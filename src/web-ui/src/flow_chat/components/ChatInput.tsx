@@ -681,9 +681,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           title: t('input.mermaidDualModeDemo'),
           data: MERMAID_INTERACTIVE_EXAMPLE,
           metadata: {
-            duplicateCheckKey: `mermaid-dual-mode-${Date.now()}`
+            duplicateCheckKey: 'mermaid-dual-mode-demo'
           },
-          checkDuplicate: false,
+          checkDuplicate: true,
+          duplicateCheckKey: 'mermaid-dual-mode-demo',
           replaceExisting: false
         }
       });

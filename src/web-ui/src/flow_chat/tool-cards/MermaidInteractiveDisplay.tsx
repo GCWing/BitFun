@@ -66,6 +66,7 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
     const enableNavigation = inputData.enable_navigation !== false;
     const enableTooltips = inputData.enable_tooltips !== false;
 
+    const duplicateCheckKey = `mermaid-interactive-${toolCall.id}`;
     const eventData = {
       type: 'mermaid-editor',
       title: title,
@@ -83,12 +84,13 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
         }
       },
       metadata: {
-        duplicateCheckKey: `mermaid-interactive-${Date.now()}`,
+        duplicateCheckKey,
         fromTool: true,
         toolName: 'MermaidInteractive'
       },
-      checkDuplicate: false,
-      replaceExisting: false
+      checkDuplicate: true,
+      duplicateCheckKey,
+      replaceExisting: true
     };
 
     window.dispatchEvent(new CustomEvent('expand-right-panel'));
