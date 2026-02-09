@@ -187,26 +187,29 @@ async fn main() -> Result<()> {
     
     match cli.command {
         Some(Commands::Chat { agent, workspace }) => {
-            let workspace = if workspace.is_none() {
+            let (workspace, mut startup_terminal) = if workspace.is_none() {
                 use ui::startup::StartupPage;
                 
                 let mut terminal = ui::init_terminal()?;
                 let mut startup_page = StartupPage::new();
                 let selected_workspace = startup_page.run(&mut terminal)?;
-                ui::restore_terminal(terminal)?;
                 
                 if selected_workspace.is_none() {
+                    ui::restore_terminal(terminal)?;
                     println!("Goodbye!");
                     return Ok(());
                 }
                 
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                selected_workspace
+                (selected_workspace, Some(terminal))
             } else {
-                workspace
+                (workspace, None)
             };
             
-            println!("Initializing system, please wait...");
+            if let Some(ref mut term) = startup_terminal {
+                ui::render_loading(term, "Initializing system, please wait...")?;
+            } else {
+                println!("Initializing system, please wait...");
+            }
             
             if let Some(ref ws) = workspace {
                 use std::path::PathBuf;
@@ -254,11 +257,15 @@ async fn main() -> Result<()> {
                 .expect("Failed to initialize agentic system");
             tracing::info!("Agentic system initialized");
             
-            println!("System initialized, starting chat interface...\n");
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Some(ref mut term) = startup_terminal {
+                ui::render_loading(term, "System initialized, starting chat interface...")?;
+            } else {
+                println!("System initialized, starting chat interface...\n");
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
             
             let mut chat_mode = ChatMode::new(config, agent, workspace, &agentic_system);
-            let chat_result = chat_mode.run();
+            let chat_result = chat_mode.run(startup_terminal);
 
             if let Some(ref svc) = config_service {
                 let _ = svc
@@ -375,15 +382,14 @@ async fn main() -> Result<()> {
                 let mut terminal = ui::init_terminal()?;
                 let mut startup_page = StartupPage::new();
                 let workspace = startup_page.run(&mut terminal)?;
-                ui::restore_terminal(terminal)?;
                 
                 if workspace.is_none() {
+                    ui::restore_terminal(terminal)?;
                     println!("Goodbye!");
                     break;
                 }
                 
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                println!("Initializing system, please wait...");
+                ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
                 
                 if let Some(ref ws) = workspace {
                     use std::path::PathBuf;
@@ -429,12 +435,11 @@ async fn main() -> Result<()> {
                     .expect("Failed to initialize agentic system");
                 tracing::info!("Agentic system initialized");
                 
-                println!("System initialized, starting chat interface...\n");
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                ui::render_loading(&mut terminal, "System initialized, starting chat interface...")?;
                 
                 let agent = config.behavior.default_agent.clone();
                 let mut chat_mode = ChatMode::new(config.clone(), agent, workspace, &agentic_system);
-                let exit_reason = chat_mode.run();
+                let exit_reason = chat_mode.run(Some(terminal));
 
                 if let Some(ref svc) = config_service {
                     let _ = svc
@@ -449,8 +454,6 @@ async fn main() -> Result<()> {
                         break;
                     }
                     ChatExitReason::BackToMenu => {
-                        println!("\nReturning to main menu...\n");
-                        std::thread::sleep(std::time::Duration::from_millis(300));
                         continue;
                     }
                 }

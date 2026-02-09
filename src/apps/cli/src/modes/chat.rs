@@ -4,6 +4,9 @@
 
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -54,13 +57,19 @@ impl ChatMode {
         }
     }
 
-    pub fn run(&mut self) -> Result<ChatExitReason> {
+    pub fn run(
+        &mut self,
+        existing_terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
+    ) -> Result<ChatExitReason> {
         tracing::info!("Starting Chat mode, Agent: {}", self.agent_name);
         if let Some(ws) = &self.workspace {
             tracing::info!("Workspace: {}", ws);
         }
 
-        let mut terminal = init_terminal()?;
+        let mut terminal = match existing_terminal {
+            Some(t) => t,
+            None => init_terminal()?,
+        };
         let session = Session::new(self.agent_name.clone(), self.workspace.clone());
         
         let theme = match self.config.ui.theme.as_str() {
