@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RotateCcw, ListChecks, X, Save } from 'lucide-react';
-import { IconButton, Card, Switch, Select } from '@/component-library';
+import { RotateCcw, ListChecks, X } from 'lucide-react';
+import { IconButton, Card, Switch } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
 import { configAPI } from '@/infrastructure/api';
-import type { ModeConfigItem } from '../types';
+import type { ModeConfigItem, AIExperienceConfig } from '../types';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent } from './common';
 import { createLogger } from '@/shared/utils/logger';
 import './AgenticModeConfig.scss';
 
 const log = createLogger('AgenticModeConfig');
-
-interface AgenticPreferences {
-  visualMode: boolean;
-  priorityStrategy: 'economy' | 'quality' | 'balanced';
-}
 
 interface ToolInfo {
   name: string;
@@ -31,11 +26,7 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
   const [loading, setLoading] = useState(false);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
   const [agenticConfig, setAgenticConfig] = useState<ModeConfigItem | null>(null);
-  
-  const [preferences, setPreferences] = useState<AgenticPreferences>({
-    visualMode: false,
-    priorityStrategy: 'balanced',
-  });
+  const [visualMode, setVisualMode] = useState(false);
   
   const [toolsCollapsed, setToolsCollapsed] = useState(true);
 
@@ -47,15 +38,19 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
     try {
       setLoading(true);
       
-      const [toolsData, modeConfig] = await Promise.all([
+      const [toolsData, modeConfig, aiExperience] = await Promise.all([
         fetchAvailableTools(),
-        configAPI.getModeConfig('agentic')
+        configAPI.getModeConfig('agentic'),
+        configAPI.getConfig('app.ai_experience') as Promise<AIExperienceConfig | undefined>
       ]);
       
       setAvailableTools(toolsData);
       setAgenticConfig(modeConfig);
+      if (aiExperience) {
+        setVisualMode(aiExperience.enable_visual_mode ?? false);
+      }
       
-      log.debug('Data loaded', { toolsCount: toolsData.length, agenticConfig: modeConfig });
+      log.debug('Data loaded', { toolsCount: toolsData.length, agenticConfig: modeConfig, visualMode: aiExperience?.enable_visual_mode });
     } catch (error) {
       log.error('Failed to load data', { error });
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -78,6 +73,21 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
     }
   };
 
+  const saveToolsConfig = async (newConfig: ModeConfigItem) => {
+    try {
+      setAgenticConfig(newConfig);
+      await configAPI.setModeConfig('agentic', newConfig);
+      
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+      log.debug('Mode config saved and event emitted');
+    } catch (error) {
+      log.error('Failed to save tools config', { error });
+      setAgenticConfig(agenticConfig);
+      notificationService.error(`${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
   const toggleTool = async (toolName: string) => {
     if (!agenticConfig) return;
     
@@ -88,45 +98,17 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
       ? [...tools, toolName]
       : tools.filter(t => t !== toolName);
     
-    setAgenticConfig({
-      ...agenticConfig,
-      available_tools: newTools
-    });
+    await saveToolsConfig({ ...agenticConfig, available_tools: newTools });
   };
 
-  const selectAllTools = () => {
+  const selectAllTools = async () => {
     if (!agenticConfig) return;
-    setAgenticConfig({
-      ...agenticConfig,
-      available_tools: availableTools.map(t => t.name)
-    });
+    await saveToolsConfig({ ...agenticConfig, available_tools: availableTools.map(t => t.name) });
   };
 
-  const clearAllTools = () => {
+  const clearAllTools = async () => {
     if (!agenticConfig) return;
-    setAgenticConfig({
-      ...agenticConfig,
-      available_tools: []
-    });
-  };
-
-  const saveToolsConfig = async () => {
-    if (!agenticConfig) return;
-    
-    try {
-      setLoading(true);
-      await configAPI.setModeConfig('agentic', agenticConfig);
-      notificationService.success(t('messages.saveSuccess'));
-      
-      const { globalEventBus } = await import('@/infrastructure/event-bus');
-      globalEventBus.emit('mode:config:updated');
-      log.debug('Mode config update event emitted');
-    } catch (error) {
-      log.error('Failed to save tools config', { error });
-      notificationService.error(`${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error)));
-    } finally {
-      setLoading(false);
-    }
+    await saveToolsConfig({ ...agenticConfig, available_tools: [] });
   };
 
   const resetToolsConfig = async () => {
@@ -147,6 +129,19 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
     }
   };
 
+  const handleVisualModeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setVisualMode(checked);
+    try {
+      await configAPI.setConfig('app.ai_experience.enable_visual_mode', checked);
+      log.debug('Visual mode updated', { enabled: checked });
+    } catch (error) {
+      log.error('Failed to save visual mode config', { error });
+      setVisualMode(!checked);
+      notificationService.error(t('messages.saveFailed', 'Failed to save'));
+    }
+  };
+
   return (
     <ConfigPageLayout className="agentic-mode-config">
       <ConfigPageHeader
@@ -163,37 +158,15 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
                   {t('preferences.visualMode.label', 'Visual Mode')}
                 </span>
                 <span className="agentic-mode-config__preference-desc">
-                  {t('preferences.visualMode.description', 'Enable visual feedback during execution')}
+                  {t('preferences.visualMode.description', 'Use Mermaid diagrams to visualize complex logic and flows')}
                 </span>
               </div>
               <Switch
-                checked={preferences.visualMode}
-                onChange={(checked) => setPreferences(prev => ({ ...prev, visualMode: checked }))}
+                checked={visualMode}
+                onChange={handleVisualModeChange}
                 size="small"
+                disabled={loading}
               />
-            </div>
-            
-            <div className="agentic-mode-config__preference-item">
-              <div className="agentic-mode-config__preference-info">
-                <span className="agentic-mode-config__preference-label">
-                  {t('preferences.priorityStrategy.label', 'Priority Strategy')}
-                </span>
-                <span className="agentic-mode-config__preference-desc">
-                  {t('preferences.priorityStrategy.description', 'Control model selection and invocation strategy')}
-                </span>
-              </div>
-              <div className="agentic-mode-config__preference-select">
-                <Select
-                  value={preferences.priorityStrategy}
-                  onChange={(value) => setPreferences(prev => ({ ...prev, priorityStrategy: value as AgenticPreferences['priorityStrategy'] }))}
-                  options={[
-                    { value: 'economy', label: t('preferences.priorityStrategy.options.economy', 'Economy First') },
-                    { value: 'balanced', label: t('preferences.priorityStrategy.options.balanced', 'Balanced') },
-                    { value: 'quality', label: t('preferences.priorityStrategy.options.quality', 'Quality First') },
-                  ]}
-                  size="small"
-                />
-              </div>
             </div>
           </div>
         </div>
@@ -242,15 +215,6 @@ export const AgenticModeConfig: React.FC<AgenticModeConfigProps> = ({ embedded =
                     tooltip={t('tools.reset')}
                   >
                     <RotateCcw size={18} />
-                  </IconButton>
-                  <IconButton
-                    variant="ghost"
-                    size="medium"
-                    onClick={saveToolsConfig}
-                    disabled={loading}
-                    tooltip={t('tools.save')}
-                  >
-                    <Save size={18} />
                   </IconButton>
                 </div>
 

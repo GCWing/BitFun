@@ -48,12 +48,14 @@ pub struct AppConfig {
 
 /// AI experience configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[serde(default)]
 pub struct AIExperienceConfig {
     /// Whether to enable automatic AI-generated summaries for session titles.
     pub enable_session_title_generation: bool,
     /// Whether to enable AI analysis of work status on the FlowChat welcome page.
     pub enable_welcome_panel_ai_analysis: bool,
+    /// Whether to enable visual mode.
+    pub enable_visual_mode: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -862,6 +864,7 @@ impl Default for AIExperienceConfig {
         Self {
             enable_session_title_generation: true,
             enable_welcome_panel_ai_analysis: true,
+            enable_visual_mode: false,
         }
     }
 }

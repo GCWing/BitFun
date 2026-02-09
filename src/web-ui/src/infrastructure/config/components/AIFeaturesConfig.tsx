@@ -19,13 +19,13 @@ const log = createLogger('AIFeaturesConfig');
 
 
 interface AIExperienceSettings {
-  enableSessionTitleGeneration: boolean;
-  enableWelcomePanelAiAnalysis: boolean;
+  enable_session_title_generation: boolean;
+  enable_welcome_panel_ai_analysis: boolean;
 }
 
 const defaultSettings: AIExperienceSettings = {
-  enableSessionTitleGeneration: true,
-  enableWelcomePanelAiAnalysis: true,
+  enable_session_title_generation: true,
+  enable_welcome_panel_ai_analysis: true,
 };
 
 
@@ -39,12 +39,12 @@ interface FeatureConfig {
 const FEATURE_CONFIGS: FeatureConfig[] = [
   {
     id: 'sessionTitle',
-    settingKey: 'enableSessionTitleGeneration',
+    settingKey: 'enable_session_title_generation',
     agentName: 'startchat-func-agent',
   },
   {
     id: 'welcomeAnalysis',
-    settingKey: 'enableWelcomePanelAiAnalysis',
+    settingKey: 'enable_welcome_panel_ai_analysis',
     agentName: 'startchat-func-agent',  
   },
   {

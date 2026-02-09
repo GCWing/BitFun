@@ -44,9 +44,12 @@ export interface NotificationConfig {
 
 export interface AIExperienceConfig {
    
-  enableSessionTitleGeneration: boolean;
+  enable_session_title_generation: boolean;
    
-  enableWelcomePanelAiAnalysis: boolean;
+  enable_welcome_panel_ai_analysis: boolean;
+
+  /** Whether to enable visual mode (use Mermaid diagrams to illustrate complex logic and flows). */
+  enable_visual_mode: boolean;
 }
 
 

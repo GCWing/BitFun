@@ -124,10 +124,15 @@ impl GlobalConfigManager {
         Ok(())
     }
 
-    /// Reloads configuration.
+    /// Reloads configuration in-place.
+    ///
+    /// Re-reads the config from disk into the existing `ConfigService` instance,
+    /// preserving the `Arc` pointer so that all holders (e.g. `AppState`) stay in sync.
     pub async fn reload() -> BitFunResult<()> {
-        let new_service = Arc::new(ConfigService::new().await?);
-        Self::update_service(new_service).await
+        let service = Self::get_service().await?;
+        service.reload().await?;
+        Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
+        Ok(())
     }
 
     /// Subscribes to configuration update events.

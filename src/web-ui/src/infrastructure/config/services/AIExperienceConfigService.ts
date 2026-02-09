@@ -7,17 +7,17 @@ const log = createLogger('AIExperienceConfig');
 
 export interface AIExperienceSettings {
    
-  enableSessionTitleGeneration: boolean;
+  enable_session_title_generation: boolean;
   
    
-  enableWelcomePanelAiAnalysis: boolean;
+  enable_welcome_panel_ai_analysis: boolean;
 }
 
 const CONFIG_PATH = 'app.ai_experience';
 
 const defaultSettings: AIExperienceSettings = {
-  enableSessionTitleGeneration: true,
-  enableWelcomePanelAiAnalysis: true,
+  enable_session_title_generation: true,
+  enable_welcome_panel_ai_analysis: true,
 };
 
  
@@ -92,12 +92,12 @@ export class AIExperienceConfigService {
 
    
   isSessionTitleGenerationEnabled(): boolean {
-    return this.getSettings().enableSessionTitleGeneration;
+    return this.getSettings().enable_session_title_generation;
   }
 
    
   isWelcomePanelAIAnalysisEnabled(): boolean {
-    return this.getSettings().enableWelcomePanelAiAnalysis;
+    return this.getSettings().enable_welcome_panel_ai_analysis;
   }
 
    

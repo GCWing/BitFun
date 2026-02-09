@@ -17,6 +17,7 @@ const PLACEHOLDER_PROJECT_LAYOUT: &str = "{PROJECT_LAYOUT}";
 const PLACEHOLDER_RULES: &str = "{RULES}";
 const PLACEHOLDER_MEMORIES: &str = "{MEMORIES}";
 const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
+const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 
 pub struct PromptBuilder {
     pub workspace_path: String,
@@ -156,6 +157,32 @@ These files are maintained by the user and should NOT be modified unless explici
         }
     }
 
+    /// Get visual mode instruction from user config
+    ///
+    /// Reads `app.ai_experience.enable_visual_mode` from global config.
+    /// Returns a prompt snippet when enabled, or empty string when disabled.
+    async fn get_visual_mode_instruction(&self) -> String {
+        let enabled = match GlobalConfigManager::get_service().await {
+            Ok(service) => service
+                .get_config::<bool>(Some("app.ai_experience.enable_visual_mode"))
+                .await
+                .unwrap_or(false),
+            Err(e) => {
+                debug!("Failed to read visual mode config: {}", e);
+                false
+            }
+        };
+
+        if enabled {
+            r"# Visualizing complex logic as you explain
+Use Mermaid diagrams to visualize complex logic, workflows, architectures, and data flows whenever it helps clarify the explanation.
+Prefer MermaidInteractive tool when available, otherwise output Mermaid code blocks directly.
+".to_string()
+        } else {
+            String::new()
+        }
+    }
+
     /// Get user language preference instruction
     ///
     /// Read app.language from global config, generate simple language instruction
@@ -194,6 +221,7 @@ These files are maintained by the user and should NOT be modified unless explici
     /// - `{PROJECT_CONTEXT_FILES}` - Project context files (AGENTS.md, CLAUDE.md, etc.)
     /// - `{RULES}` - AI rules
     /// - `{MEMORIES}` - AI memories
+    /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
     pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
@@ -262,6 +290,12 @@ These files are maintained by the user and should NOT be modified unless explici
         if result.contains(PLACEHOLDER_MEMORIES) {
             let memories = self.load_ai_memories().await.unwrap_or_default();
             result = result.replace(PLACEHOLDER_MEMORIES, &memories);
+        }
+
+        // Replace {VISUAL_MODE}
+        if result.contains(PLACEHOLDER_VISUAL_MODE) {
+            let visual_mode = self.get_visual_mode_instruction().await;
+            result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
         }
 
         Ok(result.trim().to_string())
