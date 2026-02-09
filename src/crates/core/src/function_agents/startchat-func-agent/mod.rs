@@ -35,9 +35,13 @@ impl StartchatFunctionAgent {
         WorkStateAnalyzer::analyze_work_state(self.factory.clone(), repo_path, options).await
     }
     
-    /// Quickly analyze work state (use default options)
-    pub async fn quick_analyze(&self, repo_path: &Path) -> AgentResult<WorkStateAnalysis> {
-        self.analyze_work_state(repo_path, WorkStateOptions::default()).await
+    /// Quickly analyze work state (use default options with specified language)
+    pub async fn quick_analyze(&self, repo_path: &Path, language: Language) -> AgentResult<WorkStateAnalysis> {
+        let options = WorkStateOptions {
+            language,
+            ..WorkStateOptions::default()
+        };
+        self.analyze_work_state(repo_path, options).await
     }
     
     /// Generate greeting only (do not analyze Git status)

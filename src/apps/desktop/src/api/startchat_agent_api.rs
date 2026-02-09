@@ -6,6 +6,7 @@ use bitfun_core::function_agents::{
     StartchatFunctionAgent,
     WorkStateAnalysis,
     WorkStateOptions,
+    startchat_func_agent::Language,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -23,6 +24,7 @@ pub struct AnalyzeWorkStateRequest {
 #[serde(rename_all = "camelCase")]
 pub struct QuickAnalyzeRequest {
     pub repo_path: String,
+    pub language: Option<Language>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -65,9 +67,10 @@ pub async fn quick_analyze_work_state(
     request: QuickAnalyzeRequest,
 ) -> Result<WorkStateAnalysis, String> {
     let agent = StartchatFunctionAgent::new(state.ai_client_factory.clone());
+    let language = request.language.unwrap_or(Language::Chinese);
     
     agent
-        .quick_analyze(Path::new(&request.repo_path))
+        .quick_analyze(Path::new(&request.repo_path), language)
         .await
         .map_err(|e| {
             error!("Quick work state analysis failed: repo_path={}, error={}", request.repo_path, e);
@@ -98,8 +101,10 @@ pub async fn get_work_state_summary(
 ) -> Result<WorkStateSummaryResponse, String> {
     let agent = StartchatFunctionAgent::new(state.ai_client_factory.clone());
     
+    let language = request.language.unwrap_or(Language::Chinese);
+    
     let analysis = agent
-        .quick_analyze(Path::new(&request.repo_path))
+        .quick_analyze(Path::new(&request.repo_path), language)
         .await
         .map_err(|e| {
             error!("Failed to get work state summary: repo_path={}, error={}", request.repo_path, e);

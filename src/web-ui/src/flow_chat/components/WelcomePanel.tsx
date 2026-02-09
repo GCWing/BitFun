@@ -31,7 +31,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   onQuickAction,
   className = ''
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [analysis, setAnalysis] = useState<WorkStateAnalysis | null>(null);
   const [fallbackGitState, setFallbackGitState] = useState<GitWorkState | null>(null);
   const [aiAnalysisCompleted, setAiAnalysisCompleted] = useState<boolean>(false);
@@ -152,7 +152,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         return;
       }
 
-      const result = await startchatAgentAPI.quickAnalyzeWorkState(currentWorkspacePath);
+      const language = i18n.language?.startsWith('zh') ? 'Chinese' : 'English';
+      const result = await startchatAgentAPI.quickAnalyzeWorkState(currentWorkspacePath, language);
       
       setAnalysis(result);
       setAiAnalysisCompleted(true);

@@ -6,12 +6,43 @@ import React, { useCallback } from 'react';
 import { CheckCircle, Eye, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CubeLoading } from '../../component-library';
-import type { ToolCardProps } from '../types/flow-chat';
+import type { ToolCardProps, FlowToolItem } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { flowChatStore } from '../store/FlowChatStore';
 import { createLogger } from '@/shared/utils/logger';
 import './MermaidInteractiveDisplay.scss';
 
 const log = createLogger('MermaidInteractiveDisplay');
+
+/**
+ * Read the latest toolCall.input from flowChatStore for a given tool item.
+ * This ensures we always get the most up-to-date data (e.g. after mermaid code fix),
+ * even if the component has not re-rendered with new props.
+ */
+function getLatestToolInput(toolItemId: string, toolCallId: string): any | null {
+  try {
+    const state = flowChatStore.getState();
+    const activeSessionId = state.activeSessionId;
+    if (!activeSessionId) return null;
+
+    const session = state.sessions.get(activeSessionId);
+    if (!session) return null;
+
+    for (const turn of session.dialogTurns) {
+      for (const round of turn.modelRounds) {
+        const item = round.items.find(
+          (it: any) => it.type === 'tool' && (it.toolCall?.id === toolCallId || it.id === toolItemId)
+        ) as FlowToolItem | undefined;
+        if (item) {
+          return item.toolCall?.input ?? null;
+        }
+      }
+    }
+  } catch {
+    // Fallback to props data
+  }
+  return null;
+}
 
 export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
   toolItem
@@ -50,7 +81,9 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
   };
 
   const handleOpenMermaid = useCallback(() => {
-    const inputData = getInputData();
+    // Read the latest data from store first, fallback to props if unavailable.
+    const latestInput = getLatestToolInput(toolItem.id, toolCall.id);
+    const inputData = latestInput || getInputData();
     const resultData = getResultData();
     
     if (!inputData) {
@@ -66,6 +99,7 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
     const enableNavigation = inputData.enable_navigation !== false;
     const enableTooltips = inputData.enable_tooltips !== false;
 
+    const duplicateCheckKey = `mermaid-interactive-${toolCall.id}`;
     const eventData = {
       type: 'mermaid-editor',
       title: title,
@@ -80,15 +114,22 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
           highlights: highlights,
           enable_navigation: enableNavigation,
           enable_tooltips: enableTooltips
+        },
+        // Source tracking for write-back after edits/fixes.
+        _source: {
+          type: 'tool-call',
+          toolCallId: toolCall.id,
+          toolItemId: toolItem.id,
         }
       },
       metadata: {
-        duplicateCheckKey: `mermaid-interactive-${Date.now()}`,
+        duplicateCheckKey,
         fromTool: true,
         toolName: 'MermaidInteractive'
       },
-      checkDuplicate: false,
-      replaceExisting: false
+      checkDuplicate: true,
+      duplicateCheckKey,
+      replaceExisting: true
     };
 
     window.dispatchEvent(new CustomEvent('expand-right-panel'));

@@ -28,7 +28,7 @@ fn default_true() -> bool {
 }
 
 fn default_language() -> Language {
-    Language::Chinese
+    Language::English
 }
 
 impl Default for WorkStateOptions {
@@ -37,7 +37,7 @@ impl Default for WorkStateOptions {
             analyze_git: true,
             predict_next_actions: true,
             include_quick_actions: true,
-            language: Language::Chinese,
+            language: Language::English,
         }
     }
 }

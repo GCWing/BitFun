@@ -17,6 +17,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
 import {
   saveAllInProgressTurns,
+  immediateSaveDialogTurn,
   clearAllBuffers,
   createChatSession as createChatSessionModule,
   switchChatSession as switchChatSessionModule,
@@ -174,6 +175,14 @@ export class FlowChatManager {
 
   public async saveAllInProgressTurns(): Promise<void> {
     return saveAllInProgressTurns(this.context);
+  }
+
+  /**
+   * Save a specific dialog turn to disk.
+   * Used when tool call data is updated after the turn has completed (e.g. mermaid code fix).
+   */
+  public async saveDialogTurn(sessionId: string, turnId: string): Promise<void> {
+    return immediateSaveDialogTurn(this.context, sessionId, turnId, true);
   }
 
   addDialogTurn(sessionId: string, dialogTurn: DialogTurn): void {

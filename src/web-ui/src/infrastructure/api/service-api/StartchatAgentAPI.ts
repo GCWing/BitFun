@@ -164,12 +164,13 @@ export class StartchatAgentAPI {
   }
 
    
-  async quickAnalyzeWorkState(repoPath: string): Promise<WorkStateAnalysis> {
+  async quickAnalyzeWorkState(repoPath: string, language?: 'Chinese' | 'English'): Promise<WorkStateAnalysis> {
     try {
       
       return await api.invoke('quick_analyze_work_state', {
         request: {
-          repoPath
+          repoPath,
+          language: language || null
         }
       }, {
         retries: 0

@@ -175,6 +175,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
   }, [code]);
 
   const handleOpenInEditor = useCallback(() => {
+    const duplicateCheckKey = `mermaid-md-${code.length}-${code.slice(0, 64).replace(/\s+/g, '')}`;
     window.dispatchEvent(new CustomEvent('expand-right-panel'));
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('agent-create-tab', {
@@ -192,9 +193,10 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
               auto_format: false
             }
           },
-          metadata: { duplicateCheckKey: `mermaid-${Date.now()}`, fromMarkdown: true },
-          checkDuplicate: false,
-          replaceExisting: false
+          metadata: { duplicateCheckKey, fromMarkdown: true },
+          checkDuplicate: true,
+          duplicateCheckKey,
+          replaceExisting: true
         }
       }));
     }, 100);

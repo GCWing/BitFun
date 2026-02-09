@@ -130,7 +130,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     
     return unsubscribe;
   }, []);
-  
+
   const handleToolConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
     try {
       const latestState = flowChatStore.getState();
