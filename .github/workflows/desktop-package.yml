@@ -1,0 +1,103 @@
+name: Desktop Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: macos-15-intel
+            name: macos-x64
+            target: x86_64-apple-darwin
+            build_command: pnpm desktop:build:x86_64
+          - os: macos-15
+            name: macos-arm64
+            target: aarch64-apple-darwin
+            build_command: pnpm build:web && cd src/apps/desktop && pnpm tauri build --target aarch64-apple-darwin --bundles dmg
+          - os: windows-latest
+            name: windows-x64
+            target: x86_64-pc-windows-msvc
+            build_command: pnpm desktop:build:nsis
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop app
+        run: ${{ matrix.platform.build_command }}
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfun-${{ matrix.platform.name }}-bundle
+          if-no-files-found: error
+          path: |
+            target/*/release/bundle
+            target/release/bundle
+            src/apps/desktop/target/release/bundle
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download bundled artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bitfun-*-bundle
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: |
+          echo "Release assets:"
+          find release-assets -type f | sort
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-assets/**/*.dmg
+            release-assets/**/*setup.exe
+          overwrite_files: true
+          fail_on_unmatched_files: true
