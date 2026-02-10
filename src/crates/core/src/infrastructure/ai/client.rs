@@ -2,7 +2,6 @@
 //!
 //! Uses a modular architecture to separate provider-specific logic into the providers module
 
-use log::{debug, info, warn, error};
 use crate::infrastructure::ai::providers::anthropic::AnthropicMessageConverter;
 use crate::infrastructure::ai::providers::openai::OpenAIMessageConverter;
 use crate::service::config::ProxyConfig;
@@ -11,6 +10,7 @@ use crate::util::JsonChecker;
 use ai_stream_handlers::{handle_anthropic_stream, handle_openai_stream, UnifiedResponse};
 use anyhow::{anyhow, Result};
 use futures::StreamExt;
+use log::{debug, error, info, warn};
 use reqwest::{Client, Proxy};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -68,7 +68,10 @@ impl AIClient {
                         builder = builder.proxy(proxy);
                     }
                     Err(e) => {
-                        error!("Proxy configuration failed: {}, proceeding without proxy", e);
+                        error!(
+                            "Proxy configuration failed: {}, proceeding without proxy",
+                            e
+                        );
                         builder = builder.no_proxy();
                     }
                 }
@@ -82,14 +85,18 @@ impl AIClient {
         match builder.build() {
             Ok(client) => client,
             Err(e) => {
-                error!("HTTP client initialization failed: {}, using default client", e);
+                error!(
+                    "HTTP client initialization failed: {}, using default client",
+                    e
+                );
                 Client::new()
             }
         }
     }
 
     fn build_proxy(config: &ProxyConfig) -> Result<Proxy> {
-        let mut proxy = Proxy::all(&config.url).map_err(|e| anyhow!("Failed to create proxy: {}", e))?;
+        let mut proxy =
+            Proxy::all(&config.url).map_err(|e| anyhow!("Failed to create proxy: {}", e))?;
 
         if let (Some(username), Some(password)) = (&config.username, &config.password) {
             if !username.is_empty() && !password.is_empty() {
@@ -212,7 +219,6 @@ impl AIClient {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
-        // TODO: OpenAI-format thinking enablement varies by vendor; this only applies to Zhipu.
         request_body["thinking"] = serde_json::json!({
             "type": if self.config.enable_thinking_process { "enabled" } else { "disabled" }
         });
@@ -364,7 +370,6 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
     ) -> Result<StreamResponse> {
-
         let max_tries = 3;
         match self.get_api_format().to_lowercase().as_str() {
             "openai" => {
@@ -396,9 +401,7 @@ impl AIClient {
         let url = self.config.base_url.clone();
         debug!(
             "OpenAI config: model={}, base_url={}, max_tries={}",
-            self.config.model,
-            self.config.base_url,
-            max_tries
+            self.config.model, self.config.base_url, max_tries
         );
 
         // Use OpenAI message converter
@@ -431,8 +434,7 @@ impl AIClient {
                             .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
                         error!(
                             "OpenAI Streaming API client error {}: {}",
-                            status,
-                            error_text
+                            status, error_text
                         );
                         return Err(anyhow!(
                             "OpenAI Streaming API client error {}: {}",
@@ -532,9 +534,7 @@ impl AIClient {
         let url = self.config.base_url.clone();
         debug!(
             "Anthropic config: model={}, base_url={}, max_tries={}",
-            self.config.model,
-            self.config.base_url,
-            max_tries
+            self.config.model, self.config.base_url, max_tries
         );
 
         // Use Anthropic message converter
@@ -572,8 +572,7 @@ impl AIClient {
                             .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
                         error!(
                             "Anthropic Streaming API client error {}: {}",
-                            status,
-                            error_text
+                            status, error_text
                         );
                         return Err(anyhow!(
                             "Anthropic Streaming API client error {}: {}",
@@ -733,7 +732,10 @@ impl AIClient {
                                 name: cur_tool_call_name.clone(),
                                 arguments,
                             });
-                            debug!("[send_message] Tool call arguments complete: {}", cur_tool_call_name);
+                            debug!(
+                                "[send_message] Tool call arguments complete: {}",
+                                cur_tool_call_name
+                            );
                             json_checker.reset();
                         }
                     }
@@ -783,38 +785,35 @@ impl AIClient {
         }]);
 
         match self.send_message(test_messages, tools).await {
-                Ok(response) => {
-                    let response_time_ms = start_time.elapsed().as_millis() as u64;
-                    if response.tool_calls.is_some() {
-                        Ok(ConnectionTestResult {
-                            success: true,
-                            response_time_ms,
-                            message: "Connection successful".to_string(),
-                            model_response: Some(response.text),
-                            error_details: None,
-                        })
-                    } else {
-                        Ok(ConnectionTestResult {
-                            success: false,
-                            response_time_ms,
-                            message: "Model does not support tool calls".to_string(),
-                            model_response: Some(response.text),
-                            error_details: Some("Model does not support tool calls".to_string()),
-                        })
-                    }
-                }
-                Err(e) => {
-                    let response_time_ms = start_time.elapsed().as_millis() as u64;
-                    let error_msg = format!("{}", e);
-                    debug!("[test_connection] error: {}", error_msg);
+            Ok(response) => {
+                let response_time_ms = start_time.elapsed().as_millis() as u64;
+                if response.tool_calls.is_some() {
+                    Ok(ConnectionTestResult {
+                        success: true,
+                        response_time_ms,
+                        model_response: Some(response.text),
+                        error_details: None,
+                    })
+                } else {
                     Ok(ConnectionTestResult {
                         success: false,
                         response_time_ms,
-                        message: "Connection failed".to_string(),
-                        model_response: None,
-                        error_details: Some(error_msg),
+                        model_response: Some(response.text),
+                        error_details: Some("Model does not support tool calls".to_string()),
                     })
                 }
+            }
+            Err(e) => {
+                let response_time_ms = start_time.elapsed().as_millis() as u64;
+                let error_msg = format!("{}", e);
+                debug!("test connection failed: {}", error_msg);
+                Ok(ConnectionTestResult {
+                    success: false,
+                    response_time_ms,
+                    model_response: None,
+                    error_details: Some(error_msg),
+                })
+            }
         }
     }
 }

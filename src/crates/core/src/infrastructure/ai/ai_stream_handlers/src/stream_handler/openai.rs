@@ -1,9 +1,9 @@
-use log::warn;
 use crate::types::openai::OpenAISSEData;
 use crate::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Error, Result};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use log::{trace, warn};
 use reqwest::Response;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -31,9 +31,8 @@ pub async fn handle_openai_stream(
             Ok(Some(Ok(sse))) => sse,
             Ok(None) => {
                 if !received_done {
-                    let error = response_error.unwrap_or(anyhow!(
-                        "SSE stream closed before response completed"
-                    ));
+                    let error = response_error
+                        .unwrap_or(anyhow!("SSE stream closed before response completed"));
                     warn!("SSE stream ended unexpectedly: {}", error);
                     let _ = tx_event.send(Err(error));
                 }
@@ -46,12 +45,15 @@ pub async fn handle_openai_stream(
             }
             Err(_) => {
                 warn!("SSE stream timeout after {}s", idle_timeout.as_secs());
-                let _ = tx_event.send(Err(anyhow!("SSE stream timeout: idle timeout waiting for SSE")));
+                let _ = tx_event.send(Err(anyhow!(
+                    "SSE stream timeout: idle timeout waiting for SSE"
+                )));
                 return;
             }
         };
 
-        let raw = sse.data.clone();
+        let raw = sse.data;
+        trace!("sse data: {:?}", raw);
 
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(raw.clone());
@@ -70,6 +72,7 @@ pub async fn handle_openai_stream(
             }
         };
         let unified_response: UnifiedResponse = sse_data.into();
+        trace!("unified_response: {:?}", unified_response);
         let _ = tx_event.send(Ok(unified_response));
     }
 }

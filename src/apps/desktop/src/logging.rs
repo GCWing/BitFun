@@ -29,10 +29,33 @@ pub struct LogConfig {
 
 impl LogConfig {
     pub fn new(is_debug: bool) -> Self {
-        let level = if is_debug {
-            log::LevelFilter::Debug
-        } else {
-            log::LevelFilter::Info
+        let level = match std::env::var("BITFUN_LOG_LEVEL") {
+            Ok(val) => match val.to_lowercase().as_str() {
+                "trace" => log::LevelFilter::Trace,
+                "debug" => log::LevelFilter::Debug,
+                "info" => log::LevelFilter::Info,
+                "warn" => log::LevelFilter::Warn,
+                "error" => log::LevelFilter::Error,
+                "off" => log::LevelFilter::Off,
+                other => {
+                    eprintln!(
+                        "Warning: Invalid BITFUN_LOG_LEVEL '{}', falling back to default",
+                        other
+                    );
+                    if is_debug {
+                        log::LevelFilter::Debug
+                    } else {
+                        log::LevelFilter::Info
+                    }
+                }
+            },
+            Err(_) => {
+                if is_debug {
+                    log::LevelFilter::Debug
+                } else {
+                    log::LevelFilter::Info
+                }
+            }
         };
 
         let session_log_dir = create_session_log_dir();
@@ -197,11 +220,6 @@ async fn do_cleanup_log_sessions(
     session_dirs.sort();
 
     if session_dirs.len() <= max_sessions {
-        log::debug!(
-            "Log sessions count ({}) within limit ({}), no cleanup needed",
-            session_dirs.len(),
-            max_sessions
-        );
         return Ok(());
     }
 
@@ -220,10 +238,6 @@ async fn do_cleanup_log_sessions(
         .collect();
 
     if to_delete.is_empty() {
-        log::debug!(
-            "No log sessions older than {} days to cleanup",
-            LOG_RETENTION_DAYS
-        );
         return Ok(());
     }
 

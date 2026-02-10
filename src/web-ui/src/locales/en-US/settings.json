@@ -290,7 +290,6 @@
       "saveFailed": "Save failed",
       "deleteFailed": "Failed to delete configuration",
       "loadFailed": "Failed to load AI configuration",
-      "connectionFailed": "Connection failed",
       "errorDetails": "Error details"
     },
     "capabilities": {

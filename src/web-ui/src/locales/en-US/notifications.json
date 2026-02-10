@@ -26,7 +26,6 @@
     "fileCreateFailed": "Failed to create file",
     "fileDeleteFailed": "Failed to delete file",
     "operationFailed": "Operation failed",
-    "connectionFailed": "Connection failed",
     "networkError": "Network error",
     "unexpectedError": "An unexpected error occurred"
   },

@@ -111,7 +111,7 @@
     "enable": "启用思考",
     "enableHint": "需要模型支持思考模式",
     "preserve": "保留历史思考",
-    "preserveHint": "开启后将保留之前对话轮的思考内容（需模型支持 Preserved Thinking）"
+    "preserveHint": "开启后将保留历史对话的思考内容"
   },
   "details": {
     "basicInfo": "基本信息",
@@ -170,7 +170,8 @@
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
     "loadFailed": "加载AI配置失败",
-    "connectionFailed": "连接失败",
+    "testSuccess": "测试成功",
+    "testFailed": "测试失败",
     "errorDetails": "详细错误",
     "autoSetPrimary": "已自动设为主力模型",
     "defaultDescription": "{{name}} 模型配置",

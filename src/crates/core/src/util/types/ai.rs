@@ -35,8 +35,6 @@ pub struct ConnectionTestResult {
     pub success: bool,
     /// Response time (ms)
     pub response_time_ms: u64,
-    /// Result message
-    pub message: String,
     /// Model response content (if successful)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_response: Option<String>,

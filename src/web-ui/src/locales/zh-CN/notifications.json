@@ -26,7 +26,6 @@
     "fileCreateFailed": "创建文件失败",
     "fileDeleteFailed": "删除文件失败",
     "operationFailed": "操作失败",
-    "connectionFailed": "连接失败",
     "networkError": "网络错误",
     "unexpectedError": "发生意外错误"
   },

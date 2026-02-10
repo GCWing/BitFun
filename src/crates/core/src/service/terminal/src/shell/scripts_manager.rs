@@ -3,15 +3,13 @@
 //! Manages shell integration scripts with hash-based update detection.
 //! Scripts are generated once and shared across all terminal sessions.
 
+use super::ShellType;
+use log::info;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
-
-use log::{debug, info};
-
-use super::ShellType;
 
 // Embedded script contents
 const BASH_SCRIPT: &str = include_str!("scripts/shellIntegration-bash.sh");
@@ -62,10 +60,6 @@ impl ScriptsManager {
         if hash_file.exists() {
             if let Ok(existing) = fs::read_to_string(&hash_file) {
                 if existing.trim() == hash {
-                    debug!(
-                        "Shell integration scripts are up-to-date at {:?}",
-                        self.scripts_dir
-                    );
                     return Ok(false);
                 }
             }

@@ -99,7 +99,6 @@ export async function invokeAIChat(
 export interface ConnectionTestResult {
   success: boolean;
   response_time_ms: number;
-  message: string;
   model_response?: string;
   error_details?: string;
 }

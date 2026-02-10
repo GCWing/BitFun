@@ -786,6 +786,12 @@
       margin-bottom: 0;
     }
 
+    > .bitfun-ai-model-config__form-field + .bitfun-ai-model-config__form-field {
+      border-top: 1px dashed var(--border-base);
+      padding-top: $size-gap-2;
+      margin-top: $size-gap-1;
+    }
+
     
     .bitfun-checkbox__label {
       color: var(--color-text-primary);

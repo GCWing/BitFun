@@ -111,7 +111,7 @@
     "enable": "Enable Thinking",
     "enableHint": "Requires model to support thinking mode",
     "preserve": "Preserve Historical Thinking",
-    "preserveHint": "When enabled, preserves thinking content from previous conversation turns (requires model to support Preserved Thinking)"
+    "preserveHint": "When enabled, preserves thinking content from past conversations"
   },
   "details": {
     "basicInfo": "Basic Information",
@@ -170,7 +170,8 @@
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "loadFailed": "Failed to load AI configuration",
-    "connectionFailed": "Connection failed",
+    "testSuccess": "Test successful",
+    "testFailed": "Test failed",
     "errorDetails": "Error details",
     "autoSetPrimary": "Automatically set as primary model",
     "defaultDescription": "{{name}} model configuration",

@@ -290,7 +290,6 @@
       "saveFailed": "保存失败",
       "deleteFailed": "删除配置失败",
       "loadFailed": "加载AI配置失败",
-      "connectionFailed": "连接失败",
       "errorDetails": "详细错误"
     },
     "capabilities": {

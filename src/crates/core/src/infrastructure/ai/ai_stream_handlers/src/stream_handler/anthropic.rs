@@ -1,4 +1,3 @@
-use log::{debug};
 use crate::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
     MessageStart, Usage,
@@ -7,6 +6,7 @@ use crate::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Error, Result};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use log::{debug, trace};
 use reqwest::Response;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -57,6 +57,7 @@ pub async fn handle_anthropic_stream(
 
         let event_type = sse.event;
         let data = sse.data;
+        trace!("sse data: {:?}", data);
 
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(format!("[{}] {}", event_type, data));
@@ -90,6 +91,7 @@ pub async fn handle_anthropic_stream(
                     ContentBlock::ToolUse { .. }
                 ) {
                     let unified_response = UnifiedResponse::from(content_block_start);
+                    trace!("unified_response: {:?}", unified_response);
                     let _ = tx_event.send(Ok(unified_response));
                 }
             }
@@ -105,6 +107,7 @@ pub async fn handle_anthropic_stream(
                 };
                 match UnifiedResponse::try_from(content_block_delta) {
                     Ok(unified_response) => {
+                        trace!("unified_response: {:?}", unified_response);
                         let _ = tx_event.send(Ok(unified_response));
                     }
                     Err(e) => {
@@ -125,6 +128,7 @@ pub async fn handle_anthropic_stream(
                 usage.update(&message_delta.usage);
                 message_delta.usage = usage.clone();
                 let unified_response = UnifiedResponse::from(message_delta);
+                trace!("unified_response: {:?}", unified_response);
                 let _ = tx_event.send(Ok(unified_response));
             }
             "error" => {

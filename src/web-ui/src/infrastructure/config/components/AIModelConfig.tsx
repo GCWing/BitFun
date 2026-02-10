@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, Wifi, Loader, Shield, Search, ChevronDown, ChevronUp, AlertTriangle, X, Settings, Layers, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Plus, Edit2, Trash2, Wifi, Loader, Search, ChevronDown, ChevronUp, AlertTriangle, X, Settings, ArrowLeft, ExternalLink } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, CardBody, Checkbox } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
@@ -42,9 +42,6 @@ const AIModelConfig: React.FC = () => {
   const [creationMode, setCreationMode] = useState<'selection' | 'form' | null>(null);
   
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
-  
-  const [selectedModelName, setSelectedModelName] = useState<string>('');
-  
   
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<'all' | 'text' | 'multimodal' | 'other'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,7 +149,6 @@ const AIModelConfig: React.FC = () => {
   
   const handleCreateNew = () => {
     setSelectedProviderId(null);
-    setSelectedModelName('');
     setCreationMode('selection');
   };
 
@@ -163,7 +159,6 @@ const AIModelConfig: React.FC = () => {
     
     const defaultModel = template.models[0] || '';
     setSelectedProviderId(providerId);
-    setSelectedModelName(defaultModel);
     
     // Dynamically get translated name
     const providerName = t(`providers.${template.id}.name`);
@@ -173,7 +168,7 @@ const AIModelConfig: React.FC = () => {
       base_url: template.baseUrl,
       api_key: '',
       model_name: defaultModel,
-      provider: template.format === 'google' ? 'openai' : template.format,  
+      provider: template.format,  
       enabled: true,
       context_window: 128000,
       max_tokens: 8192,
@@ -190,7 +185,6 @@ const AIModelConfig: React.FC = () => {
   
   const handleSelectCustom = () => {
     setSelectedProviderId(null);
-    setSelectedModelName('');
     setEditingConfig({
       name: '',
       base_url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',  
@@ -332,8 +326,8 @@ const AIModelConfig: React.FC = () => {
           const result = await aiApi.testAIConfigConnection(newConfig);
           
           
-          let message = result.message + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
-          
+          const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
+          let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
           
           if (!result.success && result.error_details) {
             message += `\n${t('messages.errorDetails')}: ${result.error_details}`;
@@ -348,9 +342,10 @@ const AIModelConfig: React.FC = () => {
           }));
         } catch (error) {
           
+          const message = `${t('messages.testFailed')}\n${t('messages.errorDetails')}: ${error}`;
           setTestResults(prev => ({
             ...prev,
-            [configId]: { success: false, message: `${t('messages.connectionFailed')}: ${error}` }
+            [configId]: { success: false, message }
           }));
           log.warn('Auto test failed after save', { configId, error });
         } finally {
@@ -401,8 +396,8 @@ const AIModelConfig: React.FC = () => {
       const result = await aiApi.testAIConfigConnection(config);
       
       
-      let message = result.message + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
-      
+      const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
+      let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
       
       if (!result.success && result.error_details) {
         message += `\n${t('messages.errorDetails')}: ${result.error_details}`;
@@ -416,9 +411,10 @@ const AIModelConfig: React.FC = () => {
         }
       }));
     } catch (error) {
+      const message = `${t('messages.testFailed')}\n${t('messages.errorDetails')}: ${error}`;
       setTestResults(prev => ({
         ...prev,
-        [configId]: { success: false, message: `${t('messages.connectionFailed')}: ${error}` }
+        [configId]: { success: false, message }
       }));
     } finally {
       setTestingConfigs(prev => ({ ...prev, [configId]: false }));
@@ -506,7 +502,7 @@ const AIModelConfig: React.FC = () => {
                           e.preventDefault();
                           e.stopPropagation();
                           try {
-                            await systemAPI.openExternal(provider.helpUrl);
+                            await systemAPI.openExternal(provider.helpUrl!);
                           } catch (error) {
                             console.error('[AIModelConfig] Failed to open external URL:', error);
                           }
@@ -567,7 +563,6 @@ const AIModelConfig: React.FC = () => {
                     value={editingConfig.model_name || ''}
                     onChange={(value) => {
                       const newModelName = value as string;
-                      setSelectedModelName(newModelName);
                       setEditingConfig(prev => {
                         
                         const oldAutoName = prev?.model_name ? `${currentTemplate.name} - ${prev.model_name}` : '';
@@ -623,7 +618,7 @@ const AIModelConfig: React.FC = () => {
                         onClick={async (e) => {
                           e.preventDefault();
                           try {
-                            await systemAPI.openExternal(currentTemplate.helpUrl);
+                            await systemAPI.openExternal(currentTemplate.helpUrl!);
                           } catch (error) {
                             console.error('[AIModelConfig] Failed to open external URL:', error);
                           }
@@ -732,23 +727,6 @@ const AIModelConfig: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Support Preserved Thinking */}
-                {editingConfig.enable_thinking_process && (
-                  <div className="bitfun-ai-model-config__form-field">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <label style={{ marginBottom: '4px' }}>{t('thinking.preserve')}</label>
-                        <small style={{ display: 'block', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                          {t('thinking.preserveHint')}
-                        </small>
-                      </div>
-                      <Switch
-                        checked={editingConfig.support_preserved_thinking ?? false}
-                        onChange={(e) => setEditingConfig(prev => ({ ...prev, support_preserved_thinking: e.target.checked }))}
-                      />
-                    </div>
-                  </div>
-                )}
               </>
             ) : (
               <>
@@ -941,23 +919,6 @@ const AIModelConfig: React.FC = () => {
                 </div>
 
                 
-                {editingConfig.enable_thinking_process && (
-                  <div className="bitfun-ai-model-config__form-field">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <label style={{ marginBottom: '4px' }}>{t('thinking.preserve')}</label>
-                        <small style={{ display: 'block', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                          {t('thinking.preserveHint')}
-                        </small>
-                      </div>
-                      <Switch
-                        checked={editingConfig.support_preserved_thinking ?? false}
-                        onChange={(e) => setEditingConfig(prev => ({ ...prev, support_preserved_thinking: e.target.checked }))}
-                      />
-                    </div>
-                  </div>
-                )}
-
                 <div className="bitfun-ai-model-config__form-field">
                   <label>{t('form.description')}</label>
                   <textarea
@@ -984,6 +945,23 @@ const AIModelConfig: React.FC = () => {
               {showAdvancedSettings && (
                 <div className="bitfun-ai-model-config__advanced-content">
                   
+                  {editingConfig.enable_thinking_process && (
+                    <div className="bitfun-ai-model-config__form-field">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <label style={{ marginBottom: '4px' }}>{t('thinking.preserve')}</label>
+                          <small style={{ display: 'block', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
+                            {t('thinking.preserveHint')}
+                          </small>
+                        </div>
+                        <Switch
+                          checked={editingConfig.support_preserved_thinking ?? false}
+                          onChange={(e) => setEditingConfig(prev => ({ ...prev, support_preserved_thinking: e.target.checked }))}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="bitfun-ai-model-config__form-field">
                     <Checkbox
                       label={t('advancedSettings.skipSslVerify.label')}

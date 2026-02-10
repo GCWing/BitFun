@@ -239,10 +239,9 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
         });
       } else {
         setTestStatus('error');
-        // Combine message + error_details for a complete error description
         const errorMsg = result.error_details
-          ? `${result.message}\n${result.error_details}`
-          : result.message || t('model.testFailed');
+          ? `${t('model.testFailed')}\n${result.error_details}`
+          : t('model.testFailed');
         setTestError(errorMsg);
       }
     } catch (error) {
@@ -251,7 +250,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
       const rawMsg = error instanceof Error ? error.message : String(error);
       // Tauri command errors often have "Connection test failed: " prefix, extract the actual cause
       const cleanMsg = rawMsg.replace(/^Connection test failed:\s*/i, '');
-      setTestError(cleanMsg || t('model.testFailed'));
+      setTestError(cleanMsg ? `${t('model.testFailed')}\n${cleanMsg}` : t('model.testFailed'));
     }
   }, [apiKey, selectedProviderId, baseUrl, modelName, currentTemplate, getEffectiveFormat, t]);
 
