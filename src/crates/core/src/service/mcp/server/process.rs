@@ -110,7 +110,7 @@ impl MCPServerProcess {
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
 
-        let mut child = cmd.spawn().map_err(|e| {
+        let child = cmd.spawn().map_err(|e| {
             error!(
                 "Failed to spawn MCP server process: command={} error={}",
                 final_command, e
@@ -119,7 +119,14 @@ impl MCPServerProcess {
                 "Failed to start MCP server '{}': {}",
                 final_command, e
             ))
-        })?;
+        });
+        let mut child = match child {
+            Ok(c) => c,
+            Err(e) => {
+                self.set_status(MCPServerStatus::Failed).await;
+                return Err(e);
+            }
+        };
 
         let stdin = child
             .stdin
@@ -141,7 +148,15 @@ impl MCPServerProcess {
         self.child = Some(child);
         self.start_time = Some(Instant::now());
 
-        self.handshake().await?;
+        if let Err(e) = self.handshake().await {
+            error!(
+                "MCP server handshake failed: name={} id={} error={}",
+                self.name, self.id, e
+            );
+            let _ = self.stop().await;
+            self.set_status(MCPServerStatus::Failed).await;
+            return Err(e);
+        }
 
         self.set_status(MCPServerStatus::Connected).await;
         info!(
@@ -181,7 +196,18 @@ impl MCPServerProcess {
         self.connection = Some(connection.clone());
         self.start_time = Some(Instant::now());
 
-        self.handshake().await?;
+        if let Err(e) = self.handshake().await {
+            error!(
+                "Remote MCP server handshake failed: name={} id={} url={} error={}",
+                self.name, self.id, url, e
+            );
+            self.connection = None;
+            self.message_rx = None;
+            self.child = None;
+            self.server_info = None;
+            self.set_status(MCPServerStatus::Failed).await;
+            return Err(e);
+        }
 
         let session_id = connection.get_session_id().await;
         RemoteMCPTransport::start_sse_loop(url.to_string(), session_id, auth_token, tx);

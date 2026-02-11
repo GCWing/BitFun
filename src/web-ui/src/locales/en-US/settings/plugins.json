@@ -1,0 +1,39 @@
+{
+  "title": "Plugin Management",
+  "subtitle": "Install, enable, and manage plugins",
+  "toolbar": {
+    "searchPlaceholder": "Search plugins...",
+    "refreshTooltip": "Refresh",
+    "installFromFile": "Install (File)",
+    "installFromFolder": "Install (Folder)",
+    "overwriteExisting": "Overwrite existing MCP servers"
+  },
+  "messages": {
+    "installSuccess": "Plugin installed successfully",
+    "installFailed": "Failed to install plugin: {{error}}",
+    "toggleSuccess": "Updated plugin: {{name}}",
+    "toggleFailed": "Failed to update plugin: {{error}}",
+    "importSuccess": "Imported MCP servers (added: {{added}}, overwritten: {{overwritten}}, skipped: {{skipped}})",
+    "importFailed": "Failed to import MCP servers: {{error}}",
+    "uninstallSuccess": "Plugin uninstalled: {{name}}",
+    "uninstallFailed": "Failed to uninstall plugin: {{error}}"
+  },
+  "list": {
+    "loading": "Loading...",
+    "errorPrefix": "Failed to load: ",
+    "empty": "No plugins found",
+    "item": {
+      "mcpServers": "{{count}} MCP servers",
+      "noMcp": "No MCP config",
+      "importMcp": "Import MCP",
+      "uninstall": "Uninstall"
+    }
+  },
+  "deleteModal": {
+    "title": "Uninstall Plugin",
+    "message": "Are you sure you want to uninstall \"{{name}}\"?",
+    "delete": "Uninstall",
+    "cancel": "Cancel"
+  }
+}
+

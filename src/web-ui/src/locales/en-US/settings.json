@@ -20,6 +20,7 @@
       "aiMemory": "Memory",
       "promptTemplates": "Prompts",
       "skills": "Skills",
+      "plugins": "Plugins",
       "agents": "Sub Agent",
       "mcp": "MCP",
       "editor": "Editor",

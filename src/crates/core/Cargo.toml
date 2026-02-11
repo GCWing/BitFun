@@ -52,6 +52,7 @@ dunce = { workspace = true }
 filetime = { workspace = true }
 zip = { workspace = true }
 flate2 = { workspace = true }
+include_dir = { workspace = true }
 
 git2 = { workspace = true }
 portable-pty = { workspace = true }
@@ -95,4 +96,3 @@ win32job = { workspace = true }
 [features]
 default = []
 tauri-support = ["tauri"]  # Optional tauri support
-

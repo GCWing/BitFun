@@ -5,6 +5,7 @@
 //! .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills
 
 use super::types::{SkillData, SkillInfo, SkillLocation};
+use super::builtin::ensure_builtin_skills_installed;
 use crate::infrastructure::{get_path_manager_arc, get_workspace_path};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error};
@@ -150,6 +151,10 @@ impl SkillRegistry {
 
     /// Refresh cache, rescan all directories
     pub async fn refresh(&self) {
+        if let Err(e) = ensure_builtin_skills_installed().await {
+            debug!("Failed to install built-in skills: {}", e);
+        }
+
         let mut by_name: HashMap<String, SkillInfo> = HashMap::new();
 
         for entry in Self::get_possible_paths() {

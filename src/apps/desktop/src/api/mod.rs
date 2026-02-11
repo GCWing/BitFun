@@ -18,6 +18,7 @@ pub mod image_analysis_api;
 pub mod lsp_api;
 pub mod lsp_workspace_api;
 pub mod mcp_api;
+pub mod plugin_api;
 pub mod project_context_api;
 pub mod prompt_template_api;
 pub mod skill_api;

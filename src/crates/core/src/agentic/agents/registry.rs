@@ -1,5 +1,5 @@
 use super::{
-    Agent, AgenticMode, CodeReviewAgent, DebugMode, ExploreAgent, FileFinderAgent,
+    Agent, AgenticMode, CodeReviewAgent, CoworkMode, DebugMode, ExploreAgent, FileFinderAgent,
     GenerateDocAgent, PlanMode,
 };
 use crate::agentic::agents::custom_subagents::{
@@ -198,6 +198,7 @@ impl AgentRegistry {
             Arc::new(AgenticMode::new()),
             Arc::new(DebugMode::new()),
             Arc::new(PlanMode::new()),
+            Arc::new(CoworkMode::new()),
         ];
         for mode in modes {
             register(&mut agents, mode, AgentCategory::Mode, None);
@@ -330,8 +331,9 @@ impl AgentRegistry {
             let order = |id: &str| -> u8 {
                 match id {
                     "agentic" => 0,
-                    "plan" => 1,
+                    "Plan" => 1,
                     "debug" => 2,
+                    "Cowork" => 3,
                     _ => 99,
                 }
             };

@@ -45,6 +45,7 @@ pub(super) fn parse_cursor_format(
                     Some("stdio") => MCPServerType::Local,
                     Some("sse") => MCPServerType::Remote,
                     Some("remote") => MCPServerType::Remote,
+                    Some("http") => MCPServerType::Remote,
                     Some("local") => MCPServerType::Local,
                     Some("container") => MCPServerType::Container,
                     _ => {

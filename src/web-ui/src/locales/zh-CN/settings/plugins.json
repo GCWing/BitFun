@@ -1,0 +1,39 @@
+{
+  "title": "插件管理",
+  "subtitle": "安装、启用并管理插件",
+  "toolbar": {
+    "searchPlaceholder": "搜索插件...",
+    "refreshTooltip": "刷新",
+    "installFromFile": "安装（文件）",
+    "installFromFolder": "安装（文件夹）",
+    "overwriteExisting": "覆盖已存在的 MCP 配置"
+  },
+  "messages": {
+    "installSuccess": "插件安装成功",
+    "installFailed": "插件安装失败：{{error}}",
+    "toggleSuccess": "插件已更新：{{name}}",
+    "toggleFailed": "插件更新失败：{{error}}",
+    "importSuccess": "已导入 MCP 配置（新增：{{added}}，覆盖：{{overwritten}}，跳过：{{skipped}}）",
+    "importFailed": "导入 MCP 配置失败：{{error}}",
+    "uninstallSuccess": "插件已卸载：{{name}}",
+    "uninstallFailed": "插件卸载失败：{{error}}"
+  },
+  "list": {
+    "loading": "加载中...",
+    "errorPrefix": "加载失败：",
+    "empty": "未找到插件",
+    "item": {
+      "mcpServers": "{{count}} 个 MCP 服务",
+      "noMcp": "无 MCP 配置",
+      "importMcp": "导入 MCP",
+      "uninstall": "卸载"
+    }
+  },
+  "deleteModal": {
+    "title": "卸载插件",
+    "message": "确定要卸载 \"{{name}}\" 吗？",
+    "delete": "卸载",
+    "cancel": "取消"
+  }
+}
+

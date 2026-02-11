@@ -51,6 +51,7 @@ import zhCNSettingsLogging from '../../../locales/zh-CN/settings/logging.json';
 import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
 import zhCNSettingsPromptTemplates from '../../../locales/zh-CN/settings/prompt-templates.json';
 import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
+import zhCNSettingsPlugins from '../../../locales/zh-CN/settings/plugins.json';
 import zhCNSettingsAiRules from '../../../locales/zh-CN/settings/ai-rules.json';
 import zhCNSettingsAiMemory from '../../../locales/zh-CN/settings/ai-memory.json';
 import zhCNSettingsAgents from '../../../locales/zh-CN/settings/agents.json';
@@ -87,6 +88,7 @@ import enUSSettingsLogging from '../../../locales/en-US/settings/logging.json';
 import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
 import enUSSettingsPromptTemplates from '../../../locales/en-US/settings/prompt-templates.json';
 import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
+import enUSSettingsPlugins from '../../../locales/en-US/settings/plugins.json';
 import enUSSettingsAiRules from '../../../locales/en-US/settings/ai-rules.json';
 import enUSSettingsAiMemory from '../../../locales/en-US/settings/ai-memory.json';
 import enUSSettingsAgents from '../../../locales/en-US/settings/agents.json';
@@ -130,6 +132,7 @@ const resources = {
     'settings/editor': zhCNSettingsEditor,
     'settings/prompt-templates': zhCNSettingsPromptTemplates,
     'settings/skills': zhCNSettingsSkills,
+    'settings/plugins': zhCNSettingsPlugins,
     'settings/ai-rules': zhCNSettingsAiRules,
     'settings/ai-memory': zhCNSettingsAiMemory,
     'settings/agents': zhCNSettingsAgents,
@@ -167,6 +170,7 @@ const resources = {
     'settings/editor': enUSSettingsEditor,
     'settings/prompt-templates': enUSSettingsPromptTemplates,
     'settings/skills': enUSSettingsSkills,
+    'settings/plugins': enUSSettingsPlugins,
     'settings/ai-rules': enUSSettingsAiRules,
     'settings/ai-memory': enUSSettingsAiMemory,
     'settings/agents': enUSSettingsAgents,
@@ -227,6 +231,7 @@ export class I18nService {
           'settings/editor',
           'settings/prompt-templates',
           'settings/skills',
+          'settings/plugins',
           'settings/ai-rules',
           'settings/ai-memory',
           'settings/agents',

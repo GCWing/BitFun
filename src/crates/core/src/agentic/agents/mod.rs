@@ -9,6 +9,7 @@ mod registry;
 mod agentic_mode;
 mod debug_mode;
 mod plan_mode;
+mod cowork_mode;
 // Built-in subagents
 mod explore_agent;
 mod file_finder_agent;
@@ -23,6 +24,7 @@ pub use explore_agent::ExploreAgent;
 pub use file_finder_agent::FileFinderAgent;
 pub use generate_doc_agent::GenerateDocAgent;
 pub use plan_mode::PlanMode;
+pub use cowork_mode::CoworkMode;
 
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;

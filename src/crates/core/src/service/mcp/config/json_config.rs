@@ -112,7 +112,7 @@ impl MCPConfigService {
                     if let Some(t) = type_str {
                         let normalized_transport = match t {
                             "stdio" | "local" | "container" => "stdio",
-                            "sse" | "remote" | "streamable_http" => "sse",
+                            "sse" | "remote" | "streamable_http" | "http" => "sse",
                             _ => {
                                 let error_msg = format!(
                                     "Server '{}' has unsupported 'type' value: '{}'",

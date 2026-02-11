@@ -4,6 +4,7 @@
 
 pub mod registry;
 pub mod types;
+pub mod builtin;
 
 pub use registry::SkillRegistry;
 pub use types::{SkillData, SkillInfo, SkillLocation};
@@ -12,4 +13,3 @@ pub use types::{SkillData, SkillInfo, SkillLocation};
 pub fn get_skill_registry() -> &'static SkillRegistry {
     SkillRegistry::global()
 }
-

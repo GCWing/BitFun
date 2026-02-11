@@ -1,0 +1,152 @@
+.bitfun-plugins-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  &__search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 260px;
+    flex: 1;
+    max-width: 520px;
+  }
+
+  &__search-icon {
+    color: var(--color-text-secondary);
+  }
+
+  &__toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  &__overwrite {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+  }
+
+  &__overwrite-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  &__loading,
+  &__error,
+  &__empty {
+    padding: 16px;
+    color: var(--color-text-secondary);
+  }
+
+  &__error {
+    color: var(--color-error);
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__item {
+    &.is-disabled {
+      opacity: 0.75;
+    }
+  }
+
+  &__item-body {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 14px;
+  }
+
+  &__item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__item-title {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  &__item-name {
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  &__item-version {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+
+  &__item-description {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  &__item-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+  }
+
+  &__item-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 620px;
+  }
+
+  &__item-mcp {
+    padding: 2px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+
+    &.is-missing {
+      opacity: 0.8;
+    }
+  }
+
+  &__item-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  &__toggle {
+    display: flex;
+    align-items: center;
+  }
+}
+

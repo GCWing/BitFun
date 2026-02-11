@@ -102,6 +102,30 @@ impl MCPServerManager {
         Ok(())
     }
 
+    /// Ensures a server is registered in the registry if it exists in config.
+    ///
+    /// This is useful after config changes (e.g. importing MCP servers) where the registry
+    /// hasn't been re-initialized yet.
+    pub async fn ensure_registered(&self, server_id: &str) -> BitFunResult<()> {
+        if self.registry.contains(server_id).await {
+            return Ok(());
+        }
+
+        let Some(config) = self.config_service.get_server_config(server_id).await? else {
+            return Err(BitFunError::NotFound(format!(
+                "MCP server config not found: {}",
+                server_id
+            )));
+        };
+
+        if !config.enabled {
+            return Ok(());
+        }
+
+        self.registry.register(&config).await?;
+        Ok(())
+    }
+
     /// Starts a server.
     pub async fn start_server(&self, server_id: &str) -> BitFunResult<()> {
         info!("Starting MCP server: id={}", server_id);
@@ -121,6 +145,10 @@ impl MCPServerManager {
                 "MCP server is disabled: {}",
                 server_id
             )));
+        }
+
+        if !self.registry.contains(server_id).await {
+            self.registry.register(&config).await?;
         }
 
         let process = self.registry.get_process(server_id).await.ok_or_else(|| {
@@ -249,20 +277,26 @@ impl MCPServerManager {
                 BitFunError::NotFound(format!("MCP server config not found: {}", server_id))
             })?;
 
-        let process =
-            self.registry.get_process(server_id).await.ok_or_else(|| {
-                BitFunError::NotFound(format!("MCP server not found: {}", server_id))
-            })?;
-
-        let mut proc = process.write().await;
-
         match config.server_type {
             super::MCPServerType::Local => {
+                self.ensure_registered(server_id).await?;
+
+                let process = self.registry.get_process(server_id).await.ok_or_else(|| {
+                    BitFunError::NotFound(format!("MCP server not found: {}", server_id))
+                })?;
+                let mut proc = process.write().await;
+
                 let command = config
                     .command
                     .as_ref()
                     .ok_or_else(|| BitFunError::Configuration("Missing command".to_string()))?;
                 proc.restart(command, &config.args, &config.env).await?;
+            }
+            super::MCPServerType::Remote => {
+                // Treat restart as reconnect for remote servers.
+                self.ensure_registered(server_id).await?;
+                let _ = self.stop_server(server_id).await;
+                self.start_server(server_id).await?;
             }
             _ => {
                 return Err(BitFunError::NotImplemented(
@@ -276,10 +310,15 @@ impl MCPServerManager {
 
     /// Returns server status.
     pub async fn get_server_status(&self, server_id: &str) -> BitFunResult<MCPServerStatus> {
-        let process =
-            self.registry.get_process(server_id).await.ok_or_else(|| {
-                BitFunError::NotFound(format!("MCP server not found: {}", server_id))
-            })?;
+        if !self.registry.contains(server_id).await {
+            // If the server exists in config but isn't registered yet, register it so status
+            // reflects reality (Uninitialized) instead of heuristics in the UI.
+            let _ = self.ensure_registered(server_id).await;
+        }
+
+        let process = self.registry.get_process(server_id).await.ok_or_else(|| {
+            BitFunError::NotFound(format!("MCP server not found: {}", server_id))
+        })?;
 
         let proc = process.read().await;
         Ok(proc.status().await)
