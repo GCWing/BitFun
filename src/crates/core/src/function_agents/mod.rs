@@ -13,19 +13,9 @@ pub mod startchat_func_agent;
 pub use git_func_agent::GitFunctionAgent;
 pub use startchat_func_agent::StartchatFunctionAgent;
 
-pub use git_func_agent::{
-    CommitMessage,
-    CommitMessageOptions,
-    CommitFormat,
-    CommitType,
-};
+pub use git_func_agent::{CommitFormat, CommitMessage, CommitMessageOptions, CommitType};
 
 pub use startchat_func_agent::{
-    WorkStateAnalysis,
-    WorkStateOptions,
-    GreetingMessage,
-    CurrentWorkState,
-    GitWorkState,
-    PredictedAction,
-    QuickAction,
+    CurrentWorkState, GitWorkState, GreetingMessage, PredictedAction, QuickAction,
+    WorkStateAnalysis, WorkStateOptions,
 };

@@ -67,6 +67,17 @@ globset = { workspace = true }
 
 eventsource-stream = { workspace = true }
 
+# MCP Streamable HTTP client (official rust-sdk used by Codex)
+rmcp = { version = "0.12.0", default-features = false, features = [
+    "base64",
+    "client",
+    "macros",
+    "schemars",
+    "server",
+    "transport-streamable-http-client-reqwest",
+] }
+sse-stream = "0.2.1"
+
 # AI stream processor - local sub-crate
 ai_stream_handlers = { path = "src/infrastructure/ai/ai_stream_handlers" }
 

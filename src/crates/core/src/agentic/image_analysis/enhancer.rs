@@ -23,12 +23,16 @@ impl MessageEnhancer {
         if !image_analyses.is_empty() {
             enhanced.push_str("User uploaded ");
             enhanced.push_str(&image_analyses.len().to_string());
-            enhanced.push_str(" image(s). AI's understanding of the image content is as follows:\n\n");
+            enhanced
+                .push_str(" image(s). AI's understanding of the image content is as follows:\n\n");
 
             for (idx, analysis) in image_analyses.iter().enumerate() {
                 enhanced.push_str(&format!("[Image {}]\n", idx + 1));
                 enhanced.push_str(&format!("• Summary: {}\n", analysis.summary));
-                enhanced.push_str(&format!("• Detailed description: {}\n", analysis.detailed_description));
+                enhanced.push_str(&format!(
+                    "• Detailed description: {}\n",
+                    analysis.detailed_description
+                ));
 
                 if !analysis.detected_elements.is_empty() {
                     enhanced.push_str("• Key elements: ");

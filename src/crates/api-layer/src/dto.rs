@@ -1,7 +1,6 @@
 /// Data Transfer Objects (DTO) - Platform-agnostic request and response types
 ///
 /// These types are used by all platforms (CLI, Tauri, Server)
-
 use serde::{Deserialize, Serialize};
 
 /// Execute agent task request
@@ -27,7 +26,7 @@ pub struct ExecuteAgentResponse {
 /// Image data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageData {
-    pub data: String,  // Base64
+    pub data: String, // Base64
     pub mime_type: String,
 }
 

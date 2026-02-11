@@ -1,14 +1,15 @@
 //! OpenAI message format converter
 
-use log::{warn, error};
 use crate::util::types::{Message, ToolDefinition};
+use log::{error, warn};
 use serde_json::{json, Value};
 
 pub struct OpenAIMessageConverter;
 
 impl OpenAIMessageConverter {
     pub fn convert_messages(messages: Vec<Message>) -> Vec<Value> {
-        messages.into_iter()
+        messages
+            .into_iter()
             .map(Self::convert_single_message)
             .collect()
     }
@@ -28,15 +29,12 @@ impl OpenAIMessageConverter {
                 } else if msg.role == "tool" {
                     openai_msg["content"] = Value::String("Tool execution completed".to_string());
                     warn!(
-                        "[OpenAI] Tool response content is empty: name={:?}", 
+                        "[OpenAI] Tool response content is empty: name={:?}",
                         msg.name
                     );
                 } else {
                     openai_msg["content"] = Value::String(" ".to_string());
-                    warn!(
-                        "[OpenAI] Message content is empty: role={}", 
-                        msg.role
-                    );
+                    warn!("[OpenAI] Message content is empty: role={}", msg.role);
                 }
             } else {
                 if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
@@ -55,9 +53,9 @@ impl OpenAIMessageConverter {
                 openai_msg["content"] = Value::String(" ".to_string());
             } else if msg.role == "tool" {
                 openai_msg["content"] = Value::String("Tool execution completed".to_string());
-                
+
                 warn!(
-                    "[OpenAI] Tool response message content is empty, set to default: name={:?}", 
+                    "[OpenAI] Tool response message content is empty, set to default: name={:?}",
                     msg.name
                 );
             } else {
@@ -66,7 +64,7 @@ impl OpenAIMessageConverter {
                     msg.role, 
                     has_tool_calls
                 );
-                
+
                 openai_msg["content"] = Value::String(" ".to_string());
             }
         }
@@ -124,4 +122,3 @@ impl OpenAIMessageConverter {
         })
     }
 }
-

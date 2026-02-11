@@ -9,4 +9,3 @@ pub use coordinator::*;
 pub use state_manager::*;
 
 pub use coordinator::get_global_coordinator;
-

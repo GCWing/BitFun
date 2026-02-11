@@ -10,7 +10,6 @@ pub mod service;
 pub mod tool_config_sync;
 pub mod types;
 
-
 pub use factory::ConfigFactory;
 pub use global::{
     get_global_config_service, initialize_global_config, reload_global_config,

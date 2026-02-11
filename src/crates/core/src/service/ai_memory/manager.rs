@@ -26,9 +26,9 @@ impl AIMemoryManager {
         let storage_path = path_manager.user_data_dir().join("ai_memories.json");
 
         if let Some(parent) = storage_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to create memory storage directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                BitFunError::io(format!("Failed to create memory storage directory: {}", e))
+            })?;
         }
 
         let storage = if storage_path.exists() {
@@ -53,9 +53,9 @@ impl AIMemoryManager {
         let storage_path = workspace_path.join(".bitfun").join("ai_memories.json");
 
         if let Some(parent) = storage_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to create memory storage directory: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                BitFunError::io(format!("Failed to create memory storage directory: {}", e))
+            })?;
         }
 
         let storage = if storage_path.exists() {
@@ -77,8 +77,9 @@ impl AIMemoryManager {
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read memory storage file: {}", e)))?;
 
-        let storage: MemoryStorage = serde_json::from_str(&content)
-            .map_err(|e| BitFunError::Deserialization(format!("Failed to deserialize memory storage: {}", e)))?;
+        let storage: MemoryStorage = serde_json::from_str(&content).map_err(|e| {
+            BitFunError::Deserialization(format!("Failed to deserialize memory storage: {}", e))
+        })?;
 
         debug!("Loaded {} memory points from disk", storage.memories.len());
         Ok(storage)
@@ -87,8 +88,9 @@ impl AIMemoryManager {
     /// Saves storage to disk.
     async fn save_storage(&self) -> BitFunResult<()> {
         let storage = self.storage.read().await;
-        let content = serde_json::to_string_pretty(&*storage)
-            .map_err(|e| BitFunError::serialization(format!("Failed to serialize memory storage: {}", e)))?;
+        let content = serde_json::to_string_pretty(&*storage).map_err(|e| {
+            BitFunError::serialization(format!("Failed to serialize memory storage: {}", e))
+        })?;
 
         fs::write(&self.storage_path, content)
             .await

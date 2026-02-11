@@ -13,7 +13,11 @@ pub struct Session {
     pub agent_type: String,
 
     /// Associated resources
-    #[serde(skip_serializing_if = "Option::is_none", alias = "sandbox_session_id", alias = "sandboxSessionId")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        alias = "sandbox_session_id",
+        alias = "sandboxSessionId"
+    )]
     pub snapshot_session_id: Option<String>,
 
     /// Dialog turn ID list

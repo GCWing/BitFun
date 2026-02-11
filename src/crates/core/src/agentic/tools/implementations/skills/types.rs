@@ -88,13 +88,17 @@ impl SkillData {
             .get("name")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| BitFunError::tool("Missing required field 'name' in SKILL.md".to_string()))?;
+            .ok_or_else(|| {
+                BitFunError::tool("Missing required field 'name' in SKILL.md".to_string())
+            })?;
 
         let description = metadata
             .get("description")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| BitFunError::tool("Missing required field 'description' in SKILL.md".to_string()))?;
+            .ok_or_else(|| {
+                BitFunError::tool("Missing required field 'description' in SKILL.md".to_string())
+            })?;
 
         // enabled field defaults to true if not present
         let enabled = metadata
@@ -102,11 +106,7 @@ impl SkillData {
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
-        let skill_content = if with_content {
-            body
-        } else {
-            String::new()
-        };
+        let skill_content = if with_content { body } else { String::new() };
 
         Ok(SkillData {
             name,
@@ -119,7 +119,7 @@ impl SkillData {
     }
 
     /// Set enabled status and save to SKILL.md file
-    /// 
+    ///
     /// If enabled is true, remove enabled field (use default value)
     /// If enabled is false, write enabled: false
     pub fn set_enabled_and_save(skill_md_path: &str, enabled: bool) -> BitFunResult<()> {
@@ -127,19 +127,16 @@ impl SkillData {
             .map_err(|e| BitFunError::tool(format!("Failed to load SKILL.md: {}", e)))?;
 
         // Get mutable mapping of metadata
-        let map = metadata
-            .as_mapping_mut()
-            .ok_or_else(|| BitFunError::tool("Invalid SKILL.md: metadata is not a mapping".to_string()))?;
+        let map = metadata.as_mapping_mut().ok_or_else(|| {
+            BitFunError::tool("Invalid SKILL.md: metadata is not a mapping".to_string())
+        })?;
 
         if enabled {
             // When enabling, remove enabled field (use default value)
             map.remove(&Value::String("enabled".to_string()));
         } else {
             // When disabling, write enabled: false
-            map.insert(
-                Value::String("enabled".to_string()),
-                Value::Bool(false),
-            );
+            map.insert(Value::String("enabled".to_string()), Value::Bool(false));
         }
 
         FrontMatterMarkdown::save(skill_md_path, &metadata, &body)
@@ -167,4 +164,3 @@ impl SkillData {
         )
     }
 }
-

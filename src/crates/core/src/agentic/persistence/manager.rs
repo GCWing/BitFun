@@ -65,17 +65,20 @@ impl PersistenceManager {
     ) -> BitFunResult<()> {
         let dir = self.ensure_session_dir(session_id).await?;
         let snapshots_dir = dir.join("context_snapshots");
-        fs::create_dir_all(&snapshots_dir)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to create context_snapshots directory: {}", e)))?;
+        fs::create_dir_all(&snapshots_dir).await.map_err(|e| {
+            BitFunError::io(format!(
+                "Failed to create context_snapshots directory: {}",
+                e
+            ))
+        })?;
 
         let snapshot_path = self.context_snapshot_path(session_id, turn_index);
         let json = serde_json::to_string(messages).map_err(|e| {
             BitFunError::serialization(format!("Failed to serialize turn context snapshot: {}", e))
         })?;
-        fs::write(&snapshot_path, json)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to write turn context snapshot: {}", e)))?;
+        fs::write(&snapshot_path, json).await.map_err(|e| {
+            BitFunError::io(format!("Failed to write turn context snapshot: {}", e))
+        })?;
         Ok(())
     }
 
@@ -98,7 +101,10 @@ impl PersistenceManager {
             .map_err(|e| BitFunError::io(format!("Failed to read turn context snapshot: {}", e)))?;
 
         let messages: Vec<Message> = serde_json::from_str(&content).map_err(|e| {
-            BitFunError::Deserialization(format!("Failed to deserialize turn context snapshot: {}", e))
+            BitFunError::Deserialization(format!(
+                "Failed to deserialize turn context snapshot: {}",
+                e
+            ))
         })?;
         Ok(Some(messages))
     }
@@ -112,9 +118,9 @@ impl PersistenceManager {
             return Ok(None);
         }
 
-        let mut rd = fs::read_dir(&dir)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read context_snapshots directory: {}", e)))?;
+        let mut rd = fs::read_dir(&dir).await.map_err(|e| {
+            BitFunError::io(format!("Failed to read context_snapshots directory: {}", e))
+        })?;
 
         let mut latest: Option<usize> = None;
         while let Some(entry) = rd
@@ -159,9 +165,9 @@ impl PersistenceManager {
             return Ok(());
         }
 
-        let mut rd = fs::read_dir(&dir)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read context_snapshots directory: {}", e)))?;
+        let mut rd = fs::read_dir(&dir).await.map_err(|e| {
+            BitFunError::io(format!("Failed to read context_snapshots directory: {}", e))
+        })?;
         while let Some(entry) = rd
             .next_entry()
             .await
@@ -195,8 +201,9 @@ impl PersistenceManager {
         let dir = self.ensure_session_dir(&session.session_id).await?;
         let metadata_path = dir.join("metadata.json");
 
-        let json = serde_json::to_string_pretty(session)
-            .map_err(|e| BitFunError::serialization(format!("Failed to serialize session: {}", e)))?;
+        let json = serde_json::to_string_pretty(session).map_err(|e| {
+            BitFunError::serialization(format!("Failed to serialize session: {}", e))
+        })?;
 
         fs::write(&metadata_path, json)
             .await
@@ -213,8 +220,9 @@ impl PersistenceManager {
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read session metadata: {}", e)))?;
 
-        let session: Session = serde_json::from_str(&json)
-            .map_err(|e| BitFunError::Deserialization(format!("Failed to deserialize session: {}", e)))?;
+        let session: Session = serde_json::from_str(&json).map_err(|e| {
+            BitFunError::Deserialization(format!("Failed to deserialize session: {}", e))
+        })?;
 
         Ok(session)
     }
@@ -243,9 +251,9 @@ impl PersistenceManager {
         let dir = self.get_session_dir(session_id);
 
         if dir.exists() {
-            fs::remove_dir_all(&dir)
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to delete session directory: {}", e)))?;
+            fs::remove_dir_all(&dir).await.map_err(|e| {
+                BitFunError::io(format!("Failed to delete session directory: {}", e))
+            })?;
         }
 
         info!("Session deleted: session_id={}", session_id);
@@ -312,8 +320,9 @@ impl PersistenceManager {
         let dir = self.ensure_session_dir(session_id).await?;
         let messages_path = dir.join("messages.jsonl");
 
-        let json = serde_json::to_string(message)
-            .map_err(|e| BitFunError::serialization(format!("Failed to serialize message: {}", e)))?;
+        let json = serde_json::to_string(message).map_err(|e| {
+            BitFunError::serialization(format!("Failed to serialize message: {}", e))
+        })?;
 
         let mut file = fs::OpenOptions::new()
             .create(true)
@@ -397,15 +406,18 @@ impl PersistenceManager {
         let dir = self.ensure_session_dir(session_id).await?;
         let compressed_path = dir.join("compressed_messages.jsonl");
 
-        let json = serde_json::to_string(message)
-            .map_err(|e| BitFunError::serialization(format!("Failed to serialize compressed message: {}", e)))?;
+        let json = serde_json::to_string(message).map_err(|e| {
+            BitFunError::serialization(format!("Failed to serialize compressed message: {}", e))
+        })?;
 
         let mut file = fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&compressed_path)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to open compressed message file: {}", e)))?;
+            .map_err(|e| {
+                BitFunError::io(format!("Failed to open compressed message file: {}", e))
+            })?;
 
         file.write_all(json.as_bytes())
             .await
@@ -433,16 +445,19 @@ impl PersistenceManager {
             .truncate(true)
             .open(&compressed_path)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to open compressed message file: {}", e)))?;
+            .map_err(|e| {
+                BitFunError::io(format!("Failed to open compressed message file: {}", e))
+            })?;
 
         // Write all messages
         for message in messages {
-            let json = serde_json::to_string(message)
-                .map_err(|e| BitFunError::serialization(format!("Failed to serialize compressed message: {}", e)))?;
+            let json = serde_json::to_string(message).map_err(|e| {
+                BitFunError::serialization(format!("Failed to serialize compressed message: {}", e))
+            })?;
 
-            file.write_all(json.as_bytes())
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to write compressed message: {}", e)))?;
+            file.write_all(json.as_bytes()).await.map_err(|e| {
+                BitFunError::io(format!("Failed to write compressed message: {}", e))
+            })?;
             file.write_all(b"\n")
                 .await
                 .map_err(|e| BitFunError::io(format!("Failed to write newline: {}", e)))?;
@@ -470,19 +485,17 @@ impl PersistenceManager {
             return Ok(None);
         }
 
-        let file = fs::File::open(&compressed_path)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to open compressed message file: {}", e)))?;
+        let file = fs::File::open(&compressed_path).await.map_err(|e| {
+            BitFunError::io(format!("Failed to open compressed message file: {}", e))
+        })?;
 
         let reader = BufReader::new(file);
         let mut lines = reader.lines();
         let mut messages = Vec::new();
 
-        while let Some(line) = lines
-            .next_line()
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read compressed message line: {}", e)))?
-        {
+        while let Some(line) = lines.next_line().await.map_err(|e| {
+            BitFunError::io(format!("Failed to read compressed message line: {}", e))
+        })? {
             if line.trim().is_empty() {
                 continue;
             }
@@ -514,9 +527,9 @@ impl PersistenceManager {
             .join("compressed_messages.jsonl");
 
         if compressed_path.exists() {
-            fs::remove_file(&compressed_path)
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to delete compressed message file: {}", e)))?;
+            fs::remove_file(&compressed_path).await.map_err(|e| {
+                BitFunError::io(format!("Failed to delete compressed message file: {}", e))
+            })?;
             debug!("Compressed history file deleted: session_id={}", session_id);
         }
 
@@ -535,8 +548,9 @@ impl PersistenceManager {
 
         let turn_path = turns_dir.join(format!("{}.json", turn.turn_id));
 
-        let json = serde_json::to_string_pretty(turn)
-            .map_err(|e| BitFunError::serialization(format!("Failed to serialize dialog turn: {}", e)))?;
+        let json = serde_json::to_string_pretty(turn).map_err(|e| {
+            BitFunError::serialization(format!("Failed to serialize dialog turn: {}", e))
+        })?;
 
         fs::write(&turn_path, json)
             .await
@@ -560,8 +574,9 @@ impl PersistenceManager {
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read dialog turn: {}", e)))?;
 
-        let turn: DialogTurn = serde_json::from_str(&json)
-            .map_err(|e| BitFunError::Deserialization(format!("Failed to deserialize dialog turn: {}", e)))?;
+        let turn: DialogTurn = serde_json::from_str(&json).map_err(|e| {
+            BitFunError::Deserialization(format!("Failed to deserialize dialog turn: {}", e))
+        })?;
 
         Ok(turn)
     }

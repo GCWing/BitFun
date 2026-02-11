@@ -1,13 +1,15 @@
-use log::debug;
+use crate::agentic::tools::framework::{
+    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+};
+use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use log::debug;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
-use crate::agentic::tools::framework::{Tool, ToolUseContext, ToolResult, ValidationResult, ToolRenderOptions};
-use crate::util::errors::{BitFunError, BitFunResult};
 
 /// File deletion tool - provides safe file/directory deletion functionality
-/// 
+///
 /// This tool automatically integrates with the snapshot system, all deletion operations are recorded and support rollback
 pub struct DeleteFileTool;
 
@@ -22,7 +24,7 @@ impl Tool for DeleteFileTool {
     fn name(&self) -> &str {
         "Delete"
     }
-    
+
     async fn description(&self) -> BitFunResult<String> {
         Ok(r#"Deletes a file or directory from the filesystem. This operation is tracked by the snapshot system and can be rolled back if needed.
 
@@ -73,7 +75,7 @@ Important notes:
  - All deletions can be rolled back through the snapshot interface
  - The tool will fail gracefully if permissions are insufficient"#.to_string())
     }
-    
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -90,20 +92,24 @@ Important notes:
             "required": ["path"]
         })
     }
-    
+
     fn is_readonly(&self) -> bool {
         false
     }
-    
+
     fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
         false
     }
-    
+
     fn needs_permissions(&self, _input: Option<&Value>) -> bool {
         true
     }
-    
-    async fn validate_input(&self, input: &Value, _context: Option<&ToolUseContext>) -> ValidationResult {
+
+    async fn validate_input(
+        &self,
+        input: &Value,
+        _context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
         // Validate path parameter
         let path_str = match input.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
@@ -116,7 +122,7 @@ Important notes:
                 };
             }
         };
-        
+
         if path_str.is_empty() {
             return ValidationResult {
                 result: false,
@@ -125,9 +131,9 @@ Important notes:
                 meta: None,
             };
         }
-        
+
         let path = Path::new(path_str);
-        
+
         // Validate if path is absolute
         if !path.is_absolute() {
             return ValidationResult {
@@ -137,7 +143,7 @@ Important notes:
                 meta: None,
             };
         }
-        
+
         // Validate if path exists
         if !path.exists() {
             return ValidationResult {
@@ -147,19 +153,20 @@ Important notes:
                 meta: None,
             };
         }
-        
+
         // If directory, check if recursive deletion is needed
         if path.is_dir() {
-            let recursive = input.get("recursive")
+            let recursive = input
+                .get("recursive")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            
+
             // Check if directory is empty
             let is_empty = match fs::read_dir(path).await {
                 Ok(mut entries) => entries.next_entry().await.ok().flatten().is_none(),
                 Err(_) => false,
             };
-            
+
             if !is_empty && !recursive {
                 return ValidationResult {
                     result: false,
@@ -173,7 +180,7 @@ Important notes:
                 };
             }
         }
-        
+
         ValidationResult {
             result: true,
             message: None,
@@ -181,13 +188,14 @@ Important notes:
             meta: None,
         }
     }
-    
+
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
         if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
-            let recursive = input.get("recursive")
+            let recursive = input
+                .get("recursive")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            
+
             if recursive {
                 format!("Deleting directory and contents: {}", path)
             } else {
@@ -197,49 +205,63 @@ Important notes:
             "Deleting file or directory".to_string()
         }
     }
-    
+
     fn render_result_for_assistant(&self, output: &Value) -> String {
         if let Some(path) = output.get("path").and_then(|v| v.as_str()) {
-            let is_directory = output.get("is_directory")
+            let is_directory = output
+                .get("is_directory")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            
+
             let type_name = if is_directory { "directory" } else { "file" };
-            
+
             format!("Successfully deleted {} at: {}", type_name, path)
         } else {
             "Deletion completed".to_string()
         }
     }
-    
-    async fn call_impl(&self, input: &Value, _context: &ToolUseContext) -> BitFunResult<Vec<ToolResult>> {
-        let path_str = input.get("path")
+
+    async fn call_impl(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let path_str = input
+            .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("path is required".to_string()))?;
-        
-        let recursive = input.get("recursive")
+
+        let recursive = input
+            .get("recursive")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        
+
         let path = Path::new(path_str);
         let is_directory = path.is_dir();
-        
-        debug!("DeleteFile tool deleting {}: {}", if is_directory { "directory" } else { "file" }, path_str);
-        
+
+        debug!(
+            "DeleteFile tool deleting {}: {}",
+            if is_directory { "directory" } else { "file" },
+            path_str
+        );
+
         // Execute deletion operation
         if is_directory {
             if recursive {
-                fs::remove_dir_all(path).await
+                fs::remove_dir_all(path)
+                    .await
                     .map_err(|e| BitFunError::tool(format!("Failed to delete directory: {}", e)))?;
             } else {
-                fs::remove_dir(path).await
+                fs::remove_dir(path)
+                    .await
                     .map_err(|e| BitFunError::tool(format!("Failed to delete directory: {}", e)))?;
             }
         } else {
-            fs::remove_file(path).await
+            fs::remove_file(path)
+                .await
                 .map_err(|e| BitFunError::tool(format!("Failed to delete file: {}", e)))?;
         }
-        
+
         // Build result
         let result_data = json!({
             "success": true,
@@ -247,9 +269,9 @@ Important notes:
             "is_directory": is_directory,
             "recursive": recursive
         });
-        
+
         let result_text = self.render_result_for_assistant(&result_data);
-        
+
         Ok(vec![ToolResult::Result {
             data: result_data,
             result_for_assistant: Some(result_text),

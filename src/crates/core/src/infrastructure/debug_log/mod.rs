@@ -5,12 +5,12 @@
 //! - `types` - Types and handlers for the HTTP ingest server (Config, State, Request, Response)
 //! - `http_server` - The actual HTTP server implementation (axum-based)
 
-pub mod types;
 pub mod http_server;
+pub mod types;
 
 pub use types::{
-    IngestServerConfig, IngestServerState, IngestLogRequest, IngestResponse,
-    handle_ingest, DEFAULT_INGEST_PORT,
+    handle_ingest, IngestLogRequest, IngestResponse, IngestServerConfig, IngestServerState,
+    DEFAULT_INGEST_PORT,
 };
 
 pub use http_server::IngestServerManager;
@@ -39,9 +39,8 @@ static DEFAULT_LOG_PATH: Lazy<PathBuf> = Lazy::new(|| {
         .join("debug.log")
 });
 
-static DEFAULT_INGEST_URL: Lazy<Option<String>> = Lazy::new(|| {
-    std::env::var("BITFUN_DEBUG_INGEST_URL").ok()
-});
+static DEFAULT_INGEST_URL: Lazy<Option<String>> =
+    Lazy::new(|| std::env::var("BITFUN_DEBUG_INGEST_URL").ok());
 
 #[derive(Debug, Clone)]
 pub struct DebugLogConfig {
@@ -168,7 +167,11 @@ fn ensure_parent_exists(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub async fn append_log_async(entry: DebugLogEntry, config: Option<DebugLogConfig>, send_http: bool) -> Result<()> {
+pub async fn append_log_async(
+    entry: DebugLogEntry,
+    config: Option<DebugLogConfig>,
+    send_http: bool,
+) -> Result<()> {
     let cfg = config.unwrap_or_default();
     let log_line = build_log_line(entry, &cfg);
     let log_path = cfg.log_path.clone();

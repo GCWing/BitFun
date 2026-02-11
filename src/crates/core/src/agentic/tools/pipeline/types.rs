@@ -73,7 +73,11 @@ pub struct ToolTask {
 }
 
 impl ToolTask {
-    pub fn new(tool_call: ToolCall, context: ToolExecutionContext, options: ToolExecutionOptions) -> Self {
+    pub fn new(
+        tool_call: ToolCall,
+        context: ToolExecutionContext,
+        options: ToolExecutionOptions,
+    ) -> Self {
         Self {
             tool_call,
             context,
@@ -94,4 +98,3 @@ pub struct ToolExecutionResult {
     pub result: crate::agentic::core::ToolResult,
     pub execution_time_ms: u64,
 }
-

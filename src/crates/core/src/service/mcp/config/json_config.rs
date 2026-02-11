@@ -98,10 +98,10 @@ impl MCPConfigService {
                             return Err(BitFunError::validation(error_msg));
                         }
                         (true, false) => "stdio",
-                        (false, true) => "sse",
+                        (false, true) => "streamable-http",
                         (false, false) => {
                             let error_msg = format!(
-                                "Server '{}' must provide either 'command' (stdio) or 'url' (sse)",
+                                "Server '{}' must provide either 'command' (stdio) or 'url' (streamable-http)",
                                 server_id
                             );
                             error!("{}", error_msg);
@@ -112,7 +112,12 @@ impl MCPConfigService {
                     if let Some(t) = type_str {
                         let normalized_transport = match t {
                             "stdio" | "local" | "container" => "stdio",
-                            "sse" | "remote" | "streamable_http" | "http" => "sse",
+                            "sse"
+                            | "remote"
+                            | "http"
+                            | "streamable_http"
+                            | "streamable-http"
+                            | "streamablehttp" => "streamable-http",
                             _ => {
                                 let error_msg = format!(
                                     "Server '{}' has unsupported 'type' value: '{}'",
@@ -142,9 +147,9 @@ impl MCPConfigService {
                         return Err(BitFunError::validation(error_msg));
                     }
 
-                    if inferred_transport == "sse" && url.is_none() {
+                    if inferred_transport == "streamable-http" && url.is_none() {
                         let error_msg =
-                            format!("Server '{}' (sse) must provide 'url' field", server_id);
+                            format!("Server '{}' (streamable-http) must provide 'url' field", server_id);
                         error!("{}", error_msg);
                         return Err(BitFunError::validation(error_msg));
                     }

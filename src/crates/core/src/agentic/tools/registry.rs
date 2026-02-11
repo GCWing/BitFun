@@ -160,11 +160,11 @@ impl ToolRegistry {
 }
 
 /// Get all tools
-/// - Snapshot initialized: 
+/// - Snapshot initialized:
 /// return tools only in the snapshot manager (wrapped file tools + built-in non-file tools)
 /// **not containing** dynamically registered MCP tools.
-/// - Snapshot not initialized: 
-/// return all tools in the global registry, 
+/// - Snapshot not initialized:
+/// return all tools in the global registry,
 /// **containing** MCP tools.
 /// If you need **always include** MCP tools, use [get_all_registered_tools]
 pub async fn get_all_tools() -> Vec<Arc<dyn Tool>> {
@@ -221,7 +221,7 @@ pub fn get_global_tool_registry() -> Arc<TokioRwLock<ToolRegistry>> {
 }
 
 /// Get all registered tools (**always include** dynamically registered MCP tools)
-/// - Snapshot initialized: 
+/// - Snapshot initialized:
 /// return wrapped file tools + other tools in the global registry (containing MCP tools)
 /// - Snapshot not initialized: return all tools in the global registry.
 pub async fn get_all_registered_tools() -> Vec<Arc<dyn Tool>> {

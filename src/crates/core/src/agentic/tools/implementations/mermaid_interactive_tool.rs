@@ -1,14 +1,14 @@
 //! Mermaid interactive diagram tool
-//! 
+//!
 //! Allows Agent to generate Mermaid diagrams with interactive features, supports node click navigation and highlight states
 
-use log::debug;
-use crate::agentic::tools::framework::{Tool, ToolUseContext, ToolResult, ValidationResult};
+use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::infrastructure::events::event_system::{get_global_event_system, BackendEvent};
 use crate::util::errors::BitFunResult;
-use crate::infrastructure::events::event_system::{BackendEvent, get_global_event_system};
-use serde_json::{json, Value};
 use async_trait::async_trait;
 use chrono::Utc;
+use log::debug;
+use serde_json::{json, Value};
 
 /// Mermaid interactive diagram tool
 pub struct MermaidInteractiveTool;
@@ -21,21 +21,34 @@ impl MermaidInteractiveTool {
     /// Validate if Mermaid code is valid, returns validation result and error message
     fn validate_mermaid_code(&self, code: &str) -> (bool, Option<String>) {
         let trimmed = code.trim();
-        
+
         // Check if empty
         if trimmed.is_empty() {
             return (false, Some("Mermaid code cannot be empty".to_string()));
         }
-        
+
         // Check if starts with valid diagram type
         let valid_starters = vec![
-            "graph ", "flowchart ", "sequenceDiagram", "classDiagram", 
-            "stateDiagram", "erDiagram", "gantt", "pie", "journey",
-            "timeline", "mindmap", "gitgraph", "C4Context", "C4Container"
+            "graph ",
+            "flowchart ",
+            "sequenceDiagram",
+            "classDiagram",
+            "stateDiagram",
+            "erDiagram",
+            "gantt",
+            "pie",
+            "journey",
+            "timeline",
+            "mindmap",
+            "gitgraph",
+            "C4Context",
+            "C4Container",
         ];
-        
-        let starts_with_valid = valid_starters.iter().any(|starter| trimmed.starts_with(starter));
-        
+
+        let starts_with_valid = valid_starters
+            .iter()
+            .any(|starter| trimmed.starts_with(starter));
+
         if !starts_with_valid {
             return (false, Some(format!(
                 "Mermaid code must start with a valid diagram type. Supported diagram types: graph, flowchart, sequenceDiagram, classDiagram, stateDiagram, erDiagram, gantt, pie, journey, timeline, mindmap, etc.\nCurrent code start: {}",
@@ -46,45 +59,50 @@ impl MermaidInteractiveTool {
                 }
             )));
         }
-        
+
         // Check basic syntax structure
         let lines: Vec<&str> = trimmed.lines().collect();
         if lines.len() < 2 {
             return (false, Some("Mermaid code needs at least 2 lines (diagram type declaration and at least one node/relationship)".to_string()));
         }
-        
+
         // Check if graph/flowchart has node definitions
         if trimmed.starts_with("graph ") || trimmed.starts_with("flowchart ") {
             // Check if there are arrows or node definitions
-            let has_arrow = trimmed.contains("-->") || trimmed.contains("---") || trimmed.contains("==>");
+            let has_arrow =
+                trimmed.contains("-->") || trimmed.contains("---") || trimmed.contains("==>");
             let has_node = trimmed.contains('[') || trimmed.contains('(') || trimmed.contains('{');
-            
+
             if !has_arrow && !has_node {
                 return (false, Some("Flowchart (graph/flowchart) must contain node definitions and connections. Example: A[Node] --> B[Node]".to_string()));
             }
         }
-        
+
         // Check if sequenceDiagram has participants
         if trimmed.starts_with("sequenceDiagram") {
-            if !trimmed.contains("participant") && !trimmed.contains("->>") && !trimmed.contains("-->>") {
+            if !trimmed.contains("participant")
+                && !trimmed.contains("->>")
+                && !trimmed.contains("-->>")
+            {
                 return (false, Some("Sequence diagram (sequenceDiagram) must contain participant definitions and interaction arrows. Example: participant A\nA->>B: Message".to_string()));
             }
         }
-        
+
         // Check if classDiagram has class definitions
         if trimmed.starts_with("classDiagram") {
-            if !trimmed.contains("class ") && !trimmed.contains("<|--") && !trimmed.contains("..>") {
+            if !trimmed.contains("class ") && !trimmed.contains("<|--") && !trimmed.contains("..>")
+            {
                 return (false, Some("Class diagram (classDiagram) must contain class definitions and relationships. Example: class A\nclass B\nA <|-- B".to_string()));
             }
         }
-        
+
         // Check if stateDiagram has state definitions
         if trimmed.starts_with("stateDiagram") {
             if !trimmed.contains("state ") && !trimmed.contains("[*]") && !trimmed.contains("-->") {
                 return (false, Some("State diagram (stateDiagram) must contain state definitions and transitions. Example: state A\n[*] --> A".to_string()));
             }
         }
-        
+
         // Check for unclosed brackets
         let open_brackets = trimmed.matches('[').count();
         let close_brackets = trimmed.matches(']').count();
@@ -94,7 +112,7 @@ impl MermaidInteractiveTool {
                 open_brackets, close_brackets
             )));
         }
-        
+
         let open_parens = trimmed.matches('(').count();
         let close_parens = trimmed.matches(')').count();
         if open_parens != close_parens {
@@ -103,7 +121,7 @@ impl MermaidInteractiveTool {
                 open_parens, close_parens
             )));
         }
-        
+
         let open_braces = trimmed.matches('{').count();
         let close_braces = trimmed.matches('}').count();
         if open_braces != close_braces {
@@ -112,16 +130,19 @@ impl MermaidInteractiveTool {
                 open_braces, close_braces
             )));
         }
-        
+
         // Check for obvious syntax errors (like isolated arrows)
-        let lines_with_arrows: Vec<&str> = lines.iter()
+        let lines_with_arrows: Vec<&str> = lines
+            .iter()
             .filter(|line| {
                 let trimmed_line = line.trim();
-                trimmed_line.contains("-->") || trimmed_line.contains("---") || trimmed_line.contains("==>")
+                trimmed_line.contains("-->")
+                    || trimmed_line.contains("---")
+                    || trimmed_line.contains("==>")
             })
             .copied()
             .collect();
-        
+
         for line in &lines_with_arrows {
             let trimmed_line = line.trim();
             // Check if there are node identifiers before and after arrows
@@ -139,7 +160,7 @@ impl MermaidInteractiveTool {
                 }
             }
         }
-        
+
         (true, None)
     }
 
@@ -161,26 +182,29 @@ impl MermaidInteractiveTool {
                 }
 
                 // Check required field: file_path is required
-                let has_file_path = node_data.get("file_path")
+                let has_file_path = node_data
+                    .get("file_path")
                     .and_then(|v| v.as_str())
                     .map(|s| !s.is_empty())
                     .unwrap_or(false);
-                
+
                 if !has_file_path {
                     return false;
                 }
 
                 // Get node type (defaults to file)
-                let node_type = node_data.get("node_type")
+                let node_type = node_data
+                    .get("node_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("file");
 
                 // For file type, line_number is required
                 if node_type == "file" {
-                    let has_line_number = node_data.get("line_number")
+                    let has_line_number = node_data
+                        .get("line_number")
                         .and_then(|v| v.as_u64())
                         .is_some();
-                    
+
                     if !has_line_number {
                         return false;
                     }
@@ -397,7 +421,11 @@ Mermaid Syntax:
         false
     }
 
-    async fn validate_input(&self, input: &Value, _context: Option<&ToolUseContext>) -> ValidationResult {
+    async fn validate_input(
+        &self,
+        input: &Value,
+        _context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
         // Validate mermaid_code
         let mermaid_code = match input.get("mermaid_code").and_then(|v| v.as_str()) {
             Some(code) if !code.trim().is_empty() => code,
@@ -418,7 +446,8 @@ Mermaid Syntax:
         // Validate Mermaid code format (returns detailed error message)
         let (is_valid, error_msg) = self.validate_mermaid_code(mermaid_code);
         if !is_valid {
-            let error_message = error_msg.unwrap_or_else(|| "Invalid Mermaid diagram syntax".to_string());
+            let error_message =
+                error_msg.unwrap_or_else(|| "Invalid Mermaid diagram syntax".to_string());
             return ValidationResult {
                 result: false,
                 message: Some(format!(
@@ -458,16 +487,19 @@ Mermaid Syntax:
     fn render_result_for_assistant(&self, output: &Value) -> String {
         if let Some(success) = output.get("success").and_then(|v| v.as_bool()) {
             if success {
-                let title = output.get("title")
+                let title = output
+                    .get("title")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Mermaid diagram");
-                
-                let node_count = output.get("metadata")
+
+                let node_count = output
+                    .get("metadata")
                     .and_then(|m| m.get("node_count"))
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0);
 
-                let interactive_nodes = output.get("metadata")
+                let interactive_nodes = output
+                    .get("metadata")
                     .and_then(|m| m.get("interactive_nodes"))
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0);
@@ -485,7 +517,7 @@ Mermaid Syntax:
                 }
             }
         }
-        
+
         if let Some(error) = output.get("error").and_then(|v| v.as_str()) {
             return format!("Failed to create Mermaid diagram: {}", error);
         }
@@ -493,15 +525,22 @@ Mermaid Syntax:
         "Mermaid diagram creation result unknown".to_string()
     }
 
-    fn render_tool_use_message(&self, input: &Value, _options: &crate::agentic::tools::framework::ToolRenderOptions) -> String {
-        let title = input.get("title")
+    fn render_tool_use_message(
+        &self,
+        input: &Value,
+        _options: &crate::agentic::tools::framework::ToolRenderOptions,
+    ) -> String {
+        let title = input
+            .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("Interactive Mermaid Diagram");
 
-        let has_metadata = input.get("node_metadata")
+        let has_metadata = input
+            .get("node_metadata")
             .and_then(|v| v.as_object())
             .map(|obj| obj.len())
-            .unwrap_or(0) > 0;
+            .unwrap_or(0)
+            > 0;
 
         if has_metadata {
             format!("Creating interactive diagram: {}", title)
@@ -510,11 +549,16 @@ Mermaid Syntax:
         }
     }
 
-    async fn call_impl(&self, input: &Value, context: &ToolUseContext) -> BitFunResult<Vec<ToolResult>> {
-        let mermaid_code = input.get("mermaid_code")
+    async fn call_impl(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let mermaid_code = input
+            .get("mermaid_code")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing mermaid_code field"))?;
-        
+
         // Validate Mermaid code
         let (is_valid, error_msg) = self.validate_mermaid_code(mermaid_code);
         if !is_valid {
@@ -538,15 +582,19 @@ Mermaid Syntax:
             }]);
         }
 
-        let title = input.get("title")
+        let title = input
+            .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("Interactive Mermaid Diagram");
 
-        let mode = input.get("mode")
+        let mode = input
+            .get("mode")
             .and_then(|v| v.as_str())
             .unwrap_or("interactive");
 
-        let session_id = context.session_id.clone()
+        let session_id = context
+            .session_id
+            .clone()
             .unwrap_or_else(|| format!("mermaid-{}", Utc::now().timestamp_millis()));
 
         // Build interactive configuration
@@ -566,17 +614,19 @@ Mermaid Syntax:
         }
 
         // Calculate statistics
-        let node_count = mermaid_code.lines()
+        let node_count = mermaid_code
+            .lines()
             .filter(|line| {
                 let trimmed = line.trim();
-                !trimmed.is_empty() && 
-                !trimmed.starts_with("%%") && 
-                !trimmed.starts_with("style") &&
-                !trimmed.starts_with("classDef")
+                !trimmed.is_empty()
+                    && !trimmed.starts_with("%%")
+                    && !trimmed.starts_with("style")
+                    && !trimmed.starts_with("classDef")
             })
             .count();
 
-        let interactive_nodes = input.get("node_metadata")
+        let interactive_nodes = input
+            .get("node_metadata")
             .and_then(|v| v.as_object())
             .map(|obj| obj.len())
             .unwrap_or(0);
@@ -614,7 +664,7 @@ Mermaid Syntax:
                     "timestamp": Utc::now().timestamp_millis(),
                     "session_id": session_id.clone()
                 }
-            })
+            }),
         };
 
         debug!("MermaidInteractive tool creating diagram, mode: {}, title: {}, node_count: {}, interactive_nodes: {}", 

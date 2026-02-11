@@ -105,7 +105,8 @@ impl AskUserQuestionTool {
     fn format_result_for_assistant(questions: &[Question], answers: &Value) -> String {
         // Try flat structure first (frontend sends {"0": "...", "1": [...]}),
         // then fall back to nested {"answers": {...}} for backward compatibility
-        let answers_obj = answers.as_object()
+        let answers_obj = answers
+            .as_object()
             .or_else(|| answers.get("answers").and_then(|v| v.as_object()));
 
         if let Some(answers_map) = answers_obj {

@@ -261,10 +261,9 @@ impl SnapshotCore {
                 .turns
                 .get_mut(&turn_index)
                 .ok_or_else(|| SnapshotError::ConfigError("turn not found".to_string()))?;
-            let op = turn
-                .operations
-                .get_mut(seq)
-                .ok_or_else(|| SnapshotError::ConfigError("seq_in_turn out of bounds".to_string()))?;
+            let op = turn.operations.get_mut(seq).ok_or_else(|| {
+                SnapshotError::ConfigError("seq_in_turn out of bounds".to_string())
+            })?;
 
             op.tool_context.execution_time_ms = execution_time_ms;
 
@@ -291,10 +290,9 @@ impl SnapshotCore {
                 .turns
                 .get_mut(&turn_index)
                 .ok_or_else(|| SnapshotError::ConfigError("turn not found".to_string()))?;
-            let op = turn
-                .operations
-                .get_mut(seq)
-                .ok_or_else(|| SnapshotError::ConfigError("seq_in_turn out of bounds".to_string()))?;
+            let op = turn.operations.get_mut(seq).ok_or_else(|| {
+                SnapshotError::ConfigError("seq_in_turn out of bounds".to_string())
+            })?;
 
             op.diff_summary = diff_summary;
             session.last_updated = SystemTime::now();

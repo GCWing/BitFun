@@ -124,11 +124,11 @@ impl BitFunError {
     pub fn validation<T: Into<String>>(msg: T) -> Self {
         Self::Validation(msg.into())
     }
-    
+
     pub fn ai<T: Into<String>>(msg: T) -> Self {
         Self::AIClient(msg.into())
     }
-    
+
     pub fn parse<T: Into<String>>(msg: T) -> Self {
         Self::Deserialization(msg.into())
     }

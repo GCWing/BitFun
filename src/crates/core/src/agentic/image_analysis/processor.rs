@@ -70,7 +70,10 @@ impl ImageAnalyzer {
                 }
                 Err(e) => {
                     error!("Image analysis task failed: {:?}", e);
-                    return Err(BitFunError::service(format!("Image analysis task failed: {}", e)));
+                    return Err(BitFunError::service(format!(
+                        "Image analysis task failed: {}",
+                        e
+                    )));
                 }
             }
         }
@@ -174,7 +177,9 @@ impl ImageAnalyzer {
                     .map_err(|e| BitFunError::io(format!("Invalid workspace path: {}", e)))?;
 
                 if !canonical_path.starts_with(&canonical_workspace) {
-                    return Err(BitFunError::validation("Image path must be within workspace"));
+                    return Err(BitFunError::validation(
+                        "Image path must be within workspace",
+                    ));
                 }
             }
 
@@ -182,7 +187,9 @@ impl ImageAnalyzer {
                 .await
                 .map_err(|e| BitFunError::io(format!("Failed to read image: {}", e)))
         } else {
-            Err(BitFunError::validation("Image context missing path or data"))
+            Err(BitFunError::validation(
+                "Image context missing path or data",
+            ))
         }
     }
 

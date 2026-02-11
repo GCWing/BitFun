@@ -1,8 +1,8 @@
 //! Conversation history persistence manager
 
 use super::types::*;
-use crate::infrastructure::PathManager;
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
+use crate::infrastructure::PathManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::PathBuf;
@@ -83,7 +83,6 @@ impl ConversationPersistenceManager {
         self.save_session_list(sessions).await
     }
 
-
     /// Saves session metadata.
     pub async fn save_session_metadata(&self, metadata: &SessionMetadata) -> BitFunResult<()> {
         let key = format!("session-{}/metadata", metadata.session_id);
@@ -115,17 +114,15 @@ impl ConversationPersistenceManager {
             .join(format!("session-{}", session_id));
 
         if session_dir.exists() {
-            tokio::fs::remove_dir_all(&session_dir)
-                .await
-                .map_err(|e| BitFunError::service(format!("Failed to delete session directory: {}", e)))?;
+            tokio::fs::remove_dir_all(&session_dir).await.map_err(|e| {
+                BitFunError::service(format!("Failed to delete session directory: {}", e))
+            })?;
         }
 
         self.remove_session_from_list(session_id).await?;
 
         Ok(())
     }
-
-    
 
     /// Saves a dialog turn.
     pub async fn save_dialog_turn(&self, turn: &DialogTurnData) -> BitFunResult<()> {
@@ -328,7 +325,6 @@ impl ConversationPersistenceManager {
             Ok(Vec::new())
         }
     }
-
 
     /// Updates the session's last active time.
     pub async fn touch_session(&self, session_id: &str) -> BitFunResult<()> {

@@ -108,14 +108,13 @@ pub async fn handle_ingest(
     request: IngestLogRequest,
     config: &DebugLogConfig,
 ) -> Result<IngestResponse> {
-    let log_config =
-        if let Some(workspace_path) = get_workspace_path() {
-            let mut cfg = config.clone();
-            cfg.log_path = workspace_path.join(".bitfun").join("debug.log");
-            cfg
-        } else {
-            config.clone()
-        };
+    let log_config = if let Some(workspace_path) = get_workspace_path() {
+        let mut cfg = config.clone();
+        cfg.log_path = workspace_path.join(".bitfun").join("debug.log");
+        cfg
+    } else {
+        config.clone()
+    };
 
     let entry: DebugLogEntry = request.into();
 

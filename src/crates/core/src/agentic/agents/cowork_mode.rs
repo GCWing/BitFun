@@ -67,4 +67,3 @@ impl Agent for CoworkMode {
         false
     }
 }
-

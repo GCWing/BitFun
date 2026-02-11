@@ -4,8 +4,8 @@
 //! Supports multiple application paths:
 //! .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills
 
-use super::types::{SkillData, SkillInfo, SkillLocation};
 use super::builtin::ensure_builtin_skills_installed;
+use super::types::{SkillData, SkillInfo, SkillLocation};
 use crate::infrastructure::{get_path_manager_arc, get_workspace_path};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error};

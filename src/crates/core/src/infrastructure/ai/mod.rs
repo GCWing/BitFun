@@ -9,4 +9,6 @@ pub mod providers;
 pub use ai_stream_handlers;
 
 pub use client::{AIClient, StreamResponse};
-pub use client_factory::{AIClientFactory, get_global_ai_client_factory, initialize_global_ai_client_factory};
+pub use client_factory::{
+    get_global_ai_client_factory, initialize_global_ai_client_factory, AIClientFactory,
+};

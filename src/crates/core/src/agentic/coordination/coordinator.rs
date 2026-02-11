@@ -544,7 +544,9 @@ impl ConversationCoordinator {
         if let Some(token) = cancel_token {
             if token.is_cancelled() {
                 debug!("Subagent task cancelled before execution");
-                return Err(BitFunError::Cancelled("Subagent task has been cancelled".to_string()));
+                return Err(BitFunError::Cancelled(
+                    "Subagent task has been cancelled".to_string(),
+                ));
             }
         }
 
@@ -562,7 +564,9 @@ impl ConversationCoordinator {
             if token.is_cancelled() {
                 debug!("Subagent task cancelled before AI call, cleaning up resources");
                 let _ = self.cleanup_subagent_resources(&session.session_id).await;
-                return Err(BitFunError::Cancelled("Subagent task has been cancelled".to_string()));
+                return Err(BitFunError::Cancelled(
+                    "Subagent task has been cancelled".to_string(),
+                ));
             }
         }
 

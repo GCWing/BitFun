@@ -1,5 +1,4 @@
 /// Transport adapters for different platforms
-
 pub mod cli;
 pub mod websocket;
 

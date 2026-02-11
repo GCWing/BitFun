@@ -1,5 +1,5 @@
 //! Image context provider trait
-//! 
+//!
 //! Through dependency injection mode, tools can access image context without directly depending on specific implementations
 
 use serde::{Deserialize, Serialize};
@@ -20,12 +20,12 @@ pub struct ImageContextData {
 }
 
 /// Image context provider trait
-/// 
+///
 /// Types that implement this trait can provide image data access capabilities to tools
 pub trait ImageContextProvider: Send + Sync + std::fmt::Debug {
     /// Get image context data by image_id
     fn get_image(&self, image_id: &str) -> Option<ImageContextData>;
-    
+
     /// Optional: delete image context (clean up after use)
     fn remove_image(&self, image_id: &str) {
         // Default implementation: do nothing
@@ -35,4 +35,3 @@ pub trait ImageContextProvider: Send + Sync + std::fmt::Debug {
 
 /// Optional wrapper type, for convenience
 pub type ImageContextProviderRef = Arc<dyn ImageContextProvider>;
-

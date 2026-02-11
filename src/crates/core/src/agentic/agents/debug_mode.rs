@@ -1,13 +1,13 @@
 //! Debug Mode - Evidence-driven debugging mode
 
-use log::debug;
 use super::prompt_builder::PromptBuilder;
 use super::Agent;
-use async_trait::async_trait;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
 use crate::service::lsp::project_detector::{ProjectDetector, ProjectInfo};
 use crate::util::errors::BitFunResult;
+use async_trait::async_trait;
+use log::debug;
 use std::path::Path;
 
 pub struct DebugMode;
@@ -70,7 +70,7 @@ impl DebugMode {
                 .get("javascript")
                 .map(|t| t.enabled && !t.instrumentation_template.trim().is_empty())
                 .unwrap_or(false);
-            
+
             if use_custom {
                 if let Some(template) = config.language_templates.get("javascript") {
                     output.push_str(&Self::render_template(template, config));
@@ -84,9 +84,9 @@ impl DebugMode {
             let matched_user_templates: Vec<_> = user_other_templates
                 .iter()
                 .filter(|(lang, _)| {
-                    detected_languages.iter().any(|detected| {
-                        detected.to_lowercase() == lang.to_lowercase()
-                    })
+                    detected_languages
+                        .iter()
+                        .any(|detected| detected.to_lowercase() == lang.to_lowercase())
                 })
                 .collect();
 
@@ -109,7 +109,7 @@ impl DebugMode {
 
         output
     }
-    
+
     fn render_builtin_js_template(config: &DebugModeConfig) -> String {
         let mut section = "## JavaScript / TypeScript Instrumentation\n\n".to_string();
         section.push_str("```javascript\n");
@@ -175,11 +175,7 @@ impl DebugMode {
     }
 
     /// Builds session-level configuration with dynamic values like server endpoint and log path.
-    fn build_session_level_rule(
-        &self,
-        config: &DebugModeConfig,
-        workspace_path: &str,
-    ) -> String {
+    fn build_session_level_rule(&self, config: &DebugModeConfig, workspace_path: &str) -> String {
         let log_path = if config.log_path.starts_with('/') || config.log_path.starts_with('.') {
             config.log_path.clone()
         } else {
@@ -290,12 +286,11 @@ impl Agent for DebugMode {
 
         debug!(
             "Debug mode project detection: languages={:?}, types={:?}",
-            project_info.languages,
-            project_info.project_types
+            project_info.languages, project_info.project_types
         );
 
-        let system_prompt_template =
-            get_embedded_prompt("debug_mode").unwrap_or("Debug mode prompt not found in embedded files");
+        let system_prompt_template = get_embedded_prompt("debug_mode")
+            .unwrap_or("Debug mode prompt not found in embedded files");
 
         let language_templates =
             Self::build_language_templates_prompt(&debug_config, &project_info.languages);

@@ -3,7 +3,6 @@
  *
  * Defines data structures for commit message generation
  */
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -12,16 +11,16 @@ use std::fmt;
 pub struct CommitMessageOptions {
     #[serde(default = "default_commit_format")]
     pub format: CommitFormat,
-    
+
     #[serde(default = "default_true")]
     pub include_files: bool,
-    
+
     #[serde(default = "default_max_length")]
     pub max_title_length: usize,
-    
+
     #[serde(default = "default_true")]
     pub include_body: bool,
-    
+
     #[serde(default = "default_language")]
     pub language: Language,
 }
@@ -77,21 +76,21 @@ pub enum Language {
 pub struct CommitMessage {
     /// Title (50-72 chars)
     pub title: String,
-    
+
     pub body: Option<String>,
-    
+
     /// Footer info (breaking changes, etc.)
     pub footer: Option<String>,
-    
+
     pub full_message: String,
-    
+
     pub commit_type: CommitType,
-    
+
     pub scope: Option<String>,
-    
+
     /// Confidence (0.0-1.0)
     pub confidence: f32,
-    
+
     pub changes_summary: ChangesSummary,
 }
 
@@ -141,15 +140,15 @@ impl fmt::Display for CommitType {
 #[serde(rename_all = "camelCase")]
 pub struct ChangesSummary {
     pub total_additions: u32,
-    
+
     pub total_deletions: u32,
-    
+
     pub files_changed: u32,
-    
+
     pub file_changes: Vec<FileChange>,
-    
+
     pub affected_modules: Vec<String>,
-    
+
     pub change_patterns: Vec<ChangePattern>,
 }
 
@@ -157,13 +156,13 @@ pub struct ChangesSummary {
 #[serde(rename_all = "camelCase")]
 pub struct FileChange {
     pub path: String,
-    
+
     pub change_type: FileChangeType,
-    
+
     pub additions: u32,
-    
+
     pub deletions: u32,
-    
+
     pub file_type: String,
 }
 
@@ -216,21 +215,21 @@ impl AgentError {
             error_type: AgentErrorType::GitError,
         }
     }
-    
+
     pub fn analysis_error(msg: impl Into<String>) -> Self {
         Self {
             message: msg.into(),
             error_type: AgentErrorType::AnalysisError,
         }
     }
-    
+
     pub fn invalid_input(msg: impl Into<String>) -> Self {
         Self {
             message: msg.into(),
             error_type: AgentErrorType::InvalidInput,
         }
     }
-    
+
     pub fn internal_error(msg: impl Into<String>) -> Self {
         Self {
             message: msg.into(),
@@ -245,11 +244,11 @@ pub type AgentResult<T> = Result<T, AgentError>;
 pub struct ProjectContext {
     /// Project type (e.g., web-app, library, cli-tool, etc.)
     pub project_type: String,
-    
+
     pub tech_stack: Vec<String>,
-    
+
     pub project_docs: Option<String>,
-    
+
     pub code_standards: Option<String>,
 }
 
@@ -267,16 +266,16 @@ impl Default for ProjectContext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AICommitAnalysis {
     pub commit_type: CommitType,
-    
+
     pub scope: Option<String>,
-    
+
     pub title: String,
-    
+
     pub body: Option<String>,
-    
+
     pub breaking_changes: Option<String>,
-    
+
     pub reasoning: String,
-    
+
     pub confidence: f32,
 }

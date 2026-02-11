@@ -26,6 +26,9 @@ pub struct MCPServerConfig {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
+    /// Additional HTTP headers for remote MCP servers (Cursor-style `headers`).
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(default = "default_true")]

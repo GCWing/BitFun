@@ -102,6 +102,49 @@ impl MCPServerManager {
         Ok(())
     }
 
+    /// Initializes servers without shutting down existing ones.
+    ///
+    /// This is safe to call multiple times (e.g., from multiple frontend windows).
+    pub async fn initialize_non_destructive(&self) -> BitFunResult<()> {
+        info!("Initializing MCP servers (non-destructive)");
+
+        let configs = self.config_service.load_all_configs().await?;
+        if configs.is_empty() {
+            return Ok(());
+        }
+
+        for config in &configs {
+            if !config.enabled {
+                continue;
+            }
+            if !self.registry.contains(&config.id).await {
+                if let Err(e) = self.registry.register(config).await {
+                    warn!(
+                        "Failed to register MCP server during non-destructive init: name={} id={} error={}",
+                        config.name, config.id, e
+                    );
+                }
+            }
+        }
+
+        for config in configs {
+            if !(config.enabled && config.auto_start) {
+                continue;
+            }
+
+            // Start only when not already running.
+            if let Ok(status) = self.get_server_status(&config.id).await {
+                if matches!(status, MCPServerStatus::Connected | MCPServerStatus::Healthy) {
+                    continue;
+                }
+            }
+
+            let _ = self.start_server(&config.id).await;
+        }
+
+        Ok(())
+    }
+
     /// Ensures a server is registered in the registry if it exists in config.
     ///
     /// This is useful after config changes (e.g. importing MCP servers) where the registry
@@ -200,7 +243,9 @@ impl MCPServerManager {
                     url, server_id
                 );
 
-                proc.start_remote(url, &config.env).await.map_err(|e| {
+                proc.start_remote(url, &config.env, &config.headers)
+                    .await
+                    .map_err(|e| {
                     error!(
                         "Failed to connect to remote MCP server: url={} id={} error={}",
                         url, server_id, e
@@ -316,9 +361,10 @@ impl MCPServerManager {
             let _ = self.ensure_registered(server_id).await;
         }
 
-        let process = self.registry.get_process(server_id).await.ok_or_else(|| {
-            BitFunError::NotFound(format!("MCP server not found: {}", server_id))
-        })?;
+        let process =
+            self.registry.get_process(server_id).await.ok_or_else(|| {
+                BitFunError::NotFound(format!("MCP server not found: {}", server_id))
+            })?;
 
         let proc = process.read().await;
         Ok(proc.status().await)

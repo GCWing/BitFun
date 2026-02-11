@@ -55,9 +55,7 @@ impl TokenCounter {
     }
 
     pub fn estimate_messages_tokens(messages: &[Message]) -> usize {
-        let mut total: usize = messages.iter()
-            .map(Self::estimate_message_tokens)
-            .sum();
+        let mut total: usize = messages.iter().map(Self::estimate_message_tokens).sum();
 
         total += 3;
 

@@ -509,8 +509,9 @@ impl FileSnapshotSystem {
     /// Gets snapshot content (string), read directly from disk.
     pub async fn get_snapshot_content(&self, snapshot_id: &str) -> SnapshotResult<String> {
         let content_bytes = self.restore_snapshot_content(snapshot_id).await?;
-        String::from_utf8(content_bytes)
-            .map_err(|e| SnapshotError::ConfigError(format!("Snapshot content is not valid UTF-8: {}", e)))
+        String::from_utf8(content_bytes).map_err(|e| {
+            SnapshotError::ConfigError(format!("Snapshot content is not valid UTF-8: {}", e))
+        })
     }
 
     /// Restores snapshot content (read directly from disk, without using in-memory cache).

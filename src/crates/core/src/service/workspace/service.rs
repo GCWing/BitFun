@@ -6,9 +6,9 @@ use super::manager::{
     ScanOptions, WorkspaceInfo, WorkspaceManager, WorkspaceManagerConfig,
     WorkspaceManagerStatistics, WorkspaceStatus, WorkspaceSummary, WorkspaceType,
 };
-use crate::infrastructure::{PathManager, try_get_path_manager_arc};
-use crate::infrastructure::storage::{PersistenceService, StorageOptions};
 use crate::infrastructure::set_workspace_path;
+use crate::infrastructure::storage::{PersistenceService, StorageOptions};
+use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::util::errors::*;
 use log::{info, warn};
 

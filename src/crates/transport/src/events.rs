@@ -1,8 +1,7 @@
 /// Generic event definitions
 ///
 /// Supports multiple event types, uniformly distributed by transport layer
-
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Unified event enum - All events to be sent to frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,19 +9,19 @@ use serde::{Serialize, Deserialize};
 pub enum UnifiedEvent {
     /// Agentic system event
     Agentic(AgenticEventPayload),
-    
+
     /// LSP event
     Lsp(LspEventPayload),
-    
+
     /// File watch event
     FileWatch(FileWatchEventPayload),
-    
+
     /// Profile generation event
     Profile(ProfileEventPayload),
-    
+
     /// Snapshot event
     Snapshot(SnapshotEventPayload),
-    
+
     /// Generic backend event
     Backend(BackendEventPayload),
 }

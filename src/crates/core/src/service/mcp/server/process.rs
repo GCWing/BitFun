@@ -4,7 +4,7 @@
 
 use super::connection::MCPConnection;
 use crate::service::mcp::protocol::{
-    InitializeResult, MCPMessage, MCPServerInfo, RemoteMCPTransport,
+    InitializeResult, MCPMessage, MCPServerInfo,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
@@ -169,11 +169,12 @@ impl MCPServerProcess {
         Ok(())
     }
 
-    /// Starts a remote server (HTTP/SSE).
+    /// Starts a remote server (Streamable HTTP).
     pub async fn start_remote(
         &mut self,
         url: &str,
         env: &std::collections::HashMap<String, String>,
+        headers: &std::collections::HashMap<String, String>,
     ) -> BitFunResult<()> {
         info!(
             "Starting remote MCP server: name={} id={} url={}",
@@ -181,18 +182,22 @@ impl MCPServerProcess {
         );
         self.set_status(MCPServerStatus::Starting).await;
 
-        let auth_token = env
-            .get("Authorization")
-            .or_else(|| env.get("AUTHORIZATION"))
-            .cloned();
+        let mut merged_headers = headers.clone();
+        if !merged_headers.contains_key("Authorization")
+            && !merged_headers.contains_key("authorization")
+            && !merged_headers.contains_key("AUTHORIZATION")
+        {
+            // Backward compatibility: older BitFun configs store `Authorization` under `env`.
+            if let Some(value) = env
+                .get("Authorization")
+                .or_else(|| env.get("authorization"))
+                .or_else(|| env.get("AUTHORIZATION"))
+            {
+                merged_headers.insert("Authorization".to_string(), value.clone());
+            }
+        }
 
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        let connection = Arc::new(MCPConnection::new_remote(
-            url.to_string(),
-            auth_token.clone(),
-            rx,
-        ));
+        let connection = Arc::new(MCPConnection::new_remote(url.to_string(), merged_headers));
         self.connection = Some(connection.clone());
         self.start_time = Some(Instant::now());
 
@@ -208,9 +213,6 @@ impl MCPServerProcess {
             self.set_status(MCPServerStatus::Failed).await;
             return Err(e);
         }
-
-        let session_id = connection.get_session_id().await;
-        RemoteMCPTransport::start_sse_loop(url.to_string(), session_id, auth_token, tx);
 
         self.set_status(MCPServerStatus::Connected).await;
         info!(

@@ -1,6 +1,5 @@
 //! LSP protocol-layer manager
 
-
 use anyhow::{anyhow, Result};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -202,7 +201,6 @@ impl LspManager {
         Ok(())
     }
 
-
     /// Returns whether the server is running.
     pub async fn is_server_running(&self, language: &str) -> bool {
         let processes = self.processes.read().await;
@@ -276,7 +274,6 @@ impl LspManager {
     pub async fn stop_all_servers(&self) -> Result<()> {
         self.shutdown().await
     }
-
 
     /// Document open notification (protocol-only; does not include startup logic).
     pub async fn did_open(&self, language: &str, uri: &str, text: &str) -> Result<()> {

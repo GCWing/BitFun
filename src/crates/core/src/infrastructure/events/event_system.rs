@@ -1,12 +1,12 @@
 //! Backend event system for tool execution and custom events
 
-use log::{trace, warn, error};
-use crate::util::types::event::ToolExecutionProgressInfo;
 use crate::infrastructure::events::EventEmitter;
+use crate::util::types::event::ToolExecutionProgressInfo;
+use anyhow::Result;
+use log::{error, trace, warn};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
@@ -17,9 +17,9 @@ pub enum BackendEvent {
         session_id: String,
         questions: serde_json::Value,
     },
-    Custom { 
-        event_name: String, 
-        payload: serde_json::Value 
+    Custom {
+        event_name: String,
+        payload: serde_json::Value,
     },
 }
 
@@ -46,10 +46,14 @@ impl BackendEventSystem {
         if let Some(ref emitter) = *emitter_guard {
             let event_name = match &event {
                 BackendEvent::Custom { event_name, .. } => event_name.clone(),
-                BackendEvent::ToolExecutionProgress(_) => "backend-event-toolexecutionprogress".to_string(),
-                BackendEvent::ToolAwaitingUserInput { .. } => "backend-event-toolawaitinguserinput".to_string(),
+                BackendEvent::ToolExecutionProgress(_) => {
+                    "backend-event-toolexecutionprogress".to_string()
+                }
+                BackendEvent::ToolAwaitingUserInput { .. } => {
+                    "backend-event-toolawaitinguserinput".to_string()
+                }
             };
-            
+
             let event_data = match &event {
                 BackendEvent::Custom { payload, .. } => payload.clone(),
                 _ => match serde_json::to_value(&event) {
@@ -60,7 +64,7 @@ impl BackendEventSystem {
                     }
                 },
             };
-            
+
             if let Err(e) = emitter.emit(&event_name, event_data).await {
                 warn!("Failed to emit to frontend: {}", e);
             }
@@ -76,12 +80,13 @@ impl Default for BackendEventSystem {
     }
 }
 
-static GLOBAL_EVENT_SYSTEM: std::sync::OnceLock<Arc<BackendEventSystem>> = std::sync::OnceLock::new();
+static GLOBAL_EVENT_SYSTEM: std::sync::OnceLock<Arc<BackendEventSystem>> =
+    std::sync::OnceLock::new();
 
 pub fn get_global_event_system() -> Arc<BackendEventSystem> {
-    GLOBAL_EVENT_SYSTEM.get_or_init(|| {
-        Arc::new(BackendEventSystem::new())
-    }).clone()
+    GLOBAL_EVENT_SYSTEM
+        .get_or_init(|| Arc::new(BackendEventSystem::new()))
+        .clone()
 }
 
 pub async fn emit_global_event(event: BackendEvent) -> Result<()> {

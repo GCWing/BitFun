@@ -144,6 +144,14 @@ impl PathManager {
         self.user_root.join("plugins")
     }
 
+    /// Cowork workspace root directory: ~/.config/bitfun/cowork/workspace/
+    ///
+    /// This is an app-managed workspace used to enable FlowChat features even when the user
+    /// hasn't selected a project folder. Cowork sessions can store their conversation history and
+    /// intermediate artifacts under this workspace.
+    pub fn cowork_workspace_dir(&self) -> PathBuf {
+        self.user_root.join("cowork").join("workspace")
+    }
     /// Get user-level rules directory: ~/.config/bitfun/data/rules/
     pub fn user_rules_dir(&self) -> PathBuf {
         self.user_data_dir().join("rules")

@@ -1,5 +1,5 @@
-use log::warn;
 use crate::service::config::types::AIModelConfig;
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 /// AI client configuration (for AI requests)
@@ -33,7 +33,10 @@ impl TryFrom<AIModelConfig> for AIConfig {
             match serde_json::from_str::<serde_json::Value>(body_str) {
                 Ok(value) => Some(value),
                 Err(e) => {
-                    warn!("Failed to parse custom_request_body: {}, config: {}", e, other.name);
+                    warn!(
+                        "Failed to parse custom_request_body: {}, config: {}",
+                        e, other.name
+                    );
                     None
                 }
             }

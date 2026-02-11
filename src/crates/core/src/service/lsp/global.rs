@@ -2,8 +2,8 @@
 //!
 //! Uses a global singleton to avoid adding dependencies to `AppState`.
 
-use log::{info, warn};
 use crate::infrastructure::try_get_path_manager_arc;
+use log::{info, warn};
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::path::PathBuf;

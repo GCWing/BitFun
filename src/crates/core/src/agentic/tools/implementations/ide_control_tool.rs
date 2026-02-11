@@ -58,11 +58,17 @@ impl IdeControlTool {
 
     /// Validate if panel type is valid
     fn is_valid_panel_type(&self, panel_type: &str) -> bool {
-        matches!(panel_type,
-            "git-settings" | "git-diff" |
-            "config-center" | "planner" |
-            "files" | "code-editor" | "markdown-editor" |
-            "ai-session" | "mermaid-editor"
+        matches!(
+            panel_type,
+            "git-settings"
+                | "git-diff"
+                | "config-center"
+                | "planner"
+                | "files"
+                | "code-editor"
+                | "markdown-editor"
+                | "ai-session"
+                | "mermaid-editor"
         )
     }
 

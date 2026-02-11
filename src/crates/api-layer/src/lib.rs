@@ -4,7 +4,6 @@
 /// - CLI (apps/cli)
 /// - Tauri Desktop (apps/desktop)
 /// - Web Server (apps/server)
-
 pub mod dto;
 pub mod handlers;
 

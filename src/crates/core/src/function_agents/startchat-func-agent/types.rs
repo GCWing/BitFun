@@ -3,7 +3,6 @@
  *
  * Defines data structures for work state analysis and greeting info at session start
  */
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -12,13 +11,13 @@ use std::fmt;
 pub struct WorkStateOptions {
     #[serde(default = "default_true")]
     pub analyze_git: bool,
-    
+
     #[serde(default = "default_true")]
     pub predict_next_actions: bool,
-    
+
     #[serde(default = "default_true")]
     pub include_quick_actions: bool,
-    
+
     #[serde(default = "default_language")]
     pub language: Language,
 }
@@ -52,13 +51,13 @@ pub enum Language {
 #[serde(rename_all = "camelCase")]
 pub struct WorkStateAnalysis {
     pub greeting: GreetingMessage,
-    
+
     pub current_state: CurrentWorkState,
-    
+
     pub predicted_actions: Vec<PredictedAction>,
-    
+
     pub quick_actions: Vec<QuickAction>,
-    
+
     pub analyzed_at: String,
 }
 
@@ -66,9 +65,9 @@ pub struct WorkStateAnalysis {
 #[serde(rename_all = "camelCase")]
 pub struct GreetingMessage {
     pub title: String,
-    
+
     pub subtitle: String,
-    
+
     pub tagline: Option<String>,
 }
 
@@ -76,11 +75,11 @@ pub struct GreetingMessage {
 #[serde(rename_all = "camelCase")]
 pub struct CurrentWorkState {
     pub summary: String,
-    
+
     pub git_state: Option<GitWorkState>,
-    
+
     pub ongoing_work: Vec<WorkItem>,
-    
+
     pub time_info: TimeInfo,
 }
 
@@ -88,15 +87,15 @@ pub struct CurrentWorkState {
 #[serde(rename_all = "camelCase")]
 pub struct GitWorkState {
     pub current_branch: String,
-    
+
     pub unstaged_files: u32,
-    
+
     pub staged_files: u32,
-    
+
     pub unpushed_commits: u32,
-    
+
     pub ahead_behind: Option<AheadBehind>,
-    
+
     /// List of modified files (show at most the first few)
     pub modified_files: Vec<FileModification>,
 }
@@ -105,7 +104,7 @@ pub struct GitWorkState {
 #[serde(rename_all = "camelCase")]
 pub struct AheadBehind {
     pub ahead: u32,
-    
+
     pub behind: u32,
 }
 
@@ -113,9 +112,9 @@ pub struct AheadBehind {
 #[serde(rename_all = "camelCase")]
 pub struct FileModification {
     pub path: String,
-    
+
     pub change_type: FileChangeType,
-    
+
     pub module: Option<String>,
 }
 
@@ -145,13 +144,13 @@ impl fmt::Display for FileChangeType {
 #[serde(rename_all = "camelCase")]
 pub struct WorkItem {
     pub title: String,
-    
+
     pub description: String,
-    
+
     pub related_files: Vec<String>,
-    
+
     pub category: WorkCategory,
-    
+
     pub icon: String,
 }
 
@@ -188,10 +187,10 @@ impl fmt::Display for WorkCategory {
 pub struct TimeInfo {
     /// Minutes since last commit
     pub minutes_since_last_commit: Option<u64>,
-    
+
     /// Last commit time description (e.g., "2 hours ago")
     pub last_commit_time_desc: Option<String>,
-    
+
     /// Current time of day (morning/afternoon/evening)
     pub time_of_day: TimeOfDay,
 }
@@ -220,11 +219,11 @@ impl fmt::Display for TimeOfDay {
 #[serde(rename_all = "camelCase")]
 pub struct PredictedAction {
     pub description: String,
-    
+
     pub priority: ActionPriority,
-    
+
     pub icon: String,
-    
+
     pub is_reminder: bool,
 }
 
@@ -250,12 +249,12 @@ impl fmt::Display for ActionPriority {
 #[serde(rename_all = "camelCase")]
 pub struct QuickAction {
     pub title: String,
-    
+
     /// Action command (natural language)
     pub command: String,
-    
+
     pub icon: String,
-    
+
     pub action_type: QuickActionType,
 }
 
@@ -272,11 +271,11 @@ pub enum QuickActionType {
 #[serde(rename_all = "camelCase")]
 pub struct AIGeneratedAnalysis {
     pub summary: String,
-    
+
     pub ongoing_work: Vec<WorkItem>,
-    
+
     pub predicted_actions: Vec<PredictedAction>,
-    
+
     pub quick_actions: Vec<QuickAction>,
 }
 
@@ -309,21 +308,21 @@ impl AgentError {
             error_type: AgentErrorType::GitError,
         }
     }
-    
+
     pub fn analysis_error(msg: impl Into<String>) -> Self {
         Self {
             message: msg.into(),
             error_type: AgentErrorType::AnalysisError,
         }
     }
-    
+
     pub fn invalid_input(msg: impl Into<String>) -> Self {
         Self {
             message: msg.into(),
             error_type: AgentErrorType::InvalidInput,
         }
     }
-    
+
     pub fn internal_error(msg: impl Into<String>) -> Self {
         Self {
             message: msg.into(),
@@ -333,4 +332,3 @@ impl AgentError {
 }
 
 pub type AgentResult<T> = Result<T, AgentError>;
-
