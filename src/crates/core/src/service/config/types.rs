@@ -863,7 +863,7 @@ impl Default for AIExperienceConfig {
     fn default() -> Self {
         Self {
             enable_session_title_generation: true,
-            enable_welcome_panel_ai_analysis: true,
+            enable_welcome_panel_ai_analysis: false,
             enable_visual_mode: false,
         }
     }

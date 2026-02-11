@@ -17,7 +17,7 @@ const CONFIG_PATH = 'app.ai_experience';
 
 const defaultSettings: AIExperienceSettings = {
   enable_session_title_generation: true,
-  enable_welcome_panel_ai_analysis: true,
+  enable_welcome_panel_ai_analysis: false,
 };
 
  
