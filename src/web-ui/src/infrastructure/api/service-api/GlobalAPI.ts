@@ -81,6 +81,14 @@ export class GlobalAPI {
     }
   }
 
+  async getCoworkWorkspacePath(): Promise<string> {
+    try {
+      return await api.invoke('get_cowork_workspace_path');
+    } catch (error) {
+      throw createTauriCommandError('get_cowork_workspace_path', error);
+    }
+  }
+
    
   async closeWorkspace(): Promise<void> {
     try {

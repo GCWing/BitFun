@@ -20,7 +20,7 @@ import type { FlowChatState } from '../types/flow-chat';
 import type { FileContext, DirectoryContext } from '../../shared/types/context';
 import type { PromptTemplate } from '../../shared/types/prompt-template';
 import { SmartRecommendations } from './smart-recommendations';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
 import { notificationService } from '@/shared/notification-system';
 import { TemplatePickerPanel } from './TemplatePickerPanel';
@@ -34,8 +34,10 @@ import { MERMAID_INTERACTIVE_EXAMPLE } from '../constants/mermaidExamples';
 import { useMessageSender } from '../hooks/useMessageSender';
 import { useTemplateEditor } from '../hooks/useTemplateEditor';
 import { useChatInputState } from '../store/chatInputStateStore';
+import CoworkExampleCards from './CoworkExampleCards';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip, IconButton, Modal, Card, CardHeader, CardBody } from '@/component-library';
+import { systemAPI } from '@/infrastructure/api';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
@@ -71,8 +73,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const isProcessing = derivedState?.isProcessing || false;
 
   const { workspacePath } = useCurrentWorkspace();
+  const { currentWorkspace, openWorkspace, hasWorkspace: hasOpenWorkspace } = useWorkspaceContext();
   
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
+  const [isEmptySession, setIsEmptySession] = React.useState(true);
+  const [coworkExamplesDismissed, setCoworkExamplesDismissed] = React.useState(false);
+  const [coworkExamplesResetKey, setCoworkExamplesResetKey] = React.useState(0);
   
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
@@ -146,6 +152,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     query: '',
     selectedIndex: 0,
   });
+
+  type CoworkWorkspaceScope = 'current' | 'global';
+  const [coworkScopeModalOpen, setCoworkScopeModalOpen] = useState(false);
+  const [coworkScopeSubmitting, setCoworkScopeSubmitting] = useState(false);
+  const [pendingCoworkModeId, setPendingCoworkModeId] = useState<string | null>(null);
   
   React.useEffect(() => {
     const store = FlowChatStore.getInstance();
@@ -158,6 +169,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             current: session.currentTokenUsage?.totalTokens || 0,
             max: session.maxContextTokens || 128128
           });
+          setIsEmptySession(session.dialogTurns.length === 0);
         }
       }
     });
@@ -170,11 +182,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           current: session.currentTokenUsage?.totalTokens || 0,
           max: session.maxContextTokens || 128128
         });
+        setIsEmptySession(session.dialogTurns.length === 0);
+      } else {
+        setIsEmptySession(true);
       }
     }
 
     return () => unsubscribe();
   }, [currentSessionId]);
+
+  const prevModeRef = React.useRef<string>(modeState.current);
+  React.useEffect(() => {
+    const prev = prevModeRef.current;
+    if (prev !== modeState.current && modeState.current === 'Cowork') {
+      setCoworkExamplesDismissed(false);
+      setCoworkExamplesResetKey((k) => k + 1);
+    }
+    prevModeRef.current = modeState.current;
+  }, [modeState.current]);
+
+  const fillInputAndExpand = useCallback((content: string) => {
+    dispatchInput({ type: 'ACTIVATE' });
+    dispatchInput({ type: 'SET_EXPANDED', payload: true });
+    dispatchInput({ type: 'SET_VALUE', payload: content });
+
+    if (richTextInputRef.current) {
+      richTextInputRef.current.focus();
+    }
+  }, []);
 
   React.useEffect(() => {
     const initializeTemplateService = async () => {
@@ -513,23 +548,77 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   }, [modeState.available, slashCommandState.query]);
   
-  const selectSlashCommandMode = useCallback((modeId: string) => {
-    dispatchMode({ 
-      type: 'SET_CURRENT_MODE', 
-      payload: modeId 
+  const applyModeChange = useCallback((modeId: string) => {
+    dispatchMode({
+      type: 'SET_CURRENT_MODE',
+      payload: modeId,
     });
-    
+
     if (currentSessionId) {
       FlowChatStore.getInstance().updateSessionMode(currentSessionId, modeId);
     }
-    
+  }, [currentSessionId]);
+
+  const requestModeChange = useCallback((modeId: string) => {
+    if (modeId === modeState.current) {
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
+
+    if (modeId === 'Cowork') {
+      setPendingCoworkModeId(modeId);
+      setCoworkScopeModalOpen(true);
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
+
+    applyModeChange(modeId);
+    dispatchMode({ type: 'CLOSE_DROPDOWN' });
+  }, [applyModeChange, modeState.current]);
+
+  const selectSlashCommandMode = useCallback((modeId: string) => {
+    requestModeChange(modeId);
+
     dispatchInput({ type: 'CLEAR_VALUE' });
     setSlashCommandState({
       isActive: false,
       query: '',
       selectedIndex: 0,
     });
-  }, [currentSessionId]);
+  }, [requestModeChange]);
+
+  const handleCloseCoworkScopeModal = useCallback(() => {
+    if (coworkScopeSubmitting) return;
+    setCoworkScopeModalOpen(false);
+    setPendingCoworkModeId(null);
+  }, [coworkScopeSubmitting]);
+
+  const handleSelectCoworkScope = useCallback(async (scope: CoworkWorkspaceScope) => {
+    if (!pendingCoworkModeId) return;
+
+    if (scope === 'current' && !hasOpenWorkspace) {
+      notificationService.error(t('coworkScope.errors.noWorkspace'), { duration: 4000 });
+      return;
+    }
+
+    setCoworkScopeSubmitting(true);
+    try {
+      if (scope === 'global') {
+        const coworkPath = await systemAPI.getCoworkWorkspacePath();
+        await openWorkspace(coworkPath);
+      }
+
+      applyModeChange(pendingCoworkModeId);
+    } catch (error) {
+      log.error('Failed to switch Cowork scope', { scope, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      notificationService.error(errorMessage || t('coworkScope.errors.openFailed'), { duration: 5000 });
+    } finally {
+      setCoworkScopeSubmitting(false);
+      setCoworkScopeModalOpen(false);
+      setPendingCoworkModeId(null);
+    }
+  }, [applyModeChange, hasOpenWorkspace, openWorkspace, pendingCoworkModeId, t]);
   
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (slashCommandState.isActive) {
@@ -778,9 +867,84 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </IconButton>
     );
   };
+
+  const shouldShowCoworkExamples =
+    modeState.current === 'Cowork' &&
+    isEmptySession &&
+    !coworkExamplesDismissed &&
+    inputState.value.trim() === '';
   
   return (
     <>
+      <Modal
+        isOpen={coworkScopeModalOpen}
+        onClose={handleCloseCoworkScopeModal}
+        title={t('coworkScope.title')}
+        size="small"
+      >
+        <div className="bitfun-chat-input__cowork-scope-modal">
+          <div className="bitfun-chat-input__cowork-scope-description">
+            {t('coworkScope.description')}
+          </div>
+
+          <div className="bitfun-chat-input__cowork-scope-options">
+            <Card
+              className={`bitfun-chat-input__cowork-scope-option${!hasOpenWorkspace ? ' bitfun-chat-input__cowork-scope-option--disabled' : ''}`}
+              variant="subtle"
+              interactive={hasOpenWorkspace && !coworkScopeSubmitting}
+              onClick={() => {
+                if (!hasOpenWorkspace || coworkScopeSubmitting) return;
+                handleSelectCoworkScope('current');
+              }}
+            >
+              <CardHeader
+                title={t('coworkScope.current.title')}
+                subtitle={t('coworkScope.current.subtitle', {
+                  name: currentWorkspace?.name || '',
+                })}
+              />
+              <CardBody>
+                <div className="bitfun-chat-input__cowork-scope-option-body">
+                  <div className="bitfun-chat-input__cowork-scope-option-desc">
+                    {t('coworkScope.current.description')}
+                  </div>
+                  {currentWorkspace?.rootPath && (
+                    <div className="bitfun-chat-input__cowork-scope-option-path">
+                      {currentWorkspace.rootPath}
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+
+            <Card
+              className="bitfun-chat-input__cowork-scope-option"
+              variant="subtle"
+              interactive={!coworkScopeSubmitting}
+              onClick={() => {
+                if (coworkScopeSubmitting) return;
+                handleSelectCoworkScope('global');
+              }}
+            >
+              <CardHeader
+                title={t('coworkScope.global.title')}
+                subtitle={t('coworkScope.global.subtitle')}
+              />
+              <CardBody>
+                <div className="bitfun-chat-input__cowork-scope-option-body">
+                  <div className="bitfun-chat-input__cowork-scope-option-desc">
+                    {t('coworkScope.global.description')}
+                  </div>
+                  {coworkScopeSubmitting && (
+                    <div className="bitfun-chat-input__cowork-scope-option-loading">...</div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      </Modal>
+
       <TemplatePickerPanel
         isOpen={templateState.isPickerOpen}
         onClose={() => dispatchTemplate({ type: 'CLOSE_PICKER' })}
@@ -805,14 +969,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onClick={!inputState.isActive ? handleActivate : undefined}
           data-testid="chat-input-container"
         >
-        {recommendationContext && (
-          <SmartRecommendations
-            context={recommendationContext}
-            className="bitfun-chat-input__recommendations"
-          />
-        )}
+          {shouldShowCoworkExamples && (
+            <div className="bitfun-chat-input__cowork-examples">
+              <CoworkExampleCards
+                resetKey={coworkExamplesResetKey}
+                onClose={() => setCoworkExamplesDismissed(true)}
+                onSelectPrompt={(prompt) => {
+                  setCoworkExamplesDismissed(true);
+                  fillInputAndExpand(prompt);
+                }}
+              />
+            </div>
+          )}
 
-        <div className="bitfun-chat-input__container">
+          {recommendationContext && (
+            <SmartRecommendations
+              context={recommendationContext}
+              className="bitfun-chat-input__recommendations"
+            />
+          )}
+
+          <div className="bitfun-chat-input__container">
           {templateState.fillState?.isActive && (
 <div className="bitfun-chat-input__template-hint">
                 <span className="bitfun-chat-input__template-hint-text" dangerouslySetInnerHTML={{ __html: t('chatInput.templateHint') }} />
@@ -975,17 +1152,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (modeOption.id !== modeState.current) {
-                            dispatchMode({ 
-                              type: 'SET_CURRENT_MODE', 
-                              payload: modeOption.id 
-                            });
-                            
-                            if (currentSessionId) {
-                              FlowChatStore.getInstance().updateSessionMode(currentSessionId, modeOption.id);
-                            }
-                          }
-                          dispatchMode({ type: 'CLOSE_DROPDOWN' });
+                          requestModeChange(modeOption.id);
                         }}
                       >
                         <span className="bitfun-chat-input__mode-option-name">{modeName}</span>

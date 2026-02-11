@@ -66,5 +66,55 @@
     "toolToggleFailed": "工具切换失败",
     "modelUpdated": "\"{{modeName}}\" 将使用 {{modelName}}",
     "modelUpdateFailed": "模型设置失败"
+  },
+  "cowork": {
+    "notion": {
+      "title": "Notion",
+      "hint": "连接你的 Notion 就行了",
+      "status": {
+        "connected": "已连接",
+        "connecting": "连接中",
+        "failed": "连接失败",
+        "notConnected": "未连接"
+      },
+      "actions": {
+        "connect": "连接",
+        "disconnect": "断开",
+        "working": "处理中..."
+      },
+      "messages": {
+        "connected": "Notion 已连接",
+        "disconnected": "Notion 已断开"
+      },
+      "errors": {
+        "invalidMcpConfig": "MCP 配置无效: {{message}}",
+        "connectFailed": "连接 Notion 失败",
+        "disconnectFailed": "断开 Notion 失败"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "hint": "连接你的 Gmail 就行了",
+      "status": {
+        "connected": "已连接",
+        "connecting": "连接中",
+        "failed": "连接失败",
+        "notConnected": "未连接"
+      },
+      "actions": {
+        "connect": "连接",
+        "disconnect": "断开",
+        "working": "处理中..."
+      },
+      "messages": {
+        "connected": "Gmail 已连接",
+        "disconnected": "Gmail 已断开"
+      },
+      "errors": {
+        "invalidMcpConfig": "MCP 配置无效: {{message}}",
+        "connectFailed": "连接 Gmail 失败",
+        "disconnectFailed": "断开 Gmail 失败"
+      }
+    }
   }
-}
+  }

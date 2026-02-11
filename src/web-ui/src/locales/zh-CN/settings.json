@@ -21,6 +21,7 @@
       "promptTemplates": "提示词",
       "skills": "技能",
       "plugins": "插件",
+      "integrations": "集成",
       "agents": "Sub Agent",
       "mcp": "MCP",
       "editor": "编辑器",

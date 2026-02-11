@@ -338,4 +338,3 @@ const StartupContent: React.FC<StartupContentProps> = ({
 
 export default StartupContent;
 export { StartupContent };
-

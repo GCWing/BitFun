@@ -94,6 +94,7 @@
     .bitfun-chat-input__expand-button,
     .bitfun-chat-input__template-hint,
     .bitfun-chat-input__recommendations,
+    .bitfun-chat-input__cowork-examples,
     .bitfun-chat-input__actions-left,
     .bitfun-chat-input__mode-selector,
     .bitfun-chat-input__queued-indicator {
@@ -199,6 +200,60 @@
 
   &__recommendations {
     margin-bottom: 8px;
+  }
+
+  &__cowork-examples {
+    margin-bottom: 8px;
+  }
+
+  &__cowork-scope-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__cowork-scope-description {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  &__cowork-scope-options {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  &__cowork-scope-option {
+    cursor: pointer;
+
+    &--disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+  }
+
+  &__cowork-scope-option-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__cowork-scope-option-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.35;
+  }
+
+  &__cowork-scope-option-path {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    word-break: break-all;
+  }
+
+  &__cowork-scope-option-loading {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
   }
   
   & > * {
@@ -1179,7 +1234,6 @@
     transform: translateY(0);
   }
 }
-
 
 
 

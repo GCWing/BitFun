@@ -73,12 +73,12 @@
   "jsonEditor": {
     "title": "MCP JSON Config",
     "hint1": "Use standard Cursor format for MCP configuration. Config will be saved to app.json in user directory.",
-    "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as sse (remote service). You can also set type=\"stdio\"/\"sse\" explicitly for compatibility.",
+    "hint2": "Format: the \"type\" field is optional. If you provide \"command\" it will be parsed as stdio (local process); if you provide \"url\" it will be parsed as streamable-http (remote service). You can also set type=\"stdio\"/\"streamable-http\" explicitly for compatibility.",
     "lintLocation": " (line {{line}}, col {{column}})",
     "lintError": "JSON syntax error{{location}}: {{message}}",
     "exampleTitle": "Configuration Examples:",
     "localProcess": "Local Process (stdio):",
-    "remoteService": "Remote Service (sse):"
+    "remoteService": "Remote Service (streamable-http):"
   },
   "resourceBrowser": {
     "title": "MCP Resources",
@@ -149,7 +149,7 @@
         "Refer to the configuration examples"
       ],
       "serverConfig": [
-        "Provide either command (stdio) or url (sse)",
+        "Provide either command (stdio) or url (streamable-http)",
         "args must be an array format",
         "env must be an object format"
       ],

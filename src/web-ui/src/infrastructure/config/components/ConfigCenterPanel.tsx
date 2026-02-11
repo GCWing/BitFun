@@ -9,6 +9,7 @@ import SubAgentConfig from './SubAgentConfig';
 import SkillsConfig from './SkillsConfig';
 import PluginsConfig from './PluginsConfig';
 import MCPConfig from './MCPConfig';
+import IntegrationsConfig from './IntegrationsConfig';
 import AgenticToolsConfig from './AgenticToolsConfig';
 import AIMemoryConfig from './AIMemoryConfig';
 import LspConfig from './LspConfig';
@@ -27,7 +28,26 @@ export interface ConfigCenterPanelProps {
   initialTab?: 'models' | 'ai-rules' | 'agents' | 'mcp' | 'agentic-tools' | 'logging';
 }
 
-type ConfigTab = 'models' | 'super-agent' | 'ai-features' | 'modes' | 'ai-rules' | 'agents' | 'skills' | 'plugins' | 'mcp' | 'agentic-tools' | 'ai-memory' | 'lsp' | 'debug' | 'logging' | 'terminal' | 'editor' | 'theme' | 'prompt-templates';
+type ConfigTab =
+  | 'models'
+  | 'super-agent'
+  | 'ai-features'
+  | 'modes'
+  | 'ai-rules'
+  | 'agents'
+  | 'skills'
+  | 'plugins'
+  | 'integrations'
+  | 'mcp'
+  | 'agentic-tools'
+  | 'ai-memory'
+  | 'lsp'
+  | 'debug'
+  | 'logging'
+  | 'terminal'
+  | 'editor'
+  | 'theme'
+  | 'prompt-templates';
 
 interface TabCategory {
   name: string;
@@ -127,6 +147,10 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
           label: t('configCenter.tabs.plugins')
         },
         {
+          id: 'integrations' as ConfigTab,
+          label: t('configCenter.tabs.integrations')
+        },
+        {
           id: 'mcp' as ConfigTab,
           label: t('configCenter.tabs.mcp')
         }
@@ -202,6 +226,8 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
         return <SubAgentConfig />;
       case 'mcp':
         return <MCPConfig />;
+      case 'integrations':
+        return <IntegrationsConfig />;
       case 'lsp':
         return <LspConfig />;
       case 'debug':
@@ -280,4 +306,3 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
 };
 
 export default ConfigCenterPanel;
-

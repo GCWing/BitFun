@@ -21,6 +21,7 @@
       "promptTemplates": "Prompts",
       "skills": "Skills",
       "plugins": "Plugins",
+      "integrations": "Integrations",
       "agents": "Sub Agent",
       "mcp": "MCP",
       "editor": "Editor",

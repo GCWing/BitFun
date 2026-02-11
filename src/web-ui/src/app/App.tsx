@@ -167,7 +167,7 @@ function App() {
     const initMCPServers = async () => {
       try {
         const { MCPAPI } = await import('../infrastructure/api/service-api/MCPAPI');
-        await MCPAPI.initializeServers();
+        await MCPAPI.initializeServersNonDestructive();
         log.debug('MCP servers initialized');
       } catch (error) {
         log.error('Failed to initialize MCP servers', error);

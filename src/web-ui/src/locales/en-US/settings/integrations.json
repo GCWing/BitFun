@@ -1,0 +1,29 @@
+{
+  "title": "Integrations",
+  "subtitle": "Connect external services via MCP",
+  "integrations": {
+    "notion": "Notion",
+    "gmail": "Gmail"
+  },
+  "status": {
+    "connected": "Connected",
+    "connecting": "Connecting",
+    "failed": "Failed",
+    "notConnected": "Not connected"
+  },
+  "actions": {
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "working": "Working..."
+  },
+  "messages": {
+    "connected": "{{name}} connected",
+    "disconnected": "{{name}} disconnected"
+  },
+  "errors": {
+    "invalidMcpConfig": "Invalid MCP config: {{message}}",
+    "connectFailed": "Connect failed",
+    "disconnectFailed": "Disconnect failed"
+  }
+}
+

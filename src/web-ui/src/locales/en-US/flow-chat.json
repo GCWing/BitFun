@@ -183,12 +183,84 @@
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
-      "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence"
+      "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
+      "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime"
     },
     "modeNames": {
       "agentic": "Agentic",
       "Plan": "Plan",
-      "debug": "Debug"
+      "debug": "Debug",
+      "Cowork": "Cowork"
+    }
+  },
+  "coworkScope": {
+    "title": "Choose a Cowork workspace",
+    "description": "Cowork mode can run in the currently opened workspace, or switch to a global Cowork workspace for temporary artifacts and conversations.",
+    "current": {
+      "title": "Current workspace",
+      "subtitle": "Opened: {{name}}",
+      "description": "Collaborate inside the current project. File search and context default to this workspace."
+    },
+    "global": {
+      "title": "Global workspace",
+      "subtitle": "App-managed temp workspace",
+      "description": "Switch to the global Cowork workspace for cross-project temporary tasks and artifacts."
+    },
+    "errors": {
+      "noWorkspace": "No workspace is currently open",
+      "openFailed": "Failed to open Cowork workspace"
+    }
+  },
+  "coworkExamples": {
+    "title": "Examples",
+    "refresh": "Shuffle",
+    "close": "Close",
+    "items": {
+      "desktop_cleanup": {
+        "title": "Tidy up my desktop",
+        "description": "Create an actionable cleanup + filing system.",
+        "prompt": "Help me clean up my desktop/downloads folder and set up a sustainable filing system.\n\nContext:\n- OS:\n- Main file types:\n- Preferred structure (by project / by date / by type):\n- Shortcuts I want to keep handy:\n\nOutput:\n1) Suggested folder structure (with examples)\n2) Naming conventions\n3) Step-by-step cleanup checklist (easy → hard)\n4) Optional: habits/automation tips to keep it clean"
+      },
+      "vacation_plan": {
+        "title": "Plan my vacation",
+        "description": "Build a day-by-day itinerary with budget + backups.",
+        "prompt": "Plan a vacation for me.\n\nBasics:\n- From:\n- Destinations (optional backups):\n- Dates / total days:\n- Travelers + preferences:\n- Budget range:\n- Interests (food / nature / museums / shopping / relax):\n- Hard constraints (no early mornings, no long drives, etc.):\n\nOutput:\n1) 2–3 destination options with pros/cons\n2) Best option: day-by-day plan (morning/afternoon/evening)\n3) Transport + lodging suggestions\n4) Budget breakdown\n5) Rainy-day/contingency alternatives"
+      },
+      "make_ppt": {
+        "title": "Draft a PPT",
+        "description": "Outline slides, talking points, and visuals.",
+        "prompt": "Help me draft a PPT (content + structure only, no file generation).\n\nTopic:\nAudience:\nTime limit:\nUse case (status update / pitch / training / sharing):\nPreferred style (clean / business / playful / minimal):\n\nOutput:\n1) Table of contents\n2) Slide-by-slide: title + 3–5 bullets\n3) Short speaker notes for key slides\n4) Visual/chart suggestions (what chart for what message)\n5) Likely questions + suggested answers"
+      },
+      "todo_breakdown": {
+        "title": "Break it into todos",
+        "description": "Turn a goal into executable tasks with estimates.",
+        "prompt": "Break the following goal into an executable todo list with priorities and time estimates.\n\nGoal:\nDeadline:\nCurrent status:\nResources (people/budget/tools):\nRisks/unknowns:\n\nOutput:\n1) Milestones\n2) Task list (owner / ETA / dependencies / acceptance criteria)\n3) Critical path + risks\n4) Three small things I can start tomorrow"
+      },
+      "weekly_plan": {
+        "title": "Make a weekly plan",
+        "description": "Schedule priorities, meetings, and deep work blocks.",
+        "prompt": "Create a practical weekly plan for me.\n\nInputs:\n- Top goals (max 3):\n- Fixed meetings/commitments:\n- Deep work windows:\n- Must-do tasks:\n- Nice-to-have tasks:\n\nOutput:\n1) Priority order\n2) Day-by-day plan (2–3 core tasks per day)\n3) Risk + buffer time suggestions\n4) 5-minute daily wrap-up checklist"
+      },
+      "meeting_minutes": {
+        "title": "Write meeting minutes",
+        "description": "Summarize decisions, action items, and open questions.",
+        "prompt": "Turn my meeting notes into clear meeting minutes.\n\nTopic:\nAttendees:\nTime:\nRaw notes (paste here):\n\nOutput:\n1) Key outcomes (3–6)\n2) Decisions\n3) Action items (owner / due date / acceptance criteria)\n4) Risks + open questions\n5) Suggested agenda for the next meeting"
+      },
+      "reply_email": {
+        "title": "Reply to an email",
+        "description": "Generate a polite, clear email template (two tones).",
+        "prompt": "Help me write an email reply.\n\nOriginal email (paste here):\nMy goal (confirm / decline / push forward / clarify):\nTone (formal / friendly / firm but polite):\nKey points to include:\n\nOutput:\n1) Subject line suggestions\n2) Body (2 versions: more formal / more concise)\n3) Questions for the recipient to confirm (if any)"
+      },
+      "make_spreadsheet": {
+        "title": "Design a spreadsheet",
+        "description": "Define fields and formulas for reusable tracking.",
+        "prompt": "Design a spreadsheet schema (columns + example rows) for the following purpose.\n\nPurpose:\nData sources:\nMetrics / aggregation needs:\nPreferred output (weekly report / dashboard / checklist):\n\nOutput:\n1) Recommended columns (type + notes)\n2) Example data (3–5 rows)\n3) Useful formulas / pivot suggestions\n4) Data validation + filling guidelines"
+      },
+      "budget_plan": {
+        "title": "Create a budget plan",
+        "description": "Allocate by category + timeline with review rules.",
+        "prompt": "Help me create a budget plan.\n\nContext:\n- Budget period (monthly / quarterly / project):\n- Total budget:\n- Fixed costs:\n- Variable costs:\n- Goal (save money / control spending / save for something):\n\nOutput:\n1) Suggested categories + ratios\n2) A category budget table (copy-paste friendly)\n3) Overrun rules + adjustment plan\n4) Weekly/monthly review checklist"
+      }
     }
   },
   "planner": {

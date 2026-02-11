@@ -73,12 +73,12 @@
   "jsonEditor": {
     "title": "MCP JSON 配置",
     "hint1": "使用标准Cursor格式的MCP配置。配置将自动保存到用户目录的 app.json 文件中。",
-    "hint2": "格式说明：可以省略 type 字段。提供 \"command\" 时按 stdio（本地进程）解析；提供 \"url\" 时按 sse（远程服务）解析。也可显式设置 type=\"stdio\"/\"sse\" 以保持兼容。",
+    "hint2": "格式说明：可以省略 type 字段。提供 \"command\" 时按 stdio（本地进程）解析；提供 \"url\" 时按 streamable-http（远程服务）解析。也可显式设置 type=\"stdio\"/\"streamable-http\" 以保持兼容。",
     "lintLocation": "（第 {{line}} 行，第 {{column}} 列）",
     "lintError": "JSON 有语法错误{{location}}：{{message}}",
     "exampleTitle": "配置示例：",
     "localProcess": "本地进程（stdio）：",
-    "remoteService": "远程服务（sse）："
+    "remoteService": "远程服务（streamable-http）："
   },
   "resourceBrowser": {
     "title": "MCP 资源",
@@ -149,7 +149,7 @@
         "参考界面中的配置示例"
       ],
       "serverConfig": [
-        "提供 command（stdio）或 url（sse）字段",
+        "提供 command（stdio）或 url（streamable-http）字段",
         "args 必须是数组格式",
         "env 必须是对象格式"
       ],

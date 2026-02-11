@@ -68,11 +68,12 @@ function createErrorClassifier(t: (key: string, options?: any) => any) {
     
     if (matches([
       "must not set both 'command' and 'url'",
-      "must provide either 'command' (stdio) or 'url' (sse)",
+      "must provide either 'command' (stdio) or 'url' (streamable-http)",
       "unsupported 'type' value",
       "'type' conflicts with provided fields",
       "(stdio) must provide 'command' field",
       "(sse) must provide 'url' field",
+      "(streamable-http) must provide 'url' field",
       "'args' field must be an array",
       "'env' field must be an object",
       'config must be an object'

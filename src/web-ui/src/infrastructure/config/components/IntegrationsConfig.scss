@@ -1,0 +1,76 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.integrations-config-panel {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+}
+
+.integrations-list {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+}
+
+.integration-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $size-gap-3;
+  padding: $size-gap-4;
+
+  &__left {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__title {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 2px 8px;
+    border-radius: $size-radius-sm;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    border: 1px solid var(--border-base);
+    color: var(--color-text-muted);
+    background: transparent;
+    white-space: nowrap;
+
+    &--ok {
+      border-color: rgba(34, 197, 94, 0.35);
+      color: var(--color-success);
+      background: rgba(34, 197, 94, 0.08);
+    }
+    &--pending {
+      border-color: rgba(245, 158, 11, 0.35);
+      color: var(--color-warning);
+      background: rgba(245, 158, 11, 0.08);
+    }
+    &--error {
+      border-color: rgba(239, 68, 68, 0.35);
+      color: var(--color-danger);
+      background: rgba(239, 68, 68, 0.08);
+    }
+    &--unknown {
+      border-color: var(--border-base);
+      color: var(--color-text-muted);
+      background: transparent;
+    }
+  }
+
+  &__right {
+    flex-shrink: 0;
+  }
+}
+

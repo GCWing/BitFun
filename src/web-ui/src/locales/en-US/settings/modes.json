@@ -66,5 +66,55 @@
     "toolToggleFailed": "Failed to toggle tool",
     "modelUpdated": "\"{{modeName}}\" will use {{modelName}}",
     "modelUpdateFailed": "Failed to set model"
+  },
+  "cowork": {
+    "notion": {
+      "title": "Notion",
+      "hint": "Connect your Notion.",
+      "status": {
+        "connected": "Connected",
+        "connecting": "Connecting",
+        "failed": "Failed",
+        "notConnected": "Not connected"
+      },
+      "actions": {
+        "connect": "Connect",
+        "disconnect": "Disconnect",
+        "working": "Working..."
+      },
+      "messages": {
+        "connected": "Notion connected",
+        "disconnected": "Notion disconnected"
+      },
+      "errors": {
+        "invalidMcpConfig": "Invalid MCP config: {{message}}",
+        "connectFailed": "Failed to connect Notion",
+        "disconnectFailed": "Failed to disconnect Notion"
+      }
+    },
+    "gmail": {
+      "title": "Gmail",
+      "hint": "Connect your Gmail.",
+      "status": {
+        "connected": "Connected",
+        "connecting": "Connecting",
+        "failed": "Failed",
+        "notConnected": "Not connected"
+      },
+      "actions": {
+        "connect": "Connect",
+        "disconnect": "Disconnect",
+        "working": "Working..."
+      },
+      "messages": {
+        "connected": "Gmail connected",
+        "disconnected": "Gmail disconnected"
+      },
+      "errors": {
+        "invalidMcpConfig": "Invalid MCP config: {{message}}",
+        "connectFailed": "Failed to connect Gmail",
+        "disconnectFailed": "Failed to disconnect Gmail"
+      }
+    }
   }
 }

@@ -322,6 +322,11 @@
     }
   }
 
+  &__cowork-btn {
+    border-style: solid;
+    color: var(--color-text-primary);
+  }
+
   // ==================== History Workspace Section ====================
 
   &__history-section {
@@ -744,4 +749,3 @@
     }
   }
 }
-

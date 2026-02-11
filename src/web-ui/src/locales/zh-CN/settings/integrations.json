@@ -1,0 +1,29 @@
+{
+  "title": "集成",
+  "subtitle": "通过 MCP 连接外部服务",
+  "integrations": {
+    "notion": "Notion",
+    "gmail": "Gmail"
+  },
+  "status": {
+    "connected": "已连接",
+    "connecting": "连接中",
+    "failed": "连接失败",
+    "notConnected": "未连接"
+  },
+  "actions": {
+    "connect": "连接",
+    "disconnect": "断开",
+    "working": "处理中..."
+  },
+  "messages": {
+    "connected": "{{name}} 已连接",
+    "disconnected": "{{name}} 已断开"
+  },
+  "errors": {
+    "invalidMcpConfig": "MCP 配置无效: {{message}}",
+    "connectFailed": "连接失败",
+    "disconnectFailed": "断开失败"
+  }
+}
+
