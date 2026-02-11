@@ -17,7 +17,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_log::{RotationStrategy, TimezoneStrategy};
 
 // Re-export API
