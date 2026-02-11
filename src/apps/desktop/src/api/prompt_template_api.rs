@@ -1,9 +1,9 @@
 //! Prompt Template Management API
 
-use log::{warn, error};
-use tauri::State;
 use crate::api::app_state::AppState;
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,12 +48,18 @@ pub async fn get_prompt_template_config(
     state: State<'_, AppState>,
 ) -> Result<PromptTemplateConfig, String> {
     let config_service = &state.config_service;
-    
-    match config_service.get_config::<Option<PromptTemplateConfig>>(Some("prompt_templates")).await {
+
+    match config_service
+        .get_config::<Option<PromptTemplateConfig>>(Some("prompt_templates"))
+        .await
+    {
         Ok(Some(config)) => Ok(config),
         Ok(None) => {
             let default_config = create_default_config();
-            if let Err(e) = config_service.set_config("prompt_templates", &default_config).await {
+            if let Err(e) = config_service
+                .set_config("prompt_templates", &default_config)
+                .await
+            {
                 warn!("Failed to save default config: error={}", e);
             }
             Ok(default_config)
@@ -71,8 +77,10 @@ pub async fn save_prompt_template_config(
     config: PromptTemplateConfig,
 ) -> Result<(), String> {
     let config_service = &state.config_service;
-    
-    config_service.set_config("prompt_templates", config).await
+
+    config_service
+        .set_config("prompt_templates", config)
+        .await
         .map_err(|e| {
             error!("Failed to save prompt template config: error={}", e);
             format!("Failed to save config: {}", e)
@@ -80,16 +88,13 @@ pub async fn save_prompt_template_config(
 }
 
 #[tauri::command]
-pub async fn export_prompt_templates(
-    state: State<'_, AppState>,
-) -> Result<String, String> {
+pub async fn export_prompt_templates(state: State<'_, AppState>) -> Result<String, String> {
     let config = get_prompt_template_config(state).await?;
-    
-    serde_json::to_string_pretty(&config)
-        .map_err(|e| {
-            error!("Failed to export prompt templates: error={}", e);
-            format!("Export failed: {}", e)
-        })
+
+    serde_json::to_string_pretty(&config).map_err(|e| {
+        error!("Failed to export prompt templates: error={}", e);
+        format!("Export failed: {}", e)
+    })
 }
 
 #[tauri::command]
@@ -97,16 +102,14 @@ pub async fn import_prompt_templates(
     state: State<'_, AppState>,
     json: String,
 ) -> Result<(), String> {
-    let config: PromptTemplateConfig = serde_json::from_str(&json)
-        .map_err(|e| format!("Invalid config format: {}", e))?;
-    
+    let config: PromptTemplateConfig =
+        serde_json::from_str(&json).map_err(|e| format!("Invalid config format: {}", e))?;
+
     save_prompt_template_config(state, config).await
 }
 
 #[tauri::command]
-pub async fn reset_prompt_templates(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn reset_prompt_templates(state: State<'_, AppState>) -> Result<(), String> {
     let default_config = create_default_config();
     save_prompt_template_config(state, default_config).await
 }

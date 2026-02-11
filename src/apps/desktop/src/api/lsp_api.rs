@@ -1,12 +1,12 @@
 //! LSP API
 
-use log::{info, error};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-use bitfun_core::service::lsp::{get_global_lsp_manager, initialize_global_lsp_manager};
 use bitfun_core::service::lsp::types::{CompletionItem, LspPlugin};
+use bitfun_core::service::lsp::{get_global_lsp_manager, initialize_global_lsp_manager};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -140,15 +140,17 @@ pub async fn lsp_initialize() -> Result<(), String> {
 pub async fn lsp_start_server_for_file(
     request: StartServerForFileRequest,
 ) -> Result<StartServerResponse, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     info!("Starting LSP server for file: {}", request.file_path);
 
     let guard = manager.read().await;
     if let Some(plugin) = guard.find_plugin_by_file(&request.file_path).await {
         let language = &plugin.languages[0];
-        match guard.start_server(language, None, None, None, None, None).await {
+        match guard
+            .start_server(language, None, None, None, None, None)
+            .await
+        {
             Ok(_) => Ok(StartServerResponse {
                 success: true,
                 message: format!("LSP server started for {}", request.file_path),
@@ -159,19 +161,20 @@ pub async fn lsp_start_server_for_file(
             }
         }
     } else {
-        Err(format!("No LSP plugin found for file: {}", request.file_path))
+        Err(format!(
+            "No LSP plugin found for file: {}",
+            request.file_path
+        ))
     }
 }
 
 #[tauri::command]
-pub async fn lsp_stop_server(
-    request: StopServerRequest,
-) -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_stop_server(request: StopServerRequest) -> Result<(), String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.stop_server(&request.language)
+    guard
+        .stop_server(&request.language)
         .await
         .map_err(|e| format!("Failed to stop LSP server: {}", e))?;
 
@@ -180,11 +183,11 @@ pub async fn lsp_stop_server(
 
 #[tauri::command]
 pub async fn lsp_stop_all_servers() -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.stop_all_servers()
+    guard
+        .stop_all_servers()
         .await
         .map_err(|e| format!("Failed to stop all LSP servers: {}", e))?;
 
@@ -192,14 +195,12 @@ pub async fn lsp_stop_all_servers() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn lsp_did_open(
-    request: DidOpenRequest,
-) -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_did_open(request: DidOpenRequest) -> Result<(), String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.did_open(&request.language, &request.uri, &request.text)
+    guard
+        .did_open(&request.language, &request.uri, &request.text)
         .await
         .map_err(|e| format!("Failed to send didOpen: {}", e))?;
 
@@ -207,14 +208,17 @@ pub async fn lsp_did_open(
 }
 
 #[tauri::command]
-pub async fn lsp_did_change(
-    request: DidChangeRequest,
-) -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_did_change(request: DidChangeRequest) -> Result<(), String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.did_change(&request.language, &request.uri, request.version, &request.text)
+    guard
+        .did_change(
+            &request.language,
+            &request.uri,
+            request.version,
+            &request.text,
+        )
         .await
         .map_err(|e| format!("Failed to send didChange: {}", e))?;
 
@@ -222,14 +226,12 @@ pub async fn lsp_did_change(
 }
 
 #[tauri::command]
-pub async fn lsp_did_save(
-    request: DidSaveRequest,
-) -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_did_save(request: DidSaveRequest) -> Result<(), String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.did_save(&request.language, &request.uri)
+    guard
+        .did_save(&request.language, &request.uri)
         .await
         .map_err(|e| format!("Failed to send didSave: {}", e))?;
 
@@ -237,14 +239,12 @@ pub async fn lsp_did_save(
 }
 
 #[tauri::command]
-pub async fn lsp_did_close(
-    request: DidCloseRequest,
-) -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_did_close(request: DidCloseRequest) -> Result<(), String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.did_close(&request.language, &request.uri)
+    guard
+        .did_close(&request.language, &request.uri)
         .await
         .map_err(|e| format!("Failed to send didClose: {}", e))?;
 
@@ -255,11 +255,16 @@ pub async fn lsp_did_close(
 pub async fn lsp_get_completions(
     request: GetCompletionsRequest,
 ) -> Result<Vec<CompletionItem>, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    let items = guard.get_completions(&request.language, &request.uri, request.line, request.character)
+    let items = guard
+        .get_completions(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to get completions: {}", e))?;
 
@@ -267,14 +272,17 @@ pub async fn lsp_get_completions(
 }
 
 #[tauri::command]
-pub async fn lsp_get_hover(
-    request: GetHoverRequest,
-) -> Result<serde_json::Value, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_get_hover(request: GetHoverRequest) -> Result<serde_json::Value, String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    let hover = guard.get_hover(&request.language, &request.uri, request.line, request.character)
+    let hover = guard
+        .get_hover(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to get hover: {}", e))?;
 
@@ -285,11 +293,16 @@ pub async fn lsp_get_hover(
 pub async fn lsp_goto_definition(
     request: GotoDefinitionRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    let definition = guard.goto_definition(&request.language, &request.uri, request.line, request.character)
+    let definition = guard
+        .goto_definition(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to goto definition: {}", e))?;
 
@@ -300,11 +313,16 @@ pub async fn lsp_goto_definition(
 pub async fn lsp_find_references(
     request: FindReferencesRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    let references = guard.find_references(&request.language, &request.uri, request.line, request.character)
+    let references = guard
+        .find_references(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to find references: {}", e))?;
 
@@ -315,14 +333,14 @@ pub async fn lsp_find_references(
 pub async fn lsp_format_document(
     request: FormatDocumentRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let tab_size = request.tab_size.unwrap_or(4);
     let insert_spaces = request.insert_spaces.unwrap_or(true);
 
     let guard = manager.read().await;
-    let edits = guard.format_document(&request.language, &request.uri, tab_size, insert_spaces)
+    let edits = guard
+        .format_document(&request.language, &request.uri, tab_size, insert_spaces)
         .await
         .map_err(|e| format!("Failed to format document: {}", e))?;
 
@@ -330,43 +348,36 @@ pub async fn lsp_format_document(
 }
 
 #[tauri::command]
-pub async fn lsp_install_plugin(
-    request: InstallPluginRequest,
-) -> Result<String, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_install_plugin(request: InstallPluginRequest) -> Result<String, String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let package_path = PathBuf::from(request.package_path);
 
     let guard = manager.read().await;
-    let plugin_id = guard.install_plugin(package_path)
+    let plugin_id = guard
+        .install_plugin(package_path)
         .await
         .map_err(|e| format!("Failed to install plugin: {}", e))?;
-
 
     Ok(plugin_id)
 }
 
 #[tauri::command]
-pub async fn lsp_uninstall_plugin(
-    request: UninstallPluginRequest,
-) -> Result<(), String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_uninstall_plugin(request: UninstallPluginRequest) -> Result<(), String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    guard.uninstall_plugin(&request.plugin_id)
+    guard
+        .uninstall_plugin(&request.plugin_id)
         .await
         .map_err(|e| format!("Failed to uninstall plugin: {}", e))?;
-
 
     Ok(())
 }
 
 #[tauri::command]
 pub async fn lsp_list_plugins() -> Result<Vec<LspPlugin>, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
     let plugins = guard.list_plugins().await;
@@ -383,28 +394,28 @@ pub struct SupportedExtensionsResponse {
 #[tauri::command]
 pub async fn lsp_get_supported_extensions() -> Result<SupportedExtensionsResponse, String> {
     use std::collections::HashMap;
-    
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
     let plugins = guard.list_plugins().await;
-    
+
     let mut extension_to_language: HashMap<String, String> = HashMap::new();
-    let mut supported_languages: std::collections::HashSet<String> = std::collections::HashSet::new();
-    
+    let mut supported_languages: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+
     for plugin in plugins {
         for lang in &plugin.languages {
             supported_languages.insert(lang.clone());
         }
-        
+
         for ext in &plugin.file_extensions {
             if !plugin.languages.is_empty() {
                 extension_to_language.insert(ext.clone(), plugin.languages[0].clone());
             }
         }
     }
-    
+
     Ok(SupportedExtensionsResponse {
         extension_to_language,
         supported_languages: supported_languages.into_iter().collect(),
@@ -412,11 +423,8 @@ pub async fn lsp_get_supported_extensions() -> Result<SupportedExtensionsRespons
 }
 
 #[tauri::command]
-pub async fn lsp_get_plugin(
-    request: GetPluginRequest,
-) -> Result<Option<LspPlugin>, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+pub async fn lsp_get_plugin(request: GetPluginRequest) -> Result<Option<LspPlugin>, String> {
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
     let plugin = guard.get_plugin(&request.plugin_id).await;
@@ -427,11 +435,11 @@ pub async fn lsp_get_plugin(
 pub async fn lsp_get_server_capabilities(
     request: GetServerCapabilitiesRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = get_global_lsp_manager()
-        .map_err(|e| format!("LSP not initialized: {}", e))?;
+    let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    let capabilities = guard.get_server_capabilities(&request.language)
+    let capabilities = guard
+        .get_server_capabilities(&request.language)
         .await
         .map_err(|e| format!("Failed to get server capabilities: {}", e))?;
 

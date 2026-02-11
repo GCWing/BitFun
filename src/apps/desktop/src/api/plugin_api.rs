@@ -81,7 +81,10 @@ async fn read_plugin_state(plugin_dir: &std::path::Path) -> PluginState {
     }
 }
 
-async fn write_plugin_state(plugin_dir: &std::path::Path, state: &PluginState) -> Result<(), String> {
+async fn write_plugin_state(
+    plugin_dir: &std::path::Path,
+    state: &PluginState,
+) -> Result<(), String> {
     let state_path = plugin_state_path(plugin_dir);
     if let Some(parent) = state_path.parent() {
         tokio::fs::create_dir_all(parent)
@@ -184,7 +187,10 @@ fn resolve_plugin_root(extracted_root: &std::path::Path) -> Option<std::path::Pa
     None
 }
 
-fn safe_join(root: &std::path::Path, relative: &std::path::Path) -> Result<std::path::PathBuf, String> {
+fn safe_join(
+    root: &std::path::Path,
+    relative: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
     use std::path::Component;
     if relative.is_absolute() {
         return Err(format!(
@@ -209,7 +215,10 @@ fn safe_join(root: &std::path::Path, relative: &std::path::Path) -> Result<std::
     Ok(root.join(relative))
 }
 
-async fn extract_zip_to_dir(zip_path: &std::path::Path, dest_dir: &std::path::Path) -> Result<(), String> {
+async fn extract_zip_to_dir(
+    zip_path: &std::path::Path,
+    dest_dir: &std::path::Path,
+) -> Result<(), String> {
     let zip_path = zip_path.to_path_buf();
     let dest_dir = dest_dir.to_path_buf();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
@@ -282,7 +291,11 @@ pub async fn list_plugins(_state: State<'_, AppState>) -> Result<Vec<PluginInfo>
         match build_plugin_info(&path).await {
             Ok(info) => result.push(info),
             Err(e) => {
-                warn!("Skipping invalid plugin directory: path={}, error={}", path.display(), e);
+                warn!(
+                    "Skipping invalid plugin directory: path={}, error={}",
+                    path.display(),
+                    e
+                );
             }
         }
     }
@@ -309,7 +322,9 @@ pub async fn install_plugin(
         return Err("Source path does not exist".to_string());
     }
 
-    let temp_root = pm.temp_dir().join(format!("plugin_install_{}", uuid::Uuid::new_v4()));
+    let temp_root = pm
+        .temp_dir()
+        .join(format!("plugin_install_{}", uuid::Uuid::new_v4()));
     tokio::fs::create_dir_all(&temp_root)
         .await
         .map_err(|e| format!("Failed to create temp directory: {}", e))?;
@@ -318,8 +333,9 @@ pub async fn install_plugin(
 
     if source.is_file() {
         extract_zip_to_dir(source, &temp_root).await?;
-        plugin_root = resolve_plugin_root(&temp_root)
-            .ok_or_else(|| "Plugin archive does not contain a valid .claude-plugin/plugin.json".to_string())?;
+        plugin_root = resolve_plugin_root(&temp_root).ok_or_else(|| {
+            "Plugin archive does not contain a valid .claude-plugin/plugin.json".to_string()
+        })?;
     } else if source.is_dir() {
         if !plugin_manifest_path(source).exists() {
             return Err("Plugin folder is missing .claude-plugin/plugin.json".to_string());
@@ -356,11 +372,19 @@ pub async fn install_plugin(
     // Cleanup temp extraction directory if used.
     if source.is_file() {
         if let Err(e) = tokio::fs::remove_dir_all(&temp_root).await {
-            debug!("Failed to remove temp plugin dir: path={}, error={}", temp_root.display(), e);
+            debug!(
+                "Failed to remove temp plugin dir: path={}, error={}",
+                temp_root.display(),
+                e
+            );
         }
     }
 
-    info!("Plugin installed: id={}, path={}", manifest.name, dest_dir.display());
+    info!(
+        "Plugin installed: id={}, path={}",
+        manifest.name,
+        dest_dir.display()
+    );
     build_plugin_info(&dest_dir).await
 }
 
@@ -405,7 +429,10 @@ pub async fn set_plugin_enabled(
     let state = PluginState { enabled };
     write_plugin_state(&plugin_dir, &state).await?;
 
-    info!("Plugin state updated: id={}, enabled={}", plugin_id, enabled);
+    info!(
+        "Plugin state updated: id={}, enabled={}",
+        plugin_id, enabled
+    );
     Ok(format!(
         "Plugin '{}' {}",
         plugin_id,
@@ -504,7 +531,11 @@ pub async fn import_plugin_mcp_servers(
     // started/restarted immediately without requiring a full initialize.
     if let Some(mcp_service) = state.mcp_service.as_ref() {
         for server_id in plugin_servers.keys() {
-            if let Err(e) = mcp_service.server_manager().ensure_registered(server_id).await {
+            if let Err(e) = mcp_service
+                .server_manager()
+                .ensure_registered(server_id)
+                .await
+            {
                 warn!(
                     "Failed to register imported MCP server (continuing): server_id={} error={}",
                     server_id, e

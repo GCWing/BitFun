@@ -1,12 +1,8 @@
 //! Git Agent API - Provides Tauri command interface for Git Function Agent
 
-use log::error;
-use bitfun_core::function_agents::{
-    GitFunctionAgent,
-    CommitMessage,
-    CommitMessageOptions,
-};
 use crate::api::app_state::AppState;
+use bitfun_core::function_agents::{CommitMessage, CommitMessageOptions, GitFunctionAgent};
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::State;
@@ -50,7 +46,7 @@ pub async fn generate_commit_message(
     let factory = app_state.ai_client_factory.clone();
     let agent = GitFunctionAgent::new(factory);
     let opts = request.options.unwrap_or_default();
-    
+
     agent
         .generate_commit_message(Path::new(&request.repo_path), opts)
         .await
@@ -64,12 +60,15 @@ pub async fn quick_commit_message(
 ) -> Result<CommitMessage, String> {
     let factory = app_state.ai_client_factory.clone();
     let agent = GitFunctionAgent::new(factory);
-    
+
     agent
         .quick_commit_message(Path::new(&request.repo_path))
         .await
         .map_err(|e| {
-            error!("Failed to generate quick commit message: repo_path={}, error={}", request.repo_path, e);
+            error!(
+                "Failed to generate quick commit message: repo_path={}, error={}",
+                request.repo_path, e
+            );
             e.to_string()
         })
 }
@@ -81,12 +80,12 @@ pub async fn preview_commit_message(
 ) -> Result<PreviewCommitMessageResponse, String> {
     let factory = app_state.ai_client_factory.clone();
     let agent = GitFunctionAgent::new(factory);
-    
+
     let message = agent
         .quick_commit_message(Path::new(&request.repo_path))
         .await
         .map_err(|e| e.to_string())?;
-    
+
     Ok(PreviewCommitMessageResponse {
         title: message.title,
         commit_type: format!("{:?}", message.commit_type),

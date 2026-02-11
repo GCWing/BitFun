@@ -1,7 +1,7 @@
 //! System API
 
-use serde::{Deserialize, Serialize};
 use bitfun_core::service::system;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -512,6 +512,18 @@ pub async fn get_recent_workspaces(
 }
 
 #[tauri::command]
+pub async fn get_cowork_workspace_path(state: State<'_, AppState>) -> Result<String, String> {
+    let path = state
+        .workspace_service
+        .path_manager()
+        .cowork_workspace_dir();
+    tokio::fs::create_dir_all(&path)
+        .await
+        .map_err(|e| format!("Failed to create cowork workspace directory: {}", e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub async fn scan_workspace_info(
     state: State<'_, AppState>,
     request: ScanWorkspaceInfoRequest,
