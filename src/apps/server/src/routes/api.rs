@@ -1,8 +1,7 @@
 /// HTTP API routes
 ///
 /// Provides RESTful API endpoints
-
-use axum::{Json, extract::State};
+use axum::{extract::State, Json};
 use serde::Serialize;
 
 use crate::AppState;

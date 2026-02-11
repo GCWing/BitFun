@@ -1,9 +1,9 @@
+use anyhow::Result;
 /// WebSocket handler
 ///
 /// Implements real-time bidirectional communication with frontend:
 /// - Command request/response (JSON RPC format)
 /// - Event push (streaming output, tool calls, etc.)
-
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -13,7 +13,6 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
 use crate::AppState;
 
@@ -54,10 +53,7 @@ pub struct ErrorInfo {
 }
 
 /// WebSocket connection handler
-pub async fn websocket_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> Response {
+pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
     tracing::info!("New WebSocket connection");
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
@@ -165,12 +161,10 @@ async fn handle_command(
     _state: &AppState,
 ) -> Result<serde_json::Value> {
     match method {
-        "ping" => {
-            Ok(serde_json::json!({
-                "pong": true,
-                "timestamp": chrono::Utc::now().timestamp(),
-            }))
-        }
+        "ping" => Ok(serde_json::json!({
+            "pong": true,
+            "timestamp": chrono::Utc::now().timestamp(),
+        })),
         _ => {
             tracing::warn!("Unknown command: {}", method);
             Err(anyhow::anyhow!("Unknown command: {}", method))

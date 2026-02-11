@@ -1,19 +1,14 @@
+use anyhow::Result;
 /// BitFun Server
 ///
 /// Web server with support for:
 /// - RESTful API
 /// - WebSocket real-time communication
 /// - Static file serving (frontend)
-
-use axum::{
-    routing::get,
-    Router,
-    Json,
-};
+use axum::{routing::get, Json, Router};
 use serde::Serialize;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
-use anyhow::Result;
 
 mod routes;
 
