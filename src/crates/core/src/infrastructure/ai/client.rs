@@ -215,7 +215,7 @@ impl AIClient {
 
         let model_name = self.config.model.to_lowercase();
 
-        if model_name == "glm-4.6" || model_name == "glm-4.7" {
+        if model_name == "glm-4.6" || model_name == "glm-4.7" || model_name == "glm-5" {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
@@ -276,7 +276,7 @@ impl AIClient {
         let model_name = self.config.model.to_lowercase();
 
         // TODO: Zhipu tool streaming currently only supports the OpenAI format
-        if model_name == "glm-4.6" || model_name == "glm-4.7" {
+        if model_name == "glm-4.6" || model_name == "glm-4.7" || model_name == "glm-5" {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
