@@ -102,17 +102,17 @@
 
   
   
-  .mcp-server-card {
-    padding: $size-gap-4;
-    overflow: hidden;
+    .mcp-server-card {
+      padding: $size-gap-4;
+      overflow: hidden;
 
-    &:hover {
-      .status-indicator {
-        background: var(--color-accent-200);
+      &:hover {
+        .status-indicator {
+          background: var(--color-accent-200);
+        }
       }
-    }
 
-    .server-header {
+      .server-header {
       display: flex;
       align-items: center;
       gap: $size-gap-2;
@@ -132,6 +132,12 @@
         font-size: 18px;
         line-height: 1;
         transition: background $motion-base $easing-standard;
+      }
+
+      .status-indicator--busy {
+        svg {
+          animation: mcp-status-spin 1s linear infinite;
+        }
       }
 
       h3 {
@@ -253,6 +259,12 @@
         flex-shrink: 0;
       }
     }
+  }
+}
+
+@keyframes mcp-status-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -697,6 +709,5 @@
     }
   }
 }
-
 
 

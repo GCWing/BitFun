@@ -195,16 +195,17 @@
   },
   "coworkScope": {
     "title": "Choose a Cowork workspace",
-    "description": "Cowork mode can run in the currently opened workspace, or switch to a global Cowork workspace for temporary artifacts and conversations.",
+    "description": "Cowork mode needs a workspace to read/write files. Use the current project, or switch to an app-managed Cowork workspace for ad-hoc tasks.",
+    "recommended": "Recommended",
     "current": {
       "title": "Current workspace",
       "subtitle": "Opened: {{name}}",
-      "description": "Collaborate inside the current project. File search and context default to this workspace."
+      "description": "Artifacts are saved in the current project. Use this when you need to read or change project files."
     },
     "global": {
-      "title": "Global workspace",
-      "subtitle": "App-managed temp workspace",
-      "description": "Switch to the global Cowork workspace for cross-project temporary tasks and artifacts."
+      "title": "Cowork workspace",
+      "subtitle": "App-managed (ad-hoc)",
+      "description": "Artifacts are saved in an app-managed workspace to avoid touching your current project. Look for outputs in the workspace's \"artifacts/\" folder."
     },
     "errors": {
       "noWorkspace": "No workspace is currently open",
@@ -213,13 +214,17 @@
   },
   "coworkExamples": {
     "title": "Examples",
+    "addPlugin": "Add plugin",
+    "addPluginDialogTitle": "Select a plugin folder",
+    "addPluginSuccess": "Plugin installed: {{name}}",
+    "addPluginFailed": "Failed to install plugin: {{error}}",
     "refresh": "Shuffle",
     "close": "Close",
     "items": {
       "desktop_cleanup": {
-        "title": "Tidy up my desktop",
-        "description": "Create an actionable cleanup + filing system.",
-        "prompt": "Help me clean up my desktop/downloads folder and set up a sustainable filing system.\n\nContext:\n- OS:\n- Main file types:\n- Preferred structure (by project / by date / by type):\n- Shortcuts I want to keep handy:\n\nOutput:\n1) Suggested folder structure (with examples)\n2) Naming conventions\n3) Step-by-step cleanup checklist (easy → hard)\n4) Optional: habits/automation tips to keep it clean"
+        "title": "Organize desktop screenshots",
+        "description": "Rename, group, and file recent screenshots.",
+        "prompt": "Help me organize recent screenshots on my Desktop.\n\nFirst, scan my Desktop and count how many screenshots/images are there. Show me:\n\n- Total count\n\n- Date range (oldest to newest)\n\nThen, focus only on screenshots from the last 14 days. For each one:\n\n- Identify what it shows\n\n- Suggest a descriptive filename\n\n- Propose which folder it belongs in (or if it can be deleted)\n\nGroup similar screenshots together. Show me the plan before making any changes.\n\nAfter I approve, start by organizing just 10 files as a preview. If there are more than 10 files, check in with me before continuing with the rest."
       },
       "vacation_plan": {
         "title": "Plan my vacation",
@@ -229,12 +234,17 @@
       "make_ppt": {
         "title": "Draft a PPT",
         "description": "Outline slides, talking points, and visuals.",
-        "prompt": "Help me draft a PPT (content + structure only, no file generation).\n\nTopic:\nAudience:\nTime limit:\nUse case (status update / pitch / training / sharing):\nPreferred style (clean / business / playful / minimal):\n\nOutput:\n1) Table of contents\n2) Slide-by-slide: title + 3–5 bullets\n3) Short speaker notes for key slides\n4) Visual/chart suggestions (what chart for what message)\n5) Likely questions + suggested answers"
+        "prompt": "Help me create a PPT deck.\n\nTopic:\nAudience:\nTime limit:\nUse case (status update / pitch / training / sharing):\nPreferred style (clean / business / playful / minimal):\n\nDeliverable:\n1) Table of contents\n2) Slide-by-slide: title + 3–5 bullets\n3) Short speaker notes for key slides\n4) Visual/chart suggestions (what chart for what message)\n5) Export as a PPTX file (save it under artifacts/)"
       },
       "todo_breakdown": {
         "title": "Break it into todos",
         "description": "Turn a goal into executable tasks with estimates.",
         "prompt": "Break the following goal into an executable todo list with priorities and time estimates.\n\nGoal:\nDeadline:\nCurrent status:\nResources (people/budget/tools):\nRisks/unknowns:\n\nOutput:\n1) Milestones\n2) Task list (owner / ETA / dependencies / acceptance criteria)\n3) Critical path + risks\n4) Three small things I can start tomorrow"
+      },
+      "optimize_week": {
+        "title": "Optimize my week",
+        "description": "Find patterns across messy notes and transcripts.",
+        "prompt": "Help me find patterns and insights across [my voice memos / meeting transcripts / documents / journal entries / specify folder]. I have messy, unstructured files and want to understand what themes are emerging.\n\nFirst, scan the folder and show me a summary:\n\n- Total files\n\n- Date range (oldest to newest)\n\n- Types of content\n\nBefore analyzing, ask me:\n\n- What I'm hoping to discover (recurring themes, contradictions, evolution of thinking, action items, or something else)\n\n- Whether certain files or time periods should be prioritized\n\n- What format would be most useful for the final analysis\n\nIf there are more than 20 files, start by analyzing just the 10 most recent files.\n\nShow me the top 3-5 patterns you found with 2-3 specific examples for each pattern. Once I confirm you're on the right track, analyze the remaining files."
       },
       "weekly_plan": {
         "title": "Make a weekly plan",
@@ -250,6 +260,11 @@
         "title": "Reply to an email",
         "description": "Generate a polite, clear email template (two tones).",
         "prompt": "Help me write an email reply.\n\nOriginal email (paste here):\nMy goal (confirm / decline / push forward / clarify):\nTone (formal / friendly / firm but polite):\nKey points to include:\n\nOutput:\n1) Subject line suggestions\n2) Body (2 versions: more formal / more concise)\n3) Questions for the recipient to confirm (if any)"
+      },
+      "make_docx": {
+        "title": "Draft a DOCX",
+        "description": "Write a structured document and export as DOCX.",
+        "prompt": "Help me write a document and export it as a .docx file.\n\nDocument type (PRD / proposal / meeting summary / report / SOP):\nAudience:\nTone (formal / friendly / concise):\nMust-include points:\nLength target:\n\nDeliverable:\n1) Suggested outline\n2) Full content\n3) Export as a .docx file (save it under artifacts/)"
       },
       "make_spreadsheet": {
         "title": "Design a spreadsheet",

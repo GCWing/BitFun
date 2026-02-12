@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brush, Plane, Presentation, ListTodo, CalendarDays, ClipboardList, Mail, FileSpreadsheet, HandCoins, X, RotateCcw } from 'lucide-react';
+import { Image, Plane, Presentation, ListTodo, CalendarDays, ClipboardList, Mail, FileSpreadsheet, HandCoins, TrendingUp, FileText, X, RotateCcw, Plus } from 'lucide-react';
 import { Card, IconButton, Tooltip } from '@/component-library';
 import './CoworkExampleCards.scss';
 
@@ -13,9 +13,11 @@ type ExampleId =
   | 'vacation_plan'
   | 'make_ppt'
   | 'todo_breakdown'
+  | 'optimize_week'
   | 'weekly_plan'
   | 'meeting_minutes'
   | 'reply_email'
+  | 'make_docx'
   | 'make_spreadsheet'
   | 'budget_plan';
 
@@ -25,13 +27,15 @@ interface ExampleItem {
 }
 
 const EXAMPLES: ExampleItem[] = [
-  { id: 'desktop_cleanup', icon: Brush },
+  { id: 'desktop_cleanup', icon: Image },
   { id: 'vacation_plan', icon: Plane },
   { id: 'make_ppt', icon: Presentation },
   { id: 'todo_breakdown', icon: ListTodo },
+  { id: 'optimize_week', icon: TrendingUp },
   { id: 'weekly_plan', icon: CalendarDays },
   { id: 'meeting_minutes', icon: ClipboardList },
   { id: 'reply_email', icon: Mail },
+  { id: 'make_docx', icon: FileText },
   { id: 'make_spreadsheet', icon: FileSpreadsheet },
   { id: 'budget_plan', icon: HandCoins },
 ];
@@ -52,12 +56,14 @@ export interface CoworkExampleCardsProps {
   resetKey: number;
   onClose: () => void;
   onSelectPrompt: (prompt: string) => void;
+  onAddPlugin?: () => void;
 }
 
 export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
   resetKey,
   onClose,
   onSelectPrompt,
+  onAddPlugin,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [selected, setSelected] = useState<ExampleItem[]>(() => pickRandomUnique(EXAMPLES, 3));
@@ -102,6 +108,18 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
       <div className="bitfun-cowork-example-cards__header">
         <div className="bitfun-cowork-example-cards__title">{t('coworkExamples.title')}</div>
         <div className="bitfun-cowork-example-cards__header-actions">
+          {onAddPlugin && (
+            <Tooltip content={t('coworkExamples.addPlugin')}>
+              <IconButton
+                variant="ghost"
+                size="xs"
+                onClick={onAddPlugin}
+                aria-label={t('coworkExamples.addPlugin')}
+              >
+                <Plus size={14} />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip content={t('coworkExamples.refresh')}>
             <IconButton
               variant="ghost"
@@ -132,4 +150,3 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
 };
 
 export default CoworkExampleCards;
-

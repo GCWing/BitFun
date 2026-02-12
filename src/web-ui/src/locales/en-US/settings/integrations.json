@@ -1,13 +1,14 @@
 {
   "title": "Integrations",
-  "subtitle": "Connect external services via MCP",
+  "subtitle": "Connect external services",
   "integrations": {
-    "notion": "Notion",
-    "gmail": "Gmail"
+    "notion": "Notion"
   },
   "status": {
     "connected": "Connected",
     "connecting": "Connecting",
+    "reconnecting": "Reconnecting",
+    "disconnecting": "Disconnecting",
     "failed": "Failed",
     "notConnected": "Not connected"
   },
@@ -26,4 +27,3 @@
     "disconnectFailed": "Disconnect failed"
   }
 }
-

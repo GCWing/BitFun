@@ -1,13 +1,14 @@
 {
   "title": "集成",
-  "subtitle": "通过 MCP 连接外部服务",
+  "subtitle": "连接外部服务",
   "integrations": {
-    "notion": "Notion",
-    "gmail": "Gmail"
+    "notion": "Notion"
   },
   "status": {
     "connected": "已连接",
     "connecting": "连接中",
+    "reconnecting": "重连中",
+    "disconnecting": "断开中",
     "failed": "连接失败",
     "notConnected": "未连接"
   },
@@ -26,4 +27,3 @@
     "disconnectFailed": "断开失败"
   }
 }
-

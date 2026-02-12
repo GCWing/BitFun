@@ -4,7 +4,7 @@ use crate::api::app_state::AppState;
 use crate::api::dto::WorkspaceInfoDto;
 use bitfun_core::infrastructure::{file_watcher, FileOperationOptions, SearchMatchType};
 use log::{debug, error, info, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
@@ -520,7 +520,61 @@ pub async fn get_cowork_workspace_path(state: State<'_, AppState>) -> Result<Str
     tokio::fs::create_dir_all(&path)
         .await
         .map_err(|e| format!("Failed to create cowork workspace directory: {}", e))?;
+    // Create standard subfolders so users can easily find Cowork outputs.
+    // - artifacts/: stable, user-visible outputs
+    // - tmp/: intermediate scratch files (can be cleaned up later)
+    tokio::fs::create_dir_all(path.join("artifacts"))
+        .await
+        .map_err(|e| format!("Failed to create cowork artifacts directory: {}", e))?;
+    tokio::fs::create_dir_all(path.join("tmp"))
+        .await
+        .map_err(|e| format!("Failed to create cowork tmp directory: {}", e))?;
     Ok(path.to_string_lossy().to_string())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnsureCoworkSessionDirsRequest {
+    pub session_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnsureCoworkSessionDirsResponse {
+    pub artifacts_path: String,
+    pub tmp_path: String,
+}
+
+/// Ensure per-session Cowork directories exist under the app-managed Cowork workspace.
+///
+/// This supports a "one session = one scratch space" mental model and makes it easy for users
+/// to find outputs in the left file explorer.
+#[tauri::command]
+pub async fn ensure_cowork_session_dirs(
+    state: State<'_, AppState>,
+    request: EnsureCoworkSessionDirsRequest,
+) -> Result<EnsureCoworkSessionDirsResponse, String> {
+    let path_manager = state.workspace_service.path_manager();
+    let cowork_root = path_manager.cowork_workspace_dir();
+
+    tokio::fs::create_dir_all(&cowork_root)
+        .await
+        .map_err(|e| format!("Failed to create cowork workspace directory: {}", e))?;
+
+    let artifacts_dir = path_manager.cowork_session_artifacts_dir(&request.session_id);
+    let tmp_dir = path_manager.cowork_session_tmp_dir(&request.session_id);
+
+    tokio::fs::create_dir_all(&artifacts_dir)
+        .await
+        .map_err(|e| format!("Failed to create cowork session artifacts directory: {}", e))?;
+    tokio::fs::create_dir_all(&tmp_dir)
+        .await
+        .map_err(|e| format!("Failed to create cowork session tmp directory: {}", e))?;
+
+    Ok(EnsureCoworkSessionDirsResponse {
+        artifacts_path: artifacts_dir.to_string_lossy().to_string(),
+        tmp_path: tmp_dir.to_string_lossy().to_string(),
+    })
 }
 
 #[tauri::command]

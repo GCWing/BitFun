@@ -210,6 +210,25 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    padding: $size-gap-4;
+  }
+
+  &__cowork-scope-modal-dialog {
+    .modal__header {
+      padding: 10px 12px;
+    }
+
+    .modal__title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .modal__close {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+    }
   }
 
   &__cowork-scope-description {
@@ -222,15 +241,42 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
+
+    @media (min-width: 640px) {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   &__cowork-scope-option {
     cursor: pointer;
+    border: 1px solid var(--border-subtle);
+    transition: border-color $motion-base $easing-standard, box-shadow $motion-base $easing-standard, transform $motion-base $easing-standard;
+
+    .v-card-header__title {
+      font-size: 15px;
+      letter-spacing: 0.1px;
+    }
+
+    .v-card-header__subtitle {
+      font-size: 12px;
+    }
+
+    &.v-card--interactive:hover {
+      border-color: color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 16%, transparent);
+      transform: translateY(-1px);
+    }
 
     &--disabled {
       opacity: 0.55;
       cursor: default;
     }
+  }
+
+  &__cowork-scope-option .v-card-header + .v-card-body {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
   }
 
   &__cowork-scope-option-body {
@@ -248,7 +294,13 @@
   &__cowork-scope-option-path {
     font-size: 12px;
     color: var(--color-text-tertiary);
-    word-break: break-all;
+    font-family: var(--font-family-mono);
+    overflow-wrap: anywhere;
+    word-break: normal;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-subtle);
   }
 
   &__cowork-scope-option-loading {
@@ -1234,7 +1286,3 @@
     transform: translateY(0);
   }
 }
-
-
-
-

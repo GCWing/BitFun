@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Loader2, PlugZap, Unplug } from 'lucide-react';
 import { Button, Card } from '@/component-library';
 import { MCPAPI, MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { useNotification } from '@/shared/notification-system';
@@ -9,7 +10,7 @@ import './IntegrationsConfig.scss';
 
 const log = createLogger('IntegrationsConfig');
 
-type IntegrationId = 'notion' | 'gmail';
+type IntegrationId = 'notion';
 
 const INTEGRATIONS: Array<{
   id: IntegrationId;
@@ -25,27 +26,76 @@ const INTEGRATIONS: Array<{
       autoStart: false,
       name: 'Notion'
     }
-  },
-  {
-    id: 'gmail',
-    defaultConfig: {
-      type: 'stdio',
-      command: 'npx',
-      args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'],
-      enabled: true,
-      autoStart: false,
-      name: 'Gmail'
-    }
   }
 ];
 
 function getMcpStatusClass(status: string): 'ok' | 'pending' | 'error' | 'unknown' {
   const statusLower = status.toLowerCase();
   if (statusLower.includes('healthy') || statusLower.includes('connected')) return 'ok';
-  if (statusLower.includes('starting') || statusLower.includes('reconnecting')) return 'pending';
+  if (statusLower.includes('starting') || statusLower.includes('reconnecting') || statusLower.includes('stopping')) {
+    return 'pending';
+  }
   if (statusLower.includes('failed')) return 'error';
   if (statusLower.includes('stopped') || statusLower.includes('uninitialized')) return 'unknown';
   return 'unknown';
+}
+
+function IntegrationLogo({ id }: { id: IntegrationId }) {
+  if (id === 'notion') {
+    return (
+      <svg
+        className="integration-logo integration-logo--notion"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.5" />
+        <path
+          d="M9 16V8L15 16V8"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return null;
+}
+
+function getIntegrationIcon(integrationId: IntegrationId) {
+  switch (integrationId) {
+    case 'notion':
+      return <IntegrationLogo id="notion" />;
+    default:
+      return null;
+  }
+}
+
+function deriveStatusLabelKey(status: string): 'connected' | 'connecting' | 'reconnecting' | 'disconnecting' | 'failed' | 'notConnected' {
+  const s = status.toLowerCase();
+  if (s.includes('healthy') || s.includes('connected')) return 'connected';
+  if (s.includes('starting')) return 'connecting';
+  if (s.includes('reconnecting')) return 'reconnecting';
+  if (s.includes('stopping')) return 'disconnecting';
+  if (s.includes('failed')) return 'failed';
+  return 'notConnected';
+}
+
+function deriveConnected(status: string): boolean {
+  const s = status.toLowerCase();
+  return (
+    s.includes('healthy')
+    || s.includes('connected')
+    || s.includes('reconnecting')
+    || s.includes('stopping')
+  );
+}
+
+function deriveActionMode(status: string): 'connect' | 'disconnect' | 'working' {
+  const s = status.toLowerCase();
+  if (s.includes('starting') || s.includes('stopping')) return 'working';
+  return deriveConnected(status) ? 'disconnect' : 'connect';
 }
 
 const IntegrationsConfig: React.FC = () => {
@@ -54,6 +104,7 @@ const IntegrationsConfig: React.FC = () => {
 
   const [servers, setServers] = useState<Record<string, MCPServerInfo | null>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [busyAction, setBusyAction] = useState<Partial<Record<IntegrationId, 'connect' | 'disconnect'>>>({});
 
   const refreshServers = useCallback(async () => {
     try {
@@ -125,6 +176,7 @@ const IntegrationsConfig: React.FC = () => {
 
   const connect = async (serverId: IntegrationId) => {
     try {
+      setBusyAction((prev) => ({ ...prev, [serverId]: 'connect' }));
       setBusy((prev) => ({ ...prev, [serverId]: true }));
       await ensureIntegrationConfigured(serverId);
       await MCPAPI.startServer(serverId);
@@ -138,11 +190,17 @@ const IntegrationsConfig: React.FC = () => {
     } finally {
       await refreshServers();
       setBusy((prev) => ({ ...prev, [serverId]: false }));
+      setBusyAction((prev) => {
+        const next = { ...prev };
+        delete next[serverId];
+        return next;
+      });
     }
   };
 
   const disconnect = async (serverId: IntegrationId) => {
     try {
+      setBusyAction((prev) => ({ ...prev, [serverId]: 'disconnect' }));
       setBusy((prev) => ({ ...prev, [serverId]: true }));
       await MCPAPI.stopServer(serverId);
       notification.success(t('messages.disconnected', { name: t(`integrations.${serverId}`) }));
@@ -152,6 +210,11 @@ const IntegrationsConfig: React.FC = () => {
     } finally {
       await refreshServers();
       setBusy((prev) => ({ ...prev, [serverId]: false }));
+      setBusyAction((prev) => {
+        const next = { ...prev };
+        delete next[serverId];
+        return next;
+      });
     }
   };
 
@@ -159,18 +222,38 @@ const IntegrationsConfig: React.FC = () => {
     return INTEGRATIONS.map((integration) => {
       const server = servers[integration.id] ?? null;
       const status = server?.status ?? 'Uninitialized';
-      const statusClass = getMcpStatusClass(status);
-      const connected = statusClass === 'ok';
+      const rawStatusClass = getMcpStatusClass(status);
+      const rawConnected = deriveConnected(status);
+      const rawActionMode = deriveActionMode(status);
+
+      const action = busyAction[integration.id];
+      const busyNow = !!busy[integration.id];
+
+      const statusClass = action ? 'pending' : rawStatusClass;
+      const connected =
+        action === 'disconnect' ? true : action === 'connect' ? false : rawConnected;
+      const statusLabelKey =
+        action === 'connect'
+          ? 'connecting'
+          : action === 'disconnect'
+            ? 'disconnecting'
+            : deriveStatusLabelKey(status);
+
+      const actionMode = action ? 'working' : rawActionMode;
+      const actionDisabledFromStatus = actionMode === 'working';
       return {
         id: integration.id,
         label: t(`integrations.${integration.id}`),
         status,
         statusClass,
         connected,
-        busy: !!busy[integration.id],
+        statusLabelKey,
+        busy: busyNow,
+        actionMode,
+        actionDisabledFromStatus,
       };
     });
-  }, [busy, servers, t]);
+  }, [busy, busyAction, servers, t]);
 
   return (
     <ConfigPageLayout className="integrations-config-panel">
@@ -178,38 +261,62 @@ const IntegrationsConfig: React.FC = () => {
       <ConfigPageContent className="integrations-config-panel__content">
         <div className="integrations-list">
           {items.map((item) => (
-            <Card key={item.id} variant="default" padding="none" className="integration-card">
-              <div className="integration-card__left">
-                <div className="integration-card__title">{item.label}</div>
-                <div className={`integration-card__status integration-card__status--${item.statusClass}`}>
-                  {item.statusClass === 'ok'
-                    ? t('status.connected')
-                    : item.statusClass === 'pending'
-                      ? t('status.connecting')
-                      : item.statusClass === 'error'
-                        ? t('status.failed')
-                        : t('status.notConnected')}
+            <Card
+              key={item.id}
+              variant="elevated"
+              padding="none"
+              fullWidth
+              className={`integration-card integration-card--${item.id}`}
+            >
+              <div className="integration-card__content">
+                <div className="integration-card__icon" aria-hidden="true">
+                  {getIntegrationIcon(item.id)}
                 </div>
-              </div>
-              <div className="integration-card__right">
-                <Button
-                  variant={item.connected ? 'secondary' : 'primary'}
-                  size="small"
-                  disabled={item.busy}
-                  onClick={() => {
-                    if (item.connected) {
-                      void disconnect(item.id);
-                    } else {
-                      void connect(item.id);
-                    }
-                  }}
-                >
-                  {item.busy
-                    ? t('actions.working')
-                    : item.connected
-                      ? t('actions.disconnect')
-                      : t('actions.connect')}
-                </Button>
+
+                <div className="integration-card__main">
+                  <div className="integration-card__top">
+                    <div className="integration-card__title">{item.label}</div>
+                    <div
+                      className={`integration-card__status integration-card__status--${item.statusClass}`}
+                      title={item.status}
+                    >
+                      <span className="integration-card__status-dot" aria-hidden="true" />
+                      {t(`status.${item.statusLabelKey}`)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="integration-card__actions">
+                  <Button
+                    variant={item.connected ? 'secondary' : 'primary'}
+                    size="small"
+                    disabled={item.busy || item.actionDisabledFromStatus}
+                    onClick={() => {
+                      if (item.actionMode === 'disconnect') {
+                        void disconnect(item.id);
+                      } else if (item.actionMode === 'connect') {
+                        void connect(item.id);
+                      }
+                    }}
+                  >
+                    <span className="integration-card__button-inner">
+                      {item.busy || item.actionMode === 'working' ? (
+                        <Loader2 size={14} className="integration-card__spinner" />
+                      ) : item.actionMode === 'disconnect' ? (
+                        <Unplug size={14} />
+                      ) : (
+                        <PlugZap size={14} />
+                      )}
+                      <span>
+                        {item.busy || item.actionMode === 'working'
+                          ? t('actions.working')
+                          : item.actionMode === 'disconnect'
+                            ? t('actions.disconnect')
+                            : t('actions.connect')}
+                      </span>
+                    </span>
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
@@ -220,4 +327,3 @@ const IntegrationsConfig: React.FC = () => {
 };
 
 export default IntegrationsConfig;
-

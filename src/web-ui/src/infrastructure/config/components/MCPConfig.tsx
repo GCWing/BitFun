@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileJson, RefreshCw, X, Play, Square, CheckCircle, Clock, AlertTriangle, MinusCircle, Plug } from 'lucide-react';
+import { FileJson, RefreshCw, X, Play, Square, CheckCircle, Clock, AlertTriangle, MinusCircle, Plug, Loader2 } from 'lucide-react';
 import { MCPAPI, MCPServerInfo } from '../../api/service-api/MCPAPI';
 import { Button, Textarea, Search, IconButton, Card } from '../../../component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent } from './common';
@@ -157,6 +157,7 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
+  const [serverAction, setServerAction] = useState<Record<string, 'start' | 'stop' | 'restart'>>({});
   const [jsonLintError, setJsonLintError] = useState<{
     message: string;
     line?: number;
@@ -461,6 +462,7 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
 
   const handleStartServer = async (serverId: string) => {
     try {
+      setServerAction((prev) => ({ ...prev, [serverId]: 'start' }));
       await MCPAPI.startServer(serverId);
       notification.success(t('messages.startSuccess', { serverId }), {
         title: t('notifications.startSuccess'),
@@ -474,11 +476,18 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
         title: t('notifications.startFailed'),
         duration: 5000
       });
+    } finally {
+      setServerAction((prev) => {
+        const next = { ...prev };
+        delete next[serverId];
+        return next;
+      });
     }
   };
 
   const handleStopServer = async (serverId: string) => {
     try {
+      setServerAction((prev) => ({ ...prev, [serverId]: 'stop' }));
       await MCPAPI.stopServer(serverId);
       notification.success(t('messages.stopSuccess', { serverId }), {
         title: t('notifications.stopSuccess'),
@@ -492,11 +501,18 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
         title: t('notifications.stopFailed'),
         duration: 5000
       });
+    } finally {
+      setServerAction((prev) => {
+        const next = { ...prev };
+        delete next[serverId];
+        return next;
+      });
     }
   };
 
   const handleRestartServer = async (serverId: string) => {
     try {
+      setServerAction((prev) => ({ ...prev, [serverId]: 'restart' }));
       await MCPAPI.restartServer(serverId);
       notification.success(t('messages.restartSuccess', { serverId }), {
         title: t('notifications.restartSuccess'),
@@ -510,6 +526,12 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
         title: t('notifications.restartFailed'),
         duration: 5000
       });
+    } finally {
+      setServerAction((prev) => {
+        const next = { ...prev };
+        delete next[serverId];
+        return next;
+      });
     }
   };
 
@@ -517,7 +539,7 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
     const statusLower = status.toLowerCase();
     if (statusLower.includes('healthy') || statusLower.includes('connected')) {
       return 'status-healthy';
-    } else if (statusLower.includes('starting') || statusLower.includes('reconnecting')) {
+    } else if (statusLower.includes('starting') || statusLower.includes('reconnecting') || statusLower.includes('stopping')) {
       return 'status-pending';
     } else if (statusLower.includes('failed') || statusLower.includes('stopped')) {
       return 'status-error';
@@ -529,12 +551,25 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
     const statusLower = status.toLowerCase();
     if (statusLower.includes('healthy') || statusLower.includes('connected')) {
       return <CheckCircle size={12} />;
-    } else if (statusLower.includes('starting') || statusLower.includes('reconnecting')) {
+    } else if (statusLower.includes('starting') || statusLower.includes('reconnecting') || statusLower.includes('stopping')) {
       return <Clock size={12} />;
     } else if (statusLower.includes('failed') || statusLower.includes('stopped')) {
       return <AlertTriangle size={12} />;
     }
     return <MinusCircle size={12} />;
+  };
+
+  const getEffectiveStatus = (server: MCPServerInfo): string => {
+    const action = serverAction[server.id];
+    if (action === 'start') return 'Starting';
+    if (action === 'stop') return 'Stopping';
+    if (action === 'restart') return 'Reconnecting';
+    return server.status;
+  };
+
+  const isStartableStatus = (status: string): boolean => {
+    const s = status.toLowerCase();
+    return s.includes('stopped') || s.includes('failed') || s.includes('uninitialized');
   };
 
   
@@ -685,11 +720,18 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
         </div>
       ) : !showJsonEditor ? (
         <div className="mcp-servers-list">
-          {filteredServers.map((server) => (
+          {filteredServers.map((server) => {
+            const effectiveStatus = getEffectiveStatus(server);
+            const busyAction = serverAction[server.id];
+            const actionBusy = !!busyAction;
+            const startable = isStartableStatus(effectiveStatus);
+            const statusColor = getStatusColor(effectiveStatus);
+
+            return (
             <Card key={server.id} variant="default" padding="none" className="mcp-server-card">
               <div className="server-header">
-                <span className={`status-indicator ${getStatusColor(server.status)}`}>
-                  {getStatusIcon(server.status)}
+                <span className={`status-indicator ${statusColor} ${actionBusy ? 'status-indicator--busy' : ''}`}>
+                  {actionBusy ? <Loader2 size={12} /> : getStatusIcon(effectiveStatus)}
                 </span>
                 <h3>{server.name}</h3>
                 <span className="server-id">{server.id}</span>
@@ -711,45 +753,51 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
                   </div>
                   <div className="detail-item">
                     <span className="label">{t('labels.status')}:</span>
-                    <span className={`value ${getStatusColor(server.status)}`}>
-                      {server.status}
+                    <span className={`value ${statusColor}`}>
+                      {effectiveStatus}
                     </span>
                   </div>
                 </div>
 
                 <div className="server-actions">
-                  {server.status.toLowerCase().includes('stopped') || 
-                   server.status.toLowerCase().includes('failed') ? (
+                  {startable ? (
                     <IconButton
                       size="medium"
                       variant="success"
                       onClick={() => handleStartServer(server.id)}
+                      disabled={actionBusy}
+                      isLoading={busyAction === 'start'}
                       tooltip={t('actions.start')}
                     >
-                      <Play />
+                      {busyAction === 'start' ? <Loader2 /> : <Play />}
                     </IconButton>
                   ) : (
                     <IconButton
                       size="medium"
                       variant="warning"
                       onClick={() => handleStopServer(server.id)}
+                      disabled={actionBusy}
+                      isLoading={busyAction === 'stop'}
                       tooltip={t('actions.stop')}
                     >
-                      <Square />
+                      {busyAction === 'stop' ? <Loader2 /> : <Square />}
                     </IconButton>
                   )}
                   <IconButton
                     size="medium"
                     variant="ghost"
                     onClick={() => handleRestartServer(server.id)}
+                    disabled={actionBusy}
+                    isLoading={busyAction === 'restart'}
                     tooltip={t('actions.restart')}
                   >
-                    <RefreshCw />
+                    {busyAction === 'restart' ? <Loader2 /> : <RefreshCw />}
                   </IconButton>
                 </div>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : null}
       </ConfigPageContent>

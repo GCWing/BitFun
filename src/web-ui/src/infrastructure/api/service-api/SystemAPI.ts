@@ -82,6 +82,18 @@ export class SystemAPI {
     }
   }
 
+  async ensureCoworkSessionDirs(sessionId: string): Promise<{ artifactsPath: string; tmpPath: string }> {
+    try {
+      return await api.invoke('ensure_cowork_session_dirs', {
+        request: {
+          sessionId,
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('ensure_cowork_session_dirs', error, { sessionId });
+    }
+  }
+
    
   async getClipboard(): Promise<string> {
     try {

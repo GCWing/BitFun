@@ -484,6 +484,7 @@ pub async fn run() {
             close_workspace,
             get_current_workspace,
             get_cowork_workspace_path,
+            ensure_cowork_session_dirs,
             scan_workspace_info,
             api::prompt_template_api::get_prompt_template_config,
             api::prompt_template_api::save_prompt_template_config,
