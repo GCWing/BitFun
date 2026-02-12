@@ -8,19 +8,17 @@ pub mod theme;
 
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{
-    get_path_manager_arc,
-    get_workspace_path,
-    try_get_path_manager_arc,
+    get_path_manager_arc, get_workspace_path, try_get_path_manager_arc,
 };
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tauri::Manager;
-use tauri_plugin_log::{RotationStrategy, TimezoneStrategy};
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
+use tauri::Manager;
+use tauri_plugin_log::{RotationStrategy, TimezoneStrategy};
 
 // Re-export API
 pub use api::*;
@@ -57,6 +55,7 @@ pub async fn run() {
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
     let log_targets = logging::build_log_targets(&log_config);
+    let session_log_dir = log_config.session_log_dir.clone();
 
     eprintln!("=== BitFun Desktop Starting ===");
 
@@ -64,6 +63,8 @@ pub async fn run() {
         log::error!("Failed to initialize global config service: {}", e);
         return;
     }
+
+    let startup_log_level = resolve_runtime_log_level(log_config.level).await;
 
     if let Err(e) = AIClientFactory::initialize_global().await {
         log::error!("Failed to initialize global AIClientFactory: {}", e);
@@ -105,7 +106,7 @@ pub async fn run() {
     let run_result = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(log_config.level)
+                .level(log::LevelFilter::Trace)
                 .level_for("ignore", log::LevelFilter::Off)
                 .level_for("ignore::walk", log::LevelFilter::Off)
                 .level_for("globset", log::LevelFilter::Off)
@@ -153,6 +154,8 @@ pub async fn run() {
         .manage(coordinator)
         .manage(terminal_state)
         .setup(move |app| {
+            logging::register_runtime_log_state(startup_log_level, session_log_dir.clone());
+
             let app_handle = app.handle().clone();
             theme::create_main_window(&app_handle);
 
@@ -203,7 +206,7 @@ pub async fn run() {
 
             init_mcp_servers(app_handle.clone());
 
-            init_services(app_handle.clone());
+            init_services(app_handle.clone(), startup_log_level);
 
             logging::spawn_log_cleanup_task();
 
@@ -298,6 +301,7 @@ pub async fn run() {
             reload_config,
             sync_config_to_global,
             get_global_config_health,
+            get_runtime_logging_info,
             get_mode_configs,
             get_mode_config,
             set_mode_config,
@@ -666,10 +670,11 @@ fn start_event_loop_with_transport(
     });
 }
 
-fn init_services(app_handle: tauri::AppHandle) {
+fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilter) {
     use bitfun_core::{infrastructure, service};
 
     spawn_ingest_server_with_config_listener();
+    spawn_runtime_log_level_listener(default_log_level);
 
     tokio::spawn(async move {
         let transport = Arc::new(TauriTransportAdapter::new(app_handle.clone()));
@@ -685,6 +690,65 @@ fn init_services(app_handle: tauri::AppHandle) {
 
         let event_system = infrastructure::events::get_global_event_system();
         event_system.set_emitter(emitter).await;
+    });
+}
+
+async fn resolve_runtime_log_level(default_level: log::LevelFilter) -> log::LevelFilter {
+    use bitfun_core::service::config::get_global_config_service;
+
+    if let Ok(config_service) = get_global_config_service().await {
+        if let Ok(config_level) = config_service
+            .get_config::<String>(Some("app.logging.level"))
+            .await
+        {
+            if let Some(level) = logging::parse_log_level(&config_level) {
+                return level;
+            }
+            log::warn!(
+                "Invalid app.logging.level '{}', falling back to default={}",
+                config_level,
+                logging::level_to_str(default_level)
+            );
+        }
+    }
+
+    default_level
+}
+
+fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
+    use bitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
+
+    tokio::spawn(async move {
+        if let Some(mut receiver) = subscribe_config_updates() {
+            loop {
+                match receiver.recv().await {
+                    Ok(ConfigUpdateEvent::LogLevelUpdated { new_level }) => {
+                        if let Some(level) = logging::parse_log_level(&new_level) {
+                            logging::apply_runtime_log_level(level, "config_update_event");
+                        } else {
+                            log::warn!(
+                                "Received invalid log level from config update event: {}",
+                                new_level
+                            );
+                        }
+                    }
+                    Ok(ConfigUpdateEvent::ConfigReloaded) => {
+                        let level = resolve_runtime_log_level(default_level).await;
+                        logging::apply_runtime_log_level(level, "config_reloaded");
+                    }
+                    Ok(_) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        log::warn!("Log-level listener channel closed, stopping listener");
+                        break;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        log::warn!("Log-level listener lagged by {} messages", n);
+                    }
+                }
+            }
+        } else {
+            log::warn!("Config update subscription unavailable for log-level listener");
+        }
     });
 }
 

@@ -12,6 +12,7 @@ import AgenticToolsConfig from './AgenticToolsConfig';
 import AIMemoryConfig from './AIMemoryConfig';
 import LspConfig from './LspConfig';
 import DebugConfig from './DebugConfig';
+import LoggingConfig from './LoggingConfig';
 import TerminalConfig from './TerminalConfig';
 import EditorConfig from './EditorConfig';
 import { ThemeConfig } from './ThemeConfig';
@@ -22,10 +23,10 @@ import './ConfigCenter.scss';
  
 
 export interface ConfigCenterPanelProps {
-  initialTab?: 'models' | 'ai-rules' | 'agents' | 'mcp' | 'agentic-tools';
+  initialTab?: 'models' | 'ai-rules' | 'agents' | 'mcp' | 'agentic-tools' | 'logging';
 }
 
-type ConfigTab = 'models' | 'super-agent' | 'ai-features' | 'modes' | 'ai-rules' | 'agents' | 'skills' | 'mcp' | 'agentic-tools' | 'ai-memory' | 'lsp' | 'debug' | 'terminal' | 'editor' | 'theme' | 'prompt-templates';
+type ConfigTab = 'models' | 'super-agent' | 'ai-features' | 'modes' | 'ai-rules' | 'agents' | 'skills' | 'mcp' | 'agentic-tools' | 'ai-memory' | 'lsp' | 'debug' | 'logging' | 'terminal' | 'editor' | 'theme' | 'prompt-templates';
 
 interface TabCategory {
   name: string;
@@ -144,6 +145,10 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
         {
           id: 'terminal' as ConfigTab,
           label: t('configCenter.tabs.terminal')
+        },
+        {
+          id: 'logging' as ConfigTab,
+          label: t('configCenter.tabs.logging')
         }
       ]
     }
@@ -194,6 +199,8 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
         return <LspConfig />;
       case 'debug':
         return <DebugConfig />;
+      case 'logging':
+        return <LoggingConfig />;
       case 'terminal':
         return <TerminalConfig />;
       case 'editor':

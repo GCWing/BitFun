@@ -25,6 +25,7 @@
       "editor": "编辑器",
       "lsp": "语言服务",
       "debug": "调试",
+      "logging": "日志",
       "terminal": "终端"
     }
   },

@@ -40,10 +40,21 @@ pub struct AppConfig {
     pub confirm_on_exit: bool,
     pub restore_windows: bool,
     pub zoom_level: f64,
+    #[serde(default)]
+    pub logging: AppLoggingConfig,
     pub sidebar: SidebarConfig,
     pub right_panel: RightPanelConfig,
     pub notifications: NotificationConfig,
     pub ai_experience: AIExperienceConfig,
+}
+
+/// App logging configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppLoggingConfig {
+    /// Runtime backend log level.
+    /// Allowed values: trace, debug, info, warn, error, off.
+    pub level: String,
 }
 
 /// AI experience configuration.
@@ -750,7 +761,6 @@ pub struct ProxyConfig {
     pub password: Option<String>,
 }
 
-
 /// Configuration provider interface.
 #[async_trait]
 pub trait ConfigProvider: Send + Sync {
@@ -841,6 +851,7 @@ impl Default for AppConfig {
             confirm_on_exit: true,
             restore_windows: true,
             zoom_level: 1.0,
+            logging: AppLoggingConfig::default(),
             sidebar: SidebarConfig {
                 width: 300,
                 collapsed: false,
@@ -855,6 +866,14 @@ impl Default for AppConfig {
                 duration: 5000,
             },
             ai_experience: AIExperienceConfig::default(),
+        }
+    }
+}
+
+impl Default for AppLoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: "info".to_string(),
         }
     }
 }
@@ -1110,7 +1129,6 @@ impl Default for AIModelConfig {
         }
     }
 }
-
 
 impl Default for SidebarConfig {
     fn default() -> Self {

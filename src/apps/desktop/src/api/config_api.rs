@@ -22,6 +22,9 @@ pub struct ResetConfigRequest {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct GetRuntimeLoggingInfoRequest {}
+
 fn to_json_value<T: Serialize>(value: T, context: &str) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|e| format!("Failed to serialize {}: {}", context, e))
 }
@@ -199,6 +202,15 @@ pub async fn sync_config_to_global(_state: State<'_, AppState>) -> Result<String
 #[tauri::command]
 pub async fn get_global_config_health() -> Result<bool, String> {
     Ok(bitfun_core::service::config::GlobalConfigManager::is_initialized())
+}
+
+#[tauri::command]
+pub async fn get_runtime_logging_info(
+    _state: State<'_, AppState>,
+    _request: GetRuntimeLoggingInfoRequest,
+) -> Result<Value, String> {
+    let logging_info = crate::logging::get_runtime_logging_info();
+    to_json_value(logging_info, "runtime logging info")
 }
 
 #[tauri::command]

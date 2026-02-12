@@ -10,6 +10,7 @@ export { default as MCPResourceBrowser } from './MCPResourceBrowser';
 export { default as AgenticToolsConfig } from './AgenticToolsConfig';
 export { default as EditorConfig } from './EditorConfig';
 export { default as TerminalConfig } from './TerminalConfig';
+export { default as LoggingConfig } from './LoggingConfig';
 
 
 export { default as DefaultModelConfig } from './DefaultModelConfig';

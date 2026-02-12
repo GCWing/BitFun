@@ -20,10 +20,17 @@ export interface AppConfig {
   confirm_on_exit: boolean;
   restore_windows: boolean;
   zoom_level: number;
+  logging: AppLoggingConfig;
   sidebar: SidebarConfig;
   right_panel: RightPanelConfig;
   notifications: NotificationConfig;
   ai_experience: AIExperienceConfig;
+}
+
+export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off';
+
+export interface AppLoggingConfig {
+  level: BackendLogLevel;
 }
 
 export interface SidebarConfig {
@@ -530,6 +537,14 @@ export interface ConfigPanelProps {
   onClose?: () => void;
   onSave?: (config: Partial<GlobalConfig>) => void;
   readOnly?: boolean;
+}
+
+export interface RuntimeLoggingInfo {
+  effectiveLevel: BackendLogLevel;
+  sessionLogDir: string;
+  appLogPath: string;
+  aiLogPath: string;
+  webviewLogPath: string;
 }
 
 

@@ -1,0 +1,33 @@
+{
+  "title": "Logging",
+  "subtitle": "Runtime log level and startup log path",
+  "sections": {
+    "level": "Log Level",
+    "path": "Startup Log Path"
+  },
+  "level": {
+    "description": "Controls backend log verbosity in real time. Changes apply immediately."
+  },
+  "levels": {
+    "trace": "Trace",
+    "debug": "Debug",
+    "info": "Info",
+    "warn": "Warn",
+    "error": "Error",
+    "off": "Off"
+  },
+  "actions": {
+    "refreshTooltip": "Refresh runtime status",
+    "openFolder": "Open Folder"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "loadFailed": "Failed to load logging configuration",
+    "saveFailed": "Failed to save logging level",
+    "levelUpdated": "Logging level updated",
+    "refreshed": "Runtime status refreshed",
+    "openedFolder": "Log folder opened",
+    "openFailed": "Failed to open log folder",
+    "pathUnavailable": "Log folder path is unavailable"
+  }
+}

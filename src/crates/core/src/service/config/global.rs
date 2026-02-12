@@ -48,6 +48,11 @@ pub enum ConfigUpdateEvent {
         /// The new log path.
         new_log_path: String,
     },
+    /// Runtime log level updated.
+    LogLevelUpdated {
+        /// New runtime log level.
+        new_level: String,
+    },
 }
 
 /// Global configuration service manager.

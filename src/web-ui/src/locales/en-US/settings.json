@@ -25,6 +25,7 @@
       "editor": "Editor",
       "lsp": "LSP",
       "debug": "Debug",
+      "logging": "Logging",
       "terminal": "Terminal"
     }
   },

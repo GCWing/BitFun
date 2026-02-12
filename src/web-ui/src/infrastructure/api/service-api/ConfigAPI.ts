@@ -81,6 +81,16 @@ export class ConfigAPI {
     }
   }
 
+  async getRuntimeLoggingInfo(): Promise<RuntimeLoggingInfo> {
+    try {
+      return await api.invoke('get_runtime_logging_info', {
+        request: {},
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_runtime_logging_info', error);
+    }
+  }
+
    
   async getModelConfigs(): Promise<any[]> {
     try {
@@ -232,7 +242,12 @@ export class ConfigAPI {
 }
 
 
-import type { SkillInfo, SkillLevel, SkillValidationResult } from '../../config/types';
+import type {
+  RuntimeLoggingInfo,
+  SkillInfo,
+  SkillLevel,
+  SkillValidationResult,
+} from '../../config/types';
 
 
 export const configAPI = new ConfigAPI();

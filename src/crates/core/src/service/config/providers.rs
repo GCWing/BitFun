@@ -469,6 +469,17 @@ impl ConfigProvider for AppConfigProvider {
             if app_config.sidebar.width < 200 || app_config.sidebar.width > 800 {
                 warnings.push("Sidebar width should be between 200 and 800 pixels".to_string());
             }
+
+            let valid_log_level = matches!(
+                app_config.logging.level.to_lowercase().as_str(),
+                "trace" | "debug" | "info" | "warn" | "error" | "off"
+            );
+            if !valid_log_level {
+                return Err(BitFunError::validation(format!(
+                    "Invalid app.logging.level '{}': expected one of trace/debug/info/warn/error/off",
+                    app_config.logging.level
+                )));
+            }
         } else {
             return Err(BitFunError::validation(
                 "Invalid app config format".to_string(),
@@ -485,8 +496,8 @@ impl ConfigProvider for AppConfigProvider {
     ) -> BitFunResult<()> {
         if let Ok(app_config) = serde_json::from_value::<AppConfig>(new_config.clone()) {
             info!(
-                "App config changed: language={}, zoom_level={}",
-                app_config.language, app_config.zoom_level
+                "App config changed: language={}, zoom_level={}, log_level={}",
+                app_config.language, app_config.zoom_level, app_config.logging.level
             );
         }
         Ok(())

@@ -500,6 +500,7 @@ impl ConfigManager {
         old_config: &GlobalConfig,
     ) -> BitFunResult<()> {
         self.check_and_broadcast_debug_mode_change(old_config).await;
+        self.check_and_broadcast_log_level_change(old_config).await;
 
         self.providers
             .notify_config_changed(path, old_config, &self.config)
@@ -528,6 +529,23 @@ impl ConfigManager {
                 new_log_path: new_debug.log_path.clone(),
             })
             .await;
+        }
+    }
+
+    /// Detects and broadcasts runtime log-level changes.
+    async fn check_and_broadcast_log_level_change(&self, old_config: &GlobalConfig) {
+        let old_level = old_config.app.logging.level.trim().to_lowercase();
+        let new_level = self.config.app.logging.level.trim().to_lowercase();
+
+        if old_level != new_level {
+            debug!(
+                "App logging level change detected: {} -> {}",
+                old_level, new_level
+            );
+
+            use super::global::{ConfigUpdateEvent, GlobalConfigManager};
+            GlobalConfigManager::broadcast_update(ConfigUpdateEvent::LogLevelUpdated { new_level })
+                .await;
         }
     }
 }

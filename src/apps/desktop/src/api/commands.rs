@@ -910,33 +910,55 @@ pub async fn list_directory_files(
 
 #[tauri::command]
 pub async fn reveal_in_explorer(request: RevealInExplorerRequest) -> Result<(), String> {
-    let _path = std::path::Path::new(&request.path);
+    let path = std::path::Path::new(&request.path);
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", request.path));
+    }
+    let is_directory = path.is_dir();
 
     #[cfg(target_os = "windows")]
     {
-        let normalized_path = request.path.replace("/", "\\");
-        bitfun_core::util::process_manager::create_command("explorer")
-            .args(&["/select,", &normalized_path])
-            .spawn()
-            .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        if is_directory {
+            let normalized_path = request.path.replace("/", "\\");
+            bitfun_core::util::process_manager::create_command("explorer")
+                .arg(&normalized_path)
+                .spawn()
+                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        } else {
+            let normalized_path = request.path.replace("/", "\\");
+            bitfun_core::util::process_manager::create_command("explorer")
+                .args(&["/select,", &normalized_path])
+                .spawn()
+                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        }
     }
 
     #[cfg(target_os = "macos")]
     {
-        bitfun_core::util::process_manager::create_command("open")
-            .args(&["-R", &request.path])
-            .spawn()
-            .map_err(|e| format!("Failed to open finder: {}", e))?;
+        if is_directory {
+            bitfun_core::util::process_manager::create_command("open")
+                .arg(&request.path)
+                .spawn()
+                .map_err(|e| format!("Failed to open finder: {}", e))?;
+        } else {
+            bitfun_core::util::process_manager::create_command("open")
+                .args(&["-R", &request.path])
+                .spawn()
+                .map_err(|e| format!("Failed to open finder: {}", e))?;
+        }
     }
 
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
-        let parent = path
-            .parent()
-            .ok_or_else(|| "Failed to get parent directory".to_string())?;
+        let target = if is_directory {
+            path.to_path_buf()
+        } else {
+            path.parent()
+                .ok_or_else(|| "Failed to get parent directory".to_string())?
+                .to_path_buf()
+        };
         bitfun_core::util::process_manager::create_command("xdg-open")
-            .arg(parent)
+            .arg(target)
             .spawn()
             .map_err(|e| format!("Failed to open file manager: {}", e))?;
     }

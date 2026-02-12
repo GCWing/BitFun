@@ -1,0 +1,33 @@
+{
+  "title": "日志",
+  "subtitle": "运行时日志级别与本次启动日志路径",
+  "sections": {
+    "level": "日志级别",
+    "path": "本次启动日志路径"
+  },
+  "level": {
+    "description": "实时控制后端日志输出级别，修改后立即生效。"
+  },
+  "levels": {
+    "trace": "Trace",
+    "debug": "Debug",
+    "info": "Info",
+    "warn": "Warn",
+    "error": "Error",
+    "off": "Off"
+  },
+  "actions": {
+    "refreshTooltip": "刷新运行时状态",
+    "openFolder": "打开文件夹"
+  },
+  "messages": {
+    "loading": "加载中...",
+    "loadFailed": "加载日志配置失败",
+    "saveFailed": "保存日志级别失败",
+    "levelUpdated": "日志级别已更新",
+    "refreshed": "运行时状态已刷新",
+    "openedFolder": "日志文件夹已打开",
+    "openFailed": "打开日志文件夹失败",
+    "pathUnavailable": "日志文件夹路径不可用"
+  }
+}

@@ -47,6 +47,7 @@ import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.
 import zhCNSettingsLsp from '../../../locales/zh-CN/settings/lsp.json';
 import zhCNSettingsTerminal from '../../../locales/zh-CN/settings/terminal.json';
 import zhCNSettingsDebug from '../../../locales/zh-CN/settings/debug.json';
+import zhCNSettingsLogging from '../../../locales/zh-CN/settings/logging.json';
 import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
 import zhCNSettingsPromptTemplates from '../../../locales/zh-CN/settings/prompt-templates.json';
 import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
@@ -82,6 +83,7 @@ import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.
 import enUSSettingsLsp from '../../../locales/en-US/settings/lsp.json';
 import enUSSettingsTerminal from '../../../locales/en-US/settings/terminal.json';
 import enUSSettingsDebug from '../../../locales/en-US/settings/debug.json';
+import enUSSettingsLogging from '../../../locales/en-US/settings/logging.json';
 import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
 import enUSSettingsPromptTemplates from '../../../locales/en-US/settings/prompt-templates.json';
 import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
@@ -124,6 +126,7 @@ const resources = {
     'settings/lsp': zhCNSettingsLsp,
     'settings/terminal': zhCNSettingsTerminal,
     'settings/debug': zhCNSettingsDebug,
+    'settings/logging': zhCNSettingsLogging,
     'settings/editor': zhCNSettingsEditor,
     'settings/prompt-templates': zhCNSettingsPromptTemplates,
     'settings/skills': zhCNSettingsSkills,
@@ -160,6 +163,7 @@ const resources = {
     'settings/lsp': enUSSettingsLsp,
     'settings/terminal': enUSSettingsTerminal,
     'settings/debug': enUSSettingsDebug,
+    'settings/logging': enUSSettingsLogging,
     'settings/editor': enUSSettingsEditor,
     'settings/prompt-templates': enUSSettingsPromptTemplates,
     'settings/skills': enUSSettingsSkills,
@@ -219,6 +223,7 @@ export class I18nService {
           'settings/lsp',
           'settings/terminal',
           'settings/debug',
+          'settings/logging',
           'settings/editor',
           'settings/prompt-templates',
           'settings/skills',
