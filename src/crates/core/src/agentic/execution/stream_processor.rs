@@ -9,7 +9,7 @@ use crate::agentic::events::{
 };
 use crate::agentic::tools::registry::get_all_end_turn_tool_names;
 use crate::agentic::tools::SubagentParentInfo;
-use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::errors::BitFunError;
 use crate::util::types::ai::GeminiUsage;
 use crate::util::JsonChecker;
 use ai_stream_handlers::UnifiedResponse;
@@ -173,6 +173,24 @@ pub struct StreamResult {
     pub tool_calls: Vec<ToolCall>,
     /// Token usage statistics (from model response)
     pub usage: Option<GeminiUsage>,
+    /// Whether this stream produced any user-visible output (text/thinking/tool events)
+    pub has_effective_output: bool,
+}
+
+/// Stream processing error with output diagnostics.
+#[derive(Debug)]
+pub struct StreamProcessError {
+    pub error: BitFunError,
+    pub has_effective_output: bool,
+}
+
+impl StreamProcessError {
+    fn new(error: BitFunError, has_effective_output: bool) -> Self {
+        Self {
+            error,
+            has_effective_output,
+        }
+    }
 }
 
 /// Stream processing context, encapsulates state during stream processing
@@ -198,6 +216,7 @@ struct StreamContext {
     text_chunks_count: usize,
     thinking_chunks_count: usize,
     thinking_completed_sent: bool,
+    has_effective_output: bool,
 }
 
 impl StreamContext {
@@ -223,6 +242,7 @@ impl StreamContext {
             text_chunks_count: 0,
             thinking_chunks_count: 0,
             thinking_completed_sent: false,
+            has_effective_output: false,
         }
     }
 
@@ -233,6 +253,7 @@ impl StreamContext {
             full_text: self.full_text,
             tool_calls: self.tool_calls,
             usage: self.usage,
+            has_effective_output: self.has_effective_output,
         }
     }
 
@@ -288,7 +309,7 @@ impl StreamProcessor {
         ctx: &mut StreamContext,
         cancellation_token: &tokio_util::sync::CancellationToken,
         location: &str,
-    ) -> Option<BitFunResult<StreamResult>> {
+    ) -> Option<Result<StreamResult, StreamProcessError>> {
         if cancellation_token.is_cancelled() {
             debug!(
                 "Cancellation detected at {}: location={}",
@@ -296,8 +317,9 @@ impl StreamProcessor {
             );
             self.graceful_shutdown_from_ctx(ctx, "User cancelled stream processing".to_string())
                 .await;
-            Some(Err(BitFunError::Cancelled(
-                "Stream processing cancelled".to_string(),
+            Some(Err(StreamProcessError::new(
+                BitFunError::Cancelled("Stream processing cancelled".to_string()),
+                ctx.has_effective_output,
             )))
         } else {
             None
@@ -428,6 +450,7 @@ impl StreamProcessor {
         // Handle tool ID and name
         if let Some(tool_id) = tool_call.id {
             if !tool_id.is_empty() {
+                ctx.has_effective_output = true;
                 // Clear previous tool_call state
                 ctx.force_finish_tool_call_buffer();
 
@@ -461,6 +484,7 @@ impl StreamProcessor {
         if let Some(tool_call_arguments) = tool_call.arguments {
             // Empty tool_id indicates abnormal premature closure, stop processing subsequent data for this tool_call
             if !ctx.tool_call_buffer.tool_id.is_empty() {
+                ctx.has_effective_output = true;
                 ctx.tool_call_buffer.append(&tool_call_arguments);
 
                 // Send partial parameters event
@@ -496,6 +520,7 @@ impl StreamProcessor {
 
     /// Handle text chunk
     async fn handle_text_chunk(&self, ctx: &mut StreamContext, text: String) {
+        ctx.has_effective_output = true;
         ctx.full_text.push_str(&text);
         ctx.text_chunks_count += 1;
 
@@ -517,6 +542,7 @@ impl StreamProcessor {
 
     /// Handle thinking chunk
     async fn handle_thinking_chunk(&self, ctx: &mut StreamContext, thinking_content: String) {
+        ctx.has_effective_output = true;
         ctx.full_thinking.push_str(&thinking_content);
         ctx.thinking_chunks_count += 1;
 
@@ -575,11 +601,12 @@ impl StreamProcessor {
         }
 
         trace!(
-            "Returning StreamResult: thinking_len={}, text_len={}, tool_calls={}, has_usage={}",
+            "Returning StreamResult: thinking_len={}, text_len={}, tool_calls={}, has_usage={}, has_effective_output={}",
             ctx.full_thinking.len(),
             ctx.full_text.len(),
             ctx.tool_calls.len(),
-            ctx.usage.is_some()
+            ctx.usage.is_some(),
+            ctx.has_effective_output
         );
     }
 
@@ -604,7 +631,7 @@ impl StreamProcessor {
         round_id: String,
         subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &tokio_util::sync::CancellationToken,
-    ) -> BitFunResult<StreamResult> {
+    ) -> Result<StreamResult, StreamProcessError> {
         let chunk_timeout = std::time::Duration::from_secs(600);
         let mut ctx =
             StreamContext::new(session_id, dialog_turn_id, round_id, subagent_parent_info);
@@ -650,7 +677,10 @@ impl StreamProcessor {
                 _ = cancellation_token.cancelled() => {
                     debug!("Cancel token detected, stopping stream processing: session_id={}", ctx.session_id);
                     self.graceful_shutdown_from_ctx(&mut ctx, "User cancelled stream processing".to_string()).await;
-                    return Err(BitFunError::Cancelled("Stream processing cancelled".to_string()));
+                    return Err(StreamProcessError::new(
+                        BitFunError::Cancelled("Stream processing cancelled".to_string()),
+                        ctx.has_effective_output,
+                    ));
                 }
 
                 // Wait for next chunk (with timeout)
@@ -667,7 +697,10 @@ impl StreamProcessor {
                             // log SSE for network errors
                             flush_sse_on_error(&sse_collector, &error_msg).await;
                             self.graceful_shutdown_from_ctx(&mut ctx, error_msg.clone()).await;
-                            return Err(BitFunError::AIClient(error_msg));
+                            return Err(StreamProcessError::new(
+                                BitFunError::AIClient(error_msg),
+                                ctx.has_effective_output,
+                            ));
                         }
                         Err(_) => {
                             let error_msg = format!("Stream data timeout (no data received for {} seconds)", chunk_timeout.as_secs());
@@ -675,7 +708,10 @@ impl StreamProcessor {
                             // log SSE for timeout errors
                             flush_sse_on_error(&sse_collector, &error_msg).await;
                             self.graceful_shutdown_from_ctx(&mut ctx, error_msg.clone()).await;
-                            return Err(BitFunError::AIClient(error_msg));
+                            return Err(StreamProcessError::new(
+                                BitFunError::AIClient(error_msg),
+                                ctx.has_effective_output,
+                            ));
                         }
                     };
 

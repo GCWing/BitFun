@@ -15,8 +15,9 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use dashmap::DashMap;
-use log::{debug, error};
+use log::{debug, error, warn};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 /// Round executor
@@ -29,6 +30,9 @@ pub struct RoundExecutor {
 }
 
 impl RoundExecutor {
+    const MAX_RETRIES_WITHOUT_OUTPUT: usize = 1;
+    const RETRY_BASE_DELAY_MS: u64 = 500;
+
     pub fn new(
         stream_processor: Arc<StreamProcessor>,
         event_queue: Arc<EventQueue>,
@@ -84,54 +88,125 @@ impl RoundExecutor {
         )
         .await;
 
-        debug!(
-            "Sending request: model={}, messages={}, tools={}",
-            context.model_name,
-            ai_messages.len(),
-            tool_definitions.as_ref().map(|t| t.len()).unwrap_or(0)
-        );
-
-        // Use dynamically obtained client for call
-        let stream_response = ai_client
-            .send_message_stream(ai_messages, tool_definitions)
-            .await
-            .map_err(|e| {
-                error!("AI request failed: {}", e);
-                BitFunError::AIClient(e.to_string())
-            })?;
-
-        // Destructure StreamResponse: get stream and raw SSE data receiver
-        let ai_stream = stream_response.stream;
-        let raw_sse_rx = stream_response.raw_sse_rx;
-
-        // Check cancellation token before calling stream processing
-        if cancel_token.is_cancelled() {
+        let max_attempts = Self::MAX_RETRIES_WITHOUT_OUTPUT + 1;
+        let mut attempt_index = 0usize;
+        let stream_result = loop {
             debug!(
-                "Cancel token detected before AI call, stopping execution: session_id={}",
-                context.session_id
+                "Sending request: model={}, messages={}, tools={}, attempt={}/{}",
+                context.model_name,
+                ai_messages.len(),
+                tool_definitions.as_ref().map(|t| t.len()).unwrap_or(0),
+                attempt_index + 1,
+                max_attempts
             );
-            return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
-        }
 
-        debug!(
-            "Starting AI stream processing: session={}, round={}, thread={:?}",
-            context.session_id,
-            round_id,
-            std::thread::current().id()
-        );
+            // Use dynamically obtained client for call
+            let stream_response = match ai_client
+                .send_message_stream(ai_messages.clone(), tool_definitions.clone())
+                .await
+            {
+                Ok(response) => response,
+                Err(e) => {
+                    error!("AI request failed: {}", e);
+                    let err_msg = e.to_string();
+                    let can_retry = attempt_index < max_attempts - 1
+                        && Self::is_transient_network_error(&err_msg);
+                    if can_retry {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying request after transient error with no output: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            err_msg
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+                    return Err(BitFunError::AIClient(err_msg));
+                }
+            };
 
-        let stream_result = self
-            .stream_processor
-            .process_stream(
-                ai_stream,
-                raw_sse_rx, // Pass raw SSE data receiver (for error diagnosis)
-                context.session_id.clone(),
-                context.dialog_turn_id.clone(),
-                round_id.clone(),
-                subagent_parent_info.clone(),
-                &cancel_token,
-            )
-            .await?;
+            // Destructure StreamResponse: get stream and raw SSE data receiver
+            let ai_stream = stream_response.stream;
+            let raw_sse_rx = stream_response.raw_sse_rx;
+
+            // Check cancellation token before calling stream processing
+            if cancel_token.is_cancelled() {
+                debug!(
+                    "Cancel token detected before AI call, stopping execution: session_id={}",
+                    context.session_id
+                );
+                return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+            }
+
+            debug!(
+                "Starting AI stream processing: session={}, round={}, thread={:?}, attempt={}/{}",
+                context.session_id,
+                round_id,
+                std::thread::current().id(),
+                attempt_index + 1,
+                max_attempts
+            );
+
+            match self
+                .stream_processor
+                .process_stream(
+                    ai_stream,
+                    raw_sse_rx, // Pass raw SSE data receiver (for error diagnosis)
+                    context.session_id.clone(),
+                    context.dialog_turn_id.clone(),
+                    round_id.clone(),
+                    subagent_parent_info.clone(),
+                    &cancel_token,
+                )
+                .await
+            {
+                Ok(result) => {
+                    let no_effective_output = !result.has_effective_output;
+                    if no_effective_output && attempt_index < max_attempts - 1 {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying stream because no effective output was received: session_id={}, round_id={}, attempt={}/{}, delay_ms={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+                    break result;
+                }
+                Err(stream_err) => {
+                    let err_msg = stream_err.error.to_string();
+                    let can_retry = !stream_err.has_effective_output
+                        && attempt_index < max_attempts - 1
+                        && Self::is_transient_network_error(&err_msg);
+                    if can_retry {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying stream after transient error with no effective output: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            err_msg
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+                    return Err(stream_err.error);
+                }
+            }
+        };
 
         // Model returned successfully (output to AI log file)
         let tool_names: Vec<&str> = stream_result
@@ -447,5 +522,91 @@ impl RoundExecutor {
     /// Emit event
     async fn emit_event(&self, event: AgenticEvent, priority: EventPriority) {
         let _ = self.event_queue.enqueue(event, Some(priority)).await;
+    }
+
+    fn retry_delay_ms(attempt_index: usize) -> u64 {
+        Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
+    }
+
+    fn is_transient_network_error(error_message: &str) -> bool {
+        let msg = error_message.to_lowercase();
+
+        let non_retryable_keywords = [
+            "invalid api key",
+            "unauthorized",
+            "forbidden",
+            "model not found",
+            "unsupported model",
+            "invalid request",
+            "bad request",
+            "prompt is too long",
+            "content policy",
+            "proxy authentication required",
+            "client error 400",
+            "client error 401",
+            "client error 403",
+            "client error 404",
+            "client error 422",
+            "sse parsing error",
+            "schema error",
+            "unknown api format",
+        ];
+
+        let transient_keywords = [
+            "transport error",
+            "error decoding response body",
+            "stream closed before response completed",
+            "stream processing error",
+            "sse stream error",
+            "sse error",
+            "sse timeout",
+            "stream data timeout",
+            "timeout",
+            "connection reset",
+            "broken pipe",
+            "unexpected eof",
+            "connection refused",
+            "temporarily unavailable",
+            "gateway timeout",
+            "proxy",
+            "tunnel",
+            "dns",
+            "network",
+            "econnreset",
+            "econnrefused",
+            "etimedout",
+            "rate limit",
+            "too many requests",
+            "429",
+        ];
+
+        if non_retryable_keywords.iter().any(|k| msg.contains(k)) {
+            return false;
+        }
+
+        transient_keywords.iter().any(|k| msg.contains(k))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RoundExecutor;
+
+    #[test]
+    fn detects_transient_stream_transport_error() {
+        let msg = "Error: Stream processing error: SSE Error: Transport Error: Error decoding response body";
+        assert!(RoundExecutor::is_transient_network_error(msg));
+    }
+
+    #[test]
+    fn rejects_non_retryable_auth_error() {
+        let msg = "OpenAI Streaming API client error 401: unauthorized";
+        assert!(!RoundExecutor::is_transient_network_error(msg));
+    }
+
+    #[test]
+    fn rejects_sse_schema_error() {
+        let msg = "Stream processing error: SSE data schema error: missing field choices";
+        assert!(!RoundExecutor::is_transient_network_error(msg));
     }
 }
