@@ -255,7 +255,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           
           glyphMargin: false,
           folding: false,
-          lineNumbersMinChars: 2,
+          lineNumbersMinChars: 4,
           lineDecorationsWidth: 10,
           padding: { top: 4, bottom: 4 },
           

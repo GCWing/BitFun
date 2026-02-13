@@ -652,10 +652,23 @@ impl SessionManager {
 
         let max_length = max_length.unwrap_or(20);
 
+        // Get current user locale for language setting
+        let user_language = if let Some(service) = crate::service::get_global_i18n_service().await {
+            service.get_current_locale().await
+        } else {
+            crate::service::LocaleId::ZhCN
+        };
+
+        let language_instruction = match user_language {
+            crate::service::LocaleId::ZhCN => "使用简体中文",
+            crate::service::LocaleId::EnUS => "Use English",
+        };
+
         // Construct system prompt
         let system_prompt = format!(
-            "You are a professional session title generation assistant. Based on the user's message content, generate a concise and accurate session title.\n\nRequirements:\n- Title should not exceed {} characters\n- Use English\n- Concise and accurate, reflecting the conversation topic\n- Do not add quotes or other decorative symbols\n- Return only the title text, no other content",
-            max_length
+            "You are a professional session title generation assistant. Based on the user's message content, generate a concise and accurate session title.\n\nRequirements:\n- Title should not exceed {} characters\n- {}\n- Concise and accurate, reflecting the conversation topic\n- Do not add quotes or other decorative symbols\n- Return only the title text, no other content",
+            max_length,
+            language_instruction
         );
 
         // Truncate message to save tokens (max 200 characters)

@@ -29,7 +29,7 @@ pub use diff::{
 };
 pub use filesystem::{DirectoryStats, FileSystemService, FileSystemServiceFactory};
 pub use git::GitService;
-pub use i18n::{I18nConfig, I18nService, LocaleId, LocaleMetadata};
+pub use i18n::{get_global_i18n_service, I18nConfig, I18nService, LocaleId, LocaleMetadata};
 pub use lsp::LspManager;
 pub use mcp::MCPService;
 pub use project_context::{ContextDocumentStatus, ProjectContextConfig, ProjectContextService};

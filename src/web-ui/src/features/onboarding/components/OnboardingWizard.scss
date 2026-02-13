@@ -164,7 +164,7 @@
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-4;
-    padding: $size-gap-4 $size-gap-6;
+    padding: $size-gap-2 $size-gap-3;
     border-top: 1px dashed var(--border-medium);
   }
 
@@ -183,11 +183,11 @@
     align-items: center;
     justify-content: center;
     gap: $size-gap-2;
-    min-height: 40px;
-    padding: 8px 16px;
-    min-width: 100px;
+    min-height: 32px;
+    padding: 6px 16px;
+    min-width: 80px;
     border: 1px dashed var(--border-medium);
-    border-radius: var(--size-radius-base, 8px);
+    border-radius: 4px;
     background: transparent;
     color: var(--color-text-secondary);
     font-size: $font-size-sm;
@@ -376,7 +376,7 @@
     gap: $size-gap-2;
     padding: $size-gap-3 $size-gap-6;
     border: 1px dashed var(--border-medium);
-    border-radius: $size-radius-base;
+    border-radius: 4px;
     background: transparent;
     color: var(--color-text-secondary);
     font-size: $font-size-base;
@@ -447,9 +447,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    font-size: $font-size-2xl;
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    font-size: $font-size-lg;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-muted);
     margin: $size-gap-4 0 $size-gap-6 0;
     text-align: center;
     line-height: 1.6;
@@ -852,58 +852,9 @@
     flex-direction: column;
     gap: $size-gap-2;
 
-    // Adapt component library Select for onboarding (class is .select, not .bitfun-select)
+    // Use component library default Select styles
     .select {
       width: 100%;
-
-      .select__label {
-        font-size: $font-size-sm;
-        font-weight: $font-weight-medium;
-        color: var(--color-text-primary);
-        margin-bottom: $size-gap-2;
-      }
-
-      .select__trigger {
-        min-height: 40px;
-        padding: 8px 12px;
-        border: 1px solid var(--border-base, rgba(255, 255, 255, 0.08));
-        border-radius: var(--size-radius-base, 8px);
-        background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
-
-        &:hover:not(.select--disabled &) {
-          border-color: var(--border-medium, rgba(255, 255, 255, 0.15));
-          background: var(--glass-blue-subtle, rgba(96, 165, 250, 0.05));
-        }
-      }
-
-      &.select--open .select__trigger {
-        border-color: var(--color-accent-500, #60a5fa);
-        background: var(--element-bg-soft, rgba(255, 255, 255, 0.06));
-        box-shadow: 0 0 0 3px var(--color-accent-200, rgba(96, 165, 250, 0.15));
-      }
-
-      // Dropdown - tighter corners
-      .select__dropdown {
-        border-radius: var(--size-radius-base, 8px);
-        margin-top: 4px;
-      }
-
-      // Options list - tighter padding
-      .select__options {
-        padding: 4px;
-      }
-
-      // Option item - tighter gap and padding
-      .select__option {
-        padding: 6px 10px;
-        gap: 8px;
-        font-size: $font-size-sm;
-        border-radius: var(--size-radius-sm, 6px);
-      }
-
-      .select__option-content {
-        gap: 8px;
-      }
     }
   }
 
@@ -913,16 +864,16 @@
     color: var(--color-text-primary);
   }
 
-  // Inputs - match Select sizing
+  // Inputs - match component library Select sizing
   &__input {
     width: 100%;
-    min-height: 40px;
-    padding: 8px 12px;
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.08));
-    border-radius: var(--size-radius-base, 8px);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+    border-radius: var(--size-radius-sm, 6px);
+    background: transparent;
     color: var(--color-text-primary);
-    font-size: $font-size-sm;
+    font-size: var(--font-size-sm, 14px);
     font-family: $font-family-sans;
     box-sizing: border-box;
     transition: all $motion-base $easing-standard;
@@ -931,16 +882,14 @@
       color: var(--color-text-muted);
     }
 
-    &:hover {
-      border-color: var(--border-medium, rgba(255, 255, 255, 0.15));
-      background: var(--glass-blue-subtle, rgba(96, 165, 250, 0.05));
+    &:hover:not(:disabled) {
+      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
     }
 
     &:focus {
       outline: none;
       border-color: var(--color-accent-500, #60a5fa);
-      background: var(--element-bg-soft, rgba(255, 255, 255, 0.06));
-      box-shadow: 0 0 0 3px var(--color-accent-200, rgba(96, 165, 250, 0.15));
     }
   }
 
@@ -1069,11 +1018,11 @@
     width: 100%;
     min-height: 80px;
     padding: 8px 12px;
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.08));
-    border-radius: var(--size-radius-base, 8px);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+    border-radius: var(--size-radius-sm, 6px);
+    background: transparent;
     color: var(--color-text-primary);
-    font-size: $font-size-xs;
+    font-size: var(--font-size-sm, 14px);
     font-family: monospace;
     line-height: 1.5;
     box-sizing: border-box;
@@ -1084,16 +1033,14 @@
       color: var(--color-text-muted);
     }
 
-    &:hover {
-      border-color: var(--border-medium, rgba(255, 255, 255, 0.15));
-      background: var(--glass-blue-subtle, rgba(96, 165, 250, 0.05));
+    &:hover:not(:disabled) {
+      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
     }
 
     &:focus {
       outline: none;
       border-color: var(--color-accent-500, #60a5fa);
-      background: var(--element-bg-soft, rgba(255, 255, 255, 0.06));
-      box-shadow: 0 0 0 3px var(--color-accent-200, rgba(96, 165, 250, 0.15));
     }
   }
 
@@ -1121,13 +1068,13 @@
     align-items: center;
     justify-content: center;
     gap: $size-gap-2;
-    min-height: 40px;
-    padding: 8px 12px;
-    border: 1px dashed var(--border-medium);
-    border-radius: var(--size-radius-base, 8px);
+    min-height: 36px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+    border-radius: var(--size-radius-sm, 6px);
     background: transparent;
     color: var(--color-text-secondary);
-    font-size: $font-size-sm;
+    font-size: var(--font-size-sm, 14px);
     font-weight: $font-weight-medium;
     font-family: $font-family-sans;
     cursor: pointer;
@@ -1135,8 +1082,8 @@
     transition: all $motion-base $easing-standard;
 
     &:hover:not(:disabled) {
-      border-style: solid;
-      background: var(--element-bg-subtle);
+      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
       color: var(--color-text-primary);
     }
 
@@ -1333,10 +1280,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 8px 16px;
+  min-height: 32px;
+  padding: 6px 16px;
   border: 1px dashed var(--border-medium);
-  border-radius: var(--size-radius-base, 8px);
+  border-radius: 4px;
   background: transparent;
   color: var(--color-text-secondary);
   font-size: $font-size-sm;

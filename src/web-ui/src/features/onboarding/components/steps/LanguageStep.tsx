@@ -34,10 +34,9 @@ export const LanguageStep: React.FC<LanguageStepProps> = ({
         BitFun
       </h1>
 
-      {/* Subtitle - always show both languages */}
+      {/* Subtitle - both languages on one line with / separator */}
       <div className="bitfun-onboarding-language__subtitle">
-        <span>选择界面语言</span>
-        <span>Choose Your Language</span>
+        <span>选择界面语言 / Choose Your Language</span>
       </div>
 
       {/* Language options */}

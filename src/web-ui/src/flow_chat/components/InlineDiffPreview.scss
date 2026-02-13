@@ -140,18 +140,18 @@
     background: var(--color-bg-secondary, rgba(255, 255, 255, 0.03));
     user-select: none;
     border-right: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.05));
-    
+
     &--single {
       padding: 0 4px;
       gap: 0;
-      
+
       .diff-line__num {
         min-width: 24px;
         padding: 0 4px;
       }
     }
   }
-  
+
   &__num {
     min-width: 32px;
     padding: 0 6px;
@@ -159,17 +159,17 @@
     color: var(--color-text-muted, #666);
     opacity: 0.6;
     font-size: 11px;
-    
+
     &--original {
       border-right: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
       padding-right: 8px;
     }
-    
+
     &--modified {
       padding-left: 8px;
     }
   }
-  
+
   &__prefix {
     display: flex;
     align-items: center;
@@ -245,10 +245,10 @@
     background: rgba(0, 0, 0, 0.03);
     border-right-color: rgba(0, 0, 0, 0.08);
   }
-  
+
   .diff-line__num {
     color: #6e7781;
-    
+
     &--original {
       border-right-color: rgba(0, 0, 0, 0.1);
     }

@@ -284,9 +284,9 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
     
     const origNum = line.originalLineNumber ?? '';
     const modNum = line.modifiedLineNumber ?? '';
-    
+
     const prefix = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' ';
-    
+
     return (
       <div
         key={`line-${index}`}

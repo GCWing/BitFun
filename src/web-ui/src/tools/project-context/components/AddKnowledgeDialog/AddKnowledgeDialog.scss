@@ -17,29 +17,8 @@
 // ==================== Dialog ====================
 .bitfun-add-knowledge-dialog {
   position: relative;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-  border-radius: 10px;
-  width: 420px;
-  max-width: calc(100vw - 48px);
-  max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  animation: bitfun-dialog-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-
-  @keyframes bitfun-dialog-enter {
-    from {
-      opacity: 0;
-      transform: translateY(16px) scale(0.98);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
 
   // ==================== Header ====================
   &__header {
