@@ -1,4 +1,4 @@
-name: Release Please
+name: Release On Version Bump
 
 on:
   push:
@@ -6,34 +6,90 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+  actions: write
 
 jobs:
-  release-please:
-    name: Release Please
+  create-release:
+    name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: googleapis/release-please-action@v4
-        id: release
+      - uses: actions/checkout@v4
         with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+          fetch-depth: 0
 
-  # When a release is created, trigger the desktop package workflow
-  trigger-package:
-    name: Trigger Desktop Package
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Log release info
+      - name: Detect version bump
+        id: detect
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          echo "Release created: ${{ needs.release-please.outputs.tag_name }}"
-          echo "Version: ${{ needs.release-please.outputs.version }}"
+          set -euo pipefail
+
+          CURRENT_VERSION="$(jq -r '.version' package.json)"
+          TAG_NAME="v${CURRENT_VERSION}"
+
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+          # First push to branch or unknown previous commit
+          if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" =~ ^0+$ ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=before_sha_unavailable" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PREV_VERSION="$(git show "${BEFORE_SHA}:package.json" 2>/dev/null | jq -r '.version' 2>/dev/null || true)"
+
+          if [[ -z "${PREV_VERSION}" ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=previous_version_unavailable" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$CURRENT_VERSION" == "$PREV_VERSION" ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=version_unchanged" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=tag_exists" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "previous_version=$PREV_VERSION" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "reason=version_changed" >> "$GITHUB_OUTPUT"
+
+      - name: Log decision
+        shell: bash
+        run: |
+          echo "Decision: ${{ steps.detect.outputs.reason }}"
+          echo "Current version: ${{ steps.detect.outputs.current_version }}"
+          echo "Tag: ${{ steps.detect.outputs.tag_name }}"
+
+      - name: Create GitHub release
+        if: steps.detect.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.detect.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+
+      - name: Trigger desktop package workflow
+        if: steps.detect.outputs.should_release == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "desktop-package.yml",
+              ref: context.ref.replace("refs/heads/", ""),
+              inputs: {
+                tag_name: "${{ steps.detect.outputs.tag_name }}",
+                upload_to_release: "true"
+              }
+            });

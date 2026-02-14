@@ -42,6 +42,7 @@ once_cell = { workspace = true }
 similar = { workspace = true }
 dashmap = { workspace = true }
 ignore = { workspace = true }
+urlencoding = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

@@ -65,6 +65,8 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     needs: check-changes
     if: needs.check-changes.outputs.should_build == 'true'
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
 
     strategy:
       fail-fast: false
