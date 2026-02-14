@@ -11,6 +11,11 @@ on:
         description: "Tag name to build (e.g. v0.2.0). Leave empty to build from HEAD."
         required: false
         type: string
+      upload_to_release:
+        description: "Upload built artifacts to the release specified by tag_name."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -30,6 +35,9 @@ jobs:
       - name: Resolve version metadata
         id: meta
         shell: bash
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          INPUT_UPLOAD_TO_RELEASE: ${{ inputs.upload_to_release }}
         run: |
           set -euo pipefail
 
@@ -37,10 +45,14 @@ jobs:
             TAG="${{ github.event.release.tag_name }}"
             VERSION="${TAG#v}"
             UPLOAD="true"
-          elif [[ -n "${{ inputs.tag_name }}" ]]; then
-            TAG="${{ inputs.tag_name }}"
+          elif [[ -n "${INPUT_TAG_NAME}" ]]; then
+            TAG="${INPUT_TAG_NAME}"
             VERSION="${TAG#v}"
-            UPLOAD="false"
+            if [[ "${INPUT_UPLOAD_TO_RELEASE}" == "true" ]]; then
+              UPLOAD="true"
+            else
+              UPLOAD="false"
+            fi
           else
             VERSION="$(jq -r '.version' package.json)"
             TAG="v${VERSION}"

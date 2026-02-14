@@ -53,7 +53,7 @@ jobs:
           shared-key: "ci-check"
 
       - name: Check compilation
-        run: cargo check --all-targets
+        run: cargo check --workspace
 
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:

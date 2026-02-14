@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   create-release:
@@ -75,3 +76,20 @@ jobs:
           tag_name: ${{ steps.detect.outputs.tag_name }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
+
+      - name: Trigger desktop package workflow
+        if: steps.detect.outputs.should_release == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "desktop-package.yml",
+              ref: context.ref.replace("refs/heads/", ""),
+              inputs: {
+                tag_name: "${{ steps.detect.outputs.tag_name }}",
+                upload_to_release: "true"
+              }
+            });

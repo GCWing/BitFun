@@ -89,6 +89,7 @@ eventsource-stream = "0.2.3"
 # Command detection (cross-platform)
 which = "8.0"
 similar = "2.5"
+urlencoding = "2.1"
 
 # Tauri (desktop only)
 tauri = { version = "2", features = [] }
