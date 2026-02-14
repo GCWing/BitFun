@@ -1,7 +1,7 @@
 {
   "name": "BitFun",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "copy-monaco": "copyfiles -u 3 \"node_modules/monaco-editor/min/vs/**/*\" src/web-ui/public/monaco-editor",

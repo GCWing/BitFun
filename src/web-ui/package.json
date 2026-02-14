@@ -1,6 +1,6 @@
 {
   "name": "@bitfun/web-ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BitFun Web UI - 支持 Desktop 和 Server 两种部署方式",
   "type": "module",
   "scripts": {

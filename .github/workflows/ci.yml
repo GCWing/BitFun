@@ -59,6 +59,8 @@ jobs:
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
 
