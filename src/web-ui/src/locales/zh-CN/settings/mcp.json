@@ -66,9 +66,17 @@
     "type": "类型",
     "enabled": "启用",
     "autoStart": "自动启动",
+    "command": "命令",
+    "runtime": "运行时",
     "status": "状态",
     "yes": "是",
     "no": "否"
+  },
+  "runtime": {
+    "sourceSystem": "系统运行时",
+    "sourceManaged": "BitFun 托管运行时",
+    "commandMissing": "命令不存在",
+    "unknown": "未知"
   },
   "jsonEditor": {
     "title": "MCP JSON 配置",

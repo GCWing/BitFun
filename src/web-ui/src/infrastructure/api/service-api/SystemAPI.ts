@@ -9,6 +9,19 @@ import { createLogger } from '@/shared/utils/logger';
 const log = createLogger('SystemAPI');
 
 export class SystemAPI {
+  async getRuntimeCapabilities(): Promise<Array<{
+    command: string;
+    available: boolean;
+    source: 'system' | 'managed' | null;
+    resolvedPath: string | null;
+  }>> {
+    try {
+      return await api.invoke('get_runtime_capabilities');
+    } catch (error) {
+      throw createTauriCommandError('get_runtime_capabilities', error);
+    }
+  }
+
    
   async getSystemInfo(): Promise<any> {
     try {

@@ -35,6 +35,7 @@ use api::i18n_api::*;
 use api::lsp_api::*;
 use api::lsp_workspace_api::*;
 use api::mcp_api::*;
+use api::runtime_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::startchat_agent_api::*;
@@ -509,6 +510,7 @@ pub async fn run() {
             check_command_exists,
             check_commands_exist,
             run_system_command,
+            get_runtime_capabilities,
             i18n_get_current_language,
             i18n_set_language,
             i18n_get_supported_languages,

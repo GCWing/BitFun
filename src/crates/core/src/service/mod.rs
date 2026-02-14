@@ -13,6 +13,7 @@ pub mod i18n; // I18n service
 pub mod lsp; // LSP (Language Server Protocol) system
 pub mod mcp; // MCP (Model Context Protocol) system
 pub mod project_context; // Project context management
+pub mod runtime; // Managed runtime and capability management
 pub mod snapshot; // Snapshot-based change tracking
 pub mod system; // System command detection and execution
 pub mod workspace; // Workspace management // Diff calculation and merge service
@@ -33,6 +34,7 @@ pub use i18n::{get_global_i18n_service, I18nConfig, I18nService, LocaleId, Local
 pub use lsp::LspManager;
 pub use mcp::MCPService;
 pub use project_context::{ContextDocumentStatus, ProjectContextConfig, ProjectContextService};
+pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, RuntimeSource};
 pub use snapshot::SnapshotService;
 pub use system::{
     check_command, check_commands, run_command, run_command_simple, CheckCommandResult,

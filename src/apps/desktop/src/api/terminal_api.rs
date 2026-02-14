@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::service::terminal::{
     AcknowledgeRequest as CoreAcknowledgeRequest, CloseSessionRequest as CoreCloseSessionRequest,
     CreateSessionRequest as CoreCreateSessionRequest,
@@ -42,6 +43,20 @@ impl TerminalState {
             // Set scripts directory to app data dir: {config_dir}/bitfun/temp/scripts
             let scripts_dir = Self::get_scripts_dir();
             config.shell_integration.scripts_dir = Some(scripts_dir);
+
+            // Prepend BitFun-managed runtime dirs to PATH so Bash/Skill commands can
+            // run on machines without preinstalled dev tools.
+            if let Ok(runtime_manager) = RuntimeManager::new() {
+                let current_path = std::env::var("PATH").ok();
+                if let Some(merged_path) = runtime_manager.merged_path_env(current_path.as_deref())
+                {
+                    config.env.insert("PATH".to_string(), merged_path.clone());
+                    #[cfg(windows)]
+                    {
+                        config.env.insert("Path".to_string(), merged_path);
+                    }
+                }
+            }
 
             let api = TerminalApi::new(config).await;
             *api_guard = Some(api);

@@ -21,6 +21,10 @@ export interface MCPServerInfo {
   serverType: string;
   enabled: boolean;
   autoStart: boolean;
+  command?: string;
+  commandAvailable?: boolean;
+  commandSource?: 'system' | 'managed';
+  commandResolvedPath?: string;
 }
 
  

@@ -1,6 +1,8 @@
 //! MCP API
 
 use crate::api::app_state::AppState;
+use bitfun_core::service::mcp::MCPServerType;
+use bitfun_core::service::runtime::{RuntimeManager, RuntimeSource};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -13,6 +15,14 @@ pub struct MCPServerInfo {
     pub server_type: String,
     pub enabled: bool,
     pub auto_start: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_available: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_resolved_path: Option<String>,
 }
 
 #[tauri::command]
@@ -63,8 +73,36 @@ pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<MCPServer
         .map_err(|e| e.to_string())?;
 
     let mut infos = Vec::new();
+    let runtime_manager = RuntimeManager::new().ok();
 
     for config in configs {
+        let (command, command_available, command_source, command_resolved_path) = if matches!(
+            config.server_type,
+            MCPServerType::Local | MCPServerType::Container
+        ) {
+            if let Some(command) = config.command.clone() {
+                let capability = runtime_manager
+                    .as_ref()
+                    .map(|manager| manager.get_command_capability(&command));
+                let available = capability.as_ref().map(|c| c.available);
+                let source = capability.and_then(|c| {
+                    c.source.map(|source| match source {
+                        RuntimeSource::System => "system".to_string(),
+                        RuntimeSource::Managed => "managed".to_string(),
+                    })
+                });
+                let resolved_path = runtime_manager
+                    .as_ref()
+                    .and_then(|manager| manager.resolve_command(&command))
+                    .and_then(|resolved| resolved.resolved_path);
+                (Some(command), available, source, resolved_path)
+            } else {
+                (None, None, None, None)
+            }
+        } else {
+            (None, None, None, None)
+        };
+
         let status = match mcp_service
             .server_manager()
             .get_server_status(&config.id)
@@ -89,6 +127,10 @@ pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<MCPServer
             server_type: format!("{:?}", config.server_type),
             enabled: config.enabled,
             auto_start: config.auto_start,
+            command,
+            command_available,
+            command_source,
+            command_resolved_path,
         });
     }
 

@@ -572,6 +572,18 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
     return s.includes('stopped') || s.includes('failed') || s.includes('uninitialized');
   };
 
+  const isLocalLikeServer = (serverType: string): boolean => {
+    const normalized = serverType.toLowerCase();
+    return normalized.includes('local') || normalized.includes('container');
+  };
+
+  const getRuntimeSourceText = (source?: 'system' | 'managed'): string => {
+    if (source === 'managed') {
+      return t('runtime.sourceManaged');
+    }
+    return t('runtime.sourceSystem');
+  };
+
   
   const filteredServers = servers.filter(server => {
     if (searchKeyword) {
@@ -745,8 +757,8 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
                 </div>
               </div>
               
-              <div className="server-footer">
-                <div className="server-details">
+                <div className="server-footer">
+                  <div className="server-details">
                   <div className="detail-item">
                     <span className="label">{t('labels.autoStart')}:</span>
                     <span className="value">{server.autoStart ? t('labels.yes') : t('labels.no')}</span>
@@ -757,6 +769,28 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
                       {effectiveStatus}
                     </span>
                   </div>
+                  {isLocalLikeServer(server.serverType) && server.command && (
+                    <div className="detail-item">
+                      <span className="label">{t('labels.command')}:</span>
+                      <span className="value">{server.command}</span>
+                    </div>
+                  )}
+                  {isLocalLikeServer(server.serverType) && server.command && (
+                    <div className="detail-item">
+                      <span className="label">{t('labels.runtime')}:</span>
+                      <span
+                        className={`value ${
+                          server.commandAvailable === false ? 'status-error' : 'status-healthy'
+                        }`}
+                      >
+                        {server.commandAvailable === true
+                          ? getRuntimeSourceText(server.commandSource)
+                          : server.commandAvailable === false
+                          ? t('runtime.commandMissing')
+                          : t('runtime.unknown')}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="server-actions">

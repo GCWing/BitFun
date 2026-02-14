@@ -66,9 +66,17 @@
     "type": "Type",
     "enabled": "Enabled",
     "autoStart": "Auto Start",
+    "command": "Command",
+    "runtime": "Runtime",
     "status": "Status",
     "yes": "Yes",
     "no": "No"
+  },
+  "runtime": {
+    "sourceSystem": "System runtime",
+    "sourceManaged": "BitFun managed runtime",
+    "commandMissing": "Command not found",
+    "unknown": "Unknown"
   },
   "jsonEditor": {
     "title": "MCP JSON Config",

@@ -123,6 +123,13 @@ impl PathManager {
         self.user_root.join("cache")
     }
 
+    /// Get managed runtimes root directory: ~/.config/bitfun/runtimes/
+    ///
+    /// BitFun-managed runtime components (e.g. node/python/office) are stored here.
+    pub fn managed_runtimes_dir(&self) -> PathBuf {
+        self.user_root.join("runtimes")
+    }
+
     /// Get cache directory for a specific type
     pub fn cache_dir(&self, cache_type: CacheType) -> PathBuf {
         let subdir = match cache_type {
@@ -143,7 +150,6 @@ impl PathManager {
     pub fn user_plugins_dir(&self) -> PathBuf {
         self.user_root.join("plugins")
     }
-
     /// Cowork workspace root directory: ~/.config/bitfun/cowork/workspace/
     ///
     /// This is an app-managed workspace used to enable FlowChat features even when the user

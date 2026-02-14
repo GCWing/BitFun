@@ -6,6 +6,7 @@ use super::connection::{MCPConnection, MCPConnectionPool};
 use super::{MCPServerConfig, MCPServerRegistry, MCPServerStatus};
 use crate::service::mcp::adapter::tool::MCPToolAdapter;
 use crate::service::mcp::config::MCPConfigService;
+use crate::service::runtime::{RuntimeManager, RuntimeSource};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -134,7 +135,10 @@ impl MCPServerManager {
 
             // Start only when not already running.
             if let Ok(status) = self.get_server_status(&config.id).await {
-                if matches!(status, MCPServerStatus::Connected | MCPServerStatus::Healthy) {
+                if matches!(
+                    status,
+                    MCPServerStatus::Connected | MCPServerStatus::Healthy
+                ) {
                     continue;
                 }
             }
@@ -217,17 +221,31 @@ impl MCPServerManager {
                     BitFunError::Configuration("Missing command for local MCP server".to_string())
                 })?;
 
+                let runtime_manager = RuntimeManager::new()?;
+                let resolved = runtime_manager.resolve_command(command).ok_or_else(|| {
+                    BitFunError::ProcessError(format!(
+                        "MCP server command '{}' not found in system PATH or BitFun managed runtimes at {}",
+                        command,
+                        runtime_manager.runtime_root_display()
+                    ))
+                })?;
+
+                let source_label = match resolved.source {
+                    RuntimeSource::System => "system",
+                    RuntimeSource::Managed => "managed",
+                };
+
                 info!(
-                    "Starting local MCP server: command={} id={}",
-                    command, server_id
+                    "Starting local MCP server: command={} source={} id={}",
+                    resolved.command, source_label, server_id
                 );
 
-                proc.start(command, &config.args, &config.env)
+                proc.start(&resolved.command, &config.args, &config.env)
                     .await
                     .map_err(|e| {
                         error!(
-                            "Failed to start local MCP server process: id={} error={}",
-                            server_id, e
+                            "Failed to start local MCP server process: id={} command={} source={} error={}",
+                            server_id, resolved.command, source_label, e
                         );
                         e
                     })?;
@@ -246,12 +264,12 @@ impl MCPServerManager {
                 proc.start_remote(url, &config.env, &config.headers)
                     .await
                     .map_err(|e| {
-                    error!(
-                        "Failed to connect to remote MCP server: url={} id={} error={}",
-                        url, server_id, e
-                    );
-                    e
-                })?;
+                        error!(
+                            "Failed to connect to remote MCP server: url={} id={} error={}",
+                            url, server_id, e
+                        );
+                        e
+                    })?;
             }
             super::MCPServerType::Container => {
                 error!("Container MCP servers not supported: id={}", server_id);
