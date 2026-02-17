@@ -85,7 +85,7 @@ html, body, #root {
   padding: 6px 10px;
   min-height: 28px;
   background: transparent;
-  border: none;
+  border: 1px dashed var(--border-base);
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: 13px; font-weight: 500;
@@ -93,7 +93,9 @@ html, body, #root {
   cursor: pointer;
   box-shadow: none;
   transition: background var(--motion-base) var(--easing-standard),
-              color var(--motion-base) var(--easing-standard);
+              color var(--motion-base) var(--easing-standard),
+              border-color var(--motion-base) var(--easing-standard),
+              border-style var(--motion-base) var(--easing-standard);
 }
 .btn svg {
   color: var(--color-text-muted);
@@ -102,6 +104,8 @@ html, body, #root {
 .btn:hover:not(:disabled) {
   background: var(--element-bg-subtle);
   color: var(--color-text-primary);
+  border-style: solid;
+  border-color: var(--border-medium);
   box-shadow: none;
 }
 .btn:hover:not(:disabled) svg { color: var(--color-accent-500); }
@@ -135,12 +139,12 @@ html, body, #root {
 
 .btn-ghost {
   min-height: 28px;
-  border: none; padding: 6px 10px;
+  padding: 6px 10px;
   box-shadow: none;
   color: var(--color-text-muted);
 }
 .btn-ghost:hover:not(:disabled) {
-  background: var(--element-bg-subtle); border: none;
+  background: var(--element-bg-subtle);
   color: var(--color-text-secondary);
 }
 
@@ -149,16 +153,18 @@ html, body, #root {
   padding: 14px 16px;
   min-height: 68px;
   width: 100%;
-  background: rgba(148, 163, 184, 0.08);
-  border: none;
+  background: transparent;
+  border: 1px dashed var(--border-base);
   border-radius: var(--radius-sm);
   cursor: pointer; text-align: left;
   box-shadow: none;
-  transition: background 0.25s ease, transform 0.2s ease;
+  transition: background 0.25s ease, transform 0.2s ease, border-color 0.25s ease, border-style 0.25s ease;
   position: relative; overflow: hidden;
 }
 .card-btn:hover {
-  background: rgba(148, 163, 184, 0.14);
+  background: rgba(148, 163, 184, 0.08);
+  border-style: solid;
+  border-color: var(--border-medium);
   transform: translateY(-1px);
   box-shadow: none;
 }
@@ -389,13 +395,4 @@ html, body, #root {
   position: absolute;
   right: 24px;
   bottom: 18px;
-}
-
-.uninstall-actions .btn {
-  border: 1px dashed var(--border-base);
-}
-
-.uninstall-actions .btn:hover:not(:disabled) {
-  border-style: solid;
-  border-color: var(--border-medium);
 }
