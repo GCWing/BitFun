@@ -676,9 +676,8 @@ export const MCPConfig: React.FC<MCPConfigProps> = () => {
           <div className="empty-icon">
             <Plug size={28} />
           </div>
-          <p>{searchKeyword ? t('empty.noMatchingServers') : t('empty.noServers')}</p>
           {!searchKeyword && (
-            <Button onClick={() => setShowJsonEditor(true)}>
+            <Button variant="dashed" onClick={() => setShowJsonEditor(true)}>
               {t('actions.jsonConfig')}
             </Button>
           )}

@@ -95,6 +95,11 @@
     transition: color 0.15s ease, font-weight 0.15s ease;
   }
 
+  // Keep title visually centered when tab is not hovered.
+  &:not(:hover) &__title {
+    text-align: center;
+  }
+
   // Active state title color is brighter
   &.is-active &__title {
     color: var(--color-text-primary, rgba(255, 255, 255, 0.95));

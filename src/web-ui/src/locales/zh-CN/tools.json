@@ -35,7 +35,12 @@
       "fileNotFound": "文件不存在",
       "permissionDenied": "权限不足",
       "networkError": "网络错误",
-      "saveFailedWithMessage": "保存文件失败: {{message}}"
+      "saveFailedWithMessage": "保存文件失败: {{message}}",
+      "save": "保存",
+      "cancel": "取消",
+      "edit": "编辑",
+      "add": "新增",
+      "delete": "删除"
     },
     "codeEditor": {
       "loadingFile": "正在加载文件...",

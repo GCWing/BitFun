@@ -6,7 +6,7 @@ import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { createLogger } from '@/shared/utils/logger';
-import { CubeLoading, Button } from '@/component-library';
+import { CubeLoading, Button, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -32,6 +32,8 @@ interface PlanData {
   overview: string;
   todos: PlanTodo[];
 }
+
+type YamlEditorPlacement = 'none' | 'inline' | 'trailing';
 
 export interface PlanViewerProps {
   /** File path */
@@ -64,15 +66,21 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   });
   const [originalContent, setOriginalContent] = useState('');
   // Edit mode: display raw yaml frontmatter
-  const [isEditingYaml, setIsEditingYaml] = useState(false);
+  const [yamlEditorPlacement, setYamlEditorPlacement] = useState<YamlEditorPlacement>('none');
   const [yamlContent, setYamlContent] = useState<string>('');
   const [originalYamlContent, setOriginalYamlContent] = useState<string>('');
   // Todos list expand/collapse state (collapsed by default)
   const [isTodosExpanded, setIsTodosExpanded] = useState(false);
+  const [isInlineTodoEditing, setIsInlineTodoEditing] = useState(false);
+  const [inlineTodoDrafts, setInlineTodoDrafts] = useState<Record<string, string>>({});
+  const [inlineDeletedTodoKeys, setInlineDeletedTodoKeys] = useState<string[]>([]);
+  const [inlineAddedTodos, setInlineAddedTodos] = useState<PlanTodo[]>([]);
   const [isTrailingTodoEditing, setIsTrailingTodoEditing] = useState(false);
   const [trailingTodoDrafts, setTrailingTodoDrafts] = useState<Record<string, string>>({});
   const [trailingDeletedTodoKeys, setTrailingDeletedTodoKeys] = useState<string[]>([]);
   const [trailingAddedTodos, setTrailingAddedTodos] = useState<PlanTodo[]>([]);
+
+  const isEditingYaml = yamlEditorPlacement !== 'none';
   
   const editorRef = useRef<EditorInstance>(null);
   const yamlEditorRef = useRef<EditorInstance>(null);
@@ -299,18 +307,56 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     saveFileContent();
   }, [saveFileContent]);
 
-  const startTrailingTodoEdit = useCallback(() => {
-    if (!planData?.todos?.length) return;
+  const buildTodoDraftsFromPlan = useCallback((todos: PlanTodo[]) => {
     const drafts: Record<string, string> = {};
-    planData.todos.forEach((todo, index) => {
+    todos.forEach((todo, index) => {
       const key = todo.id || String(index);
       drafts[key] = todo.content;
     });
-    setTrailingTodoDrafts(drafts);
+    return drafts;
+  }, []);
+
+  const startInlineTodoEdit = useCallback(() => {
+    if (!planData?.todos?.length) return;
+    setInlineTodoDrafts(buildTodoDraftsFromPlan(planData.todos));
+    setInlineDeletedTodoKeys([]);
+    setInlineAddedTodos([]);
+    setIsInlineTodoEditing(true);
+  }, [buildTodoDraftsFromPlan, planData]);
+
+  const cancelInlineTodoEdit = useCallback(() => {
+    setIsInlineTodoEditing(false);
+    setInlineTodoDrafts({});
+    setInlineDeletedTodoKeys([]);
+    setInlineAddedTodos([]);
+  }, []);
+
+  const handleAddInlineTodo = useCallback(() => {
+    const id = `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const newTodo: PlanTodo = { id, content: '', status: 'pending' };
+    setInlineAddedTodos(prev => [...prev, newTodo]);
+    setInlineTodoDrafts(prev => ({ ...prev, [id]: '' }));
+  }, []);
+
+  const handleDeleteInlineTodo = useCallback((todoKey: string) => {
+    if (todoKey.startsWith('new-')) {
+      setInlineAddedTodos(prev => prev.filter(todo => todo.id !== todoKey));
+      setInlineTodoDrafts(prev => {
+        const { [todoKey]: _removed, ...rest } = prev;
+        return rest;
+      });
+      return;
+    }
+    setInlineDeletedTodoKeys(prev => (prev.includes(todoKey) ? prev : [...prev, todoKey]));
+  }, []);
+
+  const startTrailingTodoEdit = useCallback(() => {
+    if (!planData?.todos?.length) return;
+    setTrailingTodoDrafts(buildTodoDraftsFromPlan(planData.todos));
     setTrailingDeletedTodoKeys([]);
     setTrailingAddedTodos([]);
     setIsTrailingTodoEditing(true);
-  }, [planData]);
+  }, [buildTodoDraftsFromPlan, planData]);
 
   const cancelTrailingTodoEdit = useCallback(() => {
     setIsTrailingTodoEditing(false);
@@ -321,65 +367,10 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
 
   const handleAddTrailingTodo = useCallback(() => {
     const id = `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const newTodo: PlanTodo = {
-      id,
-      content: '',
-      status: 'pending',
-    };
+    const newTodo: PlanTodo = { id, content: '', status: 'pending' };
     setTrailingAddedTodos(prev => [...prev, newTodo]);
     setTrailingTodoDrafts(prev => ({ ...prev, [id]: '' }));
   }, []);
-
-  const saveTrailingTodoEdit = useCallback(async () => {
-    if (!planData?.todos?.length || !filePath) return;
-
-    const nextTodos = planData.todos
-      .map((todo, index) => ({ todo, key: todo.id || String(index) }))
-      .filter(({ key }) => !trailingDeletedTodoKeys.includes(key))
-      .map(({ todo, key }) => {
-        const nextContent = (trailingTodoDrafts[key] ?? todo.content).trim();
-        return {
-          ...todo,
-          content: nextContent || todo.content,
-        };
-      })
-      .concat(
-        trailingAddedTodos
-          .map(todo => ({
-            ...todo,
-            content: (trailingTodoDrafts[todo.id] ?? todo.content).trim(),
-          }))
-          .filter(todo => !!todo.content)
-      );
-
-    let nextYamlContent = yamlContent;
-    if (yamlContent) {
-      try {
-        const parsed = yaml.parse(yamlContent) || {};
-        parsed.todos = nextTodos;
-        nextYamlContent = yaml.stringify(parsed).trimEnd();
-      } catch (e) {
-        log.warn('Failed to parse yaml while saving trailing todo edit', e);
-      }
-    }
-
-    try {
-      const fullContent = nextYamlContent
-        ? `---\n${nextYamlContent}\n---\n\n${planContent}`
-        : planContent;
-      await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
-      setPlanData(prev => (prev ? { ...prev, todos: nextTodos } : prev));
-      setYamlContent(nextYamlContent);
-      setOriginalYamlContent(nextYamlContent);
-      setOriginalContent(planContent);
-      setIsTrailingTodoEditing(false);
-      setTrailingTodoDrafts({});
-      setTrailingDeletedTodoKeys([]);
-      setTrailingAddedTodos([]);
-    } catch (err) {
-      log.error('Failed to save trailing todo edit', err);
-    }
-  }, [planData, trailingAddedTodos, trailingDeletedTodoKeys, trailingTodoDrafts, yamlContent, planContent, workspacePath, filePath]);
 
   const handleDeleteTrailingTodo = useCallback((todoKey: string) => {
     if (todoKey.startsWith('new-')) {
@@ -393,7 +384,111 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     setTrailingDeletedTodoKeys(prev => (prev.includes(todoKey) ? prev : [...prev, todoKey]));
   }, []);
 
-  const displayedTodos = useMemo(() => {
+  const saveTodoEdits = useCallback(async (nextTodos: PlanTodo[]) => {
+    if (!filePath || !planData) return;
+
+    let nextYamlContent = yamlContent;
+    if (yamlContent) {
+      try {
+        const parsed = yaml.parse(yamlContent) || {};
+        parsed.todos = nextTodos;
+        nextYamlContent = yaml.stringify(parsed).trimEnd();
+      } catch (e) {
+        log.warn('Failed to parse yaml while saving todo edit', e);
+      }
+    }
+
+    try {
+      const fullContent = nextYamlContent
+        ? `---\n${nextYamlContent}\n---\n\n${planContent}`
+        : planContent;
+      await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
+      setPlanData(prev => (prev ? { ...prev, todos: nextTodos } : prev));
+      setYamlContent(nextYamlContent);
+      setOriginalYamlContent(nextYamlContent);
+      setOriginalContent(planContent);
+    } catch (err) {
+      log.error('Failed to save todo edit', err);
+    }
+  }, [filePath, planContent, planData, workspacePath, yamlContent]);
+
+  const saveInlineTodoEdit = useCallback(async () => {
+    if (!planData?.todos?.length) return;
+    const nextTodos = planData.todos
+      .map((todo, index) => ({ todo, key: todo.id || String(index) }))
+      .filter(({ key }) => !inlineDeletedTodoKeys.includes(key))
+      .map(({ todo, key }) => {
+        const nextContent = (inlineTodoDrafts[key] ?? todo.content).trim();
+        return { ...todo, content: nextContent || todo.content };
+      })
+      .concat(
+        inlineAddedTodos
+          .map(todo => ({ ...todo, content: (inlineTodoDrafts[todo.id] ?? todo.content).trim() }))
+          .filter(todo => !!todo.content)
+      );
+    await saveTodoEdits(nextTodos);
+    setIsInlineTodoEditing(false);
+    setInlineTodoDrafts({});
+    setInlineDeletedTodoKeys([]);
+    setInlineAddedTodos([]);
+  }, [inlineAddedTodos, inlineDeletedTodoKeys, inlineTodoDrafts, planData, saveTodoEdits]);
+
+  const saveTrailingTodoEdit = useCallback(async () => {
+    if (!planData?.todos?.length) return;
+    const nextTodos = planData.todos
+      .map((todo, index) => ({ todo, key: todo.id || String(index) }))
+      .filter(({ key }) => !trailingDeletedTodoKeys.includes(key))
+      .map(({ todo, key }) => {
+        const nextContent = (trailingTodoDrafts[key] ?? todo.content).trim();
+        return { ...todo, content: nextContent || todo.content };
+      })
+      .concat(
+        trailingAddedTodos
+          .map(todo => ({ ...todo, content: (trailingTodoDrafts[todo.id] ?? todo.content).trim() }))
+          .filter(todo => !!todo.content)
+      );
+    await saveTodoEdits(nextTodos);
+    setIsTrailingTodoEditing(false);
+    setTrailingTodoDrafts({});
+    setTrailingDeletedTodoKeys([]);
+    setTrailingAddedTodos([]);
+  }, [planData, saveTodoEdits, trailingAddedTodos, trailingDeletedTodoKeys, trailingTodoDrafts]);
+
+  const openYamlEditor = useCallback((source: 'inline' | 'trailing' | 'unknown' = 'unknown') => {
+    if (source === 'inline') {
+      setIsInlineTodoEditing(false);
+      setInlineTodoDrafts({});
+      setInlineDeletedTodoKeys([]);
+      setInlineAddedTodos([]);
+      setIsTodosExpanded(true);
+      setYamlEditorPlacement('inline');
+      return;
+    }
+    if (source === 'trailing') {
+      setIsTrailingTodoEditing(false);
+      setTrailingTodoDrafts({});
+      setTrailingDeletedTodoKeys([]);
+      setTrailingAddedTodos([]);
+      setYamlEditorPlacement('trailing');
+      return;
+    }
+    setYamlEditorPlacement('inline');
+  }, [isInlineTodoEditing, isTodosExpanded, isTrailingTodoEditing, yamlEditorPlacement]);
+
+  const closeYamlEditor = useCallback(() => {
+    setYamlEditorPlacement('none');
+  }, []);
+
+  const displayedInlineTodos = useMemo(() => {
+    if (!planData?.todos) return [];
+    if (!isInlineTodoEditing) return planData.todos;
+    return [
+      ...planData.todos.filter((todo, index) => !inlineDeletedTodoKeys.includes(todo.id || String(index))),
+      ...inlineAddedTodos,
+    ];
+  }, [inlineAddedTodos, inlineDeletedTodoKeys, isInlineTodoEditing, planData]);
+
+  const displayedTrailingTodos = useMemo(() => {
     if (!planData?.todos) return [];
     if (!isTrailingTodoEditing) return planData.todos;
     return [
@@ -403,6 +498,17 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   }, [isTrailingTodoEditing, planData, trailingAddedTodos, trailingDeletedTodoKeys]);
 
   const renderSharedTodoPanel = useCallback((placement: 'inline' | 'trailing') => {
+    const isInline = placement === 'inline';
+    const isYamlEditingInPanel = yamlEditorPlacement === placement;
+    const isPanelEditing = isInline ? isInlineTodoEditing : isTrailingTodoEditing;
+    const panelTodos = isInline ? displayedInlineTodos : displayedTrailingTodos;
+    const panelDrafts = isInline ? inlineTodoDrafts : trailingTodoDrafts;
+    const startEdit = isInline ? startInlineTodoEdit : startTrailingTodoEdit;
+    const cancelEdit = isInline ? cancelInlineTodoEdit : cancelTrailingTodoEdit;
+    const addTodo = isInline ? handleAddInlineTodo : handleAddTrailingTodo;
+    const saveEdit = isInline ? saveInlineTodoEdit : saveTrailingTodoEdit;
+    const deleteTodo = isInline ? handleDeleteInlineTodo : handleDeleteTrailingTodo;
+
     const panelClassName = placement === 'trailing'
       ? `plan-viewer-todos plan-viewer-todos--trailing ${isEditingYaml ? 'plan-viewer-todos--yaml-editing' : ''}`
       : `plan-viewer-todos ${isTodosExpanded ? 'plan-viewer-todos--expanded' : ''} ${isEditingYaml ? 'plan-viewer-todos--yaml-editing' : ''}`;
@@ -411,65 +517,71 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     return (
       <div className={panelClassName}>
         <div className={toolbarClassName}>
-          {isEditingYaml ? (
-            <button
-              type="button"
-              className="edit-btn"
-              onClick={() => setIsEditingYaml(false)}
-              title={t('editor.planViewer.toggleYamlEditOff')}
-            >
-              <X size={14} />
-            </button>
-          ) : isTrailingTodoEditing ? (
-            <>
+          {isYamlEditingInPanel ? (
+            <Tooltip content={t('editor.planViewer.toggleYamlEditOff')} placement="top">
               <button
                 type="button"
                 className="edit-btn"
-                onClick={handleAddTrailingTodo}
-                title={t('editor.common.add')}
-              >
-                <Plus size={14} />
-              </button>
-              <button
-                type="button"
-                className="edit-btn edit-btn--confirm"
-                onClick={saveTrailingTodoEdit}
-                title={t('editor.common.save')}
-              >
-                <Check size={14} />
-              </button>
-              <button
-                type="button"
-                className="edit-btn"
-                onClick={cancelTrailingTodoEdit}
-                title={t('editor.common.cancel')}
+                onClick={closeYamlEditor}
               >
                 <X size={14} />
               </button>
+            </Tooltip>
+          ) : isPanelEditing ? (
+            <>
+              <Tooltip content={t('editor.common.add')} placement="top">
+                <button
+                  type="button"
+                  className="edit-btn"
+                  onClick={addTodo}
+                >
+                  <Plus size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip content={t('editor.common.save')} placement="top">
+                <button
+                  type="button"
+                  className="edit-btn edit-btn--confirm"
+                  onClick={saveEdit}
+                >
+                  <Check size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip content={t('editor.common.cancel')} placement="top">
+                <button
+                  type="button"
+                  className="edit-btn"
+                  onClick={cancelEdit}
+                >
+                  <X size={14} />
+                </button>
+              </Tooltip>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="edit-btn"
-                onClick={() => setIsEditingYaml(true)}
-                title={t('editor.planViewer.toggleYamlEditOn')}
-              >
-                <FileText size={14} />
-              </button>
-              <button
-                type="button"
-                className="edit-btn"
-                onClick={startTrailingTodoEdit}
-                title={t('editor.common.edit')}
-              >
-                <Pencil size={14} />
-              </button>
+              <Tooltip content={t('editor.planViewer.toggleYamlEditOn')} placement="top">
+                <button
+                  type="button"
+                  className="edit-btn"
+                  onClick={() => openYamlEditor(placement)}
+                >
+                  <FileText size={14} />
+                </button>
+              </Tooltip>
+              <Tooltip content={t('editor.common.edit')} placement="top">
+                <button
+                  type="button"
+                  className="edit-btn"
+                  onClick={startEdit}
+                >
+                  <Pencil size={14} />
+                </button>
+              </Tooltip>
             </>
           )}
         </div>
 
-        {isEditingYaml ? (
+        {isYamlEditingInPanel ? (
           <div className="yaml-editor-section">
             <div className="yaml-editor-content">
               <MEditor
@@ -490,33 +602,35 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
           </div>
         ) : (
           <div className="todos-list">
-            {displayedTodos.map((todo, index) => (
+            {panelTodos.map((todo, index) => (
               <div
                 key={todo.id || index}
                 className={`todo-item status-${todo.status || 'pending'}`}
               >
                 {getTodoIcon(todo.status)}
-                {isTrailingTodoEditing ? (
+                {isPanelEditing ? (
                   <>
                     <input
                       className="todo-content-input"
-                      value={trailingTodoDrafts[todo.id || String(index)] ?? todo.content}
+                      value={panelDrafts[todo.id || String(index)] ?? todo.content}
                       onChange={(e) => {
                         const key = todo.id || String(index);
-                        setTrailingTodoDrafts(prev => ({
-                          ...prev,
-                          [key]: e.target.value,
-                        }));
+                        if (isInline) {
+                          setInlineTodoDrafts(prev => ({ ...prev, [key]: e.target.value }));
+                        } else {
+                          setTrailingTodoDrafts(prev => ({ ...prev, [key]: e.target.value }));
+                        }
                       }}
                     />
-                    <button
-                      type="button"
-                      className="todo-delete-btn"
-                      onClick={() => handleDeleteTrailingTodo(todo.id || String(index))}
-                      title={t('editor.common.delete')}
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <Tooltip content={t('editor.common.delete')} placement="top">
+                      <button
+                        type="button"
+                        className="todo-delete-btn"
+                        onClick={() => deleteTodo(todo.id || String(index))}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </Tooltip>
                   </>
                 ) : (
                   <span className="todo-content">{todo.content}</span>
@@ -528,20 +642,31 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       </div>
     );
   }, [
+    cancelInlineTodoEdit,
     cancelTrailingTodoEdit,
-    displayedTodos,
+    closeYamlEditor,
+    displayedInlineTodos,
+    displayedTrailingTodos,
+    handleAddInlineTodo,
     handleAddTrailingTodo,
+    handleDeleteInlineTodo,
     handleDeleteTrailingTodo,
     handleSave,
     handleYamlChange,
+    isInlineTodoEditing,
     isEditingYaml,
     isTodosExpanded,
     isTrailingTodoEditing,
+    openYamlEditor,
+    saveInlineTodoEdit,
     saveTrailingTodoEdit,
+    startInlineTodoEdit,
     startTrailingTodoEdit,
     t,
+    inlineTodoDrafts,
     trailingTodoDrafts,
     yamlContent,
+    yamlEditorPlacement,
   ]);
 
   // Build button click handler
@@ -669,7 +794,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
         </div>
       </div>
 
-      {hasTodos && (isEditingYaml || isTodosExpanded) && renderSharedTodoPanel('inline')}
+      {hasTodos && (yamlEditorPlacement === 'inline' || isTodosExpanded) && renderSharedTodoPanel('inline')}
 
       <div className="plan-viewer-content">
         <div className="plan-markdown">
@@ -688,7 +813,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             basePath={basePath}
           />
         </div>
-        {hasTodos && isTodosExpanded && !isEditingYaml && renderSharedTodoPanel('trailing')}
+        {hasTodos && yamlEditorPlacement !== 'inline' && renderSharedTodoPanel('trailing')}
       </div>
     </div>
   );

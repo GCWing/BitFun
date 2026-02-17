@@ -130,11 +130,9 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
         {renderHeader()}
         <div className="lsp-plugin-list__empty">
           <Package size={64} />
-          <p>{t('pluginList.empty.title')}</p>
-          <p className="hint">{t('pluginList.empty.hint')}</p>
           {onInstallPlugin && (
             <Button
-              variant="primary"
+              variant="dashed"
               size="medium"
               onClick={onInstallPlugin}
               disabled={isInstalling}

@@ -35,7 +35,12 @@
       "fileNotFound": "File not found",
       "permissionDenied": "Permission denied",
       "networkError": "Network error",
-      "saveFailedWithMessage": "Failed to save file: {{message}}"
+      "saveFailedWithMessage": "Failed to save file: {{message}}",
+      "save": "Save",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "add": "Add",
+      "delete": "Delete"
     },
     "codeEditor": {
       "loadingFile": "Loading file...",
