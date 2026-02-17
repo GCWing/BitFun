@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BitFun Installer",
+  "identifier": "com.bitfun.installer",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1520",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "both",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "installer",
+        "title": "Install BitFun",
+        "width": 700,
+        "height": 480,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  }
+}

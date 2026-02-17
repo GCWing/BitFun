@@ -1,0 +1,52 @@
+:root {
+  --color-bg-primary: #121214;
+  --color-bg-secondary: #18181a;
+  --color-bg-quaternary: #202024;
+
+  --color-text-primary: #e8e8e8;
+  --color-text-secondary: #e5e5e5;
+  --color-text-muted: #a0a0a0;
+  --color-text-disabled: #666666;
+
+  --color-accent-50: rgba(96, 165, 250, 0.04);
+  --color-accent-100: rgba(96, 165, 250, 0.08);
+  --color-accent-200: rgba(96, 165, 250, 0.15);
+  --color-accent-300: rgba(96, 165, 250, 0.25);
+  --color-accent-400: rgba(96, 165, 250, 0.4);
+  --color-accent-500: #60a5fa;
+  --color-accent-600: #3b82f6;
+
+  --color-success: #6eb88c;
+  --color-success-bg: rgba(110, 184, 140, 0.1);
+  --color-success-border: rgba(110, 184, 140, 0.3);
+  --color-error: #c77070;
+  --color-error-bg: rgba(199, 112, 112, 0.1);
+  --color-error-border: rgba(199, 112, 112, 0.3);
+
+  --element-bg-subtle: rgba(255, 255, 255, 0.05);
+  --element-bg-soft: rgba(255, 255, 255, 0.08);
+  --element-bg-base: rgba(255, 255, 255, 0.11);
+  --element-bg-medium: rgba(255, 255, 255, 0.14);
+  --element-bg-strong: rgba(255, 255, 255, 0.17);
+
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-base: rgba(255, 255, 255, 0.14);
+  --border-medium: rgba(255, 255, 255, 0.20);
+  --border-strong: rgba(255, 255, 255, 0.26);
+
+  --radius-sm: 6px;
+  --radius-base: 8px;
+  --radius-lg: 12px;
+
+  --font-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display',
+    Roboto, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', 'SF Mono', 'Consolas',
+    'Noto Sans SC', 'Microsoft YaHei', monospace;
+
+  --motion-fast: 0.15s;
+  --motion-base: 0.3s;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --header-height: 36px;
+}

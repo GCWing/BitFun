@@ -9,6 +9,10 @@ members = [
     "src/apps/server",
 ]
 
+exclude = [
+    "BitFun-Installer/src-tauri",
+]
+
 resolver = "2"
 
 # Shared package metadata — single source of truth for version

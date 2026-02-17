@@ -1,0 +1,87 @@
+{
+  "lang": {
+    "title": "Language",
+    "subtitle": "Select your preferred language",
+    "continue": "Continue"
+  },
+  "options": {
+    "title": "Options",
+    "subtitle": "Review install location and preferences",
+    "quickSetup": "Quick setup",
+    "appLanguage": "App language",
+    "theme": "Theme",
+    "themeDark": "Dark",
+    "themeSlate": "Slate",
+    "changeLanguage": "Change language",
+    "pathLabel": "Installation Path",
+    "pathPlaceholder": "Select directory...",
+    "browse": "Browse",
+    "required": "Required",
+    "available": "Available",
+    "insufficientSpace": "Insufficient space",
+    "optionsLabel": "Options",
+    "desktopShortcut": "Create desktop shortcut",
+    "startMenu": "Add to Start Menu",
+    "contextMenu": "Add right-click context menu",
+    "addToPath": "Add to system PATH",
+    "launchAfterInstall": "Launch BitFun after setup",
+    "back": "Back",
+    "install": "Install",
+    "nextModel": "Next: Configure model"
+  },
+  "model": {
+    "title": "Model",
+    "subtitle": "Installation complete. Continue with model and theme setup",
+    "installDone": "Installation complete",
+    "provider": "Provider",
+    "config": "Connection",
+    "modelName": "Model name (e.g. deepseek-chat)",
+    "apiKey": "API key",
+    "back": "Back",
+    "skip": "Skip for now",
+    "nextTheme": "Next: Theme"
+  },
+  "progress": {
+    "title": "Installing",
+    "installing": "Installing...",
+    "prepare": "Preparing",
+    "extract": "Extracting Files",
+    "registry": "Registering Application",
+    "shortcuts": "Creating Shortcuts",
+    "contextMenu": "Context Menu",
+    "path": "Updating PATH",
+    "config": "Applying startup preferences",
+    "complete": "Finishing Up",
+    "starting": "Starting...",
+    "failed": "Installation Failed",
+    "confirmContinue": "Continue setup"
+  },
+  "themeSetup": {
+    "title": "Theme & Launch",
+    "subtitle": "Choose your startup theme, then launch",
+    "skip": "Skip theme and launch"
+  },
+  "complete": {
+    "title": "Complete",
+    "heading": "Installation Complete",
+    "ready": "BitFun is ready to use.",
+    "autoLaunch": " It will launch automatically.",
+    "launchFinish": "Launch BitFun",
+    "finish": "Finish"
+  },
+  "uninstall": {
+    "title": "Uninstall BitFun",
+    "subtitle": "This removes BitFun and related integrations (shortcuts, context menu, PATH).",
+    "installPath": "Install path",
+    "inlineHint": "Will remove integration and install directory",
+    "pathUnknown": "Install path not detected",
+    "confirm": "Start uninstall",
+    "uninstalling": "Uninstalling...",
+    "completed": "Uninstall completed. You can close this window.",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "titlebar": {
+    "default": "BitFun"
+  }
+}
