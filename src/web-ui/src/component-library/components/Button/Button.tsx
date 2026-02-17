@@ -6,7 +6,7 @@ import React, { forwardRef } from 'react';
 import './Button.scss';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'accent' | 'ai';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'dashed' | 'danger' | 'success' | 'accent' | 'ai';
   size?: 'small' | 'medium' | 'large';
   isLoading?: boolean;
   iconOnly?: boolean;
@@ -43,6 +43,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
         return 'btn-action btn-action-success';
       case 'ghost':
         return 'btn-ghost';
+      case 'dashed':
+        return 'btn-dashed';
       default:
         return 'btn-secondary';
     }

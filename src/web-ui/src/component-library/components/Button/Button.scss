@@ -105,6 +105,24 @@
     }
   }
 
+  &-dashed {
+    background: transparent;
+    color: var(--color-text-secondary, #e5e5e5);
+    border: 1px dashed var(--border-base, rgba(255, 255, 255, 0.16));
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.08));
+      color: var(--color-text-primary, #ffffff);
+      border-style: solid;
+      border-color: var(--border-medium, rgba(255, 255, 255, 0.24));
+    }
+
+    &:active:not(:disabled) {
+      background: var(--element-bg-base, rgba(255, 255, 255, 0.1));
+      border-color: var(--border-strong, rgba(255, 255, 255, 0.32));
+    }
+  }
+
   &-icon-only {
     padding: 0;
     width: var(--button-height-base, 40px);
