@@ -1,0 +1,401 @@
+@import './variables.css';
+@import './animations.css';
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: 14px; line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  text-rendering: optimizeLegibility;
+}
+
+.installer-app {
+  width: 100vw; height: 100vh;
+  background: var(--color-bg-primary);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.titlebar {
+  height: var(--header-height);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  -webkit-app-region: drag;
+  flex-shrink: 0; position: relative; z-index: 10;
+}
+
+.titlebar::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--border-base) 25%,
+    var(--border-medium) 50%, var(--border-base) 75%,
+    transparent 100%);
+  pointer-events: none; z-index: 1;
+}
+
+.titlebar-title {
+  font-size: 12px; font-weight: 500;
+  color: var(--color-text-muted); opacity: 0.6;
+  letter-spacing: 0.3px;
+}
+
+.window-controls {
+  display: flex; align-items: center; gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls__btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: #8a8a8a;
+  cursor: pointer; outline: none;
+  transition: background var(--motion-fast) ease,
+              color var(--motion-fast) ease;
+}
+.window-controls__btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #b8b8b8;
+}
+.window-controls__btn:active { opacity: 0.8; }
+.window-controls__btn--close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ef4444;
+}
+
+.installer-content {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; position: relative;
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 6px 10px;
+  min-height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 13px; font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  box-shadow: none;
+  transition: background var(--motion-base) var(--easing-standard),
+              color var(--motion-base) var(--easing-standard);
+}
+.btn svg {
+  color: var(--color-text-muted);
+  transition: color 0.2s ease;
+}
+.btn:hover:not(:disabled) {
+  background: var(--element-bg-subtle);
+  color: var(--color-text-primary);
+  box-shadow: none;
+}
+.btn:hover:not(:disabled) svg { color: var(--color-accent-500); }
+.btn:focus-visible {
+  outline: none;
+  background: var(--element-bg-subtle);
+  box-shadow: none;
+}
+.btn:disabled { opacity: 0.46; cursor: default; box-shadow: none; }
+
+.btn-primary {
+  color: var(--color-accent-500);
+}
+.btn-primary svg { color: var(--color-accent-500); }
+.btn-primary:hover:not(:disabled) {
+  background: var(--element-bg-subtle);
+  color: var(--color-accent-600);
+}
+
+.btn-success {
+  color: var(--color-success);
+}
+.btn-success svg { color: var(--color-success); }
+.btn-success:hover:not(:disabled) {
+  background: var(--element-bg-subtle);
+  color: var(--color-success);
+}
+.btn-success:hover:not(:disabled) svg {
+  color: var(--color-success);
+}
+
+.btn-ghost {
+  min-height: 28px;
+  border: none; padding: 6px 10px;
+  box-shadow: none;
+  color: var(--color-text-muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--element-bg-subtle); border: none;
+  color: var(--color-text-secondary);
+}
+
+.card-btn {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 16px;
+  min-height: 68px;
+  width: 100%;
+  background: rgba(148, 163, 184, 0.08);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; text-align: left;
+  box-shadow: none;
+  transition: background 0.25s ease, transform 0.2s ease;
+  position: relative; overflow: hidden;
+}
+.card-btn:hover {
+  background: rgba(148, 163, 184, 0.14);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+.card-btn:active { transform: translateY(0); }
+.card-btn:focus-visible {
+  outline: none;
+  background: rgba(148, 163, 184, 0.14);
+  box-shadow: none;
+}
+.card-btn:hover .card-btn__icon { background: rgba(148, 163, 184, 0.16); }
+.card-btn:hover .card-btn__icon svg { color: var(--color-accent-600); }
+.card-btn:hover .card-btn__arrow { opacity: 0.8; transform: translateX(0); }
+
+.card-btn__icon {
+  flex-shrink: 0; width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+  transition: all 0.25s ease;
+}
+.card-btn__icon svg { color: var(--color-accent-500); transition: color 0.25s ease; }
+
+.card-btn__content { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.card-btn__title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+.card-btn__subtitle { font-size: 12px; color: var(--color-text-muted); opacity: 0.7; }
+
+.card-btn__arrow {
+  flex-shrink: 0; color: var(--color-text-muted);
+  opacity: 0.3; transform: translateX(-6px);
+  transition: all 0.35s var(--easing-standard);
+}
+
+.input-group { display: flex; gap: 8px; align-items: stretch; }
+
+.input {
+  flex: 1; padding: 10px 14px;
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 12px; font-family: var(--font-mono);
+  outline: none; transition: all 0.25s ease;
+}
+.input:focus { border-color: var(--color-accent-400); background: var(--element-bg-soft); }
+.input::placeholder { color: var(--color-text-muted); }
+
+.checkbox-group { display: flex; flex-direction: column; gap: 2px; }
+
+.checkbox-item {
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) ease;
+}
+.checkbox-item:hover { background: var(--element-bg-subtle); }
+
+.checkbox-box {
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 1.5px solid var(--border-medium);
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--motion-fast) ease; flex-shrink: 0;
+}
+.checkbox-box.checked { background: var(--color-accent-500); border-color: var(--color-accent-500); }
+.checkbox-box svg { width: 10px; height: 10px; color: white; opacity: 0; transition: opacity var(--motion-fast) ease; }
+.checkbox-box.checked svg { opacity: 1; }
+
+.checkbox-label { font-size: 13px; color: var(--color-text-secondary); transition: color var(--motion-fast) ease; }
+.checkbox-item:hover .checkbox-label { color: var(--color-text-primary); }
+
+.progress-bar-container {
+  width: 100%; height: 4px;
+  background: var(--element-bg-soft);
+  border-radius: 2px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: var(--color-accent-500);
+  transition: width 400ms var(--easing-standard);
+  position: relative;
+}
+.progress-bar-fill::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+.step-indicator { display: flex; align-items: center; padding: 12px 0 20px; }
+.step-dot-wrapper { display: flex; align-items: center; }
+.step-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--element-bg-strong);
+  transition: all 0.25s ease;
+}
+.step-dot.active {
+  width: 8px; height: 8px;
+  background: var(--color-accent-500);
+  box-shadow: 0 0 8px var(--color-accent-300);
+}
+.step-dot.completed { background: var(--color-success); }
+.step-line { width: 40px; height: 1px; background: var(--element-bg-strong); transition: background 0.25s ease; }
+.step-line.completed { background: var(--color-success); }
+
+.section-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 12px;
+}
+.section-label svg { opacity: 0.6; }
+
+.installer-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 16px; margin-top: auto;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--element-bg-strong); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+.uninstall-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 42px 92px;
+  animation: fadeIn 0.4s ease-out;
+  position: relative;
+}
+
+.uninstall-card {
+  width: 100%;
+  max-width: 600px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0 auto;
+}
+
+.uninstall-title {
+  margin-top: -34px;
+  margin-bottom: 30px;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+
+.uninstall-subtitle {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  text-align: left;
+  opacity: 0.86;
+}
+
+.uninstall-inline-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 4px 0 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  border: none;
+  min-width: 0;
+}
+
+.uninstall-inline-label {
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  opacity: 1;
+}
+
+.uninstall-inline-path {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 82%;
+  flex: 0 1 auto;
+  opacity: 0.9;
+}
+
+.uninstall-error {
+  margin-bottom: 10px;
+  color: var(--color-error);
+  font-size: 12px;
+}
+
+.uninstall-success {
+  margin-bottom: 10px;
+  color: var(--color-success);
+  font-size: 12px;
+}
+
+.uninstall-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.uninstall-progress-wrap .progress-bar-container {
+  flex: 1;
+}
+
+.uninstall-progress-text {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  min-width: 34px;
+  text-align: right;
+}
+
+.uninstall-actions {
+  display: flex;
+  gap: 10px;
+  position: absolute;
+  right: 24px;
+  bottom: 18px;
+}
+
+.uninstall-actions .btn {
+  border: 1px dashed var(--border-base);
+}
+
+.uninstall-actions .btn:hover:not(:disabled) {
+  border-style: solid;
+  border-color: var(--border-medium);
+}

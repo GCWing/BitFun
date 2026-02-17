@@ -1,0 +1,87 @@
+{
+  "lang": {
+    "title": "语言",
+    "subtitle": "选择您的首选语言",
+    "continue": "继续"
+  },
+  "options": {
+    "title": "选项",
+    "subtitle": "确认安装位置与安装偏好",
+    "quickSetup": "快速设置",
+    "appLanguage": "应用语言",
+    "theme": "主题",
+    "themeDark": "暗色",
+    "themeSlate": "石板灰",
+    "changeLanguage": "切换语言",
+    "pathLabel": "安装路径",
+    "pathPlaceholder": "选择目录...",
+    "browse": "浏览",
+    "required": "所需空间",
+    "available": "可用空间",
+    "insufficientSpace": "磁盘空间不足",
+    "optionsLabel": "安装选项",
+    "desktopShortcut": "创建桌面快捷方式",
+    "startMenu": "添加到开始菜单",
+    "contextMenu": "添加右键菜单",
+    "addToPath": "添加到系统 PATH",
+    "launchAfterInstall": "安装后启动 BitFun",
+    "back": "返回",
+    "install": "安装",
+    "nextModel": "下一步：配置模型"
+  },
+  "model": {
+    "title": "模型",
+    "subtitle": "安装完成，继续配置模型与主题",
+    "installDone": "安装完成",
+    "provider": "服务商",
+    "config": "连接信息",
+    "modelName": "模型名称（如 deepseek-chat）",
+    "apiKey": "API Key",
+    "back": "返回",
+    "skip": "稍后配置",
+    "nextTheme": "下一步：主题"
+  },
+  "progress": {
+    "title": "安装中",
+    "installing": "正在安装...",
+    "prepare": "准备中",
+    "extract": "正在解压文件",
+    "registry": "正在注册应用",
+    "shortcuts": "正在创建快捷方式",
+    "contextMenu": "右键菜单",
+    "path": "正在更新 PATH",
+    "config": "正在应用启动偏好设置",
+    "complete": "即将完成",
+    "starting": "启动中...",
+    "failed": "安装失败",
+    "confirmContinue": "继续完成配置"
+  },
+  "themeSetup": {
+    "title": "主题与启动",
+    "subtitle": "选择首次启动主题，然后开始使用",
+    "skip": "跳过主题并启动"
+  },
+  "complete": {
+    "title": "完成",
+    "heading": "安装完成",
+    "ready": "BitFun 已准备就绪。",
+    "autoLaunch": "将自动启动应用。",
+    "launchFinish": "启动 BitFun",
+    "finish": "完成"
+  },
+  "uninstall": {
+    "title": "卸载 BitFun",
+    "subtitle": "将移除 BitFun 及其集成项（快捷方式、右键菜单、PATH）。",
+    "installPath": "安装目录",
+    "inlineHint": "将清理集成与安装目录",
+    "pathUnknown": "未检测到安装目录",
+    "confirm": "开始卸载",
+    "uninstalling": "正在卸载...",
+    "completed": "卸载已完成，可关闭窗口。",
+    "cancel": "取消",
+    "close": "关闭"
+  },
+  "titlebar": {
+    "default": "BitFun"
+  }
+}
