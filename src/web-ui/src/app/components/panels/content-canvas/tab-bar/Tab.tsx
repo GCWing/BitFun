@@ -119,8 +119,8 @@ export const Tab: React.FC<TabProps> = ({
     getStateClassName(tab.state),
   ].filter(Boolean).join(' ');
 
-  // Show close button (hidden in preview, shown on hover)
-  const showCloseButton = tab.state !== 'preview' || isHovered;
+  // Show close button only while hovering to avoid reserving layout space.
+  const showCloseButton = isHovered;
 
   return (
     <Tooltip content={tooltipText} placement="bottom">
