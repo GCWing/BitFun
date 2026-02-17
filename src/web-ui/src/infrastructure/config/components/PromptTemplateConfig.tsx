@@ -315,9 +315,8 @@ export const PromptTemplateConfig: React.FC = () => {
               <div className="prompt-template-config__templates">
                 {sortedTemplates.length === 0 && (
                   <div className="prompt-template-config__empty">
-                    <p>{t('empty.noTemplates')}</p>
                     <Button
-                      variant="primary"
+                      variant="dashed"
                       size="medium"
                       onClick={handleCreateTemplate}
                     >
