@@ -63,17 +63,56 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 8px 12px;
     background: var(--color-bg-secondary);
     border-bottom: 1px solid var(--border-base);
     flex-shrink: 0;
+
+    &--collapsible {
+      cursor: pointer;
+
+      &:hover {
+        background: var(--color-bg-tertiary);
+
+        .header-expand-indicator {
+          color: var(--color-text-primary);
+          background: rgba(255, 255, 255, 0.08);
+        }
+      }
+    }
 
     .header-left {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
+
+      .header-expand-indicator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        color: var(--color-text-muted);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.03);
+        transition: all 0.15s ease;
+
+        svg {
+          transition: transform 0.15s ease;
+        }
+
+        &--expanded svg {
+          transform: rotate(180deg);
+        }
+
+        &--disabled {
+          opacity: 0.5;
+        }
+      }
 
       .file-icon {
+        flex-shrink: 0;
         color: var(--color-text-muted);
       }
 
@@ -82,6 +121,9 @@
         font-weight: 500;
         color: var(--color-text-primary);
         font-family: var(--font-mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .unsaved-indicator {
@@ -98,6 +140,50 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-shrink: 0;
+
+      .todos-count {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--color-text-muted);
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border-base);
+        background: var(--color-bg-primary);
+        letter-spacing: 0.2px;
+      }
+
+      .edit-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        color: var(--color-text-muted);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          color: var(--color-text-primary);
+          background: var(--color-bg-tertiary);
+          border-color: var(--border-medium);
+        }
+
+        &--active {
+          color: var(--color-info);
+          background: rgba(59, 130, 246, 0.1);
+          border-color: var(--color-info);
+
+          &:hover {
+            color: var(--color-info);
+            background: rgba(59, 130, 246, 0.15);
+          }
+        }
+      }
     }
   }
 
@@ -106,7 +192,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 16px;
+    padding: 4px 12px;
     font-size: 12px;
     font-weight: 500;
     color: #fff;
@@ -159,63 +245,27 @@
     border-bottom: 1px solid var(--border-base);
     flex-shrink: 0;
 
-    .todos-header {
+    .todo-inline-toolbar,
+    .trailing-todo-toolbar {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      padding: 2px 0;
-      border-radius: 4px;
-      transition: background 0.15s ease;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-bottom: 6px;
 
-      &:hover {
-        background: rgba(255, 255, 255, 0.03);
-      }
-
-      .todos-header-left {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .todos-toggle-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        padding: 0;
-        border: none;
-        background: transparent;
-        color: var(--color-text-muted);
-        cursor: pointer;
-        border-radius: 4px;
-        transition: all 0.15s ease;
-
-        &:hover {
-          color: var(--color-text-primary);
-          background: rgba(255, 255, 255, 0.08);
-        }
-      }
-
-      .todos-count {
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--color-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+      &.todo-toolbar--yaml {
+        margin-bottom: 0;
       }
 
       .edit-btn {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
         padding: 0;
         color: var(--color-text-muted);
         background: transparent;
-        border: 1px solid var(--border-base);
+        border: 1px solid transparent;
         border-radius: 4px;
         cursor: pointer;
         transition: all 0.15s ease;
@@ -223,30 +273,17 @@
         &:hover {
           color: var(--color-text-primary);
           background: var(--color-bg-tertiary);
-          border-color: var(--border-medium);
+          border-color: var(--border-base);
         }
 
-        &--active {
-          color: var(--color-info);
-          background: rgba(59, 130, 246, 0.1);
-          border-color: var(--color-info);
-
-          &:hover {
-            color: var(--color-info);
-            background: rgba(59, 130, 246, 0.15);
-          }
+        &--confirm {
+          color: var(--color-success);
         }
       }
     }
 
-    &--expanded .todos-header {
-      margin-bottom: 8px;
-    }
-
     // YAML editor section
     .yaml-editor-section {
-      margin-bottom: 12px;
-      border: 1px solid var(--border-base);
       border-radius: 6px;
       overflow: hidden;
 
@@ -257,6 +294,10 @@
 
         > div {
           height: 100%;
+        }
+
+        .m-editor-textarea {
+          padding-top: 4px;
         }
       }
     }
@@ -269,6 +310,22 @@
       overflow-x: hidden;
       overflow-y: auto;
 
+    }
+
+    &--trailing {
+      border: none;
+      border-top: 1px dashed var(--border-base);
+      background: transparent;
+      padding: 6px 16px 10px;
+
+      .todos-list {
+        max-height: none;
+        overflow: visible;
+      }
+
+      .todo-item {
+        padding: 3px 4px;
+      }
     }
 
     .todo-item {
@@ -306,6 +363,45 @@
         font-size: 13px;
         line-height: 1.5;
         color: var(--color-text-secondary);
+        flex: 1;
+        min-width: 0;
+      }
+
+      .todo-content-input {
+        flex: 1;
+        min-width: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--color-text-primary);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--border-base);
+        border-radius: 4px;
+        padding: 4px 8px;
+        outline: none;
+
+        &:focus {
+          border-color: var(--color-info);
+        }
+      }
+
+      .todo-delete-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          color: var(--color-error);
+          background: rgba(var(--color-error-rgb), 0.1);
+          border-color: rgba(var(--color-error-rgb), 0.3);
+        }
       }
 
       // Status styles
@@ -348,15 +444,33 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
 
     .plan-markdown {
-      flex: 1;
-      overflow: hidden;
+      flex: none;
+      overflow-x: hidden;
+      overflow-y: visible;
+      width: 100%;
+      min-width: 0;
       
-      // Ensure MEditor fills entire area
+      // Let markdown and trailing todos share one parent scroller.
       > div {
-        height: 100%;
+        height: auto;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .m-editor,
+      .m-editor-content,
+      .m-editor-ir-panel,
+      .m-editor-ir {
+        height: auto;
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+        overflow-y: visible;
       }
     }
   }
