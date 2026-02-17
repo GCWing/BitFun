@@ -1,7 +1,7 @@
 /** Optimized viewer/editor for `.plan.md` files (frontmatter + markdown body). */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Circle, ArrowRight, Check, XCircle, Loader2, CheckCircle, AlertCircle, FileText, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Circle, ArrowRight, Check, XCircle, Loader2, CheckCircle, AlertCircle, FileText, Pencil, X, ChevronDown, Trash2, Plus } from 'lucide-react';
 import yaml from 'yaml';
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
@@ -69,6 +69,10 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   const [originalYamlContent, setOriginalYamlContent] = useState<string>('');
   // Todos list expand/collapse state (collapsed by default)
   const [isTodosExpanded, setIsTodosExpanded] = useState(false);
+  const [isTrailingTodoEditing, setIsTrailingTodoEditing] = useState(false);
+  const [trailingTodoDrafts, setTrailingTodoDrafts] = useState<Record<string, string>>({});
+  const [trailingDeletedTodoKeys, setTrailingDeletedTodoKeys] = useState<string[]>([]);
+  const [trailingAddedTodos, setTrailingAddedTodos] = useState<PlanTodo[]>([]);
   
   const editorRef = useRef<EditorInstance>(null);
   const yamlEditorRef = useRef<EditorInstance>(null);
@@ -90,6 +94,8 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     const parts = filePath.replace(/\\/g, '/').split('/');
     return parts[parts.length - 1] || '';
   }, [filePath, fileName]);
+
+  const hasTodos = !!(planData?.todos && planData.todos.length > 0);
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -293,21 +299,250 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     saveFileContent();
   }, [saveFileContent]);
 
-  const toggleEditMode = useCallback(() => {
-    if (isEditingYaml) {
+  const startTrailingTodoEdit = useCallback(() => {
+    if (!planData?.todos?.length) return;
+    const drafts: Record<string, string> = {};
+    planData.todos.forEach((todo, index) => {
+      const key = todo.id || String(index);
+      drafts[key] = todo.content;
+    });
+    setTrailingTodoDrafts(drafts);
+    setTrailingDeletedTodoKeys([]);
+    setTrailingAddedTodos([]);
+    setIsTrailingTodoEditing(true);
+  }, [planData]);
+
+  const cancelTrailingTodoEdit = useCallback(() => {
+    setIsTrailingTodoEditing(false);
+    setTrailingTodoDrafts({});
+    setTrailingDeletedTodoKeys([]);
+    setTrailingAddedTodos([]);
+  }, []);
+
+  const handleAddTrailingTodo = useCallback(() => {
+    const id = `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const newTodo: PlanTodo = {
+      id,
+      content: '',
+      status: 'pending',
+    };
+    setTrailingAddedTodos(prev => [...prev, newTodo]);
+    setTrailingTodoDrafts(prev => ({ ...prev, [id]: '' }));
+  }, []);
+
+  const saveTrailingTodoEdit = useCallback(async () => {
+    if (!planData?.todos?.length || !filePath) return;
+
+    const nextTodos = planData.todos
+      .map((todo, index) => ({ todo, key: todo.id || String(index) }))
+      .filter(({ key }) => !trailingDeletedTodoKeys.includes(key))
+      .map(({ todo, key }) => {
+        const nextContent = (trailingTodoDrafts[key] ?? todo.content).trim();
+        return {
+          ...todo,
+          content: nextContent || todo.content,
+        };
+      })
+      .concat(
+        trailingAddedTodos
+          .map(todo => ({
+            ...todo,
+            content: (trailingTodoDrafts[todo.id] ?? todo.content).trim(),
+          }))
+          .filter(todo => !!todo.content)
+      );
+
+    let nextYamlContent = yamlContent;
+    if (yamlContent) {
       try {
-        const parsed = yaml.parse(yamlContent);
-        setPlanData({
-          name: parsed.name || '',
-          overview: parsed.overview || '',
-          todos: parsed.todos || [],
-        });
+        const parsed = yaml.parse(yamlContent) || {};
+        parsed.todos = nextTodos;
+        nextYamlContent = yaml.stringify(parsed).trimEnd();
       } catch (e) {
-        log.warn('YAML parse failed', e);
+        log.warn('Failed to parse yaml while saving trailing todo edit', e);
       }
     }
-    setIsEditingYaml(!isEditingYaml);
-  }, [isEditingYaml, yamlContent]);
+
+    try {
+      const fullContent = nextYamlContent
+        ? `---\n${nextYamlContent}\n---\n\n${planContent}`
+        : planContent;
+      await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
+      setPlanData(prev => (prev ? { ...prev, todos: nextTodos } : prev));
+      setYamlContent(nextYamlContent);
+      setOriginalYamlContent(nextYamlContent);
+      setOriginalContent(planContent);
+      setIsTrailingTodoEditing(false);
+      setTrailingTodoDrafts({});
+      setTrailingDeletedTodoKeys([]);
+      setTrailingAddedTodos([]);
+    } catch (err) {
+      log.error('Failed to save trailing todo edit', err);
+    }
+  }, [planData, trailingAddedTodos, trailingDeletedTodoKeys, trailingTodoDrafts, yamlContent, planContent, workspacePath, filePath]);
+
+  const handleDeleteTrailingTodo = useCallback((todoKey: string) => {
+    if (todoKey.startsWith('new-')) {
+      setTrailingAddedTodos(prev => prev.filter(todo => todo.id !== todoKey));
+      setTrailingTodoDrafts(prev => {
+        const { [todoKey]: _removed, ...rest } = prev;
+        return rest;
+      });
+      return;
+    }
+    setTrailingDeletedTodoKeys(prev => (prev.includes(todoKey) ? prev : [...prev, todoKey]));
+  }, []);
+
+  const displayedTodos = useMemo(() => {
+    if (!planData?.todos) return [];
+    if (!isTrailingTodoEditing) return planData.todos;
+    return [
+      ...planData.todos.filter((todo, index) => !trailingDeletedTodoKeys.includes(todo.id || String(index))),
+      ...trailingAddedTodos,
+    ];
+  }, [isTrailingTodoEditing, planData, trailingAddedTodos, trailingDeletedTodoKeys]);
+
+  const renderSharedTodoPanel = useCallback((placement: 'inline' | 'trailing') => {
+    const panelClassName = placement === 'trailing'
+      ? `plan-viewer-todos plan-viewer-todos--trailing ${isEditingYaml ? 'plan-viewer-todos--yaml-editing' : ''}`
+      : `plan-viewer-todos ${isTodosExpanded ? 'plan-viewer-todos--expanded' : ''} ${isEditingYaml ? 'plan-viewer-todos--yaml-editing' : ''}`;
+    const toolbarClassName = `${placement === 'trailing' ? 'trailing-todo-toolbar' : 'todo-inline-toolbar'} ${isEditingYaml ? 'todo-toolbar--yaml' : ''}`;
+
+    return (
+      <div className={panelClassName}>
+        <div className={toolbarClassName}>
+          {isEditingYaml ? (
+            <button
+              type="button"
+              className="edit-btn"
+              onClick={() => setIsEditingYaml(false)}
+              title={t('editor.planViewer.toggleYamlEditOff')}
+            >
+              <X size={14} />
+            </button>
+          ) : isTrailingTodoEditing ? (
+            <>
+              <button
+                type="button"
+                className="edit-btn"
+                onClick={handleAddTrailingTodo}
+                title={t('editor.common.add')}
+              >
+                <Plus size={14} />
+              </button>
+              <button
+                type="button"
+                className="edit-btn edit-btn--confirm"
+                onClick={saveTrailingTodoEdit}
+                title={t('editor.common.save')}
+              >
+                <Check size={14} />
+              </button>
+              <button
+                type="button"
+                className="edit-btn"
+                onClick={cancelTrailingTodoEdit}
+                title={t('editor.common.cancel')}
+              >
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="edit-btn"
+                onClick={() => setIsEditingYaml(true)}
+                title={t('editor.planViewer.toggleYamlEditOn')}
+              >
+                <FileText size={14} />
+              </button>
+              <button
+                type="button"
+                className="edit-btn"
+                onClick={startTrailingTodoEdit}
+                title={t('editor.common.edit')}
+              >
+                <Pencil size={14} />
+              </button>
+            </>
+          )}
+        </div>
+
+        {isEditingYaml ? (
+          <div className="yaml-editor-section">
+            <div className="yaml-editor-content">
+              <MEditor
+                ref={yamlEditorRef}
+                value={yamlContent}
+                onChange={handleYamlChange}
+                onSave={handleSave}
+                mode="edit"
+                theme="dark"
+                height="200px"
+                width="100%"
+                placeholder={t('editor.planViewer.yamlPlaceholder')}
+                readonly={false}
+                toolbar={false}
+                autofocus={true}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="todos-list">
+            {displayedTodos.map((todo, index) => (
+              <div
+                key={todo.id || index}
+                className={`todo-item status-${todo.status || 'pending'}`}
+              >
+                {getTodoIcon(todo.status)}
+                {isTrailingTodoEditing ? (
+                  <>
+                    <input
+                      className="todo-content-input"
+                      value={trailingTodoDrafts[todo.id || String(index)] ?? todo.content}
+                      onChange={(e) => {
+                        const key = todo.id || String(index);
+                        setTrailingTodoDrafts(prev => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }));
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="todo-delete-btn"
+                      onClick={() => handleDeleteTrailingTodo(todo.id || String(index))}
+                      title={t('editor.common.delete')}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                ) : (
+                  <span className="todo-content">{todo.content}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }, [
+    cancelTrailingTodoEdit,
+    displayedTodos,
+    handleAddTrailingTodo,
+    handleDeleteTrailingTodo,
+    handleSave,
+    handleYamlChange,
+    isEditingYaml,
+    isTodosExpanded,
+    isTrailingTodoEditing,
+    saveTrailingTodoEdit,
+    startTrailingTodoEdit,
+    t,
+    trailingTodoDrafts,
+    yamlContent,
+  ]);
 
   // Build button click handler
   const handleBuild = useCallback(async () => {
@@ -385,104 +620,56 @@ ${JSON.stringify(simpleTodos, null, 2)}
 
   return (
     <div className="bitfun-plan-viewer">
-      <div className="plan-viewer-header">
+      <div
+        className={`plan-viewer-header ${hasTodos ? 'plan-viewer-header--collapsible' : ''}`}
+        onClick={() => {
+          if (hasTodos && !isEditingYaml) {
+            setIsTodosExpanded(!isTodosExpanded);
+          }
+        }}
+      >
         <div className="header-left">
+          {hasTodos && (
+            <span
+              className={`header-expand-indicator ${isTodosExpanded ? 'header-expand-indicator--expanded' : ''} ${isEditingYaml ? 'header-expand-indicator--disabled' : ''}`}
+            >
+              <ChevronDown size={14} />
+            </span>
+          )}
           <FileText size={16} className="file-icon" />
           <span className="file-name">{displayFileName}</span>
           {hasUnsavedChanges && <span className="unsaved-indicator">{t('editor.planViewer.unsaved')}</span>}
         </div>
-        <div className="header-right">
-          {planData && planData.todos && planData.todos.length > 0 && (
-            <button
-              className={`build-btn build-btn--${buildStatus}`}
-              onClick={handleBuild}
-              disabled={buildStatus !== 'build'}
-            >
-              {buildStatus === 'building' ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>{t('editor.planViewer.building')}</span>
-                </>
-              ) : buildStatus === 'built' ? (
-                <>
-                  <CheckCircle size={14} />
-                  <span>{t('editor.planViewer.built')}</span>
-                </>
-              ) : (
-                <span>{t('editor.planViewer.build')}</span>
-              )}
-            </button>
+        <div className="header-right" onClick={(e) => e.stopPropagation()}>
+          {hasTodos && (
+            <>
+              <span className="todos-count">{t('editor.planViewer.remainingTodos', { count: remainingTodos })}</span>
+
+              <button
+                className={`build-btn build-btn--${buildStatus}`}
+                onClick={handleBuild}
+                disabled={buildStatus !== 'build'}
+              >
+                {buildStatus === 'building' ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>{t('editor.planViewer.building')}</span>
+                  </>
+                ) : buildStatus === 'built' ? (
+                  <>
+                    <CheckCircle size={14} />
+                    <span>{t('editor.planViewer.built')}</span>
+                  </>
+                ) : (
+                  <span>{t('editor.planViewer.build')}</span>
+                )}
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {planData && planData.todos && planData.todos.length > 0 && (
-        <div className={`plan-viewer-todos ${isTodosExpanded ? 'plan-viewer-todos--expanded' : ''}`}>
-          <div 
-            className="todos-header"
-            onClick={() => !isEditingYaml && setIsTodosExpanded(!isTodosExpanded)}
-          >
-            <div className="todos-header-left">
-              <button 
-                className="todos-toggle-btn" 
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsTodosExpanded(!isTodosExpanded);
-                }}
-              >
-                {isTodosExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-              <span className="todos-count">{t('editor.planViewer.remainingTodos', { count: remainingTodos })}</span>
-            </div>
-            <button
-              className={`edit-btn ${isEditingYaml ? 'edit-btn--active' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleEditMode();
-              }}
-              title={isEditingYaml ? t('editor.planViewer.toggleYamlEditOff') : t('editor.planViewer.toggleYamlEditOn')}
-            >
-              {isEditingYaml ? <X size={14} /> : <Pencil size={14} />}
-            </button>
-          </div>
-          
-          {isEditingYaml && (
-            <div className="yaml-editor-section">
-              <div className="yaml-editor-content">
-                <MEditor
-                  ref={yamlEditorRef}
-                  value={yamlContent}
-                  onChange={handleYamlChange}
-                  onSave={handleSave}
-                  mode="edit"
-                  theme="dark"
-                  height="200px"
-                  width="100%"
-                  placeholder={t('editor.planViewer.yamlPlaceholder')}
-                  readonly={false}
-                  toolbar={false}
-                  autofocus={true}
-                />
-              </div>
-            </div>
-          )}
-          
-          {!isEditingYaml && isTodosExpanded && (
-            <div className="todos-list">
-              {planData.todos.map((todo, index) => (
-                <div
-                  key={todo.id || index}
-                  className={`todo-item status-${todo.status || 'pending'}`}
-                >
-                  {getTodoIcon(todo.status)}
-                  <span className="todo-content">{todo.content}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {hasTodos && (isEditingYaml || isTodosExpanded) && renderSharedTodoPanel('inline')}
 
       <div className="plan-viewer-content">
         <div className="plan-markdown">
@@ -493,7 +680,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             onSave={handleSave}
             mode="ir"
             theme="dark"
-            height="100%"
+            height="auto"
             width="100%"
             placeholder={t('editor.planViewer.contentPlaceholder')}
             readonly={false}
@@ -501,6 +688,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             basePath={basePath}
           />
         </div>
+        {hasTodos && isTodosExpanded && !isEditingYaml && renderSharedTodoPanel('trailing')}
       </div>
     </div>
   );
