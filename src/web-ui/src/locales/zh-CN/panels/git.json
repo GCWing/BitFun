@@ -174,7 +174,8 @@
     "stagedWithCount": "已暂存 ({{count}})",
     "unstagedWithFilter": "未暂存 ({{filtered}} / {{total}})",
     "untrackedWithFilter": "未跟踪 ({{filtered}} / {{total}})",
-    "stagedWithFilter": "已暂存 ({{filtered}} / {{total}})"
+    "stagedWithFilter": "已暂存 ({{filtered}} / {{total}})",
+    "moreFiles": "还有 {{count}} 个文件未显示..."
   },
   "commit": {
     "inputPlaceholder": "输入提交信息...",

@@ -83,7 +83,9 @@ const GitPanel: React.FC<GitPanelProps> = ({
   const [loadingDetails, setLoadingDetails] = useState(false);
   
 
-  const [expandedFileGroups, setExpandedFileGroups] = useState<Set<string>>(new Set(['unstaged', 'untracked', 'staged']));
+  const [expandedFileGroups, setExpandedFileGroups] = useState<Set<string>>(new Set(['unstaged', 'staged']));
+  
+  const MAX_RENDERED_FILES = 200;
   
 
   const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set());
@@ -1253,53 +1255,66 @@ const GitPanel: React.FC<GitPanelProps> = ({
                                 <Check size={14} />
                               </IconButton>
                             </div>
-                            {expandedFileGroups.has('unstaged') && filteredFiles.unstaged.map((file, index) => {
-                              const statusInfo = getFileStatusInfo(file.status);
-                              const { fileName, dirPath } = getFileNameAndDir(file.path);
-                              const isSelected = selectedFiles.has(file.path);
-                              const isLoading = loadingDiffFiles.has(file.path);
+                            {expandedFileGroups.has('unstaged') && (() => {
+                              const visibleFiles = filteredFiles.unstaged.slice(0, MAX_RENDERED_FILES);
+                              const hiddenCount = filteredFiles.unstaged.length - visibleFiles.length;
                               return (
-                                <div 
-                                  key={`unstaged-${index}`}
-                                  className={`bitfun-git-panel__list-item bitfun-git-panel__file-item bitfun-git-panel__file-item--clickable ${isSelected ? 'bitfun-git-panel__file-item--selected' : ''} ${isLoading ? 'bitfun-git-panel__file-item--loading' : ''}`}
-                                  onClick={() => !isLoading && handleOpenFileDiff(file.path, file.status)}
-                                  title={isLoading ? t('common.loading') : t('tooltips.viewDiff')}
-                                >
-                                  <button
-                                    className={`bitfun-git-panel__checkbox-btn ${isSelected ? 'bitfun-git-panel__checkbox-btn--visible' : ''}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleFileSelection(file.path);
-                                    }}
-                                    title={isSelected ? t('selection.deselectFile') : t('selection.selectFile')}
-                                  >
-                                    {isSelected ? (
-                                      <CheckCircle size={14} className="bitfun-git-panel__checkbox--checked" />
-                                    ) : (
-                                      <Circle size={14} className="bitfun-git-panel__checkbox--unchecked" />
-                                    )}
-                                  </button>
-                                  <span className="bitfun-git-panel__file-name">{fileName}</span>
-                                  {dirPath && <span className="bitfun-git-panel__file-dir">{dirPath}</span>}
-                                  <span className={`bitfun-git-panel__file-status-badge ${statusInfo.className}`} title={file.status}>
-                                    {statusInfo.text}
-                                  </span>
-                                  <IconButton
-                                    className="bitfun-git-panel__file-action-btn"
-                                    variant="ghost"
-                                    size="xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDiscardFile(file.path, 'unstaged');
-                                    }}
-                                    disabled={isOperating}
-                                    tooltip={t('actions.discardFile')}
-                                  >
-                                    <RotateCcw size={12} />
-                                  </IconButton>
-                                </div>
+                                <>
+                                  {visibleFiles.map((file, index) => {
+                                    const statusInfo = getFileStatusInfo(file.status);
+                                    const { fileName, dirPath } = getFileNameAndDir(file.path);
+                                    const isSelected = selectedFiles.has(file.path);
+                                    const isLoading = loadingDiffFiles.has(file.path);
+                                    return (
+                                      <div 
+                                        key={`unstaged-${index}`}
+                                        className={`bitfun-git-panel__list-item bitfun-git-panel__file-item bitfun-git-panel__file-item--clickable ${isSelected ? 'bitfun-git-panel__file-item--selected' : ''} ${isLoading ? 'bitfun-git-panel__file-item--loading' : ''}`}
+                                        onClick={() => !isLoading && handleOpenFileDiff(file.path, file.status)}
+                                        title={isLoading ? t('common.loading') : t('tooltips.viewDiff')}
+                                      >
+                                        <button
+                                          className={`bitfun-git-panel__checkbox-btn ${isSelected ? 'bitfun-git-panel__checkbox-btn--visible' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleFileSelection(file.path);
+                                          }}
+                                          title={isSelected ? t('selection.deselectFile') : t('selection.selectFile')}
+                                        >
+                                          {isSelected ? (
+                                            <CheckCircle size={14} className="bitfun-git-panel__checkbox--checked" />
+                                          ) : (
+                                            <Circle size={14} className="bitfun-git-panel__checkbox--unchecked" />
+                                          )}
+                                        </button>
+                                        <span className="bitfun-git-panel__file-name">{fileName}</span>
+                                        {dirPath && <span className="bitfun-git-panel__file-dir">{dirPath}</span>}
+                                        <span className={`bitfun-git-panel__file-status-badge ${statusInfo.className}`} title={file.status}>
+                                          {statusInfo.text}
+                                        </span>
+                                        <IconButton
+                                          className="bitfun-git-panel__file-action-btn"
+                                          variant="ghost"
+                                          size="xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDiscardFile(file.path, 'unstaged');
+                                          }}
+                                          disabled={isOperating}
+                                          tooltip={t('actions.discardFile')}
+                                        >
+                                          <RotateCcw size={12} />
+                                        </IconButton>
+                                      </div>
+                                    );
+                                  })}
+                                  {hiddenCount > 0 && (
+                                    <div className="bitfun-git-panel__list-item bitfun-git-panel__file-item bitfun-git-panel__file-overflow-hint" style={{ opacity: 0.6, fontSize: '11px', justifyContent: 'center', padding: '6px 8px' }}>
+                                      {t('fileGroups.moreFiles', { count: hiddenCount })}
+                                    </div>
+                                  )}
+                                </>
                               );
-                            })}
+                            })()}
                           </>
                         )}
                         {filteredFiles.untracked.length > 0 && (
@@ -1323,56 +1338,69 @@ const GitPanel: React.FC<GitPanelProps> = ({
                                 }
                               </span>
                             </div>
-                            {expandedFileGroups.has('untracked') && filteredFiles.untracked.map((filePath, index) => {
-                              const { fileName, dirPath } = getFileNameAndDir(filePath);
-                              const isSelected = selectedFiles.has(filePath);
-                              const isLoading = loadingDiffFiles.has(filePath);
+                            {expandedFileGroups.has('untracked') && (() => {
+                              const visibleFiles = filteredFiles.untracked.slice(0, MAX_RENDERED_FILES);
+                              const hiddenCount = filteredFiles.untracked.length - visibleFiles.length;
                               return (
-                                <div 
-                                  key={`untracked-${index}`}
-                                  className={`bitfun-git-panel__list-item bitfun-git-panel__file-item bitfun-git-panel__file-item--clickable ${isSelected ? 'bitfun-git-panel__file-item--selected' : ''} ${isLoading ? 'bitfun-git-panel__file-item--loading' : ''}`}
-                                  onClick={() => !isLoading && handleOpenFileDiff(filePath, 'Untracked')}
-                                  title={isLoading ? t('common.loading') : t('tooltips.viewDiff')}
-                                >
-                                  <IconButton
-                                    className={`bitfun-git-panel__checkbox-btn ${isSelected ? 'bitfun-git-panel__checkbox-btn--visible' : ''}`}
-                                    variant="ghost"
-                                    size="xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleFileSelection(filePath);
-                                    }}
-                                    tooltip={isSelected ? t('selection.deselectFile') : t('selection.selectFile')}
-                                  >
-                                    {isSelected ? (
-                                      <CheckCircle size={14} className="bitfun-git-panel__checkbox--checked" />
-                                    ) : (
-                                      <Circle size={14} className="bitfun-git-panel__checkbox--unchecked" />
-                                    )}
-                                  </IconButton>
-                                  <span className="bitfun-git-panel__file-name">{fileName}</span>
-                                  {dirPath && <span className="bitfun-git-panel__file-dir">{dirPath}</span>}
-                                  <Tooltip content={t('status.untracked')}>
-                                    <span className="bitfun-git-panel__file-status-badge bitfun-git-panel__file-status-indicator--added">
-                                      U
-                                    </span>
-                                  </Tooltip>
-                                  <IconButton
-                                    className="bitfun-git-panel__file-action-btn"
-                                    variant="ghost"
-                                    size="xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDiscardFile(filePath, 'untracked');
-                                    }}
-                                    disabled={isOperating}
-                                    tooltip={t('actions.deleteFile')}
-                                  >
-                                    <RotateCcw size={12} />
-                                  </IconButton>
-                                </div>
+                                <>
+                                  {visibleFiles.map((filePath, index) => {
+                                    const { fileName, dirPath } = getFileNameAndDir(filePath);
+                                    const isSelected = selectedFiles.has(filePath);
+                                    const isLoading = loadingDiffFiles.has(filePath);
+                                    return (
+                                      <div 
+                                        key={`untracked-${index}`}
+                                        className={`bitfun-git-panel__list-item bitfun-git-panel__file-item bitfun-git-panel__file-item--clickable ${isSelected ? 'bitfun-git-panel__file-item--selected' : ''} ${isLoading ? 'bitfun-git-panel__file-item--loading' : ''}`}
+                                        onClick={() => !isLoading && handleOpenFileDiff(filePath, 'Untracked')}
+                                        title={isLoading ? t('common.loading') : t('tooltips.viewDiff')}
+                                      >
+                                        <IconButton
+                                          className={`bitfun-git-panel__checkbox-btn ${isSelected ? 'bitfun-git-panel__checkbox-btn--visible' : ''}`}
+                                          variant="ghost"
+                                          size="xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleFileSelection(filePath);
+                                          }}
+                                          tooltip={isSelected ? t('selection.deselectFile') : t('selection.selectFile')}
+                                        >
+                                          {isSelected ? (
+                                            <CheckCircle size={14} className="bitfun-git-panel__checkbox--checked" />
+                                          ) : (
+                                            <Circle size={14} className="bitfun-git-panel__checkbox--unchecked" />
+                                          )}
+                                        </IconButton>
+                                        <span className="bitfun-git-panel__file-name">{fileName}</span>
+                                        {dirPath && <span className="bitfun-git-panel__file-dir">{dirPath}</span>}
+                                        <Tooltip content={t('status.untracked')}>
+                                          <span className="bitfun-git-panel__file-status-badge bitfun-git-panel__file-status-indicator--added">
+                                            U
+                                          </span>
+                                        </Tooltip>
+                                        <IconButton
+                                          className="bitfun-git-panel__file-action-btn"
+                                          variant="ghost"
+                                          size="xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDiscardFile(filePath, 'untracked');
+                                          }}
+                                          disabled={isOperating}
+                                          tooltip={t('actions.deleteFile')}
+                                        >
+                                          <RotateCcw size={12} />
+                                        </IconButton>
+                                      </div>
+                                    );
+                                  })}
+                                  {hiddenCount > 0 && (
+                                    <div className="bitfun-git-panel__list-item bitfun-git-panel__file-item bitfun-git-panel__file-overflow-hint" style={{ opacity: 0.6, fontSize: '11px', justifyContent: 'center', padding: '6px 8px' }}>
+                                      {t('fileGroups.moreFiles', { count: hiddenCount })}
+                                    </div>
+                                  )}
+                                </>
                               );
-                            })}
+                            })()}
                           </>
                         )}
                         {filteredFiles.staged.length > 0 && (

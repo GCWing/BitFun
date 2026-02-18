@@ -174,7 +174,8 @@
     "stagedWithCount": "Staged ({{count}})",
     "unstagedWithFilter": "Unstaged ({{filtered}} / {{total}})",
     "untrackedWithFilter": "Untracked ({{filtered}} / {{total}})",
-    "stagedWithFilter": "Staged ({{filtered}} / {{total}})"
+    "stagedWithFilter": "Staged ({{filtered}} / {{total}})",
+    "moreFiles": "{{count}} more files not shown..."
   },
   "commit": {
     "inputPlaceholder": "Enter commit message...",
