@@ -501,6 +501,23 @@
       box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
     }
   }
+
+  &__action-btn {
+    margin-top: $size-gap-4;
+    padding: $size-gap-2 $size-gap-4;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      border-color: var(--color-accent-500);
+      background: var(--element-bg-medium);
+    }
+  }
 }
 
 // ==================== Responsive ====================

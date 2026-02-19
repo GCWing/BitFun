@@ -1,0 +1,898 @@
+/**
+ * WorkflowEditor styles.
+ * Multi-step form editor for the right panel.
+ * Uses dashed/solid line patterns consistent with SessionsPanel.
+ */
+
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-wf-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+
+  // ==================== Header ====================
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: $size-gap-3 $size-gap-4;
+    border-bottom: 1px solid var(--border-base);
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+
+    &-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+      color: var(--color-text-muted);
+    }
+  }
+
+  // ==================== Steps Nav ====================
+  &__steps {
+    display: flex;
+    gap: 2px;
+    padding: $size-gap-2 $size-gap-4;
+    flex-shrink: 0;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: $size-gap-4;
+      right: $size-gap-4;
+      height: 0;
+      border-top: 1px dashed var(--border-subtle);
+    }
+  }
+
+  &__step {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-1;
+    padding: 6px $size-gap-2;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-secondary);
+    }
+
+    &.is-active {
+      background: var(--element-bg-base);
+      color: var(--color-text-primary);
+    }
+
+    &.is-done {
+      color: var(--color-text-secondary);
+    }
+
+    &-num {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: $font-weight-medium;
+      border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+      background: transparent;
+      
+      .is-active & {
+        border-color: var(--color-text-primary);
+        color: var(--color-text-primary);
+      }
+
+      .is-done & {
+        border-color: var(--color-text-secondary);
+        background: var(--element-bg-soft);
+      }
+    }
+
+    &-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  // ==================== Content ====================
+  &__content {
+    flex: 1;
+    overflow-y: auto;
+    padding: $size-gap-3 $size-gap-4;
+  }
+
+  // ==================== Form Fields ====================
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+
+    > label {
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-secondary);
+    }
+
+    &--row {
+      flex-direction: row;
+      align-items: center;
+      gap: $size-gap-2;
+
+      > label {
+        flex-shrink: 0;
+      }
+    }
+  }
+
+  &__section-title {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-secondary);
+    margin-top: $size-gap-2;
+    padding-top: $size-gap-2;
+    border-top: 1px dashed color-mix(in srgb, var(--border-base) 65%, transparent);
+  }
+
+  &__section-desc {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    margin-bottom: $size-gap-2;
+  }
+
+  &__hint {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  // ==================== Icon Picker ====================
+  &__icon-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__icon-option {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-secondary);
+      border-color: var(--border-base);
+    }
+
+    &.is-active {
+      border-color: var(--color-text-primary);
+      color: var(--color-text-primary);
+      background: var(--element-bg-base);
+    }
+  }
+
+  // ==================== Tags ====================
+  &__tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+    background: var(--color-bg-primary);
+    min-height: 32px;
+  }
+
+  &__tag-input-wrapper {
+    flex: 1;
+    min-width: 80px;
+
+    .bitfun-input-wrapper {
+      margin: 0;
+    }
+
+    .bitfun-input-container {
+      border: none !important;
+      background: transparent !important;
+      height: 24px;
+      padding: 0 4px;
+    }
+  }
+
+  // ==================== Role Card Grid ====================
+  &__role-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: $size-gap-2;
+  }
+
+  &__role-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: $size-gap-2 $size-gap-1;
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      border-color: var(--border-base);
+    }
+
+    &.is-active {
+      border-color: var(--border-strong);
+      background: var(--element-bg-base);
+    }
+
+    &-icon {
+      color: var(--color-text-muted);
+
+      .is-active & {
+        color: var(--color-text-secondary);
+      }
+    }
+
+    &-label {
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+    }
+
+    &-desc {
+      font-size: 10px;
+      color: var(--color-text-muted);
+      text-align: center;
+      line-height: 1.3;
+    }
+  }
+
+  // ==================== Checklist ====================
+  &__checklist {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: $size-gap-1;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+
+    &-group-label {
+      font-size: 10px;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    &-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+    }
+  }
+
+  &__check-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  // ==================== Agents Step ====================
+  &__agents-step {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__agents-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-secondary);
+  }
+
+  &__agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__agents-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: $size-gap-6;
+    color: var(--color-text-muted);
+    border: 1px dashed color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+
+    p {
+      font-size: $font-size-xs;
+    }
+  }
+
+  &__agent-card {
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    overflow: hidden;
+
+    &-header {
+      display: flex;
+      align-items: center;
+      gap: $size-gap-1;
+      padding: $size-gap-2;
+      cursor: pointer;
+      transition: background $motion-fast $easing-standard;
+
+      &:hover {
+        background: var(--element-bg-soft);
+      }
+
+      svg {
+        flex-shrink: 0;
+        color: var(--color-text-muted);
+      }
+    }
+
+    &-name {
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    &-role {
+      flex-shrink: 0;
+      font-size: 10px;
+      padding: 0 4px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 80%, transparent);
+      color: var(--color-text-muted);
+    }
+
+    &-model {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: var(--color-text-muted);
+      font-family: var(--font-mono);
+    }
+
+    &-info {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      color: var(--color-text-muted);
+      margin-left: auto;
+
+      svg {
+        opacity: 0.7;
+      }
+    }
+  }
+
+  &__agent-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: all $motion-fast $easing-standard;
+
+    .bitfun-wf-editor__agent-card-header:hover & {
+      opacity: 1;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-error) 15%, transparent);
+      color: var(--color-error);
+    }
+  }
+
+  &__agent-editor {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-top: 1px dashed color-mix(in srgb, var(--border-base) 65%, transparent);
+    background: color-mix(in srgb, var(--element-bg-soft) 40%, transparent);
+
+    &-actions {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: $size-gap-1;
+    }
+  }
+
+  // ==================== Pattern Grid ====================
+  &__pattern-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: $size-gap-2;
+  }
+
+  &__pattern-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: $size-gap-3 $size-gap-2;
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      border-color: var(--border-base);
+    }
+
+    &.is-active {
+      border-color: var(--border-strong);
+      background: var(--element-bg-base);
+    }
+  }
+
+  &__pattern-icon {
+    color: var(--color-text-muted);
+    
+    .is-active & {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__pattern-label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+  }
+
+  &__pattern-desc {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  // ==================== Supervisor Picker ====================
+  &__supervisor-picker {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__supervisor-option {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: $size-gap-2;
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    text-align: left;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      border-color: var(--border-base);
+    }
+
+    &.is-active {
+      border-color: var(--border-strong);
+      background: var(--element-bg-base);
+    }
+
+    &-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+      color: var(--color-text-muted);
+      flex-shrink: 0;
+
+      .is-active & {
+        border-color: var(--border-strong);
+        color: var(--color-text-secondary);
+      }
+    }
+
+    &-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    &-name {
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &-role {
+      font-size: 10px;
+      color: var(--color-text-muted);
+    }
+
+    &-badge {
+      flex-shrink: 0;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 80%, transparent);
+      color: var(--color-text-muted);
+    }
+  }
+
+  // ==================== Topology ====================
+  &__topology {
+    padding: $size-gap-3;
+    border: 1px dashed color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__topo-node {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: $size-radius-sm;
+    border: 1px solid color-mix(in srgb, var(--border-base) 80%, transparent);
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+
+    svg {
+      color: var(--color-text-muted);
+      flex-shrink: 0;
+    }
+
+    &--primary {
+      border-color: var(--border-strong);
+      background: var(--element-bg-base);
+      color: var(--color-text-primary);
+
+      svg {
+        color: var(--color-text-secondary);
+      }
+    }
+
+    &--io {
+      border-style: dashed;
+      border-color: color-mix(in srgb, var(--border-base) 50%, transparent);
+      background: transparent;
+      color: var(--color-text-muted);
+      font-size: 10px;
+      padding: 3px 8px;
+    }
+  }
+
+  &__topo-role {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    font-weight: $font-weight-normal;
+  }
+
+  &__topo-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    opacity: 0.5;
+
+    &--down {
+      padding: 2px 0;
+    }
+
+    &--fan,
+    &--bi {
+      flex-shrink: 0;
+    }
+  }
+
+  &__topo-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $size-gap-2;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+  }
+
+  // -- Single
+  &__topo-single {
+    display: flex;
+    justify-content: center;
+  }
+
+  // -- Pipeline (vertical)
+  &__topo-pipeline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  // -- Fan-out (horizontal: input → [parallel] → output)
+  &__topo-fanout {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  &__topo-parallel {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  // -- Supervisor (top-down: supervisor → workers row)
+  &__topo-supervisor {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  &__topo-branch-lines {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    color: var(--color-text-muted);
+    opacity: 0.5;
+  }
+
+  &__topo-workers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: $size-gap-2;
+  }
+
+  // -- Team (horizontal with bidirectional arrows)
+  &__topo-team {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  // ==================== Preview ====================
+  &__preview-step {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__preview-header {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-3;
+
+    &-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+      color: var(--color-text-muted);
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: $font-size-base;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+      margin: 0;
+    }
+
+    p {
+      font-size: $font-size-xs;
+      color: var(--color-text-muted);
+      margin: 2px 0 0;
+    }
+  }
+
+  &__preview-info {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+    padding: $size-gap-2;
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+  }
+
+  &__preview-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    padding: 2px 0;
+
+    &:not(:last-child) {
+      border-bottom: 1px dashed color-mix(in srgb, var(--border-base) 40%, transparent);
+    }
+  }
+
+  &__preview-label {
+    flex-shrink: 0;
+    width: 70px;
+    color: var(--color-text-muted);
+  }
+
+  &__preview-value {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-text-secondary);
+  }
+
+  &__preview-agents {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__preview-agent-card {
+    border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+    border-radius: $size-radius-sm;
+    overflow: hidden;
+
+    &-header {
+      display: flex;
+      align-items: center;
+      gap: $size-gap-1;
+      padding: $size-gap-2;
+    }
+
+    &-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 65%, transparent);
+      color: var(--color-text-muted);
+      flex-shrink: 0;
+    }
+
+    &-name {
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    &-role {
+      flex-shrink: 0;
+      font-size: 10px;
+      padding: 0 4px;
+      border-radius: $size-radius-sm;
+      border: 1px solid color-mix(in srgb, var(--border-base) 80%, transparent);
+      color: var(--color-text-muted);
+      margin-left: auto;
+    }
+
+    &-meta {
+      display: flex;
+      align-items: center;
+      gap: $size-gap-2;
+      padding: 0 $size-gap-2 $size-gap-2;
+      padding-left: calc(24px + $size-gap-2 + $size-gap-1);
+    }
+
+    &-model {
+      font-size: 10px;
+      color: var(--color-text-muted);
+      font-family: var(--font-mono);
+    }
+
+    &-stat {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      color: var(--color-text-muted);
+
+      svg {
+        opacity: 0.7;
+      }
+    }
+  }
+
+  // ==================== Footer ====================
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $size-gap-2 $size-gap-4;
+    border-top: 1px solid var(--border-base);
+    flex-shrink: 0;
+
+    &-right {
+      display: flex;
+      gap: $size-gap-2;
+    }
+  }
+}

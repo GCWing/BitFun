@@ -123,6 +123,10 @@ function convertToMonacoOptions(
     
     readOnly: presetConfig.readOnly ?? false,
     lineNumbers: config.lineNumbers,
+    lineNumbersMinChars: 3,
+    lineDecorationsWidth: 0,
+    glyphMargin: false,
+    showFoldingControls: 'never',
     minimap: {
       enabled: config.minimap.enabled,
       side: config.minimap.side,

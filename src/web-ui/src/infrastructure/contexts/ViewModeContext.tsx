@@ -5,14 +5,13 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ViewModeContext');
 
-export type ViewMode = 'agentic' | 'editor';
+export type ViewMode = 'cowork' | 'coder';
 
 interface ViewModeContextType {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
-  toggleViewMode: () => void;
-  isAgenticMode: boolean;
-  isEditorMode: boolean;
+  isCoworkMode: boolean;
+  isCoderMode: boolean;
 }
 
 const ViewModeContext = createContext<ViewModeContextType | undefined>(undefined);
@@ -24,28 +23,20 @@ interface ViewModeProviderProps {
 
 export const ViewModeProvider: React.FC<ViewModeProviderProps> = ({ 
   children, 
-  defaultMode = 'agentic' 
+  defaultMode = 'coder' 
 }) => {
   const [viewMode, setViewModeState] = useState<ViewMode>(defaultMode);
 
   const setViewMode = useCallback((mode: ViewMode) => {
+    log.debug('View mode changed', { to: mode });
     setViewModeState(mode);
-  }, []);
-
-  const toggleViewMode = useCallback(() => {
-    setViewModeState(prev => {
-      const newMode = prev === 'agentic' ? 'editor' : 'agentic';
-      log.debug('View mode toggled', { from: prev, to: newMode });
-      return newMode;
-    });
   }, []);
 
   const value: ViewModeContextType = {
     viewMode,
     setViewMode,
-    toggleViewMode,
-    isAgenticMode: viewMode === 'agentic',
-    isEditorMode: viewMode === 'editor',
+    isCoworkMode: viewMode === 'cowork',
+    isCoderMode: viewMode === 'coder',
   };
 
   return (

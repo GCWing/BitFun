@@ -36,6 +36,11 @@ $_app-icon-size: 20px;
     opacity: 0;
     pointer-events: none;
   }
+
+  .bitfun-mode-switch {
+    opacity: 0;
+    pointer-events: none;
+  }
   
   // Hide center area
   .bitfun-header-center {
@@ -56,6 +61,7 @@ $_app-icon-size: 20px;
       opacity: 0;
       pointer-events: none;
     }
+
   }
   
   // Keep window controls visible
@@ -165,52 +171,6 @@ $_app-icon-size: 20px;
     width: 100% !important;
     left: 0 !important;
   }
-
-  // Buttons and icons echo the icy-blue tone
-  .bitfun-agent-menu-btn,
-  .bitfun-horizontal-menu-item,
-  .bitfun-immersive-toggle-btn,
-  .bitfun-panel-indicator,
-  .bitfun-header-right > button,
-  .window-controls__btn {
-    color: rgba(100, 180, 255, 0.7);
-    
-    &:hover {
-      color: rgba(100, 180, 255, 0.9);
-    }
-  }
-
-  // Session title echoes the icy-blue tone
-  .bitfun-current-session-title {
-    .bitfun-current-session-title__text {
-      color: rgba(100, 180, 255, 0.8);
-    }
-    
-    .bitfun-current-session-title__create-btn {
-      color: rgba(100, 180, 255, 0.6);
-      
-      &:hover {
-        color: rgba(100, 180, 255, 0.9);
-      }
-    }
-  }
-
-  // Divider styling
-  .bitfun-panel-divider,
-  .bitfun-horizontal-menu-divider {
-    background: rgba(100, 180, 255, 0.3);
-  }
-
-  // Special handling for window control buttons
-  .window-controls__btn {
-    svg {
-      stroke: rgba(100, 180, 255, 0.7);
-    }
-    
-    &:hover svg {
-      stroke: rgba(100, 180, 255, 0.9);
-    }
-  }
 }
 
 // Header orb hover - Editor mode (theme-colored border breathing)
@@ -227,64 +187,6 @@ $_app-icon-size: 20px;
     animation: header-border-breathe-theme 2.5s ease-in-out infinite !important;
     width: 100% !important;
     left: 0 !important;
-  }
-
-  // Buttons and icons use theme colors via CSS variables
-  .bitfun-agent-menu-btn,
-  .bitfun-horizontal-menu-item,
-  .bitfun-immersive-toggle-btn,
-  .bitfun-panel-indicator,
-  .bitfun-header-right > button,
-  .window-controls__btn {
-    color: var(--color-text-secondary);
-    
-    &:hover {
-      color: var(--color-text-primary);
-    }
-  }
-
-  // Global search follows theme colors with border breathing
-  .bitfun-global-search {
-    animation: search-border-breathe-theme 2.5s ease-in-out infinite;
-    
-    &:focus-within {
-      animation: none;
-      border-color: var(--border-strong);
-      box-shadow: 0 0 0 1px var(--border-subtle);
-    }
-    
-    .search__input {
-      color: var(--color-text-primary);
-      
-      &::placeholder {
-        color: var(--color-text-muted);
-      }
-    }
-    
-    .bitfun-global-search__option {
-      color: var(--color-text-secondary);
-      
-      &:hover, &.active {
-        color: var(--color-text-primary);
-      }
-    }
-  }
-
-  // Divider styling
-  .bitfun-panel-divider,
-  .bitfun-horizontal-menu-divider {
-    background: var(--border-medium);
-  }
-
-  // Special handling for window control buttons
-  .window-controls__btn {
-    svg {
-      stroke: var(--color-text-secondary);
-    }
-    
-    &:hover svg {
-      stroke: var(--color-text-primary);
-    }
   }
 }
 
@@ -379,117 +281,122 @@ $_app-icon-size: 20px;
   }
 }
 
-// ==================== Horizontal expanded menu ====================
+// ==================== Logo popup menu ====================
 
-// Horizontal menu container: fully blended into the header
-.bitfun-horizontal-menu {
-  @include mix.flex-layout(row, center, start, 4px); // Spacing between items
-  position: absolute; // Absolute positioning
-  left: 28px; // Align to menu button (~28px width)
-  top: 50%;
-  transform: translateY(-50%); // Vertically center
-  height: auto;
-  padding: 0; // Remove padding for a flatter look
-  background: transparent; // Fully transparent to blend in
-  border: none; // Remove border
-  border-radius: 0; // Remove rounding
-  box-shadow: none; // Remove shadow
-  backdrop-filter: none; // Remove blur
-  z-index: tokens.$z-decoration; // Lower z-index to align with header elements
-  overflow: hidden;
-  max-width: 0;
+.bitfun-logo-popup-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -2px;
+  width: max-content;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 6px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: var(--blur-medium);
+  -webkit-backdrop-filter: var(--blur-medium);
+  z-index: tokens.$z-popover;
   opacity: 0;
-  @include mix.transition(all, tokens.$motion-base);
+  transform: scale(0.95) translateY(-4px);
+  transform-origin: top left;
   pointer-events: none;
-  white-space: nowrap; // Prevent wrapping
+  transition: all var(--motion-fast) var(--easing-standard);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px dashed var(--border-base);
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 0;
+  }
 
   &--visible {
-    max-width: 500px; // Cap width to avoid overrun
     opacity: 1;
+    transform: scale(1) translateY(0);
     pointer-events: auto;
   }
 }
 
-// Horizontal menu item
-.bitfun-horizontal-menu-item {
+.bitfun-logo-popup-menu-item {
   @include mix.reset-button;
-  @include mix.flex-layout(row, center, center, 5px); // Icon/text spacing
-  padding: 4px 10px; // Padding
-  border-radius: tokens.$size-radius-sm;
+  @include mix.flex-layout(row, center, start, 8px);
+  width: 100%;
+  padding: 4px var(--size-gap-2);
+  margin: 1px 0;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 3px;
   background: transparent;
-  color: var(--color-text-secondary); // Use CSS variables
-  font-size: tokens.$font-size-xs;
-  font-weight: 500;
-  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  border: none;
-  @include mix.transition(all, tokens.$motion-fast);
-  transform: translateX(-8px); // Slide in from left
-  opacity: 0;
-  flex-shrink: 0;
-  
-  // Icon
+  line-height: 1.4;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+  transition: background var(--motion-instant) ease, color var(--motion-instant) ease, box-shadow var(--motion-instant) ease;
+
   svg {
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
+    opacity: 0.9;
   }
 
-  // Label
   &__label {
-    flex-shrink: 0;
-  }
-
-  // Expand items when menu is visible
-  .bitfun-horizontal-menu--visible & {
-    transform: translateX(0);
-    opacity: 1;
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &:hover {
-    background: var(--element-bg-soft); // Use CSS variables
-    color: var(--color-text-primary); // Use CSS variables
-    transform: translateX(0) translateY(-1px);
+    background: var(--color-accent-100);
+    color: var(--color-text-primary);
+    box-shadow: inset 0 0 0 1px var(--color-accent-300);
+
+    svg {
+      opacity: 1;
+    }
   }
 
   &:active {
-    transform: translateX(0) translateY(0);
-    background: var(--element-bg-medium); // Use CSS variables
+    background: var(--color-accent-100);
   }
 }
 
-// Horizontal menu divider
-.bitfun-horizontal-menu-divider {
-  width: 1px;
-  height: 20px; // Increased height
-  background: var(--border-subtle); // Use CSS variables
-  opacity: 0;
-  flex-shrink: 0;
-  @include mix.transition(opacity, tokens.$motion-fast);
-  
-  // Show divider when menu is visible
-  .bitfun-horizontal-menu--visible & {
-    opacity: 0.3; // Lower opacity to blend in
-  }
+.bitfun-logo-popup-menu-divider {
+  border: none;
+  border-top: 1px dashed var(--border-base);
+  background: transparent;
+  height: 1px;
+  margin: 5px var(--size-gap-1);
+  opacity: 0.8;
+  position: relative;
+  z-index: 1;
 }
 
 // Header center area: absolute positioning for true centering
 .bitfun-header-center {
   @include mix.flex-layout(row, center, center);
   position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 600px; // Fixed max width for stable layout
+  inset: 0;
   min-width: 0;
   padding: 0 $_header-gap;
   z-index: tokens.$z-content;
-  overflow: visible; // Allow content to render outside
-  pointer-events: none; // Center container ignores events
+  overflow: visible;
+  pointer-events: none;
   @include mix.transition(none); // Disable transitions for stability
   
   // Re-enable events for children
   > * {
+    max-width: 600px; // Keep center content compact and stable
     pointer-events: auto;
   }
 
@@ -524,47 +431,85 @@ $_app-icon-size: 20px;
 
 // ==================== View mode toggle ====================
 
-.bitfun-view-mode-toggle {
-  @include mix.flex-layout(row, center, start, 2px);
-  padding: 2px;
-  background: tokens.$element-bg-subtle;
-  border-radius: tokens.$size-radius-sm;
-  border: 1px solid tokens.$border-subtle;
-  margin-left: $_header-gap;
+.bitfun-mode-switch {
+  @include mix.flex-layout(row, center, start, 6px);
+  padding: 0;
+  margin-left: 6px;
+  background: transparent;
+  border: none;
+  min-width: 132px;
 }
 
-.bitfun-view-mode-btn {
+.bitfun-mode-switch__btn {
   @include mix.reset-button;
   @include mix.flex-layout(row, center, center);
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: tokens.$color-text-secondary;
+  position: relative;
+  height: 18px;
+  padding: 3px 1px;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: 520;
+  line-height: 1;
+  letter-spacing: 0.012em;
+  color: var(--color-text-secondary);
   background: transparent;
-  @include mix.transition(all, tokens.$motion-fast);
+  @include mix.transition(
+    color,
+    180ms,
+    cubic-bezier(0.22, 1, 0.36, 1)
+  );
+  transition:
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    letter-spacing 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 220ms cubic-bezier(0.22, 1, 0.36, 1);
   cursor: pointer;
   white-space: nowrap;
+  transform-origin: center center;
 
   &:hover {
-    color: tokens.$color-text-primary;
-    background: tokens.$element-bg-soft;
+    color: var(--color-text-primary);
   }
 
-  &--active {
-    color: tokens.$color-text-primary;
-    background: tokens.$element-bg-medium;
-    font-weight: 600;
-    box-shadow: tokens.$shadow-xs;
-
-    &:hover {
-      background: tokens.$element-bg-medium;
-    }
+  &:focus-visible {
+    outline: 1px solid var(--border-strong);
+    outline-offset: 2px;
   }
 
   &:active {
-    transform: scale(0.98);
+    transform: translateY(-0.5px) scale(1.01);
   }
+}
+
+.bitfun-mode-switch__divider {
+  @include mix.flex-layout(row, center, center);
+  height: 18px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  opacity: 0.72;
+  transform: translateY(0);
+  transition:
+    opacity 180ms ease,
+    color 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.bitfun-mode-switch--coder .bitfun-mode-switch__btn:first-child,
+.bitfun-mode-switch--cowork .bitfun-mode-switch__btn:last-child {
+  color: var(--color-text-primary);
+  font-size: 11.8px;
+  font-weight: 620;
+  letter-spacing: 0.006em;
+  transform: translateY(0) scale(1.05);
+}
+
+.bitfun-mode-switch--coder .bitfun-mode-switch__divider,
+.bitfun-mode-switch--cowork .bitfun-mode-switch__divider {
+  color: var(--color-text-secondary);
+  opacity: 0.9;
+  transform: translateY(0);
 }
 
 // ==================== App title button ====================
@@ -636,116 +581,147 @@ $_app-icon-size: 20px;
 
 .bitfun-immersive-panel-toggles {
   @include mix.flex-layout(row, center, start, 1px);
-  margin-right: 4px; // Reduce right margin to sit closer to config button
+  margin-right: 4px;
   padding: 1px;
+  border-radius: 999px;
+  border: 1px solid transparent;
   background: transparent;
-  border-radius: tokens.$size-radius-sm;
-  border: none;
-}
-
-// Panel toggle button: unified icon version
-.bitfun-immersive-toggle-btn {
-  @include mix.reset-button;
-  @include mix.flex-layout(row, center, center, 1px);
-  height: $_panel-btn-size;
-  padding: 0 6px;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--color-text-muted);
-  @include mix.transition(all, tokens.$motion-fast);
   position: relative;
-  overflow: hidden;
-  cursor: pointer;
-
-  // Unified icon mode
-  &--unified {
-    min-width: auto;
-    width: auto;
-  }
-
-  // Left fill state (left expanded, right collapsed)
-  &--left-fill {
-    background: transparent;
-    
-    .bitfun-panel-indicator--right {
-      color: var(--color-text-disabled);
-    }
-  }
-
-  // Right fill state (right expanded, left collapsed)
-  &--right-fill {
-    background: transparent;
-    
-    .bitfun-panel-indicator--left {
-      color: var(--color-text-disabled);
-    }
-  }
-
-  // Both sides expanded
-  &--both-expanded {
-    background: transparent;
-  }
-
-  // Both sides collapsed
-  &--both-collapsed {
-    background: transparent;
-    
-    .bitfun-panel-indicator--left,
-    .bitfun-panel-indicator--right {
-      color: var(--color-text-disabled);
-    }
-  }
-
-}
-
-// Panel indicators (left and right icons)
-.bitfun-panel-indicator {
-  @include mix.flex-layout(row, center, center);
-  padding: 2px;
-  border-radius: 2px;
-  cursor: pointer;
-  @include mix.transition(all, tokens.$motion-fast);
-  position: relative;
-  background: transparent;
+  isolation: isolate;
+  transition: border-color tokens.$motion-fast tokens.$easing-standard,
+              background tokens.$motion-fast tokens.$easing-standard,
+              box-shadow tokens.$motion-fast tokens.$easing-standard;
 
   &:hover {
-    background: var(--color-primary-alpha-10);
+    border-color: var(--border-subtle);
+    background: color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+  }
+
+  &--flow {
+    .bitfun-flow-rail {
+      position: absolute;
+      top: 50%;
+      height: 1px;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      pointer-events: none;
+      transition: background tokens.$motion-fast tokens.$easing-standard,
+                  opacity tokens.$motion-fast tokens.$easing-standard,
+                  box-shadow tokens.$motion-fast tokens.$easing-standard;
+      z-index: 0;
+      opacity: 0.85;
+    }
+
+    .bitfun-flow-rail--left {
+      left: 9px;
+      width: 14px;
+      background: color-mix(in srgb, var(--border-subtle) 85%, transparent);
+    }
+
+    .bitfun-flow-rail--right {
+      left: 24px;
+      width: 14px;
+      background: color-mix(in srgb, var(--border-subtle) 85%, transparent);
+    }
+  }
+
+  &--left-open.bitfun-immersive-panel-toggles--chat-open .bitfun-flow-rail--left {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-primary) 28%, transparent) 0%,
+      color-mix(in srgb, var(--color-primary) 70%, transparent) 100%
+    );
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  &--chat-open.bitfun-immersive-panel-toggles--right-open .bitfun-flow-rail--right {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-primary) 70%, transparent) 0%,
+      color-mix(in srgb, var(--color-primary) 28%, transparent) 100%
+    );
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  // Chat hidden means the conversation channel is offline; mute rails and bias right action a little.
+  &--chat-collapsed {
+    .bitfun-flow-rail--left,
+    .bitfun-flow-rail--right {
+      opacity: 0.45;
+      background: repeating-linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--border-subtle) 80%, transparent) 0 4px,
+        transparent 4px 8px
+      );
+      box-shadow: none;
+    }
+
+    .bitfun-panel-indicator--right.active {
+      transform: scale(1.06);
+    }
+  }
+
+  // Chat visible means dialogue mode is active; keep a subtle "ready" signal on center node.
+  &--chat-open .bitfun-panel-indicator--chat.active {
     color: var(--color-primary);
-    transform: scale(1.1);
+  }
+}
+
+.bitfun-panel-indicator {
+  @include mix.reset-button;
+  @include mix.flex-layout(row, center, center);
+  width: auto;
+  height: 16px;
+  padding: 0 1px;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  color: var(--color-text-muted);
+  background: transparent;
+  transition: transform tokens.$motion-fast tokens.$easing-standard,
+              color tokens.$motion-fast tokens.$easing-standard,
+              background tokens.$motion-fast tokens.$easing-standard,
+              box-shadow tokens.$motion-fast tokens.$easing-standard;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-primary) 14%, var(--color-bg-elevated));
+    color: var(--color-primary);
+    transform: translateY(-0.5px);
   }
 
   &:active {
-    background: var(--color-primary-alpha-20);
-    transform: scale(1.05);
+    transform: translateY(0);
   }
 
-  // Active state: keep original color
   &.active {
+    color: var(--color-primary);
     background: transparent;
-    
-    &:hover {
-      color: var(--color-primary);
-      background: var(--color-primary-alpha-10);
-      transform: scale(1.1);
+    box-shadow: none;
+  }
+
+  &--chat {
+    svg {
+      transform: translateY(-0.2px);
     }
   }
-  
-  // Toolbar mode button
-  &--toolbar {
-    color: var(--color-text-muted);
+
+  svg {
+    width: 13px;
+    height: 13px;
+    display: block;
   }
-}
 
-// Divider
-.bitfun-panel-divider {
-  width: 1px;
-  height: 12px;
-  background: tokens.$border-subtle;
-  opacity: 0.5;
-  @include mix.transition(opacity, tokens.$motion-fast);
+  &--toolbar {
+    margin-left: 0;
+    color: var(--color-text-secondary);
+    background: transparent;
 
-  .bitfun-immersive-toggle-btn:hover & {
-    opacity: 0.8;
+    &:hover {
+      color: var(--color-primary);
+      background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-elevated));
+    }
   }
 }
 
@@ -811,27 +787,16 @@ $_app-icon-size: 20px;
     gap: 1px;
     margin-right: 2px; // Reduce right margin on mobile
     padding: 1px;
-    background: transparent;
-    border: none;
-  }
-
-  .bitfun-immersive-toggle-btn {
-    height: $_panel-btn-size-mobile;
-    padding: 0 3px;
-    gap: 1px;
   }
 
   .bitfun-panel-indicator {
-    padding: 1px;
+    height: 14px;
+    padding: 0;
 
     svg {
-      width: 9px;
-      height: 9px;
+      width: 11px;
+      height: 11px;
     }
-  }
-
-  .bitfun-panel-divider {
-    height: 9px;
   }
 }
 
@@ -868,31 +833,19 @@ $_app-icon-size: 20px;
   }
 
   .bitfun-immersive-panel-toggles {
-    gap: 0px;
+    gap: 0;
     margin-right: 2px; // Reduce right margin on small screens
     padding: 1px;
-    background: transparent;
-    border: none;
-  }
-
-  .bitfun-immersive-toggle-btn {
-    height: $_panel-btn-size-small;
-    padding: 0 2px;
-    gap: 1px;
-    border-radius: 3px;
   }
 
   .bitfun-panel-indicator {
-    padding: 1px;
+    height: 13px;
+    padding: 0;
 
     svg {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
     }
-  }
-
-  .bitfun-panel-divider {
-    height: 7px;
   }
 }
 
@@ -910,19 +863,10 @@ $_app-icon-size: 20px;
 
   .bitfun-immersive-toggle-btn {
     border: none;
-
-    &:hover {
-      border: none;
-    }
   }
 
   .bitfun-panel-indicator {
-    border: none;
-  }
-
-  .bitfun-panel-divider {
-    opacity: 1;
-    background: tokens.$border-strong;
+    outline: 1px solid tokens.$border-strong;
   }
 
   .bitfun-horizontal-menu-divider {
@@ -934,9 +878,9 @@ $_app-icon-size: 20px;
 // Reduced motion preference
 @media (prefers-reduced-motion: reduce) {
   .bitfun-app-title-btn,
-  .bitfun-immersive-toggle-btn,
+  .bitfun-immersive-panel-toggles,
   .bitfun-panel-indicator,
-  .bitfun-panel-divider,
+  .bitfun-flow-rail,
   .bitfun-app-icon,
   .bitfun-logo-menu,
   .bitfun-horizontal-menu,

@@ -513,7 +513,8 @@
     "flowChatInitFailed": "Initialization failed. Please refresh the page."
   },
   "bottomBar": {
-    "sessions": "Sessions",
+    "sessions": "Workbench",
+    "workflows": "Workflows",
     "files": "Files",
     "terminal": "Terminal",
     "projectContext": "Project Context",

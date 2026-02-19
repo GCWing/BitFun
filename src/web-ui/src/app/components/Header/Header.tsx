@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Settings, FolderOpen, Home, FolderPlus, Info, Menu, PanelBottom } from 'lucide-react';
-import { PanelLeftIcon, PanelRightIcon } from './PanelIcons';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Settings, FolderOpen, Home, FolderPlus, Info, PanelBottom } from 'lucide-react';
+import { PanelLeftIcon, PanelRightIcon, PanelCenterIcon } from './PanelIcons';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
@@ -27,8 +27,10 @@ interface HeaderProps {
   onClose: () => void;
   onHome: () => void;
   onToggleLeftPanel: () => void;
+  onToggleChatPanel: () => void;
   onToggleRightPanel: () => void;
   leftPanelCollapsed: boolean;
+  chatCollapsed: boolean;
   rightPanelCollapsed: boolean;
   onCreateSession?: () => void; // Callback to create a FlowChat session
   isMaximized?: boolean; // Whether the window is maximized
@@ -45,8 +47,10 @@ const Header: React.FC<HeaderProps> = ({
   onClose,
   onHome,
   onToggleLeftPanel,
+  onToggleChatPanel,
   onToggleRightPanel,
   leftPanelCollapsed,
+  chatCollapsed,
   rightPanelCollapsed,
   onCreateSession,
   isMaximized = false
@@ -55,9 +59,9 @@ const Header: React.FC<HeaderProps> = ({
   const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
-  const [showHorizontalMenu, setShowHorizontalMenu] = useState(false);
-  const [menuPinned, setMenuPinned] = useState(false); // Whether the menu is pinned open
+  const [showLogoMenu, setShowLogoMenu] = useState(false);
   const [isOrbHovered, setIsOrbHovered] = useState(false); // Orb hover state
+  const logoMenuContainerRef = useRef<HTMLDivElement | null>(null);
 
   // macOS Desktop (Tauri): use native titlebar traffic lights (hide custom window controls)
   const isMacOS = useMemo(() => {
@@ -71,7 +75,7 @@ const Header: React.FC<HeaderProps> = ({
   }, []);
   
   // View mode
-  const { toggleViewMode, isAgenticMode, isEditorMode } = useViewMode();
+  const { setViewMode, isCoworkMode, isCoderMode } = useViewMode();
   
 	// Toolbar mode
 	const { enableToolbarMode } = useToolbarModeContext();
@@ -192,12 +196,10 @@ const Header: React.FC<HeaderProps> = ({
     setShowAboutDialog(true);
   }, []);
 
-  // Orb menu click: toggle pinned open/close
-  const handleMenuClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setMenuPinned(!menuPinned);
-    setShowHorizontalMenu(!menuPinned);
-  }, [menuPinned]);
+  // Orb click: toggle popup menu open/close
+  const handleMenuClick = useCallback(() => {
+    setShowLogoMenu((prev) => !prev);
+  }, []);
 
   // Orb hover: enable header glow
   const handleOrbHoverEnter = useCallback(() => {
@@ -208,13 +210,49 @@ const Header: React.FC<HeaderProps> = ({
     setIsOrbHovered(false);
   }, []);
 
-  const agentOrbNode = (
+  const menuOrbNode = (
     <div
       className="agent-orb-wrapper"
       onMouseEnter={handleOrbHoverEnter}
       onMouseLeave={handleOrbHoverLeave}
     >
-      <AgentOrb isAgenticMode={isAgenticMode} onToggle={toggleViewMode} />
+      <AgentOrb
+        isAgenticMode={isCoworkMode}
+        onToggle={handleMenuClick}
+        tooltipText={showLogoMenu ? t('header.closeMenu') : t('header.openMenu')}
+      />
+    </div>
+  );
+
+  const modeSwitchNode = (
+    <div
+      className={`bitfun-mode-switch ${isCoderMode ? 'bitfun-mode-switch--coder' : 'bitfun-mode-switch--cowork'}`}
+      role="group"
+      aria-label={t('header.modeSwitchAriaLabel')}
+    >
+      <Tooltip content={t('header.switchToCoder')} placement="bottom">
+        <button
+          type="button"
+          className={`bitfun-mode-switch__btn ${isCoderMode ? 'bitfun-mode-switch__btn--active' : ''}`}
+          onClick={() => setViewMode('coder')}
+          aria-pressed={isCoderMode}
+        >
+          {t('header.modeCoder')}
+        </button>
+      </Tooltip>
+      <span className="bitfun-mode-switch__divider" aria-hidden="true">
+        /
+      </span>
+      <Tooltip content={t('header.switchToCowork')} placement="bottom">
+        <button
+          type="button"
+          className={`bitfun-mode-switch__btn ${isCoworkMode ? 'bitfun-mode-switch__btn--active' : ''}`}
+          onClick={() => setViewMode('cowork')}
+          aria-pressed={isCoworkMode}
+        >
+          {t('header.modeCowork')}
+        </button>
+      </Tooltip>
     </div>
   );
 
@@ -260,18 +298,30 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, [isMacOS, handleOpenProject, handleNewProject, handleGoHome, handleShowAbout]);
 
-  // Menu hover: expand
-  const handleMenuHoverEnter = useCallback(() => {
-    if (!menuPinned) {
-      setShowHorizontalMenu(true);
-    }
-  }, [menuPinned]);
+  // Close popup menu on outside click / Escape
+  useEffect(() => {
+    if (!showLogoMenu) return;
 
-  const handleMenuHoverLeave = useCallback(() => {
-    if (!menuPinned) {
-      setShowHorizontalMenu(false);
-    }
-  }, [menuPinned]);
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (logoMenuContainerRef.current?.contains(target)) return;
+      setShowLogoMenu(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowLogoMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showLogoMenu]);
 
   // Horizontal menu items (no separators)
   const horizontalMenuItems = [
@@ -305,7 +355,7 @@ const Header: React.FC<HeaderProps> = ({
 		return (
 			<>
 						<header 
-							className={`${className} ${isMacOS ? 'bitfun-app-header--macos-native-titlebar' : ''} ${isOrbHovered ? (isAgenticMode ? 'bitfun-header--orb-glow-agentic' : 'bitfun-header--orb-glow-editor') : ''}`} 
+							className={`${className} ${isMacOS ? 'bitfun-app-header--macos-native-titlebar' : ''} ${isOrbHovered ? (isCoworkMode ? 'bitfun-header--orb-glow-agentic' : 'bitfun-header--orb-glow-editor') : ''}`} 
 							data-testid="header-container"
 							onMouseDown={handleHeaderMouseDown}
 							onDoubleClick={handleHeaderDoubleClick}
@@ -313,52 +363,33 @@ const Header: React.FC<HeaderProps> = ({
 						<div className="bitfun-header-left">
               {/* macOS: move items to system menubar; hide custom menu button; move toggle to right */}
               {!isMacOS && (
-                <div className="bitfun-menu-container">
-                  {/* Logo: used for mode switch with independent hover effect */}
-                  {agentOrbNode}
-                  
-                  {/* Menu area: hoverable region to keep menu open on pointer move */}
-                  <div 
-                    className="bitfun-menu-expand-area"
-                    onMouseEnter={handleMenuHoverEnter}
-                    onMouseLeave={handleMenuHoverLeave}
-                  >
-                    {/* Orb menu button: expand on hover */}
-                    <Tooltip content={menuPinned ? t('header.closeMenu') : t('header.openMenu')} placement="bottom">
-                      <button
-                        className={`bitfun-agent-menu-btn ${menuPinned ? 'bitfun-agent-menu-btn--pinned' : ''}`}
-                        onClick={handleMenuClick}
-                      >
-                        <Menu size={14} />
-                      </button>
-                    </Tooltip>
+                <div className="bitfun-menu-container" ref={logoMenuContainerRef}>
+                  {/* Logo: used as the menu trigger */}
+                  {menuOrbNode}
+                  {modeSwitchNode}
 
-                    {/* Expanded horizontal menu items */}
-                    <div 
-                      className={`bitfun-horizontal-menu ${showHorizontalMenu ? 'bitfun-horizontal-menu--visible' : ''}`}
-                    >
-                      {horizontalMenuItems.map((item, index) => (
-                        <React.Fragment key={item.id}>
-                          {index > 0 && <div className="bitfun-horizontal-menu-divider" />}
-                          <button
-                            className="bitfun-horizontal-menu-item"
-                            onClick={() => {
-                              item.onClick();
-                              // Close the menu after item click
-                              setShowHorizontalMenu(false);
-                              setMenuPinned(false);
-                            }}
-                            style={{
-                              transitionDelay: showHorizontalMenu ? `${index * 40}ms` : '0ms'
-                            }}
-                            data-testid={(item as any).testId}
-                          >
-                            {item.icon}
-                            <span className="bitfun-horizontal-menu-item__label">{item.label}</span>
-                          </button>
-                        </React.Fragment>
-                      ))}
-                    </div>
+                  {/* Popup menu items */}
+                  <div
+                    className={`bitfun-logo-popup-menu ${showLogoMenu ? 'bitfun-logo-popup-menu--visible' : ''}`}
+                    role="menu"
+                  >
+                    {horizontalMenuItems.map((item, index) => (
+                      <React.Fragment key={item.id}>
+                        {index > 0 && <div className="bitfun-logo-popup-menu-divider" />}
+                        <button
+                          className="bitfun-logo-popup-menu-item"
+                          role="menuitem"
+                          onClick={() => {
+                            item.onClick();
+                            setShowLogoMenu(false);
+                          }}
+                          data-testid={(item as any).testId}
+                        >
+                          {item.icon}
+                          <span className="bitfun-logo-popup-menu-item__label">{item.label}</span>
+                        </button>
+                      </React.Fragment>
+                    ))}
                   </div>
                 </div>
               )}
@@ -367,71 +398,82 @@ const Header: React.FC<HeaderProps> = ({
 						<div 
 							className="bitfun-header-center"
 					>
-						{/* Current session title: only in Agentic mode */}
-						{isAgenticMode && <CurrentSessionTitle onCreateSession={onCreateSession} />}
+						{/* Current session title: show whenever chat panel is visible */}
+						{!chatCollapsed && <CurrentSessionTitle onCreateSession={onCreateSession} />}
 						
-          {/* Global search: only in Editor mode */}
-          {isEditorMode && <GlobalSearch />}
+          {/* Global search: show in coder layout when chat is hidden */}
+          {chatCollapsed && <GlobalSearch />}
         </div>
         
         <div className="bitfun-header-right">
-          {/* Immersive panel toggles: unified icon */}
-          <div className="bitfun-immersive-panel-toggles">
-            <button
-              className={`bitfun-immersive-toggle-btn bitfun-immersive-toggle-btn--unified ${
-                !leftPanelCollapsed && rightPanelCollapsed ? 'bitfun-immersive-toggle-btn--left-fill' : 
-                leftPanelCollapsed && !rightPanelCollapsed ? 'bitfun-immersive-toggle-btn--right-fill' :
-                !leftPanelCollapsed && !rightPanelCollapsed ? 'bitfun-immersive-toggle-btn--both-expanded' :
-                'bitfun-immersive-toggle-btn--both-collapsed'
-              }`}
-            >
-              {/* Left indicator */}
-              <Tooltip content={leftPanelCollapsed ? t('header.expandLeftPanel') : t('header.collapseLeftPanel')} placement="bottom">
-                <span 
-                  className={`bitfun-panel-indicator bitfun-panel-indicator--left ${!leftPanelCollapsed ? 'active' : ''}`}
+          {/* Panel flow controls: keep three independent toggles with richer flow semantics */}
+          <div
+            className={[
+              'bitfun-immersive-panel-toggles',
+              'bitfun-immersive-panel-toggles--flow',
+              !leftPanelCollapsed && 'bitfun-immersive-panel-toggles--left-open',
+              !chatCollapsed && 'bitfun-immersive-panel-toggles--chat-open',
+              !rightPanelCollapsed && 'bitfun-immersive-panel-toggles--right-open',
+              chatCollapsed && 'bitfun-immersive-panel-toggles--chat-collapsed'
+            ].filter(Boolean).join(' ')}
+          >
+            <span className="bitfun-flow-rail bitfun-flow-rail--left" aria-hidden="true" />
+            <span className="bitfun-flow-rail bitfun-flow-rail--right" aria-hidden="true" />
+
+            <Tooltip content={leftPanelCollapsed ? t('header.expandLeftPanel') : t('header.collapseLeftPanel')} placement="bottom">
+              <button
+                type="button"
+                className={`bitfun-panel-indicator bitfun-panel-indicator--left ${!leftPanelCollapsed ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleLeftPanel();
+                }}
+              >
+                <PanelLeftIcon size={14} filled={!leftPanelCollapsed} />
+              </button>
+            </Tooltip>
+
+            <Tooltip content={chatCollapsed ? t('header.showChatPanel') : t('header.hideChatPanel')} placement="bottom">
+              <button
+                type="button"
+                className={`bitfun-panel-indicator bitfun-panel-indicator--chat ${!chatCollapsed ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleChatPanel();
+                }}
+              >
+                <PanelCenterIcon size={14} filled={!chatCollapsed} />
+              </button>
+            </Tooltip>
+
+            <Tooltip content={rightPanelCollapsed ? t('header.expandRightPanel') : t('header.collapseRightPanel')} placement="bottom">
+              <button
+                type="button"
+                className={`bitfun-panel-indicator bitfun-panel-indicator--right ${!rightPanelCollapsed ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleRightPanel();
+                }}
+              >
+                <PanelRightIcon size={14} filled={!rightPanelCollapsed} />
+              </button>
+            </Tooltip>
+
+            {/* Toolbar mode toggle: available when chat panel is visible */}
+            {!chatCollapsed && (
+              <Tooltip content={t('header.switchToToolbar')}>
+                <button
+                  type="button"
+                  className="bitfun-panel-indicator bitfun-panel-indicator--toolbar"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleLeftPanel();
+                    enableToolbarMode();
                   }}
                 >
-                  <PanelLeftIcon size={14} filled={!leftPanelCollapsed} />
-                </span>
+                  <PanelBottom size={14} />
+                </button>
               </Tooltip>
-              
-              {/* Divider */}
-              <span className="bitfun-panel-divider"></span>
-              
-              {/* Right indicator */}
-              <Tooltip content={rightPanelCollapsed ? t('header.expandRightPanel') : t('header.collapseRightPanel')} placement="bottom">
-                <span 
-                  className={`bitfun-panel-indicator bitfun-panel-indicator--right ${!rightPanelCollapsed ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleRightPanel();
-                  }}
-                >
-                  <PanelRightIcon size={14} filled={!rightPanelCollapsed} />
-                </span>
-              </Tooltip>
-              
-              {/* Toolbar mode toggle: only in Agentic mode */}
-              {isAgenticMode && (
-                <>
-                  <span className="bitfun-panel-divider"></span>
-                  <Tooltip content={t('header.switchToToolbar')}>
-                    <span 
-                      className="bitfun-panel-indicator bitfun-panel-indicator--toolbar"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        enableToolbarMode();
-                      }}
-                    >
-                      <PanelBottom size={14} />
-                    </span>
-                  </Tooltip>
-                </>
-              )}
-            </button>
+            )}
           </div>
 	          
 	          {/* Config center button */}
@@ -449,8 +491,8 @@ const Header: React.FC<HeaderProps> = ({
             </Button>
 	          </Tooltip>
 
-            {/* macOS: move Agentic/Editor toggle to the far right (after config button) */}
-            {isMacOS && agentOrbNode}
+            {/* macOS: keep mode switch accessible in the right section */}
+            {isMacOS && modeSwitchNode}
 		          
 		          {/* Window controls (macOS uses native traffic lights; hide custom buttons) */}
 		          {!isMacOS && (

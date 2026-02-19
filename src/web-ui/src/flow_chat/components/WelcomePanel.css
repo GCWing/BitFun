@@ -807,23 +807,12 @@
   border: none;
   border-radius: 8px;
   padding: 14px 16px;
-  transition: all 0.2s ease;
   cursor: default;
-}
-
-.welcome-panel__intent-card:hover {
-  background: var(--element-bg-soft);
 }
 
 /* Fallback intent card (clickable) */
 .welcome-panel__intent-card--clickable {
   cursor: pointer;
-}
-
-.welcome-panel__intent-card--clickable:hover {
-  background: var(--color-accent-100);
-  border-color: var(--color-accent-400);
-  transform: translateX(2px);
 }
 
 .welcome-panel__intent-header {

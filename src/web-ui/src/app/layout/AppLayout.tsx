@@ -12,7 +12,6 @@ import React, { useState, useCallback } from 'react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { useApp } from '../hooks/useApp';
-import { useViewMode } from '../../infrastructure/contexts/ViewModeContext';
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceLayout from './WorkspaceLayout';
 import AppBottomBar from '../components/BottomBar/AppBottomBar';
@@ -38,9 +37,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   // Workspace state
   const { currentWorkspace, hasWorkspace, openWorkspace } = useWorkspaceContext();
   
-  // View mode (agentic/editor)
-  const { isAgenticMode } = useViewMode();
-  
   // Toolbar mode
   const { isToolbarMode } = useToolbarModeContext();
 
@@ -49,7 +45,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     useWindowControls({ isToolbarMode });
   
   // Application state
-  const { state, toggleLeftPanel, toggleRightPanel, switchLeftPanelTab } = useApp();
+  const { state, toggleLeftPanel, toggleRightPanel, toggleChatPanel, switchLeftPanelTab } = useApp();
   
   // Transition state: startup content to workspace
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -73,10 +69,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       const workspace = await openWorkspace(workspacePath);
       
       // Configure layout based on view mode.
-      // Agentic mode: collapse right panel; Editor mode: expand.
+      // Coder layout defaults to chat-first, with right panel collapsed.
       appManager.updateLayout({
         leftPanelCollapsed: false,
-        rightPanelCollapsed: isAgenticMode
+        rightPanelCollapsed: true
       });
       
       // Trigger header sweep effect immediately
@@ -103,7 +99,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         });
       });
     }
-  }, [openWorkspace, isAgenticMode, t]);
+  }, [openWorkspace, t]);
 
   // Initialize FlowChatManager: load history or create a default session
   React.useEffect(() => {
@@ -386,8 +382,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         onClose={handleClose}
         onHome={handleHomeClick}
         onToggleLeftPanel={toggleLeftPanel}
+        onToggleChatPanel={toggleChatPanel}
         onToggleRightPanel={toggleRightPanel}
         leftPanelCollapsed={state.layout.leftPanelCollapsed}
+        chatCollapsed={state.layout.chatCollapsed}
         rightPanelCollapsed={state.layout.rightPanelCollapsed}
         onCreateSession={handleCreateFlowChatSession}
         isMaximized={isMaximized}
@@ -415,8 +413,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         />
       )}
       
-      {/* Standalone chat input (workspace + agentic mode only) */}
-      {hasWorkspace && isAgenticMode && (
+      {/* Standalone chat input (workspace + chat visible) */}
+      {hasWorkspace && !state.layout.chatCollapsed && (
         <ChatInput 
           onSendMessage={(message: string) => {
             // Message dispatch is handled inside ChatInput

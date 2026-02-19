@@ -15,7 +15,9 @@ import {
   MessageSquare, 
   MessageSquareText, 
   Terminal,
-  TerminalSquare
+  TerminalSquare,
+  Workflow,
+  SquareKanban,
 } from 'lucide-react';
 import { useApp } from '../../hooks/useApp';
 import { PanelType } from '../../types';
@@ -140,6 +142,23 @@ const AppBottomBar: React.FC<AppBottomBarProps> = ({
                 </span>
                 <span className="bitfun-bottom-bar__icon-active">
                   <MessageSquareText size={14} />
+                </span>
+              </span>
+            </button>
+          </Tooltip>
+
+          {/* Workflows tab */}
+          <Tooltip content={t('bottomBar.workflows')} placement="top">
+            <button
+              className={`bitfun-bottom-bar__tab-button ${activeTab === 'workflows' ? 'is-active' : ''} ${animatingTab === 'workflows' ? 'is-switching' : ''}`}
+              onClick={() => handleTabClick('workflows')}
+            >
+              <span className="bitfun-bottom-bar__tab-icon bitfun-bottom-bar__tab-icon--dual">
+                <span className="bitfun-bottom-bar__icon-inactive">
+                  <Workflow size={14} />
+                </span>
+                <span className="bitfun-bottom-bar__icon-active">
+                  <SquareKanban size={14} />
                 </span>
               </span>
             </button>

@@ -24,7 +24,6 @@ import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { Trans, useTranslation } from 'react-i18next';
 import { useApp } from '../hooks/useApp';
 import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
-import { useViewMode } from '../../infrastructure/contexts/ViewModeContext';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('WorkspaceLayout');
@@ -63,7 +62,6 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   const { t } = useTranslation('flow-chat');
   const { state, switchLeftPanelTab, updateLeftPanelWidth, updateRightPanelWidth, toggleRightPanel, toggleLeftPanel } = useApp();
   const { workspace: currentWorkspace } = useCurrentWorkspace();
-  const { isEditorMode } = useViewMode();
   const rightPanelRef = useRef<RightPanelRef>(null);
   
   // Dragging state
@@ -106,12 +104,12 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
     return getPanelDisplayMode(currentRightWidth, RIGHT_PANEL_CONFIG);
   }, [state.layout.rightPanelCollapsed, currentRightWidth]);
 
-  // Auto-expand right panel in editor mode
+  // Keep right panel visible when chat is hidden.
   useEffect(() => {
-    if (isEditorMode && state.layout.rightPanelCollapsed) {
+    if (state.layout.chatCollapsed && state.layout.rightPanelCollapsed) {
       toggleRightPanel();
     }
-  }, [isEditorMode]);
+  }, [state.layout.chatCollapsed, state.layout.rightPanelCollapsed, toggleRightPanel]);
 
   /**
    * Calculate valid left panel width.
@@ -121,7 +119,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
     
     const containerWidth = containerRef.current.offsetWidth;
     const rightSpace = state.layout.rightPanelCollapsed ? 0 : currentRightWidth + PANEL_COMMON_CONFIG.RESIZER_WIDTH;
-    const requiredSpace = isEditorMode 
+    const requiredSpace = state.layout.chatCollapsed
       ? rightSpace
       : PANEL_COMMON_CONFIG.MIN_CENTER_WIDTH + rightSpace + PANEL_COMMON_CONFIG.RESIZER_WIDTH;
     const dynamicMaxWidth = containerWidth - requiredSpace;
@@ -131,7 +129,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
     const minWidth = LEFT_PANEL_CONFIG.COMPACT_WIDTH;
     
     return Math.min(maxWidth, Math.max(minWidth, newWidth));
-  }, [isEditorMode, currentRightWidth, state.layout.rightPanelCollapsed]);
+  }, [state.layout.chatCollapsed, currentRightWidth, state.layout.rightPanelCollapsed]);
 
   /**
    * Calculate valid right panel width.
@@ -317,7 +315,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
         lastValidWidth = validWidth;
         
         // Perf: update DOM directly during drag to avoid CenterPanel/FlowChat re-render.
-        if (rightPanelElementRef.current && !isEditorMode) {
+        if (rightPanelElementRef.current && !state.layout.chatCollapsed) {
           rightPanelElementRef.current.style.width = `${validWidth}px`;
         } else {
           updateRightPanelWidth(validWidth);
@@ -353,7 +351,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [currentRightWidth, calculateValidRightWidth, updateRightPanelWidth, saveAndUpdateRightWidth, isEditorMode]);
+  }, [currentRightWidth, calculateValidRightWidth, updateRightPanelWidth, saveAndUpdateRightWidth, state.layout.chatCollapsed]);
 
   /**
    * Handle resizer mouse drag in editor mode.
@@ -522,7 +520,9 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   ].filter(Boolean).join(' ');
 
   // Panel state
-  const allCollapsed = state.layout.leftPanelCollapsed && (state.layout.centerPanelCollapsed || isEditorMode) && state.layout.rightPanelCollapsed;
+  const isRightAsMain = state.layout.chatCollapsed;
+  const isCenterHidden = state.layout.centerPanelCollapsed || isRightAsMain;
+  const allCollapsed = state.layout.leftPanelCollapsed && isCenterHidden && state.layout.rightPanelCollapsed;
 
   // Panel mode data attributes
   const leftPanelDataMode = leftPanelMode;
@@ -569,7 +569,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
       )}
 
       {/* Left resizer */}
-      {!state.layout.leftPanelCollapsed && !state.layout.centerPanelCollapsed && !isEditorMode && (
+      {!state.layout.leftPanelCollapsed && !state.layout.centerPanelCollapsed && !isRightAsMain && (
         <div 
           ref={leftResizerRef}
           className={`bitfun-panel-resizer ${isDraggingLeft ? 'bitfun-panel-resizer--dragging' : ''} ${isHoveringLeft ? 'bitfun-panel-resizer--hovering' : ''}`}
@@ -607,7 +607,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
       )}
 
       {/* Draggable resizer in editor mode */}
-      {isEditorMode && !state.layout.leftPanelCollapsed && !state.layout.rightPanelCollapsed && (
+      {isRightAsMain && !state.layout.leftPanelCollapsed && !state.layout.rightPanelCollapsed && (
         <div 
           ref={editorResizerRef}
           className={`bitfun-panel-resizer ${isDraggingEditor ? 'bitfun-panel-resizer--dragging' : ''} ${isHoveringEditor ? 'bitfun-panel-resizer--hovering' : ''}`}
@@ -642,7 +642,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
       )}
 
       {/* Center FlowChat panel */}
-      {!state.layout.centerPanelCollapsed && !isEditorMode && (
+      {!state.layout.centerPanelCollapsed && !isRightAsMain && (
         <div 
           className={`bitfun-center-panel ${(isDraggingLeft || isDraggingRight) ? 'bitfun-center-panel--dragging' : ''}`}
         >
@@ -656,7 +656,7 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
       )}
 
       {/* Right resizer */}
-      {!state.layout.centerPanelCollapsed && !state.layout.rightPanelCollapsed && !isEditorMode && (
+      {!state.layout.centerPanelCollapsed && !state.layout.rightPanelCollapsed && !isRightAsMain && (
         <div 
           ref={rightResizerRef}
           className={`bitfun-panel-resizer ${isDraggingRight ? 'bitfun-panel-resizer--dragging' : ''} ${isHoveringRight ? 'bitfun-panel-resizer--hovering' : ''}`}
@@ -696,11 +696,11 @@ const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
       {/* Right panel */}
       <div 
         ref={rightPanelElementRef}
-        className={`bitfun-right-panel ${state.layout.rightPanelCollapsed ? 'bitfun-right-panel--collapsed' : ''} ${isDraggingRight ? 'bitfun-right-panel--dragging' : ''} ${isEditorMode ? 'bitfun-right-panel--editor-mode' : ''} ${isRightPanelExpandingImmediate ? 'bitfun-right-panel--no-animation' : ''}`}
+        className={`bitfun-right-panel ${state.layout.rightPanelCollapsed ? 'bitfun-right-panel--collapsed' : ''} ${isDraggingRight ? 'bitfun-right-panel--dragging' : ''} ${isRightAsMain ? 'bitfun-right-panel--editor-mode' : ''} ${isRightPanelExpandingImmediate ? 'bitfun-right-panel--no-animation' : ''}`}
         style={{
           display: state.layout.rightPanelCollapsed ? 'none' : 'flex',
           // In editor mode, let the right panel fill remaining space.
-          width: state.layout.rightPanelCollapsed ? undefined : (isEditorMode ? undefined : `${currentRightWidth}px`)
+          width: state.layout.rightPanelCollapsed ? undefined : (isRightAsMain ? undefined : `${currentRightWidth}px`)
         }}
         data-mode={rightPanelDataMode}
       >

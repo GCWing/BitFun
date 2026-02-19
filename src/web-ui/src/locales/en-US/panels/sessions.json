@@ -1,5 +1,5 @@
 {
-  "title": "Sessions",
+  "title": "Workbench",
   "search": {
     "placeholder": "Search session title or content..."
   },
@@ -13,6 +13,10 @@
     "editTitle": "Edit Title",
     "deleteSession": "Delete Session",
     "doubleClickToEdit": "Double-click to edit title"
+  },
+  "views": {
+    "sessions": "Sessions",
+    "capabilities": "Capability Center"
   },
   "groups": {
     "recent": "Recent",
@@ -34,5 +38,30 @@
     "minutesAgo": "{{count}} minutes ago",
     "hoursAgo": "{{count}} hours ago",
     "daysAgo": "{{count}} days ago"
+  },
+  "capabilities": {
+    "skills": "Skills",
+    "subagents": "SubAgents",
+    "mcp": "MCP",
+    "refresh": "Refresh capability states",
+    "reconnect": "Reconnect",
+    "mcpWarning": "{{count}} MCP server(s) need attention",
+    "mcpWarningShort": "{{count}} MCP issue(s)",
+    "loadFailed": "Failed to load capabilities",
+    "toggleFailed": "Failed to update capability switch",
+    "mcpReconnectSuccess": "{{name}} reconnected",
+    "mcpReconnectFailed": "Failed to reconnect {{name}}",
+    "unknownSkill": "Unknown skill",
+    "unknownSubagent": "Unknown subagent",
+    "unknownMcpServer": "Unknown MCP server",
+    "emptySkills": "No skills configured",
+    "emptySubagents": "No subagents available",
+    "emptyMcp": "No MCP servers configured",
+    "path": "Path",
+    "toolCount": "Tools",
+    "serverType": "Type",
+    "clickToCopy": "Click to copy path",
+    "pathCopied": "Path copied",
+    "pathCopyFailed": "Failed to copy path"
   }
 }

@@ -28,7 +28,7 @@ export interface AgentConfig {
 
 // Panel types - removed 'chat'; chat lives in the center panel.
 // 'project-context' replaces 'context' to avoid overlap with agentic context.
-export type PanelType = 'sessions' | 'files' | 'git' | 'project-context' | 'terminal';
+export type PanelType = 'sessions' | 'workflows' | 'files' | 'git' | 'project-context' | 'terminal';
 
 // Layout state - three-column layout support.
 // Strategy: fixed left/right widths with elastic center (floating layout).
@@ -37,6 +37,7 @@ export interface LayoutState {
   leftPanelCollapsed: boolean;
   centerPanelWidth: number;
   centerPanelCollapsed: boolean;
+  chatCollapsed: boolean;
   rightPanelWidth: number; // Fixed right panel width
   rightPanelCollapsed: boolean;
   leftPanelActiveTab: PanelType;
@@ -183,6 +184,7 @@ export interface UseAppReturn {
   toggleLeftPanel: () => void;
   toggleCenterPanel: () => void;
   toggleRightPanel: () => void;
+  toggleChatPanel: () => void;
   switchLeftPanelTab: (tab: PanelType) => void;
   updateLeftPanelWidth: (width: number, options?: { persist?: boolean }) => void;
   updateCenterPanelWidth: (width: number) => void;
@@ -221,6 +223,7 @@ export const DEFAULT_LAYOUT_STATE: LayoutState = {
     ? Math.floor(window.innerWidth * 0.50) // Kept for compatibility
     : 960,
   centerPanelCollapsed: false,
+  chatCollapsed: false,
   rightPanelWidth: typeof window !== 'undefined'
     ? Math.max(540, Math.min(800, Math.floor(window.innerWidth * 0.35))) // Right 35%, min 540px (for config-tabs), max 800px
     : 540,

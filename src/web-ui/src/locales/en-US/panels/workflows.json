@@ -1,0 +1,148 @@
+{
+  "title": "Workflows",
+  "search": {
+    "placeholder": "Search workflows..."
+  },
+  "actions": {
+    "create": "Create Workflow",
+    "run": "Run",
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "export": "Export",
+    "enable": "Enable",
+    "disable": "Disable",
+    "save": "Save",
+    "cancel": "Cancel",
+    "test": "Test Run",
+    "nextStep": "Next",
+    "prevStep": "Back",
+    "addAgent": "Add Agent",
+    "removeAgent": "Remove",
+    "editAgent": "Edit Agent",
+    "saveAgent": "Save Agent",
+    "aiGeneratePrompt": "AI Generate Prompt",
+    "browseTemplates": "Browse Templates",
+    "copyYaml": "Copy YAML",
+    "exportFile": "Export File"
+  },
+  "groups": {
+    "user": "My Workflows",
+    "project": "Project Workflows"
+  },
+  "empty": {
+    "title": "No Workflows",
+    "description": "Create a workflow to combine Agents, Skills, and Tools for your use case",
+    "createFirst": "Create Your First Workflow"
+  },
+  "card": {
+    "agents": "{{count}} agent(s)",
+    "tools": "{{count}} tools",
+    "skills": "{{count}} skills",
+    "disabled": "Disabled"
+  },
+  "trigger": {
+    "manual": "Manual",
+    "slash_command": "Slash Command",
+    "hotkey": "Hotkey"
+  },
+  "role": {
+    "orchestrator": "Orchestrator",
+    "worker": "Worker",
+    "reviewer": "Reviewer"
+  },
+  "roleDesc": {
+    "orchestrator": "Coordinates and delegates tasks",
+    "worker": "Executes tasks and operations",
+    "reviewer": "Reviews and validates results"
+  },
+  "pattern": {
+    "single": "Single",
+    "pipeline": "Pipeline",
+    "fan_out": "Fan-out",
+    "supervisor": "Supervisor",
+    "team": "Team"
+  },
+  "patternDesc": {
+    "single": "One agent completes the task independently",
+    "pipeline": "Agents execute sequentially in order",
+    "fan_out": "Multiple agents work in parallel, results merged",
+    "supervisor": "Orchestrator dynamically delegates to workers",
+    "team": "Agents communicate and collaborate freely"
+  },
+  "editor": {
+    "title": "Edit Workflow",
+    "createTitle": "Create Workflow",
+    "steps": {
+      "basic": "Basic Info",
+      "agents": "Agents",
+      "orchestration": "Orchestration",
+      "preview": "Preview"
+    },
+    "basic": {
+      "name": "Name",
+      "namePlaceholder": "Enter workflow name...",
+      "displayName": "Display Name",
+      "displayNamePlaceholder": "Enter display name...",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe what this workflow does...",
+      "icon": "Icon",
+      "tags": "Tags",
+      "tagsPlaceholder": "Type and press Enter to add tag...",
+      "trigger": "Trigger",
+      "triggerCommand": "Command",
+      "triggerCommandPlaceholder": "/command",
+      "triggerHotkey": "Hotkey",
+      "triggerHotkeyPlaceholder": "Ctrl+Shift+...",
+      "location": "Scope",
+      "locationUser": "User-level (available in all projects)",
+      "locationProject": "Project-level (current project only)"
+    },
+    "agent": {
+      "name": "Name",
+      "namePlaceholder": "Enter agent name...",
+      "role": "Role",
+      "model": "Model",
+      "prompt": "Prompt (Agent Definition)",
+      "promptPlaceholder": "Describe this agent's responsibilities and behavior...",
+      "tools": "Tools",
+      "toolsSearch": "Search tools...",
+      "skills": "Skills",
+      "readonly": "Read-only mode (cannot modify files)",
+      "maxTurns": "Max Turns",
+      "advanced": "Advanced Settings",
+      "selectedTools": "Selected: {{count}} tools",
+      "selectedSkills": "Selected: {{count}} skills",
+      "refExisting": "Reference Existing Agent"
+    },
+    "orchestration": {
+      "title": "Choose how agents collaborate",
+      "supervisorAgent": "Supervisor Agent",
+      "workerAgents": "Worker Agents",
+      "maxDepth": "Max Delegation Depth",
+      "topologyPreview": "Topology Preview"
+    },
+    "topology": {
+      "input": "Input",
+      "output": "Output",
+      "empty": "Add agents first"
+    },
+    "preview": {
+      "title": "Workflow Summary",
+      "trigger": "Trigger",
+      "pattern": "Pattern",
+      "location": "Scope",
+      "agentSummary": "Agents",
+      "yamlPreview": "Source Preview (YAML)"
+    }
+  },
+  "notifications": {
+    "createSuccess": "Workflow created successfully",
+    "updateSuccess": "Workflow updated successfully",
+    "deleteSuccess": "Workflow deleted",
+    "deleteConfirm": "Delete workflow \"{{name}}\"?",
+    "enableSuccess": "Workflow enabled",
+    "disableSuccess": "Workflow disabled",
+    "launchSuccess": "Workflow launched"
+  }
+}

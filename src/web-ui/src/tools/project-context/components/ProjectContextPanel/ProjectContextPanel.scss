@@ -55,8 +55,8 @@
         bottom: 0;
         left: $size-gap-3;
         right: $size-gap-3;
-        height: 1px;
-        background: var(--border-subtle, rgba(255, 255, 255, 0.06));
+        height: 0;
+        border-top: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.06));
       }
     }
 
@@ -70,7 +70,7 @@
       justify-content: center;
       padding: 7px $size-gap-3;
       border-radius: 6px;
-      font-size: $font-size-sm;
+      font-size: $font-size-xs;
       font-weight: $font-weight-normal;
       color: var(--color-text-muted);
       border-bottom: none;
@@ -137,7 +137,7 @@
     gap: $size-gap-2;
     padding: 40px 20px;
     color: var(--color-text-muted);
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
   }
 
   // ==================== Document view ====================
@@ -171,7 +171,7 @@
     border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.1));
     border-radius: 4px;
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: 10px;
     cursor: pointer;
     transition: all 0.15s ease;
     flex-shrink: 0;

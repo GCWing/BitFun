@@ -164,7 +164,7 @@ html, body {
     content: '';
     position: absolute;
     top: 0;
-    left: -100%;
+    left: 0;
     width: 100%;
     height: 100%;
     background: linear-gradient(90deg, 
@@ -175,12 +175,13 @@ html, body {
     animation: shimmer 8s ease-in-out infinite;
     pointer-events: none;
     z-index: $z-decoration;
+    will-change: transform;
   }
   
   // Startup sweep glow from left to right
   &.bitfun-header--sweep-glow {
     &::after {
-      left: -50%;
+      left: 0;
       width: 50%;
       height: 100%;
       background: linear-gradient(
@@ -196,7 +197,7 @@ html, body {
   }
   
   // Ensure content sits above visual effects
-  > * {
+  > *:not(.bitfun-header-center) {
     position: relative;
     z-index: 1;
   }
@@ -309,24 +310,24 @@ html, body {
 // ==================== Animations ====================
 @keyframes shimmer {
   0%, 100% {
-    left: -100%;
+    transform: translateX(-100%);
   }
   50% {
-    left: 100%;
+    transform: translateX(100%);
   }
 }
 
 // Startup sweep glow: icy blue band from left to right, no delay.
 @keyframes header-sweep-glow {
   0% {
-    left: -50%;
-    opacity: 1;  // Visible immediately without fade-in
+    transform: translateX(-100%);
+    opacity: 1;
   }
   95% {
     opacity: 1;
   }
   100% {
-    left: 100%;
+    transform: translateX(300%);
     opacity: 0;
   }
 }

@@ -6,7 +6,6 @@
   width: 22px;
   height: 22px;
   transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
-  will-change: transform;
 
   &__image {
     width: 100%;
@@ -17,6 +16,7 @@
 
   &:hover,
   &--hover {
+    will-change: transform;
     transform: scale(1.1);
     
     .agent-orb-logo__image {

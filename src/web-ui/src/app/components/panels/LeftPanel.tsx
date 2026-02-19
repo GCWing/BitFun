@@ -16,6 +16,7 @@ import { ProjectContextPanel } from '../../../tools/project-context';
 import { FilesPanel } from './';
 import SessionsPanel from './SessionsPanel';
 import TerminalSessionsPanel from './TerminalSessionsPanel';
+import { WorkflowsPanel } from './workflows';
 
 import './LeftPanel.scss';
 
@@ -29,7 +30,7 @@ interface LeftPanelProps {
 }
 
 /** Panels that are always mounted for instant response. */
-const ALWAYS_MOUNT: Set<PanelType> = new Set(['sessions', 'files', 'terminal']);
+const ALWAYS_MOUNT: Set<PanelType> = new Set(['sessions', 'workflows', 'files', 'terminal']);
 
 const LeftPanel: React.FC<LeftPanelProps> = ({
   activeTab,
@@ -59,6 +60,10 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
     >
       <div style={{ display: activeTab === 'sessions' ? 'block' : 'none', height: '100%' }}>
         <SessionsPanel />
+      </div>
+
+      <div style={{ display: activeTab === 'workflows' ? 'block' : 'none', height: '100%' }}>
+        <WorkflowsPanel />
       </div>
 
       <div style={{ display: activeTab === 'files' ? 'block' : 'none', height: '100%' }}>

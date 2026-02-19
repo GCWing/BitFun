@@ -6,6 +6,10 @@ import { useI18n } from '@/infrastructure/i18n';
 import ConfigCenterPanel from '@/infrastructure/config/components/ConfigCenterPanel';
 import { createLogger } from '@/shared/utils/logger';
 
+const WorkflowEditorPanel = React.lazy(() => 
+  import('../workflows/WorkflowEditor')
+);
+
 const log = createLogger('FlexiblePanel');
 
 // Stable lazy components at module level to avoid re-creation on each render
@@ -654,6 +658,14 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
       case 'config-center':
         const configData = content.data || {};
         return <ConfigCenterPanel initialTab={configData.initialTab || 'models'} />;
+
+      case 'workflow-editor':
+        const wfData = content.data || {};
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading Workflow Editor...</div>}>
+            <WorkflowEditorPanel workflowId={wfData.workflowId} />
+          </React.Suspense>
+        );
 
       case 'task-detail':
         const taskDetailData = content.data || {};

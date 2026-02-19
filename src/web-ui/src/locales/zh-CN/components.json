@@ -513,7 +513,8 @@
     "flowChatInitFailed": "初始化失败，请刷新页面重试"
   },
   "bottomBar": {
-    "sessions": "会话列表",
+    "sessions": "Agent 工作台",
+    "workflows": "工作流",
     "files": "文件树",
     "terminal": "终端",
     "projectContext": "工程上下文",

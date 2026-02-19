@@ -1,5 +1,5 @@
 {
-  "title": "会话列表",
+  "title": "Agent 工作台",
   "search": {
     "placeholder": "搜索会话标题或内容..."
   },
@@ -13,6 +13,10 @@
     "editTitle": "编辑标题",
     "deleteSession": "删除会话",
     "doubleClickToEdit": "双击编辑标题"
+  },
+  "views": {
+    "sessions": "会话列表",
+    "capabilities": "能力中心"
   },
   "groups": {
     "recent": "最近",
@@ -34,5 +38,30 @@
     "minutesAgo": "{{count}}分钟前",
     "hoursAgo": "{{count}}小时前",
     "daysAgo": "{{count}}天前"
+  },
+  "capabilities": {
+    "skills": "Skill",
+    "subagents": "SubAgent",
+    "mcp": "MCP",
+    "refresh": "刷新能力状态",
+    "reconnect": "重连",
+    "mcpWarning": "{{count}} 个 MCP 服务状态异常",
+    "mcpWarningShort": "MCP 异常 {{count}}",
+    "loadFailed": "能力状态加载失败",
+    "toggleFailed": "能力开关更新失败",
+    "mcpReconnectSuccess": "{{name}} 重连成功",
+    "mcpReconnectFailed": "{{name}} 重连失败",
+    "unknownSkill": "未知 Skill",
+    "unknownSubagent": "未知 SubAgent",
+    "unknownMcpServer": "未知 MCP 服务",
+    "emptySkills": "暂无 Skill，可在设置中添加",
+    "emptySubagents": "暂无 SubAgent",
+    "emptyMcp": "暂无 MCP 服务",
+    "path": "路径",
+    "toolCount": "工具数",
+    "serverType": "类型",
+    "clickToCopy": "点击复制路径",
+    "pathCopied": "路径已复制",
+    "pathCopyFailed": "复制路径失败"
   }
 }

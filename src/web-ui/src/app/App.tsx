@@ -215,7 +215,7 @@ function App() {
   // Unified layout via a single AppLayout
   return (
     <ChatProvider>
-      <ViewModeProvider defaultMode="agentic">
+      <ViewModeProvider defaultMode="coder">
         <ToolbarModeProvider>
           {/* Onboarding overlay (first launch) */}
           {isOnboardingActive && (

@@ -63,6 +63,7 @@ export class ToolExecutionService {
   private activeExecutions: Map<string, ToolExecutionInfo> = new Map();
   private processedEvents: Set<string> = new Set(); 
   private listenersSetup: boolean = false;
+  private cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
   static getInstance(): ToolExecutionService {
     if (!ToolExecutionService.instance) {
@@ -74,12 +75,22 @@ export class ToolExecutionService {
   private constructor() {
     this.setupEventListeners();
     
-    
-    setInterval(() => {
+    this.cleanupIntervalId = setInterval(() => {
       if (this.processedEvents.size > 1000) {
         this.processedEvents.clear();
       }
-    }, 60000); 
+    }, 60000);
+  }
+
+  destroy(): void {
+    if (this.cleanupIntervalId !== null) {
+      clearInterval(this.cleanupIntervalId);
+      this.cleanupIntervalId = null;
+    }
+    this.eventHandlers.clear();
+    this.activeExecutions.clear();
+    this.processedEvents.clear();
+    ToolExecutionService.instance = null;
   }
 
   private async setupEventListeners() {

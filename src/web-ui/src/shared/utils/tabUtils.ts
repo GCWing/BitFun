@@ -221,6 +221,30 @@ export function createConfigCenterTab(
 }
 
  
+export function createWorkflowEditorTab(
+  workflowId?: string,
+  workflowName?: string,
+  mode: 'agent' | 'project' = 'agent'
+): void {
+  const title = workflowId
+    ? `${workflowName || workflowId}`
+    : i18nService.getT()('panels/workflows:editor.createTitle');
+  const duplicateKey = workflowId
+    ? `workflow-editor:${workflowId}`
+    : `workflow-editor:new-${Date.now()}`;
+
+  createTab({
+    type: 'workflow-editor',
+    title,
+    data: { workflowId },
+    metadata: { isWorkflowEditor: true, workflowId },
+    checkDuplicate: !!workflowId,
+    duplicateCheckKey: duplicateKey,
+    replaceExisting: true,
+    mode
+  });
+}
+
 export function createTerminalTab(
   sessionId: string,
   sessionName: string,

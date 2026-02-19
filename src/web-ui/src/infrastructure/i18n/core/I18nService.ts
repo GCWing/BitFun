@@ -32,6 +32,7 @@ import zhCNNotifications from '../../../locales/zh-CN/notifications.json';
 import zhCNComponents from '../../../locales/zh-CN/components.json';
 
 import zhCNPanelsSessions from '../../../locales/zh-CN/panels/sessions.json';
+import zhCNPanelsWorkflows from '../../../locales/zh-CN/panels/workflows.json';
 import zhCNPanelsFiles from '../../../locales/zh-CN/panels/files.json';
 import zhCNPanelsGit from '../../../locales/zh-CN/panels/git.json';
 import zhCNPanelsProjectContext from '../../../locales/zh-CN/panels/project-context.json';
@@ -68,6 +69,7 @@ import enUSNotifications from '../../../locales/en-US/notifications.json';
 import enUSComponents from '../../../locales/en-US/components.json';
 
 import enUSPanelsSessions from '../../../locales/en-US/panels/sessions.json';
+import enUSPanelsWorkflows from '../../../locales/en-US/panels/workflows.json';
 import enUSPanelsFiles from '../../../locales/en-US/panels/files.json';
 import enUSPanelsGit from '../../../locales/en-US/panels/git.json';
 import enUSPanelsProjectContext from '../../../locales/en-US/panels/project-context.json';
@@ -111,6 +113,7 @@ const resources = {
     components: zhCNComponents,
     
     'panels/sessions': zhCNPanelsSessions,
+    'panels/workflows': zhCNPanelsWorkflows,
     'panels/files': zhCNPanelsFiles,
     'panels/git': zhCNPanelsGit,
     'panels/project-context': zhCNPanelsProjectContext,
@@ -148,6 +151,7 @@ const resources = {
     components: enUSComponents,
     
     'panels/sessions': enUSPanelsSessions,
+    'panels/workflows': enUSPanelsWorkflows,
     'panels/files': enUSPanelsFiles,
     'panels/git': enUSPanelsGit,
     'panels/project-context': enUSPanelsProjectContext,
@@ -208,6 +212,7 @@ export class I18nService {
           'components',
           
           'panels/sessions',
+          'panels/workflows',
           'panels/files',
           'panels/git',
           'panels/project-context',

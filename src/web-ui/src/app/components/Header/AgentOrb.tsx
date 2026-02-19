@@ -6,6 +6,7 @@ import './AgentOrb.scss';
 interface AgentOrbProps {
   isAgenticMode: boolean;
   onToggle: () => void;
+  tooltipText?: string;
 }
 
 /**
@@ -13,13 +14,13 @@ interface AgentOrbProps {
  * Used to toggle between Agentic and Editor modes.
  * Uses the product logo icon.
  */
-export const AgentOrb: React.FC<AgentOrbProps> = ({ isAgenticMode, onToggle }) => {
+export const AgentOrb: React.FC<AgentOrbProps> = ({ isAgenticMode, onToggle, tooltipText }) => {
   const { t } = useTranslation('common');
-  const tooltipText = isAgenticMode ? t('header.hideAgentic') : t('header.activateAgentic');
+  const resolvedTooltipText = tooltipText ?? (isAgenticMode ? t('header.hideAgentic') : t('header.activateAgentic'));
   const [isHovered, setIsHovered] = useState(false);
   
   return (
-    <Tooltip content={tooltipText} placement="bottom">
+    <Tooltip content={resolvedTooltipText} placement="bottom">
       <div 
         className={`agent-orb-logo ${isHovered ? 'agent-orb-logo--hover' : ''} ${isAgenticMode ? 'agent-orb-logo--active' : ''}`}
         onClick={onToggle}

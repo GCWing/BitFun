@@ -31,7 +31,7 @@
   }
 
   &__loading-text {
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
     color: var(--color-text-muted);
   }
 
@@ -84,7 +84,7 @@
   }
 
   &__module-label {
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
     color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;

@@ -24,6 +24,7 @@ export type PanelContentType =
   | 'git-branch-history'
   | 'ai-session'
   | 'config-center'
+  | 'workflow-editor'
   | 'planner'
   | 'task-detail'
   | 'plan-viewer'

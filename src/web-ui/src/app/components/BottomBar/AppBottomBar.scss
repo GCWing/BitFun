@@ -430,10 +430,12 @@ $_input-min-height: 32px;
   // Breathing animation in collapsed state
   .bitfun-bottom-bar:not(.is-expanded) &:not(.is-focused):not(:hover):not(.is-processing):not(.has-content):not(:focus-within):not(.is-pinned-expanded):not(.is-global-expanded)::before {
     animation: outerRingBreath 3s ease-in-out infinite;
+    will-change: opacity, transform;
   }
 
   .bitfun-bottom-bar:not(.is-expanded) &:not(.is-focused):not(:hover):not(.is-processing):not(.has-content):not(:focus-within):not(.is-pinned-expanded):not(.is-global-expanded)::after {
     animation: innerRingBreath 3s ease-in-out infinite 0.5s;
+    will-change: opacity, transform;
   }
 
   // Hide rings on hover/focus
@@ -928,12 +930,10 @@ $_input-min-height: 32px;
   0%, 100% {
     opacity: 0.3;
     transform: scale(1);
-    border-color: rgba(255, 255, 255, 0.08);
   }
   50% {
     opacity: 0.6;
     transform: scale(1.05);
-    border-color: rgba(255, 255, 255, 0.15);
   }
 }
 
@@ -941,12 +941,10 @@ $_input-min-height: 32px;
   0%, 100% {
     opacity: 0.2;
     transform: translate(-50%, -50%) scale(1);
-    border-color: rgba(255, 255, 255, 0.05);
   }
   50% {
     opacity: 0.5;
     transform: translate(-50%, -50%) scale(1.1);
-    border-color: rgba(255, 255, 255, 0.12);
   }
 }
 
@@ -954,13 +952,10 @@ $_input-min-height: 32px;
   0%, 100% {
     opacity: 0.6;
     transform: scale(1);
-    border-color: var(--color-accent-300);
   }
   50% {
     opacity: 1;
     transform: scale(1.15);
-    border-color: var(--color-accent-700);
-    box-shadow: 0 0 20px $color-accent-300;
   }
 }
 
@@ -968,13 +963,10 @@ $_input-min-height: 32px;
   0%, 100% {
     opacity: 0.5;
     transform: translate(-50%, -50%) scale(1);
-    border-color: var(--color-purple-400);
   }
   50% {
     opacity: 0.9;
     transform: translate(-50%, -50%) scale(1.2);
-    border-color: rgba(139, 92, 246, 0.9);
-    box-shadow: 0 0 15px $color-purple-300;
   }
 }
 
@@ -982,12 +974,10 @@ $_input-min-height: 32px;
   0%, 100% {
     opacity: 0.6;
     transform: scaleY(1);
-    box-shadow: 0 0 10px $color-accent-300;
   }
   50% {
     opacity: 1;
     transform: scaleY(1.5);
-    box-shadow: 0 0 20px $color-accent-400;
   }
 }
 
@@ -995,12 +985,10 @@ $_input-min-height: 32px;
   0%, 100% {
     opacity: 0.8;
     transform: scaleY(1.5);
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
   }
   50% {
     opacity: 1;
     transform: scaleY(2);
-    box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
   }
 }
 
