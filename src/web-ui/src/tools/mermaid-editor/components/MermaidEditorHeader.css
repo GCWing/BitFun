@@ -7,10 +7,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
+  height: 40px;
   padding: 0 var(--size-gap-3, 12px);
-  background: var(--color-bg-secondary, #18181a);
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  background: var(--mermaid-bg, var(--color-bg-primary, #121214));
+  border-bottom: none;
   flex-shrink: 0;
 }
 
@@ -46,7 +46,7 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--size-radius-sm, 6px);
-  color: var(--color-text-secondary, #a0a0a0);
+  color: var(--color-text-primary, #e8e8e8);
   font-size: var(--font-size-xs, 12px);
   font-weight: 500;
   cursor: pointer;
@@ -89,7 +89,7 @@
 /* Ensure default button styles in action-controls */
 .action-controls .icon-btn {
   background: transparent !important;
-  color: var(--color-text-secondary, #a0a0a0) !important;
+  color: var(--color-text-primary, #e8e8e8) !important;
 }
 
 .action-controls .icon-btn:hover:not(:disabled) {
@@ -172,7 +172,7 @@
   min-width: 36px;
   text-align: center;
   font-size: var(--font-size-xs, 11px);
-  color: var(--color-text-muted, #707070);
+  color: var(--color-text-secondary, #a0a0a0);
   font-family: var(--font-family-mono, monospace);
 }
 
@@ -180,7 +180,7 @@
 .edit-mode-btn {
   position: relative;
   background: transparent !important;
-  color: var(--color-text-secondary, #a0a0a0) !important;
+  color: var(--color-text-primary, #e8e8e8) !important;
 }
 
 .edit-mode-btn:hover:not(.active) {
@@ -189,27 +189,19 @@
 }
 
 .edit-mode-btn.active {
-  background: var(--mermaid-highlight-stroke, rgba(96, 165, 250, 0.15)) !important;
-  color: var(--mermaid-highlight-stroke, #60a5fa) !important;
-  border-color: var(--mermaid-highlight-stroke, rgba(96, 165, 250, 0.3));
+  background: var(--color-accent-100, rgba(96, 165, 250, 0.16)) !important;
+  color: var(--color-text-primary, #e8e8e8) !important;
+  border-color: var(--border-accent-subtle, rgba(59, 130, 246, 0.25));
 }
 
 .edit-mode-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  background: var(--mermaid-highlight-stroke, #60a5fa);
-  border-radius: 50%;
+  content: none;
 }
 
 /* Ensure default colors for inactive buttons */
 .mermaid-editor-header .icon-btn {
   background: transparent;
-  color: var(--color-text-secondary, #a0a0a0);
+  color: var(--color-text-primary, #e8e8e8);
 }
 
 .mermaid-editor-header .icon-btn:hover:not(:disabled):not(.active) {
@@ -224,7 +216,7 @@
 
 .save-btn {
   background: transparent !important;
-  color: var(--color-text-secondary, #a0a0a0) !important;
+  color: var(--color-text-primary, #e8e8e8) !important;
 }
 
 .save-btn:hover:not(:disabled):not(.dirty) {
@@ -243,7 +235,7 @@
 
 .export-btn {
   background: transparent !important;
-  color: var(--color-text-secondary, #a0a0a0) !important;
+  color: var(--color-text-primary, #e8e8e8) !important;
 }
 
 .export-btn:hover:not(:disabled) {
@@ -309,7 +301,7 @@
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
   .mermaid-editor-header {
-    height: 40px;
+    height: 36px;
     padding: 0 var(--size-gap-2, 8px);
   }
 

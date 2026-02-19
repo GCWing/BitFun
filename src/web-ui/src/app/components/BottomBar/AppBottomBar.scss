@@ -102,11 +102,292 @@ $_input-min-height: 32px;
 // ==================== Tab area ====================
 
 .bitfun-bottom-bar__tabs {
-  @include mixins.flex-layout(row, center, start, $size-gap-2);
+  @include mixins.flex-layout(row, center, start, 0);
   flex-shrink: 0;
+  gap: 1px;
 }
 
-// ==================== Tab buttons ====================
+// ==================== Anchor buttons (Sessions & Files — always visible) ====================
+
+.bitfun-bottom-bar__anchor-button {
+  @include mixins.flex-layout(row, center, center);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: $size-radius-sm;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color $motion-base $easing-smooth, transform $motion-base $easing-smooth;
+  position: relative;
+  flex-shrink: 0;
+
+  // Persistent bottom indicator bar
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 14px;
+    height: 2px;
+    border-radius: 1px;
+    transition: transform 0.2s $easing-smooth, opacity 0.2s $easing-smooth;
+    opacity: 0;
+  }
+
+  &--ai::after {
+    background: linear-gradient(90deg, $color-accent-400, $color-purple-400);
+  }
+
+  &--dev::after {
+    background: linear-gradient(90deg, $color-accent-500, rgba(59, 130, 246, 0.6));
+  }
+
+  &:hover {
+    color: var(--color-text-secondary);
+
+    // Dual-icon morph: hide inactive, show active
+    .bitfun-bottom-bar__icon-inactive { opacity: 0; }
+    .bitfun-bottom-bar__icon-active   { opacity: 1; }
+  }
+
+  &:active {
+    transform: scale(0.93);
+  }
+
+  &.is-active {
+    color: var(--color-text-primary);
+
+    &::after {
+      transform: translateX(-50%) scaleX(1);
+      opacity: 1;
+    }
+
+    // Keep active icon shown
+    .bitfun-bottom-bar__icon-inactive { opacity: 0; pointer-events: none; }
+    .bitfun-bottom-bar__icon-active   { opacity: 1; }
+  }
+
+  &.is-switching {
+    animation: anchorBounce 0.28s $easing-smooth;
+  }
+}
+
+// ==================== Wing toggle arrows ====================
+//
+// Three visual states (icon is swapped in React):
+//   default   — ChevronRight ›, collapsed no pinned item
+//   is-pinned — MoreHorizontal ···, collapsed but active item visible
+//   is-expanded — ChevronLeft ‹, all items visible
+
+.bitfun-bottom-bar__wing-toggle {
+  @include mixins.flex-layout(row, center, center);
+  width: 9px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 0.18s ease, color $motion-base $easing-smooth, width 0.2s $easing-smooth;
+
+  svg {
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover {
+    color: var(--color-text-secondary);
+    opacity: 0.9;
+  }
+
+  // Collapsed + has pinned active item: show ··· (MoreHorizontal), narrow + dimmer
+  &.is-pinned {
+    width: 11px;
+    opacity: 0.38;
+
+    &:hover {
+      opacity: 0.75;
+    }
+  }
+
+  // Wing is expanded: show ‹ (ChevronLeft), more prominent
+  &.is-expanded {
+    opacity: 0.72;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  // AI domain accent tint when expanded
+  &--ai.is-expanded {
+    color: $color-accent-400;
+  }
+
+  // Dev domain accent tint when expanded
+  &--dev.is-expanded {
+    color: rgba(59, 130, 246, 0.85);
+  }
+}
+
+// ==================== Pinned active wing item (always visible outside the grid) ====================
+
+.bitfun-bottom-bar__wing-pinned {
+  @include mixins.flex-layout(row, center, center);
+  flex-shrink: 0;
+
+  // Spring entry animation when a new item is pinned (React remounts via key prop)
+  animation: wingPinnedEnter 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes wingPinnedEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.72) translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+// AI-domain pinned items get an accent tint on the indicator bar
+.bitfun-bottom-bar__wing-pinned--ai .bitfun-bottom-bar__wing-item.is-active::after {
+  background: linear-gradient(90deg, $color-accent-400, $color-purple-400);
+}
+
+// Dev-domain pinned items get a blue tint
+.bitfun-bottom-bar__wing-pinned--dev .bitfun-bottom-bar__wing-item.is-active::after {
+  background: linear-gradient(90deg, $color-accent-500, rgba(59, 130, 246, 0.6));
+}
+
+// ==================== Wing container (slide expand/collapse) ====================
+
+.bitfun-bottom-bar__wing {
+  display: grid;
+  grid-template-columns: 0fr;
+  overflow: hidden;
+  transition: grid-template-columns 0.22s $easing-smooth;
+
+  &.is-expanded {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bitfun-bottom-bar__wing-inner {
+  overflow: hidden;
+  @include mixins.flex-layout(row, center, start, 2px);
+  padding: 0 2px;
+  min-width: 0;
+
+  // Fade items in slightly after the grid clip finishes expanding
+  opacity: 0;
+  transition: opacity 0.12s ease 0.1s;
+
+  .bitfun-bottom-bar__wing.is-expanded & {
+    opacity: 1;
+    transition-delay: 0.08s;
+  }
+}
+
+// ==================== Wing item buttons ====================
+
+.bitfun-bottom-bar__wing-item {
+  @include mixins.flex-layout(row, center, center);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: $size-radius-sm;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color $motion-base $easing-smooth, background $motion-base $easing-smooth;
+  flex-shrink: 0;
+  position: relative;
+
+  &:hover {
+    color: var(--color-text-secondary);
+    background: var(--element-bg-subtle);
+
+    // Dual-icon morph
+    .bitfun-bottom-bar__icon-inactive { opacity: 0; }
+    .bitfun-bottom-bar__icon-active   { opacity: 1; }
+  }
+
+  &:active {
+    transform: scale(0.93);
+  }
+
+  &.is-active {
+    color: var(--color-text-primary);
+    background: var(--element-bg-medium);
+
+    .bitfun-bottom-bar__icon-inactive { opacity: 0; pointer-events: none; }
+    .bitfun-bottom-bar__icon-active   { opacity: 1; }
+  }
+
+  &.is-switching {
+    animation: anchorBounce 0.28s $easing-smooth;
+  }
+
+  // Pinned item: sits outside the collapsible grid, always visible
+  // Add a subtle bottom bar (accent line) to reinforce active state
+  &--pinned {
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%) scaleX(0);
+      width: 10px;
+      height: 2px;
+      border-radius: 1px;
+      background: linear-gradient(90deg, $color-accent-400, $color-purple-400);
+      transition: transform 0.18s $easing-smooth, opacity 0.18s $easing-smooth;
+      opacity: 0;
+    }
+
+    &.is-active::after {
+      transform: translateX(-50%) scaleX(1);
+      opacity: 1;
+    }
+  }
+}
+
+// ==================== Wing dot separator ====================
+
+.bitfun-bottom-bar__wing-dot-sep {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+  margin: 0 1px;
+  opacity: 0.5;
+}
+
+// ==================== Domain separator (vertical line between AI and Dev) ====================
+
+.bitfun-bottom-bar__domain-sep {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+  margin: 0 2px;
+  opacity: 0.35;
+  border-radius: 1px;
+}
+
+// ==================== Tab buttons (legacy — kept for backward compat) ====================
 
 .bitfun-bottom-bar__tab-button {
   @include mixins.flex-layout(row, center, center);
@@ -122,7 +403,6 @@ $_input-min-height: 32px;
   overflow: hidden;
   transform-origin: center;
 
-  // Inner glow effect
   &::before {
     content: '';
     position: absolute;
@@ -130,8 +410,8 @@ $_input-min-height: 32px;
     left: 1px;
     right: 1px;
     bottom: 1px;
-    background: linear-gradient(135deg, 
-      rgba(255, 255, 255, 0.03) 0%, 
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.03) 0%,
       $color-accent-50 50%,
       rgba(255, 255, 255, 0.01) 100%);
     border-radius: 6px;
@@ -140,15 +420,14 @@ $_input-min-height: 32px;
     pointer-events: none;
   }
 
-  // Click ripple effect
   &::after {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
     @include mixins.size(0);
-    background: radial-gradient(circle, 
-      rgba(156, 163, 175, 0.15) 0%, 
+    background: radial-gradient(circle,
+      rgba(156, 163, 175, 0.15) 0%,
       $color-accent-100 30%,
       transparent 70%);
     border-radius: 50%;
@@ -168,7 +447,6 @@ $_input-min-height: 32px;
     background: transparent;
   }
 
-  // Active state
   &.is-active {
     color: var(--color-text-primary);
     background: transparent;
@@ -184,13 +462,18 @@ $_input-min-height: 32px;
   }
 }
 
+// Shared hover-parent selector — covers legacy tab-button, new anchor-button and wing-item
+$_btn-hover: '.bitfun-bottom-bar__tab-button:hover, .bitfun-bottom-bar__anchor-button:hover, .bitfun-bottom-bar__wing-item:hover';
+$_btn-active: '.bitfun-bottom-bar__tab-button.is-active, .bitfun-bottom-bar__anchor-button.is-active, .bitfun-bottom-bar__wing-item.is-active';
+$_btn-active-hover: '.bitfun-bottom-bar__tab-button.is-active:hover, .bitfun-bottom-bar__anchor-button.is-active:hover, .bitfun-bottom-bar__wing-item.is-active:hover';
+$_btn-press: '.bitfun-bottom-bar__tab-button:active, .bitfun-bottom-bar__anchor-button:active, .bitfun-bottom-bar__wing-item:active';
+
 // Tab icon
 .bitfun-bottom-bar__tab-icon {
   @include mixins.flex-layout(row, center, center);
   transition: transform $motion-base $easing-smooth;
   position: relative;
 
-  // SVG icon style - default stroke
   svg {
     stroke: currentColor;
     fill: none;
@@ -198,21 +481,21 @@ $_input-min-height: 32px;
     transition: all 0.3s $easing-smooth;
   }
 
-  // Increase stroke on hover to mimic fill while preserving clarity
-  .bitfun-bottom-bar__tab-button:hover & {
+  // Increase stroke on hover
+  #{$_btn-hover} & {
     svg {
       stroke-width: 2.5;
     }
   }
 
   // Increase stroke on active state
-  .bitfun-bottom-bar__tab-button.is-active & {
+  #{$_btn-active} & {
     svg {
       stroke-width: 2.2;
     }
   }
 
-  .bitfun-bottom-bar__tab-button:active & {
+  #{$_btn-press} & {
     transform: scale(0.95);
   }
 
@@ -223,7 +506,17 @@ $_input-min-height: 32px;
   }
 }
 
-// Inactive icon
+// Anchor buttons (15px icons) need a 15px dual-icon container
+.bitfun-bottom-bar__anchor-button .bitfun-bottom-bar__tab-icon--dual {
+  @include mixins.size(15px);
+}
+
+// Wing items (13px icons) get a 13px container
+.bitfun-bottom-bar__wing-item .bitfun-bottom-bar__tab-icon--dual {
+  @include mixins.size(13px);
+}
+
+// Inactive icon — visible by default, hides on hover/active
 .bitfun-bottom-bar__icon-inactive {
   @include mixins.flex-layout(row, center, center);
   position: absolute;
@@ -239,23 +532,23 @@ $_input-min-height: 32px;
     transition: all 0.3s $easing-smooth;
   }
 
-  // On hover: hide
-  .bitfun-bottom-bar__tab-button:hover & {
+  // On hover: fade out
+  #{$_btn-hover} & {
     opacity: 0;
-    
+
     svg {
       stroke-width: 2;
     }
   }
 
-  // On active: fully hidden
-  .bitfun-bottom-bar__tab-button.is-active & {
+  // On active: hidden
+  #{$_btn-active} & {
     opacity: 0;
     pointer-events: none;
   }
 }
 
-// Active icon
+// Active icon — hidden by default, shows on hover/active
 .bitfun-bottom-bar__icon-active {
   @include mixins.flex-layout(row, center, center);
   position: absolute;
@@ -271,26 +564,26 @@ $_input-min-height: 32px;
     transition: all 0.3s $easing-smooth;
   }
 
-  // On hover: show
-  .bitfun-bottom-bar__tab-button:hover & {
+  // On hover: fade in
+  #{$_btn-hover} & {
     opacity: 1;
-    
+
     svg {
       stroke-width: 2.5;
     }
   }
 
   // On active: fully shown
-  .bitfun-bottom-bar__tab-button.is-active & {
+  #{$_btn-active} & {
     opacity: 1;
-    
+
     svg {
       stroke-width: 2.2;
     }
   }
 
-  // On active hover
-  .bitfun-bottom-bar__tab-button.is-active:hover & {
+  // On active + hover
+  #{$_btn-active-hover} & {
     svg {
       stroke-width: 2.5;
     }
@@ -913,6 +1206,13 @@ $_input-min-height: 32px;
 }
 
 // ==================== Animations ====================
+
+@keyframes anchorBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.88); }
+  70%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
 
 @keyframes tabSwitchBounce {
   0% {

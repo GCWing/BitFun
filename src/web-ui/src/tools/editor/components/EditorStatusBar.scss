@@ -19,10 +19,7 @@ $_section-gap: 12px;
   justify-content: space-between;
   height: $_statusbar-height;
   padding: $_statusbar-padding;
-  background: linear-gradient(180deg, 
-    color-mix(in srgb, var(--color-bg-tertiary) 95%, transparent) 0%,
-    var(--color-bg-tertiary) 100%
-  );
+  background: var(--color-bg-primary);
   border-top: 1px solid var(--color-border-subtle);
   font-size: $_statusbar-font-size;
   font-family: $font-family-mono;
@@ -30,20 +27,6 @@ $_section-gap: 12px;
   user-select: none;
   flex-shrink: 0;
   
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.03) 50%,
-      transparent 100%
-    );
-  }
-
   // Left/Right Sections
   &__left,
   &__right {
@@ -66,12 +49,12 @@ $_section-gap: 12px;
       cursor: pointer;
       
       &:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--color-text-primary);
+        background: var(--element-bg-subtle);
+        color: var(--color-text-secondary);
       }
       
       &:active {
-        background: rgba(255, 255, 255, 0.12);
+        background: var(--element-bg-medium);
       }
     }
   }
@@ -80,7 +63,7 @@ $_section-gap: 12px;
   &__separator {
     width: 1px;
     height: 12px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-border-subtle);
     flex-shrink: 0;
   }
 

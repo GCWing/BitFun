@@ -15,6 +15,7 @@ import { GitPanel } from '../../../tools/git';
 import { ProjectContextPanel } from '../../../tools/project-context';
 import { FilesPanel } from './';
 import SessionsPanel from './SessionsPanel';
+import CapabilitiesPanel from './CapabilitiesPanel';
 import TerminalSessionsPanel from './TerminalSessionsPanel';
 import { WorkflowsPanel } from './workflows';
 
@@ -30,7 +31,7 @@ interface LeftPanelProps {
 }
 
 /** Panels that are always mounted for instant response. */
-const ALWAYS_MOUNT: Set<PanelType> = new Set(['sessions', 'workflows', 'files', 'terminal']);
+const ALWAYS_MOUNT: Set<PanelType> = new Set(['sessions', 'workflows', 'files', 'terminal', 'capabilities']);
 
 const LeftPanel: React.FC<LeftPanelProps> = ({
   activeTab,
@@ -92,6 +93,10 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
 
       <div style={{ display: activeTab === 'terminal' ? 'block' : 'none', height: '100%' }}>
         <TerminalSessionsPanel />
+      </div>
+
+      <div style={{ display: activeTab === 'capabilities' ? 'block' : 'none', height: '100%' }}>
+        <CapabilitiesPanel />
       </div>
     </div>
   );

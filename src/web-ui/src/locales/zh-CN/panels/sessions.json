@@ -40,6 +40,7 @@
     "daysAgo": "{{count}}天前"
   },
   "capabilities": {
+    "panelTitle": "能力中心",
     "skills": "Skill",
     "subagents": "SubAgent",
     "mcp": "MCP",

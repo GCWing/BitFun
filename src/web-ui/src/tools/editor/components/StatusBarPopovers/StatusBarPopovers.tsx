@@ -14,6 +14,7 @@ import {
   FileJson,
   type LucideIcon,
 } from 'lucide-react';
+import { Button, Input } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './StatusBarPopovers.scss';
 
@@ -87,10 +88,12 @@ export const GoToLinePopover: React.FC<GoToLinePopoverProps> = ({
     >
       <div className="status-bar-popover__hint">{t('editor.statusBar.goToLineHint')}</div>
       <div className="status-bar-popover__input-wrap">
-        <input
+        <Input
           ref={inputRef}
           type="text"
           className="status-bar-popover__input"
+          variant="outlined"
+          inputSize="small"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -160,13 +163,16 @@ export const IndentPopover: React.FC<IndentPopoverProps> = ({
             ? t('editor.statusBar.indentOptionSpaces', { n: opt.tabSize })
             : t('editor.statusBar.indentOptionTab', { n: opt.tabSize });
           return (
-            <div
+            <Button
               key={`${opt.insertSpaces ? 's' : 't'}-${opt.tabSize}`}
               className={`status-bar-popover__item ${
                 opt.tabSize === currentTabSize && opt.insertSpaces === currentInsertSpaces
                   ? 'status-bar-popover__item--active'
                   : ''
               }`}
+              variant="ghost"
+              size="small"
+              type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -183,7 +189,7 @@ export const IndentPopover: React.FC<IndentPopoverProps> = ({
               tabIndex={0}
             >
               {label}
-            </div>
+            </Button>
           );
         })}
       </div>
@@ -221,11 +227,14 @@ export const EncodingPopover: React.FC<EncodingPopoverProps> = ({
       <div className="status-bar-popover__hint">{t('editor.statusBar.selectEncoding')}</div>
       <div className="status-bar-popover__list">
         {ENCODING_OPTIONS.map((enc) => (
-          <div
+          <Button
             key={enc}
             className={`status-bar-popover__item ${
               enc === currentEncoding ? 'status-bar-popover__item--active' : ''
             }`}
+            variant="ghost"
+            size="small"
+            type="button"
             onClick={() => {
               onConfirm(enc);
               onClose();
@@ -237,7 +246,7 @@ export const EncodingPopover: React.FC<EncodingPopoverProps> = ({
             tabIndex={0}
           >
             {enc}
-          </div>
+          </Button>
         ))}
       </div>
     </div>,
@@ -330,11 +339,14 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
         {languages.map((lang) => {
           const Icon = getLanguageIcon(lang.id);
           return (
-            <div
+            <Button
               key={lang.id}
               className={`status-bar-popover__item ${
                 lang.id === currentLanguageId ? 'status-bar-popover__item--active' : ''
               }`}
+              variant="ghost"
+              size="small"
+              type="button"
               onClick={() => {
                 onConfirm(lang.id);
                 onClose();
@@ -349,7 +361,7 @@ export const LanguagePopover: React.FC<LanguagePopoverProps> = ({
                 <Icon size={14} strokeWidth={2} />
               </span>
               {getLanguageDisplayName(lang.id, lang.aliases)}
-            </div>
+            </Button>
           );
         })}
       </div>

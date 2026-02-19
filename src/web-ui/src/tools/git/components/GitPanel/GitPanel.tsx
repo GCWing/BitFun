@@ -37,7 +37,7 @@ import { useGitState, useGitOperations, useGitAgent } from '../../hooks';
 import { GitPanelProps } from '../../types';
 import { CreateBranchDialog } from '../CreateBranchDialog';
 import { gitService } from '../../services';
-import { createTab, createDiffEditorTab } from '@/shared/utils/tabUtils';
+import { createTab, createDiffEditorTab, createCodeEditorTab } from '@/shared/utils/tabUtils';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -717,24 +717,26 @@ const GitPanel: React.FC<GitPanelProps> = ({
           }
         }
 
-        let originalContent = '';
-        if (status !== 'Untracked') {
+        if (status === 'Untracked') {
+          createCodeEditorTab(fullPath, fileName, undefined, 'agent');
+        } else {
+          let originalContent = '';
           try {
             originalContent = await gitService.getFileContent(workspacePath, filePath, 'HEAD');
           } catch (error) {
             log.debug('Failed to read HEAD version, might be new file', { filePath, error });
           }
-        }
 
-        createDiffEditorTab(
-          filePath,
-          fileName,
-          originalContent,
-          modifiedContent,
-          false,
-          'agent',
-          workspacePath
-        );
+          createDiffEditorTab(
+            filePath,
+            fileName,
+            originalContent,
+            modifiedContent,
+            false,
+            'agent',
+            workspacePath
+          );
+        }
       } catch (error) {
         log.error('Failed to open file diff', { filePath, status, error });
         const errorMessage = error instanceof Error ? error.message : String(error);

@@ -70,10 +70,10 @@ export const MermaidSyntaxHighlighter: React.FC<MermaidSyntaxHighlighterProps> =
       outline: 'none !important'
     },
     '.cm-gutters': {
-      backgroundColor: 'var(--background-secondary, #151515)',
-      color: 'var(--text-muted, #666666)',
+      backgroundColor: 'var(--color-bg-secondary, #18181a)',
+      color: 'var(--color-text-muted, #707070)',
       border: 'none',
-      borderRight: '1px solid var(--border-color, #333)'
+      borderRight: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))'
     },
     '.cm-lineNumbers .cm-gutterElement': {
       minWidth: '30px',
@@ -83,8 +83,8 @@ export const MermaidSyntaxHighlighter: React.FC<MermaidSyntaxHighlighterProps> =
       backgroundColor: 'rgba(255, 255, 255, 0.05)'
     },
     '.cm-activeLineGutter': {
-      backgroundColor: 'var(--background-secondary, #151515)',
-      color: 'var(--accent-color, #3b82f6)'
+      backgroundColor: 'var(--color-bg-secondary, #18181a)',
+      color: 'var(--color-accent-500, #60a5fa)'
     },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
       backgroundColor: 'rgba(59, 130, 246, 0.3) !important'

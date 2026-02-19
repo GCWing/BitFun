@@ -519,7 +519,10 @@
     "terminal": "Terminal",
     "projectContext": "Project Context",
     "git": "Git",
-    "clickToSelectBranch": "Click to select branch"
+    "capabilities": "Capabilities",
+    "clickToSelectBranch": "Click to select branch",
+    "aiWingExpand": "Expand AI tools",
+    "devWingExpand": "Expand dev tools"
   },
   "canvas": {
     "noContentOpen": "No content open",

@@ -4,13 +4,13 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   /* Use flex-start to prevent content overflow issue with justify-content: center.
      Centering is achieved via ::before/::after pseudo-elements below. */
   justify-content: flex-start;
   padding: 32px 32px 48px 32px;
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
   height: 100%;
   max-height: 100%;
@@ -18,6 +18,17 @@
   overflow-y: auto;
   overflow-x: hidden;
   animation: fadeIn 0.5s ease-out;
+}
+
+/* Keep content constrained while letting scrollbar stay at panel edge. */
+.welcome-panel__content {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* Flexible centering: when content is short, pseudo-elements expand to center content.

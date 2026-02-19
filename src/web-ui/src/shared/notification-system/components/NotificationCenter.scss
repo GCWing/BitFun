@@ -12,7 +12,7 @@
   max-height: calc(100vh - 68px); 
   background: var(--color-bg-primary);
   border-radius: $size-radius-base;
-  box-shadow: $shadow-xl;
+  box-shadow: var(--shadow-xl, 0 12px 24px rgba(71, 85, 105, 0.16));
   border: 1px solid var(--border-base);
   z-index: $z-notification;
   display: flex;

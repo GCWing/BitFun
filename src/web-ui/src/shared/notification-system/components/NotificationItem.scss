@@ -9,7 +9,7 @@
   padding: $size-gap-3;
   background: var(--color-bg-primary);
   border-radius: $size-radius-base;
-  box-shadow: $shadow-lg;
+  box-shadow: var(--shadow-lg, 0 8px 16px rgba(71, 85, 105, 0.14));
   border: 1px solid var(--border-base);
   min-width: 280px;
   max-width: 320px;

@@ -30,23 +30,18 @@
    }
  
    &__input {
-     width: 100%;
-     padding: 6px 8px;
-     font-size: 12px;
-     font-family: $font-family-mono;
-     color: var(--color-text-primary);
-     background: var(--color-bg-primary);
-     border: 1px solid var(--color-border-subtle);
-     border-radius: 4px;
-     outline: none;
- 
-     &::placeholder {
-       color: var(--color-text-muted);
-     }
-     &:focus {
-       border-color: var(--color-accent-500);
-       box-shadow: 0 0 0 2px rgba(var(--color-accent-rgb, 59, 130, 246), 0.2);
-     }
+    width: 100%;
+
+    .bitfun-input-container {
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 4px;
+    }
+
+    .bitfun-input {
+      font-size: 12px;
+      font-family: $font-family-mono;
+    }
    }
  
    &__list {
@@ -56,16 +51,32 @@
    }
  
    &__item {
-     display: flex;
+    display: flex;
      align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    height: auto;
+    min-height: 30px;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
      padding: 6px 12px;
      cursor: pointer;
      white-space: nowrap;
      transition: background 0.1s ease;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-text-primary);
  
      &:hover {
        background: rgba(255, 255, 255, 0.08);
      }
+
+    &:focus-visible {
+      outline: none;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
      &--active {
        background: rgba(255, 255, 255, 0.12);
        color: var(--color-accent-400);

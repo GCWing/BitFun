@@ -28,6 +28,15 @@
       }
     }
   }
+
+  // Ensure the real scroller always spans the full panel width,
+  // even when inner message content is max-width constrained.
+  [data-virtuoso-scroller='true'],
+  [data-virtuoso-scroller] {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
   
   &--empty {
     display: flex;

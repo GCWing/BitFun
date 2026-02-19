@@ -519,7 +519,10 @@
     "terminal": "终端",
     "projectContext": "工程上下文",
     "git": "Git",
-    "clickToSelectBranch": "点击选择分支"
+    "capabilities": "能力配置",
+    "clickToSelectBranch": "点击选择分支",
+    "aiWingExpand": "展开 AI 工具",
+    "devWingExpand": "展开开发工具"
   },
   "canvas": {
     "noContentOpen": "暂未打开任何内容",

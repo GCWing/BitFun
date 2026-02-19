@@ -28,7 +28,7 @@ export interface AgentConfig {
 
 // Panel types - removed 'chat'; chat lives in the center panel.
 // 'project-context' replaces 'context' to avoid overlap with agentic context.
-export type PanelType = 'sessions' | 'workflows' | 'files' | 'git' | 'project-context' | 'terminal';
+export type PanelType = 'sessions' | 'workflows' | 'files' | 'git' | 'project-context' | 'terminal' | 'capabilities';
 
 // Layout state - three-column layout support.
 // Strategy: fixed left/right widths with elastic center (floating layout).
