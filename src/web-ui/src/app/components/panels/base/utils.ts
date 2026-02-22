@@ -15,8 +15,7 @@ import {
   Settings,
   ClipboardList,
   Image,
-  Network,
-  Workflow
+  Network
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -130,22 +129,6 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'ai-session',
     displayName: 'AI Session',
     icon: BookOpen,
-    supportsCopy: false,
-    supportsDownload: false,
-    showHeader: false
-  },
-  'config-center': {
-    type: 'config-center',
-    displayName: 'Config Center',
-    icon: Settings,
-    supportsCopy: false,
-    supportsDownload: false,
-    showHeader: false
-  },
-  'workflow-editor': {
-    type: 'workflow-editor',
-    displayName: 'Workflow Editor',
-    icon: Workflow,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

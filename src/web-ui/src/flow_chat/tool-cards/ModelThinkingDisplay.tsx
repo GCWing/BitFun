@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Loader2, Brain } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import './ModelThinkingDisplay.scss';
@@ -88,13 +88,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
     }
   }, [isExpanded, checkScrollState]);
 
-  const getStatusIcon = () => {
-    if (isStreaming || status === 'streaming') {
-      return <Loader2 className="animate-spin" size={12} />;
-    }
-    return <Brain size={12} />;
-  };
-
   const contentLengthText = useMemo(() => {
     if (!content || content.length === 0) return t('toolCards.think.thinkingComplete');
     return t('toolCards.think.thinkingCharacters', { count: content.length });
@@ -107,7 +100,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
     return (
       <div className="flow-thinking-item streaming">
         <div className="thinking-header">
-          <span className="thinking-icon">{getStatusIcon()}</span>
           <span className="thinking-label">{t('toolCards.think.thinking')}</span>
         </div>
         <div className={`thinking-content streaming ${hasContent && isActivelyStreaming ? 'thinking-content--has-content' : ''}`}>
@@ -129,7 +121,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
         className="thinking-collapsed-header"
         onClick={handleToggleClick}
       >
-        <span className="thinking-icon">{getStatusIcon()}</span>
+        <ChevronRight size={14} className="thinking-chevron" />
         <span className="thinking-label">
           {isExpanded ? t('toolCards.think.thinkingProcess') : contentLengthText}
         </span>

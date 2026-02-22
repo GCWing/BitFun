@@ -1,176 +1,57 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-terminal-config {
-  
-  &__message-container {
-    padding: 0 0 16px 0;
-    flex-shrink: 0;
-
-    
-    .alert {
-      border-style: dashed;
-    }
-  }
-
-  
-  &__section {
-    border-bottom: 1px dashed var(--border-medium);
-    flex-shrink: 0;
-  }
-
-  &__section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 0;
-    background: transparent;
-  }
-
-  &__section-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  &__section-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: $size-radius-sm;
-    background: var(--color-accent-100);
-    flex-shrink: 0;
-    transition: background $motion-base $easing-standard;
-
-    svg {
-      width: 16px;
-      height: 16px;
-      color: var(--color-accent-500);
-    }
-  }
-
-  &__section-header:hover &__section-icon {
-    background: var(--color-accent-200);
-  }
-
-  &__section-title h3 {
-    margin: 0;
-    font-size: $font-size-base;
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
-  }
-
-  &__refresh-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: transparent;
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all $motion-base $easing-standard;
-
-    &:hover {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-strong);
-      color: var(--color-text-primary);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .spinning {
-      animation: bitfun-terminal-config-spin 1s linear infinite;
-    }
-  }
-
-  &__section-content {
-    padding: 0 0 20px;
-    background: transparent;
-  }
-
-  
-  &__setting-item {
+  &__content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px 0;
-    border-bottom: 1px dashed var(--border-base);
-
-    &:last-child {
-      border-bottom: none;
-    }
-  }
-
-  &__setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  &__setting-description {
-    font-size: $font-size-xs;
-    color: var(--color-text-secondary);
-    margin: 0;
-    line-height: $line-height-relaxed;
+    gap: $size-gap-6;
   }
 
   &__select-wrapper {
-    max-width: 320px;
+    width: 100%;
   }
 
   &__no-shells {
     padding: 12px 16px;
-    background: transparent;
     border: 1px dashed var(--border-base);
     border-radius: $size-radius-sm;
     color: var(--color-text-muted);
     font-size: $font-size-sm;
   }
 
-  // ==================== CLI Agents ====================
+  &__inline-alert {
+    border-top: 1px solid var(--border-subtle);
+    padding: $size-gap-3;
+  }
+
   &__cli-agents-list {
+    border-top: 1px solid var(--border-subtle);
+    padding: $size-gap-3;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: $size-gap-2;
   }
 
   &__cli-agent-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 12px 16px;
-    background: transparent;
+    gap: $size-gap-3;
+    padding: $size-gap-3;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;
-    transition: all $motion-base $easing-standard;
-
-    &:hover {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-strong);
-    }
+    background: transparent;
   }
 
   &__cli-agent-info {
-    display: flex;
-    align-items: center;
-    flex: 1;
     min-width: 0;
+    flex: 1;
   }
 
   &__cli-agent-header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: $size-gap-2;
     flex-wrap: wrap;
   }
 
@@ -184,68 +65,65 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    padding: 4px 10px;
+    border-radius: 9999px;
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
-    padding: 4px 10px;
-    border-radius: 9999px; 
-    border: none;
 
     &.checking {
-      background: $element-bg-soft;
+      background: var(--element-bg-subtle);
       color: var(--color-text-muted);
     }
 
     &.available {
       background: var(--color-success-bg);
       color: var(--color-success);
-
-      svg {
-        color: var(--color-success);
-      }
     }
 
     &.unavailable {
-      background: $element-bg-soft;
+      background: var(--element-bg-subtle);
       color: var(--color-text-muted);
-
-      svg {
-        color: var(--color-text-muted);
-      }
     }
+  }
+
+  &__status-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: bitfun-terminal-config-spin 0.9s linear infinite;
   }
 
   &__cli-agent-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: $size-gap-1;
     flex-shrink: 0;
-
-    .bitfun-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
-    
-    .btn-ghost {
-      padding: 0;
-      width: 28px;
-      height: 28px;
-      aspect-ratio: 1;
-
-      &:hover:not(:disabled) {
-        border-color: transparent;
-      }
-    }
   }
+
 }
 
 @keyframes bitfun-terminal-config-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-terminal-config {
+    &__inline-alert,
+    &__cli-agents-list {
+      padding: $size-gap-2;
+    }
+
+    &__cli-agent-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    &__cli-agent-actions {
+      width: 100%;
+      flex-wrap: wrap;
+    }
   }
 }

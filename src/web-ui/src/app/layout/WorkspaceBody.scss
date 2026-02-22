@@ -1,0 +1,129 @@
+/**
+ * WorkspaceBody styles.
+ *
+ * Root:       flex-row
+ *   .nav-area   (240px, flex-column) ← NavBar + NavPanel
+ *   .scene-area (flex:1, flex-column) ← SceneBar + SceneViewport
+ */
+
+@use '../../component-library/styles/tokens.scss' as *;
+
+$_nav-width: 240px;
+$_nav-collapsed-width: 80px;
+
+// ── Root: left-right split ───────────────────────────────
+
+.bitfun-workspace-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  padding: 0 $size-gap-2 $size-gap-2 $size-gap-2;
+}
+
+// ── Left column: NavBar on top, NavPanel below ───────────
+
+.bitfun-workspace-body__nav-area {
+  display: flex;
+  flex-direction: column;
+  width: $_nav-width;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  z-index: 3;
+  transition: width $motion-base $easing-standard;
+
+  &.is-collapsed {
+    width: 0;
+    pointer-events: none;
+  }
+}
+
+.bitfun-workspace-body.is-entering .bitfun-workspace-body__nav-area:not(.is-collapsed) {
+  animation: wb-nav-slide-in 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bitfun-workspace-body.is-exiting .bitfun-workspace-body__nav-area:not(.is-collapsed) {
+  animation: wb-nav-slide-out 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bitfun-workspace-body__collapsed-nav {
+  position: absolute;
+  top: 0;
+  left: $size-gap-2;
+  z-index: $z-dropdown;
+  width: $_nav-collapsed-width;
+  height: 40px;
+}
+
+.bitfun-workspace-body__nav-divider {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+// ── Right column: rounded scene card (SceneBar + SceneViewport) ───
+
+.bitfun-workspace-body__scene-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  gap: 0;
+  transition: opacity $motion-fast $easing-standard;
+}
+
+// When nav is collapsed, the floating collapsed-nav (80px wide) overlays
+// the top-left area. Offset SceneBar content to avoid visual clipping/occlusion.
+.bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
+  .bitfun-scene-bar {
+    padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1});
+  }
+}
+
+.bitfun-workspace-body__nav-panel {
+  min-width: 0;
+}
+
+.bitfun-is-dragging-nav-collapse,
+.bitfun-is-dragging-nav-collapse * {
+  cursor: ew-resize !important;
+}
+
+@keyframes wb-nav-slide-in {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: $_nav-width;
+    opacity: 1;
+  }
+}
+
+@keyframes wb-nav-slide-out {
+  from {
+    width: $_nav-width;
+    opacity: 1;
+  }
+  to {
+    width: 0;
+    opacity: 0;
+  }
+}

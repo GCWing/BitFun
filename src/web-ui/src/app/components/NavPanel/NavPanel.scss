@@ -1,0 +1,612 @@
+/**
+ * NavPanel styles — categorized sidebar navigation.
+ *
+ * Root class: .bitfun-nav-panel
+ * Fixed width 240px, always visible.
+ * Sessions supports inline accordion expansion.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+$_nav-width: 240px;
+// Scene-inner fade: used when switching between different SceneNav components
+// while already in scene-nav mode (e.g. file-viewer → settings).
+@keyframes bitfun-nav-panel-scene-inner-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+$_item-height: 32px;
+$_section-header-height: 24px;
+
+// ──────────────────────────────────────────────
+// Root
+// ──────────────────────────────────────────────
+
+.bitfun-nav-panel {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+  user-select: none;
+
+  // ── Container ──────────────────────────────
+  &__content {
+    flex: 1 1 auto;
+    min-height: 0;
+    // Dynamic clip-path origin — set via JS from anchor element measurement.
+    // Fallback: ~20% from top (roughly the "Files" item in a typical layout).
+    position: relative;
+    overflow: hidden;
+
+    --clip-origin-top: 20%;
+    --clip-origin-bottom: 80%;
+  }
+
+  // ── Layers ─────────────────────────────────
+
+  &__layer {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    // ── MainNav layer ──
+    &--main {
+      flex: 1 1 auto;
+      transition: opacity 0.2s $easing-standard;
+
+      // Non-split scenes: hide MainNav instantly when scene nav opens
+      .is-scene:not(.is-split-open) & {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    // ── SceneNav overlay ──
+    &--scene {
+      clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
+  // Wrapper re-keyed on sceneId change → plays the fade-in when the
+  // SceneNav content is swapped while the accordion row stays expanded.
+      transition: clip-path $motion-base $easing-decelerate,
+                  opacity $motion-fast $easing-decelerate;
+    animation: bitfun-nav-panel-scene-inner-in $motion-fast $easing-decelerate;
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+        clip-path: inset(0 0 0 0);
+      opacity: 0;
+      background: var(--color-bg-primary);
+
+      // Default transition for non-split scenes: simple fade
+      transition: opacity 0.25s $easing-decelerate;
+
+      &.is-active {
+        pointer-events: auto;
+        opacity: 1;
+      }
+
+  &__section {
+    margin-bottom: $size-gap-2;
+  }
+
+      // Split-open scenes (file-viewer): clip-path reveal from anchor.
+      // The opaque background ensures revealed portions fully cover MainNav
+      // so departing items (e.g. WorkspaceHeader) never bleed through.
+      .is-split-open & {
+        clip-path: inset(var(--clip-origin-top) 0 var(--clip-origin-bottom) 0);
+        transition: clip-path 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+                    opacity 0.06s linear;
+
+        &.is-active {
+          clip-path: inset(0 0 0 0);
+        }
+      }
+    }
+  }
+
+  &__scene-inner {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  // ──────────────────────────────────────────────
+  // Scrollable sections area
+  // ──────────────────────────────────────────────
+
+  &__sections {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: $size-gap-3 0 $size-gap-2;
+
+    &::-webkit-scrollbar { width: 3px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-subtle);
+      border-radius: 2px;
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // Section
+  // ──────────────────────────────────────────────
+
+  &__section-header {
+    display: flex;
+    align-items: center;
+    height: $_section-header-height;
+    padding: 0 $size-gap-3;
+    margin: 0 $size-gap-2;
+    border-radius: 4px;
+    transition: background $motion-fast $easing-standard;
+
+    &--collapsible {
+      cursor: pointer;
+
+      &:hover {
+        background: var(--element-bg-soft);
+
+        .bitfun-nav-panel__section-label {
+          color: var(--color-text-secondary);
+        }
+      }
+
+      &:active {
+        background: var(--element-bg-medium);
+      }
+
+      &:focus-visible {
+        outline: 1px solid var(--color-accent-500);
+        outline-offset: -1px;
+      }
+    }
+  }
+
+  &__section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color $motion-fast $easing-standard;
+  }
+
+  // ──────────────────────────────────────────────
+  // Collapsible wrapper (grid-template-rows 0fr→1fr)
+  // ──────────────────────────────────────────────
+
+  &__collapsible {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows $motion-base $easing-standard,
+                transform $motion-base $easing-decelerate,
+                opacity $motion-base $easing-decelerate;
+
+    &.is-collapsed {
+      grid-template-rows: 0fr;
+    }
+  }
+
+  &__collapsible-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  // ──────────────────────────────────────────────
+  // Items list
+  // ──────────────────────────────────────────────
+
+  &__items {
+    display: flex;
+    flex-direction: column;
+    padding: 2px $size-gap-2;
+    gap: 2px;
+  }
+
+  // ──────────────────────────────────────────────
+  // Split-departure animation
+  //
+  // When scene-nav opens, MainNav items & sections receive directional
+  // classes based on their position relative to the anchor item:
+  //   .is-departing-up     → items above anchor slide up + fade
+  //   .is-departing-anchor → the anchor item itself (brief scale pulse)
+  //   .is-departing-down   → items below anchor slide down + fade
+  // These play on top of the grid-row collapse for a "split-open" feel.
+  // ──────────────────────────────────────────────
+
+  $_depart-distance: 28px;
+  $_depart-duration: 0.24s;
+  $_depart-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  &__workspace-header-slot {
+    transition: opacity $_depart-duration $_depart-easing;
+
+    &.is-departing-up {
+      opacity: 0;
+    }
+  }
+  // Inline expanded sections (e.g. SessionsSection, GitSection)
+  // also depart when their parent item departs.
+
+  &__section {
+    margin-bottom: $size-gap-2;
+    transition: transform $_depart-duration $_depart-easing,
+                opacity $_depart-duration $_depart-easing;
+
+    &.is-departing-up {
+      transform: translateY(-$_depart-distance);
+      opacity: 0;
+    }
+
+    &.is-departing-down {
+      transform: translateY($_depart-distance);
+      opacity: 0;
+    }
+  }
+
+  &__item-slot {
+    transition: transform $_depart-duration $_depart-easing,
+                opacity $_depart-duration $_depart-easing;
+
+    &.is-departing-up {
+      transform: translateY(-$_depart-distance);
+      opacity: 0;
+    }
+
+    &.is-departing-anchor {
+      transform: scale(0.96);
+      opacity: 0;
+    }
+
+    &.is-departing-down {
+      transform: translateY($_depart-distance);
+      opacity: 0;
+    }
+  }
+
+  &__collapsible {
+    &.is-departing-up {
+      transform: translateY(-$_depart-distance);
+      opacity: 0;
+    }
+
+    &.is-departing-down {
+      transform: translateY($_depart-distance);
+      opacity: 0;
+    }
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    height: $_item-height;
+    padding: 0 $size-gap-2 0 $size-gap-3;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: left;
+    font-size: $font-size-sm;
+    font-weight: 400;
+    width: 100%;
+    position: relative;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+      font-weight: 500;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2px;
+        height: 16px;
+        background: var(--color-primary);
+        border-radius: 0 2px 2px 0;
+      }
+
+      .bitfun-nav-panel__item-icon {
+        color: var(--color-primary);
+        opacity: 1;
+      }
+    }
+
+    &.is-open:not(.is-active) {
+      color: var(--color-text-primary);
+
+      .bitfun-nav-panel__item-icon {
+        opacity: 0.8;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__item-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.65;
+    transition: opacity $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    .bitfun-nav-panel__item:hover & {
+      opacity: 0.9;
+    }
+  }
+
+  &__item-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  // ──────────────────────────────────────────────
+  // Badge (e.g. git branch name)
+  // ──────────────────────────────────────────────
+
+  &__item-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    margin-left: auto;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+
+    &--clickable {
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: $size-radius-sm;
+      border: 1px solid transparent;
+      transition: color $motion-fast $easing-standard,
+                  background $motion-fast $easing-standard,
+                  border-color $motion-fast $easing-standard;
+
+      &:hover {
+        color: var(--color-text-primary);
+        background: var(--element-bg-medium);
+        border-color: var(--border-subtle);
+      }
+    }
+  }
+
+  // Custom actions container (e.g. session mode buttons + plus)
+  &__item-actions-custom {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  // Quick action icon (e.g. new session) on the right of the item
+  &__item-action {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: auto;
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+  }
+
+}
+
+// ──────────────────────────────────────────────
+// Footer: Notification + More-options menu
+// ──────────────────────────────────────────────
+
+@keyframes bitfun-footer-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bitfun-footer-menu-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+.bitfun-nav-panel__footer {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: $size-gap-2 $size-gap-2 0;
+  gap: $size-gap-1;
+}
+
+.bitfun-nav-panel__footer-btn {
+  flex-shrink: 0;
+}
+
+.bitfun-nav-panel__footer-btn--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+  }
+
+  &.is-active {
+    color: var(--color-text-primary);
+    background: var(--element-bg-medium);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+}
+
+// ──────────────────────────────────────────────
+// More-options popup menu
+// ──────────────────────────────────────────────
+
+.bitfun-nav-panel__footer-more-wrap {
+  position: relative;
+}
+
+.bitfun-nav-panel__footer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+
+.bitfun-nav-panel__footer-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 148px;
+  padding: $size-gap-1;
+  background: var(--color-bg-elevated, #1e1e22);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: $size-radius-base;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  transform-origin: bottom left;
+  animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
+
+  &.is-closing {
+    animation: bitfun-footer-menu-out $motion-fast $easing-accelerate forwards;
+  }
+}
+
+.bitfun-nav-panel__footer-menu-divider {
+  height: 1px;
+  margin: $size-gap-1 $size-gap-2;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.bitfun-nav-panel__footer-menu-item {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  width: 100%;
+  padding: 0 $size-gap-2;
+  height: 30px;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: $font-size-sm;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity $motion-fast $easing-standard;
+  }
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+
+    svg {
+      opacity: 1;
+    }
+  }
+
+  &:active {
+    background: var(--element-bg-medium);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+}
+
+// ──────────────────────────────────────────────
+// Reduced motion
+// ──────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-nav-panel {
+    &__item,
+    &__item-slot,
+    &__item-icon,
+    &__workspace-header-slot,
+    &__section,
+    &__section-label,
+    &__layer--scene,
+    &__collapsible {
+      transition: none;
+      animation: none;
+    }
+  }
+}

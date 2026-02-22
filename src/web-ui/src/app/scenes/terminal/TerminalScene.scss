@@ -1,0 +1,30 @@
+/**
+ * TerminalScene styles.
+ */
+
+.bitfun-terminal-scene {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+
+  &__empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--color-text-muted);
+  }
+
+  &__empty-icon {
+    opacity: 0.3;
+  }
+
+  &__empty-hint {
+    font-size: 13px;
+    margin: 0;
+  }
+}

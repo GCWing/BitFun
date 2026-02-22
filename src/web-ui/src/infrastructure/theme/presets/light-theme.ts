@@ -20,8 +20,8 @@ export const bitfunLightTheme: ThemeConfig = {
       quaternary: '#ebeef3',       
       elevated: '#ffffff',         
       workbench: '#f7f8fa',        
-      flowchat: '#f7f8fa',         
-      tooltip: 'rgba(255, 255, 255, 0.98)',  
+      scene: '#ffffff',
+      tooltip: 'rgba(255, 255, 255, 0.98)',
     },
     
     text: {

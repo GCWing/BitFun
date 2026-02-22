@@ -20,8 +20,8 @@ export const bitfunSlateTheme: ThemeConfig = {
       quaternary: '#32363a',    
       elevated: '#1a1c1e',      
       workbench: '#1a1c1e',     
-      flowchat: '#1a1c1e',      
-      tooltip: 'rgba(42, 45, 48, 0.96)',  
+      scene: '#1d2023',
+      tooltip: 'rgba(42, 45, 48, 0.96)',
     },
     
     text: {

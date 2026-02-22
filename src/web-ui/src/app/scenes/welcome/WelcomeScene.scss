@@ -1,0 +1,412 @@
+/**
+ * WelcomeScene styles.
+ * Session card hover effects mirror btn-action / btn-action-ai from component library.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.welcome-scene {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: $size-gap-8 $size-gap-6;
+  animation: welcome-fade-in 0.35s $easing-decelerate;
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-8;
+    max-width: 440px;
+    width: 100%;
+  }
+
+  // ── Greeting ────────────────────────────────────────
+
+  &__greeting {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__greeting-label {
+    font-size: $font-size-sm;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  &__workspace-title {
+    font-size: $font-size-3xl;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    margin: 0;
+    line-height: $line-height-tight;
+    letter-spacing: -0.02em;
+  }
+
+  &__workspace-meta {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-top: $size-gap-1;
+  }
+
+  &__meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px $size-gap-2;
+    border-radius: $size-radius-sm;
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+
+    span { line-height: 1.4; }
+    svg  { flex-shrink: 0; }
+  }
+
+  // ── Divider ──────────────────────────────────────────
+
+  &__divider {
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  // ── Session buttons (match btn-action default) ───────
+
+  &__sessions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $size-gap-2;
+
+    &--single {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__session-btn {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-3;
+    padding: $size-gap-3 $size-gap-3;
+    border: 1px dashed var(--border-subtle);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: left;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard,
+                border-color $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      border-color: var(--color-accent-400);
+
+      > svg:first-child { color: var(--color-accent-500); }
+    }
+
+    &:active { background: var(--element-bg-soft); }
+
+    > svg:first-child {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--color-text-muted);
+      transition: color $motion-fast $easing-standard;
+    }
+  }
+
+  &__session-btn-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__session-btn-label {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+  }
+
+  &__session-btn-desc {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    line-height: $line-height-base;
+  }
+
+  &__soon-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    padding: 1px 5px;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-base);
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  // ── Switch workspace section ─────────────────────────
+
+  &__switch {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__switch-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+  }
+
+  &__section-label {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    font-weight: $font-weight-medium;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  &__switch-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  &__link-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px $size-gap-2;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-soft);
+      color: var(--color-text-secondary);
+    }
+
+    &:disabled {
+      opacity: $opacity-disabled;
+      cursor: default;
+    }
+
+    svg { flex-shrink: 0; }
+  }
+
+  // ── Recent list ──────────────────────────────────────
+
+  &__recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__recent-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: $size-gap-1 + 1px $size-gap-2;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: $font-size-sm;
+    cursor: pointer;
+    text-align: left;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-primary);
+
+      svg { color: var(--color-text-secondary); }
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: var(--color-text-muted);
+      transition: color $motion-fast $easing-standard;
+    }
+  }
+
+  &__recent-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  &__recent-time {
+    flex-shrink: 0;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__no-recent {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    margin: 0;
+    padding: $size-gap-1 $size-gap-2;
+  }
+
+  // ── First-time actions ───────────────────────────────
+
+  &__first-time-actions {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__primary-action {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-4;
+    padding: $size-gap-3 + 2px $size-gap-4;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: left;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+
+      > svg:first-child { color: var(--color-accent-500); }
+
+      .welcome-scene__primary-action-arrow {
+        transform: translateX(3px);
+        color: var(--color-text-secondary);
+      }
+    }
+
+    &:disabled {
+      opacity: $opacity-disabled;
+      cursor: default;
+    }
+
+    > svg:first-child {
+      flex-shrink: 0;
+      color: var(--color-text-muted);
+      transition: color $motion-fast $easing-standard;
+    }
+  }
+
+  &__primary-action-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__primary-action-title {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+  }
+
+  &__primary-action-desc {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__primary-action-arrow {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    transition: transform $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+  }
+
+  // ── Logo ─────────────────────────────────────────────
+
+  &__logo {
+    margin-bottom: $size-gap-2;
+  }
+
+  &__logo-img {
+    width: 48px;
+    height: 48px;
+    border-radius: $size-radius-lg;
+  }
+
+  // ── First-time modifier ──────────────────────────────
+
+  &--first-time {
+    .welcome-scene__greeting {
+      align-items: center;
+      text-align: center;
+    }
+
+    .welcome-scene__workspace-title {
+      font-size: $font-size-2xl;
+    }
+
+    .welcome-scene__greeting-label {
+      max-width: 340px;
+      text-align: center;
+    }
+  }
+}
+
+// ── Animation ─────────────────────────────────────────
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ── Responsive ────────────────────────────────────────
+
+@media (max-width: 480px) {
+  .welcome-scene {
+    padding: $size-gap-5 $size-gap-4;
+
+    &__workspace-title { font-size: $font-size-2xl; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-scene {
+    animation: none;
+
+    &__session-btn,
+    &__primary-action,
+    &__recent-item,
+    &__link-btn {
+      transition: none;
+    }
+  }
+}

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useWorkspace } from '@/infrastructure/hooks/useWorkspace';
 import { gitService } from '@/tools/git/services/GitService';
-import { CubeIcon } from '@/app/components/Header/CubeIcon';
+import { CubeIcon } from '@/app/components/TitleBar/CubeIcon';
 import { createLogger } from '@/shared/utils/logger';
 import './ChatEmptyState.scss';
 

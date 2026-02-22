@@ -1,504 +1,69 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-skills-config {
-  
-  &__toolbar {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: $size-gap-3;
-    margin-bottom: $size-gap-2;
-  }
-
-  &__search-box {
-    flex: 1;
-    min-width: 0;
-  }
-
-  
-  &__content {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 0;
-    min-height: 0;
-  }
-
-  
-  &__filters {
-    
-  }
-
-  
-  &__form {
-    background: transparent;
-    border: 1px solid var(--color-accent-500);
-    border-radius: $size-radius-sm;
-    margin-bottom: 16px;
-    animation: bitfun-skills-config-slide-down 0.3s $easing-standard;
-    overflow: hidden;
-  }
-
-  &__form-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 14px;
-    background: transparent;
-    border-bottom: 1px dashed var(--border-medium);
-
-    h3 {
-      margin: 0;
-      font-size: $font-size-base;
-      font-weight: $font-weight-semibold;
-      color: var(--color-text-primary);
-    }
-  }
-
-  &__form-body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px 14px;
-    background: transparent;
-  }
-
-  &__form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-
-    label {
-      font-size: $font-size-sm;
-      color: var(--color-text-secondary);
-      font-weight: $font-weight-medium;
-    }
-  }
-
-  &__form-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 10px 14px;
-    background: transparent;
-    border-top: 1px dashed var(--border-medium);
-  }
-
-  
   &__path-input {
     display: flex;
-    gap: 6px;
     align-items: flex-end;
+    gap: $size-gap-2;
 
-    .bitfun-input-wrapper {
+    > :first-child {
       flex: 1;
+      min-width: 0;
     }
   }
 
   &__path-hint {
-    font-size: 11px;
+    font-size: $font-size-xs;
     color: var(--color-text-muted);
-    opacity: 0.8;
-    margin-top: -2px;
   }
 
   &__validating {
     font-size: $font-size-xs;
     color: var(--color-text-muted);
-    padding: 4px 0;
+    font-style: italic;
   }
 
   &__validation {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 8px 10px;
-    border-radius: $size-radius-sm;
-    background: transparent;
+    padding: $size-gap-2 $size-gap-3;
+    border-radius: $size-radius-base;
+    font-size: $font-size-sm;
 
     &.is-valid {
-      border: 1px solid var(--color-success);
+      background: rgba($color-success, 0.08);
+      border: 1px solid rgba($color-success, 0.3);
+      color: var(--color-success);
     }
 
     &.is-invalid {
-      border: 1px solid var(--color-error);
-    }
-  }
-
-  &__validation-name {
-    font-size: $font-size-sm;
-    font-weight: $font-weight-semibold;
-    color: var(--color-success);
-  }
-
-  &__validation-desc {
-    font-size: $font-size-xs;
-    color: var(--color-text-secondary);
-  }
-
-  &__validation-error {
-    font-size: $font-size-xs;
-    color: var(--color-error);
-  }
-
-  
-  &__modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    animation: bitfun-skills-config-fade-in 0.2s ease;
-  }
-
-  &__modal {
-    background: var(--color-bg-primary);
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    min-width: 320px;
-    max-width: 450px;
-    animation: bitfun-skills-config-slide-up 0.2s $easing-standard;
-  }
-
-  &__modal-header {
-    padding: 16px 20px;
-    border-bottom: 1px dashed var(--border-medium);
-
-    h3 {
-      margin: 0;
-      font-size: $font-size-lg;
-      font-weight: $font-weight-semibold;
-      color: var(--color-text-primary);
-    }
-  }
-
-  &__modal-body {
-    padding: 20px;
-
-    p {
-      margin: 0 0 8px 0;
-      font-size: $font-size-base;
-      color: var(--color-text-primary);
-      line-height: $line-height-base;
-    }
-  }
-
-  &__modal-warning {
-    font-size: $font-size-sm !important;
-    color: var(--color-warning) !important;
-  }
-
-  &__modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 12px 20px;
-    border-top: 1px dashed var(--border-medium);
-    background: transparent;
-  }
-
-  // ==================== Section ====================
-  &__section {
-    margin-bottom: $size-gap-4;
-  }
-
-  
-  &__list {
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-3;
-  }
-
-  
-  &__item {
-    overflow: hidden;
-
-    &.is-expanded {
-      background: var(--card-bg-hover) !important;
-    }
-
-    &.is-disabled {
-      opacity: 0.6;
-
-      .bitfun-skills-config__item-name {
-        text-decoration: line-through;
-      }
-    }
-  }
-
-  &__item-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: $size-gap-4;
-    cursor: pointer;
-    user-select: none;
-  }
-
-  &__item-main {
-    display: flex;
-    align-items: flex-start;
-    gap: $size-gap-3;
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__item-name {
-    font-family: $font-family-sans;
-    font-size: $font-size-base;
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
-    margin-bottom: $size-gap-1;
-  }
-
-  &__item-badges {
-    display: flex;
-    gap: $size-gap-2;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  &__badge {
-    padding: 4px $size-gap-2;
-    border-radius: $size-radius-sm;
-    font-size: $font-size-xs;
-    font-weight: $font-weight-medium;
-    white-space: nowrap;
-    background: transparent;
-    border: 1px solid;
-
-    &--user {
-      border-color: var(--color-accent-500);
-      color: var(--color-accent-500);
-    }
-
-    &--project {
-      border-color: rgba(168, 85, 247, 0.5);
-      color: rgba(192, 132, 252, 1);
-    }
-  }
-
-  &__item-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    min-width: fit-content;
-  }
-
-  &__action-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    cursor: pointer;
-    transition: all $motion-base $easing-standard;
-    color: var(--color-text-secondary);
-
-    svg {
-      width: 14px;
-      height: 14px;
-      display: block;
-      stroke-width: 2;
-    }
-
-    &:hover {
-      border-color: var(--color-accent-500);
-      color: var(--color-accent-500);
-    }
-
-    &--delete:hover {
-      border-color: var(--color-error);
+      background: rgba($color-error, 0.08);
+      border: 1px solid rgba($color-error, 0.3);
       color: var(--color-error);
     }
   }
 
-  
-  &__item-details {
-    padding: $size-gap-4;
-    border-top: 1px dashed var(--border-medium);
-    animation: bitfun-skills-config-slide-down 0.2s $easing-standard;
+  &__validation-name {
+    font-weight: $font-weight-medium;
   }
 
-  &__item-description {
+  &__validation-desc {
     font-size: $font-size-xs;
-    color: var(--color-text-secondary);
-    line-height: $line-height-base;
-    margin-bottom: 12px;
+    opacity: 0.8;
+    margin-top: 2px;
   }
 
-  &__item-path {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-    padding: 8px 10px;
-    background: transparent;
-    border-radius: $size-radius-sm;
-    border: 1px solid var(--border-base);
+  &__validation-error {
+    font-weight: $font-weight-medium;
   }
 
-  &__path-label {
-    font-size: 11px;
+  &__form-hint {
+    font-size: $font-size-xs;
     color: var(--color-text-muted);
-    font-weight: $font-weight-semibold;
-    flex-shrink: 0;
   }
 
   &__path-value {
-    font-size: $font-size-xs;
-    color: var(--color-text-primary);
     font-family: $font-family-mono;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
     word-break: break-all;
-  }
-
-  
-  &__loading,
-  &__error,
-  &__empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: $size-gap-8;
-    color: var(--color-text-muted);
-    font-size: $font-size-sm;
-    border: 1px dashed var(--border-base);
-    border-radius: $size-radius-sm;
-  }
-
-  &__error {
-    border-color: var(--color-error);
-    color: var(--color-error);
-  }
-
-  
-  @keyframes bitfun-skills-config-slide-down {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes bitfun-skills-config-slide-up {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes bitfun-skills-config-fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-}
-
-
-
-@container config-panel (max-width: 520px) {
-  .bitfun-skills-config {
-    &__toolbar {
-      gap: $size-gap-2;
-    }
-
-    &__form {
-      margin-bottom: 12px;
-    }
-
-    &__form-header {
-      padding: 8px 12px;
-
-      h3 {
-        font-size: $font-size-sm;
-      }
-    }
-
-    &__form-body {
-      padding: 10px 12px;
-      gap: 8px;
-    }
-
-    &__form-footer {
-      padding: 8px 12px;
-      gap: 6px;
-    }
-
-    &__section {
-      margin-bottom: $size-gap-3;
-    }
-
-    &__list {
-      gap: $size-gap-2;
-    }
-
-    &__item-header {
-      padding: $size-gap-3;
-    }
-
-    &__item-main {
-      gap: $size-gap-2;
-    }
-
-    &__item-name {
-      font-size: $font-size-sm;
-    }
-
-    &__badge {
-      padding: 3px 6px;
-      font-size: $font-size-xs;
-    }
-
-    &__item-actions {
-      gap: 5px;
-    }
-
-    &__action-button {
-      width: 26px;
-      height: 26px;
-
-      svg {
-        width: 13px;
-        height: 13px;
-      }
-    }
-
-    &__item-details {
-      padding: $size-gap-3;
-    }
-
-    &__item-description {
-      font-size: $font-size-xs;
-      margin-bottom: 10px;
-    }
-
-    &__loading,
-    &__error,
-    &__empty {
-      padding: $size-gap-6;
-    }
   }
 }

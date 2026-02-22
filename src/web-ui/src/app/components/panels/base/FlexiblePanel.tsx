@@ -3,12 +3,7 @@ import { Download, Copy, X, AlertCircle } from 'lucide-react';
 import { MarkdownRenderer, IconButton } from '@/component-library';
 import { CodeEditor, MarkdownEditor, ImageViewer, DiffEditor } from '@/tools/editor';
 import { useI18n } from '@/infrastructure/i18n';
-import ConfigCenterPanel from '@/infrastructure/config/components/ConfigCenterPanel';
 import { createLogger } from '@/shared/utils/logger';
-
-const WorkflowEditorPanel = React.lazy(() => 
-  import('../workflows/WorkflowEditor')
-);
 
 const log = createLogger('FlexiblePanel');
 
@@ -655,17 +650,6 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           </React.Suspense>
         );
 
-      case 'config-center':
-        const configData = content.data || {};
-        return <ConfigCenterPanel initialTab={configData.initialTab || 'models'} />;
-
-      case 'workflow-editor':
-        const wfData = content.data || {};
-        return (
-          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading Workflow Editor...</div>}>
-            <WorkflowEditorPanel workflowId={wfData.workflowId} />
-          </React.Suspense>
-        );
 
       case 'task-detail':
         const taskDetailData = content.data || {};

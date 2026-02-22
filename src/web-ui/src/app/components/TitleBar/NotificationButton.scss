@@ -1,0 +1,96 @@
+/**
+ * NotificationButton styles — TitleBar notification indicator.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-notification-btn {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: $size-radius-sm;
+  font-size: $font-size-xs;
+  flex-shrink: 0;
+  position: relative;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+  }
+
+  svg {
+    display: block;
+  }
+
+  &__icon--has-message {
+    color: var(--color-accent-400);
+  }
+
+  // ── Progress state ──────────────────────────────
+  &__progress {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__progress-text {
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  &__loading-icon,
+  &__progress-icon {
+    display: flex;
+    align-items: center;
+  }
+
+  &__spinner {
+    animation: notif-btn-spin 1s linear infinite;
+  }
+
+  // ── Tooltip ──────────────────────────────────────
+  &__tooltip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: $z-tooltip;
+    white-space: nowrap;
+  }
+
+  &__tooltip-content {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-medium);
+    border-radius: $size-radius-sm;
+    padding: 4px 8px;
+    font-size: $font-size-xs;
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-md);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@keyframes notif-btn-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-notification-btn__spinner {
+    animation: none;
+  }
+  .bitfun-notification-btn {
+    transition: none;
+  }
+}

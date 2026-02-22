@@ -514,7 +514,6 @@
   },
   "bottomBar": {
     "sessions": "Agent 工作台",
-    "workflows": "工作流",
     "files": "文件树",
     "terminal": "终端",
     "projectContext": "工程上下文",
@@ -571,7 +570,6 @@
     },
     "errors": {
       "markdownEditorMissingPath": "无法加载Markdown编辑器：缺少文件路径或初始内容",
-      "workflowMissingId": "无法加载工作流面板：缺少工作流ID",
       "planViewerMissingPath": "无法加载Plan查看器：缺少文件路径",
       "terminalMissingSessionId": "无法加载终端：缺少会话ID"
     },

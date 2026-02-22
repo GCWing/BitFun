@@ -4,24 +4,20 @@
     "selectConfig": "选择配置项",
     "categories": {
       "general": "通用",
-      "agent": "智能体",
-      "context": "上下文",
-      "extensions": "扩展",
+      "smartCapabilities": "智慧化配置",
       "devkit": "开发套件"
     },
     "tabs": {
       "theme": "外观",
       "models": "模型",
-      "superAgent": "Super Agent",
-      "modes": "模式",
       "aiFeatures": "智能特性",
-      "agenticTools": "工具设置",
       "aiRules": "规则",
       "aiMemory": "记忆",
+      "aiContext": "规则 & 记忆",
       "promptTemplates": "提示词",
       "skills": "技能",
-      "agents": "Sub Agent",
-      "mcp": "MCP",
+      "mcpTools": "MCP & 工具",
+      "agents": "Agents",
       "editor": "编辑器",
       "lsp": "语言服务",
       "debug": "调试",
@@ -192,7 +188,7 @@
     "addModel": "添加模型",
     "editModel": "编辑模型配置",
     "newModel": "新建模型配置",
-    "editSubtitle": "配置AI模型的连接参数",
+    "editSubtitle": "基础模型参数配置",
     "deleteModel": "删除模型",
     "confirmDelete": "确定删除此配置？",
     "modelName": "模型名称",
@@ -395,8 +391,8 @@
     "noSkillsHint": "技能可以扩展 AI 的能力"
   },
   "agents": {
-    "title": "Sub Agent",
-    "subtitle": "配置子智能体",
+    "title": "Agents",
+    "subtitle": "配置智能体",
     "addAgent": "添加智能体",
     "noAgents": "暂无子智能体",
     "noAgentsHint": "子智能体可以处理特定类型的任务"

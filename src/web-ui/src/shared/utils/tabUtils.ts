@@ -2,8 +2,14 @@
 
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
+import { fileTabManager } from '@/shared/services/FileTabManager';
+import type { FileTabOptions } from '@/shared/services/FileTabManager';
+import { resolveAndFocusOpenTarget } from '@/shared/services/sceneOpenTargetResolver';
+import type { OpenSource } from '@/shared/services/sceneOpenTargetResolver';
 
 const log = createLogger('TabUtils');
+
+export type TabTargetMode = 'agent' | 'project' | 'git';
 
 export interface TabCreationOptions {
   type: string;
@@ -13,7 +19,8 @@ export interface TabCreationOptions {
   checkDuplicate?: boolean;
   duplicateCheckKey?: string;
   replaceExisting?: boolean;
-  mode?: 'agent' | 'project'; 
+  /** Target canvas: agent (AuxPane), project (FileViewer), git (Git scene diff area) */
+  mode?: TabTargetMode;
 }
 
  
@@ -29,8 +36,9 @@ export function createTab(options: TabCreationOptions): void {
     mode = 'agent' 
   } = options;
 
-  const eventName = mode === 'project' ? 'project-create-tab' : 'agent-create-tab';
-  
+  const eventName =
+    mode === 'project' ? 'project-create-tab' : mode === 'git' ? 'git-create-tab' : 'agent-create-tab';
+
   const createTabEvent = new CustomEvent(eventName, {
     detail: {
       type,
@@ -108,16 +116,15 @@ export function createDiffEditorTab(
   originalCode: string,
   modifiedCode: string,
   readOnly: boolean = false,
-  mode: 'agent' | 'project' = 'agent',
-  repositoryPath?: string, 
-  revealLine?: number, 
-  replaceExisting?: boolean 
+  mode: TabTargetMode = 'agent',
+  repositoryPath?: string,
+  revealLine?: number,
+  replaceExisting?: boolean
 ): void {
-  
-  const duplicateKey = repositoryPath 
-    ? `git-diff:${repositoryPath}:${filePath}` 
+  const duplicateKey = repositoryPath
+    ? `git-diff:${repositoryPath}:${filePath}`
     : `fix-diff:${filePath}`;
-  
+
   createTab({
     type: 'diff-code-editor',
     title: `${fileName} - ${repositoryPath ? i18nService.getT()('common:tabs.gitDiff') : i18nService.getT()('common:tabs.fixPreview')}`,
@@ -128,14 +135,70 @@ export function createDiffEditorTab(
       originalCode,
       modifiedCode,
       readOnly,
-      repositoryPath, 
-      revealLine
+      repositoryPath,
+      revealLine,
     },
     metadata: { filePath, repositoryPath, duplicateCheckKey: duplicateKey },
     checkDuplicate: true,
     duplicateCheckKey: duplicateKey,
-    replaceExisting: replaceExisting ?? false, 
-    mode
+    replaceExisting: replaceExisting ?? false,
+    mode,
+  });
+}
+
+/**
+ * Open a Git diff tab in the Git scene canvas (mode 'git').
+ * Use from Git scene only; keeps diff editing inside the Git context.
+ */
+export function createGitDiffEditorTab(
+  filePath: string,
+  fileName: string,
+  originalCode: string,
+  modifiedCode: string,
+  repositoryPath: string,
+  readOnly: boolean = false,
+  replaceExisting?: boolean
+): void {
+  createDiffEditorTab(
+    filePath,
+    fileName,
+    originalCode,
+    modifiedCode,
+    readOnly,
+    'git',
+    repositoryPath,
+    undefined,
+    replaceExisting
+  );
+}
+
+/**
+ * Open a code editor tab in the Git scene canvas (e.g. for untracked files).
+ */
+export function createGitCodeEditorTab(
+  filePath: string,
+  fileName: string,
+  options?: Parameters<typeof createCodeEditorTab>[2]
+): void {
+  createTab({
+    type: 'code-editor',
+    title: fileName,
+    data: {
+      filePath,
+      fileName,
+      language: options?.language,
+      readOnly: options?.readOnly ?? false,
+      showLineNumbers: options?.showLineNumbers ?? true,
+      showMinimap: options?.showMinimap ?? true,
+      theme: options?.theme ?? 'vs-dark',
+      jumpToLine: options?.jumpToLine,
+      jumpToColumn: options?.jumpToColumn,
+    },
+    metadata: { filePath, fileName },
+    checkDuplicate: true,
+    duplicateCheckKey: `code-editor:${filePath}`,
+    replaceExisting: true,
+    mode: 'git',
   });
 }
 
@@ -173,76 +236,11 @@ export function createMarkdownEditorTab(
 
  
 export function createConfigCenterTab(
-  initialTab: 'models' | 'ai-rules' | 'agents' = 'models',
-  mode: 'agent' | 'project' = 'agent'
+  _initialTab: 'models' | 'ai-context' | 'agents' = 'models',
+  _mode: 'agent' | 'project' = 'agent'
 ): void {
-  
-  import('@/app/components/panels/content-canvas/stores/canvasStore').then(({ useCanvasStore }) => {
-    const store = useCanvasStore.getState();
-
-    
-    const existingTab = store.findTabByMetadata({ isConfigCenter: true });
-
-    if (existingTab) {
-      
-      const groupState = existingTab.groupId === 'primary' 
-        ? store.primaryGroup 
-        : existingTab.groupId === 'secondary' 
-          ? store.secondaryGroup 
-          : store.tertiaryGroup;
-      
-      const isActiveTab = groupState.activeTabId === existingTab.tab.id 
-        && store.activeGroupId === existingTab.groupId;
-      
-      if (isActiveTab) {
-        
-        store.closeTab(existingTab.tab.id, existingTab.groupId);
-      } else {
-        
-        store.switchToTab(existingTab.tab.id, existingTab.groupId);
-      }
-    } else {
-      
-      createTab({
-        type: 'config-center',
-        title: i18nService.getT()('common:tabs.configCenter'),
-        data: { initialTab },
-        metadata: { isConfigCenter: true },
-        checkDuplicate: true,
-        duplicateCheckKey: 'config-center',
-        replaceExisting: false,
-        mode
-      });
-    }
-
-    
-    
-  });
-}
-
- 
-export function createWorkflowEditorTab(
-  workflowId?: string,
-  workflowName?: string,
-  mode: 'agent' | 'project' = 'agent'
-): void {
-  const title = workflowId
-    ? `${workflowName || workflowId}`
-    : i18nService.getT()('panels/workflows:editor.createTitle');
-  const duplicateKey = workflowId
-    ? `workflow-editor:${workflowId}`
-    : `workflow-editor:new-${Date.now()}`;
-
-  createTab({
-    type: 'workflow-editor',
-    title,
-    data: { workflowId },
-    metadata: { isWorkflowEditor: true, workflowId },
-    checkDuplicate: !!workflowId,
-    duplicateCheckKey: duplicateKey,
-    replaceExisting: true,
-    mode
-  });
+  // Settings is now an independent scene — open via event bus.
+  window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'settings' } }));
 }
 
 export function createTerminalTab(
@@ -267,5 +265,31 @@ export function createTerminalTab(
     duplicateCheckKey: `terminal-${sessionId}`,
     replaceExisting: false,
     mode
+  });
+}
+
+type OpenFileInBestTargetOptions = Omit<FileTabOptions, 'mode'>;
+interface OpenFileTargetContext {
+  source?: OpenSource;
+}
+
+/**
+ * Open a file to the best target:
+ * - active scene is session: open in agent AuxPane tabs
+ * - otherwise: open in file-viewer scene project tabs
+ *
+ * This avoids unexpected focus stealing when session is merely opened but
+ * not the currently active scene.
+ */
+export function openFileInBestTarget(
+  options: OpenFileInBestTargetOptions,
+  context: OpenFileTargetContext = {}
+): void {
+  const { mode, sceneJustOpened } = resolveAndFocusOpenTarget('file', { source: context.source ?? 'default' });
+
+  fileTabManager.openFile({
+    ...options,
+    mode,
+    sceneJustOpened,
   });
 }

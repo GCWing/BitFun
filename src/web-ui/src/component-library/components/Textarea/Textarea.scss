@@ -22,6 +22,11 @@
   &__wrapper {
     position: relative;
     width: 100%;
+    outline: none;
+  }
+
+  &:focus-within {
+    outline: none;
   }
 
   &__field {
@@ -33,7 +38,7 @@
     color: var(--color-text-primary);
     background: var(--element-bg-subtle);
     border: 1.5px solid var(--border-base);
-    border-radius: var(--radius-sm, 8px);
+    border-radius: 4px;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     resize: vertical;
     font-family: inherit;
@@ -42,19 +47,25 @@
       color: var(--color-text-muted);
     }
 
+    &::selection {
+      border-radius: 2px;
+      background: var(--color-accent-300);
+    }
+
     &:hover:not(:disabled) {
       border-color: var(--border-medium);
       background: var(--element-bg-soft);
     }
 
     &:focus {
-      outline: none;
+      outline: none !important;
       border-color: var(--border-medium);
       background: var(--element-bg-subtle);
     }
 
     &:focus-visible {
-      outline: none;
+      outline: none !important;
+      outline-offset: 0 !important;
     }
 
     &:disabled {

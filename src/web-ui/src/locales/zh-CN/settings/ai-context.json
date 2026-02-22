@@ -1,0 +1,9 @@
+{
+  "title": "规则 & 记忆",
+  "subtitle": "管理 AI 行为规则与上下文记忆",
+  "scope": {
+    "user": "用户级",
+    "project": "工程级"
+  },
+  "memoryProjectPlaceholder": "工程级记忆后端暂未接入，敬请期待。"
+}

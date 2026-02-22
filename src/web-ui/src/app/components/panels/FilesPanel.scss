@@ -20,6 +20,15 @@
   container-type: inline-size;
   container-name: files-panel;
 
+  &__header {
+    border-bottom: none;
+    justify-content: flex-start;
+  }
+
+  &__header .bitfun-panel-header__title {
+    text-align: left;
+  }
+
   &__sync-indicator {
     display: inline-flex;
     align-items: center;

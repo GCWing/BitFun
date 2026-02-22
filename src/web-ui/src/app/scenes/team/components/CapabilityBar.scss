@@ -1,0 +1,81 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+.cap-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: $size-gap-4;
+  padding: 8px $size-gap-6;
+  border-top: 1px solid var(--border-subtle);
+
+  &__label {
+    flex-shrink: 0;
+    font-size: $font-size-xs;
+    color: var(--color-text-disabled);
+    letter-spacing: 0.3px;
+  }
+
+  &__items {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-5;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex-shrink: 0;
+  }
+
+  &__cat {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    width: 26px;
+    flex-shrink: 0;
+  }
+
+  &__track {
+    width: 48px;
+    height: 3px;
+    background: var(--element-bg-medium);
+    border-radius: 2px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  &__fill {
+    height: 100%;
+    background: var(--border-subtle);
+    border-radius: 2px;
+    transition: width 0.35s $easing-decelerate;
+    min-width: 0;
+  }
+
+  &__lv {
+    font-size: 10px;
+    color: var(--color-text-disabled);
+    width: 14px;
+    text-align: right;
+    flex-shrink: 0;
+    font-weight: $font-weight-medium;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__warn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: $font-size-xs;
+    color: var(--color-warning);
+    padding: 2px 8px;
+    background: var(--color-warning-bg);
+    border: 1px solid var(--color-warning-border);
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+}

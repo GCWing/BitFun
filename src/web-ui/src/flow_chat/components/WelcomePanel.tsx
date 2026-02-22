@@ -10,7 +10,6 @@ import { globalStateAPI } from '../../shared/types';
 import type { WorkStateAnalysis, PredictedAction, QuickAction, GitWorkState } from '../../infrastructure/api/service-api/StartchatAgentAPI';
 import { useApp } from '../../app/hooks/useApp';
 import { StreamText } from '../../component-library';
-import { CubeIcon } from '../../app/components/Header/CubeIcon';
 import { aiExperienceConfigService } from '@/infrastructure/config/services';
 import { createLogger } from '@/shared/utils/logger';
 import './WelcomePanel.css';
@@ -312,10 +311,6 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   return (
     <div className={`welcome-panel ${className}`}>
       <div className="welcome-panel__content">
-        <div className="welcome-panel__cube-background">
-          <CubeIcon size={200} className="welcome-panel__cube-icon" />
-        </div>
-
         <div className="welcome-panel__greeting">
         <h1 className="welcome-panel__greeting-title">{greeting.title}</h1>
         <h1 className="welcome-panel__greeting-title">{t('welcome.aiPartner')}</h1>

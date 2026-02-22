@@ -23,8 +23,6 @@ export type PanelContentType =
   | 'git-graph'
   | 'git-branch-history'
   | 'ai-session'
-  | 'config-center'
-  | 'workflow-editor'
   | 'planner'
   | 'task-detail'
   | 'plan-viewer'
@@ -96,8 +94,8 @@ export interface CreateTabOptions {
  * Create-tab event detail.
  */
 export interface CreateTabEventDetail extends CreateTabOptions {
-  /** App mode */
-  mode?: 'agent' | 'project';
+  /** App mode / target canvas */
+  mode?: 'agent' | 'project' | 'git';
 }
 
 /**
@@ -108,6 +106,8 @@ export const TAB_EVENTS = {
   AGENT_CREATE_TAB: 'agent-create-tab',
   /** Create tab in project mode */
   PROJECT_CREATE_TAB: 'project-create-tab',
+  /** Create tab in Git scene canvas */
+  GIT_CREATE_TAB: 'git-create-tab',
   /** Expand right panel */
   EXPAND_RIGHT_PANEL: 'expand-right-panel',
 } as const;

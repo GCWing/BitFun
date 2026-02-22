@@ -1,268 +1,54 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-func-agent-config {
-  
-  &__content {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    container-type: inline-size;
-    container-name: ai-features-config;
-  }
-
-  
-  &__save-actions {
-    display: flex;
-    gap: $size-gap-2;
-    align-items: center;
-  }
-
-  
-  &__sections {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: $size-gap-5 $size-gap-4;
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-3;
-    animation: featureCardFadeIn 0.4s ease-out;
-  }
-
-  @keyframes featureCardFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  
-  &__loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    min-height: 200px;
-    gap: $size-gap-4;
-    color: var(--color-text-secondary);
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    background: transparent;
-
-    p, span {
-      margin: 0;
-      font-size: $font-size-sm;
-    }
-  }
-
-  &__loading-icon {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-}
-
-
-.feature-section {
-  display: flex;
-  flex-direction: column;
-  padding: $size-gap-4;
-  position: relative;
-  overflow: visible;
-  animation: featureCardEnter 0.4s ease-out backwards;
-
-  
-  @for $i from 1 through 10 {
-    &:nth-child(#{$i}) {
-      animation-delay: #{$i * 0.06}s;
-    }
-  }
-
-  &:hover {
-    .feature-section__name {
-      color: var(--color-accent-500);
-    }
-  }
-
-  
-  &__header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
-  }
-
-  
-  &__name {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
-    font-size: $font-size-sm;
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
-    transition: color $motion-base $easing-standard;
-  }
-
-  
-  &__actions {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    .feature-enabled {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      
-      .enabled-label {
-        font-size: $font-size-xs;
-        color: var(--color-text-muted);
-        font-weight: $font-weight-medium;
-      }
-    }
-  }
-
-  
-  &__description {
-    margin: 0 0 $size-gap-3 0;
-    font-size: $font-size-xs;
-    color: var(--color-text-muted);
-    line-height: 1.4;
-  }
-
-  
   &__content {
     display: flex;
     flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  &__row-control {
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     gap: $size-gap-2;
   }
 
-  
+  &__row-control--model {
+    width: 100%;
+    align-items: stretch;
+
+    .model-selection-radio {
+      width: auto;
+      justify-content: flex-end;
+    }
+
+    .model-selection-radio--horizontal .model-selection-radio__option--custom {
+      flex-grow: 0;
+    }
+  }
+
+  .bitfun-config-page-row.bitfun-func-agent-config__model-row {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+  }
+
   &__warning {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
+    max-width: 100%;
+    padding: 6px 10px;
     border-radius: $size-radius-sm;
-    background: transparent;
     border: 1px dashed rgba(234, 179, 8, 0.4);
     color: var(--color-warning);
     font-size: $font-size-xs;
-    line-height: $line-height-base;
-  }
-}
-
-@keyframes featureCardEnter {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-
-.config-row {
-  display: flex;
-  align-items: flex-start;
-  gap: $size-gap-2;
-  padding: 8px 0;
-  background: transparent;
-
-  
-  &--model {
-    flex-direction: row;
-    align-items: center;
-    gap: $size-gap-2;
-    padding: 8px 0;
-    border: none;
+    line-height: $line-height-relaxed;
     background: transparent;
-
-    &:hover {
-      background: transparent;
-    }
-
-    .config-label__text {
-      font-size: $font-size-xs;
-      font-weight: $font-weight-medium;
-      color: var(--color-text-primary);
-      white-space: nowrap;
-    }
   }
 }
 
-
-@container ai-features-config (max-width: 400px) {
-  .bitfun-func-agent-config__sections {
-    padding: $size-gap-3 $size-gap-2;
-  }
-
-  .feature-section {
-    padding: $size-gap-3;
-
-    &__header {
-      gap: 8px;
-    }
-
-    &__name {
-      font-size: $font-size-sm;
-    }
-
-    &__description {
-      font-size: $font-size-xs;
-      margin-bottom: $size-gap-2;
-    }
-
-    &__content {
-      gap: $size-gap-2;
-    }
-
-    &__actions {
-      .enabled-label {
-        display: none;
-      }
-    }
-  }
-
-  .config-row {
-    padding: 5px 0;
-
-    &--model {
-      gap: 6px;
-
-      .config-label__text {
-        display: none;
-      }
-    }
-  }
-
-  .bitfun-func-agent-config__save-actions {
-    flex-direction: column;
-    gap: 4px;
-
-    button {
-      width: 100%;
-      padding: 6px 10px;
-      font-size: $font-size-xs;
+@container config-panel (max-width: 520px) {
+  .bitfun-func-agent-config {
+    &__row-control {
+      align-items: flex-start;
     }
   }
 }

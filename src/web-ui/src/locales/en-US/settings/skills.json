@@ -38,8 +38,7 @@
     "loading": "Loading...",
     "errorPrefix": "Failed to load: ",
     "empty": {
-      "noMatch": "No matching Skills found",
-      "noSkills": "No Skills configured yet"
+      "noMatch": "No matching Skills found"
     },
     "item": {
       "user": "User",

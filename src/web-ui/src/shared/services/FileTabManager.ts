@@ -7,6 +7,7 @@ import { normalizePath } from '@/shared/utils/pathUtils';
 import { getEditorType } from '@/infrastructure/language-detection';
 import type { LineRange } from '@/component-library/components/Markdown';
 import { createLogger } from '@/shared/utils/logger';
+import { enqueuePendingTab } from './pendingTabQueue';
 
 const log = createLogger('FileTabManager');
 
@@ -31,6 +32,13 @@ export interface FileTabOptions {
   splitView?: boolean;
    
   targetGroup?: 'primary' | 'secondary';
+  /**
+   * Pass `true` when the target scene was just added to openTabs (i.e. it was
+   * not previously mounted).  The tab event will be enqueued instead of
+   * dispatched directly, so it is processed once the scene's ContentCanvas
+   * mounts and registers its event listener.
+   */
+  sceneJustOpened?: boolean;
 }
 
  
@@ -58,7 +66,8 @@ class FileTabManager {
       mode = 'agent',
       forceNew = false,
       splitView = false,
-      targetGroup = 'secondary'
+      targetGroup = 'secondary',
+      sceneJustOpened = false,
     } = options;
 
     
@@ -108,7 +117,14 @@ class FileTabManager {
     
     
     window.dispatchEvent(new CustomEvent('expand-right-panel'));
-    
+
+    // When the target scene was just added to openTabs it hasn't mounted yet,
+    // so the ContentCanvas event listener doesn't exist.  Enqueue the event;
+    // useTabLifecycle will drain and process it once it registers its listener.
+    if (sceneJustOpened) {
+      enqueuePendingTab(mode === 'project' ? 'project' : 'agent', eventDetail);
+      return;
+    }
     
     
     const isRightPanelCollapsed = this.isRightPanelCollapsed();

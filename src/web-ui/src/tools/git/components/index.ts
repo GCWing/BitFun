@@ -1,4 +1,3 @@
-export * from './GitPanel';
 export * from './GitDiffView';
 export * from './GitSettingsView';
 export * from './CreateBranchDialog';

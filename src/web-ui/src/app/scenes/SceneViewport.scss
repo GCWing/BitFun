@@ -1,0 +1,87 @@
+/**
+ * SceneViewport styles — scene container.
+ */
+
+@use '../../component-library/styles/tokens.scss' as *;
+
+.bitfun-scene-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  border-radius: $size-radius-base;
+  border: 1px solid var(--border-subtle);
+  background: var(--color-bg-scene);
+
+  // ── Welcome overlay (app start) ──────────────────────
+
+  &--welcome {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // ── Empty state (all tabs closed) ─────────────────────
+
+  &--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  &__empty-hint {
+    color: var(--color-text-muted);
+    font-size: $font-size-sm;
+    margin: 0;
+  }
+
+  &__empty-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  &__empty-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-size: $font-size-sm;
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard,
+                border-color $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      border-color: var(--border-medium);
+    }
+  }
+
+  // ── Scene slot ────────────────────────────────────────
+
+  &__scene {
+    position: absolute;
+    inset: 0;
+    display: none;
+    overflow: hidden;
+
+    &--active {
+      display: flex;
+      flex-direction: row;
+    }
+  }
+}

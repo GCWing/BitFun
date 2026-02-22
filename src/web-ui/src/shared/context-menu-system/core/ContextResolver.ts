@@ -12,7 +12,6 @@ import {
   TabContext,
   PanelHeaderContext,
   EmptySpaceContext,
-  ProjectContextDocumentContext,
   CustomContext,
   ContextResolverConfig
 } from '../types/context.types';
@@ -61,8 +60,6 @@ export class ContextResolver {
 
     if (context = this.resolveSelection(baseContext)) {
       strategy = 'Selection';
-    } else if (context = this.resolveProjectContextDocument(baseContext)) {
-      strategy = 'ProjectContextDocument';
     } else if (context = this.resolveTerminal(baseContext)) {
       strategy = 'Terminal';
     } else if (context = this.resolveFileNode(baseContext)) {
@@ -83,35 +80,6 @@ export class ContextResolver {
     }
 
     return context;
-  }
-
-   
-  private resolveProjectContextDocument(base: BaseContext): ProjectContextDocumentContext | null {
-    
-    const docElement = this.findClosestWithAttribute(base.targetElement, [
-      'data-doc-id',
-      'data-context-doc-id'
-    ]);
-
-    if (!docElement) {
-      return null;
-    }
-
-    const docId = docElement.getAttribute('data-doc-id') || '';
-    const docName = docElement.getAttribute('data-doc-name') || '';
-    const filePath = docElement.getAttribute('data-doc-file-path');
-    const exists = docElement.getAttribute('data-doc-exists') === 'true';
-    const categoryId = docElement.getAttribute('data-doc-category') || '';
-
-    return {
-      ...base,
-      type: ContextType.PROJECT_CONTEXT_DOCUMENT,
-      docId,
-      docName,
-      filePath,
-      exists,
-      categoryId
-    };
   }
 
    

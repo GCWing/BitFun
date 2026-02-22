@@ -51,7 +51,8 @@ export class PanelController implements IdeController {
 
     
     const mode = options?.mode || 'agent';
-    const eventName = mode === 'project' ? 'project-create-tab' : 'agent-create-tab';
+    const eventName =
+      mode === 'project' ? 'project-create-tab' : mode === 'git' ? 'git-create-tab' : 'agent-create-tab';
 
     
     const tabDetail = this.buildTabDetail(panelType, panelConfig || {}, options);
@@ -131,15 +132,6 @@ export class PanelController implements IdeController {
 
     
     switch (panelType) {
-      case 'config-center':
-        return {
-          ...baseDetail,
-          data: {
-            ...baseDetail.data,
-            initialSection: config.section || 'models',
-          },
-        };
-
       case 'git-diff':
         return {
           ...baseDetail,
@@ -191,8 +183,6 @@ export class PanelController implements IdeController {
         return t('common:tabs.gitSettings');
       case 'git-diff':
         return config.file_path ? `${t('common:tabs.gitDiff')}: ${config.file_path}` : t('common:tabs.gitDiff');
-      case 'config-center':
-        return config.section ? t('common:tabs.settingsWithSection', { section: config.section }) : t('common:tabs.settings');
       case 'planner':
         return t('common:tabs.taskPlanner');
       case 'file-viewer':
@@ -211,8 +201,6 @@ export class PanelController implements IdeController {
    
   private getDuplicateCheckKey(panelType: PanelType, config: PanelConfig): string {
     switch (panelType) {
-      case 'config-center':
-        return `config-center-${config.section || 'default'}`;
       case 'git-diff':
         return config.file_path ? `git-diff-${config.file_path}` : 'git-diff';
       case 'code-editor':

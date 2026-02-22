@@ -233,7 +233,8 @@
   "tooltips": {
     "viewDiff": "Click to view diff",
     "expandDetails": "Expand details",
-    "collapseDetails": "Collapse details"
+    "collapseDetails": "Collapse details",
+    "resizeFileList": "Drag to resize file list and diff area"
   },
   "dialog": {
     "createBranch": {

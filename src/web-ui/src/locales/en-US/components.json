@@ -514,7 +514,6 @@
   },
   "bottomBar": {
     "sessions": "Workbench",
-    "workflows": "Workflows",
     "files": "Files",
     "terminal": "Terminal",
     "projectContext": "Project Context",
@@ -571,7 +570,6 @@
     },
     "errors": {
       "markdownEditorMissingPath": "Cannot load Markdown editor: missing file path or initial content",
-      "workflowMissingId": "Cannot load workflow panel: missing workflow ID",
       "planViewerMissingPath": "Cannot load Plan viewer: missing file path",
       "terminalMissingSessionId": "Cannot load terminal: missing session ID"
     },

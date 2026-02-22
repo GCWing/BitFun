@@ -233,7 +233,8 @@
   "tooltips": {
     "viewDiff": "点击查看差异",
     "expandDetails": "展开详情",
-    "collapseDetails": "收起详情"
+    "collapseDetails": "收起详情",
+    "resizeFileList": "拖拽调整文件列表与差异区域宽度"
   },
   "dialog": {
     "createBranch": {

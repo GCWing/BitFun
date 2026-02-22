@@ -7,89 +7,129 @@
   @media (max-width: 768px) {
     padding: 0 1.5rem;
   }
+}
 
-  &--collapsed {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding-top: 6px;
-    padding-bottom: 6px;
-    margin: 4px 0;
-    color: var(--text-tertiary, #6b7280);
-    font-size: 12px;
-    cursor: pointer;
-    border-radius: 6px;
-    transition: background-color 0.15s ease, color 0.15s ease;
-    
-    &:hover {
-      background: var(--bg-hover, rgba(255, 255, 255, 0.05));
-      color: var(--text-secondary, #9ca3af);
+// ==================== Non-collapsible (streaming / no auto-collapse yet) ====================
+
+.explore-region--expanded:not(.explore-region--collapsible) {
+  margin: 4px 0;
+
+  .explore-region__content {
+    position: relative;
+    padding: 4px 0;
+
+    &::-webkit-scrollbar {
+      width: 4px;
     }
-    
-    .explore-region__icon {
-      flex-shrink: 0;
-      opacity: 0.6;
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
     }
-    
-    .explore-region__summary {
-      opacity: 0.8;
-    }
-  }
-  
-  &--expanded {
-    margin: 4px 0;
-    
-    .explore-region__header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 0;
-      color: var(--text-tertiary, #6b7280);
-      font-size: 12px;
-      cursor: pointer;
-      transition: color 0.15s ease;
-      
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-base, rgba(107, 114, 128, 0.3));
+      border-radius: 2px;
+
       &:hover {
-        color: var(--text-secondary, #9ca3af);
-      }
-      
-      .explore-region__icon {
-        flex-shrink: 0;
-        opacity: 0.6;
-      }
-    }
-    
-    .explore-region__content {
-      position: relative;
-      padding: 4px 0;
-      // After streaming ends, height is unrestricted.
-      &::-webkit-scrollbar {
-        width: 4px;
-      }
-      
-      &::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      
-      &::-webkit-scrollbar-thumb {
-        background: var(--border-base, rgba(107, 114, 128, 0.3));
-        border-radius: 2px;
-        
-        &:hover {
-          background: var(--border-hover, rgba(107, 114, 128, 0.5));
-        }
+        background: var(--border-hover, rgba(107, 114, 128, 0.5));
       }
     }
   }
 }
 
-// Top/bottom mask shown only during streaming.
+// ==================== Collapsible (header + animated content) ====================
+
+.explore-region--collapsible {
+  margin: 4px 0;
+
+  .explore-region__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    color: var(--text-tertiary, #6b7280);
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+
+    &:hover {
+      background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+      color: var(--text-secondary, #9ca3af);
+    }
+  }
+
+  .explore-region__icon {
+    flex-shrink: 0;
+    opacity: 0.6;
+    // Rotate 90° when expanded; 0° = pointing right (collapsed).
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(0deg);
+  }
+
+  .explore-region__summary {
+    opacity: 0.8;
+  }
+
+  // Animated content wrapper using the CSS Grid row technique.
+  // grid-template-rows: 0fr → 1fr smoothly animates height without needing
+  // to know the actual pixel height.
+  .explore-region__content-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  // Inner div must have min-height: 0 for the 0fr trick to work.
+  .explore-region__content-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .explore-region__content {
+    position: relative;
+    padding: 4px 0;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-base, rgba(107, 114, 128, 0.3));
+      border-radius: 2px;
+
+      &:hover {
+        background: var(--border-hover, rgba(107, 114, 128, 0.5));
+      }
+    }
+  }
+}
+
+// Expanded state: rotate icon + reveal content.
+.explore-region--collapsible.explore-region--expanded {
+  .explore-region__icon {
+    transform: rotate(90deg); // pointing down = expanded
+  }
+
+  .explore-region__content-wrapper {
+    grid-template-rows: 1fr;
+  }
+}
+
+// ==================== Streaming adjustments ====================
+
+// Top/bottom gradient masks during streaming.
 .explore-region--expanded.explore-region--streaming {
   // Top mask
   &::before {
     content: '';
     position: absolute;
-    // Account for header height.
+    // Default: account for collapsible header height.
     top: 28px;
     left: 0;
     right: 0;
@@ -103,7 +143,7 @@
       transparent 100%
     );
   }
-  
+
   // Bottom mask
   &::after {
     content: '';
@@ -121,21 +161,22 @@
       transparent 100%
     );
   }
-  
-  // Adjust top mask when no header is present.
-  &:not(:has(.explore-region__header))::before {
+
+  // Non-collapsible has no header, start mask from the very top.
+  &:not(.explore-region--collapsible)::before {
     top: 0;
   }
 }
 
-// Streaming-only adjustments.
+// Limit height and enable scroll during streaming.
 .explore-region--expanded.explore-region--streaming {
   .explore-region__content {
-    // Limit height and enable scrolling during streaming.
     max-height: 400px;
     overflow-y: auto;
   }
 }
+
+// ==================== Adjacent collapsed regions ====================
 
 // Reduce spacing between adjacent collapsed regions.
 .explore-region--collapsed + .explore-region--collapsed {

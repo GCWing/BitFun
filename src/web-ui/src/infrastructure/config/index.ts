@@ -17,7 +17,6 @@ export * from './hooks';
 
 // Components
 export { default as AIModelConfig } from './components/AIModelConfig';
-export { default as ConfigCenterPanel } from './components/ConfigCenterPanel';
 
 // Default instance
 export { configManager } from './services/ConfigManager';

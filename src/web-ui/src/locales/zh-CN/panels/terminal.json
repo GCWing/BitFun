@@ -1,5 +1,6 @@
 {
   "title": "终端",
+  "emptyState": "从导航面板的 Shell 或 Shell Hub 打开终端",
   "actions": {
     "refresh": "刷新终端列表",
     "newTerminal": "新建终端",

@@ -1,6 +1,6 @@
 {
-  "title": "Agent 管理",
-  "subtitle": "管理用户级和项目级 Agent",
+  "title": "Agents",
+  "subtitle": "管理用户级和项目级智能体",
   "toolbar": {
     "searchPlaceholder": "搜索Agent...",
     "refreshTooltip": "刷新 Agent 列表",
@@ -12,6 +12,15 @@
     "builtin": "内置",
     "user": "用户级",
     "project": "项目级"
+  },
+  "section": {
+    "builtin": { "description": "系统内置的 AI 子 Agent 与工作模式。" },
+    "user": { "description": "当前用户自定义的 Agent。" },
+    "project": { "description": "当前工作区的项目级 Agent。" },
+    "customAgents": {
+      "title": "自定义 Agent",
+      "description": "用户级与项目级 Agent，通过下方标签切换。"
+    }
   },
   "form": {
     "titleEdit": "编辑Agent",
@@ -56,11 +65,12 @@
     "errorPrefix": "加载失败: ",
     "empty": {
       "noMatch": "没有找到匹配的Agent",
-      "noMatchBuiltin": "没有找到匹配的内置 Sub Agent",
-      "noAgents": "还没有配置任何Agent"
+      "noMatchBuiltin": "没有找到匹配的内置 Sub Agent"
     },
     "item": {
       "builtin": "内置",
+      "subAgent": "Sub-Agent",
+      "mode": "模式",
       "toolsCount": "{{count}} 工具",
       "editTooltip": "编辑",
       "deleteTooltip": "删除",
@@ -92,10 +102,36 @@
     "update": "更新",
     "create": "创建",
     "modelUpdated": "\"{{name}}\" 将使用 {{model}}",
-    "modelUpdateFailed": "模型设置失败"
+    "modelUpdateFailed": "模型设置失败",
+    "saveFailed": "保存失败"
   },
   "model": {
     "primary": "主力模型",
     "fast": "快速模型"
+  },
+  "mode": {
+    "tools": {
+      "label": "可用工具",
+      "selectAll": "全选",
+      "clear": "清空",
+      "reset": "重置为默认",
+      "expand": "展开",
+      "collapse": "折叠",
+      "enabled": "已启用"
+    },
+    "messages": {
+      "confirmReset": "确定要重置该模式的工具配置吗？",
+      "resetSuccess": "工具配置已重置",
+      "resetFailed": "重置失败",
+      "confirmSelectAll": "确定要启用所有工具吗？",
+      "confirmClearAll": "确定要清空所有工具吗？",
+      "allToolsEnabled": "已启用所有工具",
+      "allToolsDisabled": "已清空所有工具",
+      "toolEnabled": "\"{{name}}\" 已启用工具: {{tool}}",
+      "toolDisabled": "\"{{name}}\" 已禁用工具: {{tool}}",
+      "toolToggleFailed": "工具切换失败",
+      "modelUpdated": "\"{{name}}\" 将使用 {{model}}",
+      "modelUpdateFailed": "模型设置失败"
+    }
   }
 }

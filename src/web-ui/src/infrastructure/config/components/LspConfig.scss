@@ -1,136 +1,13 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-lsp-config {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-
-  
-  &__content {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  
-  &__body {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    min-height: 0;
-    padding: $size-gap-4 0;
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-4;
-  }
-
-  
   &__message-container {
-    flex-shrink: 0;
-    padding: 0;
-    margin-bottom: $size-gap-4;
-    animation: bitfun-lsp-slide-down 0.3s $easing-standard;
-
-    .alert {
-      border-style: dashed;
-    }
+    padding: $size-gap-4 $size-gap-4 0;
+    animation: bitfun-collection-slide-down 0.2s $easing-standard;
   }
 
-  
   &__plugins {
-    flex: 1;
-    min-height: 0;
     overflow: hidden;
     background: transparent;
   }
-
-  
-  &__settings {
-    max-width: 800px;
-    flex-shrink: 0;
-  }
-
-  &__settings-content {
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-3;
-  }
-
-  &__setting-item {
-    background: transparent !important;
-    border: none !important;
-  }
-
-  &__settings-actions {
-    display: flex;
-    gap: $size-gap-2;
-    justify-content: flex-end;
-    padding-top: $size-gap-3;
-    border-top: 1px dashed var(--border-base);
-    margin-top: $size-gap-3;
-  }
-
-  
-  &__spinning {
-    animation: bitfun-lsp-spin 1s linear infinite;
-  }
 }
-
-
-@keyframes bitfun-lsp-slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes bitfun-lsp-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-
-
-
-@container config-panel (max-width: 520px) {
-  .bitfun-lsp-config {
-    &__body {
-      padding: $size-gap-3 0;
-      gap: $size-gap-3;
-    }
-
-    &__message-container {
-      margin-bottom: 0;
-    }
-
-    &__settings {
-      max-width: 100%;
-    }
-
-    &__settings-content {
-      gap: $size-gap-2;
-    }
-
-    &__setting-item {
-      padding: $size-gap-3;
-    }
-
-    &__settings-actions {
-      gap: $size-gap-2;
-      padding-top: $size-gap-2;
-      margin-top: $size-gap-2;
-    }
-  }
-}
-
-

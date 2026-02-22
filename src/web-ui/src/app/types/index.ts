@@ -5,6 +5,9 @@
 
 import { i18nService } from '@/infrastructure/i18n';
 
+// Re-export scene tab types for convenience
+export type { SceneTabId, SceneTabDef, SceneTab } from '../components/SceneBar/types';
+
 // Agent types
 export interface Agent {
   id: string;
@@ -27,8 +30,8 @@ export interface AgentConfig {
 }
 
 // Panel types - removed 'chat'; chat lives in the center panel.
-// 'project-context' replaces 'context' to avoid overlap with agentic context.
-export type PanelType = 'sessions' | 'workflows' | 'files' | 'git' | 'project-context' | 'terminal' | 'capabilities';
+// 'profile' replaces legacy context naming.
+export type PanelType = 'sessions' | 'files' | 'git' | 'profile' | 'terminal' | 'capabilities' | 'team' | 'skills' | 'tools' | 'shell-hub';
 
 // Layout state - three-column layout support.
 // Strategy: fixed left/right widths with elastic center (floating layout).

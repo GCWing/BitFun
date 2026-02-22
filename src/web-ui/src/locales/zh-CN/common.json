@@ -58,7 +58,72 @@
     "switchToCowork": "切换到 Cowork 模式",
     "switchToCoder": "切换到 Coder 模式",
     "hideAgentic": "隐藏 Agentic",
-    "activateAgentic": "激活 Agentic"
+    "activateAgentic": "激活 Agentic",
+    "switchWorkspace": "切换工作区",
+    "recentWorkspaces": "最近工作区",
+    "noRecentWorkspaces": "暂无最近工作区",
+    "noWorkspaceOpen": "选择工作区"
+  },
+  "nav": {
+    "aria": {
+      "navControl": "导航控制",
+      "mainNav": "主导航"
+    },
+    "back": "后退",
+    "forward": "前进",
+    "backShortcut": "后退 (Alt+←)",
+    "forwardShortcut": "前进 (Alt+→)",
+    "items": {
+      "sessions": "会话",
+      "project": "目录",
+      "persona": "档案",
+      "team": "团队",
+      "skills": "技能",
+      "tools": "工具",
+      "terminal": "Shell",
+      "shellHub": "Shell Hub",
+      "git": "Git"
+    },
+    "tooltips": {
+      "persona": "智能体档案 — 身份、规则、记忆、知识与能力",
+      "team": "它能叫谁帮忙 — 子智能体专家团队",
+      "skills": "它懂什么专项知识 — 技能知识文件",
+      "tools": "它能用什么工具 — 内置工具与 MCP 服务"
+    },
+    "sections": {
+      "workspace": "工作区",
+      "myAgent": "我的智能体",
+      "devSuite": "开发套件"
+    },
+    "sessions": {
+      "newSession": "新建会话",
+      "newCodeSession": "新建 Code 会话",
+      "newCoworkSession": "新建 Cowork 会话",
+      "modeCode": "Code",
+      "modeCowork": "Cowork（即将推出）",
+      "noSessions": "暂无会话",
+      "rename": "重命名",
+      "delete": "删除",
+      "confirmEdit": "确认",
+      "cancelEdit": "取消",
+      "showMore": "还有 {{count}} 个会话",
+      "showLess": "收起"
+    },
+    "team": {
+      "allAgents": "全部子智能体",
+      "newAgent": "新建子智能体",
+      "agentsOverview": "Agents",
+      "expertTeams": "专家团队"
+    },
+    "skills": {
+      "allSkills": "全部技能",
+      "addSkill": "添加技能"
+    },
+    "tools": {
+      "builtinTools": "内置工具",
+      "mcpServices": "MCP 服务"
+    },
+    "moreOptions": "更多选项"
   },
   "window": {
     "minimize": "最小化",
@@ -344,17 +409,20 @@
     }
   },
   "startup": {
-    "subtitle": "在这里，思维与代码同步流动",
-    "continueLastWork": "继续上次的工作",
-    "openFolder": "打开文件夹",
+    "subtitle": "Hi，今天我能帮你做什么？",
+    "greetingMorning": "早上好，准备好开始今天的工作了吗？",
+    "greetingAfternoon": "下午好，让我们继续推进吧",
+    "greetingEvening": "晚上好，有什么我能帮到你的？",
+    "continueLastWork": "继续我们的工作",
+    "openFolder": "开始新任务",
     "selecting": "正在选择...",
-    "recentlyOpened": "最近打开",
+    "recentlyOpened": "最近的项目",
     "projects": "个项目",
     "collapse": "收起",
     "showMore": "查看更多 ({{count}} 个)",
     "noProjectsYet": "还没有打开过项目",
-    "startYourJourney": "选择一个文件夹开始你的编程之旅",
-    "selectWorkspaceDirectory": "选择工作区目录",
+    "startYourJourney": "选择一个项目目录，我来帮你",
+    "selectWorkspaceDirectory": "选择项目目录",
     "pathNotExist": "路径不存在",
     "invalidWorkspacePath": "工作区路径无效或为空",
     "daysAgo": "{{count}} 天前",
@@ -400,5 +468,40 @@
     "defaultAction2Command": "帮我继续写代码",
     "defaultAction3": "提交当前的更改",
     "defaultAction3Command": "帮我提交代码"
+  },
+  "scenes": {
+    "aiAgent": "会话",
+    "terminal": "终端",
+    "git": "Git",
+    "settings": "设置",
+    "fileViewer": "文件查看",
+    "projectContext": "项目概况",
+    "capabilities": "能力配置",
+    "team": "团队"
+  },
+  "welcomeScene": {
+    "tabLabel": "欢迎使用",
+    "welcomeBack": "欢迎回到",
+    "welcomeTabTitle": "欢迎使用",
+    "quickStart": "开始",
+    "newCodeSession": "新建 Code 会话",
+    "newCodeSessionDesc": "适合日常编码、问答与调试",
+    "newCoworkSession": "新建 Cowork 会话",
+    "newCoworkSessionDesc": "适合复杂任务，多个智能体分工协作完成",
+    "comingSoon": "即将推出",
+    "recentWorkspaces": "切换工作区",
+    "openOtherProject": "打开",
+    "newProject": "新建",
+    "noOtherWorkspaces": "暂无其他工作区",
+    "emptyHint": "打开一个场景开始工作",
+    "firstTime": {
+      "title": "欢迎使用 BitFun",
+      "subtitle": "你的 AI 编程伙伴，让创意瞬间成为现实",
+      "noWorkspaceHint": "尚未打开任何工作区",
+      "openProject": "打开项目",
+      "openProjectDesc": "选择一个已有的项目目录，开始你的 AI 编程之旅",
+      "newProject": "新建项目",
+      "newProjectDesc": "从零开始创建一个全新的项目"
+    }
   }
 }

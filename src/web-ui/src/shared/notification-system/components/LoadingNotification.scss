@@ -7,7 +7,7 @@
   max-width: 320px;
   background: var(--color-bg-primary);
   border-radius: $size-radius-base;
-  box-shadow: var(--shadow-lg, 0 8px 16px rgba(71, 85, 105, 0.14));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   border: 1px solid $border-base;
   padding: $size-gap-2 $size-gap-3;
   display: flex;
@@ -128,7 +128,7 @@
 @keyframes bitfun-notification-slide-in {
   from {
     opacity: 0;
-    transform: translateX(100%);
+    transform: translateX(-100%);
   }
   to {
     opacity: 1;

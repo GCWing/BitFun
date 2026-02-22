@@ -29,8 +29,6 @@ export enum ContextType {
    
   PANEL_HEADER = 'panel_header',
    
-  PROJECT_CONTEXT_DOCUMENT = 'project_context_document',
-   
   CUSTOM = 'custom'
 }
 
@@ -171,21 +169,6 @@ export interface EmptySpaceContext extends BaseContext {
 }
 
  
-export interface ProjectContextDocumentContext extends BaseContext {
-  type: ContextType.PROJECT_CONTEXT_DOCUMENT;
-   
-  docId: string;
-   
-  docName: string;
-   
-  filePath: string | null;
-   
-  exists: boolean;
-   
-  categoryId: string;
-}
-
- 
 export interface CustomContext extends BaseContext {
   type: ContextType.CUSTOM;
    
@@ -204,7 +187,6 @@ export type MenuContext =
   | TabContext
   | PanelHeaderContext
   | EmptySpaceContext
-  | ProjectContextDocumentContext
   | CustomContext;
 
  

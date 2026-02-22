@@ -1,0 +1,143 @@
+/**
+ * GitNav styles — scene-specific left sidebar for Git.
+ *
+ * Reuses design language as SettingsNav (tokens, spacing, BEM).
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-git-scene-nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 $size-gap-3;
+    height: 40px;
+  }
+
+  &__title {
+    font-size: $font-size-sm;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__sections {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: $size-gap-2 0;
+
+    &::-webkit-scrollbar { width: 3px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-subtle);
+      border-radius: 2px;
+    }
+  }
+
+  &__status {
+    flex-shrink: 0;
+    padding: 0 $size-gap-3 $size-gap-2;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: $size-gap-2;
+  }
+
+  &__branch-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    font-size: $font-size-sm;
+    color: var(--color-text-secondary);
+    margin-bottom: $size-gap-1;
+  }
+
+  &__branch-name {
+    font-weight: 500;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__sync-badges {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    font-size: 10px;
+    color: var(--color-text-muted);
+  }
+
+  &__actions-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    margin-top: $size-gap-2;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 $size-gap-2 0 $size-gap-3;
+    border: none;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    text-align: left;
+    font-size: $font-size-sm;
+    font-weight: 400;
+    width: 100%;
+    position: relative;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+      font-weight: 500;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2px;
+        height: 16px;
+        background: var(--color-primary);
+        border-radius: 0 2px 2px 0;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__item-badge {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    margin-left: $size-gap-1;
+  }
+}

@@ -20,7 +20,6 @@ export async function initializeAllTools(): Promise<void> {
 }
 
 // Export all tool modules.
-export * from './project-context';
 export * from './editor';
 export * from './file-system';
 export * from './git';

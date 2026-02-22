@@ -3,7 +3,11 @@
  */
 
 export {
+  CanvasStoreModeContext,
   useCanvasStore,
+  useAgentCanvasStore,
+  useProjectCanvasStore,
+  useGitCanvasStore,
   useGroupTabs,
   useActiveTabId,
   useLayout,

@@ -2,11 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Loader
-} from 'lucide-react';
-import { Switch, Card } from '@/component-library';
-import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent } from './common';
+import { Switch, ConfigPageLoading } from '@/component-library';
+import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
 import { useNotification, notificationService } from '@/shared/notification-system';
@@ -46,10 +43,6 @@ const FEATURE_CONFIGS: FeatureConfig[] = [
     id: 'welcomeAnalysis',
     settingKey: 'enable_welcome_panel_ai_analysis',
     agentName: 'startchat-func-agent',  
-  },
-  {
-    id: 'compression',
-    agentName: 'compression',
   },
 ];
 
@@ -165,87 +158,15 @@ const AIFeaturesConfig: React.FC = () => {
   
   const enabledModels = models.filter(m => m.enabled);
 
-  
-  const renderFeatureCard = (feature: FeatureConfig) => {
-    const isEnabled = feature.settingKey ? settings[feature.settingKey] : true;
-
-    
-    const configuredModelId = feature.agentName
-      ? (funcAgentModels[feature.agentName] || 'fast')
-      : 'fast';
-
-    
-    const sharedAgentFeatures = FEATURE_CONFIGS.filter(f => f.agentName === feature.agentName);
-    const isSharedAgent = sharedAgentFeatures.length > 1;
-    const isFirstOfSharedAgent = isSharedAgent && sharedAgentFeatures[0].id === feature.id;
-
-    return (
-      <Card 
-        key={feature.id} 
-        variant="default" 
-        padding="none" 
-        className="feature-section"
-      >
-        
-        <div className="feature-section__header">
-          <h3 className="feature-section__name">
-            {t(`features.${feature.id}.title`)}
-          </h3>
-          {feature.settingKey && (
-            <div className="feature-section__actions">
-              <div className="feature-enabled">
-                <span className="enabled-label">{t('common.enable')}</span>
-                <Switch
-                  checked={isEnabled}
-                  onChange={(e) => updateSetting(feature.settingKey!, e.target.checked)}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        
-        <p className="feature-section__description">
-          {t(`features.${feature.id}.subtitle`)}
-        </p>
-
-        
-        <div className="feature-section__content">
-          
-          {feature.agentName && (!isSharedAgent || isFirstOfSharedAgent) && (
-            <div className="config-row config-row--model">
-              <span className="config-label__text">{t('model.label')}</span>
-              <ModelSelectionRadio
-                value={configuredModelId}
-                models={enabledModels}
-                onChange={(modelId) =>
-                  handleAgentSelectionChange(feature.agentName!, modelId)
-                }
-                layout="horizontal"
-                size="small"
-              />
-            </div>
-          )}
-
-          
-          {feature.settingKey && !isEnabled && t(`features.${feature.id}.warning`, '') && (
-            <div className="feature-section__warning">
-              {t(`features.${feature.id}.warning`)}
-            </div>
-          )}
-        </div>
-      </Card>
-    );
-  };
-
   if (isLoading) {
     return (
       <ConfigPageLayout className="bitfun-func-agent-config">
+        <ConfigPageHeader
+          title={t('title')}
+          subtitle={t('subtitle')}
+        />
         <ConfigPageContent className="bitfun-func-agent-config__content">
-          <div className="bitfun-func-agent-config__loading">
-            <Loader className="bitfun-func-agent-config__loading-icon" size={24} />
-            <span>{t('loading.text')}</span>
-          </div>
+          <ConfigPageLoading text={t('loading.text')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -259,10 +180,56 @@ const AIFeaturesConfig: React.FC = () => {
       />
       
       <ConfigPageContent className="bitfun-func-agent-config__content">
-        
-        <div className="bitfun-func-agent-config__sections">
-          {FEATURE_CONFIGS.map(feature => renderFeatureCard(feature))}
-        </div>
+        {FEATURE_CONFIGS.map((feature) => {
+          const hasSwitch = !!feature.settingKey;
+          const hasModel = !!feature.agentName;
+          const isEnabled = hasSwitch ? settings[feature.settingKey!] : true;
+          const configuredModelId = hasModel ? (funcAgentModels[feature.agentName!] || 'fast') : 'fast';
+          const warning = t(`features.${feature.id}.warning`, '');
+
+          return (
+            <ConfigPageSection
+              key={feature.id}
+              title={t(`features.${feature.id}.title`)}
+              description={t(`features.${feature.id}.subtitle`)}
+            >
+              {hasSwitch && (
+                <ConfigPageRow
+                  label={t('common.enable')}
+                  description={warning && !isEnabled ? warning : undefined}
+                  align="center"
+                >
+                  <div className="bitfun-func-agent-config__row-control">
+                    <Switch
+                      checked={isEnabled}
+                      onChange={(e) => updateSetting(feature.settingKey!, e.target.checked)}
+                      size="small"
+                    />
+                  </div>
+                </ConfigPageRow>
+              )}
+
+              {hasModel && (
+                <ConfigPageRow
+                  className="bitfun-func-agent-config__model-row"
+                  label={t('model.label')}
+                  description={enabledModels.length === 0 ? t('models.empty') : undefined}
+                  align="center"
+                >
+                  <div className="bitfun-func-agent-config__row-control bitfun-func-agent-config__row-control--model">
+                    <ModelSelectionRadio
+                      value={configuredModelId}
+                      models={enabledModels}
+                      onChange={(modelId) => handleAgentSelectionChange(feature.agentName!, modelId)}
+                      layout="horizontal"
+                      size="small"
+                    />
+                  </div>
+                </ConfigPageRow>
+              )}
+            </ConfigPageSection>
+          );
+        })}
       </ConfigPageContent>
     </ConfigPageLayout>
   );

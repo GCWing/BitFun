@@ -66,7 +66,7 @@
 
 /* Chrome/Safari */
 @media screen and (-webkit-min-device-pixel-ratio: 2) {
-  input, textarea {
+  input:not([type="radio"]):not([type="checkbox"]), textarea {
     -webkit-appearance: none;
     -webkit-font-smoothing: antialiased;
   }

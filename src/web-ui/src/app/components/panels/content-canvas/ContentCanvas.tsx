@@ -20,7 +20,7 @@ export interface ContentCanvasProps {
   /** Workspace path */
   workspacePath?: string;
   /** App mode */
-  mode?: 'agent' | 'project';
+  mode?: 'agent' | 'project' | 'git';
   /** Interaction callback */
   onInteraction?: (itemId: string, userInput: string) => Promise<void>;
   /** Before-close callback */

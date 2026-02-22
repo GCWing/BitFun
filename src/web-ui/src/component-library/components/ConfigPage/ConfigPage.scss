@@ -1,0 +1,13 @@
+.bitfun-config-page-loading {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.bitfun-config-page-message {
+  margin-bottom: var(--size-gap-1, 4px);
+}
+

@@ -58,7 +58,72 @@
     "switchToCowork": "Switch to Cowork mode",
     "switchToCoder": "Switch to Coder mode",
     "hideAgentic": "Hide Agentic",
-    "activateAgentic": "Activate Agentic"
+    "activateAgentic": "Activate Agentic",
+    "switchWorkspace": "Switch Workspace",
+    "recentWorkspaces": "Recent Workspaces",
+    "noRecentWorkspaces": "No Recent Workspaces",
+    "noWorkspaceOpen": "Select Workspace"
+  },
+  "nav": {
+    "aria": {
+      "navControl": "Navigation controls",
+      "mainNav": "Main navigation"
+    },
+    "back": "Back",
+    "forward": "Forward",
+    "backShortcut": "Back (Alt+←)",
+    "forwardShortcut": "Forward (Alt+→)",
+    "items": {
+      "sessions": "Sessions",
+      "project": "Directory",
+      "persona": "Profile",
+      "team": "Team",
+      "skills": "Skills",
+      "tools": "Tools",
+      "terminal": "Shell",
+      "shellHub": "Shell Hub",
+      "git": "Git"
+    },
+    "tooltips": {
+      "persona": "Agent profile — identity, rules, memory, knowledge & capabilities",
+      "team": "Who it can call — specialist sub-agents",
+      "skills": "What it knows — specialized knowledge files",
+      "tools": "What it can use — built-in tools & MCP services"
+    },
+    "sections": {
+      "workspace": "Workspace",
+      "myAgent": "My Agent",
+      "devSuite": "Developer Suite"
+    },
+    "sessions": {
+      "newSession": "New session",
+      "newCodeSession": "New Code session",
+      "newCoworkSession": "New Cowork session",
+      "modeCode": "Code",
+      "modeCowork": "Cowork (coming soon)",
+      "noSessions": "No sessions",
+      "rename": "Rename",
+      "delete": "Delete",
+      "confirmEdit": "Confirm",
+      "cancelEdit": "Cancel",
+      "showMore": "{{count}} more sessions",
+      "showLess": "Show less"
+    },
+    "team": {
+      "allAgents": "All Agents",
+      "newAgent": "New Agent",
+      "agentsOverview": "Agents",
+      "expertTeams": "Expert Teams"
+    },
+    "skills": {
+      "allSkills": "All Skills",
+      "addSkill": "Add Skill"
+    },
+    "tools": {
+      "builtinTools": "Built-in Tools",
+      "mcpServices": "MCP Services"
+    },
+    "moreOptions": "More options"
   },
   "window": {
     "minimize": "Minimize",
@@ -344,17 +409,20 @@
     }
   },
   "startup": {
-    "subtitle": "Where thoughts and code flow as one",
-    "continueLastWork": "Continue Last Work",
-    "openFolder": "Open Folder",
+    "subtitle": "Hi, what can I help you with today?",
+    "greetingMorning": "Good morning, ready to get started?",
+    "greetingAfternoon": "Good afternoon, let's keep things moving",
+    "greetingEvening": "Good evening, how can I help you?",
+    "continueLastWork": "Continue Where We Left Off",
+    "openFolder": "Start a New Task",
     "selecting": "Selecting...",
-    "recentlyOpened": "Recently Opened",
+    "recentlyOpened": "Recent Projects",
     "projects": "projects",
     "collapse": "Collapse",
     "showMore": "Show More ({{count}})",
     "noProjectsYet": "No projects opened yet",
-    "startYourJourney": "Select a folder to start your coding journey",
-    "selectWorkspaceDirectory": "Select Workspace Directory",
+    "startYourJourney": "Pick a project folder and I'll take it from there",
+    "selectWorkspaceDirectory": "Select Project Directory",
     "pathNotExist": "Path does not exist",
     "invalidWorkspacePath": "Workspace path is invalid or empty",
     "daysAgo": "{{count}} days ago",
@@ -400,5 +468,40 @@
     "defaultAction2Command": "Help me continue coding",
     "defaultAction3": "Commit current changes",
     "defaultAction3Command": "Help me commit my code"
+  },
+  "scenes": {
+    "aiAgent": "Session",
+    "terminal": "Terminal",
+    "git": "Git",
+    "settings": "Settings",
+    "fileViewer": "File Viewer",
+    "projectContext": "Profile",
+    "capabilities": "Capabilities",
+    "team": "Team"
+  },
+  "welcomeScene": {
+    "tabLabel": "Welcome",
+    "welcomeBack": "Welcome back to",
+    "welcomeTabTitle": "Welcome",
+    "quickStart": "Start",
+    "newCodeSession": "New Code Session",
+    "newCodeSessionDesc": "For everyday coding, Q&A and debugging",
+    "newCoworkSession": "New Cowork Session",
+    "newCoworkSessionDesc": "For complex tasks handled by multiple agents working together",
+    "comingSoon": "Coming Soon",
+    "recentWorkspaces": "Switch Workspace",
+    "openOtherProject": "Open",
+    "newProject": "New",
+    "noOtherWorkspaces": "No other workspaces",
+    "emptyHint": "Open a scene to get started",
+    "firstTime": {
+      "title": "Welcome to BitFun",
+      "subtitle": "Your AI coding companion — turn ideas into reality in an instant.",
+      "noWorkspaceHint": "No workspace opened yet",
+      "openProject": "Open Project",
+      "openProjectDesc": "Select an existing project directory to start your AI-powered coding journey.",
+      "newProject": "New Project",
+      "newProjectDesc": "Create a brand new project from scratch."
+    }
   }
 }

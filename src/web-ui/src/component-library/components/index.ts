@@ -31,6 +31,7 @@ export * from './Empty';
 export * from './Markdown';
 export * from './Card';
 export * from './FilterPill';
+export * from './ConfigPage';
 
 export * from './CodeEditor';
 
