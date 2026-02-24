@@ -95,6 +95,8 @@
     "modelName": "Model Name",
     "modelNameHint": "GLM-ASR uses glm-asr, other speech models use their corresponding model names",
     "baseUrl": "API URL",
+    "resolvedUrlLabel": "Request URL: ",
+    "forceUrlHint": "Append # to force use the exact URL you entered",
     "searchApiHint": "Zhipu AI search API URL, or other compatible search API URL",
     "apiKey": "API Key",
     "apiKeyPlaceholder": "Enter your API Key",
