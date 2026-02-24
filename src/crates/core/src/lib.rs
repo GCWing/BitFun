@@ -7,7 +7,7 @@ pub mod function_agents;
 pub mod infrastructure; // Infrastructure layer - AI clients, storage, logging, events
 pub mod service; // Service layer - Workspace, Config, FileSystem, Terminal, Git
 pub mod util; // Utility layer - General types, errors, helper functions // Function Agents - Function-based agents
-                                                                         // Re-export debug_log from infrastructure for backward compatibility
+              // Re-export debug_log from infrastructure for backward compatibility
 pub use infrastructure::debug_log as debug;
 
 // Export main types

@@ -14,27 +14,28 @@ use log::{debug, error, info, warn};
 use reqwest::header::{
     HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE, USER_AGENT, WWW_AUTHENTICATE,
 };
-use rmcp::ClientHandler;
-use rmcp::RoleClient;
 use rmcp::model::{
     CallToolRequestParam, ClientCapabilities, ClientInfo, Content, GetPromptRequestParam,
-    Implementation, JsonObject, LoggingLevel, LoggingMessageNotificationParam, PaginatedRequestParam,
-    ProtocolVersion, ReadResourceRequestParam, RequestNoParam, ResourceContents,
+    Implementation, JsonObject, LoggingLevel, LoggingMessageNotificationParam,
+    PaginatedRequestParam, ProtocolVersion, ReadResourceRequestParam, RequestNoParam,
+    ResourceContents,
 };
 use rmcp::service::RunningService;
-use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::common::http_header::{
     EVENT_STREAM_MIME_TYPE, HEADER_LAST_EVENT_ID, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::streamable_http_client::{
-    AuthRequiredError, StreamableHttpClient, StreamableHttpError, StreamableHttpPostResponse,
-    SseError,
-};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+use rmcp::transport::streamable_http_client::{
+    AuthRequiredError, SseError, StreamableHttpClient, StreamableHttpError,
+    StreamableHttpPostResponse,
+};
+use rmcp::transport::StreamableHttpClientTransport;
+use rmcp::ClientHandler;
+use rmcp::RoleClient;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::Arc as StdArc;
 use std::str::FromStr;
+use std::sync::Arc as StdArc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -64,20 +65,35 @@ impl ClientHandler for BitFunRmcpClientHandler {
         let logger = logger.as_deref();
         match level {
             LoggingLevel::Critical | LoggingLevel::Error => {
-                error!("MCP server log message: level={:?} logger={:?} data={}", level, logger, data);
+                error!(
+                    "MCP server log message: level={:?} logger={:?} data={}",
+                    level, logger, data
+                );
             }
             LoggingLevel::Warning => {
-                warn!("MCP server log message: level={:?} logger={:?} data={}", level, logger, data);
+                warn!(
+                    "MCP server log message: level={:?} logger={:?} data={}",
+                    level, logger, data
+                );
             }
             LoggingLevel::Notice | LoggingLevel::Info => {
-                info!("MCP server log message: level={:?} logger={:?} data={}", level, logger, data);
+                info!(
+                    "MCP server log message: level={:?} logger={:?} data={}",
+                    level, logger, data
+                );
             }
             LoggingLevel::Debug => {
-                debug!("MCP server log message: level={:?} logger={:?} data={}", level, logger, data);
+                debug!(
+                    "MCP server log message: level={:?} logger={:?} data={}",
+                    level, logger, data
+                );
             }
             // Keep a default arm in case rmcp adds new levels.
             _ => {
-                info!("MCP server log message: level={:?} logger={:?} data={}", level, logger, data);
+                info!(
+                    "MCP server log message: level={:?} logger={:?} data={}",
+                    level, logger, data
+                );
             }
         }
     }
@@ -106,8 +122,10 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
         session_id: StdArc<str>,
         last_event_id: Option<String>,
         auth_token: Option<String>,
-    ) -> Result<futures_util::stream::BoxStream<'static, Result<Sse, SseError>>, StreamableHttpError<Self::Error>>
-    {
+    ) -> Result<
+        futures_util::stream::BoxStream<'static, Result<Sse, SseError>>,
+        StreamableHttpError<Self::Error>,
+    > {
         let mut request_builder = self
             .client
             .get(uri.as_ref())
@@ -292,7 +310,10 @@ impl RemoteMCPTransport {
 
         for (name, value) in headers {
             let Ok(header_name) = HeaderName::from_str(name) else {
-                warn!("Invalid HTTP header name in MCP config (skipping): {}", name);
+                warn!(
+                    "Invalid HTTP header name in MCP config (skipping): {}",
+                    name
+                );
                 continue;
             };
 
@@ -342,7 +363,9 @@ impl RemoteMCPTransport {
             });
 
         let transport = StreamableHttpClientTransport::with_client(
-            BitFunStreamableHttpClient { client: http_client },
+            BitFunStreamableHttpClient {
+                client: http_client,
+            },
             StreamableHttpClientTransportConfig::with_uri(url.clone()),
         );
 
@@ -364,7 +387,9 @@ impl RemoteMCPTransport {
             .map(|s| s.to_string())
     }
 
-    async fn service(&self) -> BitFunResult<Arc<RunningService<RoleClient, BitFunRmcpClientHandler>>> {
+    async fn service(
+        &self,
+    ) -> BitFunResult<Arc<RunningService<RoleClient, BitFunRmcpClientHandler>>> {
         let guard = self.state.lock().await;
         match &*guard {
             ClientState::Ready { service } => Ok(Arc::clone(service)),
@@ -461,9 +486,14 @@ impl RemoteMCPTransport {
         }
     }
 
-    pub async fn list_resources(&self, cursor: Option<String>) -> BitFunResult<ResourcesListResult> {
+    pub async fn list_resources(
+        &self,
+        cursor: Option<String>,
+    ) -> BitFunResult<ResourcesListResult> {
         let service = self.service().await?;
-        let fut = service.peer().list_resources(Some(PaginatedRequestParam { cursor }));
+        let fut = service
+            .peer()
+            .list_resources(Some(PaginatedRequestParam { cursor }));
         let result = tokio::time::timeout(self.request_timeout, fut)
             .await
             .map_err(|_| BitFunError::Timeout("MCP resources/list timeout".to_string()))?
@@ -476,21 +506,27 @@ impl RemoteMCPTransport {
 
     pub async fn read_resource(&self, uri: &str) -> BitFunResult<ResourcesReadResult> {
         let service = self.service().await?;
-        let fut = service
-            .peer()
-            .read_resource(ReadResourceRequestParam { uri: uri.to_string() });
+        let fut = service.peer().read_resource(ReadResourceRequestParam {
+            uri: uri.to_string(),
+        });
         let result = tokio::time::timeout(self.request_timeout, fut)
             .await
             .map_err(|_| BitFunError::Timeout("MCP resources/read timeout".to_string()))?
             .map_err(|e| BitFunError::MCPError(format!("MCP resources/read failed: {}", e)))?;
         Ok(ResourcesReadResult {
-            contents: result.contents.into_iter().map(map_resource_content).collect(),
+            contents: result
+                .contents
+                .into_iter()
+                .map(map_resource_content)
+                .collect(),
         })
     }
 
     pub async fn list_prompts(&self, cursor: Option<String>) -> BitFunResult<PromptsListResult> {
         let service = self.service().await?;
-        let fut = service.peer().list_prompts(Some(PaginatedRequestParam { cursor }));
+        let fut = service
+            .peer()
+            .list_prompts(Some(PaginatedRequestParam { cursor }));
         let result = tokio::time::timeout(self.request_timeout, fut)
             .await
             .map_err(|_| BitFunError::Timeout("MCP prompts/list timeout".to_string()))?
@@ -516,25 +552,29 @@ impl RemoteMCPTransport {
             obj
         });
 
-        let fut = service
-            .peer()
-            .get_prompt(GetPromptRequestParam {
-                name: name.to_string(),
-                arguments,
-            });
+        let fut = service.peer().get_prompt(GetPromptRequestParam {
+            name: name.to_string(),
+            arguments,
+        });
         let result = tokio::time::timeout(self.request_timeout, fut)
             .await
             .map_err(|_| BitFunError::Timeout("MCP prompts/get timeout".to_string()))?
             .map_err(|e| BitFunError::MCPError(format!("MCP prompts/get failed: {}", e)))?;
 
         Ok(PromptsGetResult {
-            messages: result.messages.into_iter().map(map_prompt_message).collect(),
+            messages: result
+                .messages
+                .into_iter()
+                .map(map_prompt_message)
+                .collect(),
         })
     }
 
     pub async fn list_tools(&self, cursor: Option<String>) -> BitFunResult<ToolsListResult> {
         let service = self.service().await?;
-        let fut = service.peer().list_tools(Some(PaginatedRequestParam { cursor }));
+        let fut = service
+            .peer()
+            .list_tools(Some(PaginatedRequestParam { cursor }));
         let result = tokio::time::timeout(self.request_timeout, fut)
             .await
             .map_err(|_| BitFunError::Timeout("MCP tools/list timeout".to_string()))?
@@ -546,7 +586,11 @@ impl RemoteMCPTransport {
         })
     }
 
-    pub async fn call_tool(&self, name: &str, arguments: Option<Value>) -> BitFunResult<MCPToolResult> {
+    pub async fn call_tool(
+        &self,
+        name: &str,
+        arguments: Option<Value>,
+    ) -> BitFunResult<MCPToolResult> {
         let service = self.service().await?;
 
         let arguments = match arguments {
@@ -588,20 +632,23 @@ fn map_initialize_result(info: &rmcp::model::ServerInfo) -> BitFunInitializeResu
 
 fn map_server_capabilities(cap: &rmcp::model::ServerCapabilities) -> MCPCapability {
     MCPCapability {
-        resources: cap.resources.as_ref().map(|r| super::types::ResourcesCapability {
-            subscribe: r.subscribe.unwrap_or(false),
-            list_changed: r.list_changed.unwrap_or(false),
-        }),
-        prompts: cap.prompts.as_ref().map(|p| super::types::PromptsCapability {
-            list_changed: p.list_changed.unwrap_or(false),
-        }),
+        resources: cap
+            .resources
+            .as_ref()
+            .map(|r| super::types::ResourcesCapability {
+                subscribe: r.subscribe.unwrap_or(false),
+                list_changed: r.list_changed.unwrap_or(false),
+            }),
+        prompts: cap
+            .prompts
+            .as_ref()
+            .map(|p| super::types::PromptsCapability {
+                list_changed: p.list_changed.unwrap_or(false),
+            }),
         tools: cap.tools.as_ref().map(|t| super::types::ToolsCapability {
             list_changed: t.list_changed.unwrap_or(false),
         }),
-        logging: cap
-            .logging
-            .as_ref()
-            .map(|o| Value::Object(o.clone())),
+        logging: cap.logging.as_ref().map(|o| Value::Object(o.clone())),
     }
 }
 
@@ -626,12 +673,22 @@ fn map_resource(resource: rmcp::model::Resource) -> MCPResource {
 
 fn map_resource_content(contents: ResourceContents) -> MCPResourceContent {
     match contents {
-        ResourceContents::TextResourceContents { uri, mime_type, text, .. } => MCPResourceContent {
+        ResourceContents::TextResourceContents {
+            uri,
+            mime_type,
+            text,
+            ..
+        } => MCPResourceContent {
             uri,
             content: text,
             mime_type,
         },
-        ResourceContents::BlobResourceContents { uri, mime_type, blob, .. } => MCPResourceContent {
+        ResourceContents::BlobResourceContents {
+            uri,
+            mime_type,
+            blob,
+            ..
+        } => MCPResourceContent {
             uri,
             content: blob,
             mime_type,
@@ -690,7 +747,11 @@ fn map_tool_result(result: rmcp::model::CallToolResult) -> MCPToolResult {
     }
 
     MCPToolResult {
-        content: if mapped.is_empty() { None } else { Some(mapped) },
+        content: if mapped.is_empty() {
+            None
+        } else {
+            Some(mapped)
+        },
         is_error: result.is_error.unwrap_or(false),
     }
 }

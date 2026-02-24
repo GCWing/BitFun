@@ -3,9 +3,7 @@
 //! Handles starting, stopping, monitoring, and restarting MCP server processes.
 
 use super::connection::MCPConnection;
-use crate::service::mcp::protocol::{
-    InitializeResult, MCPMessage, MCPServerInfo,
-};
+use crate::service::mcp::protocol::{InitializeResult, MCPMessage, MCPServerInfo};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
 use std::sync::Arc;

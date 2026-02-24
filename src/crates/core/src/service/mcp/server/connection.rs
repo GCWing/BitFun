@@ -6,10 +6,9 @@ use crate::service::mcp::protocol::{
     create_initialize_request, create_ping_request, create_prompts_get_request,
     create_prompts_list_request, create_resources_list_request, create_resources_read_request,
     create_tools_call_request, create_tools_list_request, parse_response_result,
-    transport::MCPTransport,
-    transport_remote::RemoteMCPTransport,
-    InitializeResult, MCPMessage, MCPResponse, MCPToolResult, PromptsGetResult,
-    PromptsListResult, ResourcesListResult, ResourcesReadResult, ToolsListResult,
+    transport::MCPTransport, transport_remote::RemoteMCPTransport, InitializeResult, MCPMessage,
+    MCPResponse, MCPToolResult, PromptsGetResult, PromptsListResult, ResourcesListResult,
+    ResourcesReadResult, ToolsListResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
@@ -156,7 +155,9 @@ impl MCPConnection {
                     .await?;
                 parse_response_result(&response)
             }
-            TransportType::Remote(transport) => transport.initialize(client_name, client_version).await,
+            TransportType::Remote(transport) => {
+                transport.initialize(client_name, client_version).await
+            }
         }
     }
 

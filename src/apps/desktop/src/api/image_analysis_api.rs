@@ -34,12 +34,13 @@ pub async fn analyze_images(
             .models
             .iter()
             .find(|m| {
-                m.enabled && m.capabilities.iter().any(|cap| {
-                    matches!(
+                m.enabled
+                    && m.capabilities.iter().any(|cap| {
+                        matches!(
                         cap,
                         bitfun_core::service::config::types::ModelCapability::ImageUnderstanding
                     )
-                })
+                    })
             })
             .map(|m| m.id.as_str());
 

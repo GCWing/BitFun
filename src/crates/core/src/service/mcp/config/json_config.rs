@@ -112,11 +112,7 @@ impl MCPConfigService {
                     if let Some(t) = type_str {
                         let normalized_transport = match t {
                             "stdio" | "local" | "container" => "stdio",
-                            "sse"
-                            | "remote"
-                            | "http"
-                            | "streamable_http"
-                            | "streamable-http"
+                            "sse" | "remote" | "http" | "streamable_http" | "streamable-http"
                             | "streamablehttp" => "streamable-http",
                             _ => {
                                 let error_msg = format!(
@@ -148,8 +144,10 @@ impl MCPConfigService {
                     }
 
                     if inferred_transport == "streamable-http" && url.is_none() {
-                        let error_msg =
-                            format!("Server '{}' (streamable-http) must provide 'url' field", server_id);
+                        let error_msg = format!(
+                            "Server '{}' (streamable-http) must provide 'url' field",
+                            server_id
+                        );
                         error!("{}", error_msg);
                         return Err(BitFunError::validation(error_msg));
                     }

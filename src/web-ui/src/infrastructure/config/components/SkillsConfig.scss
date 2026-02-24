@@ -209,6 +209,78 @@
     margin-bottom: $size-gap-4;
   }
 
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: $size-gap-2;
+  }
+
+  &__section-title {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+
+  &__section-subtitle {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  &__market-list {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    margin-bottom: $size-gap-3;
+  }
+
+  &__market-item-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    padding: $size-gap-4;
+  }
+
+  &__market-item-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__market-item-name {
+    font-family: $font-family-sans;
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+
+  &__market-item-description {
+    margin-top: 4px;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    line-height: $line-height-base;
+    word-break: break-word;
+  }
+
+  &__market-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
+    margin-top: 4px;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+  }
+
+  &__market-item-source,
+  &__market-item-installs {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: $size-radius-sm;
+    border: 1px solid var(--border-base);
+  }
+
   
   &__list {
     display: flex;
@@ -449,6 +521,24 @@
 
     &__section {
       margin-bottom: $size-gap-3;
+    }
+
+    &__section-title {
+      font-size: $font-size-sm;
+    }
+
+    &__section-subtitle {
+      font-size: 11px;
+    }
+
+    &__market-list {
+      gap: $size-gap-2;
+    }
+
+    &__market-item-body {
+      padding: $size-gap-3;
+      flex-direction: column;
+      align-items: flex-start;
     }
 
     &__list {

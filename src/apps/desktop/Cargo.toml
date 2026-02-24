@@ -45,6 +45,7 @@ ignore = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
 zip = { workspace = true }
+reqwest = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

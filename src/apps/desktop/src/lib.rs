@@ -18,8 +18,6 @@ use std::sync::{
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
-#[cfg(target_os = "macos")]
-use tauri::Emitter;
 use tauri_plugin_log::{RotationStrategy, TimezoneStrategy};
 
 // Re-export API
@@ -319,6 +317,9 @@ pub async fn run() {
             list_agent_tool_names,
             update_subagent_config,
             get_skill_configs,
+            list_skill_market,
+            search_skill_market,
+            download_skill_market,
             set_skill_enabled,
             validate_skill_path,
             add_skill,

@@ -2,7 +2,7 @@
 //!
 //! Manages Skill loading and enabled/disabled filtering
 //! Supports multiple application paths:
-//! .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills
+//! .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills, .agents/skills
 
 use super::builtin::ensure_builtin_skills_installed;
 use super::types::{SkillData, SkillInfo, SkillLocation};
@@ -21,6 +21,14 @@ static SKILL_REGISTRY: OnceLock<SkillRegistry> = OnceLock::new();
 /// Project-level Skill directory names (relative to workspace root)
 const PROJECT_SKILL_SUBDIRS: &[(&str, &str)] = &[
     (".bitfun", "skills"),
+    (".claude", "skills"),
+    (".cursor", "skills"),
+    (".codex", "skills"),
+    (".agents", "skills"),
+];
+
+/// Home-directory based user-level Skill paths.
+const USER_HOME_SKILL_SUBDIRS: &[(&str, &str)] = &[
     (".claude", "skills"),
     (".cursor", "skills"),
     (".codex", "skills"),
@@ -57,8 +65,8 @@ impl SkillRegistry {
     /// Get all possible Skill directory paths
     ///
     /// Returns existing directories and their levels (project/user)
-    /// - Project-level: .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills under workspace
-    /// - User-level: skills under bitfun user config, ~/.claude/skills, ~/.cursor/skills, ~/.codex/skills
+    /// - Project-level: .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills, .agents/skills under workspace
+    /// - User-level: skills under bitfun user config, ~/.claude/skills, ~/.cursor/skills, ~/.codex/skills, ~/.config/agents/skills
     pub fn get_possible_paths() -> Vec<SkillDirEntry> {
         let mut entries = Vec::new();
 
@@ -87,10 +95,7 @@ impl SkillRegistry {
 
         // User-level: ~/.claude/skills, ~/.cursor/skills, ~/.codex/skills
         if let Some(home) = dirs::home_dir() {
-            for (parent, sub) in PROJECT_SKILL_SUBDIRS {
-                if *parent == ".bitfun" {
-                    continue; // bitfun user path already handled by path_manager
-                }
+            for (parent, sub) in USER_HOME_SKILL_SUBDIRS {
                 let p = home.join(parent).join(sub);
                 if p.exists() && p.is_dir() {
                     entries.push(SkillDirEntry {
@@ -98,6 +103,17 @@ impl SkillRegistry {
                         level: SkillLocation::User,
                     });
                 }
+            }
+        }
+
+        // User-level: ~/.config/agents/skills (used by universal agent installs in skills CLI)
+        if let Some(config_dir) = dirs::config_dir() {
+            let p = config_dir.join("agents").join("skills");
+            if p.exists() && p.is_dir() {
+                entries.push(SkillDirEntry {
+                    path: p,
+                    level: SkillLocation::User,
+                });
             }
         }
 
@@ -209,6 +225,15 @@ impl SkillRegistry {
     /// Find skill information by name
     pub async fn find_skill(&self, skill_name: &str) -> Option<SkillInfo> {
         self.ensure_loaded().await;
+        {
+            let cache = self.cache.read().await;
+            if let Some(info) = cache.get(skill_name) {
+                return Some(info.clone());
+            }
+        }
+
+        // Skill may have been installed externally (e.g. via `npx skills add`) after cache init.
+        self.refresh().await;
         let cache = self.cache.read().await;
         cache.get(skill_name).cloned()
     }

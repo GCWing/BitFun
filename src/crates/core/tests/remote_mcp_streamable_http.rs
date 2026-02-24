@@ -1,22 +1,22 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
-use axum::Json;
-use axum::Router;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::IntoResponse;
 use axum::routing::get;
+use axum::Json;
+use axum::Router;
 use bitfun_core::service::mcp::server::MCPConnection;
 use futures_util::Stream;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tokio::net::TcpListener;
-use tokio::sync::{Mutex, Notify, mpsc};
-use tokio_stream::StreamExt;
+use tokio::sync::{mpsc, Mutex, Notify};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::StreamExt;
 
 #[derive(Clone, Default)]
 struct TestState {
@@ -47,7 +47,11 @@ async fn sse_handler(
     }
 
     let stream = UnboundedReceiverStream::new(rx).map(|data| Ok(Event::default().data(data)));
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)).text("ka"))
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("ka"),
+    )
 }
 
 async fn post_handler(
@@ -150,9 +154,12 @@ async fn remote_mcp_streamable_http_accepts_202_and_delivers_response_via_sse() 
         .await
         .expect("initialize should succeed");
 
-    tokio::time::timeout(Duration::from_secs(2), state.sse_connected_notify.notified())
-        .await
-        .expect("SSE stream should connect");
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        state.sse_connected_notify.notified(),
+    )
+    .await
+    .expect("SSE stream should connect");
 
     let tools = connection
         .list_tools(None)

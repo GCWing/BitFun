@@ -11,6 +11,27 @@
     "user": "User",
     "project": "Project"
   },
+  "market": {
+    "title": "Skill Marketplace",
+    "subtitle": "Search and download reusable Skills (default scope: current project)",
+    "searchPlaceholder": "Search marketplace skills...",
+    "refreshTooltip": "Refresh marketplace results",
+    "loading": "Loading marketplace skills...",
+    "errorPrefix": "Failed to load marketplace: ",
+    "empty": {
+      "noMatch": "No matching marketplace Skills found",
+      "noSkills": "No marketplace Skills available"
+    },
+    "item": {
+      "sourceLabel": "Source: ",
+      "installs": "Installs: {{count}}",
+      "noDescription": "No description available",
+      "downloadProject": "Download to Project",
+      "installed": "Installed",
+      "installedTooltip": "This Skill is already installed",
+      "downloading": "Downloading..."
+    }
+  },
   "form": {
     "title": "Add Skill",
     "closeTooltip": "Close",
@@ -64,6 +85,8 @@
     "deleteFailed": "Failed to delete: {{error}}",
     "toggleSuccess": "Skill \"{{name}}\" {{status}}",
     "toggleFailed": "Failed to toggle: {{error}}",
+    "marketDownloadSuccess": "Skill \"{{name}}\" downloaded successfully",
+    "marketDownloadFailed": "Failed to download: {{error}}",
     "enabled": "enabled",
     "disabled": "disabled"
   }

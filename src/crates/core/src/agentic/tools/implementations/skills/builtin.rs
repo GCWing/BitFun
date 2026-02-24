@@ -135,9 +135,11 @@ async fn desired_file_content(
     };
 
     let enabled = if let Ok(existing) = fs::read_to_string(dest_path).await {
+        // Preserve user-selected state when file already exists.
         extract_enabled_flag(&existing).unwrap_or(true)
     } else {
-        true
+        // On first install, respect bundled default (if present), otherwise enable by default.
+        extract_enabled_flag(source_text).unwrap_or(true)
     };
 
     let merged = merge_skill_markdown_enabled(source_text, enabled)?;

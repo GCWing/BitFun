@@ -122,10 +122,7 @@ pub(super) fn parse_cursor_format(
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| server_id.clone());
 
-                let enabled = obj
-                    .get("enabled")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true);
+                let enabled = obj.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
                 let auto_start = obj
                     .get("autoStart")
