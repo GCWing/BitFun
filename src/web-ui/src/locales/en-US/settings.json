@@ -20,6 +20,7 @@
       "aiMemory": "Memory",
       "promptTemplates": "Prompts",
       "skills": "Skills",
+      "skillMarket": "Skill Market",
       "plugins": "Plugins",
       "integrations": "Integrations",
       "agents": "Sub Agent",

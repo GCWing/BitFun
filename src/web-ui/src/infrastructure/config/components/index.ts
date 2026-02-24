@@ -6,6 +6,7 @@ export { default as SubAgentConfig } from './SubAgentConfig';
 export { ThemeConfig } from './ThemeConfig';
 export { default as AIRulesConfig } from './AIRulesConfig';
 export { default as MCPConfig } from './MCPConfig';
+export { default as SkillMarketConfig } from './SkillMarketConfig';
 export { default as MCPResourceBrowser } from './MCPResourceBrowser';
 export { default as AgenticToolsConfig } from './AgenticToolsConfig';
 export { default as EditorConfig } from './EditorConfig';

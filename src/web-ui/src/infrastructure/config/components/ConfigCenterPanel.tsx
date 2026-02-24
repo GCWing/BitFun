@@ -7,6 +7,7 @@ import AIFeaturesConfig from './AIFeaturesConfig';
 import AIRulesConfig from './AIRulesConfig';
 import SubAgentConfig from './SubAgentConfig';
 import SkillsConfig from './SkillsConfig';
+import SkillMarketConfig from './SkillMarketConfig';
 import MCPConfig from './MCPConfig';
 import IntegrationsConfig from './IntegrationsConfig';
 import AgenticToolsConfig from './AgenticToolsConfig';
@@ -24,7 +25,7 @@ import './ConfigCenter.scss';
  
 
 export interface ConfigCenterPanelProps {
-  initialTab?: 'models' | 'ai-rules' | 'agents' | 'mcp' | 'agentic-tools' | 'logging';
+  initialTab?: 'models' | 'ai-rules' | 'agents' | 'mcp' | 'agentic-tools' | 'logging' | 'skill-market';
 }
 
 type ConfigTab =
@@ -35,6 +36,7 @@ type ConfigTab =
   | 'ai-rules'
   | 'agents'
   | 'skills'
+  | 'skill-market'
   | 'integrations'
   | 'mcp'
   | 'agentic-tools'
@@ -141,6 +143,10 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
           label: t('configCenter.tabs.skills')
         },
         {
+          id: 'skill-market' as ConfigTab,
+          label: t('configCenter.tabs.skillMarket')
+        },
+        {
           id: 'integrations' as ConfigTab,
           label: t('configCenter.tabs.integrations')
         },
@@ -214,6 +220,8 @@ const ConfigCenterPanel: React.FC<ConfigCenterPanelProps> = ({
         return <PromptTemplateConfig />;
       case 'skills':
         return <SkillsConfig />;
+      case 'skill-market':
+        return <SkillMarketConfig />;
       case 'agents':
         return <SubAgentConfig />;
       case 'mcp':
