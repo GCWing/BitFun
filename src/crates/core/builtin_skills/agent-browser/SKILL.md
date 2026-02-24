@@ -6,6 +6,43 @@ allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 
 # Browser Automation with agent-browser
 
+## Prerequisites (required)
+
+This skill relies on the external `agent-browser` CLI plus a local Chromium browser binary.
+
+Before using this skill, confirm prerequisites are satisfied:
+
+1. `agent-browser` is available in PATH (or via `npx`)
+2. Chromium is installed for Playwright (one-time download)
+
+If the CLI is missing, ask the user whether to install it (this may download binaries):
+
+```bash
+# Option A: global install (recommended for repeated use)
+npm install -g agent-browser
+
+# Option B: no global install (runs via npx)
+npx agent-browser --version
+```
+
+Then install the browser binary (one-time download):
+
+```bash
+agent-browser install
+# or:
+npx agent-browser install
+```
+
+Linux only (if Chromium fails to launch due to missing shared libraries):
+
+```bash
+agent-browser install --with-deps
+# or:
+npx playwright install-deps chromium
+```
+
+If prerequisites are not available and the user does not want to install anything, do not silently switch tools. Tell the user what is missing and offer a non-browser fallback.
+
 ## Core Workflow
 
 Every browser automation follows this pattern:
