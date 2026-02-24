@@ -18,6 +18,8 @@ use std::sync::{
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 use tauri_plugin_log::{RotationStrategy, TimezoneStrategy};
 
 // Re-export API
