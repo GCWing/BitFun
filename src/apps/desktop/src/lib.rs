@@ -86,7 +86,7 @@ pub async fn run() {
         return;
     }
 
-    let app_state = match AppState::new_async().await {
+    let app_state = match api::AppState::new_async().await {
         Ok(state) => state,
         Err(e) => {
             log::error!("Failed to initialize AppState: {}", e);
