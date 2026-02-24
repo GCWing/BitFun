@@ -51,17 +51,19 @@ export async function getModelMaxTokens(modelName?: string): Promise<number> {
  */
 export async function createChatSession(
   context: FlowChatContext,
-  config: SessionConfig
+  config: SessionConfig,
+  mode?: string
 ): Promise<string> {
   try {
     const sessionCount = context.flowChatStore.getState().sessions.size + 1;
     const sessionName = i18nService.t('flow-chat:session.newWithIndex', { count: sessionCount });
     
     const maxContextTokens = await getModelMaxTokens(config.modelName);
+    const agentType = mode || 'agentic';
     
     const response = await agentAPI.createSession({
       sessionName,
-      agentType: 'agentic',
+      agentType,
       config: {
         modelName: config.modelName || 'default',
         enableTools: true,
@@ -77,10 +79,11 @@ export async function createChatSession(
       config, 
       undefined,
       sessionName,
-      maxContextTokens
+      maxContextTokens,
+      mode
     );
     
-    await saveNewSessionMetadata(response.sessionId, config, sessionName);
+    await saveNewSessionMetadata(response.sessionId, config, sessionName, mode);
 
     return response.sessionId;
   } catch (error) {

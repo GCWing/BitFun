@@ -110,6 +110,8 @@
     "openMermaidEditor": "Open Mermaid Editor",
     "mermaidDualModeDemo": "Mermaid Editor",
     "selectPromptTemplate": "Select prompt template (Ctrl+Shift+P)",
+    "openWorkspaceFolder": "Open workspace folder",
+    "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
     "willSendAfterStop": "Will send after stop"
   },
   "context": {
@@ -175,6 +177,9 @@
     "noMatchingMode": "No matching mode",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
+    "openFolder": "Open folder…",
+    "selectWorkspaceTitle": "Select workspace directory",
+    "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
     "professionalMode": "Professional Mode",
     "designMode": "Design Mode",
     "templateHint": "Press <kbd>Tab</kbd> for next placeholder, <kbd>Shift+Tab</kbd> for previous, <kbd>Esc</kbd> to exit",
@@ -195,7 +200,7 @@
   },
   "coworkScope": {
     "title": "Choose a Cowork workspace",
-    "description": "Cowork mode needs a workspace to read/write files. Use the current project, or switch to an app-managed Cowork workspace for ad-hoc tasks.",
+    "description": "Cowork mode needs a workspace folder to read/write files. Use the current project, or choose another folder.",
     "recommended": "Recommended",
     "current": {
       "title": "Current workspace",
@@ -203,9 +208,9 @@
       "description": "Artifacts are saved in the current project. Use this when you need to read or change project files."
     },
     "global": {
-      "title": "Cowork workspace",
-      "subtitle": "App-managed (ad-hoc)",
-      "description": "Artifacts are saved in an app-managed workspace to avoid touching your current project. Look for outputs in the workspace's \"artifacts/\" folder."
+      "title": "Other folder",
+      "subtitle": "Choose directory",
+      "description": "Use a different folder for Cowork tasks. Outputs will be saved in that folder."
     },
     "errors": {
       "noWorkspace": "No workspace is currently open",

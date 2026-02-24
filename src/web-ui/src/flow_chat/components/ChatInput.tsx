@@ -5,7 +5,7 @@
 
 import React, { useRef, useCallback, useEffect, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Image, Network, ChevronsUp, ChevronsDown, RotateCcw, FileText } from 'lucide-react';
+import { ArrowUp, Image, Network, ChevronsUp, ChevronsDown, RotateCcw, FileText, FolderOpen } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '../hooks/useActiveSessionState';
 import { RichTextInput, type MentionState } from './RichTextInput';
@@ -36,8 +36,8 @@ import { useTemplateEditor } from '../hooks/useTemplateEditor';
 import { useChatInputState } from '../store/chatInputStateStore';
 import CoworkExampleCards from './CoworkExampleCards';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip, IconButton, Modal, Card, CardHeader, CardBody, Tag } from '@/component-library';
-import { systemAPI } from '@/infrastructure/api';
+import { Tooltip, IconButton } from '@/component-library';
+import { systemAPI, workspaceAPI } from '@/infrastructure/api';
 import { pluginAPI } from '@/infrastructure/api/service-api/PluginAPI';
 import { open } from '@tauri-apps/plugin-dialog';
 import './ChatInput.scss';
@@ -154,18 +154,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     query: '',
     selectedIndex: 0,
   });
-
-  type CoworkWorkspaceScope = 'current' | 'global';
-  const [coworkScopeModalOpen, setCoworkScopeModalOpen] = useState(false);
-  const [coworkScopeSubmitting, setCoworkScopeSubmitting] = useState(false);
-
-  const coworkWorkspacePathRef = useRef<string | null>(null);
-  const getCoworkWorkspacePathCached = useCallback(async (): Promise<string> => {
-    if (coworkWorkspacePathRef.current) return coworkWorkspacePathRef.current;
-    const path = await systemAPI.getCoworkWorkspacePath();
-    coworkWorkspacePathRef.current = path;
-    return path;
-  }, []);
   
   React.useEffect(() => {
     const store = FlowChatStore.getInstance();
@@ -361,6 +349,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (sessionId && mode) {
         log.debug('Session switched, syncing mode', { sessionId, mode });
         dispatchMode({ type: 'SET_CURRENT_MODE', payload: mode });
+        try {
+          sessionStorage.setItem('bitfun:flowchat:lastMode', mode);
+        } catch {
+          // ignore
+        }
       }
     };
 
@@ -381,6 +374,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (session?.mode) {
       log.debug('Session ID changed, syncing mode', { sessionId: currentSessionId, mode: session.mode });
       dispatchMode({ type: 'SET_CURRENT_MODE', payload: session.mode });
+      try {
+        sessionStorage.setItem('bitfun:flowchat:lastMode', session.mode);
+      } catch {
+        // ignore
+      }
     }
   }, [currentSessionId]);
 
@@ -579,59 +577,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       payload: modeId,
     });
 
+    try {
+      sessionStorage.setItem('bitfun:flowchat:lastMode', modeId);
+    } catch {
+      // ignore
+    }
+
     if (currentSessionId) {
       FlowChatStore.getInstance().updateSessionMode(currentSessionId, modeId);
     }
   }, [currentSessionId]);
 
-  const normalizePathForCompare = useCallback((path: string): string => {
-    const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
-    const looksWindows = /^[a-zA-Z]:\//.test(normalized) || path.includes('\\');
-    return looksWindows ? normalized.toLowerCase() : normalized;
-  }, []);
-
-  const isSamePath = useCallback((a: string, b: string): boolean => {
-    return normalizePathForCompare(a) === normalizePathForCompare(b);
-  }, [normalizePathForCompare]);
-
-  const focusCoworkArtifactsForSession = useCallback(async (sessionId: string) => {
+  const openCurrentWorkspaceFolder = useCallback(async () => {
+    const workspacePath = currentWorkspace?.rootPath;
+    if (!workspacePath) return;
     try {
-      const { artifactsPath } = await systemAPI.ensureCoworkSessionDirs(sessionId);
-      globalEventBus.emit('file-tree:refresh');
-      setTimeout(() => {
-        globalEventBus.emit('file-explorer:navigate', { path: artifactsPath, scrollIntoView: true });
-      }, 250);
+      await workspaceAPI.openInExplorer(workspacePath);
     } catch (error) {
-      log.warn('Failed to focus Cowork artifacts in file explorer', { sessionId, error });
-    }
-  }, []);
-
-  const enterCoworkMode = useCallback(async (scope: CoworkWorkspaceScope) => {
-    if (scope === 'current' && !hasOpenWorkspace) {
-      notificationService.error(t('coworkScope.errors.noWorkspace'), { duration: 4000 });
-      return;
-    }
-
-    setCoworkScopeSubmitting(true);
-    try {
-      if (scope === 'global') {
-        const coworkPath = await getCoworkWorkspacePathCached();
-        await openWorkspace(coworkPath);
-      }
-
-      applyModeChange('Cowork');
-      if (scope === 'global' && currentSessionId) {
-        await focusCoworkArtifactsForSession(currentSessionId);
-      }
-    } catch (error) {
-      log.error('Failed to switch Cowork scope', { scope, error });
+      log.error('Failed to open workspace folder', { workspacePath, error });
       const errorMessage = error instanceof Error ? error.message : String(error);
-      notificationService.error(errorMessage || t('coworkScope.errors.openFailed'), { duration: 5000 });
-    } finally {
-      setCoworkScopeSubmitting(false);
-      setCoworkScopeModalOpen(false);
+      notificationService.error(t('input.openWorkspaceFolderFailed', { error: errorMessage }), {
+        duration: 5000,
+      });
     }
-  }, [applyModeChange, currentSessionId, focusCoworkArtifactsForSession, getCoworkWorkspacePathCached, hasOpenWorkspace, openWorkspace, t]);
+  }, [currentWorkspace?.rootPath, t]);
+
+  const openWorkspaceFromDialog = useCallback(async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t('chatInput.selectWorkspaceTitle'),
+      });
+      if (!selected || typeof selected !== 'string') return;
+      sessionStorage.setItem('bitfun:flowchat:preferredMode', modeState.current);
+      await openWorkspace(selected);
+    } catch (error) {
+      log.error('Failed to open workspace from dialog', { error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      notificationService.error(t('chatInput.switchWorkspaceFailed', { error: errorMessage }), {
+        duration: 5000,
+      });
+    }
+  }, [modeState.current, openWorkspace, t]);
 
   const requestModeChange = useCallback((modeId: string) => {
     if (modeId === modeState.current) {
@@ -641,48 +629,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (modeId === 'Cowork') {
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      void (async () => {
-        if (coworkScopeSubmitting) return;
-
-        try {
-          const coworkPath = await getCoworkWorkspacePathCached();
-
-          if (!hasOpenWorkspace) {
-            // No workspace open: automatically use the app-managed Cowork workspace.
-            setCoworkScopeSubmitting(true);
-            await openWorkspace(coworkPath);
-            applyModeChange('Cowork');
-            if (currentSessionId) {
-              await focusCoworkArtifactsForSession(currentSessionId);
-            }
-            setCoworkScopeSubmitting(false);
-            return;
-          }
-
-          // Workspace already open: skip the scope modal if we're already in the Cowork workspace.
-          if (currentWorkspace?.rootPath && isSamePath(currentWorkspace.rootPath, coworkPath)) {
-            applyModeChange('Cowork');
-            if (currentSessionId) {
-              await focusCoworkArtifactsForSession(currentSessionId);
-            }
-            return;
-          }
-
-          // Otherwise, ask whether to use the current workspace or switch to Cowork workspace.
-          setCoworkScopeModalOpen(true);
-        } catch (error) {
-          log.error('Failed to prepare Cowork workspace', { error });
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          notificationService.error(errorMessage || t('coworkScope.errors.openFailed'), { duration: 5000 });
-          setCoworkScopeSubmitting(false);
-        }
-      })();
+      // Default behavior: stay in the currently opened workspace (if any).
+      // Users can switch workspace explicitly via the workspace selector in the input bar.
+      applyModeChange('Cowork');
       return;
     }
 
     applyModeChange(modeId);
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
-  }, [applyModeChange, coworkScopeSubmitting, currentSessionId, currentWorkspace?.rootPath, focusCoworkArtifactsForSession, getCoworkWorkspacePathCached, hasOpenWorkspace, isSamePath, modeState.current, openWorkspace, t]);
+  }, [applyModeChange, modeState.current]);
 
   const selectSlashCommandMode = useCallback((modeId: string) => {
     requestModeChange(modeId);
@@ -695,11 +650,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, [requestModeChange]);
 
-  const handleCloseCoworkScopeModal = useCallback(() => {
-    if (coworkScopeSubmitting) return;
-    setCoworkScopeModalOpen(false);
-  }, [coworkScopeSubmitting]);
-  
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (slashCommandState.isActive) {
       const filteredModes = getFilteredModes();
@@ -956,77 +906,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   return (
     <>
-      <Modal
-        isOpen={coworkScopeModalOpen}
-        onClose={handleCloseCoworkScopeModal}
-        title={t('coworkScope.title')}
-        size="medium"
-        className="bitfun-chat-input__cowork-scope-modal-dialog"
-      >
-        <div className="bitfun-chat-input__cowork-scope-modal">
-          <div className="bitfun-chat-input__cowork-scope-description">
-            {t('coworkScope.description')}
-          </div>
-
-          <div className="bitfun-chat-input__cowork-scope-options">
-            <Card
-              className={`bitfun-chat-input__cowork-scope-option${!hasOpenWorkspace ? ' bitfun-chat-input__cowork-scope-option--disabled' : ''}`}
-              variant="subtle"
-              interactive={hasOpenWorkspace && !coworkScopeSubmitting}
-              onClick={() => {
-                if (!hasOpenWorkspace || coworkScopeSubmitting) return;
-                enterCoworkMode('current');
-              }}
-            >
-              <CardHeader
-                title={t('coworkScope.current.title')}
-                subtitle={t('coworkScope.current.subtitle', {
-                  name: currentWorkspace?.name || '',
-                })}
-                extra={<Tag color="green" size="small" rounded>{t('coworkScope.recommended')}</Tag>}
-              />
-              <CardBody>
-                <div className="bitfun-chat-input__cowork-scope-option-body">
-                  <div className="bitfun-chat-input__cowork-scope-option-desc">
-                    {t('coworkScope.current.description')}
-                  </div>
-                  {currentWorkspace?.rootPath && (
-                    <div className="bitfun-chat-input__cowork-scope-option-path">
-                      {currentWorkspace.rootPath}
-                    </div>
-                  )}
-                </div>
-              </CardBody>
-            </Card>
-
-            <Card
-              className="bitfun-chat-input__cowork-scope-option"
-              variant="subtle"
-              interactive={!coworkScopeSubmitting}
-              onClick={() => {
-                if (coworkScopeSubmitting) return;
-                enterCoworkMode('global');
-              }}
-            >
-              <CardHeader
-                title={t('coworkScope.global.title')}
-                subtitle={t('coworkScope.global.subtitle')}
-              />
-              <CardBody>
-                <div className="bitfun-chat-input__cowork-scope-option-body">
-                  <div className="bitfun-chat-input__cowork-scope-option-desc">
-                    {t('coworkScope.global.description')}
-                  </div>
-                  {coworkScopeSubmitting && (
-                    <div className="bitfun-chat-input__cowork-scope-option-loading">...</div>
-                  )}
-                </div>
-              </CardBody>
-            </Card>
-          </div>
-        </div>
-      </Modal>
-
       <TemplatePickerPanel
         isOpen={templateState.isPickerOpen}
         onClose={() => dispatchTemplate({ type: 'CLOSE_PICKER' })}
@@ -1199,6 +1078,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 )}
               </div>
               <div className="bitfun-chat-input__actions-right">
+                {modeState.current === 'Cowork' && (
+                  <div className="bitfun-chat-input__workspace-selector">
+                    <IconButton
+                      className="bitfun-chat-input__workspace-selector-button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={openWorkspaceFromDialog}
+                      tooltip={currentWorkspace?.rootPath || t('chatInput.selectWorkspaceTitle')}
+                    >
+                      <FolderOpen size={12} />
+                      <span className="bitfun-chat-input__workspace-selector-label">
+                        {currentWorkspace?.name || t('chatInput.openFolder')}
+                      </span>
+                    </IconButton>
+                  </div>
+                )}
+
                 <div 
                   className="bitfun-chat-input__mode-selector"
                   ref={modeDropdownRef}
@@ -1282,6 +1178,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 >
                   <FileText size={12} />
                 </IconButton>
+
+                {modeState.current === 'Cowork' && !!currentWorkspace?.rootPath && (
+                  <IconButton
+                    className="bitfun-chat-input__action-button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={openCurrentWorkspaceFolder}
+                    tooltip={t('input.openWorkspaceFolder')}
+                  >
+                    <FolderOpen size={12} />
+                  </IconButton>
+                )}
                 
                 {renderActionButton()}
               </div>

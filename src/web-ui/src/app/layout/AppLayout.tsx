@@ -113,14 +113,26 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       }
 
       try {
+        const preferredMode =
+          sessionStorage.getItem('bitfun:flowchat:preferredMode') ||
+          sessionStorage.getItem('bitfun:flowchat:lastMode') ||
+          undefined;
+        if (sessionStorage.getItem('bitfun:flowchat:preferredMode')) {
+          sessionStorage.removeItem('bitfun:flowchat:preferredMode');
+        }
+
         const flowChatManager = FlowChatManager.getInstance();
-        const hasHistoricalSessions = await flowChatManager.initialize(currentWorkspace.rootPath);
+        const hasHistoricalSessions = await flowChatManager.initialize(
+          currentWorkspace.rootPath,
+          preferredMode
+        );
         
         let sessionId: string | undefined;
         
-        // If no history exists, create a default session.
-        if (!hasHistoricalSessions) {
-          sessionId = await flowChatManager.createChatSession({});
+        // If no history exists (or no active session was selected), create a default session.
+        const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+        if (!hasHistoricalSessions || !flowChatStore.getState().activeSessionId) {
+          sessionId = await flowChatManager.createChatSession({}, preferredMode);
         }
         
         // Send pending project description from startup screen if present.
@@ -131,7 +143,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({
           // Wait briefly to ensure UI is fully rendered
           setTimeout(async () => {
             try {
-              const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
               const targetSessionId = sessionId || flowChatStore.getState().activeSessionId;
               
               if (!targetSessionId) {

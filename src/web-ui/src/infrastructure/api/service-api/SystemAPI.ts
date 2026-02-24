@@ -20,7 +20,6 @@ export class SystemAPI {
     }
   }
 
-   
   async getAppVersion(): Promise<string> {
     try {
       return await api.invoke('get_app_version', { 
@@ -74,27 +73,6 @@ export class SystemAPI {
     }
   }
 
-  async getCoworkWorkspacePath(): Promise<string> {
-    try {
-      return await api.invoke('get_cowork_workspace_path');
-    } catch (error) {
-      throw createTauriCommandError('get_cowork_workspace_path', error);
-    }
-  }
-
-  async ensureCoworkSessionDirs(sessionId: string): Promise<{ artifactsPath: string; tmpPath: string }> {
-    try {
-      return await api.invoke('ensure_cowork_session_dirs', {
-        request: {
-          sessionId,
-        }
-      });
-    } catch (error) {
-      throw createTauriCommandError('ensure_cowork_session_dirs', error, { sessionId });
-    }
-  }
-
-   
   async getClipboard(): Promise<string> {
     try {
       return await api.invoke('get_clipboard', { 
@@ -105,7 +83,6 @@ export class SystemAPI {
     }
   }
 
-   
   async setClipboard(text: string): Promise<void> {
     try {
       await api.invoke('set_clipboard', { 

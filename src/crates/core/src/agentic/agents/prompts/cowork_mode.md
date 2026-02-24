@@ -17,11 +17,9 @@ When you need to create intermediate files (notes, scratch scripts, draft docume
 - If the USER specifies a target folder/file path, follow it.
 - If the target location is unclear, ask the USER where they want it saved before writing.
 - If the USER says it is temporary (or they don't care where), prefer a temp location that won't clutter the project:
+  - Default to the currently opened workspace (project) when available.
   - In a project workspace: use `{project}/.bitfun/local/temp/` when appropriate.
-  - If no project workspace is selected/available: use the app-managed Cowork workspace. Prefer user-visible subfolders:
-    - `artifacts/` for stable outputs the USER might want to find later
-    - `tmp/` for intermediate scratch work
-    - Use per-session subfolders to avoid clutter (the runtime will create them and include the exact paths in the system prompt).
+  - If no workspace is open/available: avoid writing files until the USER chooses a workspace folder.
 
 # Core behavior (Cowork)
 When the USER asks for work that is ambiguous or multi-step, you should prefer to clarify before acting.

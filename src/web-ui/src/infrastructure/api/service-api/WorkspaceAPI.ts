@@ -11,7 +11,7 @@ import { createLogger } from '@/shared/utils/logger';
 const log = createLogger('WorkspaceAPI');
 
 export class WorkspaceAPI {
-   
+
   async openWorkspace(path: string): Promise<WorkspaceInfo> {
     try {
       return await api.invoke('open_workspace', { 
@@ -22,7 +22,6 @@ export class WorkspaceAPI {
     }
   }
 
-   
   async closeWorkspace(): Promise<void> {
     try {
       await api.invoke('close_workspace', { 
@@ -33,7 +32,6 @@ export class WorkspaceAPI {
     }
   }
 
-   
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
     try {
       return await api.invoke('get_workspace_info', { 
@@ -44,7 +42,6 @@ export class WorkspaceAPI {
     }
   }
 
-   
   async listFiles(path: string): Promise<any[]> {
     try {
       return await api.invoke('list_files', { 
@@ -328,7 +325,16 @@ export class WorkspaceAPI {
     }
   }
 
-   
+  async openInExplorer(path: string): Promise<void> {
+    try {
+      await api.invoke('open_in_explorer', {
+        request: { path }
+      });
+    } catch (error) {
+      throw createTauriCommandError('open_in_explorer', error, { path });
+    }
+  }
+
   async startFileWatch(path: string, recursive?: boolean): Promise<void> {
     try {
       await api.invoke('start_file_watch', { 

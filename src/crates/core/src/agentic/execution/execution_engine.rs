@@ -11,7 +11,6 @@ use crate::agentic::session::SessionManager;
 use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::infrastructure::get_workspace_path;
-use crate::infrastructure::try_get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
@@ -257,69 +256,10 @@ impl ExecutionEngine {
         let system_prompt = {
             let workspace_path = get_workspace_path();
 
-            // Cowork workspace: ensure per-session directories exist so the model can reliably
-            // place intermediate work and user-visible outputs without cluttering the root.
-            if agent_type == "Cowork" {
-                if let (Some(workspace_path), Ok(path_manager)) =
-                    (workspace_path.as_ref(), try_get_path_manager_arc())
-                {
-                    let cowork_root = path_manager.cowork_workspace_dir();
-                    if workspace_path == &cowork_root {
-                        if let Err(e) = path_manager.ensure_dir(&cowork_root).await {
-                            warn!("Failed to ensure cowork workspace dir: {}", e);
-                        }
-                        if let Err(e) = path_manager
-                            .ensure_dir(&path_manager.cowork_artifacts_dir())
-                            .await
-                        {
-                            warn!("Failed to ensure cowork artifacts dir: {}", e);
-                        }
-                        if let Err(e) = path_manager.ensure_dir(&path_manager.cowork_tmp_dir()).await
-                        {
-                            warn!("Failed to ensure cowork tmp dir: {}", e);
-                        }
-
-                        if let Err(e) = path_manager
-                            .ensure_dir(
-                                &path_manager.cowork_session_artifacts_dir(&context.session_id),
-                            )
-                            .await
-                        {
-                            warn!("Failed to ensure cowork session artifacts dir: {}", e);
-                        }
-                        if let Err(e) = path_manager
-                            .ensure_dir(&path_manager.cowork_session_tmp_dir(&context.session_id))
-                            .await
-                        {
-                            warn!("Failed to ensure cowork session tmp dir: {}", e);
-                        }
-                    }
-                }
-            }
-
             let workspace_str = workspace_path.as_ref().map(|p| p.display().to_string());
-            let mut system_prompt = current_agent
+            let system_prompt = current_agent
                 .get_system_prompt(workspace_str.as_deref())
                 .await?;
-
-            // Add a small, session-specific hint for Cowork mode.
-            if agent_type == "Cowork" {
-                if let (Some(workspace_path), Ok(path_manager)) =
-                    (workspace_path.as_ref(), try_get_path_manager_arc())
-                {
-                    if workspace_path == &path_manager.cowork_workspace_dir() {
-                        let artifacts =
-                            path_manager.cowork_session_artifacts_dir(&context.session_id);
-                        let tmp = path_manager.cowork_session_tmp_dir(&context.session_id);
-                        system_prompt.push_str(&format!(
-                            "\n\n# Cowork session directories\nSession ID: {}\n- Stable outputs: {}\n- Intermediate scratch: {}\n",
-                            context.session_id,
-                            artifacts.display(),
-                            tmp.display(),
-                        ));
-                    }
-                }
-            }
 
             system_prompt
         };

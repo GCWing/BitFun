@@ -98,18 +98,9 @@ impl CleanupService {
 
     async fn cleanup_temp_files(&self) -> BitFunResult<CleanupResult> {
         let temp_dir = self.path_manager.temp_dir();
-        let cowork_tmp_dir = self.path_manager.cowork_tmp_dir();
         let retention = Duration::from_secs(self.policy.temp_retention_days * 24 * 3600);
 
-        let mut result = self.cleanup_old_files(&temp_dir, retention).await?;
-
-        // Cowork workspace tmp is also scratch space and should be cleaned periodically.
-        let cowork_result = self.cleanup_old_files(&cowork_tmp_dir, retention).await?;
-        result.files_deleted += cowork_result.files_deleted;
-        result.directories_deleted += cowork_result.directories_deleted;
-        result.bytes_freed += cowork_result.bytes_freed;
-
-        Ok(result)
+        self.cleanup_old_files(&temp_dir, retention).await
     }
 
     async fn cleanup_old_logs(&self) -> BitFunResult<CleanupResult> {

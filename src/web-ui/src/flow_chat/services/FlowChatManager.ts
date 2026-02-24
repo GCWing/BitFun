@@ -67,7 +67,7 @@ export class FlowChatManager {
     return FlowChatManager.instance;
   }
 
-  async initialize(workspacePath: string): Promise<boolean> {
+  async initialize(workspacePath: string, preferredMode?: string): Promise<boolean> {
     const workspaceChanged = this.context.currentWorkspacePath && 
                             this.context.currentWorkspacePath !== workspacePath;
     
@@ -89,10 +89,25 @@ export class FlowChatManager {
       
       if (hasHistoricalSessions && !state.activeSessionId) {
         const sessions = Array.from(state.sessions.values());
-        const latestSession = sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0];
+        const latestSession = (preferredMode
+          ? sessions
+              .filter(s => s.mode === preferredMode)
+              .sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0]
+          : undefined) || sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0];
         
+        // If we could not find a session matching the preferred mode, keep activeSessionId unset
+        // so the caller can decide whether to create a new session.
+        if (preferredMode && latestSession.mode !== preferredMode) {
+          this.initialized = true;
+          this.context.currentWorkspacePath = workspacePath;
+          return hasHistoricalSessions;
+        }
+
         if (latestSession.isHistorical) {
-          await this.context.flowChatStore.loadSessionHistory(latestSession.sessionId, workspacePath);
+          await this.context.flowChatStore.loadSessionHistory(
+            latestSession.sessionId,
+            workspacePath
+          );
         }
         
         this.context.flowChatStore.switchSession(latestSession.sessionId);
@@ -141,8 +156,8 @@ export class FlowChatManager {
     );
   }
 
-  async createChatSession(config: SessionConfig): Promise<string> {
-    return createChatSessionModule(this.context, config);
+  async createChatSession(config: SessionConfig, mode?: string): Promise<string> {
+    return createChatSessionModule(this.context, config, mode);
   }
 
   async switchChatSession(sessionId: string): Promise<void> {

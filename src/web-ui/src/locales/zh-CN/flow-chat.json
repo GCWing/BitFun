@@ -110,6 +110,8 @@
     "openMermaidEditor": "打开 Mermaid 编辑器",
     "mermaidDualModeDemo": "Mermaid 编辑器",
     "selectPromptTemplate": "选择提示词模板 (Ctrl+Shift+P)",
+    "openWorkspaceFolder": "打开工作区文件夹",
+    "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
     "willSendAfterStop": "将在停止后发送"
   },
   "context": {
@@ -175,6 +177,9 @@
     "noMatchingMode": "没有匹配的模式",
     "selectHint": "↑↓ 选择 · Enter 确认 · Esc 取消",
     "current": "当前",
+    "openFolder": "打开文件夹…",
+    "selectWorkspaceTitle": "选择工作区目录",
+    "switchWorkspaceFailed": "切换工作区失败：{{error}}",
     "professionalMode": "专业模式",
     "designMode": "设计模式",
     "templateHint": "按 <kbd>Tab</kbd> 切换到下一个占位符，<kbd>Shift+Tab</kbd> 返回上一个，<kbd>Esc</kbd> 退出编辑",
@@ -195,7 +200,7 @@
   },
   "coworkScope": {
     "title": "选择 Cowork 工作区",
-    "description": "Cowork 模式需要一个工作区用于读写文件。你可以使用当前项目，或切换到应用托管的 Cowork 工作区来处理临时任务。",
+    "description": "Cowork 模式需要一个工作区目录用于读写文件。你可以使用当前项目，或选择另一个目录。",
     "recommended": "推荐",
     "current": {
       "title": "当前工作区",
@@ -203,9 +208,9 @@
       "description": "产物保存在当前项目中。适合需要读取或修改项目文件的任务。"
     },
     "global": {
-      "title": "Cowork 工作区",
-      "subtitle": "应用托管（临时任务）",
-      "description": "产物保存在应用托管的工作区，不会影响当前项目。输出通常在工作区的「artifacts/」目录下。"
+      "title": "其他目录",
+      "subtitle": "选择目录",
+      "description": "用于在另一个目录中进行 Cowork 任务。输出会保存在该目录下。"
     },
     "errors": {
       "noWorkspace": "当前没有打开的工作区",
