@@ -3,11 +3,47 @@ fn main() {
     if let Err(e) = build_embedded_prompts() {
         eprintln!("Warning: Failed to embed prompts data: {}", e);
     }
+
+    // Ensure changes under builtin_skills/ trigger rebuilds, since built-in skills are embedded
+    // via include_dir! at compile time.
+    watch_path_recursive("builtin_skills");
 }
 
 fn build_embedded_prompts() -> Result<(), Box<dyn std::error::Error>> {
     // Embed prompts data
     embed_agents_prompt_data()
+}
+
+fn watch_path_recursive(relative_path: &str) {
+    use std::path::Path;
+
+    println!("cargo:rerun-if-changed={}", relative_path);
+
+    let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
+
+    let root = Path::new(&manifest_dir).join(relative_path);
+    if !root.exists() {
+        return;
+    }
+
+    fn visit(path: &Path) {
+        println!("cargo:rerun-if-changed={}", path.display());
+        let Ok(entries) = std::fs::read_dir(path) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                visit(&p);
+            } else {
+                println!("cargo:rerun-if-changed={}", p.display());
+            }
+        }
+    }
+
+    visit(&root);
 }
 
 fn escape_rust_string(s: &str) -> String {
