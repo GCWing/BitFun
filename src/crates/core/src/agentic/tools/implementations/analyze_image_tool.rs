@@ -638,35 +638,13 @@ Important Notes:
             &vision_model.provider,
         )?;
 
-        let custom_request_body = vision_model
-            .custom_request_body
-            .clone()
-            .map(|body| {
-                serde_json::from_str(&body).map_err(|e| {
-                    BitFunError::parse(format!(
-                        "Failed to parse custom request body for model {}: {}",
-                        vision_model.name, e
-                    ))
-                })
-            })
-            .transpose()?;
-
         // Vision models cannot set max_tokens (e.g., glm-4v doesn't support this parameter)
-        let model_config = ModelConfig {
-            name: vision_model.name.clone(),
-            model: vision_model.model_name.clone(),
-            api_key: vision_model.api_key.clone(),
-            base_url: vision_model.base_url.clone(),
-            format: vision_model.provider.clone(),
-            context_window: vision_model.context_window.unwrap_or(128000),
-            max_tokens: None,
-            enable_thinking_process: false,
-            support_preserved_thinking: false,
-            custom_headers: vision_model.custom_headers.clone(),
-            custom_headers_mode: vision_model.custom_headers_mode.clone(),
-            skip_ssl_verify: vision_model.skip_ssl_verify,
-            custom_request_body,
-        };
+        // and should never use the thinking process.
+        let mut model_config = ModelConfig::try_from(vision_model.clone())
+            .map_err(|e| BitFunError::parse(format!("Config conversion failed for vision model {}: {}", vision_model.name, e)))?;
+        model_config.max_tokens = None;
+        model_config.enable_thinking_process = false;
+        model_config.support_preserved_thinking = false;
 
         let ai_client = Arc::new(AIClient::new(model_config));
 

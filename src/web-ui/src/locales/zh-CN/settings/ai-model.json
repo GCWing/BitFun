@@ -95,6 +95,8 @@
     "modelName": "模型名称",
     "modelNameHint": "智谱 GLM-ASR 使用 glm-asr，其他语音模型填写对应的模型名称",
     "baseUrl": "API地址",
+    "resolvedUrlLabel": "实际请求地址：",
+    "forceUrlHint": "以 # 结尾可强制使用输入地址",
     "searchApiHint": "智谱AI搜索API地址，或其他兼容的搜索API地址",
     "apiKey": "API密钥",
     "apiKeyPlaceholder": "输入您的 API Key",
