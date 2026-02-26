@@ -120,7 +120,9 @@ export interface AIModelConfig {
   name: string;
   provider: string;
   api_key?: string;        
-  base_url: string;        
+  base_url: string;
+  /** Computed actual request URL, derived from base_url + provider format. Stored on save. */
+  request_url?: string;
   model_name: string;      
   description?: string;    
   context_window?: number; 

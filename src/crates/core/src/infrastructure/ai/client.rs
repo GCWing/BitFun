@@ -449,10 +449,10 @@ impl AIClient {
         extra_body: Option<serde_json::Value>,
         max_tries: usize,
     ) -> Result<StreamResponse> {
-        let url = self.config.base_url.clone();
+        let url = self.config.request_url.clone();
         debug!(
-            "OpenAI config: model={}, base_url={}, max_tries={}",
-            self.config.model, self.config.base_url, max_tries
+            "OpenAI config: model={}, request_url={}, max_tries={}",
+            self.config.model, self.config.request_url, max_tries
         );
 
         // Use OpenAI message converter
@@ -582,10 +582,10 @@ impl AIClient {
         extra_body: Option<serde_json::Value>,
         max_tries: usize,
     ) -> Result<StreamResponse> {
-        let url = self.config.base_url.clone();
+        let url = self.config.request_url.clone();
         debug!(
-            "Anthropic config: model={}, base_url={}, max_tries={}",
-            self.config.model, self.config.base_url, max_tries
+            "Anthropic config: model={}, request_url={}, max_tries={}",
+            self.config.model, self.config.request_url, max_tries
         );
 
         // Use Anthropic message converter

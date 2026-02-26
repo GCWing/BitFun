@@ -8,13 +8,13 @@ use std::collections::HashMap;
 
 /// MCP protocol version (string format, follows the MCP spec).
 ///
-/// Latest version: "2024-11-05"
+/// Aligned with VSCode: "2025-11-25"
 /// Reference: https://spec.modelcontextprotocol.io/
 pub type MCPProtocolVersion = String;
 
 /// Returns the default MCP protocol version.
 pub fn default_protocol_version() -> MCPProtocolVersion {
-    "2024-11-05".to_string()
+    "2025-11-25".to_string()
 }
 
 /// MCP resources capability.
@@ -80,39 +80,150 @@ pub struct MCPServerInfo {
     pub vendor: Option<String>,
 }
 
-/// MCP resource definition.
+/// Icon for display in UIs (2025-11-25 spec). sizes may be string or string[] for compatibility.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPResourceIcon {
+    pub src: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sizes: Option<Value>, // string or ["48x48"] per spec
+}
+
+/// Annotations for resources/templates (2025-11-25 spec).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPAnnotations {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audience: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
+}
+
+/// MCP resource definition (2025-11-25 spec).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPResource {
     pub uri: String,
     pub name: String,
+    /// Human-readable title for display (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
+    /// Icons for UI display (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<MCPResourceIcon>>,
+    /// Size in bytes, if known (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    /// Annotations: audience, priority, lastModified (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<MCPAnnotations>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, Value>>,
 }
 
+/// Content Security Policy configuration for MCP App UI (aligned with VSCode/MCP Apps spec).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct McpUiResourceCsp {
+    /// Origins for network requests (fetch/XHR/WebSocket).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connect_domains: Option<Vec<String>>,
+    /// Origins for static resources (scripts, images, styles, fonts).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_domains: Option<Vec<String>>,
+    /// Origins for nested iframes (frame-src directive).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_domains: Option<Vec<String>>,
+    /// Allowed base URIs for the document (base-uri directive).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_uri_domains: Option<Vec<String>>,
+}
+
+/// Sandbox permissions requested by the UI resource (aligned with VSCode/MCP Apps spec).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct McpUiResourcePermissions {
+    /// Request camera access.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub camera: Option<serde_json::Value>,
+    /// Request microphone access.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub microphone: Option<serde_json::Value>,
+    /// Request geolocation access.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geolocation: Option<serde_json::Value>,
+    /// Request clipboard write access.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clipboard_write: Option<serde_json::Value>,
+}
+
+/// UI metadata within _meta (MCP Apps spec: _meta.ui.csp, _meta.ui.permissions).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct McpUiMeta {
+    /// Content Security Policy configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub csp: Option<McpUiResourceCsp>,
+    /// Sandbox permissions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<McpUiResourcePermissions>,
+}
+
+/// Resource content _meta field (MCP Apps spec).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPResourceContentMeta {
+    /// UI metadata containing CSP and permissions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ui: Option<McpUiMeta>,
+}
+
 /// MCP resource content.
+/// MCP spec uses `text` for text content and `blob` for base64 binary; both are optional but at least one must be present.
+/// Serialization uses `text` per spec; we accept both `text` and `content` when deserializing for compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPResourceContent {
     pub uri: String,
-    pub content: String,
+    /// Text or HTML content. Serialized as `text` per MCP spec; accepts `text` or `content` when deserializing.
+    #[serde(default, alias = "text", rename = "text", skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    /// Base64-encoded binary content (MCP spec). Used for video, images, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blob: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
+    /// Annotations for embedded resources (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<MCPAnnotations>,
+    /// Resource metadata (MCP Apps: contains ui.csp and ui.permissions).
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_meta")]
+    pub meta: Option<MCPResourceContentMeta>,
 }
 
-/// MCP prompt definition.
+/// MCP prompt definition (2025-11-25 spec).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPPrompt {
     pub name: String,
+    /// Human-readable title for display (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<MCPPromptArgument>>,
+    /// Icons for UI display (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<MCPResourceIcon>>,
 }
 
 /// MCP prompt argument.
@@ -134,25 +245,133 @@ pub struct MCPPromptContent {
     pub messages: Vec<MCPPromptMessage>,
 }
 
-/// MCP prompt message.
+/// Content block in prompt message (2025-11-25 spec). Deserializes from plain string (legacy) or structured block.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MCPPromptMessageContent {
+    /// Legacy: plain string content from older servers.
+    Plain(String),
+    /// Structured content block.
+    Block(MCPPromptMessageContentBlock),
+}
+
+/// Structured content block types for prompt messages.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum MCPPromptMessageContentBlock {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "image")]
+    Image { data: String, mime_type: String },
+    #[serde(rename = "audio")]
+    Audio { data: String, mime_type: String },
+    #[serde(rename = "resource")]
+    Resource { resource: MCPResourceContent },
+}
+
+impl MCPPromptMessageContent {
+    /// Extracts displayable text. For non-text types returns a placeholder.
+    pub fn text_or_placeholder(&self) -> String {
+        match self {
+            MCPPromptMessageContent::Plain(s) => s.clone(),
+            MCPPromptMessageContent::Block(MCPPromptMessageContentBlock::Text { text }) => text.clone(),
+            MCPPromptMessageContent::Block(MCPPromptMessageContentBlock::Image { mime_type, .. }) => {
+                format!("[Image: {}]", mime_type)
+            }
+            MCPPromptMessageContent::Block(MCPPromptMessageContentBlock::Audio { mime_type, .. }) => {
+                format!("[Audio: {}]", mime_type)
+            }
+            MCPPromptMessageContent::Block(MCPPromptMessageContentBlock::Resource { resource }) => {
+                format!("[Resource: {}]", resource.uri)
+            }
+        }
+    }
+
+    /// Substitutes placeholders like {{key}} with values. Only applies to text content.
+    pub fn substitute_placeholders(&mut self, arguments: &HashMap<String, String>) {
+        match self {
+            MCPPromptMessageContent::Plain(s) => {
+                for (key, value) in arguments {
+                    let placeholder = format!("{{{{{}}}}}", key);
+                    *s = s.replace(&placeholder, value);
+                }
+            }
+            MCPPromptMessageContent::Block(MCPPromptMessageContentBlock::Text { text }) => {
+                for (key, value) in arguments {
+                    let placeholder = format!("{{{{{}}}}}", key);
+                    *text = text.replace(&placeholder, value);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// MCP prompt message (2025-11-25 spec).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPPromptMessage {
     pub role: String,
-    pub content: String,
+    pub content: MCPPromptMessageContent,
 }
 
-/// MCP tool definition.
+/// MCP Apps UI metadata (tool declares interactive UI via _meta.ui.resourceUri).
+/// resourceUri is optional: some tools use _meta.ui only for visibility/csp/permissions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPToolUIMeta {
+    /// URI pointing to UI resource, e.g. "ui://my-server/widget". Optional per MCP Apps spec.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_uri: Option<String>,
+}
+
+/// MCP tool metadata (MCP Apps extension).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPToolMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ui: Option<MCPToolUIMeta>,
+}
+
+/// Tool annotations (2025-11-25 spec). Clients MUST treat as untrusted unless from trusted servers.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPToolAnnotations {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_only_hint: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destructive_hint: Option<bool>,
+}
+
+/// MCP tool definition (2025-11-25 spec).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPTool {
     pub name: String,
+    /// Human-readable title for display (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub input_schema: Value,
+    /// Optional output schema for structured results (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<Value>,
+    /// Icons for UI display (2025-11-25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icons: Option<Vec<MCPResourceIcon>>,
+    /// Tool behavior hints (2025-11-25). Treat as untrusted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<MCPToolAnnotations>,
+    /// MCP Apps extension: tool metadata including UI resource URI
+    #[serde(skip_serializing_if = "Option::is_none", rename = "_meta")]
+    pub meta: Option<MCPToolMeta>,
 }
 
 /// MCP tool call result.
+/// MCP Apps extension: `structuredContent` is UI-optimized data (not for model context).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MCPToolResult {
@@ -160,16 +379,41 @@ pub struct MCPToolResult {
     pub content: Option<Vec<MCPToolResultContent>>,
     #[serde(default)]
     pub is_error: bool,
+    /// Structured data for MCP App UI (ext-apps ontoolresult expects this).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_content: Option<Value>,
 }
 
-/// MCP tool result content.
+/// MCP tool result content (2025-11-25 spec).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum MCPToolResultContent {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "image")]
-    Image { data: String, mime_type: String },
+    Image {
+        data: String,
+        #[serde(rename = "mimeType", alias = "mime_type")]
+        mime_type: String,
+    },
+    #[serde(rename = "audio")]
+    Audio {
+        data: String,
+        #[serde(rename = "mimeType", alias = "mime_type")]
+        mime_type: String,
+    },
+    /// Link to resource (client may fetch via resources/read).
+    #[serde(rename = "resource_link")]
+    ResourceLink {
+        uri: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+    },
+    /// Embedded resource content.
     #[serde(rename = "resource")]
     Resource { resource: MCPResourceContent },
 }
@@ -270,6 +514,8 @@ impl MCPError {
     pub const METHOD_NOT_FOUND: i32 = -32601;
     pub const INVALID_PARAMS: i32 = -32602;
     pub const INTERNAL_ERROR: i32 = -32603;
+    /// Resource not found (2025-11-25 spec).
+    pub const RESOURCE_NOT_FOUND: i32 = -32002;
 
     pub fn parse_error(message: impl Into<String>) -> Self {
         Self {
@@ -387,10 +633,12 @@ pub struct PromptsGetParams {
     pub arguments: Option<HashMap<String, String>>,
 }
 
-/// Prompts/Get response result.
+/// Prompts/Get response result (2025-11-25 spec).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptsGetResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub messages: Vec<MCPPromptMessage>,
 }
 

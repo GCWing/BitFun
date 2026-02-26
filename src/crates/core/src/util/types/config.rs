@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 pub struct AIConfig {
     pub name: String,
     pub base_url: String,
+    /// Actual request URL
+    /// Falls back to base_url when absent
+    pub request_url: String,
     pub api_key: String,
     pub model: String,
     pub format: String,
@@ -38,9 +41,16 @@ impl TryFrom<AIModelConfig> for AIConfig {
             None
         };
 
+        // Use stored request_url if present, otherwise fall back to base_url (legacy configs)
+        let request_url = other
+            .request_url
+            .filter(|u| !u.is_empty())
+            .unwrap_or_else(|| other.base_url.clone());
+
         Ok(AIConfig {
             name: other.name.clone(),
             base_url: other.base_url.clone(),
+            request_url,
             api_key: other.api_key.clone(),
             model: other.model_name.clone(),
             format: other.provider.clone(),

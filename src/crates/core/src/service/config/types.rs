@@ -697,6 +697,12 @@ pub struct AIModelConfig {
     pub provider: String,
     pub model_name: String,
     pub base_url: String,
+
+    /// Computed actual request URL (auto-derived from base_url + provider format).
+    /// Stored by the frontend when config is saved; falls back to base_url if absent.
+    #[serde(default)]
+    pub request_url: Option<String>,
+    
     pub api_key: String,
     /// Context window size (total token limit for input + output).
     pub context_window: Option<u32>,
@@ -1108,6 +1114,7 @@ impl Default for AIModelConfig {
             provider: String::new(),
             model_name: String::new(),
             base_url: String::new(),
+            request_url: None,
             api_key: String::new(),
             context_window: None,
             max_tokens: None,

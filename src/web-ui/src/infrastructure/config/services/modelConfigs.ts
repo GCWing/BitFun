@@ -12,7 +12,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   anthropic: {
     id: 'anthropic',
     name: t('settings/ai-model:providers.anthropic.name'),
-    baseUrl: 'https://api.anthropic.com/v1/messages',
+    baseUrl: 'https://api.anthropic.com',
     format: 'anthropic',
     models: ['claude-opus-4-6', 'claude-sonnet-4-5-20250929', 'claude-opus-4-5-20251101', 'claude-haiku-4-5-20251001'],
     requiresApiKey: true,
@@ -23,7 +23,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   minimax: {
     id: 'minimax',
     name: t('settings/ai-model:providers.minimax.name'),
-    baseUrl: 'https://api.minimaxi.com/anthropic/v1/messages',
+    baseUrl: 'https://api.minimaxi.com/anthropic',
     format: 'anthropic',
     models: ['MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
     requiresApiKey: true,
@@ -34,7 +34,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   moonshot: {
     id: 'moonshot',
     name: t('settings/ai-model:providers.moonshot.name'),
-    baseUrl: 'https://api.moonshot.cn/v1/chat/completions',
+    baseUrl: 'https://api.moonshot.cn/v1',
     format: 'openai',
     models: ['kimi-k2.5', 'kimi-k2', 'kimi-k2-thinking'],
     requiresApiKey: true,
@@ -45,7 +45,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   deepseek: {
     id: 'deepseek',
     name: t('settings/ai-model:providers.deepseek.name'),
-    baseUrl: 'https://api.deepseek.com/chat/completions',
+    baseUrl: 'https://api.deepseek.com',
     format: 'openai',
     models: ['deepseek-chat', 'deepseek-reasoner'],
     requiresApiKey: true,
@@ -56,23 +56,23 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   zhipu: {
     id: 'zhipu',
     name: t('settings/ai-model:providers.zhipu.name'),
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     format: 'openai',
     models: ['glm-4.7', 'glm-4.7-flash', 'glm-4.6'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.zhipu.description'),
     helpUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     baseUrlOptions: [
-      { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', format: 'openai', note: 'default' },
-      { url: 'https://open.bigmodel.cn/api/anthropic/v1/messages', format: 'anthropic', note: 'anthropic' },
-      { url: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions', format: 'openai', note: 'codingPlan' },
+      { url: 'https://open.bigmodel.cn/api/paas/v4', format: 'openai', note: 'default' },
+      { url: 'https://open.bigmodel.cn/api/anthropic', format: 'anthropic', note: 'anthropic' },
+      { url: 'https://open.bigmodel.cn/api/coding/paas', format: 'openai', note: 'codingPlan' },
     ]
   },
 
   qwen: {
     id: 'qwen',
     name: t('settings/ai-model:providers.qwen.name'),
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     format: 'openai',
     models: ['qwen3-max', 'qwen3-coder-plus', 'qwen3-coder-flash'],
     requiresApiKey: true,
@@ -83,7 +83,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   volcengine: {
     id: 'volcengine',
     name: t('settings/ai-model:providers.volcengine.name'),
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     format: 'openai',
     models: ['doubao-seed-1-8-251228', 'glm-4-7-251222', 'doubao-seed-code-preview-251028'],
     requiresApiKey: true,

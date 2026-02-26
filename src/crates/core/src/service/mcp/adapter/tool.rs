@@ -60,6 +60,14 @@ impl Tool for MCPToolWrapper {
         self.mcp_tool.input_schema.clone()
     }
 
+    fn ui_resource_uri(&self) -> Option<String> {
+        self.mcp_tool
+            .meta
+            .as_ref()
+            .and_then(|m| m.ui.as_ref())
+            .and_then(|u| u.resource_uri.clone())
+    }
+
     fn user_facing_name(&self) -> String {
         format!("{} ({})", self.mcp_tool.name, self.server_name)
     }
@@ -120,12 +128,15 @@ impl Tool for MCPToolWrapper {
                         crate::service::mcp::protocol::MCPToolResultContent::Image {
                             mime_type,
                             ..
-                        } => {
-                            format!("[Image: {}]", mime_type)
-                        }
-                        crate::service::mcp::protocol::MCPToolResultContent::Resource {
-                            resource,
-                        } => {
+                        } => format!("[Image: {}]", mime_type),
+                        crate::service::mcp::protocol::MCPToolResultContent::Audio {
+                            mime_type,
+                            ..
+                        } => format!("[Audio: {}]", mime_type),
+                        crate::service::mcp::protocol::MCPToolResultContent::ResourceLink {
+                            uri, name, ..
+                        } => name.as_ref().map_or_else(|| uri.clone(), |n| format!("[Resource: {} ({})]", n, uri)),
+                        crate::service::mcp::protocol::MCPToolResultContent::Resource { resource } => {
                             format!("[Resource: {}]", resource.uri)
                         }
                     })

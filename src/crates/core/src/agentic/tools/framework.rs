@@ -124,6 +124,12 @@ pub trait Tool: Send + Sync {
         None
     }
 
+    /// MCP Apps: URI of UI resource (ui://) declared in tool metadata. Used when tool result
+    /// does not contain a resource - the host fetches from this pre-declared URI.
+    fn ui_resource_uri(&self) -> Option<String> {
+        None
+    }
+
     /// User friendly name
     fn user_facing_name(&self) -> String {
         self.name().to_string()

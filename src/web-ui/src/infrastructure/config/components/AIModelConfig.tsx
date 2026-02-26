@@ -1,5 +1,3 @@
- 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Edit2, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ArrowLeft, ExternalLink } from 'lucide-react';
@@ -20,6 +18,28 @@ import { createLogger } from '@/shared/utils/logger';
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
+
+/**
+ * Compute the actual request URL from a base URL and provider format.
+ * Rules:
+ *   - Ends with '#'  → strip '#', use as-is (force override)
+ *   - openai         → append '/chat/completions' unless already present
+ *   - anthropic      → append '/v1/messages' unless already present
+ *   - other          → use base_url as-is
+ */
+function resolveRequestUrl(baseUrl: string, provider: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('#')) {
+    return trimmed.slice(0, -1).replace(/\/+$/, '');
+  }
+  if (provider === 'openai') {
+    return trimmed.endsWith('chat/completions') ? trimmed : `${trimmed}/chat/completions`;
+  }
+  if (provider === 'anthropic') {
+    return trimmed.endsWith('v1/messages') ? trimmed : `${trimmed}/v1/messages`;
+  }
+  return trimmed;
+}
 
 const AIModelConfig: React.FC = () => {
   const { t } = useTranslation('settings/ai-model');
@@ -118,6 +138,7 @@ const AIModelConfig: React.FC = () => {
     setEditingConfig({
       name: defaultModel ? `${providerName} - ${defaultModel}` : '',
       base_url: template.baseUrl,
+      request_url: resolveRequestUrl(template.baseUrl, template.format),
       api_key: '',
       model_name: defaultModel,
       provider: template.format,  
@@ -139,7 +160,8 @@ const AIModelConfig: React.FC = () => {
     setSelectedProviderId(null);
     setEditingConfig({
       name: '',
-      base_url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',  
+      base_url: 'https://open.bigmodel.cn/api/paas/v4',
+      request_url: resolveRequestUrl('https://open.bigmodel.cn/api/paas/v4', 'openai'),
       api_key: '',
       model_name: '',
       provider: 'openai',  
@@ -191,6 +213,7 @@ const AIModelConfig: React.FC = () => {
         id: editingConfig.id || `model_${Date.now()}`,
         name: editingConfig.name,
         base_url: editingConfig.base_url,
+        request_url: editingConfig.request_url || resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai'),
         api_key: editingConfig.api_key || '',
         model_name: editingConfig.model_name || 'search-api', 
         provider: editingConfig.provider || 'openai',
@@ -516,18 +539,22 @@ const AIModelConfig: React.FC = () => {
           case 'general_chat':
             defaultCapabilities = ['text_chat', 'function_calling'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
             break;
           case 'multimodal':
             defaultCapabilities = ['text_chat', 'image_understanding', 'function_calling'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
             break;
           case 'image_generation':
             defaultCapabilities = ['image_generation'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/images/generations';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
             break;
           case 'search_enhanced':
             defaultCapabilities = ['search'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/web_search';
+            updates.request_url = resolveRequestUrl(updates.base_url!, 'openai');
             updates.model_name = 'search-api';
             updates.provider = 'openai';
             updates.context_window = 128000;
@@ -536,6 +563,7 @@ const AIModelConfig: React.FC = () => {
           case 'speech_recognition':
             defaultCapabilities = ['speech_recognition'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
             break;
         }
         updates.capabilities = defaultCapabilities;
@@ -594,17 +622,54 @@ const AIModelConfig: React.FC = () => {
                       value={editingConfig.base_url || currentTemplate.baseUrl}
                       onChange={(value) => {
                         const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
-                        setEditingConfig(prev => ({ ...prev, base_url: value as string, provider: selectedOption?.format || prev?.provider }));
+                        const newProvider = selectedOption?.format || editingConfig.provider || 'openai';
+                        setEditingConfig(prev => ({
+                          ...prev,
+                          base_url: value as string,
+                          request_url: resolveRequestUrl(value as string, newProvider),
+                          provider: newProvider
+                        }));
                       }}
                       placeholder={t('form.baseUrl')}
                       options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.note}` }))}
                     />
                   ) : (
-                    <Input type="url" value={editingConfig.base_url || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, base_url: e.target.value }))} onFocus={(e) => e.target.select()} placeholder={currentTemplate?.baseUrl} inputSize="small" />
+                    <div className="bitfun-ai-model-config__control-stack">
+                      <Input
+                        type="url"
+                        value={editingConfig.base_url || ''}
+                        onChange={(e) => setEditingConfig(prev => ({
+                          ...prev,
+                          base_url: e.target.value,
+                          request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
+                        }))}
+                        onFocus={(e) => e.target.select()}
+                        placeholder={currentTemplate?.baseUrl}
+                        inputSize="small"
+                      />
+                      {editingConfig.base_url && (
+                        <div className="bitfun-ai-model-config__resolved-url">
+                          <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
+                          <code className="resolved-url__value">
+                            {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
+                          </code>
+                          <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </ConfigPageRow>
                 <ConfigPageRow label={t('form.provider')} description={t('providerSelection.formatHint')} align="center">
-                  <Select value={editingConfig.provider || 'openai'} onChange={(value) => setEditingConfig(prev => ({ ...prev, provider: value as string }))} placeholder={t('form.providerPlaceholder')} options={[{ label: 'OpenAI', value: 'openai' }, { label: 'Anthropic', value: 'anthropic' }]} />
+                  <Select
+                    value={editingConfig.provider || 'openai'}
+                    onChange={(value) => setEditingConfig(prev => ({
+                      ...prev,
+                      provider: value as string,
+                      request_url: resolveRequestUrl(prev?.base_url || '', value as string)
+                    }))}
+                    placeholder={t('form.providerPlaceholder')}
+                    options={[{ label: 'OpenAI', value: 'openai' }, { label: 'Anthropic', value: 'anthropic' }]}
+                  />
                 </ConfigPageRow>
                 <ConfigPageRow label={t('form.contextWindow')} description={t('form.contextWindowHint')} align="center">
                   <NumberInput value={editingConfig.context_window || 128000} onChange={(v) => setEditingConfig(prev => ({ ...prev, context_window: v }))} min={1000} max={2000000} step={1000} size="small" />
@@ -631,7 +696,29 @@ const AIModelConfig: React.FC = () => {
                   <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                 </ConfigPageRow>
                 <ConfigPageRow label={`${t('form.baseUrl')} *`} description={editingConfig.category === 'search_enhanced' ? t('form.searchApiHint') : undefined} align="center" wide>
-                  <Input type="url" value={editingConfig.base_url || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, base_url: e.target.value }))} onFocus={(e) => e.target.select()} placeholder={editingConfig.category === 'search_enhanced' ? 'https://open.bigmodel.cn/api/paas/v4/web_search' : 'https://open.bigmodel.cn/api/paas/v4/chat/completions'} inputSize="small" />
+                  <div className="bitfun-ai-model-config__control-stack">
+                    <Input
+                      type="url"
+                      value={editingConfig.base_url || ''}
+                      onChange={(e) => setEditingConfig(prev => ({
+                        ...prev,
+                        base_url: e.target.value,
+                        request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
+                      }))}
+                      onFocus={(e) => e.target.select()}
+                      placeholder={editingConfig.category === 'search_enhanced' ? 'https://open.bigmodel.cn/api/paas/v4/web_search' : 'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
+                      inputSize="small"
+                    />
+                    {editingConfig.base_url && (
+                      <div className="bitfun-ai-model-config__resolved-url">
+                        <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
+                        <code className="resolved-url__value">
+                          {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
+                        </code>
+                        <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
+                      </div>
+                    )}
+                  </div>
                 </ConfigPageRow>
                 <ConfigPageRow label={`${t('form.apiKey')} *`} align="center" wide>
                   <Input type="password" value={editingConfig.api_key || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, api_key: e.target.value }))} placeholder={t('form.apiKeyPlaceholder')} inputSize="small" />
