@@ -432,58 +432,6 @@
     }
   }
 
-  &__workspace-selector {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    margin-right: 6px;
-  }
-
-  &__workspace-selector-button {
-    height: 20px;
-    width: auto !important;
-    min-width: 24px;
-    padding: 0 8px;
-    border-radius: 10px;
-    border: none;
-    background: var(--element-bg-subtle);
-    color: var(--color-text-secondary);
-    font-size: 9px;
-    font-weight: 400;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    outline: none;
-    opacity: 0.3;
-    white-space: nowrap;
-    letter-spacing: 0.3px;
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
-    gap: 4px;
-
-    .bitfun-chat-input__box:focus-within & {
-      opacity: 1;
-    }
-
-    &:hover {
-      background-color: var(--element-bg-medium);
-      color: var(--color-text-primary);
-      opacity: 1;
-    }
-
-    &:focus {
-      background-color: var(--color-bg-tertiary);
-      color: var(--color-text-primary);
-      opacity: 1;
-    }
-  }
-
-  &__workspace-selector-label {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  
   &__mode-selector {
     position: relative;
     display: inline-flex;
@@ -1284,6 +1232,5 @@
     transform: translateY(0);
   }
 }
-
 
 
