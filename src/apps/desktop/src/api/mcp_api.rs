@@ -42,6 +42,24 @@ pub async fn initialize_mcp_servers(state: State<'_, AppState>) -> Result<(), St
 }
 
 #[tauri::command]
+pub async fn initialize_mcp_servers_non_destructive(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mcp_service = state
+        .mcp_service
+        .as_ref()
+        .ok_or_else(|| "MCP service not initialized".to_string())?;
+
+    mcp_service
+        .server_manager()
+        .initialize_non_destructive()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<MCPServerInfo>, String> {
     let mcp_service = state
         .mcp_service

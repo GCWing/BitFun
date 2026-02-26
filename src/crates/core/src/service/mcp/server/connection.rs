@@ -7,15 +7,15 @@ use crate::service::mcp::protocol::{
     create_prompts_list_request, create_resources_list_request, create_resources_read_request,
     create_tools_call_request, create_tools_list_request, parse_response_result,
     transport::MCPTransport, transport_remote::RemoteMCPTransport, InitializeResult, MCPMessage,
-    MCPRequest, MCPResponse, MCPToolResult, PromptsGetResult, PromptsListResult,
-    ResourcesListResult, ResourcesReadResult, ToolsListResult,
+    MCPResponse, MCPToolResult, PromptsGetResult, PromptsListResult, ResourcesListResult,
+    ResourcesReadResult, ToolsListResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::process::ChildStdin;
 use tokio::sync::{mpsc, oneshot, RwLock};
 
@@ -53,24 +53,16 @@ impl MCPConnection {
         }
     }
 
-    /// Creates a new remote connection instance (HTTP/SSE).
-    pub fn new_remote(
-        url: String,
-        auth_token: Option<String>,
-        message_rx: mpsc::UnboundedReceiver<MCPMessage>,
-    ) -> Self {
-        let transport = Arc::new(RemoteMCPTransport::new(url, auth_token));
+    /// Creates a new remote connection instance (Streamable HTTP).
+    pub fn new_remote(url: String, headers: HashMap<String, String>) -> Self {
+        let request_timeout = Duration::from_secs(180);
+        let transport = Arc::new(RemoteMCPTransport::new(url, headers, request_timeout));
         let pending_requests = Arc::new(RwLock::new(HashMap::new()));
-
-        let pending = pending_requests.clone();
-        tokio::spawn(async move {
-            Self::handle_messages(message_rx, pending).await;
-        });
 
         Self {
             transport: TransportType::Remote(transport),
             pending_requests,
-            request_timeout: Duration::from_secs(180),
+            request_timeout,
         }
     }
 
@@ -78,14 +70,6 @@ impl MCPConnection {
     pub async fn get_auth_token(&self) -> Option<String> {
         match &self.transport {
             TransportType::Remote(transport) => transport.get_auth_token(),
-            TransportType::Local(_) => None,
-        }
-    }
-
-    /// Returns the session ID for a remote connection.
-    pub async fn get_session_id(&self) -> Option<String> {
-        match &self.transport {
-            TransportType::Remote(transport) => transport.get_session_id().await,
             TransportType::Local(_) => None,
         }
     }
@@ -150,35 +134,10 @@ impl MCPConnection {
                     ))),
                 }
             }
-            TransportType::Remote(transport) => {
-                let request_id = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_err(|e| {
-                        BitFunError::MCPError(format!(
-                            "Failed to build request id for method {}: {}",
-                            method, e
-                        ))
-                    })?
-                    .as_millis() as u64;
-                let request = MCPRequest {
-                    jsonrpc: "2.0".to_string(),
-                    id: Value::Number(serde_json::Number::from(request_id)),
-                    method: method.clone(),
-                    params,
-                };
-
-                let response_value = transport.send_request(&request).await?;
-
-                let response: MCPResponse =
-                    serde_json::from_value(response_value).map_err(|e| {
-                        BitFunError::MCPError(format!(
-                            "Failed to parse response for method {}: {}",
-                            method, e
-                        ))
-                    })?;
-
-                Ok(response)
-            }
+            TransportType::Remote(_transport) => Err(BitFunError::NotImplemented(
+                "Generic JSON-RPC send_request is not supported for Streamable HTTP connections"
+                    .to_string(),
+            )),
         }
     }
 
@@ -188,11 +147,18 @@ impl MCPConnection {
         client_name: &str,
         client_version: &str,
     ) -> BitFunResult<InitializeResult> {
-        let request = create_initialize_request(0, client_name, client_version);
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        parse_response_result(&response)
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_initialize_request(0, client_name, client_version);
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => {
+                transport.initialize(client_name, client_version).await
+            }
+        }
     }
 
     /// Lists resources.
@@ -200,29 +166,44 @@ impl MCPConnection {
         &self,
         cursor: Option<String>,
     ) -> BitFunResult<ResourcesListResult> {
-        let request = create_resources_list_request(0, cursor);
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        parse_response_result(&response)
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_resources_list_request(0, cursor);
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => transport.list_resources(cursor).await,
+        }
     }
 
     /// Reads a resource.
     pub async fn read_resource(&self, uri: &str) -> BitFunResult<ResourcesReadResult> {
-        let request = create_resources_read_request(0, uri);
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        parse_response_result(&response)
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_resources_read_request(0, uri);
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => transport.read_resource(uri).await,
+        }
     }
 
     /// Lists prompts.
     pub async fn list_prompts(&self, cursor: Option<String>) -> BitFunResult<PromptsListResult> {
-        let request = create_prompts_list_request(0, cursor);
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        parse_response_result(&response)
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_prompts_list_request(0, cursor);
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => transport.list_prompts(cursor).await,
+        }
     }
 
     /// Gets a prompt.
@@ -231,20 +212,30 @@ impl MCPConnection {
         name: &str,
         arguments: Option<HashMap<String, String>>,
     ) -> BitFunResult<PromptsGetResult> {
-        let request = create_prompts_get_request(0, name, arguments);
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        parse_response_result(&response)
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_prompts_get_request(0, name, arguments);
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => transport.get_prompt(name, arguments).await,
+        }
     }
 
     /// Lists tools.
     pub async fn list_tools(&self, cursor: Option<String>) -> BitFunResult<ToolsListResult> {
-        let request = create_tools_list_request(0, cursor);
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        parse_response_result(&response)
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_tools_list_request(0, cursor);
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => transport.list_tools(cursor).await,
+        }
     }
 
     /// Calls a tool.
@@ -253,23 +244,33 @@ impl MCPConnection {
         name: &str,
         arguments: Option<Value>,
     ) -> BitFunResult<MCPToolResult> {
-        debug!("Calling MCP tool: name={}", name);
-        let request = create_tools_call_request(0, name, arguments);
+        match &self.transport {
+            TransportType::Local(_) => {
+                debug!("Calling MCP tool: name={}", name);
+                let request = create_tools_call_request(0, name, arguments);
 
-        let response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
+                let response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
 
-        parse_response_result(&response)
+                parse_response_result(&response)
+            }
+            TransportType::Remote(transport) => transport.call_tool(name, arguments).await,
+        }
     }
 
     /// Sends `ping` (heartbeat check).
     pub async fn ping(&self) -> BitFunResult<()> {
-        let request = create_ping_request(0);
-        let _response = self
-            .send_request_and_wait(request.method.clone(), request.params)
-            .await?;
-        Ok(())
+        match &self.transport {
+            TransportType::Local(_) => {
+                let request = create_ping_request(0);
+                let _response = self
+                    .send_request_and_wait(request.method.clone(), request.params)
+                    .await?;
+                Ok(())
+            }
+            TransportType::Remote(transport) => transport.ping().await,
+        }
     }
 }
 

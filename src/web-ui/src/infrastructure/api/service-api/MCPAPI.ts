@@ -169,6 +169,11 @@ export class MCPAPI {
   }
 
    
+  static async initializeServersNonDestructive(): Promise<void> {
+    return api.invoke('initialize_mcp_servers_non_destructive');
+  }
+
+   
   static async getServers(): Promise<MCPServerInfo[]> {
     return api.invoke('get_mcp_servers');
   }

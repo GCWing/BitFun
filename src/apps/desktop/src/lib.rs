@@ -424,6 +424,7 @@ pub async fn run() {
             api::project_context_api::toggle_imported_document_enabled,
             api::project_context_api::delete_context_document,
             initialize_mcp_servers,
+            api::mcp_api::initialize_mcp_servers_non_destructive,
             get_mcp_servers,
             start_mcp_server,
             stop_mcp_server,
