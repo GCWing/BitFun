@@ -96,6 +96,33 @@
       }
     }
 
+    .content-item-mcp-app {
+      min-height: 200px;
+    }
+
+    .mcp-app-loading,
+    .mcp-app-error {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 24px;
+      color: var(--tool-card-text-secondary);
+      font-size: 13px;
+    }
+
+    .mcp-app-error {
+      color: rgba(239, 68, 68, 0.9);
+    }
+
+    .mcp-app-iframe {
+      width: 100%;
+      min-height: 320px;
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 6px;
+      background: var(--tool-card-bg, #0f0f0f);
+    }
+
     .resource-content {
       padding: 8px 12px;
       background: rgba(139, 92, 246, 0.05);

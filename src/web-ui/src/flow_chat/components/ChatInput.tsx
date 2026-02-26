@@ -235,18 +235,94 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const handleFillChatInput = (data: { content: string }) => {
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: data.content });
-      
+
       if (richTextInputRef.current) {
         richTextInputRef.current.focus();
       }
     };
 
     globalEventBus.on('fill-chat-input', handleFillChatInput);
-    
+
     return () => {
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
   }, []);
+
+  // Handle MCP App ui/message requests (aligned with VSCode behavior)
+  React.useEffect(() => {
+    const handleMcpAppMessage = async (event: import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageEvent) => {
+      const { requestId, params } = event;
+
+      // Don't fill if input already has content (aligned with VSCode behavior)
+      if (inputState.value.trim()) {
+        log.warn('MCP App ui/message rejected: input already has content');
+        // Send error response (VSCode returns { isError: true } in this case)
+        globalEventBus.emit('mcp-app:message-response', {
+          requestId,
+          result: { isError: true }
+        } as import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageResponseEvent);
+        return;
+      }
+
+      try {
+        // Extract text content and set input
+        const textContent = params.content
+          .filter(c => c.type === 'text')
+          .map(c => c.text)
+          .join('\n\n');
+
+        if (textContent) {
+          dispatchInput({ type: 'ACTIVATE' });
+          dispatchInput({ type: 'SET_VALUE', payload: textContent });
+        }
+
+        // Handle image attachments
+        for (const block of params.content) {
+          if (block.type === 'image') {
+            try {
+              // Convert base64 to File object
+              const mimeType = block.mimeType || 'image/png';
+              const binaryString = atob(block.data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: mimeType });
+              const file = new File([blob], `image.${mimeType.split('/')[1] || 'png'}`, { type: mimeType });
+              const imageContext = await createImageContextFromClipboard(file);
+              addContext(imageContext);
+            } catch (err) {
+              log.error('Failed to add image from MCP App message', { err });
+            }
+          }
+        }
+
+        // Focus input
+        if (richTextInputRef.current) {
+          richTextInputRef.current.focus();
+        }
+
+        // Send success response
+        globalEventBus.emit('mcp-app:message-response', {
+          requestId,
+          result: { isError: false }
+        } as import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageResponseEvent);
+      } catch (err) {
+        log.error('Failed to handle MCP App ui/message', { err });
+        // Send error response
+        globalEventBus.emit('mcp-app:message-response', {
+          requestId,
+          result: { isError: true }
+        } as import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageResponseEvent);
+      }
+    };
+
+    globalEventBus.on('mcp-app:message', handleMcpAppMessage);
+
+    return () => {
+      globalEventBus.off('mcp-app:message', handleMcpAppMessage);
+    };
+  }, [inputState.value, addContext]);
 
   React.useEffect(() => {
     const handleInsertContextTag = (event: Event) => {

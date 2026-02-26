@@ -526,7 +526,10 @@
     },
     "mcp": {
       "confirmExecute": "Confirm Execute",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "loadingApp": "Loading interactive app...",
+      "appLoadError": "Failed to load app",
+      "interactiveApp": "interactive app"
     },
     "default": {
       "waitingConfirm": "Waiting for confirmation",

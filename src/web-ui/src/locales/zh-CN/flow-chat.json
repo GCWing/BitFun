@@ -526,7 +526,10 @@
     },
     "mcp": {
       "confirmExecute": "确认执行",
-      "cancel": "取消"
+      "cancel": "取消",
+      "loadingApp": "加载交互应用中...",
+      "appLoadError": "加载应用失败",
+      "interactiveApp": "交互应用"
     },
     "default": {
       "waitingConfirm": "等待确认",
