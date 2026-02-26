@@ -598,3 +598,127 @@ Example usage:
         Ok(vec![result])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::WebFetchTool;
+    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::io::ErrorKind;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    fn empty_context() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            message_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            safe_mode: None,
+            abort_controller: None,
+            read_file_timestamps: HashMap::new(),
+            options: None,
+            response_state: None,
+            image_context_provider: None,
+            subagent_parent_info: None,
+            cancellation_token: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn webfetch_can_fetch_local_http_content() {
+        let listener = match TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(e) if e.kind() == ErrorKind::PermissionDenied => {
+                eprintln!(
+                    "Skipping webfetch local server test due to sandbox socket restrictions: {}",
+                    e
+                );
+                return;
+            }
+            Err(e) => panic!("bind local test server: {}", e),
+        };
+        let addr = listener.local_addr().expect("read local addr");
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept request");
+            let mut req_buf = [0u8; 1024];
+            let _ = socket.read(&mut req_buf).await;
+
+            let body = "hello from webfetch";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("write response");
+            let _ = socket.shutdown().await;
+        });
+
+        let tool = WebFetchTool::new();
+        let input = json!({
+            "url": format!("http://{}/test", addr),
+            "format": "text"
+        });
+
+        let results = tool.call(&input, &empty_context()).await.unwrap_or_else(|e| {
+            panic!("tool call failed with detailed error: {:?}", e);
+        });
+        assert_eq!(results.len(), 1);
+
+        match &results[0] {
+            ToolResult::Result {
+                data,
+                result_for_assistant,
+            } => {
+                assert_eq!(data["content"], "hello from webfetch");
+                assert_eq!(data["format"], "text");
+                assert_eq!(
+                    result_for_assistant.as_deref(),
+                    Some("hello from webfetch")
+                );
+            }
+            other => panic!("unexpected tool result variant: {:?}", other),
+        }
+
+        server.await.expect("server task");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires outbound network"]
+    async fn webfetch_can_fetch_real_website() {
+        let tool = WebFetchTool::new();
+        let input = json!({
+            "url": "https://example.com",
+            "format": "text"
+        });
+
+        let results = tool.call(&input, &empty_context()).await.unwrap_or_else(|e| {
+            panic!("tool call failed with detailed error: {:?}", e);
+        });
+        assert_eq!(results.len(), 1);
+
+        match &results[0] {
+            ToolResult::Result {
+                data,
+                result_for_assistant,
+            } => {
+                let content = data["content"].as_str().expect("content should be string");
+                assert!(content.contains("Example Domain"));
+                assert_eq!(data["format"], "text");
+
+                let assistant_text = result_for_assistant
+                    .as_deref()
+                    .expect("assistant output should exist");
+                assert!(assistant_text.contains("Example Domain"));
+            }
+            other => panic!("unexpected tool result variant: {:?}", other),
+        }
+    }
+
+}
