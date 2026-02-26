@@ -1,368 +1,314 @@
 ---
 name: pdf
-description: Advanced PDF document toolkit for content extraction, document generation, page manipulation, and interactive form processing. Use when you need to parse PDF text and tables, create professional documents, combine or split files, or complete fillable forms programmatically.
-description_zh: 高级 PDF 文档工具包，支持内容提取、文档生成、页面操作和交互式表单处理。适用于解析 PDF 文本和表格、创建专业文档、合并或拆分文件，或以编程方式完成可填写表单。
+description: Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.
+license: Proprietary. LICENSE.txt has complete terms
 ---
 
-# PDF Document Toolkit
+# PDF Processing Guide
 
-## Introduction
+## Overview
 
-This toolkit provides comprehensive PDF document operations using Python libraries and shell utilities. For advanced usage, JavaScript APIs, and detailed code samples, refer to advanced-guide.md. For filling PDF forms, consult form-handler.md and follow its workflow.
+This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions.
 
-## Important: Post-Completion Verification
-
-**After generating or modifying PDF files, ALWAYS verify the output for CJK text rendering issues:**
-
-1. **Open the generated PDF** and visually inspect all text content
-2. **Check for garbled characters** - Look for:
-   - Black boxes (■) or rectangles instead of CJK characters
-   - Question marks (?) or replacement characters (�)
-   - Missing text where CJK content should appear
-   - Incorrectly rendered or overlapping characters
-3. **If issues are found**, refer to the "CJK (Chinese/Japanese/Korean) Text Support" section below for font configuration solutions
-
-This verification step is critical when the PDF contains Chinese, Japanese, or Korean text.
-
-## Getting Started
+## Quick Start
 
 ```python
 from pypdf import PdfReader, PdfWriter
 
-# Open a PDF document
-doc = PdfReader("sample.pdf")
-print(f"Total pages: {len(doc.pages)}")
+# Read a PDF
+reader = PdfReader("document.pdf")
+print(f"Pages: {len(reader.pages)}")
 
-# Gather text content
-content = ""
-for pg in doc.pages:
-    content += pg.extract_text()
+# Extract text
+text = ""
+for page in reader.pages:
+    text += page.extract_text()
 ```
 
 ## Python Libraries
 
-### pypdf - Core Operations
+### pypdf - Basic Operations
 
-#### Combine Multiple PDFs
+#### Merge PDFs
 ```python
 from pypdf import PdfWriter, PdfReader
 
-output = PdfWriter()
-for pdf in ["first.pdf", "second.pdf", "third.pdf"]:
-    doc = PdfReader(pdf)
-    for pg in doc.pages:
-        output.add_page(pg)
+writer = PdfWriter()
+for pdf_file in ["doc1.pdf", "doc2.pdf", "doc3.pdf"]:
+    reader = PdfReader(pdf_file)
+    for page in reader.pages:
+        writer.add_page(page)
 
-with open("combined.pdf", "wb") as out_file:
-    output.write(out_file)
+with open("merged.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-#### Separate PDF Pages
+#### Split PDF
 ```python
-doc = PdfReader("source.pdf")
-for idx, pg in enumerate(doc.pages):
-    output = PdfWriter()
-    output.add_page(pg)
-    with open(f"part_{idx+1}.pdf", "wb") as out_file:
-        output.write(out_file)
+reader = PdfReader("input.pdf")
+for i, page in enumerate(reader.pages):
+    writer = PdfWriter()
+    writer.add_page(page)
+    with open(f"page_{i+1}.pdf", "wb") as output:
+        writer.write(output)
 ```
 
-#### Read Document Properties
+#### Extract Metadata
 ```python
-doc = PdfReader("sample.pdf")
-props = doc.metadata
-print(f"Title: {props.title}")
-print(f"Author: {props.author}")
-print(f"Subject: {props.subject}")
-print(f"Creator: {props.creator}")
+reader = PdfReader("document.pdf")
+meta = reader.metadata
+print(f"Title: {meta.title}")
+print(f"Author: {meta.author}")
+print(f"Subject: {meta.subject}")
+print(f"Creator: {meta.creator}")
 ```
 
-#### Rotate Document Pages
+#### Rotate Pages
 ```python
-doc = PdfReader("source.pdf")
-output = PdfWriter()
+reader = PdfReader("input.pdf")
+writer = PdfWriter()
 
-pg = doc.pages[0]
-pg.rotate(90)  # 90 degrees clockwise
-output.add_page(pg)
+page = reader.pages[0]
+page.rotate(90)  # Rotate 90 degrees clockwise
+writer.add_page(page)
 
-with open("turned.pdf", "wb") as out_file:
-    output.write(out_file)
+with open("rotated.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-### pdfplumber - Content Extraction
+### pdfplumber - Text and Table Extraction
 
 #### Extract Text with Layout
 ```python
 import pdfplumber
 
-with pdfplumber.open("sample.pdf") as doc:
-    for pg in doc.pages:
-        content = pg.extract_text()
-        print(content)
+with pdfplumber.open("document.pdf") as pdf:
+    for page in pdf.pages:
+        text = page.extract_text()
+        print(text)
 ```
 
-#### Extract Tabular Data
+#### Extract Tables
 ```python
-with pdfplumber.open("sample.pdf") as doc:
-    for pg_num, pg in enumerate(doc.pages):
-        data_tables = pg.extract_tables()
-        for tbl_num, tbl in enumerate(data_tables):
-            print(f"Table {tbl_num+1} on page {pg_num+1}:")
-            for row in tbl:
+with pdfplumber.open("document.pdf") as pdf:
+    for i, page in enumerate(pdf.pages):
+        tables = page.extract_tables()
+        for j, table in enumerate(tables):
+            print(f"Table {j+1} on page {i+1}:")
+            for row in table:
                 print(row)
 ```
 
-#### Export Tables to Excel
+#### Advanced Table Extraction
 ```python
 import pandas as pd
 
-with pdfplumber.open("sample.pdf") as doc:
-    collected_tables = []
-    for pg in doc.pages:
-        data_tables = pg.extract_tables()
-        for tbl in data_tables:
-            if tbl:  # Verify table is not empty
-                df = pd.DataFrame(tbl[1:], columns=tbl[0])
-                collected_tables.append(df)
+with pdfplumber.open("document.pdf") as pdf:
+    all_tables = []
+    for page in pdf.pages:
+        tables = page.extract_tables()
+        for table in tables:
+            if table:  # Check if table is not empty
+                df = pd.DataFrame(table[1:], columns=table[0])
+                all_tables.append(df)
 
-# Merge all tables
-if collected_tables:
-    merged_df = pd.concat(collected_tables, ignore_index=True)
-    merged_df.to_excel("tables_export.xlsx", index=False)
+# Combine all tables
+if all_tables:
+    combined_df = pd.concat(all_tables, ignore_index=True)
+    combined_df.to_excel("extracted_tables.xlsx", index=False)
 ```
 
-### reportlab - Document Generation
+### reportlab - Create PDFs
 
-#### Create Simple PDF
+#### Basic PDF Creation
 ```python
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-c = canvas.Canvas("greeting.pdf", pagesize=letter)
+c = canvas.Canvas("hello.pdf", pagesize=letter)
 width, height = letter
 
-# Insert text
-c.drawString(100, height - 100, "Welcome!")
-c.drawString(100, height - 120, "Generated using reportlab library")
+# Add text
+c.drawString(100, height - 100, "Hello World!")
+c.drawString(100, height - 120, "This is a PDF created with reportlab")
 
-# Draw a separator line
+# Add a line
 c.line(100, height - 140, 400, height - 140)
 
-# Save document
+# Save
 c.save()
 ```
 
-#### Generate Multi-Page Document
+#### Create PDF with Multiple Pages
 ```python
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 
-doc = SimpleDocTemplate("document.pdf", pagesize=letter)
+doc = SimpleDocTemplate("report.pdf", pagesize=letter)
 styles = getSampleStyleSheet()
-elements = []
+story = []
 
 # Add content
-heading = Paragraph("Document Title", styles['Title'])
-elements.append(heading)
-elements.append(Spacer(1, 12))
+title = Paragraph("Report Title", styles['Title'])
+story.append(title)
+story.append(Spacer(1, 12))
 
-body_text = Paragraph("This is the main content section. " * 20, styles['Normal'])
-elements.append(body_text)
-elements.append(PageBreak())
+body = Paragraph("This is the body of the report. " * 20, styles['Normal'])
+story.append(body)
+story.append(PageBreak())
 
-# Second page
-elements.append(Paragraph("Section 2", styles['Heading1']))
-elements.append(Paragraph("Content for the second section", styles['Normal']))
+# Page 2
+story.append(Paragraph("Page 2", styles['Heading1']))
+story.append(Paragraph("Content for page 2", styles['Normal']))
 
-# Generate PDF
-doc.build(elements)
+# Build PDF
+doc.build(story)
 ```
 
-## Shell Utilities
+#### Subscripts and Superscripts
+
+**IMPORTANT**: Never use Unicode subscript/superscript characters (₀₁₂₃₄₅₆₇₈₉, ⁰¹²³⁴⁵⁶⁷⁸⁹) in ReportLab PDFs. The built-in fonts do not include these glyphs, causing them to render as solid black boxes.
+
+Instead, use ReportLab's XML markup tags in Paragraph objects:
+```python
+from reportlab.platypus import Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+
+styles = getSampleStyleSheet()
+
+# Subscripts: use <sub> tag
+chemical = Paragraph("H<sub>2</sub>O", styles['Normal'])
+
+# Superscripts: use <super> tag
+squared = Paragraph("x<super>2</super> + y<super>2</super>", styles['Normal'])
+```
+
+For canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.
+
+## Command-Line Tools
 
 ### pdftotext (poppler-utils)
 ```bash
-# Convert to text
-pdftotext source.pdf result.txt
+# Extract text
+pdftotext input.pdf output.txt
 
-# Preserve layout formatting
-pdftotext -layout source.pdf result.txt
+# Extract text preserving layout
+pdftotext -layout input.pdf output.txt
 
-# Convert specific page range
-pdftotext -f 1 -l 5 source.pdf result.txt  # Pages 1-5
+# Extract specific pages
+pdftotext -f 1 -l 5 input.pdf output.txt  # Pages 1-5
 ```
 
 ### qpdf
 ```bash
-# Merge documents
-qpdf --empty --pages doc1.pdf doc2.pdf -- result.pdf
+# Merge PDFs
+qpdf --empty --pages file1.pdf file2.pdf -- merged.pdf
 
-# Extract page range
-qpdf source.pdf --pages . 1-5 -- subset1-5.pdf
-qpdf source.pdf --pages . 6-10 -- subset6-10.pdf
+# Split pages
+qpdf input.pdf --pages . 1-5 -- pages1-5.pdf
+qpdf input.pdf --pages . 6-10 -- pages6-10.pdf
 
-# Rotate specific page
-qpdf source.pdf result.pdf --rotate=+90:1  # Rotate page 1 by 90 degrees
+# Rotate pages
+qpdf input.pdf output.pdf --rotate=+90:1  # Rotate page 1 by 90 degrees
 
-# Decrypt protected PDF
-qpdf --password=secret --decrypt protected.pdf unlocked.pdf
+# Remove password
+qpdf --password=mypassword --decrypt encrypted.pdf decrypted.pdf
 ```
 
 ### pdftk (if available)
 ```bash
-# Merge documents
-pdftk doc1.pdf doc2.pdf cat output result.pdf
+# Merge
+pdftk file1.pdf file2.pdf cat output merged.pdf
 
-# Split into individual pages
-pdftk source.pdf burst
+# Split
+pdftk input.pdf burst
 
-# Rotate page
-pdftk source.pdf rotate 1east output turned.pdf
+# Rotate
+pdftk input.pdf rotate 1east output rotated.pdf
 ```
 
-## Common Operations
+## Common Tasks
 
-### OCR for Scanned Documents
+### Extract Text from Scanned PDFs
 ```python
 # Requires: pip install pytesseract pdf2image
 import pytesseract
 from pdf2image import convert_from_path
 
-# Convert PDF pages to images
-pages = convert_from_path('scanned.pdf')
+# Convert PDF to images
+images = convert_from_path('scanned.pdf')
 
-# Process each page with OCR
-content = ""
-for idx, img in enumerate(pages):
-    content += f"Page {idx+1}:\n"
-    content += pytesseract.image_to_string(img)
-    content += "\n\n"
+# OCR each page
+text = ""
+for i, image in enumerate(images):
+    text += f"Page {i+1}:\n"
+    text += pytesseract.image_to_string(image)
+    text += "\n\n"
 
-print(content)
+print(text)
 ```
 
-### Apply Watermark
+### Add Watermark
 ```python
 from pypdf import PdfReader, PdfWriter
 
-# Load watermark (or create one)
-watermark_page = PdfReader("stamp.pdf").pages[0]
+# Create watermark (or load existing)
+watermark = PdfReader("watermark.pdf").pages[0]
 
 # Apply to all pages
-doc = PdfReader("sample.pdf")
-output = PdfWriter()
+reader = PdfReader("document.pdf")
+writer = PdfWriter()
 
-for pg in doc.pages:
-    pg.merge_page(watermark_page)
-    output.add_page(pg)
+for page in reader.pages:
+    page.merge_page(watermark)
+    writer.add_page(page)
 
-with open("stamped.pdf", "wb") as out_file:
-    output.write(out_file)
+with open("watermarked.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-### Export Embedded Images
+### Extract Images
 ```bash
 # Using pdfimages (poppler-utils)
-pdfimages -j source.pdf img_prefix
+pdfimages -j input.pdf output_prefix
 
-# Outputs: img_prefix-000.jpg, img_prefix-001.jpg, etc.
+# This extracts all images as output_prefix-000.jpg, output_prefix-001.jpg, etc.
 ```
 
-### Add Document Password
+### Password Protection
 ```python
 from pypdf import PdfReader, PdfWriter
 
-doc = PdfReader("source.pdf")
-output = PdfWriter()
+reader = PdfReader("input.pdf")
+writer = PdfWriter()
 
-for pg in doc.pages:
-    output.add_page(pg)
+for page in reader.pages:
+    writer.add_page(page)
 
-# Set passwords
-output.encrypt("user_pwd", "admin_pwd")
+# Add password
+writer.encrypt("userpassword", "ownerpassword")
 
-with open("secured.pdf", "wb") as out_file:
-    output.write(out_file)
+with open("encrypted.pdf", "wb") as output:
+    writer.write(output)
 ```
 
-## Quick Reference Table
+## Quick Reference
 
-| Operation | Recommended Tool | Example |
-|-----------|------------------|---------|
-| Merge documents | pypdf | `output.add_page(pg)` |
-| Split document | pypdf | One page per output file |
-| Extract text | pdfplumber | `pg.extract_text()` |
-| Extract tables | pdfplumber | `pg.extract_tables()` |
-| Create documents | reportlab | Canvas or Platypus |
-| Shell merge | qpdf | `qpdf --empty --pages ...` |
-| OCR scanned docs | pytesseract | Convert to image first |
-| Fill PDF forms | pdf-lib or pypdf (see form-handler.md) | See form-handler.md |
+| Task | Best Tool | Command/Code |
+|------|-----------|--------------|
+| Merge PDFs | pypdf | `writer.add_page(page)` |
+| Split PDFs | pypdf | One page per file |
+| Extract text | pdfplumber | `page.extract_text()` |
+| Extract tables | pdfplumber | `page.extract_tables()` |
+| Create PDFs | reportlab | Canvas or Platypus |
+| Command line merge | qpdf | `qpdf --empty --pages ...` |
+| OCR scanned PDFs | pytesseract | Convert to image first |
+| Fill PDF forms | pdf-lib or pypdf (see FORMS.md) | See FORMS.md |
 
-## CJK (Chinese/Japanese/Korean) Text Support
+## Next Steps
 
-**Important**: Standard PDF fonts (Arial, Helvetica, etc.) do not support CJK characters. If CJK text is used without a proper CJK font, characters will display as black boxes (■).
-
-### Automatic Font Detection
-
-The `apply_text_overlays.py` utility automatically:
-1. Detects CJK characters in your text content
-2. Searches for available CJK fonts on your system
-3. **Exits with an error if CJK characters are detected but no CJK font is found**
-
-### Supported System Fonts
-
-| OS | Font Paths |
-|----|------------|
-| macOS | `/System/Library/Fonts/PingFang.ttc`, `/System/Library/Fonts/STHeiti Light.ttc` |
-| Windows | `C:/Windows/Fonts/msyh.ttc` (Microsoft YaHei), `C:/Windows/Fonts/simsun.ttc` |
-| Linux | `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`, `/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc` |
-
-### If You See "No CJK Font Found" Error
-
-Install a CJK font for your operating system:
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install fonts-noto-cjk
-
-# Fedora/RHEL
-sudo dnf install google-noto-sans-cjk-fonts
-
-# macOS - PingFang is pre-installed
-# Windows - Microsoft YaHei is pre-installed
-```
-
-### Manual Font Registration (for reportlab)
-
-When using reportlab directly, register a CJK font before drawing text:
-
-```python
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
-# Register CJK font (example for macOS)
-# Note: For TTC (TrueType Collection) files, specify subfontIndex parameter
-pdfmetrics.registerFont(TTFont('PingFang', '/System/Library/Fonts/PingFang.ttc', subfontIndex=0))
-
-# Use the font for CJK text
-c.setFont('PingFang', 14)
-c.drawString(100, 700, '你好世界')      # Chinese
-c.drawString(100, 680, 'こんにちは')    # Japanese
-c.drawString(100, 660, '안녕하세요')    # Korean
-```
-
-**Common subfontIndex values for TTC files:**
-- PingFang.ttc: 0 (Regular), 1 (Medium), 2 (Semibold), etc.
-- msyh.ttc: 0 (Regular), 1 (Bold)
-- NotoSansCJK-Regular.ttc: varies by language variant
-
-For detailed CJK font configuration, see form-handler.md.
-
-## Additional Resources
-
-- For pypdfium2 advanced usage, see advanced-guide.md
-- For JavaScript libraries (pdf-lib), see advanced-guide.md
-- For filling PDF forms, follow instructions in form-handler.md
-- For troubleshooting tips, see advanced-guide.md
+- For advanced pypdfium2 usage, see REFERENCE.md
+- For JavaScript libraries (pdf-lib), see REFERENCE.md
+- If you need to fill out a PDF form, follow the instructions in FORMS.md
+- For troubleshooting guides, see REFERENCE.md
