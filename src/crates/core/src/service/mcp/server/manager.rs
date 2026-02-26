@@ -6,6 +6,7 @@ use super::connection::{MCPConnection, MCPConnectionPool};
 use super::{MCPServerConfig, MCPServerRegistry, MCPServerStatus};
 use crate::service::mcp::adapter::tool::MCPToolAdapter;
 use crate::service::mcp::config::MCPConfigService;
+use crate::service::runtime::{RuntimeManager, RuntimeSource};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -146,17 +147,49 @@ impl MCPServerManager {
                     BitFunError::Configuration("Missing command for local MCP server".to_string())
                 })?;
 
+                let runtime_manager = RuntimeManager::new()?;
+                let resolved = runtime_manager.resolve_command(command).ok_or_else(|| {
+                    BitFunError::ProcessError(format!(
+                        "MCP server command '{}' not found in system PATH or BitFun managed runtimes at {}",
+                        command,
+                        runtime_manager.runtime_root_display()
+                    ))
+                })?;
+
+                let source_label = match resolved.source {
+                    RuntimeSource::System => "system",
+                    RuntimeSource::Managed => "managed",
+                };
+
+                let mut env_map = config.env.clone();
+                if matches!(resolved.source, RuntimeSource::Managed) {
+                    let current_path = env_map
+                        .get("PATH")
+                        .cloned()
+                        .or_else(|| env_map.get("Path").cloned())
+                        .or_else(|| std::env::var("PATH").ok());
+                    if let Some(merged_path) =
+                        runtime_manager.merged_path_env(current_path.as_deref())
+                    {
+                        env_map.insert("PATH".to_string(), merged_path.clone());
+                        #[cfg(windows)]
+                        {
+                            env_map.insert("Path".to_string(), merged_path);
+                        }
+                    }
+                }
+
                 info!(
-                    "Starting local MCP server: command={} id={}",
-                    command, server_id
+                    "Starting local MCP server: command={} source={} id={}",
+                    resolved.command, source_label, server_id
                 );
 
-                proc.start(command, &config.args, &config.env)
+                proc.start(&resolved.command, &config.args, &env_map)
                     .await
                     .map_err(|e| {
                         error!(
-                            "Failed to start local MCP server process: id={} error={}",
-                            server_id, e
+                            "Failed to start local MCP server process: id={} command={} source={} error={}",
+                            server_id, resolved.command, source_label, e
                         );
                         e
                     })?;
@@ -262,7 +295,36 @@ impl MCPServerManager {
                     .command
                     .as_ref()
                     .ok_or_else(|| BitFunError::Configuration("Missing command".to_string()))?;
-                proc.restart(command, &config.args, &config.env).await?;
+
+                let runtime_manager = RuntimeManager::new()?;
+                let resolved = runtime_manager.resolve_command(command).ok_or_else(|| {
+                    BitFunError::ProcessError(format!(
+                        "MCP server command '{}' not found in system PATH or BitFun managed runtimes at {}",
+                        command,
+                        runtime_manager.runtime_root_display()
+                    ))
+                })?;
+
+                let mut env_map = config.env.clone();
+                if matches!(resolved.source, RuntimeSource::Managed) {
+                    let current_path = env_map
+                        .get("PATH")
+                        .cloned()
+                        .or_else(|| env_map.get("Path").cloned())
+                        .or_else(|| std::env::var("PATH").ok());
+                    if let Some(merged_path) =
+                        runtime_manager.merged_path_env(current_path.as_deref())
+                    {
+                        env_map.insert("PATH".to_string(), merged_path.clone());
+                        #[cfg(windows)]
+                        {
+                            env_map.insert("Path".to_string(), merged_path);
+                        }
+                    }
+                }
+
+                proc.restart(&resolved.command, &config.args, &env_map)
+                    .await?;
             }
             _ => {
                 return Err(BitFunError::NotImplemented(

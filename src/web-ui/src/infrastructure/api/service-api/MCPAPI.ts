@@ -23,6 +23,17 @@ export interface MCPServerInfo {
   serverType: string;
   enabled: boolean;
   autoStart: boolean;
+  command?: string;
+  commandAvailable?: boolean;
+  commandSource?: 'system' | 'managed';
+  commandResolvedPath?: string;
+}
+
+export interface RuntimeCommandCapability {
+  command: string;
+  available: boolean;
+  source?: 'system' | 'managed';
+  resolvedPath?: string;
 }
 
  
@@ -160,6 +171,11 @@ export class MCPAPI {
    
   static async getServers(): Promise<MCPServerInfo[]> {
     return api.invoke('get_mcp_servers');
+  }
+
+   
+  static async getRuntimeCapabilities(): Promise<RuntimeCommandCapability[]> {
+    return api.invoke('get_runtime_capabilities');
   }
 
    

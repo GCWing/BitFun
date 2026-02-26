@@ -413,7 +413,36 @@ const McpToolsConfig: React.FC = () => {
     });
   };
 
-  const handleStartServer = async (serverId: string) => {
+  const isCommandDrivenServer = (server: MCPServerInfo) => {
+    const normalizedType = server.serverType.toLowerCase();
+    return normalizedType.includes('local') || normalizedType.includes('container');
+  };
+
+  const canStartServer = (server: MCPServerInfo) => {
+    if (!isCommandDrivenServer(server)) return true;
+    return server.commandAvailable !== false;
+  };
+
+  const notifyCommandUnavailable = (server: MCPServerInfo) => {
+    notification.warning(
+      tMcp('messages.commandUnavailable', {
+        serverId: server.id,
+        defaultValue: `Server "${server.id}" command is unavailable. Check runtime installation or command configuration.`,
+      }),
+      {
+        title: tMcp('notifications.startFailed'),
+        duration: 5000,
+      }
+    );
+  };
+
+  const handleStartServer = async (server: MCPServerInfo) => {
+    if (!canStartServer(server)) {
+      notifyCommandUnavailable(server);
+      return;
+    }
+
+    const serverId = server.id;
     try {
       await MCPAPI.startServer(serverId);
       notification.success(tMcp('messages.startSuccess', { serverId }), {
@@ -449,7 +478,13 @@ const McpToolsConfig: React.FC = () => {
     }
   };
 
-  const handleRestartServer = async (serverId: string) => {
+  const handleRestartServer = async (server: MCPServerInfo) => {
+    if (!canStartServer(server)) {
+      notifyCommandUnavailable(server);
+      return;
+    }
+
+    const serverId = server.id;
     try {
       await MCPAPI.restartServer(serverId);
       notification.success(tMcp('messages.restartSuccess', { serverId }), {
@@ -486,6 +521,15 @@ const McpToolsConfig: React.FC = () => {
   const isStopped = (status: string) => {
     const s = status.toLowerCase();
     return s.includes('stopped') || s.includes('failed');
+  };
+
+  const getRuntimeSourceLabel = (server: MCPServerInfo) => {
+    if (!server.commandSource) {
+      return tMcp('server.runtime.unknown', { defaultValue: 'unknown' });
+    }
+    return server.commandSource === 'managed'
+      ? tMcp('server.runtime.managed', { defaultValue: 'managed' })
+      : tMcp('server.runtime.system', { defaultValue: 'system' });
   };
 
   // ─── Tools effects & handlers ───────────────────────────────────────────────
@@ -662,6 +706,19 @@ const McpToolsConfig: React.FC = () => {
         {server.status}
       </span>
       <span className="bitfun-collection-item__badge">{server.serverType}</span>
+      {isCommandDrivenServer(server) && (
+        <span
+          className={`bitfun-collection-item__badge ${
+            server.commandAvailable === false
+              ? 'bitfun-mcp-tools__runtime-badge bitfun-mcp-tools__runtime-badge--error'
+              : 'bitfun-mcp-tools__runtime-badge bitfun-mcp-tools__runtime-badge--ok'
+          }`}
+        >
+          {server.commandAvailable === false
+            ? tMcp('server.runtime.unavailable', { defaultValue: 'command unavailable' })
+            : tMcp('server.runtime.available', { defaultValue: 'command available' })}
+        </span>
+      )}
     </>
   );
 
@@ -671,8 +728,15 @@ const McpToolsConfig: React.FC = () => {
         <IconButton
           size="small"
           variant="success"
-          onClick={() => handleStartServer(server.id)}
-          tooltip={tMcp('actions.start')}
+          onClick={() => handleStartServer(server)}
+          tooltip={
+            canStartServer(server)
+              ? tMcp('actions.start')
+              : tMcp('messages.commandUnavailable', {
+                  serverId: server.id,
+                  defaultValue: `Server "${server.id}" command is unavailable.`,
+                })
+          }
         >
           <Play size={14} />
         </IconButton>
@@ -689,13 +753,55 @@ const McpToolsConfig: React.FC = () => {
       <IconButton
         size="small"
         variant="ghost"
-        onClick={() => handleRestartServer(server.id)}
-        tooltip={tMcp('actions.restart')}
+        onClick={() => handleRestartServer(server)}
+        tooltip={
+          canStartServer(server)
+            ? tMcp('actions.restart')
+            : tMcp('messages.commandUnavailable', {
+                serverId: server.id,
+                defaultValue: `Server "${server.id}" command is unavailable.`,
+              })
+        }
       >
         <RefreshCw size={14} />
       </IconButton>
     </>
   );
+
+  const renderServerDetails = (server: MCPServerInfo) => {
+    if (!isCommandDrivenServer(server)) return null;
+
+    return (
+      <div className="bitfun-mcp-tools__server-details">
+        <div className="bitfun-mcp-tools__server-detail-item">
+          <span className="bitfun-mcp-tools__server-detail-label">
+            {tMcp('server.command', { defaultValue: 'Command' })}:
+          </span>
+          <code className="bitfun-mcp-tools__server-detail-value">
+            {server.command || '-'}
+          </code>
+        </div>
+        <div className="bitfun-mcp-tools__server-detail-item">
+          <span className="bitfun-mcp-tools__server-detail-label">
+            {tMcp('server.runtime.source', { defaultValue: 'Source' })}:
+          </span>
+          <span className="bitfun-mcp-tools__server-detail-value">
+            {getRuntimeSourceLabel(server)}
+          </span>
+        </div>
+        {server.commandResolvedPath && (
+          <div className="bitfun-mcp-tools__server-detail-item">
+            <span className="bitfun-mcp-tools__server-detail-label">
+              {tMcp('server.runtime.path', { defaultValue: 'Resolved Path' })}:
+            </span>
+            <code className="bitfun-mcp-tools__server-detail-value">
+              {server.commandResolvedPath}
+            </code>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <ConfigPageLayout className="bitfun-mcp-tools">
@@ -847,6 +953,7 @@ const McpToolsConfig: React.FC = () => {
                 label={server.name}
                 badge={renderServerBadge(server)}
                 control={renderServerControl(server)}
+                details={renderServerDetails(server)}
               />
             ))}
         </ConfigPageSection>
