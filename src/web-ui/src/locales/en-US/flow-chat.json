@@ -113,7 +113,9 @@
     "openMermaidEditor": "Open Mermaid Editor",
     "mermaidDualModeDemo": "Mermaid Editor",
     "selectPromptTemplate": "Select prompt template (Ctrl+Shift+P)",
-    "willSendAfterStop": "Will send after stop"
+    "willSendAfterStop": "Will send after stop",
+    "openWorkspaceFolder": "Open workspace folder",
+    "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}"
   },
   "context": {
     "title": "Context",
@@ -186,13 +188,18 @@
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
-      "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence"
+      "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
+      "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime"
     },
     "modeNames": {
       "agentic": "Agentic",
       "Plan": "Plan",
-      "debug": "Debug"
-    }
+      "debug": "Debug",
+      "Cowork": "Cowork"
+    },
+    "openFolder": "Open folder…",
+    "selectWorkspaceTitle": "Select workspace directory",
+    "switchWorkspaceFailed": "Failed to switch workspace: {{error}}"
   },
   "planner": {
     "title": "Task Planning",
@@ -750,5 +757,90 @@
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
     "modelNotConfigured": "Not Configured"
+  },
+  "coworkScope": {
+    "title": "Choose a Cowork workspace",
+    "description": "Cowork mode needs a workspace folder to read/write files. Use the current project, or choose another folder.",
+    "recommended": "Recommended",
+    "current": {
+      "title": "Current workspace",
+      "subtitle": "Opened: {{name}}",
+      "description": "Artifacts are saved in the current project. Use this when you need to read or change project files."
+    },
+    "global": {
+      "title": "Other folder",
+      "subtitle": "Choose directory",
+      "description": "Use a different folder for Cowork tasks. Outputs will be saved in that folder."
+    },
+    "errors": {
+      "noWorkspace": "No workspace is currently open",
+      "openFailed": "Failed to open Cowork workspace"
+    }
+  },
+  "coworkExamples": {
+    "title": "Examples",
+    "addPlugin": "Add plugin",
+    "addPluginDialogTitle": "Select a plugin folder",
+    "addPluginSuccess": "Plugin installed: {{name}}",
+    "addPluginFailed": "Failed to install plugin: {{error}}",
+    "refresh": "Shuffle",
+    "close": "Close",
+    "items": {
+      "desktop_cleanup": {
+        "title": "Organize desktop screenshots",
+        "description": "Rename, group, and file recent screenshots.",
+        "prompt": "Help me organize recent screenshots on my Desktop.\n\nFirst, scan my Desktop and count how many screenshots/images are there. Show me:\n\n- Total count\n\n- Date range (oldest to newest)\n\nThen, focus only on screenshots from the last 14 days. For each one:\n\n- Identify what it shows\n\n- Suggest a descriptive filename\n\n- Propose which folder it belongs in (or if it can be deleted)\n\nGroup similar screenshots together. Show me the plan before making any changes.\n\nAfter I approve, start by organizing just 10 files as a preview. If there are more than 10 files, check in with me before continuing with the rest."
+      },
+      "vacation_plan": {
+        "title": "Plan my vacation",
+        "description": "Build a day-by-day itinerary with budget + backups.",
+        "prompt": "Plan a vacation for me.\n\nBasics:\n- From:\n- Destinations (optional backups):\n- Dates / total days:\n- Travelers + preferences:\n- Budget range:\n- Interests (food / nature / museums / shopping / relax):\n- Hard constraints (no early mornings, no long drives, etc.):\n\nOutput:\n1) 2–3 destination options with pros/cons\n2) Best option: day-by-day plan (morning/afternoon/evening)\n3) Transport + lodging suggestions\n4) Budget breakdown\n5) Rainy-day/contingency alternatives"
+      },
+      "make_ppt": {
+        "title": "Draft a PPT",
+        "description": "Outline slides, talking points, and visuals.",
+        "prompt": "Help me create a PPT deck.\n\nTopic:\nAudience:\nTime limit:\nUse case (status update / pitch / training / sharing):\nPreferred style (clean / business / playful / minimal):\n\nDeliverable:\n1) Table of contents\n2) Slide-by-slide: title + 3–5 bullets\n3) Short speaker notes for key slides\n4) Visual/chart suggestions (what chart for what message)\n5) Export as a PPTX file (save it under artifacts/)"
+      },
+      "todo_breakdown": {
+        "title": "Break it into todos",
+        "description": "Turn a goal into executable tasks with estimates.",
+        "prompt": "Break the following goal into an executable todo list with priorities and time estimates.\n\nGoal:\nDeadline:\nCurrent status:\nResources (people/budget/tools):\nRisks/unknowns:\n\nOutput:\n1) Milestones\n2) Task list (owner / ETA / dependencies / acceptance criteria)\n3) Critical path + risks\n4) Three small things I can start tomorrow"
+      },
+      "optimize_week": {
+        "title": "Optimize my week",
+        "description": "Find patterns across messy notes and transcripts.",
+        "prompt": "Help me find patterns and insights across [my voice memos / meeting transcripts / documents / journal entries / specify folder]. I have messy, unstructured files and want to understand what themes are emerging.\n\nFirst, scan the folder and show me a summary:\n\n- Total files\n\n- Date range (oldest to newest)\n\n- Types of content\n\nBefore analyzing, ask me:\n\n- What I'm hoping to discover (recurring themes, contradictions, evolution of thinking, action items, or something else)\n\n- Whether certain files or time periods should be prioritized\n\n- What format would be most useful for the final analysis\n\nIf there are more than 20 files, start by analyzing just the 10 most recent files.\n\nShow me the top 3-5 patterns you found with 2-3 specific examples for each pattern. Once I confirm you're on the right track, analyze the remaining files."
+      },
+      "weekly_plan": {
+        "title": "Make a weekly plan",
+        "description": "Schedule priorities, meetings, and deep work blocks.",
+        "prompt": "Create a practical weekly plan for me.\n\nInputs:\n- Top goals (max 3):\n- Fixed meetings/commitments:\n- Deep work windows:\n- Must-do tasks:\n- Nice-to-have tasks:\n\nOutput:\n1) Priority order\n2) Day-by-day plan (2–3 core tasks per day)\n3) Risk + buffer time suggestions\n4) 5-minute daily wrap-up checklist"
+      },
+      "meeting_minutes": {
+        "title": "Write meeting minutes",
+        "description": "Summarize decisions, action items, and open questions.",
+        "prompt": "Turn my meeting notes into clear meeting minutes.\n\nTopic:\nAttendees:\nTime:\nRaw notes (paste here):\n\nOutput:\n1) Key outcomes (3–6)\n2) Decisions\n3) Action items (owner / due date / acceptance criteria)\n4) Risks + open questions\n5) Suggested agenda for the next meeting"
+      },
+      "reply_email": {
+        "title": "Reply to an email",
+        "description": "Generate a polite, clear email template (two tones).",
+        "prompt": "Help me write an email reply.\n\nOriginal email (paste here):\nMy goal (confirm / decline / push forward / clarify):\nTone (formal / friendly / firm but polite):\nKey points to include:\n\nOutput:\n1) Subject line suggestions\n2) Body (2 versions: more formal / more concise)\n3) Questions for the recipient to confirm (if any)"
+      },
+      "make_docx": {
+        "title": "Draft a DOCX",
+        "description": "Write a structured document and export as DOCX.",
+        "prompt": "Help me write a document and export it as a .docx file.\n\nDocument type (PRD / proposal / meeting summary / report / SOP):\nAudience:\nTone (formal / friendly / concise):\nMust-include points:\nLength target:\n\nDeliverable:\n1) Suggested outline\n2) Full content\n3) Export as a .docx file (save it under artifacts/)"
+      },
+      "make_spreadsheet": {
+        "title": "Design a spreadsheet",
+        "description": "Define fields and formulas for reusable tracking.",
+        "prompt": "Design a spreadsheet schema (columns + example rows) for the following purpose.\n\nPurpose:\nData sources:\nMetrics / aggregation needs:\nPreferred output (weekly report / dashboard / checklist):\n\nOutput:\n1) Recommended columns (type + notes)\n2) Example data (3–5 rows)\n3) Useful formulas / pivot suggestions\n4) Data validation + filling guidelines"
+      },
+      "budget_plan": {
+        "title": "Create a budget plan",
+        "description": "Allocate by category + timeline with review rules.",
+        "prompt": "Help me create a budget plan.\n\nContext:\n- Budget period (monthly / quarterly / project):\n- Total budget:\n- Fixed costs:\n- Variable costs:\n- Goal (save money / control spending / save for something):\n\nOutput:\n1) Suggested categories + ratios\n2) A category budget table (copy-paste friendly)\n3) Overrun rules + adjustment plan\n4) Weekly/monthly review checklist"
+      }
+    }
   }
 }

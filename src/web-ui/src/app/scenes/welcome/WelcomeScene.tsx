@@ -53,12 +53,7 @@ const WelcomeScene: React.FC = () => {
     openScene('session' as SceneTabId);
   }, [hasWorkspace, openScene]);
 
-  // Cowork is coming soon — open session scene for now
-  const handleNewCoworkSession = useCallback(() => {
-    openScene('session' as SceneTabId);
-  }, [openScene]);
-
-  const handleOpenFolder = useCallback(async () => {
+  const handleOpenFolder = useCallback(async (preferredMode?: string) => {
     try {
       setIsSelecting(true);
       const { open } = await import('@tauri-apps/plugin-dialog');
@@ -68,6 +63,9 @@ const WelcomeScene: React.FC = () => {
         title: t('startup.selectWorkspaceDirectory'),
       });
       if (selected && typeof selected === 'string') {
+        if (preferredMode) {
+          sessionStorage.setItem('bitfun:flowchat:preferredMode', preferredMode);
+        }
         await openWorkspace(selected);
         openScene('session' as SceneTabId);
       }
@@ -77,6 +75,20 @@ const WelcomeScene: React.FC = () => {
       setIsSelecting(false);
     }
   }, [openWorkspace, openScene, t]);
+
+  const handleNewCoworkSession = useCallback(async () => {
+    try {
+      if (hasWorkspace) {
+        const flowChatManager = FlowChatManager.getInstance();
+        await flowChatManager.createChatSession({}, 'Cowork');
+        openScene('session' as SceneTabId);
+        return;
+      }
+      await handleOpenFolder('Cowork');
+    } catch (e) {
+      log.error('Failed to create cowork session', e);
+    }
+  }, [hasWorkspace, openScene, handleOpenFolder]);
 
   const handleNewProject = useCallback(() => {
     window.dispatchEvent(new Event('nav:new-project'));
@@ -158,7 +170,7 @@ const WelcomeScene: React.FC = () => {
               <div className="welcome-scene__switch-actions">
                 <button
                   className="welcome-scene__link-btn"
-                  onClick={handleOpenFolder}
+                  onClick={() => void handleOpenFolder()}
                   disabled={isSelecting}
                 >
                   <FolderOpen size={12} />
@@ -236,7 +248,7 @@ const WelcomeScene: React.FC = () => {
             <div className="welcome-scene__switch-actions">
               <button
                 className="welcome-scene__link-btn"
-                onClick={handleOpenFolder}
+                onClick={() => void handleOpenFolder()}
                 disabled={isSelecting}
               >
                 <FolderOpen size={12} />

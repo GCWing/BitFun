@@ -95,14 +95,13 @@ const SessionsSection: React.FC = () => {
   );
 
   const handleCreate = useCallback(async () => {
-    if (sessionMode === 'cowork') {
-      log.info('Cowork session mode is not yet available');
-      return;
-    }
     openScene('session');
     switchLeftPanelTab('sessions');
     try {
-      await flowChatManager.createChatSession({ modelName: 'claude-sonnet-4.5' });
+      await flowChatManager.createChatSession(
+        { modelName: 'claude-sonnet-4.5' },
+        sessionMode === 'cowork' ? 'Cowork' : 'agentic'
+      );
     } catch (err) {
       log.error('Failed to create session', err);
     }
@@ -171,7 +170,7 @@ const SessionsSection: React.FC = () => {
         <Tooltip content={t('nav.sessions.newSession')} placement="right" followCursor>
           <button
             type="button"
-            className={`bitfun-nav-panel__inline-action${sessionMode === 'cowork' ? ' is-placeholder' : ''}`}
+            className="bitfun-nav-panel__inline-action"
             onClick={handleCreate}
           >
             <Plus size={12} />
@@ -186,7 +185,7 @@ const SessionsSection: React.FC = () => {
           {SESSION_MODES.map(({ key, Icon, labelKey }) => (
             <Tooltip key={key} content={t(labelKey)} placement="top" followCursor>
               <span
-                className={`bitfun-nav-panel__mode-chip${sessionMode === key ? ' is-active' : ''}${key === 'cowork' ? ' is-placeholder' : ''}`}
+                className={`bitfun-nav-panel__mode-chip${sessionMode === key ? ' is-active' : ''}`}
                 role="button"
                 tabIndex={-1}
                 aria-label={t(labelKey)}

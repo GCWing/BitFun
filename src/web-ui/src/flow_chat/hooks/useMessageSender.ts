@@ -66,7 +66,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         
         sessionId = await flowChatManager.createChatSession({
           modelName: modelId || undefined
-        });
+        }, currentAgentType || 'agentic');
         log.debug('Session created', { sessionId, modelId });
       } else {
         log.debug('Reusing existing session', { sessionId });

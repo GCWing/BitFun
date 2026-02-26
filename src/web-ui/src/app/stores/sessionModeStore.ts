@@ -3,7 +3,7 @@
  *
  * Two modes:
  *   - 'code'   → standard AI coding session (default)
- *   - 'cowork' → collaborative multi-user session (placeholder)
+ *   - 'cowork' → collaborative Cowork session
  */
 
 import { create } from 'zustand';

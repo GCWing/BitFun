@@ -189,12 +189,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       if (!currentWorkspace?.rootPath) return;
 
       try {
+        const preferredMode =
+          sessionStorage.getItem('bitfun:flowchat:preferredMode') ||
+          sessionStorage.getItem('bitfun:flowchat:lastMode') ||
+          undefined;
+        if (sessionStorage.getItem('bitfun:flowchat:preferredMode')) {
+          sessionStorage.removeItem('bitfun:flowchat:preferredMode');
+        }
+
         const flowChatManager = FlowChatManager.getInstance();
-        const hasHistoricalSessions = await flowChatManager.initialize(currentWorkspace.rootPath);
+        const hasHistoricalSessions = await flowChatManager.initialize(
+          currentWorkspace.rootPath,
+          preferredMode
+        );
 
         let sessionId: string | undefined;
-        if (!hasHistoricalSessions) {
-          sessionId = await flowChatManager.createChatSession({});
+        const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+        if (!hasHistoricalSessions || !flowChatStore.getState().activeSessionId) {
+          sessionId = await flowChatManager.createChatSession({}, preferredMode);
         }
 
         const pendingDescription = sessionStorage.getItem('pendingProjectDescription');
@@ -203,7 +215,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
           setTimeout(async () => {
             try {
-              const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
               const targetSessionId = sessionId || flowChatStore.getState().activeSessionId;
 
               if (!targetSessionId) {
