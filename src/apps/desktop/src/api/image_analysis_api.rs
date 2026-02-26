@@ -1,18 +1,19 @@
 //! Image Analysis API
 
+use crate::api::app_state::AppState;
+use bitfun_core::agentic::coordination::ConversationCoordinator;
+use bitfun_core::agentic::image_analysis::*;
 use log::error;
 use std::sync::Arc;
 use tauri::State;
-use crate::api::app_state::AppState;
-use bitfun_core::agentic::image_analysis::*;
-use bitfun_core::agentic::coordination::ConversationCoordinator;
 
 #[tauri::command]
 pub async fn analyze_images(
     request: AnalyzeImagesRequest,
     state: State<'_, AppState>,
 ) -> Result<Vec<ImageAnalysisResult>, String> {
-    let ai_config: bitfun_core::service::config::types::AIConfig = state.config_service
+    let ai_config: bitfun_core::service::config::types::AIConfig = state
+        .config_service
         .get_config(Some("ai"))
         .await
         .map_err(|e| {
@@ -27,44 +28,49 @@ pub async fn analyze_images(
             error!("Image understanding model not configured");
             "Image understanding model not configured".to_string()
         })?;
-    
+
     let image_model_id = if image_model_id.is_empty() {
         let vision_model = ai_config
             .models
             .iter()
             .find(|m| {
-                m.enabled && m.capabilities.iter().any(|cap| {
-                    matches!(cap, bitfun_core::service::config::types::ModelCapability::ImageUnderstanding)
-                })
+                m.enabled
+                    && m.capabilities.iter().any(|cap| {
+                        matches!(
+                        cap,
+                        bitfun_core::service::config::types::ModelCapability::ImageUnderstanding
+                    )
+                    })
             })
             .map(|m| m.id.as_str());
-        
+
         match vision_model {
-            Some(model_id) => {
-                model_id
-            }
+            Some(model_id) => model_id,
             None => {
                 error!("No image understanding model found");
                 return Err(
                     "Image understanding model not configured and no compatible model found.\n\n\
                     Please add a model that supports image understanding\
                     in [Settings → AI Model Config], enable 'image_understanding' capability, \
-                    and assign it in [Settings → Super Agent].".to_string()
+                    and assign it in [Settings → Super Agent]."
+                        .to_string(),
                 );
             }
         }
     } else {
         &image_model_id
     };
-    
+
     let image_model = ai_config
         .models
         .iter()
         .find(|m| &m.id == image_model_id)
         .ok_or_else(|| {
-            error!("Model not found: model_id={}, available_models={:?}", 
+            error!(
+                "Model not found: model_id={}, available_models={:?}",
                 image_model_id,
-                ai_config.models.iter().map(|m| &m.id).collect::<Vec<_>>());
+                ai_config.models.iter().map(|m| &m.id).collect::<Vec<_>>()
+            );
             format!("Model not found: {}", image_model_id)
         })?
         .clone();
@@ -83,7 +89,7 @@ pub async fn analyze_images(
         .analyze_images(request, &image_model)
         .await
         .map_err(|e| format!("Image analysis failed: {}", e))?;
-    
+
     Ok(results)
 }
 
@@ -108,6 +114,6 @@ pub async fn send_enhanced_message(
         )
         .await
         .map_err(|e| format!("Failed to send enhanced message: {}", e))?;
-    
+
     Ok(())
 }

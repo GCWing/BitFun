@@ -222,11 +222,17 @@ pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesRespons
     let target_dir = Path::new(&request.target_directory);
 
     if !target_dir.exists() {
-        return Err(format!("Target directory does not exist: {}", request.target_directory));
+        return Err(format!(
+            "Target directory does not exist: {}",
+            request.target_directory
+        ));
     }
 
     if !target_dir.is_dir() {
-        return Err(format!("Target path is not a directory: {}", request.target_directory));
+        return Err(format!(
+            "Target path is not a directory: {}",
+            request.target_directory
+        ));
     }
 
     let mut success_count = 0;
@@ -323,7 +329,9 @@ fn generate_unique_path(path: &Path) -> std::path::PathBuf {
 fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> {
     std::fs::create_dir_all(target).map_err(|e| format!("Failed to create directory: {}", e))?;
 
-    for entry in std::fs::read_dir(source).map_err(|e| format!("Failed to read directory: {}", e))? {
+    for entry in
+        std::fs::read_dir(source).map_err(|e| format!("Failed to read directory: {}", e))?
+    {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let source_path = entry.path();
         let target_path = target.join(entry.file_name());
