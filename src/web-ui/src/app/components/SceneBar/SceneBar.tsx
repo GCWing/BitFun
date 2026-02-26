@@ -41,6 +41,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const settingsTabTitle = useCurrentSettingsTabTitle();
   const { t } = useI18n('common');
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
+  const sceneBarClassName = `bitfun-scene-bar ${!hasWindowControls ? 'bitfun-scene-bar--no-controls' : ''} ${className}`.trim();
   const isSingleTab = openTabs.length <= 1;
   const tabCount = Math.max(openTabs.length, 1);
   const tabsStyle = {
@@ -90,7 +91,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
 
   return (
     <div
-      className={`bitfun-scene-bar ${className}`}
+      className={sceneBarClassName}
       role="tablist"
       aria-label="Scene tabs"
       onMouseDown={handleBarMouseDown}

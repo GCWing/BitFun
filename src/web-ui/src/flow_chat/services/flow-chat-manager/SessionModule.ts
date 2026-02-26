@@ -3,7 +3,6 @@
  * Handles session creation, switching, deletion, and other operations
  */
 
-import { FlowChatStore } from '../../store/FlowChatStore';
 import { agentAPI, globalAPI } from '@/infrastructure/api';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -12,6 +11,13 @@ import type { FlowChatContext, SessionConfig } from './types';
 import { saveNewSessionMetadata, touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 
 const log = createLogger('SessionModule');
+
+type SessionDisplayMode = 'code' | 'cowork';
+
+const normalizeSessionDisplayMode = (mode?: string): SessionDisplayMode => {
+  if (!mode) return 'code';
+  return mode.toLowerCase() === 'cowork' ? 'cowork' : 'code';
+};
 
 /**
  * Get model's maximum token count
@@ -55,8 +61,15 @@ export async function createChatSession(
   mode?: string
 ): Promise<string> {
   try {
-    const sessionCount = context.flowChatStore.getState().sessions.size + 1;
-    const sessionName = i18nService.t('flow-chat:session.newWithIndex', { count: sessionCount });
+    const sessionMode = normalizeSessionDisplayMode(mode);
+    const sameModeCount =
+      Array.from(context.flowChatStore.getState().sessions.values()).filter(
+        session => normalizeSessionDisplayMode(session.mode) === sessionMode
+      ).length + 1;
+    const sessionName =
+      sessionMode === 'cowork'
+        ? i18nService.t('flow-chat:session.newCoworkWithIndex', { count: sameModeCount })
+        : i18nService.t('flow-chat:session.newCodeWithIndex', { count: sameModeCount });
     
     const maxContextTokens = await getModelMaxTokens(config.modelName);
     

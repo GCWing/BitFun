@@ -162,6 +162,15 @@
     opacity: 0.6;
     display: flex;
     align-items: center;
+    color: var(--color-text-muted);
+
+    &.is-code {
+      color: color-mix(in srgb, var(--color-primary) 70%, var(--color-text-muted));
+    }
+
+    &.is-cowork {
+      color: color-mix(in srgb, var(--color-accent-500) 70%, var(--color-text-muted));
+    }
 
     .bitfun-nav-panel__inline-item:hover &,
     .bitfun-nav-panel__inline-item.is-active & {

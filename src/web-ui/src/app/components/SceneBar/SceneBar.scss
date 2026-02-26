@@ -36,6 +36,24 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
   }
 }
 
+.bitfun-scene-bar--no-controls {
+  padding-right: $size-gap-3;
+
+  .bitfun-scene-bar__tabs {
+    padding-right: calc(#{$size-gap-2} + 4px);
+  }
+}
+
+// On macOS the cube button is fixed at the top-right corner.
+// Reserve extra space so the right-side scene tab (Settings/Model) does not crowd it.
+.bitfun-app-layout--macos .bitfun-scene-bar--no-controls {
+  padding-right: 36px;
+
+  .bitfun-scene-bar__tabs {
+    padding-right: 16px;
+  }
+}
+
 // ── Individual tab ──────────────────────────────────────
 
 .bitfun-scene-tab {

@@ -39,6 +39,8 @@
   "session": {
     "new": "New Session",
     "newWithIndex": "New Session {{count}}",
+    "newCodeWithIndex": "New Code Session {{count}}",
+    "newCoworkWithIndex": "New Cowork Session {{count}}",
     "title": "Session",
     "chatWithAgent": "Chat with {{name}}",
     "rename": "Rename Session",

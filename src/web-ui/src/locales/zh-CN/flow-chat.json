@@ -39,6 +39,8 @@
   "session": {
     "new": "新建会话",
     "newWithIndex": "新建会话 {{count}}",
+    "newCodeWithIndex": "新建 Code 会话 {{count}}",
+    "newCoworkWithIndex": "新建 Cowork 会话 {{count}}",
     "title": "会话",
     "chatWithAgent": "与{{name}}的对话",
     "rename": "重命名会话",

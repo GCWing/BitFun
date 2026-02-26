@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, RefreshCw, FolderOpen, X, Download } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, FolderOpen, X, Download, CheckCircle2, TrendingUp } from 'lucide-react';
 import { Switch, Select, Input, Button, Search, IconButton, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '../../hooks/useWorkspace';
@@ -307,7 +307,28 @@ const SkillsConfig: React.FC = () => {
 
   const renderMarketList = () => {
     if (marketLoading) {
-      return <div className="bitfun-skills-config__market-state">{t('market.loading')}</div>;
+      return (
+        <div className="bitfun-skills-config__market-list" aria-busy="true" aria-label={t('market.loading')}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Card
+              key={`market-loading-${index}`}
+              variant="elevated"
+              padding="none"
+              className="bitfun-skills-config__market-item is-loading"
+            >
+              <CardBody className="bitfun-skills-config__market-item-body">
+                <div className="bitfun-skills-config__market-skeleton-main">
+                  <div className="bitfun-skills-config__market-skeleton-line bitfun-skills-config__market-skeleton-line--title" />
+                  <div className="bitfun-skills-config__market-skeleton-line bitfun-skills-config__market-skeleton-line--desc" />
+                  <div className="bitfun-skills-config__market-skeleton-line bitfun-skills-config__market-skeleton-line--desc is-short" />
+                  <div className="bitfun-skills-config__market-skeleton-chip" />
+                </div>
+                <div className="bitfun-skills-config__market-skeleton-btn" />
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      );
     }
 
     if (marketError) {
@@ -324,9 +345,10 @@ const SkillsConfig: React.FC = () => {
 
     return (
       <div className="bitfun-skills-config__market-list">
-        {marketSkills.map((skill) => {
+        {displayMarketSkills.map((skill) => {
           const isDownloading = downloadingPackage === skill.installId;
           const isInstalled = installedSkillNames.has(skill.name);
+          const sourceLabel = formatMarketSource(skill.source);
           const tooltipText = !hasWorkspace
             ? t('messages.noWorkspace')
             : isInstalled
@@ -336,45 +358,66 @@ const SkillsConfig: React.FC = () => {
           return (
             <Card
               key={skill.installId}
-              variant="default"
+              variant="elevated"
               padding="none"
-              className="bitfun-skills-config__market-item"
+              className={`bitfun-skills-config__market-item${isInstalled ? ' is-installed' : ''}`}
             >
               <CardBody className="bitfun-skills-config__market-item-body">
                 <div className="bitfun-skills-config__market-item-main">
-                  <div className="bitfun-skills-config__market-item-name">{skill.name}</div>
+                  <div className="bitfun-skills-config__market-item-head">
+                    <div className="bitfun-skills-config__market-item-name-wrap">
+                      <div className="bitfun-skills-config__market-item-name">{skill.name}</div>
+                      {isInstalled ? (
+                        <span className="bitfun-skills-config__market-item-badge bitfun-skills-config__market-item-badge--installed">
+                          <CheckCircle2 size={12} />
+                          {t('market.item.installed')}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="bitfun-skills-config__market-item-installs">
+                      <TrendingUp size={12} />
+                      {t('market.item.installs', { count: skill.installs })}
+                    </span>
+                  </div>
                   <div className="bitfun-skills-config__market-item-description">
                     {skill.description?.trim() || t('market.item.noDescription')}
                   </div>
                   <div className="bitfun-skills-config__market-item-meta">
                     {skill.source ? (
-                      <span className="bitfun-skills-config__market-item-source">
-                        {t('market.item.sourceLabel')}{skill.source}
-                      </span>
+                      sourceLabel !== skill.source ? (
+                        <Tooltip content={skill.source}>
+                          <span className="bitfun-skills-config__market-item-chip bitfun-skills-config__market-item-source">
+                            {t('market.item.sourceLabel')}{sourceLabel}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="bitfun-skills-config__market-item-chip bitfun-skills-config__market-item-source">
+                          {t('market.item.sourceLabel')}{sourceLabel}
+                        </span>
+                      )
                     ) : null}
-                    <span className="bitfun-skills-config__market-item-installs">
-                      {t('market.item.installs', { count: skill.installs })}
-                    </span>
                   </div>
                 </div>
 
-                <Tooltip content={tooltipText}>
-                  <span>
-                    <Button
-                      variant="primary"
-                      size="small"
-                      onClick={() => handleDownload(skill)}
-                      disabled={isDownloading || !hasWorkspace || isInstalled}
-                    >
-                      <Download size={14} />
-                      {isDownloading
-                        ? t('market.item.downloading')
-                        : isInstalled
-                          ? t('market.item.installed')
-                          : t('market.item.downloadProject')}
-                    </Button>
-                  </span>
-                </Tooltip>
+                <div className="bitfun-skills-config__market-item-action">
+                  <Tooltip content={tooltipText}>
+                    <span>
+                      <Button
+                        variant="primary"
+                        size="small"
+                        onClick={() => handleDownload(skill)}
+                        disabled={isDownloading || !hasWorkspace || isInstalled}
+                      >
+                        <Download size={14} />
+                        {isDownloading
+                          ? t('market.item.downloading')
+                          : isInstalled
+                            ? t('market.item.installed')
+                            : t('market.item.downloadProject')}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </div>
               </CardBody>
             </Card>
           );
@@ -413,6 +456,49 @@ const SkillsConfig: React.FC = () => {
     () => new Set(skills.map((skill) => skill.name)),
     [skills]
   );
+
+  const formatMarketSource = useCallback((source: string): string => {
+    const raw = source.trim();
+    if (!raw) return raw;
+
+    const compact = raw
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .replace(/\/+$/, '');
+
+    const parts = compact.split('/').filter(Boolean);
+    if (parts.length === 0) return raw;
+    if (parts.length === 1) return parts[0];
+
+    if (parts[0].includes('.')) {
+      return parts.slice(0, 2).join('/');
+    }
+
+    return parts.slice(0, 2).join('/');
+  }, []);
+
+  const displayMarketSkills = useMemo(() => {
+    const entries = marketSkills.map((skill, index) => ({
+      skill,
+      index,
+      installed: installedSkillNames.has(skill.name),
+    }));
+
+    entries.sort((a, b) => {
+      if (a.installed !== b.installed) {
+        return a.installed ? -1 : 1;
+      }
+
+      const installDelta = (b.skill.installs ?? 0) - (a.skill.installs ?? 0);
+      if (installDelta !== 0) {
+        return installDelta;
+      }
+
+      return a.index - b.index;
+    });
+
+    return entries.map((entry) => entry.skill);
+  }, [marketSkills, installedSkillNames]);
 
   const handleMarketSearch = useCallback(() => {
     loadMarketSkills(marketKeyword);

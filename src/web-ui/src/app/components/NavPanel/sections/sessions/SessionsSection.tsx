@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, MessageSquareText, Pencil, Trash2, Check, X, Code2, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Code2, Users } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -28,6 +28,10 @@ const SESSION_MODES: { key: SessionMode; Icon: typeof Code2; labelKey: string }[
   { key: 'code',   Icon: Code2, labelKey: 'nav.sessions.modeCode' },
   { key: 'cowork', Icon: Users, labelKey: 'nav.sessions.modeCowork' },
 ];
+
+const resolveSessionMode = (session: Session): SessionMode => {
+  return session.mode?.toLowerCase() === 'cowork' ? 'cowork' : 'code';
+};
 
 const getTitle = (session: Session): string =>
   session.title?.trim() || `Session ${session.sessionId.slice(0, 6)}`;
@@ -111,6 +115,22 @@ const SessionsSection: React.FC = () => {
     setSessionMode(mode);
   }, [setSessionMode]);
 
+  const resolveSessionTitle = useCallback(
+    (session: Session): string => {
+      const rawTitle = getTitle(session);
+      const matched = rawTitle.match(/^(?:新建会话|New Session)\s*(\d+)$/i);
+      if (!matched) return rawTitle;
+
+      const mode = resolveSessionMode(session);
+      const label =
+        mode === 'cowork'
+          ? t('nav.sessions.newCoworkSession')
+          : t('nav.sessions.newCodeSession');
+      return `${label} ${matched[1]}`;
+    },
+    [t]
+  );
+
   const handleDelete = useCallback(
     async (e: React.MouseEvent, sessionId: string) => {
       e.stopPropagation();
@@ -127,9 +147,9 @@ const SessionsSection: React.FC = () => {
     (e: React.MouseEvent, session: Session) => {
       e.stopPropagation();
       setEditingSessionId(session.sessionId);
-      setEditingTitle(getTitle(session));
+      setEditingTitle(resolveSessionTitle(session));
     },
-    []
+    [resolveSessionTitle]
   );
 
   const handleConfirmEdit = useCallback(async () => {
@@ -204,7 +224,9 @@ const SessionsSection: React.FC = () => {
       ) : (
         visibleSessions.map(session => {
           const isEditing = editingSessionId === session.sessionId;
-          const sessionTitle = getTitle(session);
+          const sessionModeKey = resolveSessionMode(session);
+          const sessionTitle = resolveSessionTitle(session);
+          const SessionIcon = sessionModeKey === 'cowork' ? Users : Code2;
           const row = (
             <div
               key={session.sessionId}
@@ -217,7 +239,10 @@ const SessionsSection: React.FC = () => {
                 .join(' ')}
               onClick={() => handleSwitch(session.sessionId)}
             >
-              <MessageSquareText size={12} className="bitfun-nav-panel__inline-item-icon" />
+              <SessionIcon
+                size={12}
+                className={`bitfun-nav-panel__inline-item-icon ${sessionModeKey === 'cowork' ? 'is-cowork' : 'is-code'}`}
+              />
 
               {isEditing ? (
                 <div className="bitfun-nav-panel__inline-item-edit" onClick={e => e.stopPropagation()}>

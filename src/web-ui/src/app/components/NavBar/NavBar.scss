@@ -42,6 +42,25 @@
     padding: 0 calc(#{$size-gap-2} + 1px);
   }
 
+  &--macos {
+    // Reserve left native titlebar area for traffic lights in overlay mode.
+    padding-left: calc(#{$size-gap-2} + 72px);
+    padding-right: 2px;
+
+    .bitfun-nav-bar__logo-menu {
+      position: fixed;
+      top: 7px;
+      right: 10px;
+      margin: 0;
+      z-index: $z-dropdown;
+    }
+  }
+
+  &--macos#{&}--collapsed {
+    padding-left: calc(#{$size-gap-2} + 1px);
+    padding-right: 2px;
+  }
+
   // ── App logo ────────────────────────────────────────────
 
   &__logo-menu {

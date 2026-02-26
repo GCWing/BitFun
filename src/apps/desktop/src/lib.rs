@@ -130,8 +130,6 @@ pub async fn run() {
                     Some("bitfun_menu_open_project")
                 } else if event.id() == "bitfun.new_project" {
                     Some("bitfun_menu_new_project")
-                } else if event.id() == "bitfun.go_home" {
-                    Some("bitfun_menu_go_home")
                 } else if event.id() == "bitfun.about" {
                     Some("bitfun_menu_about")
                 } else {

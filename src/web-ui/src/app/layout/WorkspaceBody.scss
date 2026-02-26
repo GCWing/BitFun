@@ -97,6 +97,22 @@ $_nav-collapsed-width: 80px;
   }
 }
 
+.bitfun-app-layout--macos .bitfun-workspace-body__collapsed-nav {
+  left: calc(#{$size-gap-2} + 72px);
+}
+
+.bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
+  .bitfun-scene-bar {
+    padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1} + 72px);
+  }
+}
+
+// When the left nav is collapsed, the hidden nav area still mounts a NavBar.
+// Suppress its macOS fixed logo button to avoid duplicate icons.
+.bitfun-workspace-body__nav-area.is-collapsed .bitfun-nav-bar--macos .bitfun-nav-bar__logo-menu {
+  display: none;
+}
+
 .bitfun-workspace-body__nav-panel {
   min-width: 0;
 }
