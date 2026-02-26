@@ -1,0 +1,193 @@
+.bitfun-git-scene-working-copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+
+  &__commit-bar {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  &__branch {
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  &__badge {
+    font-size: 10px;
+    color: var(--color-text-muted);
+  }
+
+  &__sync-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 2px;
+  }
+
+  &__commit-input-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  &__message {
+    flex: 1;
+    min-height: 56px;
+    resize: none;
+    font-size: 12px;
+  }
+
+  &__commit-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  &__file-list {
+    width: 260px; // overridden by inline style when resizing
+    min-width: 160px;
+    max-width: 560px;
+    flex-shrink: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__resizer {
+    flex-shrink: 0;
+    width: 1px;
+    cursor: col-resize;
+    background: var(--border-subtle);
+  }
+
+  &__search {
+    flex-shrink: 0;
+    padding: 6px 8px;
+  }
+
+  &__group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__file-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+  }
+
+  &__file-check {
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__file-dir {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  &__file-status {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+
+    &.wcv-status--modified { color: var(--color-warning, #eab308); }
+    &.wcv-status--added { color: var(--color-success, #22c55e); }
+    &.wcv-status--deleted { color: var(--color-danger, #ef4444); }
+    &.wcv-status--renamed { color: var(--color-info, #3b82f6); }
+  }
+
+  &__empty {
+    padding: 12px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+  }
+
+  &__file-list-placeholder {
+    padding: 12px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+
+    span { font-weight: 500; color: var(--color-text-secondary); }
+  }
+
+  &__diff-area {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 8px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+
+  &__hint {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+}
+
+.wcv-file--selected {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.wcv-file--loading {
+  opacity: 0.7;
+  pointer-events: none;
+}

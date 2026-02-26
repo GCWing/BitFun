@@ -1,5 +1,6 @@
 {
   "title": "Terminal",
+  "emptyState": "Open a terminal from the Shell or Shell Hub in the nav panel",
   "actions": {
     "refresh": "Refresh Terminal List",
     "newTerminal": "New Terminal",

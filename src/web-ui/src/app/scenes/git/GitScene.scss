@@ -1,0 +1,144 @@
+/**
+ * GitScene styles.
+ */
+
+.bitfun-git-scene {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+
+  &--not-repository,
+  &--loading {
+    .bitfun-git-scene__content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+  }
+
+  &__init-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 360px;
+  }
+
+  &__init-decoration {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__init-line {
+    width: 40px;
+    height: 1px;
+    background: var(--border-subtle);
+
+    &--dashed {
+      border: none;
+      background: repeating-linear-gradient(90deg, var(--border-subtle) 0, var(--border-subtle) 4px, transparent 4px, transparent 8px);
+    }
+  }
+
+  &__init-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-text-muted);
+
+    &--muted {
+      opacity: 0.5;
+    }
+  }
+
+  &__init-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    border-radius: 12px;
+  }
+
+  &__init-icon {
+    color: var(--color-text-muted);
+  }
+
+  &__init-text {
+    text-align: center;
+
+    h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+    p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__init-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--btn-primary-border, var(--border-medium));
+    border-radius: 8px;
+    background: var(--btn-primary-bg, var(--element-bg-medium));
+    color: var(--btn-primary-color, var(--color-text-primary));
+    box-shadow: var(--btn-primary-shadow, none);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+
+    &:hover {
+      background: var(--btn-primary-hover-bg, var(--element-bg-strong));
+      color: var(--btn-primary-hover-color, var(--color-text-primary));
+      border-color: var(--btn-primary-hover-border, var(--border-strong));
+      box-shadow: var(--btn-primary-hover-shadow, none);
+      transform: var(--btn-primary-hover-transform, none);
+    }
+
+    &:active {
+      background: var(--btn-primary-active-bg, var(--element-bg-base));
+      color: var(--btn-primary-active-color, var(--color-text-primary));
+      border-color: var(--btn-primary-active-border, var(--border-medium));
+      box-shadow: var(--btn-primary-active-shadow, none);
+      transform: var(--btn-primary-active-transform, none);
+    }
+  }
+
+  &__init-hint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+
+  &__loading-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+
+  &__loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__loading-hint {
+    font-size: 10px;
+    margin: 0;
+    opacity: 0.6;
+  }
+}

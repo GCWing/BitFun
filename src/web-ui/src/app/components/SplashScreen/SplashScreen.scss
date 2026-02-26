@@ -1,0 +1,114 @@
+/**
+ * SplashScreen styles.
+ *
+ * Full-screen opaque overlay. No rings.
+ * Exit: logo scales up and fades, backdrop dissolves.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+// ── Container ────────────────────────────────────────────────────────────────
+
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-primary);
+  pointer-events: none;
+
+  // ── Exit state ─────────────────────────────────────────────────────────────
+  // Whole container fades together — logo, dots, and backdrop all in sync.
+
+  &--exiting {
+    animation: splash-bg-exit 0.5s ease-in-out both;
+
+    .splash-screen__logo-wrap {
+      animation: none; // Stop idle pulse; let container opacity drive the fade
+    }
+
+    .splash-screen__dots {
+      animation: none;
+    }
+  }
+}
+
+// ── Center cluster ────────────────────────────────────────────────────────────
+
+.splash-screen__center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+// ── Logo ──────────────────────────────────────────────────────────────────────
+
+.splash-screen__logo-wrap {
+  animation: splash-logo-idle 2.6s ease-in-out infinite;
+}
+
+.splash-screen__logo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: $size-radius-lg;
+  user-select: none;
+}
+
+// ── Loading dots ──────────────────────────────────────────────────────────────
+
+.splash-screen__dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.splash-screen__dot {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+
+  &:nth-child(1) { animation: splash-dot 1.4s ease-in-out 0.0s infinite; }
+  &:nth-child(2) { animation: splash-dot 1.4s ease-in-out 0.2s infinite; }
+  &:nth-child(3) { animation: splash-dot 1.4s ease-in-out 0.4s infinite; }
+}
+
+// ── Keyframes ─────────────────────────────────────────────────────────────────
+
+// Idle logo: gentle breathing pulse
+@keyframes splash-logo-idle {
+  0%, 100% { opacity: 0.78; transform: scale(1);    }
+  50%       { opacity: 1;    transform: scale(1.04); }
+}
+
+// Exit: whole container fades to transparent
+@keyframes splash-bg-exit {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+// Dot loading bounce
+@keyframes splash-dot {
+  0%, 100% { opacity: 0.25; transform: translateY(0);    }
+  50%       { opacity: 0.85; transform: translateY(-4px); }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen__logo-wrap,
+  .splash-screen__dot {
+    animation: none;
+  }
+
+  .splash-screen--exiting {
+    animation: splash-bg-exit 0.15s ease-out both;
+  }
+}

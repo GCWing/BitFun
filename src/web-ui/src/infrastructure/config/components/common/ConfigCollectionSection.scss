@@ -1,0 +1,81 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+.bitfun-config-collection-section__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-4, 16px);
+  padding: var(--size-gap-4, 16px);
+}
+
+.bitfun-config-collection-section__toolbar,
+.bitfun-config-collection-section__filters,
+.bitfun-config-collection-section__editor,
+.bitfun-config-collection-section__list {
+  min-width: 0;
+}
+
+.bitfun-config-collection-section__toolbar {
+  padding-bottom: var(--size-gap-2, 8px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bitfun-config-collection-section__filters {
+  padding-bottom: var(--size-gap-2, 8px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bitfun-config-collection-section__editor {
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--size-radius-md, 10px);
+  padding: var(--size-gap-3, 12px);
+}
+
+.bitfun-config-collection-section--with-editor .bitfun-config-collection-section__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  grid-template-areas:
+    'toolbar toolbar'
+    'filters filters'
+    'list editor';
+  align-items: start;
+}
+
+.bitfun-config-collection-section--with-editor .bitfun-config-collection-section__toolbar {
+  grid-area: toolbar;
+}
+
+.bitfun-config-collection-section--with-editor .bitfun-config-collection-section__filters {
+  grid-area: filters;
+}
+
+.bitfun-config-collection-section--with-editor .bitfun-config-collection-section__list {
+  grid-area: list;
+}
+
+.bitfun-config-collection-section--with-editor .bitfun-config-collection-section__editor {
+  grid-area: editor;
+  position: sticky;
+  top: var(--size-gap-2, 8px);
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-config-collection-section__content {
+    gap: var(--size-gap-3, 12px);
+    padding: var(--size-gap-3, 12px);
+  }
+
+  .bitfun-config-collection-section__editor {
+    padding: var(--size-gap-2, 8px);
+  }
+
+  .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__content {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .bitfun-config-collection-section__toolbar,
+  .bitfun-config-collection-section__filters {
+    padding-bottom: var(--size-gap-2, 8px);
+  }
+}

@@ -138,20 +138,6 @@ const THEMES: InstallerTheme[] = [
     },
   },
   {
-    id: 'bitfun-starry-night',
-    name: 'Starry Night',
-    type: 'dark',
-    colors: {
-      background: { primary: '#0a0e17', secondary: '#0d1117', tertiary: '#12171f', quaternary: '#161c27', elevated: '#080b12', workbench: '#0a0e17', flowchat: '#0a0e17', tooltip: 'rgba(10, 14, 23, 0.95)' },
-      text: { primary: '#e6edf3', secondary: '#c9d1d9', muted: '#8b949e', disabled: '#484f58' },
-      accent: { '50': 'rgba(107, 141, 214, 0.05)', '100': 'rgba(107, 141, 214, 0.1)', '200': 'rgba(107, 141, 214, 0.18)', '300': 'rgba(107, 141, 214, 0.3)', '400': 'rgba(107, 141, 214, 0.45)', '500': '#6B8DD6', '600': '#5B7CC6', '700': 'rgba(91, 124, 198, 0.85)', '800': 'rgba(91, 124, 198, 0.95)' },
-      purple: { '50': 'rgba(177, 156, 217, 0.05)', '100': 'rgba(177, 156, 217, 0.1)', '200': 'rgba(177, 156, 217, 0.18)', '300': 'rgba(177, 156, 217, 0.3)', '400': 'rgba(177, 156, 217, 0.45)', '500': '#B19CD9', '600': '#9B86C3', '700': 'rgba(155, 134, 195, 0.85)', '800': 'rgba(155, 134, 195, 0.95)' },
-      semantic: { success: '#7EE787', warning: '#FFD580', error: '#FF7B7B', info: '#6B8DD6', highlight: '#f5c563', highlightBg: 'rgba(245, 197, 99, 0.15)' },
-      border: { subtle: 'rgba(107, 141, 214, 0.14)', base: 'rgba(107, 141, 214, 0.20)', medium: 'rgba(107, 141, 214, 0.28)', strong: 'rgba(107, 141, 214, 0.36)', prominent: 'rgba(107, 141, 214, 0.48)' },
-      element: { subtle: 'rgba(107, 141, 214, 0.06)', soft: 'rgba(107, 141, 214, 0.09)', base: 'rgba(107, 141, 214, 0.13)', medium: 'rgba(107, 141, 214, 0.17)', strong: 'rgba(107, 141, 214, 0.22)', elevated: 'rgba(107, 141, 214, 0.27)' },
-    },
-  },
-  {
     id: 'bitfun-slate',
     name: 'Slate',
     type: 'dark',
@@ -175,7 +161,6 @@ const THEME_DISPLAY_ORDER: ThemeId[] = [
   'bitfun-china-style',
   'bitfun-china-night',
   'bitfun-cyber',
-  'bitfun-starry-night',
 ];
 
 interface ThemeSetupProps {

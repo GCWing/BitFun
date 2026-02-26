@@ -381,7 +381,6 @@ pub fn set_theme_preference(theme_preference: String) -> Result<(), String> {
         "bitfun-china-style",
         "bitfun-china-night",
         "bitfun-cyber",
-        "bitfun-starry-night",
         "bitfun-slate",
     ];
     if !allowed.contains(&theme_preference.as_str()) {

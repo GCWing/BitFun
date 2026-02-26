@@ -3,12 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Image,
-  Search,
-  Mic,
-  Palette,
   Layers,
-  Phone,
 } from 'lucide-react';
 import { Select, CubeLoading } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
@@ -19,18 +14,11 @@ import type {
   OptionalCapabilityModels,
   OptionalCapabilityType,
 } from '../types';
+import { ConfigPageRow } from './common';
 import { createLogger } from '@/shared/utils/logger';
 import './DefaultModelConfig.scss';
 
 const log = createLogger('DefaultModelConfig');
-
-
-const CAPABILITY_ICONS: Record<OptionalCapabilityType, React.ReactNode> = {
-  image_understanding: <Image size={16} />,
-  image_generation: <Palette size={16} />,
-  search: <Search size={16} />,
-  speech_recognition: <Mic size={16} />,
-};
 
 
 const OPTIONAL_CAPABILITY_TYPES: OptionalCapabilityType[] = [
@@ -42,15 +30,18 @@ const OPTIONAL_CAPABILITY_TYPES: OptionalCapabilityType[] = [
 
 export const DefaultModelConfig: React.FC = () => {
   const { t } = useTranslation('settings/default-model');
+  const renderOptionalLabel = (text: string) => (
+    <>
+      {text}
+      <span className="default-model-config__optional-label">（{t('core.optional')}）</span>
+    </>
+  );
   
   
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [defaultModels, setDefaultModels] = useState<DefaultModels>({ primary: null, fast: null });
   const [optionalCapabilities, setOptionalCapabilities] = useState<OptionalCapabilityModels>({});
-  
-  
-  const [optionalCollapsed, setOptionalCollapsed] = useState(true);
 
   
   useEffect(() => {
@@ -196,135 +187,72 @@ export const DefaultModelConfig: React.FC = () => {
 
   return (
     <div className="default-model-config">
-      
-      <section className="default-model-config__section">
-        <div className="default-model-config__core-section">
-          
-          <div className="default-model-config__model-slot">
-            <div className="default-model-config__slot-header">
-              <span className="default-model-config__slot-label">
-                {t('core.primary.label')}
-              </span>
-              <span className="default-model-config__slot-badge">
-                {t('core.required')}
-              </span>
-            </div>
-            <p className="default-model-config__slot-description">
-              {t('core.primary.description')}
-            </p>
-            <div className="default-model-config__slot-select">
-              <Select
-                value={defaultModels.primary || ''}
-                onChange={(value) => handleDefaultModelChange('primary', value)}
-                placeholder={t('core.primary.placeholder')}
-                options={enabledModels.map(model => ({
+      <ConfigPageRow
+        label={t('core.primary.label')}
+        description={t('core.primary.description')}
+        align="center"
+      >
+        <Select
+          value={defaultModels.primary || ''}
+          onChange={(value) => handleDefaultModelChange('primary', value)}
+          placeholder={t('core.primary.placeholder')}
+          options={enabledModels.map(model => ({
+            label: model.name,
+            value: model.id!,
+          }))}
+          disabled={enabledModels.length === 0}
+          size="small"
+        />
+      </ConfigPageRow>
+
+      <ConfigPageRow
+        label={renderOptionalLabel(t('core.fast.label'))}
+        description={t('core.fast.description')}
+        align="center"
+      >
+        <Select
+          value={defaultModels.fast || ''}
+          onChange={(value) => handleDefaultModelChange('fast', value)}
+          placeholder={t('core.fast.placeholder')}
+          options={[
+            { label: t('core.fast.notSet'), value: '' },
+            ...enabledModels.map(model => ({
+              label: model.name,
+              value: model.id!,
+            })),
+          ]}
+          size="small"
+        />
+      </ConfigPageRow>
+
+      {OPTIONAL_CAPABILITY_TYPES.map(capability => {
+        const availableModels = getModelsForCapability(capability);
+        const configuredModelId = optionalCapabilities[capability];
+
+        return (
+          <ConfigPageRow
+            key={capability}
+            label={renderOptionalLabel(t(`optional.capabilities.${capability}.label`))}
+            description={t(`optional.capabilities.${capability}.description`)}
+            align="center"
+          >
+            <Select
+              value={configuredModelId || ''}
+              onChange={(value) => handleCapabilityChange(capability, value)}
+              placeholder={t('optional.selectModel')}
+              disabled={availableModels.length === 0}
+              options={[
+                { label: t('optional.notSet'), value: '' },
+                ...availableModels.map(model => ({
                   label: model.name,
                   value: model.id!,
-                }))}
-              />
-            </div>
-          </div>
-          
-          
-          <div className="default-model-config__model-slot">
-            <div className="default-model-config__slot-header">
-              <span className="default-model-config__slot-label">
-                {t('core.fast.label')}
-              </span>
-              <span className="default-model-config__slot-badge default-model-config__slot-badge--optional">
-                {t('core.optional')}
-              </span>
-            </div>
-            <p className="default-model-config__slot-description">
-              {t('core.fast.description')}
-            </p>
-            <div className="default-model-config__slot-select">
-              <Select
-                value={defaultModels.fast || ''}
-                onChange={(value) => handleDefaultModelChange('fast', value)}
-                placeholder={t('core.fast.placeholder')}
-                options={[
-                  { label: t('core.fast.notSet'), value: '' },
-                  ...enabledModels.map(model => ({
-                    label: model.name,
-                    value: model.id!,
-                  })),
-                ]}
-              />
-            </div>
-            <p className="default-model-config__slot-hint">
-              {t('core.fast.hint')}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      
-      <div className={`default-model-config__more-section ${!optionalCollapsed ? 'default-model-config__more-section--expanded' : ''}`}>
-        <div 
-          className="default-model-config__expand-trigger"
-          onClick={() => setOptionalCollapsed(!optionalCollapsed)}
-          role="button"
-          tabIndex={0}
-        >
-          <span className="default-model-config__expand-line" />
-          <span className="default-model-config__expand-text">
-            {t('optional.title')}
-          </span>
-          <span className="default-model-config__expand-line" />
-        </div>
-        
-        {!optionalCollapsed && (
-          <div className="default-model-config__expand-content">
-            <div className="default-model-config__capability-grid">
-              {OPTIONAL_CAPABILITY_TYPES.map(capability => {
-                const availableModels = getModelsForCapability(capability);
-                const configuredModelId = optionalCapabilities[capability];
-                const isConfigured = !!configuredModelId;
-                
-                return (
-                  <div 
-                    key={capability}
-                    className={`default-model-config__capability-item ${isConfigured ? 'default-model-config__capability-item--configured' : ''}`}
-                  >
-                    <div className="default-model-config__capability-header">
-                      <span className="default-model-config__capability-label">
-                        {CAPABILITY_ICONS[capability]}
-                        {' '}
-                        {t(`optional.capabilities.${capability}.label`)}
-                      </span>
-                      <span className="default-model-config__capability-status">
-                        {isConfigured 
-                          ? getModelName(configuredModelId) 
-                          : t('optional.notConfigured')
-                        }
-                      </span>
-                    </div>
-                    <p className="default-model-config__capability-description">
-                      {t(`optional.capabilities.${capability}.description`)}
-                    </p>
-                    <Select
-                      value={configuredModelId || ''}
-                      onChange={(value) => handleCapabilityChange(capability, value)}
-                      placeholder={t('optional.selectModel')}
-                      disabled={availableModels.length === 0}
-                      options={[
-                        { label: t('optional.notSet'), value: '' },
-                        ...availableModels.map(model => ({
-                          label: model.name,
-                          value: model.id!,
-                        })),
-                      ]}
-                      size="small"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
+                })),
+              ]}
+              size="small"
+            />
+          </ConfigPageRow>
+        );
+      })}
     </div>
   );
 };

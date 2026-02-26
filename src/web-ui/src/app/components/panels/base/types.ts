@@ -20,7 +20,6 @@ export type PanelContentType =
   | 'git-graph'
   | 'git-branch-history'
   | 'ai-session'
-  | 'config-center'
   | 'planner'
   | 'task-detail'
   | 'plan-viewer'

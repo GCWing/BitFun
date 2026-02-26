@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { createContext, useContext } from 'react';
 import type {
   CanvasTab,
   EditorGroupId,
@@ -165,7 +166,7 @@ const getGroup = (draft: CanvasStoreState, groupId: EditorGroupId): EditorGroupS
 
 // ==================== Store Creation ====================
 
-export const useCanvasStore = create<CanvasStore>()(
+const createCanvasStoreHook = () => create<CanvasStore>()(
   immer((set, get) => ({
       ...initialState,
       
@@ -1027,6 +1028,32 @@ export const useCanvasStore = create<CanvasStore>()(
       },
     }))
 );
+
+export type CanvasStoreMode = 'agent' | 'project' | 'git';
+
+/**
+ * Selects which canvas store instance is used by the current subtree.
+ * Defaults to 'agent' to preserve existing behavior in AI Agent scene.
+ */
+export const CanvasStoreModeContext = createContext<CanvasStoreMode>('agent');
+
+export const useAgentCanvasStore = createCanvasStoreHook();
+export const useProjectCanvasStore = createCanvasStoreHook();
+export const useGitCanvasStore = createCanvasStoreHook();
+
+const pickStoreByMode = (mode: CanvasStoreMode) => {
+  if (mode === 'project') return useProjectCanvasStore;
+  if (mode === 'git') return useGitCanvasStore;
+  return useAgentCanvasStore;
+};
+
+export function useCanvasStore(): CanvasStore;
+export function useCanvasStore<T>(selector: (state: CanvasStore) => T): T;
+export function useCanvasStore<T>(selector?: (state: CanvasStore) => T): T | CanvasStore {
+  const mode = useContext(CanvasStoreModeContext);
+  const useScopedStore = pickStoreByMode(mode);
+  return selector ? useScopedStore(selector) : useScopedStore();
+}
 
 // ==================== Selector Hooks ====================
 

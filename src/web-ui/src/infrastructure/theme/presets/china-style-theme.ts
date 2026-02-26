@@ -20,8 +20,8 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       quaternary: '#ebe8d8',       
       elevated: '#ebe9e3',         
       workbench: '#faf8f0',        
-      flowchat: '#faf8f0',         
-      tooltip: 'rgba(250, 248, 240, 0.96)',  
+      scene: '#fdfcf6',
+      tooltip: 'rgba(250, 248, 240, 0.96)',
     },
     
     text: {

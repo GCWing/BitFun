@@ -148,7 +148,7 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
         const isDark = theme.type === 'dark';
 
         terminal.options.theme = {
-          background: theme.colors.background.primary,
+          background: theme.colors.background.scene,
           foreground: theme.colors.text.primary,
           cursor: 'transparent',
           cursorAccent: theme.colors.background.secondary,

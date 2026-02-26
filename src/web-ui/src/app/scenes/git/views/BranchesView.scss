@@ -1,0 +1,230 @@
+.bitfun-git-scene-branches {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;
+
+  &__left {
+    flex: 0 0 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  &__right {
+    flex: 0 0 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  &__toolbar {
+    flex-shrink: 0;
+    padding: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__toolbar-search {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__toolbar-actions {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  &__create-btn {
+    min-width: 120px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &--current {
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    }
+
+    &--selected {
+      background: var(--element-bg-soft);
+      outline: 1px solid var(--border-subtle);
+    }
+  }
+
+  &__info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__current-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-transform: uppercase;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 2px;
+  }
+
+  &__empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 13px;
+  }
+
+  &__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 8px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+
+  &__hint {
+    font-size: 12px;
+    opacity: 0.8;
+  }
+
+  // Right: commit history
+  &__history-toolbar {
+    flex-shrink: 0;
+    padding: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  &__history-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-right: auto;
+  }
+
+  &__history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  &__commit {
+    border-radius: 8px;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+
+    &--expanded {
+      background: var(--element-bg-soft);
+      border-color: var(--border-subtle);
+    }
+  }
+
+  &__commit-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+  }
+
+  &__expand {
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__commit-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__commit-message {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__commit-meta {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  &__commit-actions {
+    display: flex;
+    gap: 2px;
+  }
+
+  &__commit-detail {
+    padding: 8px 10px 10px 34px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 12px;
+  }
+
+  &__commit-body {
+    margin: 0 0 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+  }
+
+  &__files {
+    font-size: 11px;
+    color: var(--color-text-muted);
+
+    ul {
+      margin: 4px 0 0;
+      padding-left: 16px;
+    }
+  }
+}

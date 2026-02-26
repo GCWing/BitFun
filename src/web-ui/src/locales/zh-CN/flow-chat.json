@@ -18,6 +18,9 @@
   "layout": {
     "noPanels": "BitFun",
     "noPanelsHint": "使用底部栏切换面板或按 <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> 展开面板",
+    "chatHiddenTitle": "聊天已隐藏",
+    "chatHiddenDesc": "你可以在右上角点击“聊天”重新打开。",
+    "chatHiddenAction": "重新打开聊天",
     "panelCollapseHintLeft": "<- 松开收起",
     "panelCollapseHintRight": "松开收起 ->",
     "panelMode": {

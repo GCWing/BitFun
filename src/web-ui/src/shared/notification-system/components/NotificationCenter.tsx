@@ -1,8 +1,8 @@
  
 
 import React, { useState, useMemo } from 'react';
-import { X, CheckCheck, Trash2, Search as SearchIcon, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { Search } from '@/component-library';
+import { X, CheckCheck, Trash2, XCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Search, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useNotificationHistory, useCenterOpen, useAllProgressNotifications, useAllLoadingNotifications } from '../hooks/useNotificationState';
 import { notificationService } from '../services/NotificationService';
@@ -21,9 +21,6 @@ export const NotificationCenter: React.FC = () => {
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const panelRef = React.useRef<HTMLDivElement>(null);
-  
-  
   const activeTaskNotifications = useMemo(() => {
     return [...allProgressNotifications, ...allLoadingNotifications];
   }, [allProgressNotifications, allLoadingNotifications]);
@@ -32,27 +29,6 @@ export const NotificationCenter: React.FC = () => {
   const handleClose = React.useCallback(() => {
     notificationService.toggleCenter(false);
   }, []);
-
-  
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        handleClose();
-      }
-    };
-
-    
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, handleClose]);
 
   
   const handleMarkAllRead = () => {
@@ -219,7 +195,7 @@ export const NotificationCenter: React.FC = () => {
         className="notification-center__active-task-item"
       >
         <div className="notification-center__active-task-icon">
-          <Loader2 size={14} className="notification-center__spinner" />
+          <Loader2 size={16} className="notification-center__spinner" />
         </div>
         <div className="notification-center__active-task-content">
           <div className="notification-center__active-task-header">
@@ -336,28 +312,28 @@ export const NotificationCenter: React.FC = () => {
             }}
             title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
           >
-            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           <button
             className="notification-center__item-delete"
             onClick={(e) => handleDeleteNotification(e, notification.id)}
             title={t('common:actions.delete')}
           >
-            <XCircle size={14} />
+            <XCircle size={16} />
           </button>
         </div>
       </div>
     );
   };
 
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <>
-      
-      <div ref={panelRef} className="notification-center">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      showCloseButton={false}
+      size="large"
+    >
+      <div className="notification-center">
         
         <div className="notification-center__header">
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
@@ -367,21 +343,21 @@ export const NotificationCenter: React.FC = () => {
               onClick={handleMarkAllRead}
               title={t('components:notificationCenter.actions.markAllRead')}
             >
-              <CheckCheck size={14} />
+              <CheckCheck size={16} />
             </button>
             <button
               className="notification-center__header-button"
               onClick={handleClearAll}
               title={t('components:notificationCenter.actions.clearAll')}
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
             </button>
             <button
               className="notification-center__header-button"
               onClick={handleClose}
               title={t('common:actions.close')}
             >
-              <X size={14} />
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -393,7 +369,7 @@ export const NotificationCenter: React.FC = () => {
             value={searchQuery}
             onChange={(val) => setSearchQuery(val)}
             clearable
-            size="small"
+            size="medium"
           />
         </div>
 
@@ -475,6 +451,6 @@ export const NotificationCenter: React.FC = () => {
           )}
         </div>
       </div>
-    </>
+    </Modal>
   );
 };

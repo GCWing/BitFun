@@ -13,6 +13,10 @@
     "confirmDelete": "确定删除主题 \"{{name}}\" 吗？",
     "importSuccess": "主题导入成功！",
     "importFailed": "主题导入失败，请检查文件格式。",
+    "languageSectionHint": "配置界面显示语言。",
+    "languageRowHint": "选择一个语言包作为当前界面语言。",
+    "themeSectionHint": "选择、导入、导出或管理视觉主题。",
+    "themeRowHint": "选择已安装的主题或管理自定义主题。",
     "presets": {
       "bitfun-dark": {
         "name": "暗色",
@@ -37,10 +41,6 @@
       "bitfun-cyber": {
         "name": "赛博",
         "description": "科技感主题 - 深邃黑洞，霓虹未来，极致科技美学"
-      },
-      "bitfun-starry-night": {
-        "name": "星空夜",
-        "description": "星空主题 - 深邃夜空，星光璀璨，感受宇宙的静谧与神秘"
       },
       "bitfun-slate": {
         "name": "石板灰",

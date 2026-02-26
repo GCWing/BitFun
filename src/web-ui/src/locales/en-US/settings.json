@@ -4,24 +4,20 @@
     "selectConfig": "Select Configuration",
     "categories": {
       "general": "General",
-      "agent": "Agent",
-      "context": "Context",
-      "extensions": "Extensions",
+      "smartCapabilities": "Smart Configuration",
       "devkit": "Dev Kit"
     },
     "tabs": {
       "theme": "Appearance",
       "models": "Models",
-      "superAgent": "Super Agent",
-      "modes": "Modes",
       "aiFeatures": "AI Features",
-      "agenticTools": "Tools",
       "aiRules": "Rules",
       "aiMemory": "Memory",
+      "aiContext": "Rules & Memory",
       "promptTemplates": "Prompts",
       "skills": "Skills",
-      "agents": "Sub Agent",
-      "mcp": "MCP",
+      "mcpTools": "MCP & Tools",
+      "agents": "Agents",
       "editor": "Editor",
       "lsp": "LSP",
       "debug": "Debug",
@@ -192,7 +188,7 @@
     "addModel": "Add Model",
     "editModel": "Edit Model Configuration",
     "newModel": "New Model Configuration",
-    "editSubtitle": "Configure AI model connection parameters",
+    "editSubtitle": "Basic Model Parameters",
     "deleteModel": "Delete Model",
     "confirmDelete": "Are you sure you want to delete this configuration?",
     "modelName": "Model Name",
@@ -395,8 +391,8 @@
     "noSkillsHint": "Skills can extend AI capabilities"
   },
   "agents": {
-    "title": "Sub Agent",
-    "subtitle": "Configure sub-agents",
+    "title": "Agents",
+    "subtitle": "Configure agents",
     "addAgent": "Add Agent",
     "noAgents": "No sub-agents",
     "noAgentsHint": "Sub-agents can handle specific types of tasks"

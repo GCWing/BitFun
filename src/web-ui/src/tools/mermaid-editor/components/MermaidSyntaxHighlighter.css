@@ -35,7 +35,7 @@
 /* Keep cursor visible. */
 .codemirror-container .cm-cursor,
 .codemirror-container .cm-cursor-primary {
-  border-left: 2px solid #ffffff !important;
+  border-left: 2px solid var(--color-text-primary, #e8e8e8) !important;
   border-right: none !important;
   border-top: none !important;
   border-bottom: none !important;
@@ -81,16 +81,16 @@
 }
 
 .codemirror-container .cm-gutters {
-  background: var(--background-secondary, #151515);
-  color: var(--text-muted, #666666);
+  background: var(--color-bg-secondary, #18181a);
+  color: var(--color-text-muted, #707070);
   border: none;
-  border-right: 1px solid var(--border-color, #333);
+  border-right: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   padding-right: 8px;
 }
 
 .codemirror-container .cm-lineNumbers {
   font-size: 12px;
-  color: var(--text-muted, #666666);
+  color: var(--color-text-muted, #707070);
 }
 
 .codemirror-container .cm-lineNumbers .cm-gutterElement {
@@ -100,8 +100,8 @@
 }
 
 .codemirror-container .cm-activeLineGutter {
-  background: var(--background-secondary, #151515);
-  color: var(--accent-color, #3b82f6);
+  background: var(--color-bg-secondary, #18181a);
+  color: var(--color-accent-500, #60a5fa);
   font-weight: 600;
 }
 
@@ -151,7 +151,7 @@
 
 /* Cursor style overrides. */
 .codemirror-container .cm-cursor {
-  border-left: 2px solid #ffffff !important;
+  border-left: 2px solid var(--color-text-primary, #e8e8e8) !important;
   border-right: none !important;
   border-top: none !important;
   border-bottom: none !important;
@@ -167,7 +167,7 @@
 }
 
 .codemirror-container .cm-cursor-primary {
-  border-left: 2px solid #ffffff !important;
+  border-left: 2px solid var(--color-text-primary, #e8e8e8) !important;
   border-right: none !important;
   border-top: none !important;
   border-bottom: none !important;
@@ -198,7 +198,7 @@
 }
 
 .codemirror-container .cm-placeholder {
-  color: var(--text-muted, #666666);
+  color: var(--color-text-muted, #707070);
   font-style: italic;
 }
 
@@ -252,9 +252,9 @@
 
 /* Fold placeholder. */
 .codemirror-container .cm-foldPlaceholder {
-  background: var(--background-secondary, #151515);
-  border: 1px solid var(--border-color, #333);
-  color: var(--text-muted, #666666);
+  background: var(--color-bg-secondary, #18181a);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  color: var(--color-text-muted, #707070);
   border-radius: 3px;
   padding: 0 4px;
   margin: 0 2px;
@@ -269,7 +269,7 @@
   display: inline-block;
   width: 1px;
   height: 100%;
-  background: var(--border-color, #333);
+  background: var(--border-subtle, rgba(255, 255, 255, 0.16));
   opacity: 0.5;
 }
 
@@ -350,14 +350,14 @@
 .codemirror-container .cm-focused .cm-cursor-primary {
   animation: none !important;
   opacity: 1 !important;
-  border-left-color: #ffffff !important;
+  border-left-color: var(--color-text-primary, #e8e8e8) !important;
   visibility: visible !important;
   display: block !important;
 }
 
 /* Accessibility focus ring. */
 .codemirror-container .cm-editor.cm-focused {
-  outline: 2px solid var(--accent-color, #3b82f6);
+  outline: 2px solid var(--color-accent-500, #60a5fa);
   outline-offset: -2px;
 }
 

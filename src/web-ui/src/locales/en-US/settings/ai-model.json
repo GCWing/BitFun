@@ -3,7 +3,7 @@
   "subtitle": "Configure and manage AI model providers",
   "editModel": "Edit Model Configuration",
   "newModel": "New Model Configuration",
-  "editSubtitle": "Configure AI model connection parameters",
+  "editSubtitle": "Basic Model Parameters",
   "confirmDelete": "Are you sure you want to delete this configuration?",
   "providerSelection": {
     "title": "Select Model Provider",

@@ -1,0 +1,84 @@
+{
+  "title": "Team",
+  "desc": "Sub-agents collaborating on specialized tasks — {{total}} total, {{enabled}} enabled",
+  "manage": "Manage",
+  "builtin": "Built-in",
+  "custom": "Custom",
+  "empty": "No sub-agents available",
+  "goManage": "Go to Manage",
+  "gallery": {
+    "title": "Agent Gallery",
+    "search": "Search agents...",
+    "filter": {
+      "joined": "Joined",
+      "all": "All"
+    },
+    "empty": "No matching agents"
+  },
+  "composer": {
+    "emptyTeam": "Select or create a team",
+    "memberCount": "{{count}} members",
+    "viewMode": {
+      "formation": "Formation",
+      "list": "List"
+    },
+    "role": {
+      "leader": "Leader",
+      "member": "Member",
+      "reviewer": "Reviewer"
+    },
+    "strategy": {
+      "collaborative": "Collaborative",
+      "sequential": "Sequential",
+      "free": "Free"
+    }
+  },
+  "formation": {
+    "empty": "Select agents from the left panel",
+    "emptySub": "Click the + button on an agent card"
+  },
+  "capability": {
+    "warning": "Missing capabilities: {{cats}}"
+  },
+  "onboard": {
+    "title": "Build Your AI Team",
+    "subtitle": "Combine agents with different capabilities into specialized task teams",
+    "useTemplate": "Start with a template",
+    "blank": "Or create from scratch"
+  },
+  "tabbar": {
+    "newTeam": "New Team",
+    "fromTemplate": "From Template",
+    "templateTitle": "Choose Template",
+    "blankCreate": "Blank"
+  },
+  "home": {
+    "filterAll": "All",
+    "filterAgent": "Solo Agents",
+    "filterTeam": "Teams",
+    "search": "Search by name or description...",
+    "solo": "Solo",
+    "team": "Team",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "members": "{{count}} members",
+    "edit": "Edit",
+    "createTeam": "Create Team",
+    "quickCreate": "Quick Create",
+    "globalCap": "Global Capabilities",
+    "backToOverview": "Back to Overview",
+    "strategyCollab": "Collaborative",
+    "strategySeq": "Sequential",
+    "strategyFree": "Free"
+  },
+  "agentsOverview": {
+    "title": "Agents Overview",
+    "subtitle": "All sub-agents",
+    "sectionTitle": "Agents"
+  },
+  "expertTeams": {
+    "title": "Expert Teams",
+    "subtitle": "Team list and edit",
+    "sectionTitle": "Teams"
+  }
+}

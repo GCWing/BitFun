@@ -4,13 +4,6 @@ export * from './events';
 export * from './git-agent.types';
 export * from './graph';
 
-export interface GitPanelProps {
-  workspacePath?: string;
-  isActive?: boolean;
-  onActivate?: () => void;
-  className?: string;
-}
-
 export interface GitFeatureItem {
   id: string;
   title: string;

@@ -300,11 +300,18 @@
 // ==================== Welcome step styles ====================
 .bitfun-onboarding-welcome {
   &__logo {
-    width: 100px;
-    height: 100px;
-    margin-bottom: $size-gap-10; // Increase spacing below
-    margin-top: -$size-gap-8; // Move the cube upward
+    width: 140px;
+    height: 140px;
+    margin-bottom: $size-gap-10;
+    margin-top: -$size-gap-8;
+    background: none;
+    border: none;
     animation: onboarding-float 3s ease-in-out infinite;
+  }
+
+  // Override title size for welcome step - product name should be smaller
+  .bitfun-onboarding-step__title {
+    font-size: $font-size-xl;
   }
 
   &__pillars {

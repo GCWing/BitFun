@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useMemo, useCallback, useEffect } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem } from '../../types/flow-chat';
 import type { ExploreGroupData } from '../../store/modernFlowChatStore';
@@ -103,43 +103,51 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
       onCollapseGroup?.(groupId);
     }
   }, [isCollapsed, groupId, onExploreGroupToggle, onCollapseGroup]);
-  
-  if (isCollapsed) {
+
+  // Build class list.
+  const className = [
+    'explore-region',
+    shouldAutoCollapse ? 'explore-region--collapsible' : null,
+    isCollapsed ? 'explore-region--collapsed' : 'explore-region--expanded',
+    isGroupStreaming ? 'explore-region--streaming' : null,
+  ].filter(Boolean).join(' ');
+
+  // Non-collapsible: just render content without header (streaming, no auto-collapse yet).
+  if (!shouldAutoCollapse) {
     return (
-      <div 
-        className="explore-region explore-region--collapsed"
-        onClick={handleToggle}
-      >
-        <ChevronRight size={14} className="explore-region__icon" />
-        <span className="explore-region__summary">
-          {displaySummary}
-        </span>
+      <div className={className}>
+        <div ref={containerRef} className="explore-region__content">
+          {allItems.map(item => (
+            <ExploreItemRenderer
+              key={item.id}
+              item={item}
+              turnId={turnId}
+            />
+          ))}
+        </div>
       </div>
     );
   }
-  
-  const expandedClassName = `explore-region explore-region--expanded${isGroupStreaming ? ' explore-region--streaming' : ''}`;
-  
+
+  // Collapsible: unified header + animated content wrapper.
   return (
-    <div className={expandedClassName}>
-      {/* Show the collapse control only when auto-collapse is active. */}
-      {shouldAutoCollapse && (
-        <div 
-          className="explore-region__header"
-          onClick={handleToggle}
-        >
-          <ChevronDown size={14} className="explore-region__icon" />
-          <span>{t('exploreRegion.collapse')}</span>
+    <div className={className}>
+      <div className="explore-region__header" onClick={handleToggle}>
+        <ChevronRight size={14} className="explore-region__icon" />
+        <span className="explore-region__summary">{displaySummary}</span>
+      </div>
+      <div className="explore-region__content-wrapper">
+        <div className="explore-region__content-inner">
+          <div ref={containerRef} className="explore-region__content">
+            {allItems.map(item => (
+              <ExploreItemRenderer
+                key={item.id}
+                item={item}
+                turnId={turnId}
+              />
+            ))}
+          </div>
         </div>
-      )}
-      <div ref={containerRef} className="explore-region__content">
-        {allItems.map(item => (
-          <ExploreItemRenderer 
-            key={item.id}
-            item={item}
-            turnId={turnId}
-          />
-        ))}
       </div>
     </div>
   );

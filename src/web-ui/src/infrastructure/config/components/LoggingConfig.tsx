@@ -1,9 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw } from 'lucide-react';
-import { Alert, Button, Select, Tooltip } from '@/component-library';
+import { FolderOpen } from 'lucide-react';
+import {
+  Button,
+  Select,
+  ConfigPageLoading,
+  ConfigPageMessage,
+  ConfigPageRefreshButton,
+} from '@/component-library';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
-import { ConfigPageContent, ConfigPageHeader, ConfigPageLayout } from './common';
+import { ConfigPageContent, ConfigPageHeader, ConfigPageLayout, ConfigPageSection, ConfigPageRow } from './common';
 import { configManager } from '../services/ConfigManager';
 import { createLogger } from '@/shared/utils/logger';
 import type { BackendLogLevel, RuntimeLoggingInfo } from '../types';
@@ -111,7 +117,7 @@ const LoggingConfig: React.FC = () => {
       <ConfigPageLayout className="bitfun-logging-config">
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
-          <div className="bitfun-logging-config__loading">{t('messages.loading')}</div>
+          <ConfigPageLoading text={t('messages.loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -121,33 +127,24 @@ const LoggingConfig: React.FC = () => {
     <ConfigPageLayout className="bitfun-logging-config">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-logging-config__content">
-        {message && (
-          <div className="bitfun-logging-config__message-container">
-            <Alert
-              type={message.type === 'success' ? 'success' : message.type === 'error' ? 'error' : 'info'}
-              message={message.text}
+        <ConfigPageMessage message={message} />
+
+        <ConfigPageSection
+          title={t('sections.level')}
+          extra={(
+            <ConfigPageRefreshButton
+              tooltip={t('actions.refreshTooltip')}
+              onClick={handleRefresh}
+              loading={loading}
+              disabled={loading || saving}
             />
-          </div>
-        )}
-
-        <div className="bitfun-logging-config__section">
-          <div className="bitfun-logging-config__section-header">
-            <div className="bitfun-logging-config__section-title">
-              <h3>{t('sections.level')}</h3>
-            </div>
-            <Tooltip content={t('actions.refreshTooltip')}>
-              <button
-                className="bitfun-logging-config__refresh-btn"
-                onClick={handleRefresh}
-                disabled={loading || saving}
-              >
-                <RefreshCw size={14} className={loading ? 'spinning' : ''} />
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="bitfun-logging-config__section-content">
-            <p className="bitfun-logging-config__description">{t('level.description')}</p>
+          )}
+        >
+          <ConfigPageRow
+            label={t('sections.level')}
+            description={t('level.description')}
+            align="center"
+          >
             <div className="bitfun-logging-config__select-wrapper">
               <Select
                 value={configLevel}
@@ -156,33 +153,32 @@ const LoggingConfig: React.FC = () => {
                 disabled={saving}
               />
             </div>
-          </div>
-        </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
 
-        <div className="bitfun-logging-config__section">
-          <div className="bitfun-logging-config__section-header">
-            <div className="bitfun-logging-config__section-title">
-              <h3>{t('sections.path')}</h3>
-            </div>
-            <div className="bitfun-logging-config__header-actions">
-              <Button
-                size="small"
-                variant="secondary"
-                onClick={handleOpenFolder}
-                disabled={openingFolder || !runtimeInfo?.sessionLogDir}
-              >
-                <FolderOpen size={14} />
-                {t('actions.openFolder')}
-              </Button>
-            </div>
-          </div>
-
-          <div className="bitfun-logging-config__section-content">
+        <ConfigPageSection
+          title={t('sections.path')}
+          extra={(
+            <Button
+              size="small"
+              variant="secondary"
+              onClick={handleOpenFolder}
+              disabled={openingFolder || !runtimeInfo?.sessionLogDir}
+            >
+              <FolderOpen size={14} />
+              {t('actions.openFolder')}
+            </Button>
+          )}
+        >
+          <ConfigPageRow
+            label={t('sections.path')}
+            description={t('subtitle')}
+          >
             <div className="bitfun-logging-config__path-box">
               {runtimeInfo?.sessionLogDir || '-'}
             </div>
-          </div>
-        </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
       </ConfigPageContent>
     </ConfigPageLayout>
   );

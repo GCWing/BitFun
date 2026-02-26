@@ -52,28 +52,6 @@ function parseGitStatusFromBackend(
   return undefined;
 }
 
-/**
- * Check if paths match (supports both absolute and relative).
- */
-function pathMatches(nodePath: string, gitPath: string): boolean {
-  const normalizedNodePath = nodePath.replace(/\\/g, '/');
-  const normalizedGitPath = gitPath.replace(/\\/g, '/');
-  
-  if (normalizedNodePath === normalizedGitPath) return true;
-  
-  if (normalizedNodePath.endsWith('/' + normalizedGitPath) || 
-      normalizedNodePath.endsWith(normalizedGitPath)) {
-    return true;
-  }
-  
-  if (normalizedGitPath.endsWith('/' + normalizedNodePath) ||
-      normalizedGitPath.endsWith(normalizedNodePath)) {
-    return true;
-  }
-  
-  return false;
-}
-
 function collectChildrenGitStatuses(node: FileSystemNode): Set<string> {
   const statuses = new Set<string>();
   
@@ -106,24 +84,47 @@ function buildGitStatusMap(
   gitState.staged?.forEach(file => {
     const status = parseGitStatusFromBackend(file.status, file.index_status, file.workdir_status);
     if (status) {
-      gitStatusMap.set(file.path, { status: file.status, gitStatus: status });
+      gitStatusMap.set(file.path.replace(/\\/g, '/'), { status: file.status, gitStatus: status });
     }
   });
   
   gitState.unstaged?.forEach(file => {
     const status = parseGitStatusFromBackend(file.status, file.index_status, file.workdir_status);
-    if (status && !gitStatusMap.has(file.path)) {
-      gitStatusMap.set(file.path, { status: file.status, gitStatus: status });
+    const normalizedPath = file.path.replace(/\\/g, '/');
+    if (status && !gitStatusMap.has(normalizedPath)) {
+      gitStatusMap.set(normalizedPath, { status: file.status, gitStatus: status });
     }
   });
   
   gitState.untracked?.forEach(filePath => {
-    if (!gitStatusMap.has(filePath)) {
-      gitStatusMap.set(filePath, { status: '??', gitStatus: 'untracked' });
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    if (!gitStatusMap.has(normalizedPath)) {
+      gitStatusMap.set(normalizedPath, { status: '??', gitStatus: 'untracked' });
     }
   });
   
   return gitStatusMap;
+}
+
+function getNodeStatusInfo(
+  nodePath: string,
+  workspacePath: string | undefined,
+  gitStatusMap: Map<string, { status: string; gitStatus: ReturnType<typeof parseGitStatusFromBackend> }>
+): { status: string; gitStatus: ReturnType<typeof parseGitStatusFromBackend> } | undefined {
+  const normalizedNodePath = nodePath.replace(/\\/g, '/');
+
+  const absoluteMatch = gitStatusMap.get(normalizedNodePath);
+  if (absoluteMatch) return absoluteMatch;
+
+  if (!workspacePath) return undefined;
+
+  const normalizedWorkspacePath = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!normalizedNodePath.startsWith(`${normalizedWorkspacePath}/`)) {
+    return undefined;
+  }
+
+  const relativePath = normalizedNodePath.slice(normalizedWorkspacePath.length + 1);
+  return gitStatusMap.get(relativePath);
 }
 
 /**
@@ -131,26 +132,24 @@ function buildGitStatusMap(
  */
 function updateNodeGitStatus(
   nodes: FileSystemNode[],
-  gitStatusMap: Map<string, { status: string; gitStatus: ReturnType<typeof parseGitStatusFromBackend> }>
+  gitStatusMap: Map<string, { status: string; gitStatus: ReturnType<typeof parseGitStatusFromBackend> }>,
+  workspacePath?: string
 ): FileSystemNode[] {
   return nodes.map(node => {
     let updatedNode = { ...node };
-    let matched = false;
+    const statusInfo = getNodeStatusInfo(node.path, workspacePath, gitStatusMap);
+    const matched = !!statusInfo;
     
-    for (const [gitPath, statusInfo] of gitStatusMap.entries()) {
-      if (pathMatches(node.path, gitPath)) {
-        updatedNode = {
-          ...updatedNode,
-          gitStatus: statusInfo.gitStatus,
-          gitStatusText: statusInfo.status
-        };
-        matched = true;
-        break;
-      }
+    if (statusInfo) {
+      updatedNode = {
+        ...updatedNode,
+        gitStatus: statusInfo.gitStatus,
+        gitStatusText: statusInfo.status
+      };
     }
     
     if (node.children && node.children.length > 0) {
-      updatedNode.children = updateNodeGitStatus(node.children, gitStatusMap);
+      updatedNode.children = updateNodeGitStatus(node.children, gitStatusMap, workspacePath);
       
       const childStatuses = collectChildrenGitStatuses(updatedNode);
       
@@ -219,7 +218,8 @@ export function useFileTreeGitSync({
       
       try {
         const gitStatusMap = buildGitStatusMap(state);
-        const updatedTree = updateNodeGitStatus(targetTree, gitStatusMap);
+        const updatedTree = updateNodeGitStatus(targetTree, gitStatusMap, workspacePath);
+        
         onTreeUpdateRef.current(updatedTree);
         
         log.debug('Git status applied to file tree', {
@@ -240,7 +240,7 @@ export function useFileTreeGitSync({
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(doApply, debounceDelay);
     }
-  }, [debounceDelay]);
+  }, [debounceDelay, workspacePath]);
   
   const applyGitStatusImmediate = useCallback(() => {
     applyGitStatusToTree(treeRef.current, gitStateRef.current, true);

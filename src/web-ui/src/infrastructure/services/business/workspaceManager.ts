@@ -37,7 +37,7 @@ class WorkspaceManager {
     this.state = {
       currentWorkspace: null,
       recentWorkspaces: [],
-      loading: false,
+      loading: true, // Start as loading until initialize() completes
       error: null,
     };
   }

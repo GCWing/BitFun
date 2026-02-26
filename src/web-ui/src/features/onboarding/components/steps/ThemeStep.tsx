@@ -46,11 +46,6 @@ const THEME_OPTIONS = [
     descKey: 'theme.themes.bitfun-cyber.description'
   },
   { 
-    id: 'bitfun-starry-night', 
-    nameKey: 'theme.themes.bitfun-starry-night.name',
-    descKey: 'theme.themes.bitfun-starry-night.description'
-  },
-  { 
     id: 'bitfun-slate', 
     nameKey: 'theme.themes.bitfun-slate.name',
     descKey: 'theme.themes.bitfun-slate.description'

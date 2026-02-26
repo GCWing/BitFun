@@ -357,7 +357,6 @@ export class GitStateManager {
 
     log.debug('Starting refresh', { repositoryPath, layersToRefresh, reason });
 
-
     const refreshPromise = (async () => {
       try {
 
@@ -426,7 +425,6 @@ export class GitStateManager {
    */
   private async refreshBasicAndStatus(repositoryPath: string): Promise<void> {
     try {
-
       const isRepo = await gitAPI.isGitRepository(repositoryPath);
 
       if (!isRepo) {
@@ -443,7 +441,6 @@ export class GitStateManager {
         });
         return;
       }
-
 
       const status = await gitAPI.getStatus(repositoryPath);
 

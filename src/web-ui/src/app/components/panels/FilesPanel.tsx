@@ -16,6 +16,7 @@ import type { FileSystemNode } from '@/tools/file-system/types';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { useNotification } from '@/shared/notification-system';
 import { InputDialog, CubeLoading } from '@/component-library';
+import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import '@/tools/file-system/styles/FileExplorer.scss';
@@ -27,17 +28,24 @@ interface FilesPanelProps {
   workspacePath?: string;
   onFileSelect?: (filePath: string, fileName: string) => void;
   onFileDoubleClick?: (filePath: string) => void;
+  hideHeader?: boolean;
+  viewMode?: 'tree' | 'search';
+  onViewModeChange?: (mode: 'tree' | 'search') => void;
 }
 
 const FilesPanel: React.FC<FilesPanelProps> = ({
   workspacePath,
   onFileSelect,
-  onFileDoubleClick
+  onFileDoubleClick,
+  hideHeader = false,
+  viewMode: externalViewMode,
+  onViewModeChange,
 }) => {
   const { t } = useTranslation('panels/files');
   
   const panelRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<'tree' | 'search'>('tree');
+  const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
+  const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
   
   const {
     query: searchQuery,
@@ -121,31 +129,26 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         type: null,
         parentPath: '',
       });
-      setViewMode('tree');
+      if (onViewModeChange) {
+        onViewModeChange('tree');
+      } else {
+        setInternalViewMode('tree');
+      }
     }
     prevWorkspacePathRef.current = workspacePath;
   }, [workspacePath, clearSearch]);
 
   // ===== File Operation Handlers =====
   
-  const handleOpenFile = useCallback(async (data: { path: string; line?: number; column?: number }) => {
+  const handleOpenFile = useCallback((data: { path: string; line?: number; column?: number }) => {
     log.info('Opening file', { path: data.path, line: data.line, column: data.column });
-    
-    const { fileTabManager } = await import('@/shared/services/FileTabManager');
-    
-    if (data.line || data.column) {
-      fileTabManager.openFileAndJump(
-        data.path,
-        data.line || 1,
-        data.column,
-        { workspacePath }
-      );
-    } else {
-      fileTabManager.openFile({
-        filePath: data.path,
-        workspacePath
-      });
-    }
+
+    openFileInBestTarget({
+      filePath: data.path,
+      workspacePath,
+      ...(data.line ? { jumpToLine: data.line } : {}),
+      ...(data.column ? { jumpToColumn: data.column } : {}),
+    });
   }, [workspacePath]);
 
   const handleNewFile = useCallback((data: { parentPath: string }) => {
@@ -457,18 +460,17 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     };
   }, [handleOpenFile, handleNewFile, handleNewFolder, handleStartRename, handleDelete, handleReveal, handlePasteFromContextMenu, handleFileTreeRefresh, handleNavigateToPath]);
 
-  const handleFileSelect = useCallback(async (filePath: string, fileName: string) => {
+  const handleFileSelect = useCallback((filePath: string, fileName: string) => {
     selectFile(filePath);
     onFileSelect?.(filePath, fileName);
     
     const selectedNode = findNode(fileTree, filePath);
     if (selectedNode && !selectedNode.isDirectory) {
-      const { fileTabManager } = await import('@/shared/services/FileTabManager');
-      fileTabManager.openFile({
+      openFileInBestTarget({
         filePath,
         fileName,
-        workspacePath
-      });
+        workspacePath,
+      }, { source: 'project-nav' });
     }
   }, [selectFile, onFileSelect, workspacePath, fileTree, findNode]);
 
@@ -481,8 +483,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [clearSearch]);
 
   const handleToggleViewMode = useCallback(() => {
-    setViewMode(prev => prev === 'tree' ? 'search' : 'tree');
-  }, []);
+    const next = viewMode === 'tree' ? 'search' : 'tree';
+    if (onViewModeChange) {
+      onViewModeChange(next);
+    } else {
+      setInternalViewMode(next);
+    }
+  }, [viewMode, onViewModeChange]);
 
   return (
     <div 
@@ -491,21 +498,24 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       tabIndex={-1}
       onFocus={() => {}}
     >
-      <PanelHeader
-        title={t('title')}
-        actions={
-          workspacePath && (
-            <IconButton
-              size="xs"
-              onClick={handleToggleViewMode}
-              tooltip={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')}
-              tooltipPlacement="bottom"
-            >
-              {viewMode === 'tree' ? <SearchIcon size={14} /> : <List size={14} />}
-            </IconButton>
-          )
-        }
-      />
+      {!hideHeader && (
+        <PanelHeader
+          title={t('title')}
+          className="bitfun-files-panel__header"
+          actions={
+            workspacePath && (
+              <IconButton
+                size="xs"
+                onClick={handleToggleViewMode}
+                tooltip={viewMode === 'tree' ? t('actions.switchToSearch') : t('actions.switchToTree')}
+                tooltipPlacement="bottom"
+              >
+                {viewMode === 'tree' ? <SearchIcon size={14} /> : <List size={14} />}
+              </IconButton>
+            )
+          }
+        />
+      )}
       
       <div className="bitfun-files-panel__content">
         {workspacePath && viewMode === 'search' && (

@@ -1,0 +1,380 @@
+/**
+ * SessionsSection styles — inline accordion shown under the Sessions nav item.
+ *
+ * Uses the parent BEM block (.bitfun-nav-panel) to stay consistent with the
+ * rest of the navigation styling, while being self-contained in this file.
+ */
+
+@use '../../../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-nav-panel {
+  &__inline-list {
+    display: flex;
+    flex-direction: column;
+    padding: 2px $size-gap-2 $size-gap-1;
+    gap: 1px;
+    border-left: 1px solid var(--border-subtle);
+    margin: 1px $size-gap-2 2px calc(#{$size-gap-2} + 14px);
+  }
+
+  // Row containing the new-session button + mode chips
+  &__inline-action-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: $size-gap-3;
+  }
+
+  &__inline-action {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 $size-gap-1;
+    border: 1px dashed var(--border-subtle);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard,
+                border-color $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-primary);
+      background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+      border-color: var(--color-primary);
+    }
+
+    svg { flex-shrink: 0; }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  // Mode chips container
+  &__mode-switcher {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  // Individual mode chip with bouncy spring animation
+  &__mode-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &.is-active {
+      order: -1;
+      transform: scale(1);
+      color: var(--color-accent-500);
+      background: var(--color-accent-200);
+    }
+
+    &:not(.is-active) {
+      transform: scale(0.78);
+      color: var(--color-text-muted);
+      background: none;
+    }
+
+    &:hover:not(.is-active) {
+      transform: scale(0.88);
+      color: var(--color-text-secondary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      transform: scale(0.92);
+    }
+
+    &.is-placeholder:not(.is-active) {
+      opacity: 0.55;
+    }
+  }
+
+  &__inline-empty {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    padding: 4px $size-gap-1;
+    font-style: italic;
+  }
+
+  &__inline-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 $size-gap-1;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      font-weight: 500;
+      background: var(--element-bg-soft);
+    }
+
+    &.is-editing {
+      cursor: default;
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__inline-item-icon {
+    flex-shrink: 0;
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+
+    .bitfun-nav-panel__inline-item:hover &,
+    .bitfun-nav-panel__inline-item.is-active & {
+      opacity: 1;
+    }
+  }
+
+  &__inline-item-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__inline-item-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: auto;
+
+    .bitfun-nav-panel__inline-item:hover & {
+      display: flex;
+    }
+  }
+
+  &__inline-item-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+    }
+
+    &.delete:hover {
+      color: var(--color-error, #ef4444);
+      background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
+    }
+  }
+
+  &__inline-item-edit {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__inline-item-edit-field {
+    flex: 1;
+    min-width: 0;
+
+    .bitfun-input-container {
+      height: 18px;
+      min-height: 18px;
+      padding: 0 6px;
+      border-radius: 4px;
+      border-color: var(--border-subtle);
+      background: color-mix(in srgb, var(--element-bg-soft) 55%, transparent);
+    }
+
+    .bitfun-input {
+      font-size: 12px;
+      line-height: 16px;
+    }
+
+    .bitfun-input-container:focus-within {
+      border-color: color-mix(in srgb, var(--color-primary) 65%, var(--border-subtle));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    }
+  }
+
+  &__inline-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 $size-gap-1;
+    margin-top: 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    width: 100%;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-primary);
+      background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    }
+  }
+
+  &__inline-toggle-dots {
+    letter-spacing: 1px;
+    font-size: 13px;
+    line-height: 1;
+    opacity: 0.7;
+  }
+
+  &__inline-item-edit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &.confirm:hover {
+      color: var(--color-success, #22c55e);
+      background: color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent);
+    }
+
+    &.cancel:hover {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+    }
+  }
+
+  // Shell running-status dot (used by ShellsSection)
+  &__shell-dot {
+    flex-shrink: 0;
+    border-radius: 50%;
+
+    &.is-running {
+      color: var(--color-success, #4caf50);
+      fill: currentColor;
+    }
+
+    &.is-stopped {
+      color: var(--color-text-muted);
+      fill: transparent;
+      stroke: currentColor;
+    }
+  }
+
+  // Inline item badge (count / status text)
+  &__inline-item-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    line-height: 1;
+    color: var(--color-text-muted);
+    margin-left: auto;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+
+    &--dim {
+      opacity: 0.55;
+      font-style: italic;
+    }
+  }
+
+  // Inline item dot (health status indicator for MCP etc.)
+  &__inline-item-dot {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-left: auto;
+
+    &.is-healthy {
+      background: var(--color-success, #4caf50);
+      box-shadow: 0 0 4px color-mix(in srgb, var(--color-success, #4caf50) 40%, transparent);
+    }
+
+    &.is-error {
+      background: var(--color-warning, #f59e0b);
+      box-shadow: 0 0 4px color-mix(in srgb, var(--color-warning, #f59e0b) 40%, transparent);
+    }
+  }
+
+  // Disabled inline item (agent/skill not enabled)
+  &__inline-item.is-disabled {
+    opacity: 0.5;
+  }
+
+  // Unhealthy MCP server indicator
+  &__inline-item.is-unhealthy {
+    .bitfun-nav-panel__inline-item-icon {
+      color: var(--color-warning, #f59e0b);
+      opacity: 0.9;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-nav-panel {
+    &__inline-item,
+    &__inline-action {
+      transition: none;
+    }
+  }
+}

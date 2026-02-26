@@ -45,7 +45,6 @@ export const IdeControlToolCard: React.FC<ToolCardProps> = ({
       const panelNames: Record<string, string> = {
         'git-settings': 'Git Settings',
         'git-diff': 'Git Diff',
-        'config-center': t('toolCards.ideControl.configCenter'),
         'planner': t('toolCards.ideControl.planner'),
         'terminal': t('toolCards.ideControl.terminal'),
         'file-viewer': t('toolCards.ideControl.fileViewer'),

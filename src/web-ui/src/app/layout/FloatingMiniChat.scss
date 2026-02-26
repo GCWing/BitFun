@@ -1,0 +1,441 @@
+/**
+ * FloatingMiniChat — subtle circular button + spring-animated expanded panel.
+ *
+ * Button style follows the app's muted dark-UI language.
+ * Panel springs from the button position (bottom-right) on open.
+ * Button hides while the panel is visible.
+ */
+
+@use '../../component-library/styles/tokens' as *;
+
+$fmc-ease: cubic-bezier(0.4, 0, 0.2, 1);
+$fmc-open-duration: 0.42s;
+$fmc-close-duration: 0.25s;
+
+$button-size: 44px;
+$button-offset: 28px;
+$panel-width: 380px;
+$panel-height: 620px;
+
+// ─── Root container ────────────────────────────────────────
+.bitfun-fmc {
+  position: fixed;
+  bottom: $button-offset;
+  right: $button-offset;
+  z-index: $z-overlay + 1;
+  pointer-events: none;
+
+  & > * {
+    pointer-events: auto;
+  }
+}
+
+// ─── Fullscreen backdrop (catches outside clicks) ──────────
+.bitfun-fmc__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+// ─── Circular trigger button ───────────────────────────────
+.bitfun-fmc__button {
+  width: $button-size;
+  height: $button-size;
+  border-radius: 50%;
+  border: 1px solid var(--border-base, rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary, #a0a0a0);
+  background: var(--color-bg-tertiary, #1e1e22);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition:
+    transform 0.2s $fmc-ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity $fmc-close-duration $fmc-ease;
+
+  &:hover {
+    background: var(--color-bg-elevated, #262630);
+    border-color: var(--border-medium, rgba(255, 255, 255, 0.14));
+    color: var(--color-text-primary, #e8e8e8);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.45),
+      0 0 12px rgba(100, 140, 255, 0.08);
+    transform: scale(1.06);
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  // Hide when panel is open
+  .bitfun-fmc--open & {
+    opacity: 0;
+    transform: scale(0.5);
+    pointer-events: none;
+  }
+}
+
+// ─── Panel ─────────────────────────────────────────────────
+.bitfun-fmc__panel {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+  width: $panel-width;
+  height: $panel-height;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  background: var(--color-bg-primary, #121214);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.25),
+    0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+
+  // Pre-open state: collapsed into the button position
+  transform-origin: bottom right;
+  opacity: 0;
+  transform: scale(0.15);
+  pointer-events: none;
+  transition:
+    opacity $fmc-close-duration $fmc-ease,
+    transform $fmc-close-duration $fmc-ease;
+
+  &--open {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+    transition:
+      opacity $fmc-open-duration $fmc-ease,
+      transform $fmc-open-duration $fmc-ease;
+  }
+
+  // ── State borders ──
+  &--processing {
+    border-color: var(--color-accent-300, rgba(96, 165, 250, 0.3));
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      border-radius: 8px 8px 0 0;
+      background: linear-gradient(
+        90deg,
+        var(--color-accent-600, #3b82f6),
+        var(--color-purple-500, #8b5cf6),
+        var(--color-accent-600, #3b82f6)
+      );
+      background-size: 200% 100%;
+      animation: fmc-progress 2s linear infinite;
+      z-index: 10;
+    }
+  }
+
+  &--error {
+    border-color: var(--color-error-border, rgba(239, 68, 68, 0.4));
+  }
+
+  &--confirm {
+    border-color: var(--color-warning-border, rgba(251, 146, 60, 0.4));
+    animation: fmc-pulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes fmc-progress {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes fmc-pulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25),
+      0 0 0 1px var(--color-warning-border, rgba(251, 146, 60, 0.3));
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25),
+      0 0 0 2px var(--color-warning, rgba(251, 146, 60, 0.5));
+  }
+}
+
+// ─── Header ────────────────────────────────────────────────
+.bitfun-fmc__header {
+  flex: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.bitfun-fmc__header-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted, #707070);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
+    color: var(--color-text-primary, #e8e8e8);
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+
+  &--confirm {
+    color: var(--color-success, #22c55e);
+    &:hover { background: var(--color-success-bg, rgba(34, 197, 94, 0.15)); }
+  }
+
+  &--reject {
+    color: var(--color-error, #ef4444);
+    &:hover { background: var(--color-error-bg, rgba(239, 68, 68, 0.15)); }
+  }
+
+  &--stop {
+    color: var(--color-error, #ef4444);
+    &:hover { background: var(--color-error-bg, rgba(239, 68, 68, 0.15)); }
+  }
+
+  &--close:hover {
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
+    color: var(--color-error, #ef4444);
+  }
+}
+
+// ─── Title / session picker ────────────────────────────────
+.bitfun-fmc__title-wrapper {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.bitfun-fmc__title-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary, #e8e8e8);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
+  }
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-text-muted, #707070);
+  }
+}
+
+.bitfun-fmc__title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.bitfun-fmc__title-chevron {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.15s ease;
+
+  .bitfun-fmc__title-btn:hover & {
+    opacity: 1;
+  }
+
+  &--open {
+    opacity: 1;
+    transform: rotate(180deg);
+  }
+}
+
+.bitfun-fmc__session-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--color-bg-elevated, #1a1a20);
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  animation: fmc-dropdown-in 0.18s $fmc-ease;
+  transform-origin: top center;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
+}
+
+@keyframes fmc-dropdown-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.bitfun-fmc__session-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #a0a0a0);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--element-bg-soft, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-primary, #e8e8e8);
+  }
+
+  &--active {
+    background: var(--color-accent-200, rgba(96, 165, 250, 0.15));
+    color: var(--color-accent-500, #60a5fa);
+  }
+}
+
+// ─── FlowChat body ─────────────────────────────────────────
+.bitfun-fmc__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  .modern-flowchat-container {
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow-x: hidden;
+
+    > .flowchat-header {
+      display: none;
+    }
+  }
+}
+
+// ─── Input bar ─────────────────────────────────────────────
+.bitfun-fmc__input-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  background: var(--element-bg-subtle, rgba(255, 255, 255, 0.02));
+}
+
+.bitfun-fmc__input-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.bitfun-fmc__input-btn {
+  flex-shrink: 0;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &--send {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--color-accent-300);
+    background: var(--color-accent-200);
+    color: var(--color-accent-300);
+
+    &:not(:disabled) {
+      background: linear-gradient(135deg,
+        rgba(80, 130, 255, 0.85),
+        rgba(120, 100, 255, 0.9));
+      border: 1px solid rgba(140, 160, 255, 0.6);
+      color: white;
+      box-shadow:
+        0 2px 8px rgba(100, 140, 255, 0.4),
+        0 0 12px rgba(120, 100, 255, 0.25);
+    }
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg,
+        rgba(90, 150, 255, 1),
+        rgba(140, 120, 255, 1));
+      border-color: rgba(160, 180, 255, 0.8);
+      color: white;
+      transform: scale(1.12);
+      box-shadow:
+        0 6px 20px rgba(100, 140, 255, 0.55),
+        0 0 24px rgba(140, 100, 255, 0.4);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    &:disabled {
+      background: var(--color-accent-100);
+      border-color: var(--color-accent-200);
+      color: var(--color-accent-400);
+      opacity: 0.35;
+      cursor: default;
+    }
+  }
+
+  &--stop {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
+    color: var(--color-error, #ef4444);
+
+    &:hover {
+      background: var(--color-error-border, rgba(239, 68, 68, 0.25));
+    }
+
+    &:active {
+      transform: scale(0.93);
+    }
+  }
+}

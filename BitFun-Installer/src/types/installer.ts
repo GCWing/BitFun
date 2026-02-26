@@ -13,7 +13,6 @@ export type ThemeId =
   | 'bitfun-china-style'
   | 'bitfun-china-night'
   | 'bitfun-cyber'
-  | 'bitfun-starry-night'
   | 'bitfun-slate';
 
 export interface ModelConfig {

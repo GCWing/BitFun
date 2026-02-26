@@ -1,0 +1,165 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-agents-config {
+  &__form-group {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+
+    label {
+      font-size: $font-size-sm;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-secondary);
+    }
+
+    &--row {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  &__form-hint {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    padding: $size-gap-1 0;
+  }
+
+  &__form-error {
+    font-size: $font-size-xs;
+    color: var(--color-error);
+  }
+
+  &__form-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
+    padding: $size-gap-2;
+    background: var(--element-bg-subtle);
+    border-radius: $size-radius-base;
+    border: 1px solid var(--border-subtle);
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  &__form-tool-check {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    cursor: pointer;
+    font-size: $font-size-sm;
+    color: var(--color-text-secondary);
+    user-select: none;
+
+    &:hover {
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__model-row {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__tools-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-1;
+    margin-top: $size-gap-1;
+  }
+
+  &__meta-tag {
+    flex-shrink: 0;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+
+    & + & {
+      &::before {
+        content: '·';
+        margin-right: 4px;
+        opacity: 0.5;
+      }
+    }
+  }
+
+  &__tool-tag {
+    padding: 2px 8px;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-medium);
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    font-family: $font-family-mono;
+  }
+
+  &__mode-tools-row {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+    margin-top: $size-gap-2;
+  }
+
+  &__mode-tools-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  &__tools-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-1;
+    margin-top: $size-gap-2;
+    padding: $size-gap-2;
+    background: var(--element-bg-subtle);
+    border-radius: $size-radius-base;
+    border: 1px solid var(--border-subtle);
+  }
+
+  &__tool-item {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 4px 8px;
+    border-radius: $size-radius-sm;
+    border: 1px solid var(--border-subtle);
+    background: var(--element-bg-base);
+    font-size: $font-size-sm;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      border-color: var(--border-base);
+    }
+
+    &--selected {
+      border-color: var(--color-primary);
+      background: var(--color-primary-subtle, rgba(0 0 0 / 0.05));
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__tool-name {
+    font-family: $font-family-mono;
+  }
+
+  &__tool-badge {
+    font-size: 10px;
+    color: var(--color-text-muted);
+  }
+
+  &__custom-tabs {
+    margin-top: $size-gap-2;
+
+    .bitfun-tabs__nav {
+      margin-bottom: $size-gap-2;
+    }
+
+    .bitfun-tab-pane {
+      min-height: 80px;
+    }
+  }
+}

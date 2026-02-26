@@ -38,8 +38,7 @@
     "loading": "加载中...",
     "errorPrefix": "加载失败: ",
     "empty": {
-      "noMatch": "没有找到匹配的Skill",
-      "noSkills": "还没有配置任何Skill"
+      "noMatch": "没有找到匹配的Skill"
     },
     "item": {
       "user": "用户级",

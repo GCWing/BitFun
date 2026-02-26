@@ -174,7 +174,8 @@
     "stagedWithCount": "Staged ({{count}})",
     "unstagedWithFilter": "Unstaged ({{filtered}} / {{total}})",
     "untrackedWithFilter": "Untracked ({{filtered}} / {{total}})",
-    "stagedWithFilter": "Staged ({{filtered}} / {{total}})"
+    "stagedWithFilter": "Staged ({{filtered}} / {{total}})",
+    "moreFiles": "{{count}} more files not shown..."
   },
   "commit": {
     "inputPlaceholder": "Enter commit message...",
@@ -232,7 +233,8 @@
   "tooltips": {
     "viewDiff": "Click to view diff",
     "expandDetails": "Expand details",
-    "collapseDetails": "Collapse details"
+    "collapseDetails": "Collapse details",
+    "resizeFileList": "Drag to resize file list and diff area"
   },
   "dialog": {
     "createBranch": {

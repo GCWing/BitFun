@@ -3,7 +3,6 @@ import { Download, Copy, X, AlertCircle } from 'lucide-react';
 import { MarkdownRenderer, IconButton } from '@/component-library';
 import { CodeEditor, MarkdownEditor, ImageViewer, DiffEditor } from '@/tools/editor';
 import { useI18n } from '@/infrastructure/i18n';
-import ConfigCenterPanel from '@/infrastructure/config/components/ConfigCenterPanel';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('FlexiblePanel');
@@ -651,9 +650,6 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           </React.Suspense>
         );
 
-      case 'config-center':
-        const configData = content.data || {};
-        return <ConfigCenterPanel initialTab={configData.initialTab || 'models'} />;
 
       case 'task-detail':
         const taskDetailData = content.data || {};

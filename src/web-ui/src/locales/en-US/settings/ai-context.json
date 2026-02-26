@@ -1,0 +1,9 @@
+{
+  "title": "Rules & Memory",
+  "subtitle": "Manage AI behavior rules and context memory",
+  "scope": {
+    "user": "User",
+    "project": "Project"
+  },
+  "memoryProjectPlaceholder": "Project-level memory is not yet available."
+}

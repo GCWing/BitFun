@@ -1,24 +1,28 @@
 /**
  * Main application layout.
- * Overall layout: Header + workspace content + bottom bar.
  *
- * Unified layout:
- * - Without a workspace: show startup content (branding + actions)
- * - With a workspace: show workspace panels
- * - Header is always present; elements toggle by state
+ * Column structure (top to bottom):
+ *   WorkspaceBody (flex:1) — contains NavBar (with WindowControls) + NavPanel + SceneArea
+ *   OR StartupContent
+ *
+ * TitleBar removed; window controls moved to NavBar, dialogs managed here.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { useApp } from '../hooks/useApp';
-import { useViewMode } from '../../infrastructure/contexts/ViewModeContext';
+import { useSceneStore } from '../stores/sceneStore';
+
+type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
-import WorkspaceLayout from './WorkspaceLayout';
-import AppBottomBar from '../components/BottomBar/AppBottomBar';
-import Header from '../components/Header/Header';
-import { StartupContent } from '../components/StartupContent';
+import WorkspaceBody from './WorkspaceBody';
 import { ChatInput, ToolbarMode, useToolbarModeContext } from '../../flow_chat';
+import { FloatingMiniChat } from './FloatingMiniChat';
+import { NewProjectDialog } from '../components/NewProjectDialog';
+import { AboutDialog } from '../components/AboutDialog';
+import { WorkspaceManager } from '../../tools/workspace';
+import { workspaceAPI } from '@/infrastructure/api';
 import { appManager } from '../';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
@@ -27,141 +31,204 @@ import './AppLayout.scss';
 const log = createLogger('AppLayout');
 
 interface AppLayoutProps {
-  /** Transition class name */
   className?: string;
 }
 
-const AppLayout: React.FC<AppLayoutProps> = ({
-  className = '',
-}) => {
+const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
-  // Workspace state
-  const { currentWorkspace, hasWorkspace, openWorkspace } = useWorkspaceContext();
-  
-  // View mode (agentic/editor)
-  const { isAgenticMode } = useViewMode();
-  
-  // Toolbar mode
+  const { currentWorkspace, hasWorkspace, openWorkspace, recentWorkspaces, loading } = useWorkspaceContext();
+
   const { isToolbarMode } = useToolbarModeContext();
 
-  // Window controls
   const { handleMinimize, handleMaximize, handleClose, handleHomeClick, isMaximized } =
     useWindowControls({ isToolbarMode });
-  
-  // Application state
-  const { state, toggleLeftPanel, toggleRightPanel, switchLeftPanelTab } = useApp();
-  
-  // Transition state: startup content to workspace
+
+  const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
+  const activeSceneId = useSceneStore(s => s.activeTabId);
+  const isAgentScene = activeSceneId === 'session';
+  const isWelcomeScene = activeSceneId === 'welcome';
+
   const [isTransitioning, setIsTransitioning] = useState(false);
-  // Header sweep effect state
   const [isSweepGlowing, setIsSweepGlowing] = useState(false);
-  
-  // Handle workspace selection
+  const [showStartupOverlay, setShowStartupOverlay] = useState(false);
+  const [transitionDir, setTransitionDir] = useState<TransitionDirection>(null);
+  const [showWorkspaceUnderlay, setShowWorkspaceUnderlay] = useState(false);
+
+  // Auto-open last workspace on startup
+  const autoOpenAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenAttemptedRef.current || loading) return;
+    if (!hasWorkspace && recentWorkspaces.length > 0) {
+      autoOpenAttemptedRef.current = true;
+      openWorkspace(recentWorkspaces[0].rootPath).catch(err => {
+        log.warn('Auto-open recent workspace failed', err);
+      });
+    } else {
+      autoOpenAttemptedRef.current = true;
+    }
+  }, [hasWorkspace, loading, recentWorkspaces, openWorkspace]);
+
+  // Dialog state (previously in TitleBar)
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
+  const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
+  const handleNewProject = useCallback(() => setShowNewProjectDialog(true), []);
+  const handleShowAbout  = useCallback(() => setShowAboutDialog(true), []);
+
+  const handleConfirmNewProject = useCallback(async (parentPath: string, projectName: string) => {
+    const normalized = parentPath.replace(/\\/g, '/');
+    const newProjectPath = `${normalized}/${projectName}`;
+    try {
+      await workspaceAPI.createDirectory(newProjectPath);
+      await openWorkspace(newProjectPath);
+    } catch (error) {
+      log.error('Failed to create project', error);
+      throw error;
+    }
+  }, [openWorkspace]);
+
+  const handleAnimatedHomeClick = useCallback(() => {
+    if (!hasWorkspace || isTransitioning) return;
+
+    setTransitionDir('returning');
+    setIsTransitioning(true);
+    setShowStartupOverlay(true);
+    setShowWorkspaceUnderlay(true);
+
+    // 50ms settle delay + 560ms morph + buffer
+    setTimeout(() => {
+      handleHomeClick();
+      setTimeout(() => {
+        setShowWorkspaceUnderlay(false);
+        setShowStartupOverlay(false);
+        setIsTransitioning(false);
+        setTransitionDir(null);
+      }, 120);
+    }, 680);
+  }, [hasWorkspace, isTransitioning, handleHomeClick]);
+
+  // Listen for nav-panel events dispatched by WorkspaceHeader
+  useEffect(() => {
+    const onNewProject = () => handleNewProject();
+    const onGoHome = () => handleAnimatedHomeClick();
+    window.addEventListener('nav:new-project', onNewProject);
+    window.addEventListener('nav:go-home', onGoHome);
+    return () => {
+      window.removeEventListener('nav:new-project', onNewProject);
+      window.removeEventListener('nav:go-home', onGoHome);
+    };
+  }, [handleNewProject, handleAnimatedHomeClick]);
+
+  // macOS native menubar events (previously in TitleBar)
+  const isMacOS = useMemo(() => {
+    const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+    return isTauri && typeof navigator?.platform === 'string' && navigator.platform.toUpperCase().includes('MAC');
+  }, []);
+
+  useEffect(() => {
+    if (!isMacOS) return;
+    let unlistenFns: Array<() => void> = [];
+    void (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
+          try {
+            const selected = await open({ directory: true, multiple: false }) as string;
+            if (selected) await openWorkspace(selected);
+          } catch {}
+        }));
+        unlistenFns.push(await listen('bitfun_menu_new_project', () => handleNewProject()));
+        unlistenFns.push(await listen('bitfun_menu_go_home', () => handleAnimatedHomeClick()));
+        unlistenFns.push(await listen('bitfun_menu_about', () => handleShowAbout()));
+      } catch {}
+    })();
+    return () => { unlistenFns.forEach(fn => fn()); unlistenFns = []; };
+  }, [isMacOS, openWorkspace, handleNewProject, handleAnimatedHomeClick, handleShowAbout]);
+
   const handleWorkspaceSelected = useCallback(async (workspacePath: string, projectDescription?: string) => {
     try {
       log.info('Workspace selected', { workspacePath });
-      
-      // Persist project description if provided
+
       if (projectDescription && projectDescription.trim()) {
         sessionStorage.setItem('pendingProjectDescription', projectDescription.trim());
       }
-      
-      // Start transition
+
+      setTransitionDir('entering');
       setIsTransitioning(true);
-      
-      // Open workspace
-      const workspace = await openWorkspace(workspacePath);
-      
-      // Configure layout based on view mode.
-      // Agentic mode: collapse right panel; Editor mode: expand.
+      setShowStartupOverlay(true);
+      await openWorkspace(workspacePath);
+
       appManager.updateLayout({
         leftPanelCollapsed: false,
-        rightPanelCollapsed: isAgenticMode
+        rightPanelCollapsed: true,
       });
-      
-      // Trigger header sweep effect immediately
+
       setIsSweepGlowing(true);
-      // Stop sweep after 1.2s (0.8s animation + buffer)
+      setTimeout(() => setIsSweepGlowing(false), 1200);
       setTimeout(() => {
-        setIsSweepGlowing(false);
-      }, 1200);
-      
-      // Transition complete
-      setTimeout(() => {
+        setShowStartupOverlay(false);
         setIsTransitioning(false);
-      }, 600);
-      
+        setTransitionDir(null);
+      }, 700);
+
     } catch (error) {
       log.error('Failed to open workspace', error);
       setIsTransitioning(false);
-      
-      // Show error notification
+
       import('@/shared/notification-system').then(({ notificationService }) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        notificationService.error(errorMessage || t('appLayout.workspaceOpenFailed'), {
-          duration: 5000
-        });
+        notificationService.error(errorMessage || t('appLayout.workspaceOpenFailed'), { duration: 5000 });
       });
     }
-  }, [openWorkspace, isAgenticMode, t]);
+  }, [openWorkspace, t]);
 
-  // Initialize FlowChatManager: load history or create a default session
+  // Initialize FlowChatManager
   React.useEffect(() => {
     const initializeFlowChat = async () => {
-      if (!currentWorkspace?.rootPath) {
-        return;
-      }
+      if (!currentWorkspace?.rootPath) return;
 
       try {
         const flowChatManager = FlowChatManager.getInstance();
         const hasHistoricalSessions = await flowChatManager.initialize(currentWorkspace.rootPath);
-        
+
         let sessionId: string | undefined;
-        
-        // If no history exists, create a default session.
         if (!hasHistoricalSessions) {
           sessionId = await flowChatManager.createChatSession({});
         }
-        
-        // Send pending project description from startup screen if present.
+
         const pendingDescription = sessionStorage.getItem('pendingProjectDescription');
         if (pendingDescription && pendingDescription.trim()) {
           sessionStorage.removeItem('pendingProjectDescription');
-          
-          // Wait briefly to ensure UI is fully rendered
+
           setTimeout(async () => {
             try {
               const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
               const targetSessionId = sessionId || flowChatStore.getState().activeSessionId;
-              
+
               if (!targetSessionId) {
                 log.error('Cannot find active session ID');
                 return;
               }
-              
+
               const fullMessage = t('appLayout.projectRequestMessage', { description: pendingDescription });
               await flowChatManager.sendMessage(fullMessage, targetSessionId);
-              
+
               import('@/shared/notification-system').then(({ notificationService }) => {
-                notificationService.success(t('appLayout.projectRequestSent'), {
-                  duration: 3000
-                });
+                notificationService.success(t('appLayout.projectRequestSent'), { duration: 3000 });
               });
             } catch (sendError) {
               log.error('Failed to send project description', sendError);
               import('@/shared/notification-system').then(({ notificationService }) => {
-                notificationService.error(t('appLayout.projectRequestSendFailed'), {
-                  duration: 5000
-                });
+                notificationService.error(t('appLayout.projectRequestSendFailed'), { duration: 5000 });
               });
             }
           }, 500);
         }
-        // Open settings panel if requested during onboarding
+
         const pendingSettings = sessionStorage.getItem('pendingOpenSettings');
         if (pendingSettings) {
           sessionStorage.removeItem('pendingOpenSettings');
-          
           setTimeout(async () => {
             try {
               const { quickActions } = await import('@/shared/services/ide-control');
@@ -174,9 +241,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       } catch (error) {
         log.error('FlowChatManager initialization failed', error);
         import('@/shared/notification-system').then(({ notificationService }) => {
-          notificationService.error(t('appLayout.flowChatInitFailed'), {
-            duration: 5000
-          });
+          notificationService.error(t('appLayout.flowChatInitFailed'), { duration: 5000 });
         });
       }
     };
@@ -192,22 +257,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const currentWindow = getCurrentWindow();
-        
-        // Handle close request
+
         unlistenFn = await currentWindow.onCloseRequested(async (event: { preventDefault: () => void }) => {
           try {
-            // Prevent immediate close
             event.preventDefault();
-            
-            // Save all in-progress turns
             const flowChatManager = FlowChatManager.getInstance();
             await flowChatManager.saveAllInProgressTurns();
-            
-            // Close after save completes
             await currentWindow.close();
           } catch (error) {
             log.error('Failed to save conversations, closing anyway', error);
-            // Allow close even if save fails
             await currentWindow.close();
           }
         });
@@ -217,50 +275,28 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     };
 
     setupWindowCloseListener();
-
-    // Cleanup
-    return () => {
-      if (unlistenFn) {
-        unlistenFn();
-      }
-    };
+    return () => { if (unlistenFn) unlistenFn(); };
   }, []);
-
-  // Note: expand-right-panel is handled by usePanelTabCoordinator.
-  // Avoid duplicate listeners to prevent flicker.
 
   // Handle switch-to-files-panel event
   React.useEffect(() => {
     const handleSwitchToFilesPanel = () => {
-      // Switch to files panel
       switchLeftPanelTab('files');
-      
-      // Expand left panel if collapsed
-      if (state.layout.leftPanelCollapsed) {
-        toggleLeftPanel();
-      }
-      
-      // Expand right panel if collapsed (matches bottom bar files button)
+      if (state.layout.leftPanelCollapsed) toggleLeftPanel();
       if (state.layout.rightPanelCollapsed) {
-        setTimeout(() => {
-          toggleRightPanel();
-        }, 100);
+        setTimeout(() => toggleRightPanel(), 100);
       }
     };
 
     window.addEventListener('switch-to-files-panel', handleSwitchToFilesPanel);
-
-    return () => {
-      window.removeEventListener('switch-to-files-panel', handleSwitchToFilesPanel);
-    };
+    return () => window.removeEventListener('switch-to-files-panel', handleSwitchToFilesPanel);
   }, [state.layout.leftPanelCollapsed, state.layout.rightPanelCollapsed, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel]);
 
-  // Listen for Toolbar send message events
+  // Toolbar send message
   React.useEffect(() => {
     const handleToolbarSendMessage = async (event: Event) => {
       const customEvent = event as CustomEvent<{ message: string; sessionId: string }>;
       const { message, sessionId } = customEvent.detail;
-      
       if (message && sessionId) {
         try {
           const flowChatManager = FlowChatManager.getInstance();
@@ -270,15 +306,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         }
       }
     };
-
     window.addEventListener('toolbar-send-message', handleToolbarSendMessage);
-
-    return () => {
-      window.removeEventListener('toolbar-send-message', handleToolbarSendMessage);
-    };
+    return () => window.removeEventListener('toolbar-send-message', handleToolbarSendMessage);
   }, []);
 
-  // Listen for Toolbar cancel task events
+  // Toolbar cancel task
   React.useEffect(() => {
     const handleToolbarCancelTask = async () => {
       try {
@@ -288,15 +320,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         log.error('Failed to cancel toolbar task', error);
       }
     };
-
     window.addEventListener('toolbar-cancel-task', handleToolbarCancelTask);
-
-    return () => {
-      window.removeEventListener('toolbar-cancel-task', handleToolbarCancelTask);
-    };
+    return () => window.removeEventListener('toolbar-cancel-task', handleToolbarCancelTask);
   }, []);
 
-  // Create a FlowChat session (do not auto-open right panel)
+  // Create FlowChat session
   const handleCreateFlowChatSession = React.useCallback(async () => {
     try {
       const flowChatManager = FlowChatManager.getInstance();
@@ -306,124 +334,86 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     }
   }, []);
 
-  // Listen for Toolbar create session events
   React.useEffect(() => {
-    const handleToolbarCreateSession = () => {
-      handleCreateFlowChatSession();
-    };
-
-    window.addEventListener('toolbar-create-session', handleToolbarCreateSession);
-
-    return () => {
-      window.removeEventListener('toolbar-create-session', handleToolbarCreateSession);
-    };
+    const handler = () => handleCreateFlowChatSession();
+    window.addEventListener('toolbar-create-session', handler);
+    return () => window.removeEventListener('toolbar-create-session', handler);
   }, [handleCreateFlowChatSession]);
 
-  // Enable global drag-and-drop
+  // Global drag-and-drop
   React.useEffect(() => {
-    // Initialize drag data at capture phase
     const handleDragStart = (e: DragEvent) => {
-      // Set standard data and effectAllowed so the browser treats it as valid.
       if (e.dataTransfer) {
-        if (e.dataTransfer.types.length === 0) {
-          e.dataTransfer.setData('text/plain', 'dragging');
-        }
+        if (e.dataTransfer.types.length === 0) e.dataTransfer.setData('text/plain', 'dragging');
         e.dataTransfer.effectAllowed = 'copy';
       }
     };
-    
-    const handleDragOver = (e: DragEvent) => {
-      // Allow drop globally so the cursor indicates a valid drop target
-      e.preventDefault();
-    };
-    
-    const handleDragEnter = (e: DragEvent) => {
-      // No-op
-    };
-    
-    const handleDrop = (e: DragEvent) => {
-      // Prevent default file open behavior globally
-      if (!e.defaultPrevented) {
-        e.preventDefault();
-      }
-    };
-    
-    // Register drag events (capture phase)
+    const handleDragOver  = (e: DragEvent) => e.preventDefault();
+    const handleDragEnter = (_e: DragEvent) => {};
+    const handleDrop      = (e: DragEvent) => { if (!e.defaultPrevented) e.preventDefault(); };
+
     document.addEventListener('dragstart', handleDragStart, true);
-    document.addEventListener('dragover', handleDragOver, true);
+    document.addEventListener('dragover',  handleDragOver,  true);
     document.addEventListener('dragenter', handleDragEnter, true);
-    document.addEventListener('drop', handleDrop, true);
-    
+    document.addEventListener('drop',      handleDrop,      true);
+
     return () => {
       document.removeEventListener('dragstart', handleDragStart, true);
-      document.removeEventListener('dragover', handleDragOver, true);
+      document.removeEventListener('dragover',  handleDragOver,  true);
       document.removeEventListener('dragenter', handleDragEnter, true);
-      document.removeEventListener('drop', handleDrop, true);
+      document.removeEventListener('drop',      handleDrop,      true);
     };
   }, []);
-  
-  // Compose class names
+
   const containerClassName = [
     'bitfun-app-layout',
     className,
-    !hasWorkspace ? 'bitfun-app-layout--startup-mode' : '',
-    isTransitioning ? 'bitfun-app-layout--transitioning' : ''
+    isTransitioning ? 'bitfun-app-layout--transitioning' : '',
   ].filter(Boolean).join(' ');
-  
-  // Toolbar mode: render ToolbarMode only
-  if (isToolbarMode) {
-    return <ToolbarMode />;
-  }
-  
-  // Unified layout: content depends on workspace presence
+
+  if (isToolbarMode) return <ToolbarMode />;
+
   return (
-    <div className={containerClassName} data-testid="app-layout">
-      {/* Global header (always present) */}
-      <Header
-        className={`bitfun-app-header ${!hasWorkspace ? 'bitfun-app-header--startup-mode' : ''} ${isTransitioning ? 'bitfun-app-header--transitioning' : ''} ${isSweepGlowing ? 'bitfun-header--sweep-glow' : ''}`}
-        onMinimize={handleMinimize}
-        onMaximize={handleMaximize}
-        onClose={handleClose}
-        onHome={handleHomeClick}
-        onToggleLeftPanel={toggleLeftPanel}
-        onToggleRightPanel={toggleRightPanel}
-        leftPanelCollapsed={state.layout.leftPanelCollapsed}
-        rightPanelCollapsed={state.layout.rightPanelCollapsed}
-        onCreateSession={handleCreateFlowChatSession}
-        isMaximized={isMaximized}
-      />
-
-      {/* Main content */}
-      <main className="bitfun-app-main-workspace" data-testid="app-main-content">
-        {/* Render based on workspace presence */}
-        {hasWorkspace ? (
-          // With workspace: show workspace layout
-          <WorkspaceLayout isEntering={isTransitioning || className.includes('page-entering') || className.includes('panels-sliding')} />
-        ) : (
-          // Without workspace: show startup content
-          <StartupContent 
-            onWorkspaceSelected={handleWorkspaceSelected}
-            isTransitioning={isTransitioning}
+    <>
+      <div className={containerClassName} data-testid="app-layout">
+        {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
+        <main className="bitfun-app-main-workspace" data-testid="app-main-content">
+          <WorkspaceBody
+            onMinimize={handleMinimize}
+            onMaximize={handleMaximize}
+            onClose={handleClose}
+            isMaximized={isMaximized}
+            isEntering={transitionDir === 'entering'}
+            isExiting={transitionDir === 'returning'}
           />
-        )}
-      </main>
+        </main>
 
-      {/* Bottom bar (workspace only) */}
-      {hasWorkspace && (
-        <AppBottomBar 
-          className="bitfun-app-bottom-bar"
-        />
-      )}
-      
-      {/* Standalone chat input (workspace + agentic mode only) */}
-      {hasWorkspace && isAgenticMode && (
-        <ChatInput 
-          onSendMessage={(message: string) => {
-            // Message dispatch is handled inside ChatInput
-          }}
-        />
-      )}
-    </div>
+        {/* Agent scene: centered ChatInput (only when workspace is open and not on welcome page) */}
+        {hasWorkspace && !isWelcomeScene && !state.layout.chatCollapsed && isAgentScene && (
+          <ChatInput onSendMessage={(_message: string) => {}} />
+        )}
+
+        {/* Non-agent scenes: floating mini chat button */}
+        {hasWorkspace && !isWelcomeScene && !isAgentScene && <FloatingMiniChat />}
+      </div>
+
+      {/* Dialogs (previously owned by TitleBar) */}
+      <NewProjectDialog
+        isOpen={showNewProjectDialog}
+        onClose={() => setShowNewProjectDialog(false)}
+        onConfirm={handleConfirmNewProject}
+        defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : undefined}
+      />
+      <AboutDialog
+        isOpen={showAboutDialog}
+        onClose={() => setShowAboutDialog(false)}
+      />
+      <WorkspaceManager
+        isVisible={showWorkspaceStatus}
+        onClose={() => setShowWorkspaceStatus(false)}
+        onWorkspaceSelect={() => {}}
+      />
+    </>
   );
 };
 

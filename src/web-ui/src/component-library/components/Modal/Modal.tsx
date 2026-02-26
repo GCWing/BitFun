@@ -12,9 +12,11 @@ export interface ModalProps {
   title?: string;
   children: React.ReactNode;
   size?: 'small' | 'medium' | 'large';
+  contentInset?: boolean;
   showCloseButton?: boolean;
   draggable?: boolean;
   resizable?: boolean;
+  placement?: 'center' | 'bottom-left' | 'bottom-right';
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -23,9 +25,11 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   size = 'medium',
+  contentInset = false,
   showCloseButton = true,
   draggable = false,
   resizable = false,
+  placement = 'center',
 }) => {
   const { t } = useI18n('components');
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -236,7 +240,7 @@ export const Modal: React.FC<ModalProps> = ({
   } : {};
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className={`modal-overlay ${placement !== 'center' ? `modal-overlay--${placement}` : ''}`} onClick={onClose}>
       <div
         ref={modalRef}
         className={`modal modal--${size} ${draggable ? 'modal--draggable' : ''} ${isDragging ? 'modal--dragging' : ''} ${resizable ? 'modal--resizable' : ''} ${isResizing ? 'modal--resizing' : ''}`}
@@ -266,7 +270,7 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
         
-        <div className="modal__content">
+        <div className={`modal__content ${contentInset ? 'modal__content--inset' : ''}`}>
           {children}
         </div>
         

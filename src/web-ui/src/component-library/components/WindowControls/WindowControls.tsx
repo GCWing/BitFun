@@ -50,26 +50,26 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
 }) => {
   const { t } = useTranslation('common');
   const defaultMinimizeIcon = (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
       <line x1="3" y1="7" x2="11" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   );
 
   const defaultMaximizeIcon = (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
       <rect x="2" y="2" width="8" height="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 
   const defaultRestoreIcon = (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
       <path d="M4 4 L4 1.5 Q4 1 4.5 1 L10.5 1 Q11 1 11 1.5 L11 7.5 Q11 8 10.5 8 L8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
       <rect x="1" y="4" width="7" height="7" rx="0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
     </svg>
   );
 
   const defaultCloseIcon = (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
       <line x1="3" y1="3" x2="11" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       <line x1="11" y1="3" x2="3" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
@@ -100,7 +100,7 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
           </button>
         </Tooltip>
       )}
-      
+
       {showMaximize && (
         <Tooltip content={isMaximized ? t('window.restore') : t('window.maximize')} placement="bottom">
           <button
@@ -124,7 +124,7 @@ export const WindowControls: React.FC<WindowControlsProps> = ({
           </button>
         </Tooltip>
       )}
-      
+
       {showClose && (
         <Tooltip content={t('window.close')} placement="bottom">
           <button

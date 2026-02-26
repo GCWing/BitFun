@@ -5,7 +5,6 @@
 /* ========== @use rules must come first ========== */
 @use './global.scss';
 @use '../layout/AppLayout.scss';
-@use '../../infrastructure/config/components/ConfigCenter.scss';
 
 /* ========== Utility styles ========== */
 @import './utilities/animations.css';

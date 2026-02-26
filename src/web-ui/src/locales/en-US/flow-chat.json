@@ -18,6 +18,9 @@
   "layout": {
     "noPanels": "BitFun",
     "noPanelsHint": "Use the bottom bar to toggle panels or press <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> to expand panels",
+    "chatHiddenTitle": "Chat is hidden",
+    "chatHiddenDesc": "Use the Chat toggle in the top-right to show it again.",
+    "chatHiddenAction": "Show Chat",
     "panelCollapseHintLeft": "<- Release to collapse",
     "panelCollapseHintRight": "Release to collapse ->",
     "panelMode": {

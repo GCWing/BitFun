@@ -10,6 +10,7 @@ pub struct ThemeConfig {
     pub id: String,
     pub bg_primary: String,
     pub bg_secondary: String,
+    pub bg_scene: String,
     pub is_light: bool,
     pub text_primary: String,
     pub text_muted: String,
@@ -22,6 +23,7 @@ impl Default for ThemeConfig {
             id: "bitfun-slate".to_string(),
             bg_primary: "#1a1c1e".to_string(),
             bg_secondary: "#1a1c1e".to_string(),
+            bg_scene: "#1d2023".to_string(),
             is_light: false,
             text_primary: "#e4e6e8".to_string(),
             text_muted: "#8a8d92".to_string(),
@@ -37,6 +39,7 @@ impl ThemeConfig {
                 id: theme_id.to_string(),
                 bg_primary: "#1a1c1e".to_string(),
                 bg_secondary: "#1a1c1e".to_string(),
+                bg_scene: "#1d2023".to_string(),
                 is_light: false,
                 text_primary: "#e4e6e8".to_string(),
                 text_muted: "#8a8d92".to_string(),
@@ -46,6 +49,7 @@ impl ThemeConfig {
                 id: theme_id.to_string(),
                 bg_primary: "#121214".to_string(),
                 bg_secondary: "#18181a".to_string(),
+                bg_scene: "#16161a".to_string(),
                 is_light: false,
                 text_primary: "#e8e8e8".to_string(),
                 text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
@@ -55,6 +59,7 @@ impl ThemeConfig {
                 id: theme_id.to_string(),
                 bg_primary: "#2b2d30".to_string(),
                 bg_secondary: "#1e1f22".to_string(),
+                bg_scene: "#27292c".to_string(),
                 is_light: false,
                 text_primary: "#bcbec4".to_string(),
                 text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
@@ -64,24 +69,17 @@ impl ThemeConfig {
                 id: theme_id.to_string(),
                 bg_primary: "#101010".to_string(),
                 bg_secondary: "#151515".to_string(),
+                bg_scene: "#141414".to_string(),
                 is_light: false,
                 text_primary: "#e0f2ff".to_string(),
                 text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
                 accent_color: "#00e6ff".to_string(),
             }),
-            "bitfun-starry-night" => Some(Self {
-                id: theme_id.to_string(),
-                bg_primary: "#0a0e17".to_string(),
-                bg_secondary: "#0d1117".to_string(),
-                is_light: false,
-                text_primary: "#e6edf3".to_string(),
-                text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
-                accent_color: "#58a6ff".to_string(),
-            }),
             "bitfun-china-night" => Some(Self {
                 id: theme_id.to_string(),
                 bg_primary: "#1a1814".to_string(),
                 bg_secondary: "#141210".to_string(),
+                bg_scene: "#1e1c17".to_string(),
                 is_light: false,
                 text_primary: "#e8e6e1".to_string(),
                 text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
@@ -91,6 +89,7 @@ impl ThemeConfig {
                 id: theme_id.to_string(),
                 bg_primary: "#f4f4f4".to_string(),
                 bg_secondary: "#ffffff".to_string(),
+                bg_scene: "#ffffff".to_string(),
                 is_light: true,
                 text_primary: "#111827".to_string(),
                 text_muted: "rgba(0, 0, 0, 0.5)".to_string(),
@@ -100,6 +99,7 @@ impl ThemeConfig {
                 id: theme_id.to_string(),
                 bg_primary: "#faf8f0".to_string(),
                 bg_secondary: "#f5f3e8".to_string(),
+                bg_scene: "#fdfcf6".to_string(),
                 is_light: true,
                 text_primary: "#1a1a1a".to_string(),
                 text_muted: "rgba(0, 0, 0, 0.5)".to_string(),
@@ -173,7 +173,8 @@ impl ThemeConfig {
                     root.style.setProperty('--color-bg-secondary', '{bg_secondary}');
                     root.style.setProperty('--color-bg-tertiary', '{bg_primary}');
                     root.style.setProperty('--color-bg-workbench', '{bg_primary}');
-                    root.style.setProperty('--color-bg-flowchat', '{bg_primary}');
+                    root.style.setProperty('--color-bg-flowchat', '{bg_scene}');
+                    root.style.setProperty('--color-bg-scene', '{bg_scene}');
                     root.style.setProperty('--color-text-primary', '{text_primary}');
                     
                     root.style.backgroundColor = '{bg_primary}';
@@ -201,6 +202,7 @@ impl ThemeConfig {
             theme_type = theme_type,
             bg_primary = self.bg_primary,
             bg_secondary = self.bg_secondary,
+            bg_scene = self.bg_scene,
             text_primary = self.text_primary,
         )
     }

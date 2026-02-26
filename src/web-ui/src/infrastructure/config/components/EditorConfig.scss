@@ -1,310 +1,32 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
 
-
-$config-input-height: 32px;
-$config-label-gap: 2px;
-$config-item-gap: 12px;
-$config-row-gap: 16px;
-$config-section-gap: 16px;
-
-
-.bitfun-editor-config__loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: var(--color-text-secondary);
-  font-size: $font-size-sm;
-}
-
-
-.config-form-row {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: $config-row-gap;
-  margin-bottom: 0;
-
-  > .config-form-group {
-    margin-bottom: 0;
-  }
-}
-
-
-.config-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: $config-label-gap !important;
-  margin-bottom: 0;
-
-  &--checkbox-align {
-    justify-content: center;
-    
-    > .config-form-group {
-      margin-bottom: 0;
-    }
-  }
-
-  &--flex-2 {
-    grid-column: span 1;
-    flex: 2;
-  }
-  
-  
-  .bitfun-number-input {
-    &__container {
-      height: $config-input-height !important;
-      font-size: 13px !important;
-      border-radius: $size-radius-sm !important;
-    }
-    
-    &__btn {
-      width: 24px !important;
-      height: calc(#{$config-input-height} / 2) !important;
-      
-      svg {
-        width: 12px !important;
-        height: 12px !important;
-      }
-    }
-    
-    &__value-area {
-      padding: 0 10px !important;
-    }
-  }
-  
-  
-  .select {
-    margin: 0;
-    
-    &__trigger {
-      min-height: $config-input-height !important;
-      height: $config-input-height !important;
-      padding: 0 10px !important;
-      gap: 8px !important;
-      margin: 0 !important;
-    }
-    
-    &__value,
-    &__placeholder {
-      font-size: 13px !important;
-      line-height: $config-input-height !important;
-    }
-    
-    &__arrow {
-      svg {
-        width: 14px !important;
-        height: 14px !important;
-      }
-    }
-  }
-}
-
-
-.config-form-label {
-  font-size: 13px;
-  font-weight: $font-weight-medium;
-  color: var(--color-text-secondary);
-  user-select: none;
-  line-height: 1.2;
-  margin-bottom: 0;
-}
-
-
-.config-form-input {
-  width: 100%;
-  height: $config-input-height;
-  padding: 0 $size-gap-3;
-  font-size: 13px;
-  font-family: $font-family-mono;
-  color: var(--color-text-primary);
-  background: transparent;
-  border: 1px solid var(--border-base);
-  border-radius: $size-radius-sm;
-  outline: none;
-  transition: all $motion-base $easing-standard;
-
-  &:focus {
-    border-color: var(--color-accent-500);
-  }
-
-  &:hover:not(:focus) {
-    border-color: var(--border-medium);
-  }
-
-  &::placeholder {
-    color: var(--color-text-muted);
-    font-style: italic;
-  }
-}
-
-
-.config-form-select {
-  width: 100%;
-  height: $config-input-height;
-  padding: 0 $size-gap-3;
-  padding-right: 32px;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  background: transparent;
-  border: 1px solid var(--border-base);
-  border-radius: $size-radius-sm;
-  outline: none;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3e%3cpath d='M2.5 4.5L6 8L9.5 4.5' stroke='rgba(150, 163, 180, 0.8)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e");
-  background-position: right 10px center;
-  background-repeat: no-repeat;
-  background-size: 12px;
-  transition: all $motion-base $easing-standard;
-
-  &:focus {
-    border-color: var(--color-accent-500);
-  }
-
-  &:hover:not(:focus) {
-    border-color: var(--border-medium);
-  }
-
-  option {
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    padding: 6px 10px;
-  }
-}
-
-
-.config-form-hint {
-  font-size: $font-size-xs;
-  color: var(--color-text-muted);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-
-.config-form-checkbox {
-  padding: 6px 0 !important;
-  gap: 10px !important;
-  
-  .bitfun-checkbox__box {
-    width: 16px !important;
-    height: 16px !important;
-    border-radius: 3px !important;
-  }
-  
-  .bitfun-checkbox__icon {
-    width: 10px !important;
-    height: 10px !important;
-  }
-  
-  .bitfun-checkbox__label {
-    font-size: 13px !important;
-    line-height: 1.4 !important;
-  }
-  
-  .bitfun-checkbox__description {
-    font-size: 12px !important;
-    line-height: 1.5 !important;
-    margin-top: 1px !important;
-  }
-}
-
-
-.config-form-checkboxes {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  
-  > .config-form-group {
-    margin-bottom: 0;
-    
-    .config-form-checkbox {
-      padding: $size-gap-2 0;
-    }
-  }
-}
-
-
-
-.config-subsection {
-  margin-top: $size-gap-2;
-  padding: $size-gap-3;
-  background: var(--element-bg-subtle);
-  border-radius: $size-radius-sm;
-  display: flex;
-  flex-direction: column;
-  gap: $size-gap-3;
-  
-  .config-form-row {
-    margin-bottom: 0;
-  }
-  
-  .config-form-label {
-    font-size: 12px;
-    color: var(--color-text-muted);
-  }
-}
-
-
-.config-form-section-title {
-  font-size: 15px !important;
-  font-weight: $font-weight-semibold !important;
-  color: var(--color-text-primary) !important;
-  margin: 0 0 4px 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  
-  svg {
-    color: var(--color-accent-500);
-    opacity: 0.9;
-  }
-}
-
-.config-form-section-description {
-  font-size: 12px !important;
-  color: var(--color-text-muted) !important;
-  margin: 0 0 $config-item-gap 0 !important;
-  line-height: 1.5 !important;
-}
-
-
-.config-form-section + .config-form-section {
-  padding-top: $size-gap-4;
-  margin-top: $size-gap-4;
-  border-top: 1px dashed var(--border-medium);
-}
-
-
-.config-form-section {
-  > .config-form {
+.bitfun-editor-config {
+  &__content {
     display: flex;
     flex-direction: column;
-    gap: $config-item-gap;
+    gap: $size-gap-6;
   }
-}
 
-
-// Action buttons
-.config-action-buttons {
-  display: flex;
-  align-items: center;
-  gap: $size-gap-3;
-  margin-top: $size-gap-5;
-  padding-top: $size-gap-4;
-  border-top: 1px solid var(--border-accent-soft);
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    width: 100%;
+  }
 
   &__saving {
-    font-size: 13px;
-    color: var(--color-text-muted);
-    font-style: italic;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
   }
 }
 
-
-@media (max-width: 768px) {
-  .config-form-row {
-    grid-template-columns: 1fr;
+@container config-panel (max-width: 520px) {
+  .bitfun-editor-config {
+    &__actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
   }
 }

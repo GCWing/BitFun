@@ -1,302 +1,53 @@
- 
-
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-debug-config {
-  
-  &__wip-notice {
-    padding: 0 0 20px 0;
-    flex-shrink: 0;
-  }
-
-  
-  &__message-container {
-    padding: 0 0 16px 0;
-    flex-shrink: 0;
-  }
-
-  
-  &__section {
-    border-bottom: 1px dashed var(--border-medium);
-    flex-shrink: 0;
-  }
-
-  &__section-header {
-    display: flex;
-    align-items: center;
-    padding: $size-gap-4 0;
-    background: transparent;
-  }
-
-  &__section-title {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-3;
-
-    h3 {
-      margin: 0;
-      font-size: $font-size-base;
-      font-weight: $font-weight-semibold;
-      color: var(--color-text-primary);
-    }
-  }
-
-  &__section-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: $size-radius-sm;
-    background: var(--color-accent-100);
-    flex-shrink: 0;
-
-    svg {
-      width: 16px;
-      height: 16px;
-      color: var(--color-accent-500);
-    }
-  }
-
-  &__section-content {
-    padding: 0 0 20px;
-    background: transparent;
-  }
-
-  
-  &__setting-item {
+  &__content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px 0;
-    border-bottom: 1px dashed var(--border-base);
-
-    &:last-child {
-      border-bottom: none;
-    }
-  }
-
-  &__setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  &__setting-label {
-    font-size: $font-size-sm;
-    font-weight: $font-weight-medium;
-    color: var(--color-text-primary);
-  }
-
-  &__setting-description {
-    font-size: $font-size-xs;
-    color: var(--color-text-secondary);
-    margin: 0;
-    line-height: $line-height-relaxed;
+    gap: $size-gap-6;
   }
 
   &__input-group {
     display: flex;
+    align-items: center;
     gap: $size-gap-2;
-    align-items: flex-end;
-    margin-left: 8px;
+    width: 100%;
+    min-width: 0;
 
     .bitfun-input-wrapper {
       flex: 1;
+      min-width: 0;
     }
-  }
 
-  
-  &__region-inputs {
-    display: flex;
-    gap: $size-gap-3;
+    .bitfun-input-container {
+      min-width: 0;
+    }
 
-    .bitfun-input-wrapper {
-      flex: 1;
+    .bitfun-icon-button {
+      flex-shrink: 0;
     }
   }
 
   &__settings-actions {
     display: flex;
-    gap: 12px;
-    padding-top: 16px;
-    margin-top: 8px;
-    border-top: 1px dashed var(--border-medium);
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    width: 100%;
   }
 
-  
-  &__analysis-actions {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-
-  &__stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
-    margin-top: 20px;
-  }
-
-  &__stat-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px;
-    background: transparent;
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    transition: all $motion-base $easing-standard;
-
-    &:hover {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-strong);
-    }
-
-    &--error {
-      border-left: 3px solid var(--color-error);
-    }
-
-    &--warn {
-      border-left: 3px solid var(--color-warning);
-    }
-
-    &--info {
-      border-left: 3px solid var(--color-accent-500);
-    }
-
-    &--debug {
-      border-left: 3px solid var(--color-success);
-    }
-  }
-
-  &__stat-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    border: 1px solid var(--border-base);
-
-    &--total {
-      color: var(--color-accent-500);
-      border-color: var(--border-accent-soft);
-    }
-
-    &--error {
-      color: var(--color-error);
-    }
-
-    &--warn {
-      color: var(--color-warning);
-    }
-
-    &--info {
-      color: var(--color-accent-600);
-    }
-
-    &--debug {
-      color: var(--color-success);
-    }
-  }
-
-  &__stat-content {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  &__stat-label {
-    font-size: $font-size-xs;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: $font-weight-medium;
-  }
-
-  &__stat-value {
-    font-size: 24px;
-    font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
-  }
-
-  
-  &__usage-info {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  &__usage-item {
-    h4 {
-      margin: 0 0 12px 0;
-      font-size: $font-size-sm;
-      font-weight: $font-weight-semibold;
-      color: var(--color-text-primary);
-    }
-
-    p {
-      margin: 0 0 8px 0;
-      font-size: $font-size-sm;
-      line-height: $line-height-relaxed;
-      color: var(--color-text-secondary);
-    }
-
-    ul {
-      margin: 8px 0;
-      padding-left: 24px;
-      
-      li {
-        margin: 6px 0;
-        font-size: $font-size-sm;
-        line-height: $line-height-relaxed;
-        color: var(--color-text-secondary);
-
-        strong {
-          color: var(--color-text-primary);
-          font-weight: $font-weight-medium;
-        }
-      }
-    }
-  }
-
-  &__code-block {
-    margin-top: 12px;
-    padding: 16px;
-    background: transparent;
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    overflow-x: auto;
-
-    code {
-      font-family: $font-family-mono;
-      font-size: $font-size-xs;
-      line-height: $line-height-relaxed;
-      color: var(--color-text-primary);
-      white-space: pre;
-    }
-  }
-
-  
-  &__spinning {
-    animation: bitfun-debug-config-spin 1s linear infinite;
-  }
-
-  
   &__templates-list {
+    border-top: 1px solid var(--border-subtle);
+    padding: $size-gap-3;
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    gap: $size-gap-2;
   }
 
-  
   &__template-card {
     overflow: hidden;
 
     &.is-expanded {
-      background: var(--card-bg-hover) !important;
+      background: var(--element-bg-subtle) !important;
     }
   }
 
@@ -306,7 +57,6 @@
     justify-content: space-between;
     padding: $size-gap-3 $size-gap-4;
     cursor: pointer;
-    user-select: none;
     transition: background $motion-base $easing-standard;
 
     &:hover {
@@ -318,35 +68,21 @@
     display: flex;
     align-items: center;
     gap: $size-gap-3;
+    min-width: 0;
   }
 
   &__template-name {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
     font-size: $font-size-sm;
     font-weight: $font-weight-medium;
     color: var(--color-text-primary);
-  }
-
-  &__template-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 6px;
-    background: transparent;
-    border: 1px solid var(--color-accent-500);
-    color: var(--color-accent-500);
-    border-radius: $size-radius-sm;
-    font-size: 10px;
-    font-weight: $font-weight-semibold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__template-arrow {
     color: var(--color-text-muted);
     transition: transform $motion-base $easing-standard;
-    flex-shrink: 0;
 
     &.is-expanded {
       transform: rotate(180deg);
@@ -355,46 +91,16 @@
 
   &__template-content {
     padding: $size-gap-4;
-    border-top: 1px dashed var(--border-medium);
-    background: transparent;
-    animation: bitfun-debug-config-slide-down 0.2s $easing-standard;
-
-    
-    .bitfun-textarea {
-      .bitfun-textarea__field {
-        min-height: 100px;
-        font-family: $font-family-mono;
-        font-size: $font-size-xs;
-      }
-    }
-  }
-
-  &__readonly-notice {
+    border-top: 1px solid var(--border-subtle);
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-    background: transparent;
-    border: 1px solid var(--border-accent-soft);
-    border-radius: $size-radius-sm;
-    color: var(--color-accent-500);
-    font-size: $font-size-xs;
-
-    svg {
-      flex-shrink: 0;
-    }
+    flex-direction: column;
+    gap: $size-gap-4;
   }
 
   &__template-field {
     display: flex;
     flex-direction: column;
     gap: $size-gap-2;
-    margin-bottom: $size-gap-4;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
   }
 
   &__template-label {
@@ -403,65 +109,46 @@
     color: var(--color-text-secondary);
   }
 
+  &__region-inputs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: $size-gap-2;
+  }
+
   &__template-notes {
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding: 10px 12px;
-    background: transparent;
-    border-radius: $size-radius-sm;
     border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+    background: transparent;
   }
 
   &__template-note {
     font-size: $font-size-xs;
     color: var(--color-text-muted);
     line-height: $line-height-relaxed;
-    
-    &::before {
-      content: '•';
-      margin-right: 6px;
-      color: var(--color-text-muted);
-      opacity: 0.6;
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-debug-config {
+    &__settings-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
     }
-  }
 
-  &__template-positions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+    &__templates-list {
+      padding: $size-gap-2;
+    }
 
-  &__template-position-tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 10px;
-    background: transparent;
-    border: 1px solid var(--border-accent-soft);
-    color: var(--color-accent-500);
-    border-radius: $size-radius-sm;
-    font-size: $font-size-xs;
-    font-weight: $font-weight-medium;
-  }
+    &__template-content {
+      padding: $size-gap-3;
+    }
 
-}
-
-@keyframes bitfun-debug-config-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes bitfun-debug-config-slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+    &__region-inputs {
+      grid-template-columns: 1fr;
+    }
   }
 }

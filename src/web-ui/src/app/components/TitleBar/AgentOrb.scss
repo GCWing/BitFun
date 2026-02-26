@@ -1,0 +1,33 @@
+.agent-orb-logo {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+
+  &__image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: filter 0.2s ease;
+  }
+
+  &:hover,
+  &--hover {
+    will-change: transform;
+    transform: scale(1.1);
+    
+    .agent-orb-logo__image {
+      filter: brightness(1.15);
+    }
+  }
+
+  // Agentic mode: increase brightness and contrast
+  &--active {
+    .agent-orb-logo__image {
+      filter: brightness(1.2) contrast(1.1);
+    }
+  }
+}

@@ -238,16 +238,18 @@ export const ideControl = {
  
 export const quickActions = {
    
-  openGitPanel: () => ideControl.panel.open('git-settings'),
+  openGitPanel: () => window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'git' } })),
 
    
    
-  openSettings: (section?: string) =>
-    ideControl.panel.open('config-center', {
-      config: {
-        section: section || 'models',
-      },
-    }),
+  openSettings: (section?: string) => {
+    import('@/app/scenes/settings/settingsStore').then(({ useSettingsStore }) => {
+      if (section) {
+        useSettingsStore.getState().setActiveTab(section as import('@/app/scenes/settings/settingsConfig').ConfigTab);
+      }
+    });
+    window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'settings' } }));
+  },
 
    
   openTerminal: (sessionId?: string, workingDirectory?: string) =>

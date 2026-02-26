@@ -3,7 +3,7 @@
   "subtitle": "配置和管理 AI 模型提供商",
   "editModel": "编辑模型配置",
   "newModel": "新建模型配置",
-  "editSubtitle": "配置AI模型的连接参数",
+  "editSubtitle": "基础模型参数配置",
   "confirmDelete": "确定删除此配置？",
   "providerSelection": {
     "title": "选择模型提供商",

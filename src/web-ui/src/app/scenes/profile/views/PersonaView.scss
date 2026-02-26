@@ -1,0 +1,762 @@
+@use '@/component-library/styles/tokens' as *;
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Agent Profile  ·  Document / résumé aesthetic
+//  No card boxes. Structure comes from typography, whitespace, dividers.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Keyframes ──────────────────────────────────────────────────────────────
+@keyframes bp-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes bp-pulse-section {
+  0%   { box-shadow: inset 0 0 0 0 color-mix(in srgb, var(--color-accent-500) 0%, transparent); }
+  35%  { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 45%, transparent); }
+  100% { box-shadow: inset 0 0 0 0 color-mix(in srgb, var(--color-accent-500) 0%, transparent); }
+}
+@keyframes bp-pulse-border {
+  0%   { border-color: var(--border-subtle); }
+  35%  { border-color: color-mix(in srgb, var(--color-accent-500) 55%, var(--border-subtle)); }
+  100% { border-color: var(--border-subtle); }
+}
+@keyframes bp-chip-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes bp-drop-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes bp-overlay-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bp-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bp-box-in  { from { opacity: 0; transform: scale(0.86) translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes bp-box-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.86) translateY(18px); } }
+
+// ── Root ───────────────────────────────────────────────────────────────────
+.bp {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 44px 60px;
+  box-sizing: border-box;
+  animation: bp-fade-up 0.3s $easing-standard both;
+
+  // ── Hero ────────────────────────────────────────────────────────────
+  &-hero {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 36px;
+
+    &__left {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    &__avatar {
+      flex-shrink: 0;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-muted);
+      transition: color $motion-fast $easing-standard;
+
+      &:hover { color: var(--color-text-secondary); }
+    }
+
+    &__info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    &__name-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    &__name {
+      margin: 0;
+      font-size: 22px;
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-primary);
+      letter-spacing: -0.4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: color $motion-fast $easing-standard;
+
+      &:hover { color: var(--color-text-primary); }
+    }
+
+    &__name-edit {
+      opacity: 0;
+      color: var(--color-text-disabled);
+      transition: opacity $motion-fast $easing-standard;
+      flex-shrink: 0;
+    }
+
+    &__name:hover &__name-edit { opacity: 1; }
+
+    &__name-input {
+      min-width: 160px;
+
+      .bitfun-input-container {
+        height: 34px;
+        border-radius: 6px;
+        background: var(--element-bg-subtle);
+        border: 1px solid var(--border-base);
+        padding: 0 8px;
+      }
+
+      .bitfun-input {
+        font-size: 22px;
+        font-weight: $font-weight-semibold;
+        letter-spacing: -0.4px;
+        color: var(--color-text-primary);
+        font-family: inherit;
+      }
+    }
+
+    &__badge {
+      font-size: 10px;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-muted);
+      background: var(--element-bg-soft);
+      border-radius: 3px;
+      padding: 2px 7px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    &__desc {
+      margin: 0;
+      font-size: $font-size-sm;
+      color: var(--color-text-muted);
+      line-height: 1.65;
+      cursor: pointer;
+      transition: color $motion-fast $easing-standard;
+      display: inline-block;
+
+      &:hover { color: var(--color-text-secondary); }
+
+      &::after {
+        content: ' ✎';
+        font-size: 11px;
+        color: var(--color-text-disabled);
+        opacity: 0;
+        transition: opacity $motion-fast $easing-standard;
+      }
+
+      &:hover::after { opacity: 1; }
+    }
+
+    &__desc-input {
+      width: 100%;
+
+      .bitfun-input-container {
+        height: 34px;
+        border-radius: 6px;
+        background: var(--element-bg-subtle);
+        border: 1px solid var(--border-base);
+        padding: 0 10px;
+      }
+
+      .bitfun-input {
+        font-size: $font-size-sm;
+        line-height: 1.65;
+        color: var(--color-text-primary);
+        font-family: inherit;
+      }
+    }
+
+    &__radar {
+      flex-shrink: 0;
+      border-radius: 10px;
+      padding: 6px;
+      outline: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+  }
+
+  // ── Radar SVG ────────────────────────────────────────────────────────
+  &-radar {
+    display: block;
+    overflow: visible;
+  }
+
+  // ── Section ───────────────────────────────────────────────────────────
+  &-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+    border-radius: 10px;
+
+    &.is-pulse { animation: bp-pulse-section 0.85s $easing-standard; }
+
+    &__title {
+      margin: 0 0 4px;
+      font-size: 16px;
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-primary);
+      letter-spacing: -0.15px;
+    }
+  }
+
+  // ── Card (subtle container for each block) ─────────────────────────
+  &-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px dashed var(--border-subtle);
+    background: transparent;
+    transition: border-color $motion-fast $easing-standard;
+    min-width: 0;
+    overflow: visible;
+
+    &.is-pulse { animation: bp-pulse-border 0.85s $easing-standard; }
+
+    &__head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 22px;
+    }
+
+    &__label {
+      font-size: $font-size-sm;
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-primary);
+      flex-shrink: 0;
+    }
+
+    &__kpi {
+      flex: 1;
+      font-size: 11px;
+      color: var(--color-text-disabled);
+      letter-spacing: 0.2px;
+    }
+
+    &__actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+  }
+
+  // ── Icon button ───────────────────────────────────────────────────────
+  &-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-text-disabled);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-secondary);
+      background: var(--element-bg-soft);
+    }
+  }
+
+  // ── Link button ───────────────────────────────────────────────────────
+  &-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 11px;
+    color: var(--color-text-disabled);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard;
+
+    &:hover { color: var(--color-accent-500); }
+  }
+
+  // ── Model grid (5 slots, 3-col) ───────────────────────────────────────
+  &-model-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px 12px;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  &-model-cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+
+    &__meta {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    &__label {
+      font-size: 12px;
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-primary);
+    }
+
+    &__desc {
+      font-size: 10px;
+      color: var(--color-text-disabled);
+      line-height: 1;
+    }
+  }
+
+  &-model-select {
+    &.is-empty .select__placeholder {
+      color: var(--color-text-disabled);
+      font-style: normal;
+    }
+  }
+
+  &-model-pill {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    height: 32px;
+    padding: 0 11px;
+    border-radius: 8px;
+    border: none;
+    background: var(--element-bg-soft);
+    cursor: pointer;
+    font-family: inherit;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    transition: background $motion-fast $easing-standard,
+                box-shadow $motion-fast $easing-standard;
+
+    &:hover { background: var(--element-bg-base); }
+
+    &.is-open {
+      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-soft));
+      box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-accent-500) 35%, transparent) inset;
+    }
+
+    &.is-empty &__name { color: var(--color-text-disabled); font-style: normal; }
+
+    &__name {
+      font-size: 12px;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+      flex: 1;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: var(--color-text-disabled);
+      transition: transform $motion-fast $easing-standard;
+      &.is-rotated { transform: rotate(180deg); }
+    }
+  }
+
+  &-model-drop {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    min-width: 200px;
+    z-index: 300;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-medium);
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    animation: bp-drop-in 0.15s cubic-bezier(0, 0, 0.2, 1) both;
+
+    &__item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 13px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      font-family: inherit;
+      transition: background $motion-fast $easing-standard;
+
+      &:hover { background: var(--element-bg-soft); }
+      &.is-selected { background: color-mix(in srgb, var(--color-accent-500) 8%, transparent); }
+      svg { margin-left: auto; flex-shrink: 0; color: var(--color-accent-500); }
+    }
+
+    &__item-name {
+      font-size: 13px;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-primary);
+      flex: 1;
+      .is-selected & { color: var(--color-accent-500); }
+    }
+
+    &__divider {
+      height: 1px;
+      background: var(--border-subtle);
+      margin: 3px 0;
+    }
+
+    &__empty {
+      padding: 12px 13px;
+      font-size: 12px;
+      color: var(--color-text-disabled);
+      text-align: center;
+    }
+  }
+
+  // ── Chip row ──────────────────────────────────────────────────────────
+  &-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  // ── Toggle chip — flat, background-only state ─────────────────────────
+  // Uses CSS variable --chip-accent (set inline) for per-section tinting.
+  &-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    animation: bp-chip-in 0.15s $easing-standard both;
+    transition: background $motion-fast $easing-standard,
+                transform 80ms $easing-standard,
+                opacity $motion-fast $easing-standard;
+
+    &:active { transform: scale(0.93); }
+    &.is-loading { opacity: 0.45; cursor: wait; pointer-events: none; }
+
+    // ─ enabled: accent background via RGBA to avoid color-mix failures on dark surfaces ─
+    &.is-on {
+      // accent color is injected via inline CSS variable; decomposed into r/g/b for RGBA
+      // fallback: use --chip-accent directly as background with reduced opacity
+      background-color: var(--chip-accent, #60a5fa);
+      opacity: 1;
+
+      // pseudo-element carries the semi-transparent fill so opacity doesn't bleed into child text
+      position: relative;
+      isolation: isolate;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: var(--chip-accent, #60a5fa);
+        opacity: 0.18;
+        z-index: -1;
+        pointer-events: none;
+        transition: opacity $motion-fast $easing-standard;
+      }
+
+      background-color: transparent; // disable direct background; pseudo-element carries the color
+
+      &:hover::before { opacity: 0.26; }
+
+      .bp-chip__label {
+        color: var(--chip-accent, #60a5fa);
+        font-weight: $font-weight-medium;
+      }
+
+    }
+
+    // ─ disabled: unified across all blocks, using theme-aware CSS variables ─
+    &.is-off {
+      background: transparent;
+
+      &:hover {
+        border-color: var(--border-medium);
+        background: transparent;
+      }
+
+      .bp-chip__label {
+        color: var(--color-text-disabled);
+        font-weight: $font-weight-normal;
+      }
+
+    }
+
+    // "more / collapse" variant
+    &--more {
+      background: transparent;
+      color: var(--color-text-disabled);
+      font-size: 11px;
+      border: 1px dashed var(--border-subtle);
+
+      &:hover {
+        color: var(--color-accent-500);
+        border-color: color-mix(in srgb, var(--color-accent-500) 40%, transparent);
+        background: color-mix(in srgb, var(--color-accent-500) 5%, transparent);
+      }
+    }
+
+    &__label {
+      font-size: 12px;
+      line-height: 1;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: color $motion-fast $easing-standard;
+    }
+
+  }
+
+  // ── Empty hint ────────────────────────────────────────────────────────
+  &-empty-hint {
+    font-size: 12px;
+    color: var(--color-text-disabled);
+    font-style: italic;
+  }
+
+  // ── MCP row ───────────────────────────────────────────────────────────
+  &-mcp-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+
+    &__label {
+      font-size: 11px;
+      color: var(--color-text-disabled);
+      flex-shrink: 0;
+      letter-spacing: 0.3px;
+      margin-right: 2px;
+    }
+  }
+
+  &-mcp-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 100px;
+    border: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--color-text-muted);
+
+    &__dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--color-text-disabled);
+      flex-shrink: 0;
+    }
+
+    &.is-ok {
+      border-color: color-mix(in srgb, var(--color-success) 25%, transparent);
+      background: color-mix(in srgb, var(--color-success) 5%, transparent);
+      .bp-mcp-tag__dot { background: var(--color-success); }
+    }
+
+    &.is-err {
+      border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
+      .bp-mcp-tag__dot { background: var(--color-error); }
+    }
+  }
+
+  // ── Template chips ────────────────────────────────────────────────────
+  &-tpl-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: 5px;
+    border: 1px solid var(--border-subtle);
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    background: transparent;
+    transition: border-color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+    cursor: default;
+
+    &:hover { border-color: var(--border-medium); background: var(--element-bg-soft); }
+
+    &.is-fav {
+      border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 5%, transparent);
+      color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text-secondary));
+    }
+  }
+
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Radar modal
+// ════════════════════════════════════════════════════════════════════════════
+.bp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: bp-overlay-in 0.2s $easing-standard both;
+
+  &.is-closing {
+    animation: bp-overlay-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+    .bp-modal__box { animation: bp-box-out 0.22s cubic-bezier(0.4, 0, 1, 1) both; }
+  }
+
+  &__box {
+    width: 440px;
+    max-width: calc(100vw - 40px);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-medium);
+    border-radius: 18px;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.65);
+    padding: 26px 30px 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    animation: bp-box-in 0.22s cubic-bezier(0, 0, 0.2, 1) both;
+  }
+
+  &__head {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    letter-spacing: -0.2px;
+  }
+
+  &__sub {
+    margin: 3px 0 0;
+    font-size: 11px;
+    color: var(--color-text-disabled);
+  }
+
+  &__close {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                border-color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover { color: var(--color-text-primary); border-color: var(--border-medium); background: var(--element-bg-soft); }
+  }
+
+  &__radar { display: flex; align-items: center; justify-content: center; }
+
+  &__dims {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 22px;
+  }
+
+  &__dim {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 5px;
+    margin: -3px -5px;
+    transition: background $motion-fast $easing-standard;
+    &:hover { background: var(--element-bg-soft); }
+  }
+
+  &__dim-label {
+    flex-shrink: 0;
+    width: 36px;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-muted);
+  }
+
+  &__dim-track {
+    flex: 1;
+    height: 2px;
+    background: var(--element-bg-base);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  &__dim-fill {
+    height: 100%;
+    background: var(--color-accent-500);
+    border-radius: 1px;
+    transition: width 0.65s cubic-bezier(0, 0, 0.2, 1);
+  }
+
+  &__dim-val {
+    flex-shrink: 0;
+    width: 24px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--color-text-disabled);
+    font-variant-numeric: tabular-nums;
+  }
+}

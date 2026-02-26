@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { CubeIcon } from '../../../Header/CubeIcon';
+import { CubeIcon } from '../../../TitleBar/CubeIcon';
 import './EmptyState.scss';
 
 export interface EmptyStateProps {

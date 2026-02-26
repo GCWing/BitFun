@@ -1,0 +1,332 @@
+/**
+ * Capabilities scene views — shared card list styles.
+ * Migrated from SessionsPanel cap-* with BEM block .bitfun-cap.
+ */
+
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-cap {
+  &__view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: $size-gap-2 $size-gap-3;
+    gap: $size-gap-2;
+    overflow: hidden;
+  }
+
+  &__content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  &__cards-grid {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    padding: 2px 0 8px;
+  }
+
+  &__card {
+    overflow: hidden;
+
+    &.is-expanded {
+      background: var(--card-bg-hover) !important;
+    }
+
+    &.is-disabled {
+      opacity: 0.6;
+
+      .bitfun-cap__card-name {
+        text-decoration: line-through;
+      }
+    }
+
+    &.is-unhealthy {
+      .bitfun-cap__card-name {
+        color: var(--color-warning, #f59e0b);
+      }
+    }
+  }
+
+  &__card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      background: var(--card-bg-hover, rgba(255, 255, 255, 0.06));
+    }
+  }
+
+  &__card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: var(--element-bg-soft);
+    color: var(--color-text-muted);
+
+    &--skill {
+      background: color-mix(in srgb, var(--color-purple-500) 12%, transparent);
+      color: var(--color-purple-500);
+
+      .is-disabled & {
+        background: var(--element-bg-soft);
+        color: var(--color-text-muted);
+      }
+    }
+
+    &--agent {
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+      color: var(--color-accent-500);
+
+      .is-disabled & {
+        background: var(--element-bg-soft);
+        color: var(--color-text-muted);
+      }
+    }
+
+    &--mcp {
+      background: color-mix(in srgb, var(--color-success) 12%, transparent);
+      color: var(--color-success);
+
+      &.is-error {
+        background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+        color: var(--color-warning);
+      }
+    }
+  }
+
+  &__card-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__card-name {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__card-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: $size-radius-sm;
+    font-size: 10px;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+    flex-shrink: 0;
+    border: 1px solid;
+    background: transparent;
+    line-height: 16px;
+
+    &--purple {
+      border-color: var(--border-purple-subtle);
+      color: var(--color-purple-500);
+    }
+
+    &--blue {
+      border-color: var(--border-accent-subtle);
+      color: var(--color-accent-500);
+    }
+
+    &--gray {
+      border-color: var(--border-base);
+      color: var(--color-text-secondary);
+    }
+
+    &--green {
+      border-color: var(--color-success-border);
+      color: var(--color-success);
+    }
+
+    &--yellow {
+      border-color: var(--color-warning-border);
+      color: var(--color-warning);
+    }
+  }
+
+  &__card-details {
+    padding: 8px 10px 10px !important;
+    border-top: 1px dashed var(--border-medium);
+    animation: bitfun-cap-slide-down 0.2s $easing-standard;
+  }
+
+  &__card-desc {
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    line-height: $line-height-base;
+    margin-bottom: 8px;
+  }
+
+  &__path {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: $size-radius-sm;
+    border: 1px solid var(--border-base);
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      border-color: var(--border-accent-soft);
+      background: color-mix(in srgb, var(--color-accent-500) 4%, transparent);
+    }
+  }
+
+  &__path-copy {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--color-text-muted);
+    margin-left: auto;
+  }
+
+  &__meta-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  &__path-label,
+  &__meta-label {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: $font-weight-semibold;
+    flex-shrink: 0;
+  }
+
+  &__path-value,
+  &__meta-value {
+    font-size: $font-size-xs;
+    color: var(--color-text-primary);
+    font-family: $font-family-mono;
+    word-break: break-all;
+  }
+
+  &__row-reconnect {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 25%, transparent);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-warning, #f59e0b);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    flex-shrink: 0;
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
+    }
+  }
+
+  &__footer {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 0;
+    border-top: 1px solid color-mix(in srgb, var(--element-border-base) 50%, transparent);
+  }
+
+  &__refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-secondary);
+    }
+
+    &.is-spinning svg {
+      animation: bitfun-cap-spin 0.8s linear infinite;
+    }
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    opacity: 0.5;
+  }
+
+  &__alert {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    background: color-mix(in srgb, var(--color-warning, #f59e0b) 8%, transparent);
+    color: var(--color-warning, #f59e0b);
+    flex-shrink: 0;
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+}
+
+@keyframes bitfun-cap-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-cap-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
