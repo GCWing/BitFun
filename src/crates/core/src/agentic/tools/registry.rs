@@ -103,6 +103,7 @@ impl ToolRegistry {
         self.register_tool(Arc::new(AskUserQuestionTool::new()));
 
         // Web tool
+        self.register_tool(Arc::new(WebFetchTool::new()));
         self.register_tool(Arc::new(WebSearchTool::new()));
 
         // IDE control tool

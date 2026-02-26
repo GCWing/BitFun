@@ -149,12 +149,18 @@ impl RuntimeManager {
     /// Merge managed runtime PATH entries with existing PATH value.
     pub fn merged_path_env(&self, existing_path: Option<&str>) -> Option<String> {
         let managed_entries = self.managed_path_entries();
-        if managed_entries.is_empty() {
-            return existing_path.map(|v| v.to_string());
+        let platform_entries = system::platform_path_entries();
+
+        if managed_entries.is_empty()
+            && platform_entries.is_empty()
+            && existing_path.map(|v| v.trim().is_empty()).unwrap_or(true)
+        {
+            return None;
         }
 
         let mut merged = Vec::new();
         let mut seen = HashSet::new();
+
         for path in managed_entries {
             let key = path.to_string_lossy().to_string();
             if seen.insert(key) {
@@ -171,6 +177,16 @@ impl RuntimeManager {
                 if seen.insert(key) {
                     merged.push(path);
                 }
+            }
+        }
+
+        for path in platform_entries {
+            if path.as_os_str().is_empty() {
+                continue;
+            }
+            let key = path.to_string_lossy().to_string();
+            if seen.insert(key) {
+                merged.push(path);
             }
         }
 

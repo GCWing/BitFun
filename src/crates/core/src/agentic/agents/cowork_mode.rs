@@ -31,6 +31,7 @@ impl CoworkMode {
                 "ReadLints".to_string(),
                 "Git".to_string(),
                 "Bash".to_string(),
+                "WebFetch".to_string(),
                 "WebSearch".to_string(),
             ],
         }
