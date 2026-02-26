@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  type LucideIcon,
   Image,
   Plane,
   Presentation,
@@ -38,7 +39,7 @@ type ExampleId =
 
 interface ExampleItem {
   id: ExampleId;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: LucideIcon;
 }
 
 const EXAMPLES: ExampleItem[] = [
@@ -69,7 +70,7 @@ function pickRandomUnique<T>(items: readonly T[], count: number): T[] {
 
 export interface CoworkExampleCardsProps {
   resetKey: number;
-  onClose: () => void;
+  onClose?: () => void;
   onSelectPrompt: (prompt: string) => void;
   onAddPlugin?: () => void;
 }
@@ -145,16 +146,18 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
               <RotateCcw size={14} />
             </IconButton>
           </Tooltip>
-          <Tooltip content={t('coworkExamples.close')}>
-            <IconButton
-              variant="ghost"
-              size="xs"
-              onClick={onClose}
-              aria-label={t('coworkExamples.close')}
-            >
-              <X size={14} />
-            </IconButton>
-          </Tooltip>
+          {onClose && (
+            <Tooltip content={t('coworkExamples.close')}>
+              <IconButton
+                variant="ghost"
+                size="xs"
+                onClick={onClose}
+                aria-label={t('coworkExamples.close')}
+              >
+                <X size={14} />
+              </IconButton>
+            </Tooltip>
+          )}
         </div>
       </div>
       <div className="bitfun-cowork-example-cards__grid">

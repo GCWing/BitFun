@@ -34,7 +34,6 @@ import { MERMAID_INTERACTIVE_EXAMPLE } from '../constants/mermaidExamples';
 import { useMessageSender } from '../hooks/useMessageSender';
 import { useTemplateEditor } from '../hooks/useTemplateEditor';
 import { useChatInputState } from '../store/chatInputStateStore';
-import CoworkExampleCards from './CoworkExampleCards';
 import { createLogger } from '@/shared/utils/logger';
 import { Tooltip, IconButton } from '@/component-library';
 import './ChatInput.scss';
@@ -73,9 +72,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { workspacePath } = useCurrentWorkspace();
   
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
-  const [isEmptySession, setIsEmptySession] = React.useState(true);
-  const [coworkExamplesDismissed, setCoworkExamplesDismissed] = React.useState(false);
-  const [coworkExamplesResetKey, setCoworkExamplesResetKey] = React.useState(0);
   const canSwitchModes = modeState.current !== 'Cowork';
 
   // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
@@ -168,7 +164,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             current: session.currentTokenUsage?.totalTokens || 0,
             max: session.maxContextTokens || 128128
           });
-          setIsEmptySession(session.dialogTurns.length === 0);
         }
       }
     });
@@ -181,34 +176,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           current: session.currentTokenUsage?.totalTokens || 0,
           max: session.maxContextTokens || 128128
         });
-        setIsEmptySession(session.dialogTurns.length === 0);
-      } else {
-        setIsEmptySession(true);
       }
     }
 
     return () => unsubscribe();
   }, [currentSessionId]);
-
-  const prevModeRef = React.useRef<string>(modeState.current);
-  React.useEffect(() => {
-    const prev = prevModeRef.current;
-    if (prev !== modeState.current && modeState.current === 'Cowork') {
-      setCoworkExamplesDismissed(false);
-      setCoworkExamplesResetKey((k) => k + 1);
-    }
-    prevModeRef.current = modeState.current;
-  }, [modeState.current]);
-
-  const fillInputAndExpand = useCallback((content: string) => {
-    dispatchInput({ type: 'ACTIVATE' });
-    dispatchInput({ type: 'SET_EXPANDED', payload: true });
-    dispatchInput({ type: 'SET_VALUE', payload: content });
-
-    if (richTextInputRef.current) {
-      richTextInputRef.current.focus();
-    }
-  }, []);
 
   React.useEffect(() => {
     const initializeTemplateService = async () => {
@@ -931,12 +903,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
   };
 
-  const shouldShowCoworkExamples =
-    modeState.current === 'Cowork' &&
-    isEmptySession &&
-    !coworkExamplesDismissed &&
-    inputState.value.trim() === '';
-  
   return (
     <>
       <TemplatePickerPanel
@@ -963,19 +929,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onClick={!inputState.isActive ? handleActivate : undefined}
           data-testid="chat-input-container"
         >
-        {shouldShowCoworkExamples && (
-          <div className="bitfun-chat-input__cowork-examples">
-            <CoworkExampleCards
-              resetKey={coworkExamplesResetKey}
-              onClose={() => setCoworkExamplesDismissed(true)}
-              onSelectPrompt={(prompt) => {
-                setCoworkExamplesDismissed(true);
-                fillInputAndExpand(prompt);
-              }}
-            />
-          </div>
-        )}
-
         {recommendationContext && (
           <SmartRecommendations
             context={recommendationContext}

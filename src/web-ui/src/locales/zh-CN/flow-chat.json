@@ -734,6 +734,7 @@
     "subtitleNight": "准备开始编码了吗？",
     "aiPartner": "您的 AI 编程伙伴",
     "featureIntro": "我是您的 AI 编程助手。我可以帮您理解复杂代码，快速实现新功能，重构老旧项目，或是解决那些让人头疼的 Bug。",
+    "featureIntroCowork": "我可以帮你整理桌面，搜集资料和制作PPT、PDF文档等等...",
     "lastTimeYouWere": "上次您正在处理：",
     "branch": "分支：",
     "aheadCommits": "领先 {{count}} 个提交",
