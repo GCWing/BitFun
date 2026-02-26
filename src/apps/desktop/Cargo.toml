@@ -43,6 +43,7 @@ similar = { workspace = true }
 dashmap = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
+reqwest = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

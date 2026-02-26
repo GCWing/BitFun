@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, RefreshCw, FolderOpen, X } from 'lucide-react';
-import { Switch, Select, Input, Button, IconButton, ConfirmDialog } from '@/component-library';
+import { Plus, Trash2, RefreshCw, FolderOpen, X, Download } from 'lucide-react';
+import { Switch, Select, Input, Button, Search, IconButton, ConfirmDialog, Card, CardBody, Tooltip } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigCollectionItem } from './common';
 import { useCurrentWorkspace } from '../../hooks/useWorkspace';
 import { useNotification } from '@/shared/notification-system';
 import { configAPI } from '../../api/service-api/ConfigAPI';
-import type { SkillInfo, SkillLevel, SkillValidationResult } from '../types';
+import type { SkillInfo, SkillLevel, SkillMarketItem, SkillValidationResult } from '../types';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './SkillsConfig.scss';
@@ -32,6 +32,12 @@ const SkillsConfig: React.FC = () => {
     skill: null,
   });
 
+  const [marketKeyword, setMarketKeyword] = useState('');
+  const [marketSkills, setMarketSkills] = useState<SkillMarketItem[]>([]);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [downloadingPackage, setDownloadingPackage] = useState<string | null>(null);
+
   const { workspacePath, hasWorkspace } = useCurrentWorkspace();
   const notification = useNotification();
 
@@ -49,8 +55,26 @@ const SkillsConfig: React.FC = () => {
     }
   }, []);
 
+  const loadMarketSkills = useCallback(async (query?: string) => {
+    try {
+      setMarketLoading(true);
+      setMarketError(null);
+      const normalized = query?.trim();
+      const skillList = normalized
+        ? await configAPI.searchSkillMarket(normalized, 20)
+        : await configAPI.listSkillMarket(undefined, 20);
+      setMarketSkills(skillList);
+    } catch (err) {
+      log.error('Failed to load skill market', err);
+      setMarketError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMarketLoading(false);
+    }
+  }, []);
+
   useEffect(() => { loadSkills(); }, [loadSkills]);
   useEffect(() => { if (hasWorkspace) loadSkills(); }, [hasWorkspace, workspacePath, loadSkills]);
+  useEffect(() => { loadMarketSkills(); }, [loadMarketSkills]);
 
   const validatePath = useCallback(async (path: string) => {
     if (!path.trim()) { setValidationResult(null); return; }
@@ -114,6 +138,25 @@ const SkillsConfig: React.FC = () => {
       loadSkills();
     } catch (err) {
       notification.error(t('messages.toggleFailed', { error: err instanceof Error ? err.message : String(err) }));
+    }
+  };
+
+  const handleDownload = async (skill: SkillMarketItem) => {
+    if (!hasWorkspace) {
+      notification.warning(t('messages.noWorkspace'));
+      return;
+    }
+
+    try {
+      setDownloadingPackage(skill.installId);
+      const result = await configAPI.downloadSkillMarket(skill.installId, 'project');
+      const installedName = result.installedSkills[0] ?? skill.name;
+      notification.success(t('messages.marketDownloadSuccess', { name: installedName }));
+      await loadSkills(true);
+    } catch (err) {
+      notification.error(t('messages.marketDownloadFailed', { error: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setDownloadingPackage(null);
     }
   };
 
@@ -262,6 +305,84 @@ const SkillsConfig: React.FC = () => {
     );
   };
 
+  const renderMarketList = () => {
+    if (marketLoading) {
+      return <div className="bitfun-skills-config__market-state">{t('market.loading')}</div>;
+    }
+
+    if (marketError) {
+      return <div className="bitfun-skills-config__market-state bitfun-skills-config__market-state--error">{t('market.errorPrefix')}{marketError}</div>;
+    }
+
+    if (marketSkills.length === 0) {
+      return (
+        <div className="bitfun-skills-config__market-state">
+          {marketKeyword.trim() ? t('market.empty.noMatch') : t('market.empty.noSkills')}
+        </div>
+      );
+    }
+
+    return (
+      <div className="bitfun-skills-config__market-list">
+        {marketSkills.map((skill) => {
+          const isDownloading = downloadingPackage === skill.installId;
+          const isInstalled = installedSkillNames.has(skill.name);
+          const tooltipText = !hasWorkspace
+            ? t('messages.noWorkspace')
+            : isInstalled
+              ? t('market.item.installedTooltip')
+              : t('market.item.downloadProject');
+
+          return (
+            <Card
+              key={skill.installId}
+              variant="default"
+              padding="none"
+              className="bitfun-skills-config__market-item"
+            >
+              <CardBody className="bitfun-skills-config__market-item-body">
+                <div className="bitfun-skills-config__market-item-main">
+                  <div className="bitfun-skills-config__market-item-name">{skill.name}</div>
+                  <div className="bitfun-skills-config__market-item-description">
+                    {skill.description?.trim() || t('market.item.noDescription')}
+                  </div>
+                  <div className="bitfun-skills-config__market-item-meta">
+                    {skill.source ? (
+                      <span className="bitfun-skills-config__market-item-source">
+                        {t('market.item.sourceLabel')}{skill.source}
+                      </span>
+                    ) : null}
+                    <span className="bitfun-skills-config__market-item-installs">
+                      {t('market.item.installs', { count: skill.installs })}
+                    </span>
+                  </div>
+                </div>
+
+                <Tooltip content={tooltipText}>
+                  <span>
+                    <Button
+                      variant="primary"
+                      size="small"
+                      onClick={() => handleDownload(skill)}
+                      disabled={isDownloading || !hasWorkspace || isInstalled}
+                    >
+                      <Download size={14} />
+                      {isDownloading
+                        ? t('market.item.downloading')
+                        : isInstalled
+                          ? t('market.item.installed')
+                          : t('market.item.downloadProject')}
+                    </Button>
+                  </span>
+                </Tooltip>
+              </CardBody>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   const refreshExtra = (
     <IconButton
       variant="ghost"
@@ -287,6 +408,15 @@ const SkillsConfig: React.FC = () => {
       </IconButton>
     </>
   );
+
+  const installedSkillNames = useMemo(
+    () => new Set(skills.map((skill) => skill.name)),
+    [skills]
+  );
+
+  const handleMarketSearch = useCallback(() => {
+    loadMarketSkills(marketKeyword);
+  }, [loadMarketSkills, marketKeyword]);
 
   if (loading) {
     return (
@@ -319,8 +449,36 @@ const SkillsConfig: React.FC = () => {
 
       <ConfigPageContent>
         <ConfigPageSection
-          title={t('filters.user', { defaultValue: '用户技能' })}
-          description={t('section.user.description', { defaultValue: '当前用户安装的技能。' })}
+          title={t('market.title')}
+          description={t('market.subtitle')}
+          extra={(
+            <IconButton
+              variant="ghost"
+              size="small"
+              onClick={() => loadMarketSkills(marketKeyword)}
+              tooltip={t('market.refreshTooltip')}
+            >
+              <RefreshCw size={16} />
+            </IconButton>
+          )}
+        >
+          <div className="bitfun-skills-config__market-toolbar">
+            <Search
+              placeholder={t('market.searchPlaceholder')}
+              value={marketKeyword}
+              onChange={(value) => setMarketKeyword(value)}
+              onSearch={handleMarketSearch}
+              showSearchButton
+              clearable
+              size="small"
+            />
+          </div>
+          {renderMarketList()}
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('filters.user', { defaultValue: 'User Skills' })}
+          description={t('section.user.description', { defaultValue: 'Skills installed for current user.' })}
           extra={makeAddExtra('user')}
         >
           {renderAddForm('user')}
@@ -335,8 +493,8 @@ const SkillsConfig: React.FC = () => {
         </ConfigPageSection>
 
         <ConfigPageSection
-          title={t('filters.project', { defaultValue: '项目技能' })}
-          description={t('section.project.description', { defaultValue: '当前工作区的项目级技能。' })}
+          title={t('filters.project', { defaultValue: 'Project Skills' })}
+          description={t('section.project.description', { defaultValue: 'Project-level Skills in current workspace.' })}
           extra={makeAddExtra('project')}
         >
           {renderAddForm('project')}

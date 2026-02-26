@@ -66,4 +66,63 @@
     color: var(--color-text-secondary);
     word-break: break-all;
   }
+
+  &__market-toolbar {
+    margin-bottom: $size-gap-3;
+  }
+
+  &__market-state {
+    padding: $size-gap-3;
+    border: 1px dashed var(--border-medium);
+    border-radius: $size-radius-base;
+    color: var(--color-text-secondary);
+    font-size: $font-size-sm;
+  }
+
+  &__market-state--error {
+    border-color: rgba($color-error, 0.4);
+    color: var(--color-error);
+  }
+
+  &__market-list {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__market-item-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+  }
+
+  &__market-item-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__market-item-name {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    margin-bottom: 2px;
+  }
+
+  &__market-item-description {
+    font-size: $font-size-sm;
+    color: var(--color-text-secondary);
+    line-height: $line-height-base;
+    margin-bottom: 6px;
+    word-break: break-word;
+  }
+
+  &__market-item-meta {
+    display: flex;
+    gap: $size-gap-2;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
 }

@@ -221,6 +221,23 @@ export interface SkillInfo {
   enabled: boolean;
 }
 
+export interface SkillMarketItem {
+  id: string;
+  name: string;
+  description: string;
+  source: string;
+  installs: number;
+  url: string;
+  installId: string;
+}
+
+export interface SkillMarketDownloadResult {
+  package: string;
+  level: SkillLevel;
+  installedSkills: string[];
+  output: string;
+}
+
 
 
  
