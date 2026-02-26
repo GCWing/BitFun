@@ -8,16 +8,111 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { visit } from 'unist-util-visit';
 import { useI18n } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
 import { ReproductionStepsBlock } from './ReproductionStepsBlock';
-import { systemAPI } from '../../../infrastructure/api';
+import { globalAPI, systemAPI, workspaceAPI } from '../../../infrastructure/api';
 import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
 import { useTheme } from '@/infrastructure/theme';
 import { createLogger } from '@/shared/utils/logger';
+import path from 'path-browserify';
 import './Markdown.scss';
 
 const log = createLogger('Markdown');
+const COMPUTER_LINK_PREFIX = 'computer://';
+const FILE_LINK_PREFIX = 'file://';
+const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
+
+function remarkAutolinkComputerFileLinks() {
+  return (tree: any) => {
+    visit(tree, 'text', (node: any, index: number | undefined, parent: any) => {
+      if (index === undefined || !parent || !Array.isArray(parent.children)) {
+        return;
+      }
+
+      if (parent.type === 'link' || parent.type === 'linkReference') {
+        return;
+      }
+
+      const value = node.value;
+      if (typeof value !== 'string' || (!value.includes(COMPUTER_LINK_PREFIX) && !value.includes(FILE_LINK_PREFIX))) {
+        return;
+      }
+
+      const re = /(computer:\/\/|file:\/\/)[^\s<>()]+/g;
+      let match: RegExpExecArray | null;
+      let lastIndex = 0;
+      const nextChildren: any[] = [];
+
+      while ((match = re.exec(value)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+        const url = match[0];
+
+        if (start > lastIndex) {
+          nextChildren.push({
+            type: 'text',
+            value: value.slice(lastIndex, start)
+          });
+        }
+
+        nextChildren.push({
+          type: 'link',
+          url,
+          title: null,
+          children: [{ type: 'text', value: url }]
+        });
+
+        lastIndex = end;
+      }
+
+      if (nextChildren.length === 0) {
+        return;
+      }
+
+      if (lastIndex < value.length) {
+        nextChildren.push({
+          type: 'text',
+          value: value.slice(lastIndex)
+        });
+      }
+
+      parent.children.splice(index, 1, ...nextChildren);
+      return index + nextChildren.length;
+    });
+  };
+}
+
+function normalizeFileLikeHref(rawHref: string): string {
+  let filePath = rawHref;
+
+  if (rawHref.startsWith(COMPUTER_LINK_PREFIX)) {
+    filePath = rawHref.slice(COMPUTER_LINK_PREFIX.length);
+  } else if (rawHref.startsWith(FILE_LINK_PREFIX)) {
+    filePath = rawHref.slice(FILE_LINK_PREFIX.length);
+  } else if (rawHref.startsWith('file:')) {
+    filePath = rawHref.slice('file:'.length);
+  }
+
+  if (filePath.startsWith(WORKSPACE_FOLDER_PLACEHOLDER)) {
+    filePath = filePath.slice(WORKSPACE_FOLDER_PLACEHOLDER.length);
+    if (filePath.startsWith('/')) {
+      filePath = filePath.slice(1);
+    }
+  }
+
+  // Normalize paths like /C:/Users/... from URI forms to Windows absolute paths.
+  if (/^\/[A-Za-z]:[\\/]/.test(filePath)) {
+    filePath = filePath.slice(1);
+  }
+
+  try {
+    return decodeURIComponent(filePath);
+  } catch {
+    return filePath;
+  }
+}
 
 const CopyButton: React.FC<{ code: string }> = ({ code }) => {
   const { t } = useI18n('components');
@@ -143,6 +238,23 @@ export const Markdown = React.memo<MarkdownProps>(({
   const handleTabOpen = useCallback((tabInfo: any) => {
     onTabOpen?.(tabInfo);
   }, [onTabOpen]);
+
+  const handleRevealInExplorer = useCallback(async (filePath: string) => {
+    let targetPath = filePath;
+    try {
+      const workspacePath = await globalAPI.getCurrentWorkspacePath();
+      const isWindowsAbsolutePath = /^[A-Za-z]:[\\/]/.test(filePath);
+      const isUnixAbsolutePath = filePath.startsWith('/');
+
+      if (!isWindowsAbsolutePath && !isUnixAbsolutePath && workspacePath) {
+        targetPath = path.join(workspacePath, filePath);
+      }
+
+      await workspaceAPI.revealInExplorer(targetPath);
+    } catch (error) {
+      log.error('Failed to reveal file in explorer', { filePath: targetPath, error });
+    }
+  }, []);
   
   const components = useMemo(() => ({
     code({ node, className, children, ...props }: any) {
@@ -208,9 +320,14 @@ export const Markdown = React.memo<MarkdownProps>(({
       const linkText = typeof children === 'string' ? children : String(children);
       const originalHref = linkMap.get(linkText);
       const hrefValue = originalHref || href || node?.properties?.href;
+      const isComputerLink = typeof hrefValue === 'string' && hrefValue.startsWith(COMPUTER_LINK_PREFIX);
+      const isVisualizationLink = typeof hrefValue === 'string' && hrefValue.startsWith('visualization:');
+      const isTabLink = typeof hrefValue === 'string' && hrefValue.startsWith('tab:');
+      const isHttpLink = typeof hrefValue === 'string' &&
+        (hrefValue.startsWith('http://') || hrefValue.startsWith('https://'));
 
-      if (typeof hrefValue === 'string') {
-        let filePath = hrefValue.replace(/^file:/, '');
+      if (typeof hrefValue === 'string' && !isVisualizationLink && !isTabLink && !isHttpLink) {
+        let filePath = normalizeFileLikeHref(hrefValue);
 
         let lineRange: LineRange | undefined;
         let fileName: string;
@@ -237,16 +354,20 @@ export const Markdown = React.memo<MarkdownProps>(({
           }
         }
 
-        fileName = filePath.split('/').pop() || filePath;
+        fileName = filePath.split(/[\\/]/).pop() || filePath;
 
         const isFolder = filePath.endsWith('/');
-        if (!hrefValue.match(/^https?:\/\//) && !isFolder) {
+        if (!isFolder) {
           return (
             <button
               className="file-link"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (isComputerLink) {
+                  void handleRevealInExplorer(filePath);
+                  return;
+                }
                 handleFileViewRequest(filePath, fileName, lineRange);
               }}
               type="button"
@@ -265,7 +386,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         }
       }
       
-      if (typeof hrefValue === 'string' && hrefValue.startsWith('visualization:')) {
+      if (isVisualizationLink && typeof hrefValue === 'string') {
         const vizData = hrefValue.replace('visualization:', '');
         
         return (
@@ -288,7 +409,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         );
       }
       
-      if (typeof hrefValue === 'string' && hrefValue.startsWith('tab:')) {
+      if (isTabLink && typeof hrefValue === 'string') {
         const tabData = hrefValue.replace('tab:', '');
         
         return (
@@ -319,7 +440,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         );
       }
       
-      if (typeof hrefValue === 'string' && (hrefValue.startsWith('http://') || hrefValue.startsWith('https://'))) {
+      if (isHttpLink && typeof hrefValue === 'string') {
         return (
           <a 
             href={hrefValue} 
@@ -381,12 +502,22 @@ export const Markdown = React.memo<MarkdownProps>(({
     p({ children, ...props }: any) {
       return <p {...props}>{children}</p>;
     }
-  }), [isStreaming, linkMap, handleFileViewRequest, handleOpenVisualization, handleTabOpen, parseLineRange, syntaxTheme, isLight]);
+  }), [
+    isStreaming,
+    linkMap,
+    handleFileViewRequest,
+    handleRevealInExplorer,
+    handleOpenVisualization,
+    handleTabOpen,
+    parseLineRange,
+    syntaxTheme,
+    isLight
+  ]);
   
   return (
     <div className={`markdown-renderer ${className} ${isStreaming && contentStr ? 'markdown-renderer--streaming' : ''}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkAutolinkComputerFileLinks]}
         components={components}
       >
         {markdownContent}
