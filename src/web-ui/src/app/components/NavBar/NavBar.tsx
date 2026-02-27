@@ -39,6 +39,15 @@ const NavBar: React.FC<NavBarProps> = ({
   onMaximize,
 }) => {
   const { t } = useI18n('common');
+  const isMacOS = useMemo(() => {
+    const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+    return (
+      isTauri &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.platform === 'string' &&
+      navigator.platform.toUpperCase().includes('MAC')
+    );
+  }, []);
   const showSceneNav = useNavSceneStore(s => s.showSceneNav);
   const navSceneId   = useNavSceneStore(s => s.navSceneId);
   const goBack       = useNavSceneStore(s => s.goBack);
@@ -169,16 +178,19 @@ const NavBar: React.FC<NavBarProps> = ({
           role="menu"
           style={{ top: menuPos.top, left: menuPos.left }}
         >
-          <button type="button" className="bitfun-nav-bar__menu-item" role="menuitem" onClick={() => { void handleOpenProject(); }}>
-            <FolderOpen size={13} aria-hidden="true" />
-            <span>{t('header.openProject')}</span>
-          </button>
-          <button type="button" className="bitfun-nav-bar__menu-item" role="menuitem" onClick={handleNewProject}>
-            <FolderPlus size={13} aria-hidden="true" />
-            <span>{t('header.newProject')}</span>
-          </button>
-
-          <div className="bitfun-nav-bar__menu-divider" role="separator" />
+          {!isMacOS && (
+            <>
+              <button type="button" className="bitfun-nav-bar__menu-item" role="menuitem" onClick={() => { void handleOpenProject(); }}>
+                <FolderOpen size={13} aria-hidden="true" />
+                <span>{t('header.openProject')}</span>
+              </button>
+              <button type="button" className="bitfun-nav-bar__menu-item" role="menuitem" onClick={handleNewProject}>
+                <FolderPlus size={13} aria-hidden="true" />
+                <span>{t('header.newProject')}</span>
+              </button>
+              <div className="bitfun-nav-bar__menu-divider" role="separator" />
+            </>
+          )}
           <div className="bitfun-nav-bar__menu-section-title">
             <History size={12} aria-hidden="true" />
             <span>{t('header.recentWorkspaces')}</span>
@@ -196,9 +208,11 @@ const NavBar: React.FC<NavBarProps> = ({
       )
     : null;
 
+  const rootClassName = `bitfun-nav-bar${isCollapsed ? ' bitfun-nav-bar--collapsed' : ''}${isMacOS ? ' bitfun-nav-bar--macos' : ''} ${className}`;
+
   if (isCollapsed) {
     return (
-      <div className={`bitfun-nav-bar bitfun-nav-bar--collapsed ${className}`} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+      <div className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
         <div className="bitfun-nav-bar__logo-menu" ref={containerRef}>
           <button
             type="button"
@@ -235,7 +249,7 @@ const NavBar: React.FC<NavBarProps> = ({
   }
 
   return (
-    <div className={`bitfun-nav-bar ${className}`} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+    <div className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
       <div className="bitfun-nav-bar__logo-menu" ref={containerRef}>
         <button
           type="button"

@@ -13,11 +13,9 @@ pub enum MenubarMode {
 #[derive(Clone)]
 struct MenubarLabels {
     project_menu: &'static str,
-    navigation_menu: &'static str,
     edit_menu: &'static str,
     open_project: &'static str,
     new_project: &'static str,
-    go_home: &'static str,
     about_bitfun: &'static str,
 }
 
@@ -26,20 +24,16 @@ fn labels_for_language(language: &str) -> MenubarLabels {
     match language {
         "en-US" => MenubarLabels {
             project_menu: "Project",
-            navigation_menu: "Navigation",
             edit_menu: "Edit",
             open_project: "Open Project…",
             new_project: "New Project…",
-            go_home: "Go Home",
             about_bitfun: "About BitFun",
         },
         _ => MenubarLabels {
             project_menu: "工程",
-            navigation_menu: "导航",
             edit_menu: "编辑",
             open_project: "打开工程…",
             new_project: "新建工程…",
-            go_home: "返回首页",
             about_bitfun: "关于 BitFun",
         },
     }
@@ -71,9 +65,15 @@ pub fn set_macos_menubar_with_mode(
                 .select_all()
                 .build()?;
 
+            let project_menu = SubmenuBuilder::new(app, labels.project_menu)
+                .text("bitfun.open_project", labels.open_project)
+                .text("bitfun.new_project", labels.new_project)
+                .build()?;
+
             MenuBuilder::new(app)
                 .item(&app_menu)
                 .item(&edit_menu)
+                .item(&project_menu)
                 .build()?
         }
         MenubarMode::Workspace => {
@@ -98,15 +98,10 @@ pub fn set_macos_menubar_with_mode(
                 .text("bitfun.new_project", labels.new_project)
                 .build()?;
 
-            let navigation_menu = SubmenuBuilder::new(app, labels.navigation_menu)
-                .text("bitfun.go_home", labels.go_home)
-                .build()?;
-
             MenuBuilder::new(app)
                 .item(&app_menu)
                 .item(&edit_menu)
                 .item(&project_menu)
-                .item(&navigation_menu)
                 .build()?
         }
     };

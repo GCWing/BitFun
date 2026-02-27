@@ -112,6 +112,47 @@
     }
   }
 
+  &__runtime-badge {
+    margin-left: 4px;
+  }
+
+  &__runtime-badge--ok {
+    background: rgba($color-success, 0.1);
+    color: var(--color-success);
+    border-color: rgba($color-success, 0.25);
+  }
+
+  &__runtime-badge--error {
+    background: rgba($color-error, 0.1);
+    color: var(--color-error);
+    border-color: rgba($color-error, 0.25);
+  }
+
+  &__server-details {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__server-detail-item {
+    display: flex;
+    align-items: baseline;
+    gap: $size-gap-2;
+    flex-wrap: wrap;
+  }
+
+  &__server-detail-label {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__server-detail-value {
+    font-family: $font-family-mono;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    word-break: break-all;
+  }
+
   // ─── Tools badges & properties ──────────────────────────────────────────────
   &__badge {
     display: inline-flex;

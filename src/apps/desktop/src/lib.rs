@@ -35,6 +35,7 @@ use api::i18n_api::*;
 use api::lsp_api::*;
 use api::lsp_workspace_api::*;
 use api::mcp_api::*;
+use api::runtime_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::startchat_agent_api::*;
@@ -129,8 +130,6 @@ pub async fn run() {
                     Some("bitfun_menu_open_project")
                 } else if event.id() == "bitfun.new_project" {
                     Some("bitfun_menu_new_project")
-                } else if event.id() == "bitfun.go_home" {
-                    Some("bitfun_menu_go_home")
                 } else if event.id() == "bitfun.about" {
                     Some("bitfun_menu_about")
                 } else {
@@ -302,6 +301,7 @@ pub async fn run() {
             sync_config_to_global,
             get_global_config_health,
             get_runtime_logging_info,
+            get_runtime_capabilities,
             get_mode_configs,
             get_mode_config,
             set_mode_config,
@@ -315,6 +315,9 @@ pub async fn run() {
             list_agent_tool_names,
             update_subagent_config,
             get_skill_configs,
+            list_skill_market,
+            search_skill_market,
+            download_skill_market,
             set_skill_enabled,
             validate_skill_path,
             add_skill,
@@ -419,6 +422,7 @@ pub async fn run() {
             api::project_context_api::toggle_imported_document_enabled,
             api::project_context_api::delete_context_document,
             initialize_mcp_servers,
+            api::mcp_api::initialize_mcp_servers_non_destructive,
             get_mcp_servers,
             start_mcp_server,
             stop_mcp_server,

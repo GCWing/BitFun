@@ -180,14 +180,13 @@ const MainNav: React.FC<MainNavProps> = ({
   const sessionMode = useSessionModeStore(s => s.mode);
 
   const handleCreateSession = useCallback(async () => {
-    if (sessionMode === 'cowork') {
-      log.info('Cowork session mode is not yet available');
-      return;
-    }
     openScene('session');
     switchLeftPanelTab('sessions');
     try {
-      await flowChatManager.createChatSession({ modelName: 'claude-sonnet-4.5' });
+      await flowChatManager.createChatSession(
+        { modelName: 'claude-sonnet-4.5' },
+        sessionMode === 'cowork' ? 'Cowork' : 'agentic'
+      );
     } catch (err) {
       log.error('Failed to create session', err);
     }

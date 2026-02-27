@@ -26,7 +26,16 @@
     "url": "Server URL",
     "urlPlaceholder": "http://localhost:3000",
     "enabled": "Enable this server",
-    "autoStart": "Auto start on application launch"
+    "autoStart": "Auto start on application launch",
+    "runtime": {
+      "source": "Source",
+      "path": "Resolved Path",
+      "available": "command available",
+      "unavailable": "command unavailable",
+      "managed": "managed",
+      "system": "system",
+      "unknown": "unknown"
+    }
   },
   "status": {
     "connected": "Connected",
@@ -124,7 +133,8 @@
     "idRequired": "Please enter server ID",
     "commandRequired": "Local process type requires a start command",
     "urlRequired": "Remote service type requires a server URL",
-    "validationFailed": "Validation Failed"
+    "validationFailed": "Validation Failed",
+    "commandUnavailable": "Server \"{{serverId}}\" command is unavailable. Check runtime installation or command configuration."
   },
   "errors": {
     "unknownError": "Unknown error",

@@ -93,6 +93,7 @@
     
     .bitfun-chat-input__expand-button,
     .bitfun-chat-input__template-hint,
+    .bitfun-chat-input__cowork-examples,
     .bitfun-chat-input__recommendations,
     .bitfun-chat-input__actions-left,
     .bitfun-chat-input__mode-selector,
@@ -246,6 +247,10 @@
   gap: $size-gap-3;
 
   &__recommendations {
+    margin-bottom: 8px;
+  }
+
+  &__cowork-examples {
     margin-bottom: 8px;
   }
   
@@ -426,7 +431,7 @@
       transform: scale(0.95);
     }
   }
-  
+
   &__mode-selector {
     position: relative;
     display: inline-flex;
@@ -1227,8 +1232,5 @@
     transform: translateY(0);
   }
 }
-
-
-
 
 

@@ -37,7 +37,7 @@ pub struct DiffHunk {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffLine {
-    pub line_type: String,  // "context" | "add" | "delete"
+    pub line_type: String, // "context" | "add" | "delete"
     pub content: String,
     pub old_line_number: Option<usize>,
     pub new_line_number: Option<usize>,
@@ -57,29 +57,41 @@ pub struct SaveMergedContentRequest {
 }
 
 #[tauri::command]
-pub async fn compute_diff(
-    request: ComputeDiffRequest,
-) -> Result<DiffResult, String> {
+pub async fn compute_diff(request: ComputeDiffRequest) -> Result<DiffResult, String> {
     let old_lines: Vec<&str> = request.old_content.lines().collect();
     let new_lines: Vec<&str> = request.new_content.lines().collect();
     let diff = similar::TextDiff::from_lines(&request.old_content, &request.new_content);
-    
+
     let mut hunks = Vec::new();
     let mut additions = 0;
     let mut deletions = 0;
-    
-    for group in diff.grouped_ops(request.options.as_ref().and_then(|o| o.context_lines).unwrap_or(3)) {
+
+    for group in diff.grouped_ops(
+        request
+            .options
+            .as_ref()
+            .and_then(|o| o.context_lines)
+            .unwrap_or(3),
+    ) {
         let mut hunk_lines = Vec::new();
         let mut old_start = 0;
         let mut new_start = 0;
         let mut old_count = 0;
         let mut new_count = 0;
-        
+
         for op in &group {
             match op {
-                similar::DiffOp::Equal { old_index, new_index, len } => {
-                    if old_start == 0 { old_start = *old_index + 1; }
-                    if new_start == 0 { new_start = *new_index + 1; }
+                similar::DiffOp::Equal {
+                    old_index,
+                    new_index,
+                    len,
+                } => {
+                    if old_start == 0 {
+                        old_start = *old_index + 1;
+                    }
+                    if new_start == 0 {
+                        new_start = *new_index + 1;
+                    }
                     for i in 0..*len {
                         hunk_lines.push(DiffLine {
                             line_type: "context".to_string(),
@@ -91,8 +103,12 @@ pub async fn compute_diff(
                         new_count += 1;
                     }
                 }
-                similar::DiffOp::Delete { old_index, old_len, .. } => {
-                    if old_start == 0 { old_start = *old_index + 1; }
+                similar::DiffOp::Delete {
+                    old_index, old_len, ..
+                } => {
+                    if old_start == 0 {
+                        old_start = *old_index + 1;
+                    }
                     for i in 0..*old_len {
                         hunk_lines.push(DiffLine {
                             line_type: "delete".to_string(),
@@ -104,8 +120,12 @@ pub async fn compute_diff(
                         deletions += 1;
                     }
                 }
-                similar::DiffOp::Insert { new_index, new_len, .. } => {
-                    if new_start == 0 { new_start = *new_index + 1; }
+                similar::DiffOp::Insert {
+                    new_index, new_len, ..
+                } => {
+                    if new_start == 0 {
+                        new_start = *new_index + 1;
+                    }
                     for i in 0..*new_len {
                         hunk_lines.push(DiffLine {
                             line_type: "add".to_string(),
@@ -117,9 +137,18 @@ pub async fn compute_diff(
                         additions += 1;
                     }
                 }
-                similar::DiffOp::Replace { old_index, old_len, new_index, new_len } => {
-                    if old_start == 0 { old_start = *old_index + 1; }
-                    if new_start == 0 { new_start = *new_index + 1; }
+                similar::DiffOp::Replace {
+                    old_index,
+                    old_len,
+                    new_index,
+                    new_len,
+                } => {
+                    if old_start == 0 {
+                        old_start = *old_index + 1;
+                    }
+                    if new_start == 0 {
+                        new_start = *new_index + 1;
+                    }
                     for i in 0..*old_len {
                         hunk_lines.push(DiffLine {
                             line_type: "delete".to_string(),
@@ -143,7 +172,7 @@ pub async fn compute_diff(
                 }
             }
         }
-        
+
         if !hunk_lines.is_empty() {
             hunks.push(DiffHunk {
                 old_start,
@@ -154,7 +183,7 @@ pub async fn compute_diff(
             });
         }
     }
-    
+
     Ok(DiffResult {
         hunks,
         additions,
@@ -164,16 +193,12 @@ pub async fn compute_diff(
 }
 
 #[tauri::command]
-pub async fn apply_patch(
-    request: ApplyPatchRequest,
-) -> Result<String, String> {
+pub async fn apply_patch(request: ApplyPatchRequest) -> Result<String, String> {
     Ok(request.content)
 }
 
 #[tauri::command]
-pub async fn save_merged_diff_content(
-    request: SaveMergedContentRequest,
-) -> Result<(), String> {
+pub async fn save_merged_diff_content(request: SaveMergedContentRequest) -> Result<(), String> {
     let path = PathBuf::from(&request.file_path);
 
     if let Some(parent) = path.parent() {
@@ -185,6 +210,6 @@ pub async fn save_merged_diff_content(
     tokio::fs::write(&path, &request.content)
         .await
         .map_err(|e| format!("Failed to write file: {}", e))?;
-    
+
     Ok(())
 }

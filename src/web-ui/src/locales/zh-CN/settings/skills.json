@@ -11,6 +11,27 @@
     "user": "用户级",
     "project": "项目级"
   },
+  "market": {
+    "title": "技能市场",
+    "subtitle": "搜索并下载可复用 Skill（默认下载到当前项目）",
+    "searchPlaceholder": "搜索市场技能...",
+    "refreshTooltip": "刷新市场结果",
+    "loading": "正在加载市场技能...",
+    "errorPrefix": "市场加载失败: ",
+    "empty": {
+      "noMatch": "没有找到匹配的市场 Skill",
+      "noSkills": "暂时没有可展示的市场 Skill"
+    },
+    "item": {
+      "sourceLabel": "来源: ",
+      "installs": "安装量: {{count}}",
+      "noDescription": "暂无简介",
+      "downloadProject": "下载到项目",
+      "installed": "已安装",
+      "installedTooltip": "该 Skill 已安装",
+      "downloading": "下载中..."
+    }
+  },
   "form": {
     "title": "添加Skill",
     "closeTooltip": "关闭",
@@ -38,7 +59,8 @@
     "loading": "加载中...",
     "errorPrefix": "加载失败: ",
     "empty": {
-      "noMatch": "没有找到匹配的Skill"
+      "noMatch": "没有找到匹配的Skill",
+      "noSkills": "还没有配置任何Skill"
     },
     "item": {
       "user": "用户级",
@@ -63,6 +85,8 @@
     "deleteFailed": "删除失败: {{error}}",
     "toggleSuccess": "Skill \"{{name}}\" 已{{status}}",
     "toggleFailed": "切换状态失败: {{error}}",
+    "marketDownloadSuccess": "Skill \"{{name}}\" 下载成功",
+    "marketDownloadFailed": "下载失败: {{error}}",
     "enabled": "启用",
     "disabled": "禁用"
   }

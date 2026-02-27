@@ -104,6 +104,7 @@ impl ToolRegistry {
 
         // Web tool
         self.register_tool(Arc::new(WebSearchTool::new()));
+        self.register_tool(Arc::new(WebFetchTool::new()));
 
         // IDE control tool
         self.register_tool(Arc::new(IdeControlTool::new()));
@@ -156,6 +157,17 @@ impl ToolRegistry {
             self.tools.len()
         );
         self.tools.values().cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_tool_registry;
+
+    #[test]
+    fn registry_includes_webfetch_tool() {
+        let registry = create_tool_registry();
+        assert!(registry.get_tool("WebFetch").is_some());
     }
 }
 

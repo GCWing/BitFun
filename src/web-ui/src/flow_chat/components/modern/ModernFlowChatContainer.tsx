@@ -9,6 +9,7 @@ import { FlowChatHeader } from './FlowChatHeader';
 import { WelcomePanel } from '../WelcomePanel';
 import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo } from '../../store/modernFlowChatStore';
+import type { VirtualItem } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { startAutoSync } from '../../services/storeSync';
 import { globalEventBus } from '../../../infrastructure/event-bus';
@@ -25,6 +26,7 @@ import './ModernFlowChatContainer.scss';
 
 const log = createLogger('ModernFlowChatContainer');
 
+type ExploreGroupVirtualItem = Extract<VirtualItem, { type: 'explore-group' }>;
 
 interface ModernFlowChatContainerProps {
   className?: string;
@@ -64,7 +66,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   
   const handleExpandAllInTurn = useCallback((turnId: string) => {
     const groupIds = virtualItems
-      .filter(item => 
+      .filter((item): item is ExploreGroupVirtualItem =>
         item.type === 'explore-group' && 
         item.turnId === turnId
       )
@@ -355,6 +357,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           {virtualItems.length === 0 ? (
             <WelcomePanel
               key={activeSession?.sessionId ?? 'welcome'}
+              sessionMode={activeSession?.mode}
               onQuickAction={(command) => {
                 window.dispatchEvent(new CustomEvent('fill-chat-input', {
                   detail: { message: command }

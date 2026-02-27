@@ -40,7 +40,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   const { isToolbarMode } = useToolbarModeContext();
 
-  const { handleMinimize, handleMaximize, handleClose, handleHomeClick, isMaximized } =
+  const { handleMinimize, handleMaximize, handleClose, isMaximized } =
     useWindowControls({ isToolbarMode });
 
   const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
@@ -52,7 +52,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const [isSweepGlowing, setIsSweepGlowing] = useState(false);
   const [showStartupOverlay, setShowStartupOverlay] = useState(false);
   const [transitionDir, setTransitionDir] = useState<TransitionDirection>(null);
-  const [showWorkspaceUnderlay, setShowWorkspaceUnderlay] = useState(false);
 
   // Auto-open last workspace on startup
   const autoOpenAttemptedRef = useRef(false);
@@ -87,37 +86,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     }
   }, [openWorkspace]);
 
-  const handleAnimatedHomeClick = useCallback(() => {
-    if (!hasWorkspace || isTransitioning) return;
-
-    setTransitionDir('returning');
-    setIsTransitioning(true);
-    setShowStartupOverlay(true);
-    setShowWorkspaceUnderlay(true);
-
-    // 50ms settle delay + 560ms morph + buffer
-    setTimeout(() => {
-      handleHomeClick();
-      setTimeout(() => {
-        setShowWorkspaceUnderlay(false);
-        setShowStartupOverlay(false);
-        setIsTransitioning(false);
-        setTransitionDir(null);
-      }, 120);
-    }, 680);
-  }, [hasWorkspace, isTransitioning, handleHomeClick]);
-
   // Listen for nav-panel events dispatched by WorkspaceHeader
   useEffect(() => {
     const onNewProject = () => handleNewProject();
-    const onGoHome = () => handleAnimatedHomeClick();
     window.addEventListener('nav:new-project', onNewProject);
-    window.addEventListener('nav:go-home', onGoHome);
     return () => {
       window.removeEventListener('nav:new-project', onNewProject);
-      window.removeEventListener('nav:go-home', onGoHome);
     };
-  }, [handleNewProject, handleAnimatedHomeClick]);
+  }, [handleNewProject]);
 
   // macOS native menubar events (previously in TitleBar)
   const isMacOS = useMemo(() => {
@@ -139,12 +115,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           } catch {}
         }));
         unlistenFns.push(await listen('bitfun_menu_new_project', () => handleNewProject()));
-        unlistenFns.push(await listen('bitfun_menu_go_home', () => handleAnimatedHomeClick()));
         unlistenFns.push(await listen('bitfun_menu_about', () => handleShowAbout()));
       } catch {}
     })();
     return () => { unlistenFns.forEach(fn => fn()); unlistenFns = []; };
-  }, [isMacOS, openWorkspace, handleNewProject, handleAnimatedHomeClick, handleShowAbout]);
+  }, [isMacOS, openWorkspace, handleNewProject, handleShowAbout]);
 
   const handleWorkspaceSelected = useCallback(async (workspacePath: string, projectDescription?: string) => {
     try {
@@ -189,12 +164,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       if (!currentWorkspace?.rootPath) return;
 
       try {
+        const preferredMode =
+          sessionStorage.getItem('bitfun:flowchat:preferredMode') ||
+          sessionStorage.getItem('bitfun:flowchat:lastMode') ||
+          undefined;
+        if (sessionStorage.getItem('bitfun:flowchat:preferredMode')) {
+          sessionStorage.removeItem('bitfun:flowchat:preferredMode');
+        }
+
         const flowChatManager = FlowChatManager.getInstance();
-        const hasHistoricalSessions = await flowChatManager.initialize(currentWorkspace.rootPath);
+        const hasHistoricalSessions = await flowChatManager.initialize(
+          currentWorkspace.rootPath,
+          preferredMode
+        );
 
         let sessionId: string | undefined;
-        if (!hasHistoricalSessions) {
-          sessionId = await flowChatManager.createChatSession({});
+        const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+        if (!hasHistoricalSessions || !flowChatStore.getState().activeSessionId) {
+          sessionId = await flowChatManager.createChatSession({}, preferredMode);
         }
 
         const pendingDescription = sessionStorage.getItem('pendingProjectDescription');
@@ -203,7 +190,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
           setTimeout(async () => {
             try {
-              const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
               const targetSessionId = sessionId || flowChatStore.getState().activeSessionId;
 
               if (!targetSessionId) {
@@ -367,6 +353,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   const containerClassName = [
     'bitfun-app-layout',
+    isMacOS ? 'bitfun-app-layout--macos' : '',
     className,
     isTransitioning ? 'bitfun-app-layout--transitioning' : '',
   ].filter(Boolean).join(' ');
@@ -379,9 +366,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
         <main className="bitfun-app-main-workspace" data-testid="app-main-content">
           <WorkspaceBody
-            onMinimize={handleMinimize}
+            onMinimize={isMacOS ? undefined : handleMinimize}
             onMaximize={handleMaximize}
-            onClose={handleClose}
+            onClose={isMacOS ? undefined : handleClose}
             isMaximized={isMaximized}
             isEntering={transitionDir === 'entering'}
             isExiting={transitionDir === 'returning'}

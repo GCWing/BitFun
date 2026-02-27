@@ -1,14 +1,14 @@
 //! Application state management
 
-use bitfun_core::util::errors::*;
-use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
-use bitfun_core::service::{workspace, config, filesystem, ai_rules, mcp};
 use bitfun_core::agentic::{agents, tools};
+use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
+use bitfun_core::service::{ai_rules, config, filesystem, mcp, workspace};
+use bitfun_core::util::errors::*;
 
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthStatus {
@@ -44,30 +44,36 @@ pub struct AppState {
 impl AppState {
     pub async fn new_async() -> BitFunResult<Self> {
         let start_time = std::time::Instant::now();
-        
-        let config_service = config::get_global_config_service().await
-            .map_err(|e| BitFunError::config(format!("Failed to get global config service: {}", e)))?;
-        
+
+        let config_service = config::get_global_config_service().await.map_err(|e| {
+            BitFunError::config(format!("Failed to get global config service: {}", e))
+        })?;
+
         let ai_client = Arc::new(RwLock::new(None));
-        let ai_client_factory = AIClientFactory::get_global().await
-            .map_err(|e| BitFunError::service(format!("Failed to get global AIClientFactory: {}", e)))?;
-        
+        let ai_client_factory = AIClientFactory::get_global().await.map_err(|e| {
+            BitFunError::service(format!("Failed to get global AIClientFactory: {}", e))
+        })?;
+
         let tool_registry = {
             let registry = tools::registry::get_global_tool_registry();
             let lock = registry.read().await;
             Arc::new(lock.get_all_tools())
         };
-        
+
         let workspace_service = Arc::new(workspace::WorkspaceService::new().await?);
         let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
-        
-        ai_rules::initialize_global_ai_rules_service().await
-            .map_err(|e| BitFunError::service(format!("Failed to initialize AI rules service: {}", e)))?;
-        let ai_rules_service = ai_rules::get_global_ai_rules_service().await
+
+        ai_rules::initialize_global_ai_rules_service()
+            .await
+            .map_err(|e| {
+                BitFunError::service(format!("Failed to initialize AI rules service: {}", e))
+            })?;
+        let ai_rules_service = ai_rules::get_global_ai_rules_service()
+            .await
             .map_err(|e| BitFunError::service(format!("Failed to get AI rules service: {}", e)))?;
-        
+
         let agent_registry = agents::get_agent_registry();
-        
+
         let mcp_service = match mcp::MCPService::new(config_service.clone()) {
             Ok(service) => {
                 log::info!("MCP service initialized successfully");
@@ -106,19 +112,26 @@ impl AppState {
 
     pub async fn get_health_status(&self) -> HealthStatus {
         let mut services = HashMap::new();
-        services.insert("ai_client".to_string(), self.ai_client.read().await.is_some());
+        services.insert(
+            "ai_client".to_string(),
+            self.ai_client.read().await.is_some(),
+        );
         services.insert("workspace_service".to_string(), true);
         services.insert("config_service".to_string(), true);
         services.insert("filesystem_service".to_string(), true);
-        
+
         let all_healthy = services.values().all(|&status| status);
-        
+
         HealthStatus {
-            status: if all_healthy { "healthy".to_string() } else { "degraded".to_string() },
-            message: if all_healthy { 
-                "All services are running normally".to_string() 
-            } else { 
-                "Some services are unavailable".to_string() 
+            status: if all_healthy {
+                "healthy".to_string()
+            } else {
+                "degraded".to_string()
+            },
+            message: if all_healthy {
+                "All services are running normally".to_string()
+            } else {
+                "Some services are unavailable".to_string()
             },
             services,
             uptime_seconds: self.start_time.elapsed().as_secs(),
@@ -132,6 +145,9 @@ impl AppState {
     }
 
     pub fn get_tool_names(&self) -> Vec<String> {
-        self.tool_registry.iter().map(|tool| tool.name().to_string()).collect()
+        self.tool_registry
+            .iter()
+            .map(|tool| tool.name().to_string())
+            .collect()
     }
 }

@@ -1,4 +1,6 @@
 fn main() {
+    emit_rerun_if_changed(std::path::Path::new("builtin_skills"));
+
     // Run the build script to embed prompts data
     if let Err(e) = build_embedded_prompts() {
         eprintln!("Warning: Failed to embed prompts data: {}", e);
@@ -14,6 +16,25 @@ fn escape_rust_string(s: &str) -> String {
     // To avoid quote issues, return the original string directly
     // Using r### syntax can include any character
     s.to_string()
+}
+
+fn emit_rerun_if_changed(path: &std::path::Path) {
+    if !path.exists() {
+        return;
+    }
+
+    println!("cargo:rerun-if-changed={}", path.display());
+
+    if path.is_dir() {
+        let entries = match std::fs::read_dir(path) {
+            Ok(entries) => entries,
+            Err(_) => return,
+        };
+
+        for entry in entries.flatten() {
+            emit_rerun_if_changed(&entry.path());
+        }
+    }
 }
 
 // Function to embed prompts data

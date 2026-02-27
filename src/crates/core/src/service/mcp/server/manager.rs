@@ -6,6 +6,7 @@ use super::connection::{MCPConnection, MCPConnectionPool};
 use super::{MCPServerConfig, MCPServerRegistry, MCPServerStatus};
 use crate::service::mcp::adapter::tool::MCPToolAdapter;
 use crate::service::mcp::config::MCPConfigService;
+use crate::service::runtime::{RuntimeManager, RuntimeSource};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -102,6 +103,76 @@ impl MCPServerManager {
         Ok(())
     }
 
+    /// Initializes servers without shutting down existing ones.
+    ///
+    /// This is safe to call multiple times (e.g., from multiple frontend windows).
+    pub async fn initialize_non_destructive(&self) -> BitFunResult<()> {
+        info!("Initializing MCP servers (non-destructive)");
+
+        let configs = self.config_service.load_all_configs().await?;
+        if configs.is_empty() {
+            return Ok(());
+        }
+
+        for config in &configs {
+            if !config.enabled {
+                continue;
+            }
+            if !self.registry.contains(&config.id).await {
+                if let Err(e) = self.registry.register(config).await {
+                    warn!(
+                        "Failed to register MCP server during non-destructive init: name={} id={} error={}",
+                        config.name, config.id, e
+                    );
+                }
+            }
+        }
+
+        for config in configs {
+            if !(config.enabled && config.auto_start) {
+                continue;
+            }
+
+            // Start only when not already running.
+            if let Ok(status) = self.get_server_status(&config.id).await {
+                if matches!(
+                    status,
+                    MCPServerStatus::Connected | MCPServerStatus::Healthy
+                ) {
+                    continue;
+                }
+            }
+
+            let _ = self.start_server(&config.id).await;
+        }
+
+        Ok(())
+    }
+
+    /// Ensures a server is registered in the registry if it exists in config.
+    ///
+    /// This is useful after config changes (e.g. importing MCP servers) where the registry
+    /// hasn't been re-initialized yet.
+    pub async fn ensure_registered(&self, server_id: &str) -> BitFunResult<()> {
+        if self.registry.contains(server_id).await {
+            return Ok(());
+        }
+
+        let Some(config) = self.config_service.get_server_config(server_id).await? else {
+            return Err(BitFunError::NotFound(format!(
+                "MCP server config not found: {}",
+                server_id
+            )));
+        };
+
+        if !config.enabled {
+            return Ok(());
+        }
+
+        self.registry.register(&config).await?;
+        Ok(())
+    }
+
     /// Starts a server.
     pub async fn start_server(&self, server_id: &str) -> BitFunResult<()> {
         info!("Starting MCP server: id={}", server_id);
@@ -121,6 +192,10 @@ impl MCPServerManager {
                 "MCP server is disabled: {}",
                 server_id
             )));
+        }
+
+        if !self.registry.contains(server_id).await {
+            self.registry.register(&config).await?;
         }
 
         let process = self.registry.get_process(server_id).await.ok_or_else(|| {
@@ -146,17 +221,31 @@ impl MCPServerManager {
                     BitFunError::Configuration("Missing command for local MCP server".to_string())
                 })?;
 
+                let runtime_manager = RuntimeManager::new()?;
+                let resolved = runtime_manager.resolve_command(command).ok_or_else(|| {
+                    BitFunError::ProcessError(format!(
+                        "MCP server command '{}' not found in system PATH or BitFun managed runtimes at {}",
+                        command,
+                        runtime_manager.runtime_root_display()
+                    ))
+                })?;
+
+                let source_label = match resolved.source {
+                    RuntimeSource::System => "system",
+                    RuntimeSource::Managed => "managed",
+                };
+
                 info!(
-                    "Starting local MCP server: command={} id={}",
-                    command, server_id
+                    "Starting local MCP server: command={} source={} id={}",
+                    resolved.command, source_label, server_id
                 );
 
-                proc.start(command, &config.args, &config.env)
+                proc.start(&resolved.command, &config.args, &config.env)
                     .await
                     .map_err(|e| {
                         error!(
-                            "Failed to start local MCP server process: id={} error={}",
-                            server_id, e
+                            "Failed to start local MCP server process: id={} command={} source={} error={}",
+                            server_id, resolved.command, source_label, e
                         );
                         e
                     })?;
@@ -172,13 +261,15 @@ impl MCPServerManager {
                     url, server_id
                 );
 
-                proc.start_remote(url, &config.env).await.map_err(|e| {
-                    error!(
-                        "Failed to connect to remote MCP server: url={} id={} error={}",
-                        url, server_id, e
-                    );
-                    e
-                })?;
+                proc.start_remote(url, &config.env, &config.headers)
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            "Failed to connect to remote MCP server: url={} id={} error={}",
+                            url, server_id, e
+                        );
+                        e
+                    })?;
             }
             super::MCPServerType::Container => {
                 error!("Container MCP servers not supported: id={}", server_id);
@@ -249,20 +340,26 @@ impl MCPServerManager {
                 BitFunError::NotFound(format!("MCP server config not found: {}", server_id))
             })?;
 
-        let process =
-            self.registry.get_process(server_id).await.ok_or_else(|| {
-                BitFunError::NotFound(format!("MCP server not found: {}", server_id))
-            })?;
-
-        let mut proc = process.write().await;
-
         match config.server_type {
             super::MCPServerType::Local => {
+                self.ensure_registered(server_id).await?;
+
+                let process = self.registry.get_process(server_id).await.ok_or_else(|| {
+                    BitFunError::NotFound(format!("MCP server not found: {}", server_id))
+                })?;
+                let mut proc = process.write().await;
+
                 let command = config
                     .command
                     .as_ref()
                     .ok_or_else(|| BitFunError::Configuration("Missing command".to_string()))?;
                 proc.restart(command, &config.args, &config.env).await?;
+            }
+            super::MCPServerType::Remote => {
+                // Treat restart as reconnect for remote servers.
+                self.ensure_registered(server_id).await?;
+                let _ = self.stop_server(server_id).await;
+                self.start_server(server_id).await?;
             }
             _ => {
                 return Err(BitFunError::NotImplemented(
@@ -276,6 +373,12 @@ impl MCPServerManager {
 
     /// Returns server status.
     pub async fn get_server_status(&self, server_id: &str) -> BitFunResult<MCPServerStatus> {
+        if !self.registry.contains(server_id).await {
+            // If the server exists in config but isn't registered yet, register it so status
+            // reflects reality (Uninitialized) instead of heuristics in the UI.
+            let _ = self.ensure_registered(server_id).await;
+        }
+
         let process =
             self.registry.get_process(server_id).await.ok_or_else(|| {
                 BitFunError::NotFound(format!("MCP server not found: {}", server_id))

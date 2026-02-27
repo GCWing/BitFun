@@ -1,15 +1,12 @@
 //! Startchat Agent API
 
-use log::error;
-use tauri::State;
 use bitfun_core::function_agents::{
-    StartchatFunctionAgent,
-    WorkStateAnalysis,
-    WorkStateOptions,
-    startchat_func_agent::Language,
+    startchat_func_agent::Language, StartchatFunctionAgent, WorkStateAnalysis, WorkStateOptions,
 };
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use tauri::State;
 
 use super::app_state::AppState;
 
@@ -51,12 +48,15 @@ pub async fn analyze_work_state(
 ) -> Result<WorkStateAnalysis, String> {
     let agent = StartchatFunctionAgent::new(state.ai_client_factory.clone());
     let opts = request.options.unwrap_or_default();
-    
+
     agent
         .analyze_work_state(Path::new(&request.repo_path), opts)
         .await
         .map_err(|e| {
-            error!("Work state analysis failed: repo_path={}, error={}", request.repo_path, e);
+            error!(
+                "Work state analysis failed: repo_path={}, error={}",
+                request.repo_path, e
+            );
             e.to_string()
         })
 }
@@ -68,12 +68,15 @@ pub async fn quick_analyze_work_state(
 ) -> Result<WorkStateAnalysis, String> {
     let agent = StartchatFunctionAgent::new(state.ai_client_factory.clone());
     let language = request.language.unwrap_or(Language::Chinese);
-    
+
     agent
         .quick_analyze(Path::new(&request.repo_path), language)
         .await
         .map_err(|e| {
-            error!("Quick work state analysis failed: repo_path={}, error={}", request.repo_path, e);
+            error!(
+                "Quick work state analysis failed: repo_path={}, error={}",
+                request.repo_path, e
+            );
             e.to_string()
         })
 }
@@ -84,12 +87,15 @@ pub async fn generate_greeting_only(
     request: GenerateGreetingRequest,
 ) -> Result<WorkStateAnalysis, String> {
     let agent = StartchatFunctionAgent::new(state.ai_client_factory.clone());
-    
+
     agent
         .generate_greeting_only(Path::new(&request.repo_path))
         .await
         .map_err(|e| {
-            error!("Generate greeting failed: repo_path={}, error={}", request.repo_path, e);
+            error!(
+                "Generate greeting failed: repo_path={}, error={}",
+                request.repo_path, e
+            );
             e.to_string()
         })
 }
@@ -100,27 +106,31 @@ pub async fn get_work_state_summary(
     request: QuickAnalyzeRequest,
 ) -> Result<WorkStateSummaryResponse, String> {
     let agent = StartchatFunctionAgent::new(state.ai_client_factory.clone());
-    
+
     let language = request.language.unwrap_or(Language::Chinese);
-    
+
     let analysis = agent
         .quick_analyze(Path::new(&request.repo_path), language)
         .await
         .map_err(|e| {
-            error!("Failed to get work state summary: repo_path={}, error={}", request.repo_path, e);
+            error!(
+                "Failed to get work state summary: repo_path={}, error={}",
+                request.repo_path, e
+            );
             e.to_string()
         })?;
-    
-    let (unstaged_files, unpushed_commits, has_git_changes) = if let Some(ref git) = analysis.current_state.git_state {
-        (
-            git.unstaged_files + git.staged_files,
-            git.unpushed_commits,
-            git.unstaged_files > 0 || git.staged_files > 0 || git.unpushed_commits > 0
-        )
-    } else {
-        (0, 0, false)
-    };
-    
+
+    let (unstaged_files, unpushed_commits, has_git_changes) =
+        if let Some(ref git) = analysis.current_state.git_state {
+            (
+                git.unstaged_files + git.staged_files,
+                git.unpushed_commits,
+                git.unstaged_files > 0 || git.staged_files > 0 || git.unpushed_commits > 0,
+            )
+        } else {
+            (0, 0, false)
+        };
+
     Ok(WorkStateSummaryResponse {
         greeting_title: analysis.greeting.title,
         current_state_summary: analysis.current_state.summary,

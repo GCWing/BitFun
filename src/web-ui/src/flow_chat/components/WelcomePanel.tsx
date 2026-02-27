@@ -12,6 +12,7 @@ import { useApp } from '../../app/hooks/useApp';
 import { StreamText } from '../../component-library';
 import { aiExperienceConfigService } from '@/infrastructure/config/services';
 import { createLogger } from '@/shared/utils/logger';
+import CoworkExampleCards from './CoworkExampleCards';
 import './WelcomePanel.css';
 
 const log = createLogger('WelcomePanel');
@@ -21,6 +22,8 @@ interface WelcomePanelProps {
   onQuickAction?: (command: string) => void;
   /** Custom class name. */
   className?: string;
+  /** Current session mode, used to tailor empty-state content. */
+  sessionMode?: string;
 }
 
 // Session-level AI analysis failure flag to avoid repeated retries.
@@ -30,7 +33,8 @@ const aiAnalysisInFlight = new Map<string, Promise<WorkStateAnalysis | null>>();
 
 export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   onQuickAction,
-  className = ''
+  className = '',
+  sessionMode,
 }) => {
   const { t, i18n } = useTranslation();
   const [analysis, setAnalysis] = useState<WorkStateAnalysis | null>(null);
@@ -49,6 +53,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const defaultIntentsStartedRef = useRef<boolean>(false);
   
   const { switchLeftPanelTab } = useApp();
+  const isCoworkSession = (sessionMode || '').toLowerCase() === 'cowork';
   // AI enhancement failures are handled silently.
   
   // Static greeting content (available immediately).
@@ -75,7 +80,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     return { title, subtitle };
   }, [t]);
 
-  const featureIntro = t('welcome.featureIntro');
+  const featureIntro = t(isCoworkSession ? 'welcome.featureIntroCowork' : 'welcome.featureIntro');
 
   // Load fallback Git state without AI.
   const loadFallbackGitState = useCallback(async (workspacePath: string) => {
@@ -197,6 +202,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
   useEffect(() => {
     const loadInitialState = async () => {
+      if (isCoworkSession) {
+        return;
+      }
+
       try {
         const workspace = await globalStateAPI.getCurrentWorkspace();
         if (workspace?.rootPath) {
@@ -210,7 +219,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     };
 
     loadInitialState();
-  }, [loadFallbackGitState, loadAiEnhancements]);
+  }, [loadFallbackGitState, loadAiEnhancements, isCoworkSession]);
 
   const handleQuickActionClick = useCallback((command: string) => {
     onQuickAction?.(command);
@@ -281,21 +290,27 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   ];
 
   useEffect(() => {
+    if (isCoworkSession) return;
+
     if (featureIntroCompleted && gitState && !showGitState && !gitStateCompleted) {
       setTimeout(() => setShowGitState(true), 200);
     }
-  }, [featureIntroCompleted, gitState, showGitState, gitStateCompleted]);
+  }, [featureIntroCompleted, gitState, showGitState, gitStateCompleted, isCoworkSession]);
 
   useEffect(() => {
+    if (isCoworkSession) return;
+
     if (featureIntroCompleted && aiAnalysisCompleted && !gitState && !showIntents) {
       setTimeout(() => {
         setShowIntents(true);
         startShowingDefaultIntents();
       }, 200);
     }
-  }, [featureIntroCompleted, aiAnalysisCompleted, gitState, showIntents, startShowingDefaultIntents]);
+  }, [featureIntroCompleted, aiAnalysisCompleted, gitState, showIntents, startShowingDefaultIntents, isCoworkSession]);
 
   useEffect(() => {
+    if (isCoworkSession) return;
+
     if (gitStateCompleted && !showSummary && !showIntents) {
       if (currentState?.summary) {
         setTimeout(() => setShowSummary(true), 200);
@@ -306,7 +321,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         }, 200);
       }
     }
-  }, [gitStateCompleted, showSummary, showIntents, currentState, aiAnalysisCompleted, startShowingDefaultIntents]);
+  }, [gitStateCompleted, showSummary, showIntents, currentState, aiAnalysisCompleted, startShowingDefaultIntents, isCoworkSession]);
 
   return (
     <div className={`welcome-panel ${className}`}>
@@ -338,7 +353,16 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         </div>
 
 
-        {showGitState && gitState && (
+        {isCoworkSession && featureIntroCompleted && (
+          <div className="welcome-panel__section welcome-panel__section--cowork-examples">
+            <CoworkExampleCards
+              resetKey={0}
+              onSelectPrompt={(prompt) => handleQuickActionClick(prompt)}
+            />
+          </div>
+        )}
+
+        {!isCoworkSession && showGitState && gitState && (
           <div className="welcome-panel__section welcome-panel__section--ai-enhanced">
           <h2 className="welcome-panel__section-title">
             {t('welcome.lastTimeYouWere')}
@@ -484,13 +508,13 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
           </div>
         )}
 
-        {gitStateCompleted && !showSummary && !showIntents && (
+        {!isCoworkSession && gitStateCompleted && !showSummary && !showIntents && (
           <div className="welcome-panel__ai-analyzing">
             <span className="welcome-panel__ai-analyzing-cursor"></span>
           </div>
         )}
 
-        {showSummary && workSummaryText && (
+        {!isCoworkSession && showSummary && workSummaryText && (
           <div className="welcome-panel__work-summary" key="work-summary-container">
             <p className="welcome-panel__work-summary-text">
               <StreamText 
@@ -513,7 +537,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
           </div>
         )}
 
-        {showIntents && predictedActions.length > 0 ? (
+        {!isCoworkSession && (showIntents && predictedActions.length > 0 ? (
           <div className="welcome-panel__section">
             <h2 className="welcome-panel__section-title">
               {t('welcome.youMightWant')}
@@ -613,11 +637,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
               })}
             </div>
           </div>
-        ) : null}
+        ) : null)}
       </div>
     </div>
   );
 };
 
 export default WelcomePanel;
-
