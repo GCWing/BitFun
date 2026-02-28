@@ -1,0 +1,22 @@
+{
+  "skills": "Skill",
+  "subagents": "Agents",
+  "mcp": "MCP",
+  "refresh": "刷新能力状态",
+  "reconnect": "重连",
+  "mcpWarning": "{{count}} 个 MCP 服务状态异常",
+  "loadFailed": "能力状态加载失败",
+  "toggleFailed": "能力开关更新失败",
+  "mcpReconnectSuccess": "{{name}} 重连成功",
+  "mcpReconnectFailed": "{{name}} 重连失败",
+  "emptySkills": "暂无 Skill，可在设置中添加",
+  "emptySubagents": "暂无 Agents",
+  "emptyAgents": "暂无 Agents",
+  "emptyMcp": "暂无 MCP 服务",
+  "path": "路径",
+  "toolCount": "工具数",
+  "serverType": "类型",
+  "clickToCopy": "点击复制路径",
+  "pathCopied": "路径已复制",
+  "pathCopyFailed": "复制路径失败"
+}

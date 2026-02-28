@@ -4,6 +4,14 @@
 
 .default-model-config {
   padding: 0;
+
+  &__optional-label {
+    margin-left: 4px;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    font-weight: $font-weight-normal;
+    opacity: 0.75;
+  }
   
   
   

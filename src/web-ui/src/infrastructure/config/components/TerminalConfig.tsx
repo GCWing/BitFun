@@ -2,9 +2,17 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Download, CheckCircle, XCircle, Layers, ExternalLink } from 'lucide-react';
-import { Button, Alert, Select, Tooltip } from '@/component-library';
-import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent } from './common';
+import { Download, CheckCircle, XCircle, Layers, ExternalLink } from 'lucide-react';
+import {
+  Button,
+  Alert,
+  Select,
+  Tooltip,
+  ConfigPageLoading,
+  ConfigPageMessage,
+  ConfigPageRefreshButton,
+} from '@/component-library';
+import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { configManager } from '../services/ConfigManager';
 import { getTerminalService } from '@/tools/terminal';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -305,14 +313,12 @@ const TerminalConfig: React.FC = () => {
   if (loading) {
     return (
       <ConfigPageLayout className="bitfun-terminal-config">
-      <ConfigPageHeader
-        title={t('title')}
-        subtitle={t('subtitle')}
-      />
+        <ConfigPageHeader
+          title={t('title')}
+          subtitle={t('subtitle')}
+        />
         <ConfigPageContent>
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-            {t('messages.loading')}
-          </div>
+          <ConfigPageLoading text={t('messages.loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -327,14 +333,7 @@ const TerminalConfig: React.FC = () => {
       
       <ConfigPageContent className="bitfun-terminal-config__content">
         
-        {message && (
-          <div className="bitfun-terminal-config__message-container">
-            <Alert
-              type={message.type === 'success' ? 'success' : message.type === 'error' ? 'error' : 'info'}
-              message={message.text}
-            />
-          </div>
-        )}
+        <ConfigPageMessage message={message} />
 
         
         {shouldShowPowerShellCoreRecommendation() && (
@@ -368,182 +367,155 @@ const TerminalConfig: React.FC = () => {
         )}
 
         
-        <div className="bitfun-terminal-config__section">
-          <div className="bitfun-terminal-config__section-header">
-            <div className="bitfun-terminal-config__section-title">
-              <h3>{t('sections.defaultTerminal')}</h3>
-            </div>
-            <Tooltip content={t('terminal.refreshTooltip')}>
-              <button
-                className="bitfun-terminal-config__refresh-btn"
-                onClick={handleRefresh}
-                disabled={loading}
-              >
-                <RefreshCw size={14} className={loading ? 'spinning' : ''} />
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="bitfun-terminal-config__section-content">
-            
-            <div className="bitfun-terminal-config__setting-item">
-              <div className="bitfun-terminal-config__setting-info">
-                <p className="bitfun-terminal-config__setting-description">
-                  {t('terminal.description')}
-                </p>
-              </div>
-              <div className="bitfun-terminal-config__select-wrapper">
-                {availableShells.length > 0 ? (
-                  <Select
-                    value={defaultShell}
-                    onChange={(v) => handleShellChange(v as string)}
-                    options={shellOptions}
-                    placeholder={t('terminal.placeholder')}
-                    disabled={saving}
-                  />
-                ) : (
-                  <div className="bitfun-terminal-config__no-shells">
-                    {t('terminal.noShells')}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Shell Warnings (Windows only) */}
-            {platform === 'windows' && defaultShell === 'Cmd' && (
-              <Alert
-                type="warning"
-                message={t('terminal.warnings.cmd')}
-                style={{ marginTop: '12px' }}
-              />
-            )}
-            {platform === 'windows' && defaultShell === 'Bash' && (
-              <Alert
-                type="warning"
-                message={t('terminal.warnings.gitBash')}
-                style={{ marginTop: '12px' }}
-              />
-            )}
-          </div>
-        </div>
-
-        
-        <div className="bitfun-terminal-config__section">
-          <div className="bitfun-terminal-config__section-header">
-            <div className="bitfun-terminal-config__section-title">
-              <h3>{t('sections.cliAgents')}</h3>
-            </div>
-            <Tooltip content={t('cliAgents.refreshTooltip')}>
-              <button
-                className="bitfun-terminal-config__refresh-btn"
-                onClick={handleRefreshCLIAgents}
-                disabled={loading}
-              >
-                <RefreshCw size={14} className={loading ? 'spinning' : ''} />
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="bitfun-terminal-config__section-content">
-            <p className="bitfun-terminal-config__setting-description" style={{ marginBottom: '16px' }}>
-              {t('cliAgents.description')}
-            </p>
-
-            
-            {shouldShowNpmRecommendation() && (
-              <div className="bitfun-terminal-config__message-container" style={{ marginBottom: '16px' }}>
-                <Alert
-                  type="warning"
-                  message={
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span>{t('recommendations.npm.prefix')} </span>
-                      <strong>{t('recommendations.npm.name')}</strong>
-                      <span> {t('recommendations.npm.suffix')}</span>
-                      <a
-                        href="https://nodejs.org/zh-cn/download"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: 'var(--color-primary)',
-                          textDecoration: 'underline',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        {t('recommendations.npm.link')}
-                      </a>
-                    </span>
-                  }
+        <ConfigPageSection
+          title={t('sections.defaultTerminal')}
+          extra={(
+            <ConfigPageRefreshButton
+              tooltip={t('terminal.refreshTooltip')}
+              onClick={handleRefresh}
+              loading={loading}
+              disabled={loading}
+            />
+          )}
+        >
+          <ConfigPageRow
+            label={t('sections.defaultTerminal')}
+            description={t('terminal.description')}
+            align="center"
+          >
+            <div className="bitfun-terminal-config__select-wrapper">
+              {availableShells.length > 0 ? (
+                <Select
+                  value={defaultShell}
+                  onChange={(v) => handleShellChange(v as string)}
+                  options={shellOptions}
+                  placeholder={t('terminal.placeholder')}
+                  disabled={saving}
                 />
-              </div>
-            )}
-            
-            <div className="bitfun-terminal-config__cli-agents-list">
-              {CLI_AGENTS.map(agent => {
-                const status = cliAgentStatus[agent.id] || { exists: false, path: null, checking: true, installing: false };
-                
-                return (
-                  <div key={agent.id} className="bitfun-terminal-config__cli-agent-item">
-                    <div className="bitfun-terminal-config__cli-agent-info">
-                      <div className="bitfun-terminal-config__cli-agent-header">
-                        <span className="bitfun-terminal-config__cli-agent-name">{agent.name}</span>
-                        <span className={`bitfun-terminal-config__cli-agent-status ${status.checking ? 'checking' : status.exists ? 'available' : 'unavailable'}`}>
-                          {status.checking ? (
-                            <RefreshCw size={12} className="spinning" />
-                          ) : status.exists ? (
-                            <CheckCircle size={12} />
-                          ) : (
-                            <XCircle size={12} />
-                          )}
-                          <span>{status.checking ? t('cliAgents.checking') : status.exists ? t('cliAgents.available') : t('cliAgents.notInstalled')}</span>
-                        </span>
-                      </div>
+              ) : (
+                <div className="bitfun-terminal-config__no-shells">
+                  {t('terminal.noShells')}
+                </div>
+              )}
+            </div>
+          </ConfigPageRow>
+
+          {platform === 'windows' && defaultShell === 'Cmd' && (
+            <div className="bitfun-terminal-config__inline-alert">
+              <Alert type="warning" message={t('terminal.warnings.cmd')} />
+            </div>
+          )}
+          {platform === 'windows' && defaultShell === 'Bash' && (
+            <div className="bitfun-terminal-config__inline-alert">
+              <Alert type="warning" message={t('terminal.warnings.gitBash')} />
+            </div>
+          )}
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('sections.cliAgents')}
+          description={t('cliAgents.description')}
+          extra={(
+            <ConfigPageRefreshButton
+              tooltip={t('cliAgents.refreshTooltip')}
+              onClick={handleRefreshCLIAgents}
+              loading={loading}
+              disabled={loading}
+            />
+          )}
+        >
+          {shouldShowNpmRecommendation() && (
+            <div className="bitfun-terminal-config__inline-alert">
+              <Alert
+                type="warning"
+                message={
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>{t('recommendations.npm.prefix')} </span>
+                    <strong>{t('recommendations.npm.name')}</strong>
+                    <span> {t('recommendations.npm.suffix')}</span>
+                    <a
+                      href="https://nodejs.org/zh-cn/download"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: 'var(--color-primary)',
+                        textDecoration: 'underline',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {t('recommendations.npm.link')}
+                    </a>
+                  </span>
+                }
+              />
+            </div>
+          )}
+
+          <div className="bitfun-terminal-config__cli-agents-list">
+            {CLI_AGENTS.map(agent => {
+              const status = cliAgentStatus[agent.id] || { exists: false, path: null, checking: true, installing: false };
+              return (
+                <div key={agent.id} className="bitfun-terminal-config__cli-agent-item">
+                  <div className="bitfun-terminal-config__cli-agent-info">
+                    <div className="bitfun-terminal-config__cli-agent-header">
+                      <span className="bitfun-terminal-config__cli-agent-name">{agent.name}</span>
+                      <span className={`bitfun-terminal-config__cli-agent-status ${status.checking ? 'checking' : status.exists ? 'available' : 'unavailable'}`}>
+                        {status.checking ? (
+                          <div className="bitfun-terminal-config__status-spinner" />
+                        ) : status.exists ? (
+                          <CheckCircle size={12} />
+                        ) : (
+                          <XCircle size={12} />
+                        )}
+                        <span>{status.checking ? t('cliAgents.checking') : status.exists ? t('cliAgents.available') : t('cliAgents.notInstalled')}</span>
+                      </span>
                     </div>
-                    
-                    <div className="bitfun-terminal-config__cli-agent-actions">
-                      {agent.websiteUrl && (
-                        <Tooltip content={t('cliAgents.visitWebsite', { name: agent.name })}>
-                          <Button
-                            size="small"
-                            variant="ghost"
-                            onClick={() => systemAPI.openExternal(agent.websiteUrl)}
-                          >
-                            <ExternalLink size={14} />
-                          </Button>
-                        </Tooltip>
-                      )}
-                      {!status.exists && !status.checking && (
-                        <Tooltip content={agent.requiresNpm && !npmAvailable ? t('cliAgents.needNpm') : t('cliAgents.install')}>
-                          <Button
-                            size="small"
-                            variant="secondary"
-                            onClick={() => handleInstallAgent(agent)}
-                            disabled={status.installing || (agent.requiresNpm && !npmAvailable)}
-                          >
-                            <Download size={14} />
-                            {status.installing ? t('cliAgents.installing') : t('cliAgents.install')}
-                          </Button>
-                        </Tooltip>
-                      )}
-                      <Tooltip content={!status.exists ? t('cliAgents.needInstall') : t('cliAgents.openInHub', { name: agent.name })}>
+                  </div>
+
+                  <div className="bitfun-terminal-config__cli-agent-actions">
+                    {agent.websiteUrl && (
+                      <Tooltip content={t('cliAgents.visitWebsite', { name: agent.name })}>
                         <Button
                           size="small"
-                          variant="primary"
-                          onClick={() => handleOpenInHub(agent)}
-                          disabled={!status.exists || status.checking}
+                          variant="ghost"
+                          onClick={() => systemAPI.openExternal(agent.websiteUrl)}
                         >
-                          <Layers size={14} />
-                          {t('cliAgents.launch')}
+                          <ExternalLink size={14} />
                         </Button>
                       </Tooltip>
-                    </div>
+                    )}
+                    {!status.exists && !status.checking && (
+                      <Tooltip content={agent.requiresNpm && !npmAvailable ? t('cliAgents.needNpm') : t('cliAgents.install')}>
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          onClick={() => handleInstallAgent(agent)}
+                          disabled={status.installing || (agent.requiresNpm && !npmAvailable)}
+                        >
+                          <Download size={14} />
+                          {status.installing ? t('cliAgents.installing') : t('cliAgents.install')}
+                        </Button>
+                      </Tooltip>
+                    )}
+                    <Tooltip content={!status.exists ? t('cliAgents.needInstall') : t('cliAgents.openInHub', { name: agent.name })}>
+                      <Button
+                        size="small"
+                        variant="primary"
+                        onClick={() => handleOpenInHub(agent)}
+                        disabled={!status.exists || status.checking}
+                      >
+                        <Layers size={14} />
+                        {t('cliAgents.launch')}
+                      </Button>
+                    </Tooltip>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </ConfigPageSection>
       </ConfigPageContent>
     </ConfigPageLayout>
   );

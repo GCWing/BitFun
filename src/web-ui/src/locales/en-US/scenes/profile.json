@@ -1,0 +1,103 @@
+{
+  "defaultDesc": "A focused AI partner for programming, skilled in code analysis and project management",
+
+  "modelSlots": {
+    "primary":     { "label": "Primary",   "desc": "General conversation & reasoning" },
+    "fast":        { "label": "Fast",       "desc": "Lightweight fast responses" },
+    "compression": { "label": "Compress",   "desc": "Context length compression" },
+    "image":       { "label": "Image",      "desc": "Image generation & understanding" },
+    "voice":       { "label": "Voice",      "desc": "Voice synthesis & recognition" },
+    "retrieval":   { "label": "Retrieval",  "desc": "Vector retrieval & embedding" }
+  },
+
+  "slotDefault": {
+    "primary":     "Primary Model",
+    "fast":        "Fast Model",
+    "unconfigured": "Not configured"
+  },
+
+  "modelGroups": {
+    "presets": "System Presets",
+    "models":  "Available Models"
+  },
+
+  "hero": {
+    "editNameTitle":  "Click to edit name",
+    "editDescTitle":  "Click to edit description",
+    "descPlaceholder": "Add description...",
+    "radarTitle":     "Click to expand · Click dimension labels to navigate"
+  },
+
+  "sections": {
+    "brain":        "Brain",
+    "capabilities": "Capabilities",
+    "interaction":  "Interaction"
+  },
+
+  "cards": {
+    "model":       "Models",
+    "rules":       "Behavior Rules",
+    "memory":      "Memory",
+    "toolsMcp":    "Tools & MCP",
+    "skills":      "Skills",
+    "templates":   "Prompt Templates",
+    "preferences": "Preferences"
+  },
+
+  "actions": {
+    "globalManage": "Global Manage",
+    "manage":       "Manage",
+    "selectAll":    "Select all",
+    "clearAll":     "Clear all",
+    "reset":        "Reset",
+    "collapse":     "Collapse"
+  },
+
+  "kpi": {
+    "rules":        "User {{user}} · Project {{project}} · {{enabled}} active",
+    "memory":       "{{count}} active",
+    "skills":       "{{count}} active",
+    "templateCount": "{{count}}",
+    "toolStats":    "{{enabled}}/{{total}} built-in",
+    "toolStatsMcp": "{{enabled}}/{{total}} built-in · MCP {{mcpHealthy}}/{{mcpTotal}}"
+  },
+
+  "empty": {
+    "rules":     "No rules configured",
+    "memory":    "No memories",
+    "tools":     "No tools available",
+    "skills":    "No skills",
+    "templates": "No templates"
+  },
+
+  "notifications": {
+    "modelUpdated":  "Model updated",
+    "updateFailed":  "Update failed",
+    "toggleFailed":  "Toggle failed",
+    "resetSuccess":  "Reset complete",
+    "resetFailed":   "Reset failed",
+    "resetConfirm":  "Reset tool configuration?"
+  },
+
+  "radar": {
+    "title":    "Persona Radar",
+    "subtitle": "Click dimension labels to navigate to the corresponding settings",
+    "dims": {
+      "creativity":   "Creativity",
+      "rigor":        "Rigor",
+      "autonomy":     "Autonomy",
+      "memory":       "Memory",
+      "expression":   "Expression",
+      "adaptability": "Adaptability"
+    }
+  },
+
+  "prefs": {
+    "visualMode":         "Visual Mode",
+    "visualModeDesc":     "Show visual feedback during execution",
+    "sessionTitle":       "Auto-name Sessions",
+    "sessionTitleDesc":   "Auto-generate titles for new sessions",
+    "welcomeAnalysis":    "Welcome AI Analysis",
+    "welcomeAnalysisDesc": "Analyze project status on open"
+  }
+}

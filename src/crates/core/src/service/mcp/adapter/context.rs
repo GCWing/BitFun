@@ -65,7 +65,8 @@ impl ContextEnhancer {
         let mut total_size = 0;
 
         for (resource, content, score) in sorted {
-            let content_size = content.content.len();
+            // Only include text content in model context; skip blob-only (binary) resources
+            let content_size = content.content.as_ref().map_or(0, |s| s.len());
 
             if selected.len() >= self.config.max_resources {
                 break;
@@ -73,6 +74,11 @@ impl ContextEnhancer {
 
             if total_size + content_size > self.config.max_total_size {
                 break;
+            }
+
+            // Skip resources with no text content (e.g. video/blob-only)
+            if content_size == 0 {
+                continue;
             }
 
             selected.push((resource, content, score));

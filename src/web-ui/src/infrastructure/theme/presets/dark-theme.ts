@@ -20,7 +20,7 @@ export const bitfunDarkTheme: ThemeConfig = {
       quaternary: '#202024',
       elevated: '#18181a',
       workbench: '#121214',
-      flowchat: '#121214',
+      scene: '#16161a',
       tooltip: 'rgba(30, 30, 32, 0.92)',  
     },
     

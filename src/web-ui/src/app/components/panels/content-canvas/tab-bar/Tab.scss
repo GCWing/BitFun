@@ -28,7 +28,7 @@
 
   // Active state - match canvas-tab-bar is-active-group background
   &.is-active {
-    background: var(--color-bg-primary, rgba(255, 255, 255, 0.08));
+    background: var(--color-bg-scene, rgba(255, 255, 255, 0.08));
     border-bottom: 1px solid var(--color-primary, #60a5fa);
   }
 

@@ -513,12 +513,15 @@
     "flowChatInitFailed": "Initialization failed. Please refresh the page."
   },
   "bottomBar": {
-    "sessions": "Sessions",
+    "sessions": "Workbench",
     "files": "Files",
     "terminal": "Terminal",
     "projectContext": "Project Context",
     "git": "Git",
-    "clickToSelectBranch": "Click to select branch"
+    "capabilities": "Capabilities",
+    "clickToSelectBranch": "Click to select branch",
+    "aiWingExpand": "Expand AI tools",
+    "devWingExpand": "Expand dev tools"
   },
   "canvas": {
     "noContentOpen": "No content open",
@@ -567,7 +570,6 @@
     },
     "errors": {
       "markdownEditorMissingPath": "Cannot load Markdown editor: missing file path or initial content",
-      "workflowMissingId": "Cannot load workflow panel: missing workflow ID",
       "planViewerMissingPath": "Cannot load Plan viewer: missing file path",
       "terminalMissingSessionId": "Cannot load terminal: missing session ID"
     },

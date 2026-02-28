@@ -7,6 +7,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 
   &--small {
     .bitfun-input-container {
@@ -48,11 +49,15 @@
 
       &:hover:not(.bitfun-input-wrapper--disabled &) {
         background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
-        border-color: transparent;
+        border-color: var(--border-base, rgba(255, 255, 255, 0.14));
       }
 
       &:focus-within {
         background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
+        border-color: transparent;
+      }
+
+      &:hover:focus-within {
         border-color: var(--color-accent-500, #60a5fa);
       }
     }
@@ -101,9 +106,11 @@
   align-items: center;
   gap: var(--size-gap-2, 8px);
   padding: 0 var(--size-gap-3, 12px);
-  border-radius: var(--size-radius-sm, 6px);
+  border-radius: 4px;
   transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
   position: relative;
+  min-width: 0;
+  overflow: hidden;
 
   &:hover:not(.bitfun-input-wrapper--disabled &) {
     background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
@@ -119,6 +126,7 @@
 
 .bitfun-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none !important;
   outline: none !important;
@@ -132,10 +140,16 @@
     color: var(--color-text-muted, #a0a0a0);
   }
 
+  &::selection {
+    border-radius: 2px;
+    background: var(--color-accent-300);
+  }
+
   &:focus,
   &:focus-visible {
     border: none !important;
     outline: none !important;
+    outline-offset: 0 !important;
     box-shadow: none !important;
   }
 

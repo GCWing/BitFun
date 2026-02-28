@@ -1,0 +1,683 @@
+/**
+ * SkillsScene styles.
+ */
+
+@use '../../../component-library/styles/tokens' as *;
+
+// ── Scene shell ───────────────────────────────────────────────
+
+.bitfun-skills-scene {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+
+  &__loading {
+    flex: 1;
+  }
+
+  // ── View layout ──────────────────────────────────────────
+
+  &__view {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  &__view-header {
+    flex-shrink: 0;
+    padding: $size-gap-5 clamp(16px, 2.2vw, 28px) $size-gap-4;
+  }
+
+  // Inner centering wrapper for installed view header content (600px max-width, matches settings scene)
+  &__view-header-inner {
+    width: min(100%, 600px);
+    margin-inline: auto;
+  }
+
+  &__view-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    margin-bottom: $size-gap-3;
+  }
+
+  &__view-title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    margin: 0 0 4px;
+    line-height: $line-height-tight;
+  }
+
+  &__view-subtitle {
+    font-size: $font-size-sm;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: $line-height-relaxed;
+  }
+
+  &__view-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: $size-gap-5 clamp(16px, 2.2vw, 28px);
+
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-track { background: transparent; }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-subtle);
+      border-radius: 2px;
+    }
+  }
+
+  // Inner centering wrapper for installed view content (600px max-width, matches settings scene)
+  &__view-content-inner {
+    width: min(100%, 600px);
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  // ── Market toolbar ───────────────────────────────────────
+
+  &__market-toolbar {
+    .search__wrapper {
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        rgba(255, 255, 255, 0.03) 100%
+      );
+      border: 1px solid var(--border-subtle);
+      border-radius: $size-radius-lg;
+    }
+  }
+
+  // ── Installed form ───────────────────────────────────────
+
+  &__path-input {
+    display: flex;
+    align-items: flex-end;
+    gap: $size-gap-2;
+
+    > :first-child {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  &__path-hint {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__form-hint {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__validating {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  &__validation {
+    padding: $size-gap-2 $size-gap-3;
+    border-radius: $size-radius-base;
+    font-size: $font-size-sm;
+
+    &.is-valid {
+      background: rgba($color-success, 0.08);
+      border: 1px solid rgba($color-success, 0.3);
+      color: var(--color-success);
+    }
+
+    &.is-invalid {
+      background: rgba($color-error, 0.08);
+      border: 1px solid rgba($color-error, 0.3);
+      color: var(--color-error);
+    }
+  }
+
+  &__validation-name {
+    font-weight: $font-weight-medium;
+  }
+
+  &__validation-desc {
+    font-size: $font-size-xs;
+    opacity: 0.8;
+    margin-top: 2px;
+  }
+
+  &__validation-error {
+    font-weight: $font-weight-medium;
+  }
+
+  &__path-value {
+    font-family: $font-family-mono;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    word-break: break-all;
+  }
+}
+
+// ── Market list ───────────────────────────────────────────────
+
+.bitfun-market {
+
+  // ── List container ────────────────────────────────────────
+
+  &__list {
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    overflow: hidden;
+    // Shimmer vars must live on an actual DOM element so they inherit to children.
+    --skeleton-bg: var(--element-bg-medium);
+    --skeleton-shimmer-0: rgba(255, 255, 255, 0);
+    --skeleton-shimmer-peak: rgba(255, 255, 255, 0.13);
+  }
+
+  // ── List item ─────────────────────────────────────────────
+
+  &__list-item {
+    position: relative;
+    border-bottom: 1px solid var(--border-subtle);
+    animation: bitfun-market-item-in 0.28s $easing-decelerate both;
+    animation-delay: calc(var(--item-index, 0) * 40ms);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &--skeleton {
+      animation: none;
+      overflow: hidden;
+      pointer-events: none;
+
+      // Full-row shimmer sweep, staggered per row index for a top-down wave.
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(
+          90deg,
+          var(--skeleton-shimmer-0) 0%,
+          var(--skeleton-shimmer-peak) 50%,
+          var(--skeleton-shimmer-0) 100%
+        );
+        animation: bitfun-market-row-shimmer 1.6s ease-in-out
+          calc(var(--item-index, 0) * 0.1s) infinite;
+        z-index: 1;
+        pointer-events: none;
+      }
+    }
+  }
+
+  &__list-item-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-4;
+    padding: $size-gap-3 $size-gap-4;
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard;
+    outline: none;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -2px;
+    }
+  }
+
+  &__list-item-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__list-item-desc {
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    margin: 3px 0 0;
+    line-height: $line-height-base;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__list-item-meta {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex-shrink: 0;
+  }
+
+  &__list-item-action {
+    flex-shrink: 0;
+  }
+
+  // ── Expanded details ──────────────────────────────────────
+
+  &__list-item-details {
+    padding: $size-gap-3 $size-gap-4 $size-gap-4;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--element-bg-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+  }
+
+  &__detail-desc {
+    font-size: $font-size-sm;
+    color: var(--color-text-secondary);
+    line-height: $line-height-relaxed;
+    margin: 0;
+  }
+
+  &__detail-row {
+    display: flex;
+    align-items: baseline;
+    gap: $size-gap-2;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__detail-label {
+    flex-shrink: 0;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-secondary);
+  }
+
+  &__detail-value {
+    font-family: $font-family-mono;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    word-break: break-all;
+  }
+
+  // ── Name row (shared) ─────────────────────────────────────
+
+  &__card-name-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  &__card-name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    line-height: $line-height-tight;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // ── Badge ─────────────────────────────────────────────────
+
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: $badge-padding-y $badge-padding-x;
+    border-radius: $size-radius-full;
+    font-size: $badge-font-size;
+    font-weight: $badge-font-weight;
+    line-height: 1;
+    border: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+
+    &--installed {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+    }
+
+    &--user {
+      background: var(--color-info-bg);
+      color: var(--color-info);
+    }
+
+    &--project {
+      background: var(--color-purple-200);
+      color: var(--color-purple-500);
+    }
+
+    &--disabled {
+      background: var(--element-bg-base);
+      color: var(--color-text-secondary);
+    }
+  }
+
+  // ── Installs count ────────────────────────────────────────
+
+  &__installs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  // ── Source chip ───────────────────────────────────────────
+
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 120px;
+    padding: 2px 8px;
+    border-radius: $size-radius-full;
+    font-size: $font-size-xs;
+    border: 1px solid var(--border-subtle);
+    background: var(--element-bg-soft);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+  }
+
+  // ── Pagination ────────────────────────────────────────────
+
+  &__pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-3;
+    padding: $size-gap-4 0 $size-gap-2;
+  }
+
+  &__pagination-info {
+    font-size: $font-size-sm;
+    color: var(--color-text-secondary);
+    min-width: 64px;
+    text-align: center;
+    user-select: none;
+  }
+
+  // ── Search icon button (inside search suffix) ────────────
+
+  &__search-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  // ── Empty / error states ─────────────────────────────────
+
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-3;
+    padding: $size-gap-10 $size-gap-6;
+    color: var(--color-text-muted);
+    font-size: $font-size-sm;
+    text-align: center;
+    opacity: 0.6;
+
+    svg {
+      opacity: 0.5;
+    }
+
+    &--error {
+      color: var(--color-error);
+      opacity: 1;
+
+      svg {
+        opacity: 0.7;
+      }
+    }
+  }
+
+  // ── Skeleton ─────────────────────────────────────────────
+
+  &__skeleton-line,
+  &__skeleton-chip,
+  &__skeleton-btn {
+    background: var(--skeleton-bg);
+    border-radius: $size-radius-sm;
+    border: none;
+  }
+
+  &__skeleton-line {
+    height: 12px;
+
+    &--title {
+      height: 14px;
+      width: 40%;
+      margin-bottom: 6px;
+    }
+
+    &--body {
+      height: 11px;
+      width: 75%;
+    }
+  }
+
+  &__skeleton-chip {
+    width: 80px;
+    height: 20px;
+    border-radius: $size-radius-full;
+
+    &--sm {
+      width: 40px;
+    }
+  }
+
+  &__skeleton-btn {
+    width: 96px;
+    height: 28px;
+    border-radius: $size-radius-base;
+  }
+}
+
+// ── Responsive ───────────────────────────────────────────────
+
+@container (max-width: 460px) {
+  .bitfun-skills-scene {
+    &__view-header {
+      padding: $size-gap-4;
+    }
+
+    &__view-content {
+      padding: $size-gap-4;
+    }
+  }
+}
+
+@keyframes bitfun-market-row-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes bitfun-market-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ── Light theme: invert shimmer to dark ──────────────────────
+
+:root[data-theme-type="light"] .bitfun-market__list {
+  --skeleton-shimmer-0: rgba(0, 0, 0, 0);
+  --skeleton-shimmer-peak: rgba(0, 0, 0, 0.07);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-market__list-item {
+    animation: none;
+  }
+}
+
+// ── Installed view: filter bar & item actions ─────────────
+
+.bitfun-installed {
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+  }
+
+  // ── Filter chip bar ───────────────────────────────────
+
+  &__filter-bar {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-top: $size-gap-3;
+    flex-wrap: wrap;
+  }
+
+  &__filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-2;
+    height: 26px;
+    padding: 0 $size-gap-3;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-full;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard,
+                border-color $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &.is-active {
+      color: var(--color-primary);
+      background: rgba(var(--color-primary-rgb, 99, 102, 241), 0.1);
+      border-color: rgba(var(--color-primary-rgb, 99, 102, 241), 0.4);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: $size-radius-full;
+    background: var(--element-bg-medium);
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+    line-height: 1;
+
+    .bitfun-installed__filter-chip.is-active & {
+      background: rgba(var(--color-primary-rgb, 99, 102, 241), 0.18);
+      color: var(--color-primary);
+    }
+  }
+
+  // ── Item actions (switch + delete) ────────────────────
+
+  &__item-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
+  &__delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-error);
+      background: rgba(var(--color-error-rgb, 239, 68, 68), 0.1);
+    }
+
+    &:active {
+      background: rgba(var(--color-error-rgb, 239, 68, 68), 0.18);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-error);
+      outline-offset: -1px;
+    }
+  }
+
+  // ── Skeleton: actions placeholder ────────────────────
+
+  &__skeleton-actions {
+    width: 64px;
+    height: 24px;
+    border-radius: $size-radius-sm;
+    background: var(--skeleton-bg);
+  }
+}
+
+// ── Installed list item: disabled opacity ─────────────────
+
+.bitfun-market__list-item.is-disabled {
+  .bitfun-market__card-name,
+  .bitfun-market__list-item-desc {
+    opacity: 0.45;
+  }
+}

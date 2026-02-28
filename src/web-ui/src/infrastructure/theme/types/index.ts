@@ -20,9 +20,10 @@ export interface BackgroundColors {
   tertiary: ColorValue;
   quaternary: ColorValue;
   elevated: ColorValue;
-  workbench: ColorValue;  
-  flowchat: ColorValue;   
-  tooltip?: ColorValue;   
+  workbench: ColorValue;
+  /** Scene panel background — used by SceneViewport, FlowChat, and all scene content areas. */
+  scene: ColorValue;
+  tooltip?: ColorValue;
 }
 
  

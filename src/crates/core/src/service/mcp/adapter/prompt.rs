@@ -13,19 +13,12 @@ impl PromptAdapter {
         let mut prompt_parts = Vec::new();
 
         for message in &content.messages {
+            let text = message.content.text_or_placeholder();
             match message.role.as_str() {
-                "system" => {
-                    prompt_parts.push(message.content.clone());
-                }
-                "user" => {
-                    prompt_parts.push(format!("User: {}", message.content));
-                }
-                "assistant" => {
-                    prompt_parts.push(format!("Assistant: {}", message.content));
-                }
-                _ => {
-                    prompt_parts.push(format!("{}: {}", message.role, message.content));
-                }
+                "system" => prompt_parts.push(text),
+                "user" => prompt_parts.push(format!("User: {}", text)),
+                "assistant" => prompt_parts.push(format!("Assistant: {}", text)),
+                _ => prompt_parts.push(format!("{}: {}", message.role, text)),
             }
         }
 
@@ -49,18 +42,12 @@ impl PromptAdapter {
 
     /// Substitutes arguments in prompt messages.
     pub fn substitute_arguments(
-        messages: Vec<MCPPromptMessage>,
+        mut messages: Vec<MCPPromptMessage>,
         arguments: &std::collections::HashMap<String, String>,
     ) -> Vec<MCPPromptMessage> {
+        for msg in &mut messages {
+            msg.content.substitute_placeholders(arguments);
+        }
         messages
-            .into_iter()
-            .map(|mut msg| {
-                for (key, value) in arguments {
-                    let placeholder = format!("{{{{{}}}}}", key);
-                    msg.content = msg.content.replace(&placeholder, value);
-                }
-                msg
-            })
-            .collect()
     }
 }

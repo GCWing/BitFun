@@ -6,6 +6,7 @@
 .select {
   position: relative;
   width: 100%;
+  min-width: 0;
 
   &__label {
     display: block;
@@ -28,6 +29,8 @@
     transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
     min-height: 36px;
     position: relative;
+    min-width: 0;
+    overflow: hidden;
 
     &:hover:not(.select--disabled &) {
       background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));

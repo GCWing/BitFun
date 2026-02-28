@@ -6,18 +6,12 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Zap, Eye, Puzzle } from 'lucide-react';
-import { CubeIcon } from '@/app/components/Header/CubeIcon';
 
 export const WelcomeStep: React.FC = () => {
   const { t } = useTranslation('onboarding');
 
   return (
     <div className="bitfun-onboarding-step bitfun-onboarding-welcome">
-      {/* Logo */}
-      <div className="bitfun-onboarding-welcome__logo">
-        <CubeIcon size={100} />
-      </div>
-
       {/* Title */}
       <div className="bitfun-onboarding-step__header">
         <h1 className="bitfun-onboarding-step__title">

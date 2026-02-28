@@ -1,0 +1,103 @@
+{
+  "defaultDesc": "专注于编程的 AI 伙伴，擅长代码分析与项目管理",
+
+  "modelSlots": {
+    "primary":     { "label": "主力", "desc": "通用对话与推理" },
+    "fast":        { "label": "快速", "desc": "轻量快速响应" },
+    "compression": { "label": "压缩", "desc": "上下文长度压缩" },
+    "image":       { "label": "图像", "desc": "图像生成与理解" },
+    "voice":       { "label": "语音", "desc": "语音合成与识别" },
+    "retrieval":   { "label": "检索", "desc": "向量检索与嵌入" }
+  },
+
+  "slotDefault": {
+    "primary":     "主力模型",
+    "fast":        "快速模型",
+    "unconfigured": "未配置"
+  },
+
+  "modelGroups": {
+    "presets": "系统预设",
+    "models":  "可用模型"
+  },
+
+  "hero": {
+    "editNameTitle":  "点击编辑名称",
+    "editDescTitle":  "点击编辑描述",
+    "descPlaceholder": "添加描述...",
+    "radarTitle":     "点击图形放大 · 点击维度文字可跳转"
+  },
+
+  "sections": {
+    "brain":        "大脑",
+    "capabilities": "能力",
+    "interaction":  "交互"
+  },
+
+  "cards": {
+    "model":       "模型",
+    "rules":       "行为守则",
+    "memory":      "记忆",
+    "toolsMcp":    "工具与MCP",
+    "skills":      "技能",
+    "templates":   "提示模板",
+    "preferences": "偏好"
+  },
+
+  "actions": {
+    "globalManage": "全局管理",
+    "manage":       "管理",
+    "selectAll":    "全选",
+    "clearAll":     "清空",
+    "reset":        "重置",
+    "collapse":     "收起"
+  },
+
+  "kpi": {
+    "rules":        "用户 {{user}} · 项目 {{project}} · {{enabled}} 启用",
+    "memory":       "{{count}} 条启用",
+    "skills":       "{{count}} 个启用",
+    "templateCount": "{{count}} 个",
+    "toolStats":    "{{enabled}}/{{total}} 内置",
+    "toolStatsMcp": "{{enabled}}/{{total}} 内置 · MCP {{mcpHealthy}}/{{mcpTotal}}"
+  },
+
+  "empty": {
+    "rules":     "暂无守则",
+    "memory":    "暂无记忆",
+    "tools":     "暂无工具信息",
+    "skills":    "暂无技能",
+    "templates": "暂无模板"
+  },
+
+  "notifications": {
+    "modelUpdated":  "模型已更新",
+    "updateFailed":  "更新失败",
+    "toggleFailed":  "切换失败",
+    "resetSuccess":  "已重置",
+    "resetFailed":   "重置失败",
+    "resetConfirm":  "确定要重置工具配置吗？"
+  },
+
+  "radar": {
+    "title":    "性格雷达",
+    "subtitle": "点击维度标签可跳转至对应配置",
+    "dims": {
+      "creativity":   "创造力",
+      "rigor":        "严谨度",
+      "autonomy":     "自主性",
+      "memory":       "记忆力",
+      "expression":   "表达力",
+      "adaptability": "适应性"
+    }
+  },
+
+  "prefs": {
+    "visualMode":         "可视化模式",
+    "visualModeDesc":     "执行时显示可视化反馈",
+    "sessionTitle":       "会话自动命名",
+    "sessionTitleDesc":   "新会话自动生成标题",
+    "welcomeAnalysis":    "欢迎页智能分析",
+    "welcomeAnalysisDesc": "打开项目时分析状态"
+  }
+}

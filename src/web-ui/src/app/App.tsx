@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { ChatProvider, useAIInitialization } from '../infrastructure';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeContext';
 import AppLayout from './layout/AppLayout';
@@ -7,6 +7,8 @@ import { ContextMenuRenderer } from '../shared/context-menu-system/components/Co
 import { NotificationContainer, NotificationCenter } from '../shared/notification-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
+import SplashScreen from './components/SplashScreen/SplashScreen';
 
 // Toolbar Mode
 import { ToolbarModeProvider } from '../flow_chat';
@@ -27,11 +29,36 @@ const log = createLogger('App');
  * - With a workspace: show workspace panels
  * - Header is always present; elements toggle by state
  */
+// Minimum time (ms) the splash is shown, so the animation is never a flash.
+const MIN_SPLASH_MS = 900;
+
 function App() {
   // AI initialization
   const { currentConfig } = useCurrentModelConfig();
   const { isInitialized: aiInitialized, isInitializing: aiInitializing, error: aiError } = useAIInitialization(currentConfig);
-  
+
+  // Workspace loading state — drives splash exit timing
+  const { loading: workspaceLoading } = useWorkspaceContext();
+
+  // Splash screen state
+  const [splashVisible, setSplashVisible] = useState(true);
+  const [splashExiting, setSplashExiting] = useState(false);
+  const mountTimeRef = useRef(Date.now());
+
+  // Once the workspace finishes loading, wait for the remaining min-display
+  // time and then begin the exit animation.
+  useEffect(() => {
+    if (workspaceLoading) return;
+    const elapsed = Date.now() - mountTimeRef.current;
+    const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+    const timer = window.setTimeout(() => setSplashExiting(true), remaining);
+    return () => window.clearTimeout(timer);
+  }, [workspaceLoading]);
+
+  const handleSplashExited = useCallback(() => {
+    setSplashVisible(false);
+  }, []);
+
   // Onboarding state
   const { isOnboardingActive, forceShowOnboarding, completeOnboarding } = useOnboardingStore();
   
@@ -215,7 +242,7 @@ function App() {
   // Unified layout via a single AppLayout
   return (
     <ChatProvider>
-      <ViewModeProvider defaultMode="agentic">
+      <ViewModeProvider defaultMode="coder">
         <ToolbarModeProvider>
           {/* Onboarding overlay (first launch) */}
           {isOnboardingActive && (
@@ -236,6 +263,11 @@ function App() {
           
           {/* Confirm dialog */}
           <ConfirmDialogRenderer />
+
+          {/* Startup splash — sits above everything, exits once workspace is ready */}
+          {splashVisible && (
+            <SplashScreen isExiting={splashExiting} onExited={handleSplashExited} />
+          )}
         </ToolbarModeProvider>
       </ViewModeProvider>
     </ChatProvider>

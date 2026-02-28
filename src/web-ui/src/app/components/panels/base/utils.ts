@@ -133,14 +133,6 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
-  'config-center': {
-    type: 'config-center',
-    displayName: 'Config Center',
-    icon: Settings,
-    supportsCopy: false,
-    supportsDownload: false,
-    showHeader: false
-  },
   'planner': {
     type: 'planner',
     displayName: 'Planner',

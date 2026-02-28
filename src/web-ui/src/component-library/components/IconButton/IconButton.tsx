@@ -14,6 +14,8 @@ export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
   isLoading?: boolean;
   tooltip?: React.ReactNode;
   tooltipPlacement?: 'top' | 'bottom' | 'left' | 'right';
+  /** When true, tooltip follows the mouse cursor (default: true for better UX on small targets). */
+  tooltipFollowCursor?: boolean;
 }
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(({
@@ -24,6 +26,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>((
   isLoading = false,
   tooltip,
   tooltipPlacement = 'top',
+  tooltipFollowCursor = true,
   className = '',
   disabled,
   ...props
@@ -50,7 +53,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>((
 
   if (tooltip && !disabled) {
     return (
-      <Tooltip content={tooltip} placement={tooltipPlacement}>
+      <Tooltip content={tooltip} placement={tooltipPlacement} followCursor={tooltipFollowCursor}>
         {button}
       </Tooltip>
     );

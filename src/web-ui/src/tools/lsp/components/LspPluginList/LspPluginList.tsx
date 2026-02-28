@@ -2,9 +2,9 @@
  * LSP plugin list UI.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Package, Trash2, CheckCircle, AlertCircle, ChevronDown, ChevronRight, RefreshCw, Upload } from 'lucide-react';
+import { Package, Trash2, CheckCircle, AlertCircle, ChevronDown, ChevronRight, Upload } from 'lucide-react';
 import { Button, IconButton, Card, CardBody } from '@/component-library';
 import { useLspPlugins } from '../../hooks/useLsp';
 import type { LspPlugin } from '../../types';
@@ -17,19 +17,26 @@ export interface LspPluginListProps {
   onInstallPlugin?: () => void;
   isInitializing?: boolean;
   isInstalling?: boolean;
+  /** Passes the internal reload function to the parent after mount. */
+  onMountReload?: (reload: () => void) => void;
 }
 
-export const LspPluginList: React.FC<LspPluginListProps> = ({ 
+export const LspPluginList: React.FC<LspPluginListProps> = ({
   className,
   onInitialize,
   onInstallPlugin,
   isInitializing = false,
-  isInstalling = false
+  isInstalling = false,
+  onMountReload,
 }) => {
   const { t } = useTranslation('settings/lsp');
   const { plugins, loading, error, reload, uninstallPlugin } = useLspPlugins();
   const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
   const notification = useNotification();
+
+  useEffect(() => {
+    onMountReload?.(reload);
+  }, [reload, onMountReload]);
 
   const togglePlugin = (pluginId: string) => {
     setExpandedPlugins(prev => {
@@ -56,51 +63,9 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
     }
   };
 
-  const renderHeader = () => (
-    <div className="lsp-plugin-list__header">
-      <h3>{t('pluginList.header', { count: plugins.length })}</h3>
-      <div className="lsp-plugin-list__header-actions">
-        {onInitialize && (
-          <IconButton
-            variant="ghost"
-            size="medium"
-            onClick={onInitialize}
-            disabled={isInitializing}
-            tooltip={t('pluginList.initTooltip')}
-            tooltipPlacement="top"
-          >
-            <RefreshCw size={18} className={isInitializing ? 'lsp-plugin-list__spinning' : ''} />
-          </IconButton>
-        )}
-        {onInstallPlugin && (
-          <IconButton
-            variant="ghost"
-            size="medium"
-            onClick={onInstallPlugin}
-            disabled={isInstalling}
-            tooltip={t('pluginList.installTooltip')}
-            tooltipPlacement="top"
-          >
-            <Upload size={18} />
-          </IconButton>
-        )}
-        <IconButton
-          variant="ghost"
-          size="medium"
-          onClick={reload}
-          tooltip={t('pluginList.refreshTooltip')}
-          tooltipPlacement="top"
-        >
-          <RefreshCw size={18} />
-        </IconButton>
-      </div>
-    </div>
-  );
-
   if (loading) {
     return (
       <div className={`lsp-plugin-list ${className || ''}`}>
-        {renderHeader()}
         <div className="lsp-plugin-list__loading">
           <div className="spinner"></div>
           <p>{t('pluginList.loading')}</p>
@@ -112,7 +77,6 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
   if (error) {
     return (
       <div className={`lsp-plugin-list ${className || ''}`}>
-        {renderHeader()}
         <div className="lsp-plugin-list__error">
           <AlertCircle size={32} />
           <p>{error}</p>
@@ -127,7 +91,6 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
   if (plugins.length === 0) {
     return (
       <div className={`lsp-plugin-list ${className || ''}`}>
-        {renderHeader()}
         <div className="lsp-plugin-list__empty">
           <Package size={64} />
           {onInstallPlugin && (
@@ -148,8 +111,6 @@ export const LspPluginList: React.FC<LspPluginListProps> = ({
 
   return (
     <div className={`lsp-plugin-list ${className || ''}`}>
-      {renderHeader()}
-
       <div className="lsp-plugin-list__items">
         {plugins.map(plugin => (
           <PluginItem

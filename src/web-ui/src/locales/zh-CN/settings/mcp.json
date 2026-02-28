@@ -26,7 +26,16 @@
     "url": "服务器URL",
     "urlPlaceholder": "http://localhost:3000",
     "enabled": "启用此服务器",
-    "autoStart": "应用启动时自动运行"
+    "autoStart": "应用启动时自动运行",
+    "runtime": {
+      "source": "来源",
+      "path": "解析路径",
+      "available": "命令可用",
+      "unavailable": "命令不可用",
+      "managed": "托管运行时",
+      "system": "系统环境",
+      "unknown": "未知"
+    }
   },
   "status": {
     "connected": "已连接",
@@ -124,7 +133,8 @@
     "idRequired": "请输入服务器ID",
     "commandRequired": "本地进程类型的服务器必须提供启动命令",
     "urlRequired": "远程服务类型的服务器必须提供服务器地址",
-    "validationFailed": "验证失败"
+    "validationFailed": "验证失败",
+    "commandUnavailable": "服务器 \"{{serverId}}\" 的命令不可用，请检查运行时安装或命令配置。"
   },
   "errors": {
     "unknownError": "未知错误",

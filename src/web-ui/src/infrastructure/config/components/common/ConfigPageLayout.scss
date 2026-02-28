@@ -8,19 +8,179 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
-  background: var(--color-bg-primary);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--color-bg-scene);
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
+  /* Shared layout contract for settings pages in wide scenes. */
+  --config-page-content-inline-padding: clamp(16px, 2.2vw, 28px);
+  --config-page-content-bottom-padding: var(--size-gap-6, 24px);
+  --config-page-content-max-width: 600px;
+  container-type: inline-size;
+  container-name: config-panel;
 }
 
 
 .bitfun-config-page-content {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0;
+  overflow: visible;
+  padding: 0 var(--config-page-content-inline-padding) var(--config-page-content-bottom-padding);
   min-height: 0;
+}
 
+.bitfun-config-page-content__inner {
+  width: min(100%, var(--config-page-content-max-width));
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-6, 24px);
+}
+
+.bitfun-config-page-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-4, 16px);
+}
+
+.bitfun-config-page-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--size-gap-3, 12px);
+}
+
+.bitfun-config-page-section__heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.bitfun-config-page-section__title {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-tight);
+}
+
+.bitfun-config-page-section__description {
+  margin: var(--size-gap-1, 4px) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-relaxed);
+}
+
+.bitfun-config-page-section__extra {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-2, 8px);
+}
+
+.bitfun-config-page-section__body {
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--size-radius-md, 10px);
+  overflow: visible;
+}
+
+.bitfun-config-page-row {
+  --row-grid-cols: minmax(0, 7fr) minmax(0, 3fr);
+  display: grid;
+  grid-template-columns: var(--row-grid-cols);
+  gap: var(--size-gap-4, 16px);
+  padding: var(--size-gap-4, 16px);
+}
+
+.bitfun-config-page-row + .bitfun-config-page-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bitfun-config-page-row--center {
+  align-items: center;
+}
+
+.bitfun-config-page-row--start {
+  align-items: flex-start;
+}
+
+.bitfun-config-page-row--multiline {
+  --row-grid-cols: 1fr;
+  gap: var(--size-gap-2, 8px);
+
+  .bitfun-config-page-row__control {
+    justify-content: stretch;
+    justify-self: stretch;
+  }
+}
+
+
+.bitfun-config-page-row__meta {
+  min-width: 0;
+}
+
+.bitfun-config-page-row__label {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-normal);
+}
+
+.bitfun-config-page-row__description {
+  margin: var(--size-gap-1, 4px) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-relaxed);
+}
+
+.bitfun-config-page-row__control {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: stretch;
+
+  > .bitfun-input-wrapper,
+  > .select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@container config-panel (max-width: 900px) {
+  .bitfun-config-page-layout {
+    --config-page-content-inline-padding: var(--size-gap-4, 16px);
+    --config-page-content-bottom-padding: var(--size-gap-5, 20px);
+    --config-page-content-max-width: 100%;
+  }
+}
+
+@container config-panel (max-width: 520px) {
+  .bitfun-config-page-section {
+    gap: var(--size-gap-3, 12px);
+  }
+
+  .bitfun-config-page-section__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bitfun-config-page-section__extra {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .bitfun-config-page-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--size-gap-2, 8px);
+    padding: var(--size-gap-3, 12px);
+  }
+
+  .bitfun-config-page-row__control {
+    width: 100%;
+    justify-self: stretch;
+  }
 }
 

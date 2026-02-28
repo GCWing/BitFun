@@ -10,9 +10,9 @@ import { globalStateAPI } from '../../shared/types';
 import type { WorkStateAnalysis, PredictedAction, QuickAction, GitWorkState } from '../../infrastructure/api/service-api/StartchatAgentAPI';
 import { useApp } from '../../app/hooks/useApp';
 import { StreamText } from '../../component-library';
-import { CubeIcon } from '../../app/components/Header/CubeIcon';
 import { aiExperienceConfigService } from '@/infrastructure/config/services';
 import { createLogger } from '@/shared/utils/logger';
+import CoworkExampleCards from './CoworkExampleCards';
 import './WelcomePanel.css';
 
 const log = createLogger('WelcomePanel');
@@ -22,6 +22,8 @@ interface WelcomePanelProps {
   onQuickAction?: (command: string) => void;
   /** Custom class name. */
   className?: string;
+  /** Current session mode, used to tailor empty-state content. */
+  sessionMode?: string;
 }
 
 // Session-level AI analysis failure flag to avoid repeated retries.
@@ -31,7 +33,8 @@ const aiAnalysisInFlight = new Map<string, Promise<WorkStateAnalysis | null>>();
 
 export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   onQuickAction,
-  className = ''
+  className = '',
+  sessionMode,
 }) => {
   const { t, i18n } = useTranslation();
   const [analysis, setAnalysis] = useState<WorkStateAnalysis | null>(null);
@@ -50,6 +53,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const defaultIntentsStartedRef = useRef<boolean>(false);
   
   const { switchLeftPanelTab } = useApp();
+  const isCoworkSession = (sessionMode || '').toLowerCase() === 'cowork';
   // AI enhancement failures are handled silently.
   
   // Static greeting content (available immediately).
@@ -76,7 +80,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     return { title, subtitle };
   }, [t]);
 
-  const featureIntro = t('welcome.featureIntro');
+  const featureIntro = t(isCoworkSession ? 'welcome.featureIntroCowork' : 'welcome.featureIntro');
 
   // Load fallback Git state without AI.
   const loadFallbackGitState = useCallback(async (workspacePath: string) => {
@@ -198,6 +202,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
   useEffect(() => {
     const loadInitialState = async () => {
+      if (isCoworkSession) {
+        return;
+      }
+
       try {
         const workspace = await globalStateAPI.getCurrentWorkspace();
         if (workspace?.rootPath) {
@@ -211,7 +219,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     };
 
     loadInitialState();
-  }, [loadFallbackGitState, loadAiEnhancements]);
+  }, [loadFallbackGitState, loadAiEnhancements, isCoworkSession]);
 
   const handleQuickActionClick = useCallback((command: string) => {
     onQuickAction?.(command);
@@ -282,21 +290,27 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   ];
 
   useEffect(() => {
+    if (isCoworkSession) return;
+
     if (featureIntroCompleted && gitState && !showGitState && !gitStateCompleted) {
       setTimeout(() => setShowGitState(true), 200);
     }
-  }, [featureIntroCompleted, gitState, showGitState, gitStateCompleted]);
+  }, [featureIntroCompleted, gitState, showGitState, gitStateCompleted, isCoworkSession]);
 
   useEffect(() => {
+    if (isCoworkSession) return;
+
     if (featureIntroCompleted && aiAnalysisCompleted && !gitState && !showIntents) {
       setTimeout(() => {
         setShowIntents(true);
         startShowingDefaultIntents();
       }, 200);
     }
-  }, [featureIntroCompleted, aiAnalysisCompleted, gitState, showIntents, startShowingDefaultIntents]);
+  }, [featureIntroCompleted, aiAnalysisCompleted, gitState, showIntents, startShowingDefaultIntents, isCoworkSession]);
 
   useEffect(() => {
+    if (isCoworkSession) return;
+
     if (gitStateCompleted && !showSummary && !showIntents) {
       if (currentState?.summary) {
         setTimeout(() => setShowSummary(true), 200);
@@ -307,15 +321,12 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
         }, 200);
       }
     }
-  }, [gitStateCompleted, showSummary, showIntents, currentState, aiAnalysisCompleted, startShowingDefaultIntents]);
+  }, [gitStateCompleted, showSummary, showIntents, currentState, aiAnalysisCompleted, startShowingDefaultIntents, isCoworkSession]);
 
   return (
     <div className={`welcome-panel ${className}`}>
-      <div className="welcome-panel__cube-background">
-        <CubeIcon size={200} className="welcome-panel__cube-icon" />
-      </div>
-
-      <div className="welcome-panel__greeting">
+      <div className="welcome-panel__content">
+        <div className="welcome-panel__greeting">
         <h1 className="welcome-panel__greeting-title">{greeting.title}</h1>
         <h1 className="welcome-panel__greeting-title">{t('welcome.aiPartner')}</h1>
         <p className="welcome-panel__greeting-description">{greeting.subtitle}</p>
@@ -339,11 +350,20 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
             }}
           />
         </p>
-      </div>
+        </div>
 
 
-      {showGitState && gitState && (
-        <div className="welcome-panel__section welcome-panel__section--ai-enhanced">
+        {isCoworkSession && featureIntroCompleted && (
+          <div className="welcome-panel__section welcome-panel__section--cowork-examples">
+            <CoworkExampleCards
+              resetKey={0}
+              onSelectPrompt={(prompt) => handleQuickActionClick(prompt)}
+            />
+          </div>
+        )}
+
+        {!isCoworkSession && showGitState && gitState && (
+          <div className="welcome-panel__section welcome-panel__section--ai-enhanced">
           <h2 className="welcome-panel__section-title">
             {t('welcome.lastTimeYouWere')}
           </h2>
@@ -485,143 +505,142 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
               </div>
             )}
           </div>
-        </div>
-      )}
+          </div>
+        )}
 
-      {gitStateCompleted && !showSummary && !showIntents && (
-        <div className="welcome-panel__ai-analyzing">
-          <span className="welcome-panel__ai-analyzing-cursor"></span>
-        </div>
-      )}
+        {!isCoworkSession && gitStateCompleted && !showSummary && !showIntents && (
+          <div className="welcome-panel__ai-analyzing">
+            <span className="welcome-panel__ai-analyzing-cursor"></span>
+          </div>
+        )}
 
-      {showSummary && workSummaryText && (
-        <div className="welcome-panel__work-summary" key="work-summary-container">
-          <p className="welcome-panel__work-summary-text">
-            <StreamText 
-              key="work-summary-stream"
-              text={workSummaryText}
-              effect="typewriter"
-              speed={30}
-              showCursor={false}
-              className="welcome-panel__stream-text"
-              autoStart={true}
-              onComplete={() => {
-                // After summary completes, start showing the intent list.
-                setTimeout(() => {
-                  setShowIntents(true);
-                  setVisibleIntentsCount(1);
-                }, 200);
-              }}
-            />
-          </p>
-        </div>
-      )}
+        {!isCoworkSession && showSummary && workSummaryText && (
+          <div className="welcome-panel__work-summary" key="work-summary-container">
+            <p className="welcome-panel__work-summary-text">
+              <StreamText 
+                key="work-summary-stream"
+                text={workSummaryText}
+                effect="typewriter"
+                speed={30}
+                showCursor={false}
+                className="welcome-panel__stream-text"
+                autoStart={true}
+                onComplete={() => {
+                  // After summary completes, start showing the intent list.
+                  setTimeout(() => {
+                    setShowIntents(true);
+                    setVisibleIntentsCount(1);
+                  }, 200);
+                }}
+              />
+            </p>
+          </div>
+        )}
 
-      {showIntents && predictedActions.length > 0 ? (
-        <div className="welcome-panel__section">
-          <h2 className="welcome-panel__section-title">
-            {t('welcome.youMightWant')}
-          </h2>
-          
-          <div className="welcome-panel__intents">
-            {predictedActions.slice(0, 3).map((action: PredictedAction, index: number) => {
-              if (index >= visibleIntentsCount) return null;
+        {!isCoworkSession && (showIntents && predictedActions.length > 0 ? (
+          <div className="welcome-panel__section">
+            <h2 className="welcome-panel__section-title">
+              {t('welcome.youMightWant')}
+            </h2>
+            
+            <div className="welcome-panel__intents">
+              {predictedActions.slice(0, 3).map((action: PredictedAction, index: number) => {
+                if (index >= visibleIntentsCount) return null;
 
-              const isCurrentLine = index === visibleIntentsCount - 1;
-              const startIdx = index * 2;
-              const intentActions = quickActions.slice(startIdx, startIdx + 2);
+                const isCurrentLine = index === visibleIntentsCount - 1;
+                const startIdx = index * 2;
+                const intentActions = quickActions.slice(startIdx, startIdx + 2);
 
-              return (
-                <div key={`intent-${index}`} className="welcome-panel__intent-card" style={{ animation: 'fadeInUp 0.4s ease-out' }}>
-                  <div className="welcome-panel__intent-header">
-                    <div className="welcome-panel__intent-number">{index + 1}</div>
-                    <div className="welcome-panel__intent-title">
-                      {isCurrentLine ? (
-                        <StreamText
-                          key={`intent-desc-${index}`}
-                          text={action.description}
-                          effect="typewriter"
-                          speed={30}
-                          showCursor={true}
-                          className="welcome-panel__stream-text"
-                          autoStart={true}
-                          onComplete={() => onIntentLineComplete(index)}
-                        />
-                      ) : (
-                        action.description
-                      )}
+                return (
+                  <div key={`intent-${index}`} className="welcome-panel__intent-card" style={{ animation: 'fadeInUp 0.4s ease-out' }}>
+                    <div className="welcome-panel__intent-header">
+                      <div className="welcome-panel__intent-number">{index + 1}</div>
+                      <div className="welcome-panel__intent-title">
+                        {isCurrentLine ? (
+                          <StreamText
+                            key={`intent-desc-${index}`}
+                            text={action.description}
+                            effect="typewriter"
+                            speed={30}
+                            showCursor={true}
+                            className="welcome-panel__stream-text"
+                            autoStart={true}
+                            onComplete={() => onIntentLineComplete(index)}
+                          />
+                        ) : (
+                          action.description
+                        )}
+                      </div>
+                    </div>
+                    
+                    {intentActions.length > 0 && (
+                      <div className="welcome-panel__intent-actions">
+                        {intentActions.map((quickAction: QuickAction, actionIdx: number) => (
+                          <button
+                            key={actionIdx}
+                            className="welcome-panel__intent-action-btn"
+                            onClick={() => handleQuickActionClick(quickAction.command)}
+                            title={quickAction.command}
+                          >
+                            <svg className="welcome-panel__intent-action-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path d="M5 7h6M8 4l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            <span className="welcome-panel__intent-action-text">{quickAction.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : showIntents && aiAnalysisCompleted && gitState ? (
+          <div className="welcome-panel__section">
+            <h2 className="welcome-panel__section-title">
+              {t('welcome.youMightWant')}
+            </h2>
+            
+            <div className="welcome-panel__intents">
+              {defaultActions.map((action, index) => {
+                if (index >= visibleIntentsCount) return null;
+
+                const isCurrentLine = index === visibleIntentsCount - 1;
+                return (
+                  <div 
+                    key={`default-intent-${index}`}
+                    className="welcome-panel__intent-card welcome-panel__intent-card--clickable" 
+                    onClick={() => handleQuickActionClick(action.command)}
+                    style={{ animation: 'fadeInUp 0.4s ease-out' }}
+                  >
+                    <div className="welcome-panel__intent-header">
+                      <div className="welcome-panel__intent-number">{index + 1}</div>
+                      <div className="welcome-panel__intent-title">
+                        {isCurrentLine ? (
+                          <StreamText
+                            key={`default-intent-desc-${index}`}
+                            text={action.description}
+                            effect="typewriter"
+                            speed={30}
+                            showCursor={true}
+                            className="welcome-panel__stream-text"
+                            autoStart={true}
+                            onComplete={() => onIntentLineComplete(index)}
+                          />
+                        ) : (
+                          action.description
+                        )}
+                      </div>
                     </div>
                   </div>
-                  
-                  {intentActions.length > 0 && (
-                    <div className="welcome-panel__intent-actions">
-                      {intentActions.map((quickAction: QuickAction, actionIdx: number) => (
-                        <button
-                          key={actionIdx}
-                          className="welcome-panel__intent-action-btn"
-                          onClick={() => handleQuickActionClick(quickAction.command)}
-                          title={quickAction.command}
-                        >
-                          <svg className="welcome-panel__intent-action-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M5 7h6M8 4l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          <span className="welcome-panel__intent-action-text">{quickAction.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ) : showIntents && aiAnalysisCompleted && gitState ? (
-        <div className="welcome-panel__section">
-          <h2 className="welcome-panel__section-title">
-            {t('welcome.youMightWant')}
-          </h2>
-          
-          <div className="welcome-panel__intents">
-            {defaultActions.map((action, index) => {
-              if (index >= visibleIntentsCount) return null;
-
-              const isCurrentLine = index === visibleIntentsCount - 1;
-              return (
-                <div 
-                  key={`default-intent-${index}`}
-                  className="welcome-panel__intent-card welcome-panel__intent-card--clickable" 
-                  onClick={() => handleQuickActionClick(action.command)}
-                  style={{ animation: 'fadeInUp 0.4s ease-out' }}
-                >
-                  <div className="welcome-panel__intent-header">
-                    <div className="welcome-panel__intent-number">{index + 1}</div>
-                    <div className="welcome-panel__intent-title">
-                      {isCurrentLine ? (
-                        <StreamText
-                          key={`default-intent-desc-${index}`}
-                          text={action.description}
-                          effect="typewriter"
-                          speed={30}
-                          showCursor={true}
-                          className="welcome-panel__stream-text"
-                          autoStart={true}
-                          onComplete={() => onIntentLineComplete(index)}
-                        />
-                      ) : (
-                        action.description
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
+        ) : null)}
+      </div>
     </div>
   );
 };
 
 export default WelcomePanel;
-

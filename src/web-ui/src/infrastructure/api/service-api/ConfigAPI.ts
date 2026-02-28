@@ -239,6 +239,36 @@ export class ConfigAPI {
       throw createTauriCommandError('delete_skill', error, { skillName });
     }
   }
+
+  async listSkillMarket(query?: string, limit?: number): Promise<SkillMarketItem[]> {
+    try {
+      return await api.invoke('list_skill_market', {
+        request: { query, limit }
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_skill_market', error, { query, limit });
+    }
+  }
+
+  async searchSkillMarket(query: string, limit?: number): Promise<SkillMarketItem[]> {
+    try {
+      return await api.invoke('search_skill_market', {
+        request: { query, limit }
+      });
+    } catch (error) {
+      throw createTauriCommandError('search_skill_market', error, { query, limit });
+    }
+  }
+
+  async downloadSkillMarket(pkg: string, level: SkillLevel = 'project'): Promise<SkillMarketDownloadResult> {
+    try {
+      return await api.invoke('download_skill_market', {
+        request: { package: pkg, level }
+      });
+    } catch (error) {
+      throw createTauriCommandError('download_skill_market', error, { package: pkg, level });
+    }
+  }
 }
 
 
@@ -246,6 +276,8 @@ import type {
   RuntimeLoggingInfo,
   SkillInfo,
   SkillLevel,
+  SkillMarketDownloadResult,
+  SkillMarketItem,
   SkillValidationResult,
 } from '../../config/types';
 

@@ -93,12 +93,18 @@ pub fn status_to_string(status: Status) -> String {
     }
 }
 
-/// Returns file statuses.
-pub fn get_file_statuses(repo: &Repository) -> Result<Vec<GitFileStatus>, GitError> {
+/// Maximum number of untracked entries before we stop recursing into untracked
+/// directories. When the non-recursive scan already reports many untracked
+/// top-level entries, recursing would return thousands of paths that bloat IPC
+/// payloads and DOM rendering, causing severe UI lag.
+const UNTRACKED_RECURSE_THRESHOLD: usize = 200;
+
+/// Collects file statuses from a `StatusOptions` scan.
+fn collect_statuses(repo: &Repository, recurse_untracked: bool) -> Result<Vec<GitFileStatus>, GitError> {
     let mut status_options = StatusOptions::new();
     status_options.include_untracked(true);
     status_options.include_ignored(false);
-    status_options.recurse_untracked_dirs(true);
+    status_options.recurse_untracked_dirs(recurse_untracked);
 
     let statuses = repo
         .statuses(Some(&mut status_options))
@@ -159,6 +165,30 @@ pub fn get_file_statuses(repo: &Repository) -> Result<Vec<GitFileStatus>, GitErr
     }
 
     Ok(result)
+}
+
+/// Returns file statuses.
+///
+/// Uses a two-pass strategy to avoid expensive recursive scans when the
+/// repository contains many untracked files (e.g. missing .gitignore for
+/// build artifacts). First a non-recursive pass counts top-level untracked
+/// entries; only when that count is within `UNTRACKED_RECURSE_THRESHOLD` does
+/// a second recursive pass run.
+pub fn get_file_statuses(repo: &Repository) -> Result<Vec<GitFileStatus>, GitError> {
+    // Pass 1: fast non-recursive scan.
+    let shallow = collect_statuses(repo, false)?;
+
+    let untracked_count = shallow.iter().filter(|f| f.status.contains('?')).count();
+
+    if untracked_count <= UNTRACKED_RECURSE_THRESHOLD {
+        // Few untracked entries – safe to recurse for full detail.
+        collect_statuses(repo, true)
+    } else {
+        // Too many untracked entries – return the shallow result as-is.
+        // Untracked directories appear as a single entry (folder name with
+        // trailing slash) which is sufficient for the UI.
+        Ok(shallow)
+    }
 }
 
 /// Executes a Git command.

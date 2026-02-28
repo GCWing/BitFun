@@ -25,6 +25,7 @@ export class ProcessingStatusManager {
   private statuses: Map<string, ProcessingStatus> = new Map();
   private completedStatuses: ProcessingStatus[] = [];
   private listeners: Set<ProcessingStatusListener> = new Set();
+  private cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
   registerStatus(status: Omit<ProcessingStatus, 'id' | 'startTime'>): string {
     const id = this.generateId();
@@ -154,6 +155,20 @@ export class ProcessingStatusManager {
     this.completedStatuses = [];
   }
 
+  startCleanupTimer(): void {
+    if (this.cleanupIntervalId !== null) return;
+    this.cleanupIntervalId = setInterval(() => {
+      this.cleanupOldStatuses();
+    }, 60 * 1000);
+  }
+
+  stopCleanupTimer(): void {
+    if (this.cleanupIntervalId !== null) {
+      clearInterval(this.cleanupIntervalId);
+      this.cleanupIntervalId = null;
+    }
+  }
+
   private getMinDisplayTime(status: ProcessingStatus): number {
     const baseTime = 2000;
     
@@ -194,6 +209,4 @@ export class ProcessingStatusManager {
 
 export const processingStatusManager = new ProcessingStatusManager();
 
-setInterval(() => {
-  processingStatusManager.cleanupOldStatuses();
-}, 60 * 1000);
+processingStatusManager.startCleanupTimer();

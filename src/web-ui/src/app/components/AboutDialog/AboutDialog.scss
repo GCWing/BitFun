@@ -1,100 +1,17 @@
 /**
  * About dialog styles.
- * Inspired by the startup screen right-side design.
+ * Uses component library Modal for overlay and shell; only content layout here.
  */
 
 @use '../../../component-library/styles/tokens' as *;
 
-// ==================== Overlay ====================
-
-.bitfun-about-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: $z-modal;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(16px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  animation: about-overlay-fade 0.25s ease;
-}
-
-@keyframes about-overlay-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-// ==================== Dialog shell ====================
-
-.bitfun-about-dialog {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  box-shadow: 
-    0 32px 64px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 0 120px rgba(139, 92, 246, 0.08);
-  width: 416px;
-  max-width: calc(100vw - 48px);
-  min-height: 400px;
-  max-height: min(680px, calc(100vh - 48px));
-  overflow: hidden;
-  animation: about-dialog-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes about-dialog-enter {
-  from {
-    opacity: 0;
-    transform: translateY(24px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-// ==================== Close button ====================
-
-.bitfun-about-dialog__close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-  background: transparent;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  &:hover {
-    background: var(--element-bg-subtle);
-    color: var(--color-text-primary);
-  }
-  
-  &:active {
-    transform: scale(0.92);
-  }
-}
-
-// ==================== Content area ====================
+// ==================== Content area (inside Modal) ====================
 
 .bitfun-about-dialog__content {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0; // Important: allow flex children to shrink
+  min-height: 400px;
+  max-height: min(680px, calc(100vh - 48px));
   overflow: hidden;
 }
 
@@ -143,34 +60,6 @@
   0%, 100% { transform: translateX(-50%) translate(0, 0) scale(1); }
   33% { transform: translateX(-50%) translate(15px, -10px) scale(1.03); }
   66% { transform: translateX(-50%) translate(-10px, 8px) scale(0.98); }
-}
-
-// Cube container
-.bitfun-about-dialog__cube-wrapper {
-  position: relative;
-  z-index: 1;
-  margin-bottom: 24px;
-  animation: about-cube-enter 0.6s ease-out;
-}
-
-.bitfun-about-dialog__cube-icon {
-  filter: drop-shadow(0 4px 20px rgba(100, 180, 255, 0.15));
-  transition: transform 0.3s ease;
-  
-  &:hover {
-    transform: scale(1.05);
-  }
-}
-
-@keyframes about-cube-enter {
-  from {
-    opacity: 0;
-    transform: scale(0.8) rotateY(-20deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotateY(0deg);
-  }
 }
 
 .bitfun-about-dialog__title {
@@ -607,24 +496,13 @@
 // ==================== Responsive layout ====================
 
 @media (max-width: 580px) {
-  .bitfun-about-overlay {
-    padding: 16px;
-  }
-
-  .bitfun-about-dialog {
-    width: 100%;
+  .bitfun-about-dialog__content {
     min-height: 360px;
     max-height: calc(100vh - 32px);
   }
 
   .bitfun-about-dialog__hero {
     padding: 24px 20px 20px;
-  }
-
-  .bitfun-about-dialog__logo {
-    width: 60px;
-    height: 60px;
-    border-radius: 14px;
   }
 
   .bitfun-about-dialog__title {
@@ -649,23 +527,13 @@
   }
 }
 
-// Extra-small height adjustments
 @media (max-height: 500px) {
-  .bitfun-about-dialog {
+  .bitfun-about-dialog__content {
     min-height: 320px;
   }
 
   .bitfun-about-dialog__hero {
     padding: 20px 24px 16px;
-  }
-
-  .bitfun-about-dialog__logo-wrapper {
-    margin-bottom: 10px;
-  }
-
-  .bitfun-about-dialog__logo {
-    width: 56px;
-    height: 56px;
   }
 
   .bitfun-about-dialog__title {

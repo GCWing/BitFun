@@ -573,7 +573,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
         };
 
         const xtermTheme = {
-          background: theme.colors.background.primary,
+          background: theme.colors.background.scene,
           foreground: theme.colors.text.primary,
           cursor: theme.colors.text.primary,
           cursorAccent: theme.colors.background.secondary,

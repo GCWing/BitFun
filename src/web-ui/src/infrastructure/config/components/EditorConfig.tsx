@@ -2,18 +2,18 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, Select, Button } from '@/component-library';
+import { NumberInput, Select, Button, Switch, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
 import { RotateCcw } from 'lucide-react';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
-import { ConfigPageLayout, ConfigPageHeader, ConfigPageContent } from './common';
-import { 
-  ConfigForm,
-  ConfigSection,
-  ConfigCheckbox,
-  ConfigStatus
-} from './form-controls';
+import {
+  ConfigPageLayout,
+  ConfigPageHeader,
+  ConfigPageContent,
+  ConfigPageSection,
+  ConfigPageRow,
+} from './common';
 import { createLogger } from '@/shared/utils/logger';
 import './EditorConfig.scss';
 
@@ -344,308 +344,253 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
 
   if (isLoading) {
     return (
-      <ConfigPageLayout>
-      <ConfigPageHeader
-        title={t('title')}
-        subtitle={t('subtitle')}
-      />
+      <ConfigPageLayout className="bitfun-editor-config">
+        <ConfigPageHeader
+          title={t('title')}
+          subtitle={t('subtitle')}
+        />
         <ConfigPageContent>
-          <div className="bitfun-editor-config__loading">{t('messages.loading')}</div>
+          <ConfigPageLoading text={t('messages.loading')} />
         </ConfigPageContent>
       </ConfigPageLayout>
     );
   }
 
   return (
-    <ConfigPageLayout>
+    <ConfigPageLayout className="bitfun-editor-config">
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
       />
 
-      <ConfigPageContent>
-        <ConfigForm>
-          
-          <ConfigSection
-            title={t('sections.appearance.title')}
-            description={t('sections.appearance.description')}
-          >
-            
-            <div className="config-form-row">
-              <div className="config-form-group config-form-group--flex-2">
-                <label className="config-form-label">{t('appearance.font')}</label>
-                <Select
-                  options={fontFamilyOptions}
-                  value={getPrimaryFont(config.fontFamily)}
-                  onChange={(v) => updateConfig('fontFamily', buildFontFamily(v as string))}
-                  placeholder={t('appearance.font')}
-                  size="small"
-                />
-                <span className="config-form-hint">{t('appearance.fontHint')}</span>
-              </div>
+      <ConfigPageContent className="bitfun-editor-config__content">
+        <ConfigPageSection
+          title={t('sections.appearance.title')}
+          description={t('sections.appearance.description')}
+        >
+          <ConfigPageRow label={t('appearance.font')} description={t('appearance.fontHint')} align="center">
+            <Select
+              options={fontFamilyOptions}
+              value={getPrimaryFont(config.fontFamily)}
+              onChange={(v) => updateConfig('fontFamily', buildFontFamily(v as string))}
+              placeholder={t('appearance.font')}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('appearance.fontWeight')} align="center">
+            <Select
+              options={fontWeightOptionsTranslated}
+              value={config.fontWeight}
+              onChange={(v) => updateConfig('fontWeight', v as typeof config.fontWeight)}
+              placeholder={t('appearance.fontWeight')}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('appearance.fontSize')} align="center">
+            <NumberInput
+              value={config.fontSize}
+              onChange={(v) => updateConfig('fontSize', v)}
+              min={10}
+              max={32}
+              step={1}
+              unit="px"
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('appearance.lineHeight')} align="center">
+            <NumberInput
+              value={config.lineHeight}
+              onChange={(v) => updateConfig('lineHeight', v)}
+              min={1.0}
+              max={3.0}
+              step={0.1}
+              precision={1}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('appearance.cursorStyle')} align="center">
+            <Select
+              options={cursorStyleOptionsTranslated}
+              value={config.cursorStyle}
+              onChange={(v) => updateConfig('cursorStyle', v as typeof config.cursorStyle)}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('appearance.cursorBlinking')} align="center">
+            <Select
+              options={cursorBlinkingOptionsTranslated}
+              value={config.cursorBlinking}
+              onChange={(v) => updateConfig('cursorBlinking', v as typeof config.cursorBlinking)}
+              size="small"
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
 
-              <div className="config-form-group">
-                <label className="config-form-label">{t('appearance.fontWeight')}</label>
-                <Select
-                  options={fontWeightOptionsTranslated}
-                  value={config.fontWeight}
-                  onChange={(v) => updateConfig('fontWeight', v as typeof config.fontWeight)}
-                  placeholder={t('appearance.fontWeight')}
-                  size="small"
-                />
-              </div>
-            </div>
-
-            
-            <div className="config-form-row">
-              <div className="config-form-group">
-                <label className="config-form-label">{t('appearance.fontSize')}</label>
-                <NumberInput
-                  value={config.fontSize}
-                  onChange={(v) => updateConfig('fontSize', v)}
-                  min={10}
-                  max={32}
-                  step={1}
-                  unit="px"
-                  size="small"
-                />
-              </div>
-
-              <div className="config-form-group">
-                <label className="config-form-label">{t('appearance.lineHeight')}</label>
-                <NumberInput
-                  value={config.lineHeight}
-                  onChange={(v) => updateConfig('lineHeight', v)}
-                  min={1.0}
-                  max={3.0}
-                  step={0.1}
-                  precision={1}
-                  size="small"
-                />
-              </div>
-            </div>
-
-            
-            <div className="config-form-row">
-              <div className="config-form-group">
-                <label className="config-form-label">{t('appearance.cursorStyle')}</label>
-                <Select
-                  options={cursorStyleOptionsTranslated}
-                  value={config.cursorStyle}
-                  onChange={(v) => updateConfig('cursorStyle', v as typeof config.cursorStyle)}
-                  size="small"
-                />
-              </div>
-
-              <div className="config-form-group">
-                <label className="config-form-label">{t('appearance.cursorBlinking')}</label>
-                <Select
-                  options={cursorBlinkingOptionsTranslated}
-                  value={config.cursorBlinking}
-                  onChange={(v) => updateConfig('cursorBlinking', v as typeof config.cursorBlinking)}
-                  size="small"
-                />
-              </div>
-            </div>
-          </ConfigSection>
-
-          
-          <ConfigSection
-            title={t('sections.behavior.title')}
-            description={t('sections.behavior.description')}
-          >
-            
-            <div className="config-form-group">
-              <label className="config-form-label">{t('behavior.tabSize')}</label>
-              <NumberInput
-                value={config.tabSize}
-                onChange={(v) => updateConfig('tabSize', v)}
-                min={1}
-                max={8}
-                size="small"
-              />
-            </div>
-
-            
-            <ConfigCheckbox
+        <ConfigPageSection
+          title={t('sections.behavior.title')}
+          description={t('sections.behavior.description')}
+        >
+          <ConfigPageRow label={t('behavior.tabSize')} align="center">
+            <NumberInput
+              value={config.tabSize}
+              onChange={(v) => updateConfig('tabSize', v)}
+              min={1}
+              max={8}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('behavior.insertSpaces')} description={t('behavior.insertSpacesDesc')} align="center">
+            <Switch
               checked={config.insertSpaces}
               onChange={(e) => updateConfig('insertSpaces', e.target.checked)}
-              label={t('behavior.insertSpaces')}
-              description={t('behavior.insertSpacesDesc')}
+              size="small"
             />
-
-            
-            <div className="config-form-row">
-              <div className="config-form-group">
-                <label className="config-form-label">{t('behavior.wordWrap')}</label>
-                <Select
-                  options={wordWrapOptionsTranslated}
-                  value={config.wordWrap}
-                  onChange={(v) => updateConfig('wordWrap', v as typeof config.wordWrap)}
-                  size="small"
-                />
-              </div>
-
-              <div className="config-form-group">
-                <label className="config-form-label">{t('behavior.lineNumbers')}</label>
-                <Select
-                  options={lineNumbersOptionsTranslated}
-                  value={config.lineNumbers}
-                  onChange={(v) => updateConfig('lineNumbers', v as typeof config.lineNumbers)}
-                  size="small"
-                />
-              </div>
-            </div>
-
-            
-            <ConfigCheckbox
+          </ConfigPageRow>
+          <ConfigPageRow label={t('behavior.wordWrap')} align="center">
+            <Select
+              options={wordWrapOptionsTranslated}
+              value={config.wordWrap}
+              onChange={(v) => updateConfig('wordWrap', v as typeof config.wordWrap)}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('behavior.lineNumbers')} align="center">
+            <Select
+              options={lineNumbersOptionsTranslated}
+              value={config.lineNumbers}
+              onChange={(v) => updateConfig('lineNumbers', v as typeof config.lineNumbers)}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('behavior.smoothScrolling')} description={t('behavior.smoothScrollingDesc')} align="center">
+            <Switch
               checked={config.smoothScrolling}
               onChange={(e) => updateConfig('smoothScrolling', e.target.checked)}
-              label={t('behavior.smoothScrolling')}
-              description={t('behavior.smoothScrollingDesc')}
-              compact
+              size="small"
             />
-            <ConfigCheckbox
+          </ConfigPageRow>
+          <ConfigPageRow label={t('behavior.scrollBeyondLastLine')} description={t('behavior.scrollBeyondLastLineDesc')} align="center">
+            <Switch
               checked={config.scrollBeyondLastLine}
               onChange={(e) => updateConfig('scrollBeyondLastLine', e.target.checked)}
-              label={t('behavior.scrollBeyondLastLine')}
-              description={t('behavior.scrollBeyondLastLineDesc')}
-              compact
+              size="small"
             />
-          </ConfigSection>
+          </ConfigPageRow>
+        </ConfigPageSection>
 
-          
-          <ConfigSection
-            title={t('sections.display.title')}
-            description={t('sections.display.description')}
-          >
-            
-            <ConfigCheckbox
+        <ConfigPageSection
+          title={t('sections.display.title')}
+          description={t('sections.display.description')}
+        >
+          <ConfigPageRow label={t('display.minimap')} description={t('display.minimapDesc')} align="center">
+            <Switch
               checked={config.minimap.enabled}
               onChange={(e) => updateMinimapConfig('enabled', e.target.checked)}
-              label={t('display.minimap')}
-              description={t('display.minimapDesc')}
+              size="small"
             />
-
-            {config.minimap.enabled && (
-              <div className="config-subsection">
-                <div className="config-form-row">
-                  <div className="config-form-group">
-                    <label className="config-form-label">{t('display.minimapPosition')}</label>
-                    <Select
-                      options={minimapSideOptionsTranslated}
-                      value={config.minimap.side}
-                      onChange={(v) => updateMinimapConfig('side', v as string)}
-                      size="small"
-                    />
-                  </div>
-
-                  <div className="config-form-group">
-                    <label className="config-form-label">{t('display.minimapSize')}</label>
-                    <Select
-                      options={minimapSizeOptionsTranslated}
-                      value={config.minimap.size}
-                      onChange={(v) => updateMinimapConfig('size', v as string)}
-                      size="small"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            
-            <div className="config-form-row">
-              <div className="config-form-group">
-                <label className="config-form-label">{t('display.whitespace')}</label>
+          </ConfigPageRow>
+          {config.minimap.enabled && (
+            <>
+              <ConfigPageRow label={t('display.minimapPosition')} align="center">
                 <Select
-                  options={renderWhitespaceOptionsTranslated}
-                  value={config.renderWhitespace}
-                  onChange={(v) => updateConfig('renderWhitespace', v as typeof config.renderWhitespace)}
+                  options={minimapSideOptionsTranslated}
+                  value={config.minimap.side}
+                  onChange={(v) => updateMinimapConfig('side', v as string)}
                   size="small"
                 />
-              </div>
-
-              <div className="config-form-group">
-                <label className="config-form-label">{t('display.lineHighlight')}</label>
+              </ConfigPageRow>
+              <ConfigPageRow label={t('display.minimapSize')} align="center">
                 <Select
-                  options={renderLineHighlightOptionsTranslated}
-                  value={config.renderLineHighlight}
-                  onChange={(v) => updateConfig('renderLineHighlight', v as typeof config.renderLineHighlight)}
+                  options={minimapSizeOptionsTranslated}
+                  value={config.minimap.size}
+                  onChange={(v) => updateMinimapConfig('size', v as string)}
                   size="small"
                 />
-              </div>
-            </div>
-          </ConfigSection>
+              </ConfigPageRow>
+            </>
+          )}
+          <ConfigPageRow label={t('display.whitespace')} align="center">
+            <Select
+              options={renderWhitespaceOptionsTranslated}
+              value={config.renderWhitespace}
+              onChange={(v) => updateConfig('renderWhitespace', v as typeof config.renderWhitespace)}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('display.lineHighlight')} align="center">
+            <Select
+              options={renderLineHighlightOptionsTranslated}
+              value={config.renderLineHighlight}
+              onChange={(v) => updateConfig('renderLineHighlight', v as typeof config.renderLineHighlight)}
+              size="small"
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
 
-          
-          <ConfigSection
-            title={t('sections.advanced.title')}
-            description={t('sections.advanced.description')}
-          >
-            
-            <ConfigCheckbox
+        <ConfigPageSection
+          title={t('sections.advanced.title')}
+          description={t('sections.advanced.description')}
+        >
+          <ConfigPageRow label={t('advanced.semanticHighlighting')} description={t('advanced.semanticHighlightingDesc')} align="center">
+            <Switch
               checked={config.semanticHighlighting}
               onChange={(e) => updateConfig('semanticHighlighting', e.target.checked)}
-              label={t('advanced.semanticHighlighting')}
-              description={t('advanced.semanticHighlightingDesc')}
-              compact
+              size="small"
             />
-            <ConfigCheckbox
+          </ConfigPageRow>
+          <ConfigPageRow label={t('advanced.bracketPairColorization')} description={t('advanced.bracketPairColorizationDesc')} align="center">
+            <Switch
               checked={config.bracketPairColorization}
               onChange={(e) => updateConfig('bracketPairColorization', e.target.checked)}
-              label={t('advanced.bracketPairColorization')}
-              description={t('advanced.bracketPairColorizationDesc')}
-              compact
+              size="small"
             />
-            
-            
-            <ConfigCheckbox
+          </ConfigPageRow>
+          <ConfigPageRow label={t('advanced.formatOnSave')} description={t('advanced.formatOnSaveDesc')} align="center">
+            <Switch
               checked={config.formatOnSave}
               onChange={(e) => updateConfig('formatOnSave', e.target.checked)}
-              label={t('advanced.formatOnSave')}
-              description={t('advanced.formatOnSaveDesc')}
-              compact
+              size="small"
             />
-            <ConfigCheckbox
+          </ConfigPageRow>
+          <ConfigPageRow label={t('advanced.formatOnPaste')} description={t('advanced.formatOnPasteDesc')} align="center">
+            <Switch
               checked={config.formatOnPaste}
               onChange={(e) => updateConfig('formatOnPaste', e.target.checked)}
-              label={t('advanced.formatOnPaste')}
-              description={t('advanced.formatOnPasteDesc')}
-              compact
+              size="small"
             />
-            <ConfigCheckbox
+          </ConfigPageRow>
+          <ConfigPageRow label={t('advanced.trimAutoWhitespace')} description={t('advanced.trimAutoWhitespaceDesc')} align="center">
+            <Switch
               checked={config.trimAutoWhitespace}
               onChange={(e) => updateConfig('trimAutoWhitespace', e.target.checked)}
-              label={t('advanced.trimAutoWhitespace')}
-              description={t('advanced.trimAutoWhitespaceDesc')}
-              compact
-            />
-          </ConfigSection>
-
-          
-          <div className="config-action-buttons">
-            <Button
-              variant="secondary"
               size="small"
-              onClick={resetConfig}
-              disabled={isSaving}
-            >
-              <RotateCcw size={14} />
-              {t('actions.reset')}
-            </Button>
-            {isSaving && (
-              <span className="config-action-buttons__saving">{t('messages.saving')}</span>
-            )}
-          </div>
-
-          
-          {statusMessage && (
-            <ConfigStatus
-              type={statusMessage.type}
-              message={statusMessage.text}
             />
-          )}
-        </ConfigForm>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('actions.save')}
+          description={t('messages.saving')}
+        >
+          <ConfigPageRow label={t('actions.reset')} description={t('messages.confirmReset')} align="center">
+            <div className="bitfun-editor-config__actions">
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={resetConfig}
+                disabled={isSaving}
+              >
+                <RotateCcw size={14} />
+                {t('actions.reset')}
+              </Button>
+              {isSaving && (
+                <span className="bitfun-editor-config__saving">{t('messages.saving')}</span>
+              )}
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageMessage message={statusMessage} />
       </ConfigPageContent>
     </ConfigPageLayout>
   );

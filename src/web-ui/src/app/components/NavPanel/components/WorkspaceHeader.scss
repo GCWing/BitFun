@@ -1,0 +1,214 @@
+/**
+ * WorkspaceHeader styles — NavPanel top workspace indicator.
+ */
+
+@use '../../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-workspace-header {
+  flex-shrink: 0;
+  margin: 0 $size-gap-2;
+  border: 1px dashed var(--border-subtle);
+  border-radius: $size-radius-base;
+  background: transparent;
+  overflow: hidden;
+  transition: border-color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard,
+              box-shadow $motion-fast $easing-standard;
+
+  // ── Card container ─────────────────────────────────
+
+  &__card {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    width: 100%;
+    padding: $size-gap-2 $size-gap-2 $size-gap-2 $size-gap-3;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: none;
+      background: var(--element-bg-soft);
+    }
+
+    &--empty {
+      gap: $size-gap-2;
+    }
+  }
+
+  &__empty-icon {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  // ── Identity area (icon + name) ─────────────────────
+
+  &__identity {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex: 1;
+    min-width: 0;
+    cursor: default;
+  }
+
+  &__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    font-size: $font-size-sm;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+
+    &--muted {
+      font-weight: 500;
+      color: var(--color-text-muted);
+      font-size: $font-size-xs;
+    }
+  }
+
+  &__branch {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    max-width: 96px;
+    padding: 1px $size-gap-1;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-size: $font-size-xs;
+    font-weight: 500;
+    line-height: 1.4;
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    svg { flex-shrink: 0; }
+  }
+
+  // ── Dropdown menu ────────────────────────────────────
+
+  &__menu {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    overflow: hidden;
+    padding: 0;
+    transition: max-height 0.2s $easing-standard,
+                opacity 0.16s $easing-standard,
+                transform 0.2s $easing-standard;
+  }
+
+  &__menu-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: $size-gap-2 $size-gap-3;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: $font-size-sm;
+    text-align: left;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    svg { flex-shrink: 0; }
+    span { flex: 1; }
+  }
+
+  &__menu-item-main {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  &__menu-item--workspace {
+    padding-right: $size-gap-2;
+  }
+
+  &__menu-item--open {
+    color: var(--color-text-secondary);
+
+    &:hover {
+      color: var(--color-accent);
+      background: var(--element-bg-soft);
+    }
+  }
+
+  &__menu-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: $size-gap-1 0;
+  }
+
+  &__menu-section-title {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: $size-gap-2 $size-gap-3 $size-gap-1;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-top: 1px dashed var(--border-subtle);
+  }
+
+  &__menu-empty {
+    padding: $size-gap-2 $size-gap-3;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+  }
+
+  &__menu-workspaces {
+    max-height: 220px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  &.is-expanded {
+    background: var(--color-bg-elevated);
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-md);
+
+    .bitfun-workspace-header__menu {
+      max-height: 360px;
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+      padding-bottom: $size-gap-1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-workspace-header {
+    transition: none;
+    &__card { transition: none; }
+    &__menu { transition: none; }
+    &__menu-item { transition: none; }
+  }
+}

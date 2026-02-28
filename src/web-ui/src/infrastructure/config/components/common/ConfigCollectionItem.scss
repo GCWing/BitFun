@@ -1,0 +1,262 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+// ─── item wrapper ──────────────────────────────────────────────────────────────
+
+.bitfun-collection-item {
+  --bitfun-collection-details-bg: var(--element-bg-subtle);
+  --bitfun-collection-details-border: var(--border-medium);
+  --bitfun-collection-details-text: var(--color-text-secondary);
+
+  & + .bitfun-collection-item {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &.is-disabled {
+    opacity: 0.55;
+
+    .bitfun-collection-item__name {
+      text-decoration: line-through;
+    }
+  }
+}
+
+// ─── clickable row ─────────────────────────────────────────────────────────────
+
+.bitfun-collection-item__row {
+  transition: background $motion-base $easing-standard;
+
+  &.is-clickable {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  &.is-clickable:hover {
+    background: var(--element-bg-subtle);
+  }
+}
+
+// ─── label + inline badge ──────────────────────────────────────────────────────
+
+.bitfun-collection-item__label {
+  display: flex !important;
+  align-items: center;
+  gap: $size-gap-2;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.bitfun-collection-item__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.bitfun-collection-item__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: $size-radius-sm;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+  background: var(--element-bg-medium);
+  color: var(--color-text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+// ─── right control area ────────────────────────────────────────────────────────
+
+.bitfun-collection-item__control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $size-gap-2;
+}
+
+// ─── expandable details ────────────────────────────────────────────────────────
+
+.bitfun-collection-item__details {
+  padding: $size-gap-4;
+  border-top: 1px dashed var(--bitfun-collection-details-border);
+  background: var(--bitfun-collection-details-bg);
+  color: var(--bitfun-collection-details-text);
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+  animation: bitfun-collection-slide-down 0.18s $easing-standard;
+}
+
+// ─── shared action button ──────────────────────────────────────────────────────
+
+.bitfun-collection-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: $size-radius-base;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: background $motion-base $easing-standard, color $motion-base $easing-standard;
+
+  svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: var(--element-bg-medium);
+    color: var(--color-text-primary);
+  }
+
+  &--danger:hover {
+    background: rgba($color-error, 0.08);
+    color: var(--color-error);
+  }
+}
+
+// ─── empty row ─────────────────────────────────────────────────────────────────
+
+.bitfun-collection-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $size-gap-3;
+  padding: $size-gap-6 $size-gap-4;
+  color: var(--color-text-muted);
+  font-size: $font-size-sm;
+
+  p {
+    margin: 0;
+  }
+}
+
+// ─── inline form (shared by all collection pages) ──────────────────────────────
+
+.bitfun-collection-form {
+  padding: $size-gap-4;
+  border-bottom: 1px solid var(--border-subtle);
+  animation: bitfun-collection-slide-down 0.18s $easing-standard;
+}
+
+.bitfun-collection-form__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $size-gap-3;
+
+  h3 {
+    margin: 0;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+}
+
+.bitfun-collection-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+}
+
+.bitfun-collection-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: $size-gap-2;
+  margin-top: $size-gap-3;
+}
+
+// ─── details inner blocks ──────────────────────────────────────────────────────
+
+.bitfun-collection-details__field {
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
+  line-height: $line-height-relaxed;
+}
+
+.bitfun-collection-details__label {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: var(--color-text-muted);
+  margin-bottom: $size-gap-1;
+}
+
+.bitfun-collection-details__pre {
+  margin: 0;
+  padding: $size-gap-3;
+  background: var(--element-bg-medium);
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-sm;
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+  color: var(--color-text-primary);
+  line-height: $line-height-relaxed;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.bitfun-collection-details__meta {
+  font-size: $font-size-xs;
+  color: var(--color-text-muted);
+  padding-top: $size-gap-3;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bitfun-collection-details__code {
+  padding: 1px 6px;
+  background: var(--element-bg-medium);
+  border-radius: $size-radius-sm;
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+  color: var(--color-accent-500);
+}
+
+// ─── animation ─────────────────────────────────────────────────────────────────
+
+@keyframes bitfun-collection-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ─── responsive ────────────────────────────────────────────────────────────────
+
+@container config-panel (max-width: 520px) {
+  .bitfun-collection-item__details {
+    padding: $size-gap-3;
+    gap: $size-gap-2;
+  }
+
+  .bitfun-collection-form {
+    padding: $size-gap-3;
+  }
+
+  .bitfun-collection-form__body {
+    gap: $size-gap-2;
+  }
+
+  .bitfun-collection-empty {
+    flex-direction: column;
+    padding: $size-gap-4;
+  }
+
+  .bitfun-collection-btn {
+    width: 24px;
+    height: 24px;
+  }
+}

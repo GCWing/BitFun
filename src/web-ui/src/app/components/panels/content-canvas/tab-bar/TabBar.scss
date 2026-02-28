@@ -7,12 +7,12 @@
   align-items: center;
   height: 36px;
   padding: 0 4px;
-  background: var(--color-bg-primary, #1a1a1a);
+  background: var(--color-bg-scene, #1a1a1a);
   border-bottom: 1px solid var(--border-base);
 
   // Active group - slightly different background for active tabs
   &.is-active-group {
-    background: var(--color-bg-primary, #1a1a1a);
+    background: var(--color-bg-scene, #1a1a1a);
   }
 
   // Tab list

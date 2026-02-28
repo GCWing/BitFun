@@ -1,0 +1,22 @@
+{
+  "skills": "Skills",
+  "subagents": "Agents",
+  "mcp": "MCP",
+  "refresh": "Refresh capability states",
+  "reconnect": "Reconnect",
+  "mcpWarning": "{{count}} MCP server(s) need attention",
+  "loadFailed": "Failed to load capabilities",
+  "toggleFailed": "Failed to update capability switch",
+  "mcpReconnectSuccess": "{{name}} reconnected",
+  "mcpReconnectFailed": "Failed to reconnect {{name}}",
+  "emptySkills": "No skills configured",
+  "emptySubagents": "No agents available",
+  "emptyAgents": "No agents available",
+  "emptyMcp": "No MCP servers configured",
+  "path": "Path",
+  "toolCount": "Tools",
+  "serverType": "Type",
+  "clickToCopy": "Click to copy path",
+  "pathCopied": "Path copied",
+  "pathCopyFailed": "Failed to copy path"
+}

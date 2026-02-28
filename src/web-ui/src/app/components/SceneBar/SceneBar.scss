@@ -1,0 +1,237 @@
+/**
+ * SceneBar styles — scene-level tab strip (32px height).
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+$_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
+
+.bitfun-scene-bar {
+  display: flex;
+  align-items: stretch;
+  height: 40px;
+  flex-shrink: 0;
+  background: transparent;
+  user-select: none;
+  overflow: hidden;
+
+  &__tabs {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    gap: $size-gap-1;
+    --scene-tab-gap: #{$size-gap-1};
+    --scene-tab-count: 1;
+    // Keep horizontal breathing room so edge tabs don't have
+    // their rounded corners visually clipped at container bounds.
+    padding: $_tab-v-margin 2px;
+    overflow: hidden;
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 $size-gap-1;
+  }
+}
+
+.bitfun-scene-bar--no-controls {
+  padding-right: $size-gap-3;
+
+  .bitfun-scene-bar__tabs {
+    padding-right: calc(#{$size-gap-2} + 4px);
+  }
+}
+
+// On macOS the cube button is fixed at the top-right corner.
+// Reserve extra space so the right-side scene tab (Settings/Model) does not crowd it.
+.bitfun-app-layout--macos .bitfun-scene-bar--no-controls {
+  padding-right: 36px;
+
+  .bitfun-scene-bar__tabs {
+    padding-right: 16px;
+  }
+}
+
+// ── Individual tab ──────────────────────────────────────
+
+.bitfun-scene-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: $font-size-sm;
+  font-weight: 400;
+  white-space: nowrap;
+  background: var(--element-bg-soft);
+  // Full radius — tab floats symmetrically inside the bar
+  border-radius: $size-radius-sm;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard,
+              flex-basis 360ms cubic-bezier(0.22, 1, 0.36, 1),
+              max-width 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  outline: none;
+  flex: 0 1 auto;
+  flex-basis: calc(
+    (100% - (var(--scene-tab-count) - 1) * var(--scene-tab-gap)) / var(--scene-tab-count)
+  );
+  max-width: calc(
+    (100% - (var(--scene-tab-count) - 1) * var(--scene-tab-gap)) / var(--scene-tab-count)
+  );
+  min-width: 0;
+  overflow: hidden;
+  will-change: flex-basis, max-width;
+
+  &:hover {
+    color: var(--color-text-secondary);
+    background: var(--element-bg-medium);
+
+    .bitfun-scene-tab__close {
+      opacity: 1;
+    }
+  }
+
+  // Single tab: no default background, but hover still shows
+  &:only-child,
+  &:only-child#{&}--active {
+    background: transparent;
+    cursor: default;
+  }
+
+  &:only-child:hover {
+    background: transparent;
+    cursor: default;
+  }
+
+  // Active state
+  &--active {
+    color: var(--color-text-primary);
+    font-weight: 500;
+    background: var(--element-bg-base);
+
+    .bitfun-scene-tab__icon {
+      color: var(--color-primary);
+    }
+
+    &:hover .bitfun-scene-tab__close {
+      opacity: 1;
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -2px;
+  }
+
+  // ── Inner content row (icon + label + sep + subtitle) ──
+  // Centered as a group; close button sits absolutely at right.
+
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-2;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 $size-gap-3;
+    // Reserve right space so close button doesn't overlap text
+    padding-right: calc(#{$size-gap-3} + 20px);
+  }
+
+  // pinned only affects auto-eviction; all tabs have close button so no special padding needed
+
+  &__icon {
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+
+  &__label {
+    flex-shrink: 0;
+  }
+
+  &__sep {
+    color: var(--color-text-disabled);
+    font-size: $font-size-xs;
+    flex-shrink: 0;
+  }
+
+  &__subtitle {
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  &--active &__subtitle {
+    color: var(--color-text-secondary);
+  }
+
+  // Quick action icon inside tab content (e.g. new session for AI Agent tab)
+  &__action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: $size-gap-1;
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+  }
+
+  // ── Close button — absolutely positioned right ──────────
+
+  &__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: $size-gap-2;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    border-radius: $size-radius-sm;
+    padding: 0;
+    opacity: 0;
+    flex-shrink: 0;
+    transition: opacity $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      opacity: 1 !important;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-scene-tab {
+    transition: none;
+    transform: none;
+
+    &__close { transition: none; }
+  }
+}

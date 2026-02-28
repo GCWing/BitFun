@@ -3,9 +3,7 @@
 //! Handles starting, stopping, monitoring, and restarting MCP server processes.
 
 use super::connection::MCPConnection;
-use crate::service::mcp::protocol::{
-    InitializeResult, MCPMessage, MCPServerInfo, RemoteMCPTransport,
-};
+use crate::service::mcp::protocol::{InitializeResult, MCPMessage, MCPServerInfo};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -110,7 +108,7 @@ impl MCPServerProcess {
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
 
-        let mut child = cmd.spawn().map_err(|e| {
+        let child = cmd.spawn().map_err(|e| {
             error!(
                 "Failed to spawn MCP server process: command={} error={}",
                 final_command, e
@@ -119,7 +117,14 @@ impl MCPServerProcess {
                 "Failed to start MCP server '{}': {}",
                 final_command, e
             ))
-        })?;
+        });
+        let mut child = match child {
+            Ok(c) => c,
+            Err(e) => {
+                self.set_status(MCPServerStatus::Failed).await;
+                return Err(e);
+            }
+        };
 
         let stdin = child
             .stdin
@@ -141,7 +146,15 @@ impl MCPServerProcess {
         self.child = Some(child);
         self.start_time = Some(Instant::now());
 
-        self.handshake().await?;
+        if let Err(e) = self.handshake().await {
+            error!(
+                "MCP server handshake failed: name={} id={} error={}",
+                self.name, self.id, e
+            );
+            let _ = self.stop().await;
+            self.set_status(MCPServerStatus::Failed).await;
+            return Err(e);
+        }
 
         self.set_status(MCPServerStatus::Connected).await;
         info!(
@@ -154,11 +167,12 @@ impl MCPServerProcess {
         Ok(())
     }
 
-    /// Starts a remote server (HTTP/SSE).
+    /// Starts a remote server (Streamable HTTP).
     pub async fn start_remote(
         &mut self,
         url: &str,
         env: &std::collections::HashMap<String, String>,
+        headers: &std::collections::HashMap<String, String>,
     ) -> BitFunResult<()> {
         info!(
             "Starting remote MCP server: name={} id={} url={}",
@@ -166,25 +180,37 @@ impl MCPServerProcess {
         );
         self.set_status(MCPServerStatus::Starting).await;
 
-        let auth_token = env
-            .get("Authorization")
-            .or_else(|| env.get("AUTHORIZATION"))
-            .cloned();
+        let mut merged_headers = headers.clone();
+        if !merged_headers.contains_key("Authorization")
+            && !merged_headers.contains_key("authorization")
+            && !merged_headers.contains_key("AUTHORIZATION")
+        {
+            // Backward compatibility: older BitFun configs store `Authorization` under `env`.
+            if let Some(value) = env
+                .get("Authorization")
+                .or_else(|| env.get("authorization"))
+                .or_else(|| env.get("AUTHORIZATION"))
+            {
+                merged_headers.insert("Authorization".to_string(), value.clone());
+            }
+        }
 
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        let connection = Arc::new(MCPConnection::new_remote(
-            url.to_string(),
-            auth_token.clone(),
-            rx,
-        ));
+        let connection = Arc::new(MCPConnection::new_remote(url.to_string(), merged_headers));
         self.connection = Some(connection.clone());
         self.start_time = Some(Instant::now());
 
-        self.handshake().await?;
-
-        let session_id = connection.get_session_id().await;
-        RemoteMCPTransport::start_sse_loop(url.to_string(), session_id, auth_token, tx);
+        if let Err(e) = self.handshake().await {
+            error!(
+                "Remote MCP server handshake failed: name={} id={} url={} error={}",
+                self.name, self.id, url, e
+            );
+            self.connection = None;
+            self.message_rx = None;
+            self.child = None;
+            self.server_info = None;
+            self.set_status(MCPServerStatus::Failed).await;
+            return Err(e);
+        }
 
         self.set_status(MCPServerStatus::Connected).await;
         info!(

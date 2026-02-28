@@ -50,30 +50,6 @@
     animation: fc-chat-empty-fade-in $motion-slow $easing-decelerate;
   }
 
-  &__cube-background {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: $z-base;
-    pointer-events: none;
-  }
-
-  &__cube-icon {
-    opacity: 0.35;
-    filter: brightness(1.3);
-    transition: all $motion-slow $easing-standard;
-
-    :global(.cube-icon__rubiks) {
-      animation: fc-chat-empty-cube-rotate 20s linear infinite;
-    }
-  }
-
-  &:hover &__cube-icon {
-    opacity: 0.5;
-    filter: brightness(1.5);
-  }
-  
   &__greeting {
     text-align: left;
     display: flex;
@@ -220,15 +196,6 @@
   }
 }
 
-@keyframes fc-chat-empty-cube-rotate {
-  from {
-    transform: rotateX(-30deg) rotateY(45deg);
-  }
-  to {
-    transform: rotateX(-30deg) rotateY(405deg);
-  }
-}
-
 @media (max-width: 768px) {
   .fc-chat-empty {
     &__container {
@@ -257,15 +224,4 @@
   }
 }
 
-:root[data-theme-type="light"] {
-  .fc-chat-empty__cube-icon {
-    opacity: 0.60;
-    filter: brightness(1.0);
-  }
-
-  .fc-chat-empty:hover .fc-chat-empty__cube-icon {
-    opacity: 0.75;
-    filter: brightness(1.05);
-  }
-}
 

@@ -1,0 +1,506 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+// ─── Team overview page shell ─────────────────────────────────────────────────
+
+.th {
+  --th-bg-page: var(--color-bg-scene);
+  --th-bg-subtle: var(--element-bg-subtle);
+  --th-bg-soft: var(--element-bg-soft);
+  --th-bg-card: var(--element-bg-base);
+  --th-text-main: var(--color-text-primary);
+  --th-text-secondary: var(--color-text-secondary);
+  --th-text-muted: var(--color-text-muted);
+  --th-text-disabled: var(--color-text-disabled);
+  --th-border: var(--border-subtle);
+  --th-border-strong: var(--border-medium);
+  --th-accent-bg: var(--color-accent-100);
+  --th-accent-bg-strong: var(--color-accent-200);
+  --th-accent-text: var(--color-accent-700);
+  --th-accent-border: var(--border-accent-subtle);
+  --th-accent-border-strong: var(--border-accent);
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+// ── Header (mirrors bitfun-skills-scene__view-header) ────────────────────────
+
+.th__header {
+  flex-shrink: 0;
+  padding: $size-gap-5 clamp(16px, 2.2vw, 28px) $size-gap-4;
+}
+
+// Centered content wrapper matching bitfun-skills-scene__view-header-inner
+.th__header-inner {
+  width: min(100%, 600px);
+  margin-inline: auto;
+}
+
+// Title row: title+subtitle left, action button right
+// Mirrors bitfun-skills-scene__view-title-row
+.th__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $size-gap-3;
+  margin-bottom: $size-gap-3;
+}
+
+.th__title {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: var(--th-text-main);
+  margin: 0 0 4px;
+  line-height: $line-height-tight;
+}
+
+.th__title-sub {
+  font-size: $font-size-sm;
+  color: var(--th-text-muted);
+  margin: 0;
+  line-height: $line-height-relaxed;
+}
+
+// Toolbar row (search bar) below title
+// Mirrors bitfun-skills-scene__market-toolbar exactly
+.th__toolbar {
+  .search__wrapper {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-lg;
+  }
+}
+
+// Create team button (in title-row right side)
+.th__create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-2;
+  height: 30px;
+  padding: 0 $size-gap-3;
+  border: 1px solid var(--th-accent-border-strong);
+  border-radius: $size-radius-sm;
+  background: rgba(var(--color-primary-rgb, 99, 102, 241), 0.08);
+  color: var(--th-accent-text);
+  font-size: $font-size-xs;
+  font-family: $font-family-sans;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background $motion-fast $easing-standard,
+              border-color $motion-fast $easing-standard;
+
+  &:hover {
+    background: rgba(var(--color-primary-rgb, 99, 102, 241), 0.14);
+    border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+}
+
+// ── Scrollable list body ───────────────────────────────────────────────────────
+
+.th__list-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: $size-gap-5 clamp(16px, 2.2vw, 28px);
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 2px;
+  }
+}
+
+// Centered content wrapper (mirrors bitfun-skills-scene__view-content-inner)
+.th__list-inner {
+  width: min(100%, 600px);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-4;
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+.th-list__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $size-gap-2;
+}
+
+.th-list__section-title {
+  font-size: $font-size-xs;
+  color: var(--color-text-secondary);
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.th-list__section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: $size-radius-full;
+  background: var(--element-bg-medium);
+  border: 1px solid var(--border-subtle);
+  font-size: 10px;
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+// ── List container (mirrors .bitfun-market__list) ─────────────────────────────
+
+.th-list {
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-base;
+  overflow: hidden;
+}
+
+// ── List item (mirrors .bitfun-market__list-item) ─────────────────────────────
+
+.th-list__item {
+  position: relative;
+  border-bottom: 1px solid var(--border-subtle);
+  animation: th-list-item-in 0.28s $easing-decelerate both;
+  animation-delay: calc(var(--item-index, 0) * 40ms);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+// ── Row (mirrors .bitfun-market__list-item-row) ───────────────────────────────
+
+.th-list__item-row {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  padding: $size-gap-3 $size-gap-4;
+  cursor: pointer;
+  transition: background $motion-fast $easing-standard;
+  outline: none;
+
+  &:hover {
+    background: var(--element-bg-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -2px;
+  }
+}
+
+// ── Info column (mirrors .bitfun-market__list-item-info) ──────────────────────
+
+.th-list__item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.th-list__item-name-row {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.th-list__item-name {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-primary);
+  line-height: $line-height-tight;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.th-list__item-desc {
+  font-size: $font-size-xs;
+  color: var(--color-text-secondary);
+  margin: 3px 0 0;
+  line-height: $line-height-base;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ── Meta column ───────────────────────────────────────────────────────────────
+
+.th-list__item-meta {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  flex-shrink: 0;
+}
+
+// ── Action column ─────────────────────────────────────────────────────────────
+
+.th-list__item-action {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  flex-shrink: 0;
+}
+
+// ── Badges (mirrors .bitfun-market__badge) ────────────────────────────────────
+
+.th-list__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: $badge-padding-y $badge-padding-x;
+  border-radius: $size-radius-full;
+  font-size: $badge-font-size;
+  font-weight: $badge-font-weight;
+  line-height: 1;
+  border: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &--type {
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+  }
+
+  &--model {
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+    font-size: 10px;
+  }
+
+  &--team {
+    background: var(--color-accent-200);
+    color: var(--color-accent-500);
+  }
+
+  &--strategy {
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+    font-size: 10px;
+  }
+}
+
+// ── Capability chips ──────────────────────────────────────────────────────────
+
+.th-list__cap-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: $size-radius-full;
+  font-size: 10px;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+  border: none;
+  background: var(--element-bg-medium);
+}
+
+// ── Member avatars ────────────────────────────────────────────────────────────
+
+.th-list__avatars {
+  display: flex;
+
+  > * + * { margin-left: -4px; }
+}
+
+.th-list__avatar {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background: var(--element-bg-base);
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+
+  &--more {
+    font-size: 9px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+  }
+}
+
+.th-list__member-count {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+// ── Expanded details (mirrors .bitfun-market__list-item-details) ──────────────
+
+.th-list__item-details {
+  padding: $size-gap-3 $size-gap-4 $size-gap-4;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--element-bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+}
+
+.th-list__detail-desc {
+  font-size: $font-size-sm;
+  color: var(--color-text-secondary);
+  line-height: $line-height-relaxed;
+  margin: 0;
+}
+
+.th-list__detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: $size-gap-3;
+}
+
+.th-list__detail-label {
+  flex-shrink: 0;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: var(--color-text-secondary);
+  min-width: 32px;
+  padding-top: 2px;
+}
+
+// ── Capability grid (in agent expanded view) ──────────────────────────────────
+
+.th-list__cap-grid {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-2;
+}
+
+.th-list__cap-row {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+}
+
+.th-list__cap-label {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  min-width: 28px;
+}
+
+.th-list__cap-bar {
+  display: flex;
+  gap: 3px;
+}
+
+.th-list__cap-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--element-bg-medium);
+}
+
+.th-list__cap-level {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  min-width: 24px;
+}
+
+// ── Member list (in team expanded view) ───────────────────────────────────────
+
+.th-list__member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $size-gap-2;
+  flex: 1;
+}
+
+.th-list__member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 6px;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: var(--element-bg-medium);
+  font-size: $font-size-xs;
+  color: var(--color-text-primary);
+}
+
+.th-list__member-role {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--element-bg-medium);
+  margin-left: 2px;
+}
+
+.th-list__cap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $size-gap-2;
+  flex: 1;
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+.th-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $size-gap-3;
+  padding: $size-gap-10 $size-gap-6;
+  color: var(--color-text-muted);
+  font-size: $font-size-sm;
+  text-align: center;
+  opacity: 0.6;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-base;
+
+  svg { opacity: 0.5; }
+}
+
+// ── Animations ────────────────────────────────────────────────────────────────
+
+@keyframes th-list-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .th-list__item {
+    animation: none;
+  }
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────────
+
+@container (max-width: 480px) {
+  .th__header {
+    padding: $size-gap-4;
+  }
+
+  .th__list-body {
+    padding: $size-gap-4;
+  }
+}

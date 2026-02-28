@@ -31,17 +31,18 @@ import zhCNErrors from '../../../locales/zh-CN/errors.json';
 import zhCNNotifications from '../../../locales/zh-CN/notifications.json';
 import zhCNComponents from '../../../locales/zh-CN/components.json';
 
-import zhCNPanelsSessions from '../../../locales/zh-CN/panels/sessions.json';
+import zhCNScenesCapabilities from '../../../locales/zh-CN/scenes/capabilities.json';
+import zhCNScenesTeam from '../../../locales/zh-CN/scenes/team.json';
+import zhCNScenesProfile from '../../../locales/zh-CN/scenes/profile.json';
+import zhCNScenesSkills from '../../../locales/zh-CN/scenes/skills.json';
 import zhCNPanelsFiles from '../../../locales/zh-CN/panels/files.json';
 import zhCNPanelsGit from '../../../locales/zh-CN/panels/git.json';
-import zhCNPanelsProjectContext from '../../../locales/zh-CN/panels/project-context.json';
 import zhCNPanelsTerminal from '../../../locales/zh-CN/panels/terminal.json';
 
 import zhCNSettingsAiModel from '../../../locales/zh-CN/settings/ai-model.json';
-import zhCNSettingsSuperAgent from '../../../locales/zh-CN/settings/super-agent.json';
-import zhCNSettingsModes from '../../../locales/zh-CN/settings/modes.json';
 import zhCNSettingsAgenticTools from '../../../locales/zh-CN/settings/agentic-tools.json';
 import zhCNSettingsMcp from '../../../locales/zh-CN/settings/mcp.json';
+import zhCNSettingsMcpTools from '../../../locales/zh-CN/settings/mcp-tools.json';
 import zhCNSettingsTheme from '../../../locales/zh-CN/settings/theme.json';
 import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.json';
 import zhCNSettingsLsp from '../../../locales/zh-CN/settings/lsp.json';
@@ -53,6 +54,7 @@ import zhCNSettingsPromptTemplates from '../../../locales/zh-CN/settings/prompt-
 import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
 import zhCNSettingsAiRules from '../../../locales/zh-CN/settings/ai-rules.json';
 import zhCNSettingsAiMemory from '../../../locales/zh-CN/settings/ai-memory.json';
+import zhCNSettingsAiContext from '../../../locales/zh-CN/settings/ai-context.json';
 import zhCNSettingsAgents from '../../../locales/zh-CN/settings/agents.json';
 import zhCNSettingsDefaultModel from '../../../locales/zh-CN/settings/default-model.json';
 
@@ -67,17 +69,18 @@ import enUSErrors from '../../../locales/en-US/errors.json';
 import enUSNotifications from '../../../locales/en-US/notifications.json';
 import enUSComponents from '../../../locales/en-US/components.json';
 
-import enUSPanelsSessions from '../../../locales/en-US/panels/sessions.json';
+import enUSScenesCapabilities from '../../../locales/en-US/scenes/capabilities.json';
+import enUSScenesTeam from '../../../locales/en-US/scenes/team.json';
+import enUSScenesProfile from '../../../locales/en-US/scenes/profile.json';
+import enUSScenesSkills from '../../../locales/en-US/scenes/skills.json';
 import enUSPanelsFiles from '../../../locales/en-US/panels/files.json';
 import enUSPanelsGit from '../../../locales/en-US/panels/git.json';
-import enUSPanelsProjectContext from '../../../locales/en-US/panels/project-context.json';
 import enUSPanelsTerminal from '../../../locales/en-US/panels/terminal.json';
 
 import enUSSettingsAiModel from '../../../locales/en-US/settings/ai-model.json';
-import enUSSettingsSuperAgent from '../../../locales/en-US/settings/super-agent.json';
-import enUSSettingsModes from '../../../locales/en-US/settings/modes.json';
 import enUSSettingsAgenticTools from '../../../locales/en-US/settings/agentic-tools.json';
 import enUSSettingsMcp from '../../../locales/en-US/settings/mcp.json';
+import enUSSettingsMcpTools from '../../../locales/en-US/settings/mcp-tools.json';
 import enUSSettingsTheme from '../../../locales/en-US/settings/theme.json';
 import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.json';
 import enUSSettingsLsp from '../../../locales/en-US/settings/lsp.json';
@@ -89,6 +92,7 @@ import enUSSettingsPromptTemplates from '../../../locales/en-US/settings/prompt-
 import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
 import enUSSettingsAiRules from '../../../locales/en-US/settings/ai-rules.json';
 import enUSSettingsAiMemory from '../../../locales/en-US/settings/ai-memory.json';
+import enUSSettingsAiContext from '../../../locales/en-US/settings/ai-context.json';
 import enUSSettingsAgents from '../../../locales/en-US/settings/agents.json';
 import enUSSettingsDefaultModel from '../../../locales/en-US/settings/default-model.json';
 
@@ -110,17 +114,18 @@ const resources = {
     notifications: zhCNNotifications,
     components: zhCNComponents,
     
-    'panels/sessions': zhCNPanelsSessions,
+    'scenes/capabilities': zhCNScenesCapabilities,
+    'scenes/team': zhCNScenesTeam,
+    'scenes/profile': zhCNScenesProfile,
+    'scenes/skills': zhCNScenesSkills,
     'panels/files': zhCNPanelsFiles,
     'panels/git': zhCNPanelsGit,
-    'panels/project-context': zhCNPanelsProjectContext,
     'panels/terminal': zhCNPanelsTerminal,
     
     'settings/ai-model': zhCNSettingsAiModel,
-    'settings/super-agent': zhCNSettingsSuperAgent,
-    'settings/modes': zhCNSettingsModes,
     'settings/agentic-tools': zhCNSettingsAgenticTools,
     'settings/mcp': zhCNSettingsMcp,
+    'settings/mcp-tools': zhCNSettingsMcpTools,
     'settings/theme': zhCNSettingsTheme,
     'settings/ai-features': zhCNSettingsAiFeatures,
     'settings/lsp': zhCNSettingsLsp,
@@ -132,6 +137,7 @@ const resources = {
     'settings/skills': zhCNSettingsSkills,
     'settings/ai-rules': zhCNSettingsAiRules,
     'settings/ai-memory': zhCNSettingsAiMemory,
+    'settings/ai-context': zhCNSettingsAiContext,
     'settings/agents': zhCNSettingsAgents,
     'settings/default-model': zhCNSettingsDefaultModel,
     
@@ -147,17 +153,18 @@ const resources = {
     notifications: enUSNotifications,
     components: enUSComponents,
     
-    'panels/sessions': enUSPanelsSessions,
+    'scenes/capabilities': enUSScenesCapabilities,
+    'scenes/team': enUSScenesTeam,
+    'scenes/profile': enUSScenesProfile,
+    'scenes/skills': enUSScenesSkills,
     'panels/files': enUSPanelsFiles,
     'panels/git': enUSPanelsGit,
-    'panels/project-context': enUSPanelsProjectContext,
     'panels/terminal': enUSPanelsTerminal,
     
     'settings/ai-model': enUSSettingsAiModel,
-    'settings/super-agent': enUSSettingsSuperAgent,
-    'settings/modes': enUSSettingsModes,
     'settings/agentic-tools': enUSSettingsAgenticTools,
     'settings/mcp': enUSSettingsMcp,
+    'settings/mcp-tools': enUSSettingsMcpTools,
     'settings/theme': enUSSettingsTheme,
     'settings/ai-features': enUSSettingsAiFeatures,
     'settings/lsp': enUSSettingsLsp,
@@ -169,6 +176,7 @@ const resources = {
     'settings/skills': enUSSettingsSkills,
     'settings/ai-rules': enUSSettingsAiRules,
     'settings/ai-memory': enUSSettingsAiMemory,
+    'settings/ai-context': enUSSettingsAiContext,
     'settings/agents': enUSSettingsAgents,
     'settings/default-model': enUSSettingsDefaultModel,
     
@@ -207,17 +215,18 @@ export class I18nService {
           'notifications', 
           'components',
           
-          'panels/sessions',
+          'scenes/capabilities',
+          'scenes/team',
+          'scenes/profile',
+          'scenes/skills',
           'panels/files',
           'panels/git',
-          'panels/project-context',
           'panels/terminal',
           
           'settings/ai-model',
-          'settings/super-agent',
-          'settings/modes',
           'settings/agentic-tools',
           'settings/mcp',
+          'settings/mcp-tools',
           'settings/theme',
           'settings/ai-features',
           'settings/lsp',
@@ -229,6 +238,7 @@ export class I18nService {
           'settings/skills',
           'settings/ai-rules',
           'settings/ai-memory',
+          'settings/ai-context',
           'settings/agents',
           'settings/default-model',
           

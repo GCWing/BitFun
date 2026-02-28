@@ -1,0 +1,125 @@
+{
+  "nav": {
+    "title": "Skills",
+    "categories": {
+      "discover": "Discover",
+      "installed": "Installed"
+    },
+    "items": {
+      "market": "Marketplace",
+      "installedAll": "All",
+      "installedUser": "User",
+      "installedProject": "Project"
+    }
+  },
+  "installed": {
+    "titleAll": "Installed Skills",
+    "subtitleAll": "Manage all installed user-level and project-level skills",
+    "titleUser": "User Skills",
+    "subtitleUser": "Globally installed user-level skills",
+    "titleProject": "Project Skills",
+    "subtitleProject": "Project-level skills in the current workspace"
+  },
+  "toolbar": {
+    "searchPlaceholder": "Search skills...",
+    "refreshTooltip": "Refresh",
+    "addTooltip": "Add Skill"
+  },
+  "filters": {
+    "all": "All",
+    "user": "User",
+    "project": "Project"
+  },
+  "section": {
+    "user": {
+      "description": "Skills installed globally for the current user."
+    },
+    "project": {
+      "description": "Project-level skills in the current workspace."
+    }
+  },
+  "market": {
+    "title": "Skill Marketplace",
+    "subtitle": "Search and download reusable skills (default scope: current project)",
+    "searchPlaceholder": "Search marketplace skills...",
+    "refreshTooltip": "Refresh marketplace results",
+    "loading": "Loading marketplace skills...",
+    "errorPrefix": "Failed to load marketplace: ",
+    "empty": {
+      "noMatch": "No matching marketplace skills found",
+      "noSkills": "No marketplace skills available"
+    },
+    "item": {
+      "sourceLabel": "Source: ",
+      "installs": "Installs: {{count}}",
+      "noDescription": "No description available",
+      "downloadProject": "Download to Project",
+      "installed": "Installed",
+      "installedTooltip": "This skill is already installed",
+      "downloading": "Downloading..."
+    },
+    "pagination": {
+      "prev": "Previous page",
+      "next": "Next page",
+      "info": "{{current}} / {{total}}"
+    }
+  },
+  "form": {
+    "title": "Add Skill",
+    "closeTooltip": "Close",
+    "level": {
+      "label": "Level",
+      "user": "User-level (Global)",
+      "project": "Project-level (Current Workspace)",
+      "projectDisabled": " - Need to open workspace first",
+      "currentWorkspace": "Current workspace: {{path}}"
+    },
+    "path": {
+      "label": "Skill Folder Path",
+      "placeholder": "Select or enter skill folder path",
+      "browseTooltip": "Browse",
+      "hint": "Folder must contain a valid SKILL.md file"
+    },
+    "validating": "Validating...",
+    "actions": {
+      "cancel": "Cancel",
+      "add": "Add",
+      "adding": "Adding..."
+    }
+  },
+  "list": {
+    "loading": "Loading...",
+    "errorPrefix": "Failed to load: ",
+    "empty": {
+      "noMatch": "No matching skills found",
+      "noSkills": "No skills configured yet"
+    },
+    "item": {
+      "user": "User",
+      "project": "Project",
+      "deleteTooltip": "Delete",
+      "pathLabel": "Path:"
+    }
+  },
+  "deleteModal": {
+    "title": "Confirm Delete",
+    "message": "Are you sure you want to delete skill \"{{name}}\"?",
+    "warning": "This will delete the skill folder and cannot be undone.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "messages": {
+    "invalidPath": "Please select a valid skill folder",
+    "noWorkspace": "Please open a workspace first to add project-level skills",
+    "addSuccess": "Skill \"{{name}}\" added successfully",
+    "addFailed": "Failed to add: {{error}}",
+    "deleteSuccess": "Skill \"{{name}}\" deleted",
+    "deleteFailed": "Failed to delete: {{error}}",
+    "toggleSuccess": "Skill \"{{name}}\" {{status}}",
+    "toggleFailed": "Failed to toggle: {{error}}",
+    "marketDownloadSuccess": "Skill \"{{name}}\" downloaded successfully",
+    "marketDownloadFailed": "Failed to download: {{error}}",
+    "enabled": "enabled",
+    "disabled": "disabled"
+  }
+}

@@ -243,7 +243,8 @@ export class ThemeService {
     root.style.setProperty('--color-bg-quaternary', colors.background.quaternary);
     root.style.setProperty('--color-bg-elevated', colors.background.elevated);
     root.style.setProperty('--color-bg-workbench', colors.background.workbench);
-    root.style.setProperty('--color-bg-flowchat', colors.background.flowchat);
+    root.style.setProperty('--color-bg-scene', colors.background.scene);
+    root.style.setProperty('--color-bg-flowchat', colors.background.scene);
     if (colors.background.tooltip) {
       root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
     }

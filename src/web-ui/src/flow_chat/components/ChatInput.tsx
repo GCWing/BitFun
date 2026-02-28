@@ -3,7 +3,7 @@
  * Separated from bottom bar, supports session-level state awareness
  */
 
-import React, { useRef, useCallback, useEffect, useReducer, useState } from 'react';
+import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowUp, Image, Network, ChevronsUp, ChevronsDown, RotateCcw, FileText } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
@@ -68,11 +68,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const derivedState = useSessionDerivedState(currentSessionId);
   const { transition, setQueuedInput } = useSessionStateMachineActions(currentSessionId);
   const stateMachine = useSessionStateMachine(currentSessionId);
-  const isProcessing = derivedState?.isProcessing || false;
 
   const { workspacePath } = useCurrentWorkspace();
   
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
+  const canSwitchModes = modeState.current !== 'Cowork';
+
+  // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
+  const switchableModes = useMemo(
+    () => modeState.available.filter(mode => mode.enabled && mode.id !== 'Cowork'),
+    [modeState.available]
+  );
   
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
@@ -235,18 +241,94 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const handleFillChatInput = (data: { content: string }) => {
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: data.content });
-      
+
       if (richTextInputRef.current) {
         richTextInputRef.current.focus();
       }
     };
 
     globalEventBus.on('fill-chat-input', handleFillChatInput);
-    
+
     return () => {
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
   }, []);
+
+  // Handle MCP App ui/message requests (aligned with VSCode behavior)
+  React.useEffect(() => {
+    const handleMcpAppMessage = async (event: import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageEvent) => {
+      const { requestId, params } = event;
+
+      // Don't fill if input already has content (aligned with VSCode behavior)
+      if (inputState.value.trim()) {
+        log.warn('MCP App ui/message rejected: input already has content');
+        // Send error response (VSCode returns { isError: true } in this case)
+        globalEventBus.emit('mcp-app:message-response', {
+          requestId,
+          result: { isError: true }
+        } as import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageResponseEvent);
+        return;
+      }
+
+      try {
+        // Extract text content and set input
+        const textContent = params.content
+          .filter(c => c.type === 'text')
+          .map(c => c.text)
+          .join('\n\n');
+
+        if (textContent) {
+          dispatchInput({ type: 'ACTIVATE' });
+          dispatchInput({ type: 'SET_VALUE', payload: textContent });
+        }
+
+        // Handle image attachments
+        for (const block of params.content) {
+          if (block.type === 'image') {
+            try {
+              // Convert base64 to File object
+              const mimeType = block.mimeType || 'image/png';
+              const binaryString = atob(block.data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: mimeType });
+              const file = new File([blob], `image.${mimeType.split('/')[1] || 'png'}`, { type: mimeType });
+              const imageContext = await createImageContextFromClipboard(file);
+              addContext(imageContext);
+            } catch (err) {
+              log.error('Failed to add image from MCP App message', { err });
+            }
+          }
+        }
+
+        // Focus input
+        if (richTextInputRef.current) {
+          richTextInputRef.current.focus();
+        }
+
+        // Send success response
+        globalEventBus.emit('mcp-app:message-response', {
+          requestId,
+          result: { isError: false }
+        } as import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageResponseEvent);
+      } catch (err) {
+        log.error('Failed to handle MCP App ui/message', { err });
+        // Send error response
+        globalEventBus.emit('mcp-app:message-response', {
+          requestId,
+          result: { isError: true }
+        } as import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageResponseEvent);
+      }
+    };
+
+    globalEventBus.on('mcp-app:message', handleMcpAppMessage);
+
+    return () => {
+      globalEventBus.off('mcp-app:message', handleMcpAppMessage);
+    };
+  }, [inputState.value, addContext]);
 
   React.useEffect(() => {
     const handleInsertContextTag = (event: Event) => {
@@ -301,6 +383,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (sessionId && mode) {
         log.debug('Session switched, syncing mode', { sessionId, mode });
         dispatchMode({ type: 'SET_CURRENT_MODE', payload: mode });
+        try {
+          sessionStorage.setItem('bitfun:flowchat:lastMode', mode);
+        } catch {
+          // ignore
+        }
       }
     };
 
@@ -321,6 +408,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (session?.mode) {
       log.debug('Session ID changed, syncing mode', { sessionId: currentSessionId, mode: session.mode });
       dispatchMode({ type: 'SET_CURRENT_MODE', payload: session.mode });
+      try {
+        sessionStorage.setItem('bitfun:flowchat:lastMode', session.mode);
+      } catch {
+        // ignore
+      }
     }
   }, [currentSessionId]);
 
@@ -503,25 +595,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [inputState.value, derivedState, transition, sendMessage]);
   
   const getFilteredModes = useCallback(() => {
-    const enabledModes = modeState.available.filter(mode => mode.enabled);
-    if (!slashCommandState.query) {
-      return enabledModes;
+    if (!canSwitchModes) {
+      return [];
     }
-    return enabledModes.filter(mode => 
+    if (!slashCommandState.query) {
+      return switchableModes;
+    }
+    return switchableModes.filter(mode =>
       mode.name.toLowerCase().includes(slashCommandState.query) ||
       mode.id.toLowerCase().includes(slashCommandState.query)
     );
-  }, [modeState.available, slashCommandState.query]);
-  
-  const selectSlashCommandMode = useCallback((modeId: string) => {
-    dispatchMode({ 
-      type: 'SET_CURRENT_MODE', 
-      payload: modeId 
+  }, [canSwitchModes, switchableModes, slashCommandState.query]);
+
+  const applyModeChange = useCallback((modeId: string) => {
+    dispatchMode({
+      type: 'SET_CURRENT_MODE',
+      payload: modeId,
     });
-    
+
+    try {
+      sessionStorage.setItem('bitfun:flowchat:lastMode', modeId);
+    } catch {
+      // ignore
+    }
+
     if (currentSessionId) {
       FlowChatStore.getInstance().updateSessionMode(currentSessionId, modeId);
     }
+  }, [currentSessionId]);
+
+  const requestModeChange = useCallback((modeId: string) => {
+    if (!canSwitchModes) {
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
+
+    if (modeId === modeState.current) {
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
+
+    if (!switchableModes.some(mode => mode.id === modeId)) {
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      return;
+    }
+
+    applyModeChange(modeId);
+    dispatchMode({ type: 'CLOSE_DROPDOWN' });
+  }, [applyModeChange, modeState.current, canSwitchModes, switchableModes]);
+  
+  const selectSlashCommandMode = useCallback((modeId: string) => {
+    requestModeChange(modeId);
     
     dispatchInput({ type: 'CLEAR_VALUE' });
     setSlashCommandState({
@@ -529,10 +653,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       query: '',
       selectedIndex: 0,
     });
-  }, [currentSessionId]);
+  }, [requestModeChange]);
   
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (slashCommandState.isActive) {
+    if (canSwitchModes && slashCommandState.isActive) {
       const filteredModes = getFilteredModes();
       
       if (e.key === 'ArrowDown') {
@@ -621,7 +745,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       transition(SessionExecutionEvent.USER_CANCEL);
     }
-  }, [handleSendOrCancel, derivedState, transition, templateState.fillState, moveToNextPlaceholder, moveToPrevPlaceholder, exitTemplateMode, slashCommandState, getFilteredModes, selectSlashCommandMode]);
+  }, [handleSendOrCancel, derivedState, transition, templateState.fillState, moveToNextPlaceholder, moveToPrevPlaceholder, exitTemplateMode, slashCommandState, getFilteredModes, selectSlashCommandMode, canSwitchModes]);
   
   const handleImageInput = useCallback(() => {
     const input = document.createElement('input');
@@ -778,7 +902,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </IconButton>
     );
   };
-  
+
   return (
     <>
       <TemplatePickerPanel
@@ -856,7 +980,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 }}
               />
               
-              {slashCommandState.isActive && (() => {
+              {canSwitchModes && slashCommandState.isActive && (() => {
                 const filteredModes = getFilteredModes();
                 return (
                   <div className="bitfun-chat-input__slash-command-picker">
@@ -939,69 +1063,59 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 )}
               </div>
               <div className="bitfun-chat-input__actions-right">
-                <div 
-                  className="bitfun-chat-input__mode-selector"
-                  ref={modeDropdownRef}
-                >
-                  <IconButton
-                    className={`bitfun-chat-input__mode-selector-button${modeState.current !== 'agentic' ? ` bitfun-chat-input__mode-selector-button--${modeState.current}` : ''}`}
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => dispatchMode({ type: 'TOGGLE_DROPDOWN' })}
-                    tooltip={t('chatInput.currentMode', { mode: t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) || modeState.available.find(m => m.id === modeState.current)?.name || modeState.current })}
+                {canSwitchModes && (
+                  <div 
+                    className="bitfun-chat-input__mode-selector"
+                    ref={modeDropdownRef}
                   >
-                    {t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) || modeState.available.find(m => m.id === modeState.current)?.name || modeState.current}
-                  </IconButton>
-                {modeState.dropdownOpen && (() => {
-                  const enabledModes = modeState.available.filter(mode => mode.enabled);
-                  
-                  const modeOrder = ['agentic', 'Plan', 'debug'];
-                  
-                  const sortedModes = [...enabledModes].sort((a, b) => {
-                    const aIndex = modeOrder.indexOf(a.id);
-                    const bIndex = modeOrder.indexOf(b.id);
-                    if (aIndex === -1 && bIndex === -1) return 0;
-                    if (aIndex === -1) return 1;
-                    if (bIndex === -1) return -1;
-                    return aIndex - bIndex;
-                  });
-                  
-                  const renderModeOption = (modeOption: typeof enabledModes[0]) => {
-                    const modeDescription = t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) || modeOption.description || modeOption.name;
-                    const modeName = t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
+                    <IconButton
+                      className={`bitfun-chat-input__mode-selector-button${modeState.current !== 'agentic' ? ` bitfun-chat-input__mode-selector-button--${modeState.current}` : ''}`}
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => dispatchMode({ type: 'TOGGLE_DROPDOWN' })}
+                      tooltip={t('chatInput.currentMode', { mode: t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) || modeState.available.find(m => m.id === modeState.current)?.name || modeState.current })}
+                    >
+                      {t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) || modeState.available.find(m => m.id === modeState.current)?.name || modeState.current}
+                    </IconButton>
+                  {modeState.dropdownOpen && (() => {
+                    const modeOrder = ['agentic', 'Plan', 'debug'];
+                    
+                    const sortedModes = [...switchableModes].sort((a, b) => {
+                      const aIndex = modeOrder.indexOf(a.id);
+                      const bIndex = modeOrder.indexOf(b.id);
+                      if (aIndex === -1 && bIndex === -1) return 0;
+                      if (aIndex === -1) return 1;
+                      if (bIndex === -1) return -1;
+                      return aIndex - bIndex;
+                    });
+                    
+                    const renderModeOption = (modeOption: typeof switchableModes[0]) => {
+                      const modeDescription = t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) || modeOption.description || modeOption.name;
+                      const modeName = t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
+                      return (
+                      <Tooltip key={modeOption.id} content={modeDescription} placement="left">
+                        <div
+                          className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            requestModeChange(modeOption.id);
+                          }}
+                        >
+                          <span className="bitfun-chat-input__mode-option-name">{modeName}</span>
+                          {!['agentic', 'Plan', 'debug'].includes(modeOption.id) && <span className="bitfun-chat-input__mode-option-badge bitfun-chat-input__mode-option-badge--wip">{t('chatInput.wip')}</span>}
+                        </div>
+                      </Tooltip>
+                      );
+                    };
+                    
                     return (
-                    <Tooltip key={modeOption.id} content={modeDescription} placement="left">
-                      <div
-                        className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (modeOption.id !== modeState.current) {
-                            dispatchMode({ 
-                              type: 'SET_CURRENT_MODE', 
-                              payload: modeOption.id 
-                            });
-                            
-                            if (currentSessionId) {
-                              FlowChatStore.getInstance().updateSessionMode(currentSessionId, modeOption.id);
-                            }
-                          }
-                          dispatchMode({ type: 'CLOSE_DROPDOWN' });
-                        }}
-                      >
-                        <span className="bitfun-chat-input__mode-option-name">{modeName}</span>
-                        {!['agentic', 'Plan', 'debug'].includes(modeOption.id) && <span className="bitfun-chat-input__mode-option-badge bitfun-chat-input__mode-option-badge--wip">{t('chatInput.wip')}</span>}
+                      <div className="bitfun-chat-input__mode-dropdown">
+                        {sortedModes.map(m => renderModeOption(m))}
                       </div>
-                    </Tooltip>
                     );
-                  };
-                  
-                  return (
-                    <div className="bitfun-chat-input__mode-dropdown">
-                      {sortedModes.map(m => renderModeOption(m))}
-                    </div>
-                  );
-                })()}
-                </div>
+                  })()}
+                  </div>
+                )}
                 
                 <IconButton
                   className="bitfun-chat-input__action-button"
@@ -1032,7 +1146,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 >
                   <FileText size={12} />
                 </IconButton>
-                
+
                 {renderActionButton()}
               </div>
             </div>

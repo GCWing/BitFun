@@ -14,12 +14,13 @@ import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types
 import { TAB_EVENTS } from '../types';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
+import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
 
 const log = createLogger('useTabLifecycle');
 
 interface UseTabLifecycleOptions {
-  /** App mode */
-  mode?: 'agent' | 'project';
+  /** App mode / target canvas */
+  mode?: 'agent' | 'project' | 'git';
 }
 
 interface UseTabLifecycleReturn {
@@ -200,8 +201,13 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for external tab creation events.
    */
   useEffect(() => {
-    const eventName = mode === 'project' ? TAB_EVENTS.PROJECT_CREATE_TAB : TAB_EVENTS.AGENT_CREATE_TAB;
-    
+    const eventName =
+      mode === 'project'
+        ? TAB_EVENTS.PROJECT_CREATE_TAB
+        : mode === 'git'
+          ? TAB_EVENTS.GIT_CREATE_TAB
+          : TAB_EVENTS.AGENT_CREATE_TAB;
+
     const handleCreateTab = (event: CustomEvent<CreateTabEventDetail>) => {
       const {
         type,
@@ -258,6 +264,12 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
     };
 
     window.addEventListener(eventName, handleCreateTab as EventListener);
+
+    // Drain any tab events that were enqueued before this listener was
+    // registered (happens when the scene was just mounted for the first time).
+    const pendingMode = mode === 'project' ? 'project' : mode === 'git' ? 'git' : 'agent';
+    const pending = drainPendingTabs(pendingMode);
+    pending.forEach(detail => handleCreateTab({ detail } as CustomEvent<CreateTabEventDetail>));
     
     return () => {
       window.removeEventListener(eventName, handleCreateTab as EventListener);

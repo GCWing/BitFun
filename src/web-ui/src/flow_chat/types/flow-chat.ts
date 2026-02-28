@@ -216,6 +216,8 @@ export interface ToolCardProps {
   onOpenInPanel?: (panelType: string, data: any) => void;
   onExpand?: () => void;
   sessionId?: string;
+  /** Callback for MCP App ui/message requests. Returns whether the message was handled successfully. */
+  onMcpAppMessage?: (params: import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageParams) => Promise<import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageResult>;
 }
 
 // Flow Chat callbacks for layered events.

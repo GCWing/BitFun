@@ -1,12 +1,17 @@
 //! Git API
 
-use log::{info, error};
-use tauri::State;
-use serde::{Deserialize, Serialize};
 use crate::api::app_state::AppState;
 use bitfun_core::infrastructure::storage::StorageOptions;
-use bitfun_core::service::git::{GitService, GitLogParams, GitAddParams, GitCommitParams, GitPushParams, GitPullParams, GitDiffParams};
-use bitfun_core::service::git::{GitRepository, GitStatus, GitBranch, GitCommit, GitOperationResult};
+use bitfun_core::service::git::{
+    GitAddParams, GitCommitParams, GitDiffParams, GitLogParams, GitPullParams, GitPushParams,
+    GitService,
+};
+use bitfun_core::service::git::{
+    GitBranch, GitCommit, GitOperationResult, GitRepository, GitStatus,
+};
+use log::{error, info};
+use serde::{Deserialize, Serialize};
+use tauri::State;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,7 +104,7 @@ pub struct GitResetFilesRequest {
 pub struct GitResetToCommitRequest {
     pub repository_path: String,
     pub commit_hash: String,
-    pub mode: String,  // "soft", "mixed", or "hard"
+    pub mode: String, // "soft", "mixed", or "hard"
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,9 +144,13 @@ pub async fn git_is_repository(
     _state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<bool, String> {
-    GitService::is_repository(&request.repository_path).await
+    GitService::is_repository(&request.repository_path)
+        .await
         .map_err(|e| {
-            error!("Failed to check Git repository: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to check Git repository: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to check Git repository: {}", e)
         })
 }
@@ -151,9 +160,13 @@ pub async fn git_get_repository(
     _state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<GitRepository, String> {
-    GitService::get_repository(&request.repository_path).await
+    GitService::get_repository(&request.repository_path)
+        .await
         .map_err(|e| {
-            error!("Failed to get Git repository info: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to get Git repository info: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to get Git repository info: {}", e)
         })
 }
@@ -163,9 +176,13 @@ pub async fn git_get_status(
     _state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<GitStatus, String> {
-    GitService::get_status(&request.repository_path).await
+    GitService::get_status(&request.repository_path)
+        .await
         .map_err(|e| {
-            error!("Failed to get Git status: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to get Git status: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to get Git status: {}", e)
         })
 }
@@ -176,9 +193,13 @@ pub async fn git_get_branches(
     request: GitBranchesRequest,
 ) -> Result<Vec<GitBranch>, String> {
     let include_remote = request.include_remote.unwrap_or(false);
-    GitService::get_branches(&request.repository_path, include_remote).await
+    GitService::get_branches(&request.repository_path, include_remote)
+        .await
         .map_err(|e| {
-            error!("Failed to get Git branches: path={}, include_remote={}, error={}", request.repository_path, include_remote, e);
+            error!(
+                "Failed to get Git branches: path={}, include_remote={}, error={}",
+                request.repository_path, include_remote, e
+            );
             format!("Failed to get Git branches: {}", e)
         })
 }
@@ -189,9 +210,13 @@ pub async fn git_get_enhanced_branches(
     request: GitBranchesRequest,
 ) -> Result<Vec<GitBranch>, String> {
     let include_remote = request.include_remote.unwrap_or(false);
-    GitService::get_enhanced_branches(&request.repository_path, include_remote).await
+    GitService::get_enhanced_branches(&request.repository_path, include_remote)
+        .await
         .map_err(|e| {
-            error!("Failed to get enhanced Git branches: path={}, include_remote={}, error={}", request.repository_path, include_remote, e);
+            error!(
+                "Failed to get enhanced Git branches: path={}, include_remote={}, error={}",
+                request.repository_path, include_remote, e
+            );
             format!("Failed to get enhanced Git branches: {}", e)
         })
 }
@@ -202,9 +227,13 @@ pub async fn git_get_commits(
     request: GitCommitsRequest,
 ) -> Result<Vec<GitCommit>, String> {
     let params = request.params.unwrap_or_default();
-    GitService::get_commits(&request.repository_path, params).await
+    GitService::get_commits(&request.repository_path, params)
+        .await
         .map_err(|e| {
-            error!("Failed to get Git commits: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to get Git commits: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to get Git commits: {}", e)
         })
 }
@@ -214,9 +243,13 @@ pub async fn git_add_files(
     _state: State<'_, AppState>,
     request: GitAddFilesRequest,
 ) -> Result<GitOperationResult, String> {
-    GitService::add_files(&request.repository_path, request.params).await
+    GitService::add_files(&request.repository_path, request.params)
+        .await
         .map_err(|e| {
-            error!("Failed to add files: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to add files: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to add files: {}", e)
         })
 }
@@ -226,9 +259,13 @@ pub async fn git_commit(
     _state: State<'_, AppState>,
     request: GitCommitRequest,
 ) -> Result<GitOperationResult, String> {
-    GitService::commit(&request.repository_path, request.params).await
+    GitService::commit(&request.repository_path, request.params)
+        .await
         .map_err(|e| {
-            error!("Failed to commit: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to commit: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to commit: {}", e)
         })
 }
@@ -238,9 +275,13 @@ pub async fn git_push(
     _state: State<'_, AppState>,
     request: GitPushRequest,
 ) -> Result<GitOperationResult, String> {
-    GitService::push(&request.repository_path, request.params).await
+    GitService::push(&request.repository_path, request.params)
+        .await
         .map_err(|e| {
-            error!("Failed to push: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to push: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to push: {}", e)
         })
 }
@@ -250,9 +291,13 @@ pub async fn git_pull(
     _state: State<'_, AppState>,
     request: GitPullRequest,
 ) -> Result<GitOperationResult, String> {
-    GitService::pull(&request.repository_path, request.params).await
+    GitService::pull(&request.repository_path, request.params)
+        .await
         .map_err(|e| {
-            error!("Failed to pull: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to pull: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to pull: {}", e)
         })
 }
@@ -262,9 +307,13 @@ pub async fn git_checkout_branch(
     _state: State<'_, AppState>,
     request: GitCheckoutBranchRequest,
 ) -> Result<GitOperationResult, String> {
-    GitService::checkout_branch(&request.repository_path, &request.branch_name).await
+    GitService::checkout_branch(&request.repository_path, &request.branch_name)
+        .await
         .map_err(|e| {
-            error!("Failed to checkout branch: path={}, branch={}, error={}", request.repository_path, request.branch_name, e);
+            error!(
+                "Failed to checkout branch: path={}, branch={}, error={}",
+                request.repository_path, request.branch_name, e
+            );
             format!("Failed to checkout branch: {}", e)
         })
 }
@@ -274,11 +323,19 @@ pub async fn git_create_branch(
     _state: State<'_, AppState>,
     request: GitCreateBranchRequest,
 ) -> Result<GitOperationResult, String> {
-    GitService::create_branch(&request.repository_path, &request.branch_name, request.start_point.as_deref()).await
-        .map_err(|e| {
-            error!("Failed to create branch: path={}, branch={}, error={}", request.repository_path, request.branch_name, e);
-            format!("Failed to create branch: {}", e)
-        })
+    GitService::create_branch(
+        &request.repository_path,
+        &request.branch_name,
+        request.start_point.as_deref(),
+    )
+    .await
+    .map_err(|e| {
+        error!(
+            "Failed to create branch: path={}, branch={}, error={}",
+            request.repository_path, request.branch_name, e
+        );
+        format!("Failed to create branch: {}", e)
+    })
 }
 
 #[tauri::command]
@@ -287,9 +344,13 @@ pub async fn git_delete_branch(
     request: GitDeleteBranchRequest,
 ) -> Result<GitOperationResult, String> {
     let force = request.force.unwrap_or(false);
-    GitService::delete_branch(&request.repository_path, &request.branch_name, force).await
+    GitService::delete_branch(&request.repository_path, &request.branch_name, force)
+        .await
         .map_err(|e| {
-            error!("Failed to delete branch: path={}, branch={}, force={}, error={}", request.repository_path, request.branch_name, force, e);
+            error!(
+                "Failed to delete branch: path={}, branch={}, force={}, error={}",
+                request.repository_path, request.branch_name, force, e
+            );
             format!("Failed to delete branch: {}", e)
         })
 }
@@ -299,9 +360,13 @@ pub async fn git_get_diff(
     _state: State<'_, AppState>,
     request: GitDiffRequest,
 ) -> Result<String, String> {
-    GitService::get_diff(&request.repository_path, &request.params).await
+    GitService::get_diff(&request.repository_path, &request.params)
+        .await
         .map_err(|e| {
-            error!("Failed to get Git diff: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to get Git diff: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to get Git diff: {}", e)
         })
 }
@@ -312,14 +377,12 @@ pub async fn git_reset_files(
     request: GitResetFilesRequest,
 ) -> Result<GitOperationResult, String> {
     let staged = request.staged.unwrap_or(false);
-    
+
     info!(
         "Resetting files in '{}' (staged: {}): {:?}",
-        request.repository_path,
-        staged,
-        request.files
+        request.repository_path, staged, request.files
     );
-    
+
     GitService::reset_files(&request.repository_path, &request.files, staged)
         .await
         .map(|output| GitOperationResult {
@@ -339,19 +402,17 @@ pub async fn git_get_file_content(
 ) -> Result<String, String> {
     info!(
         "Getting file content for '{}' at commit '{:?}' in repo '{}'",
-        request.file_path,
-        request.commit,
-        request.repository_path
+        request.file_path, request.commit, request.repository_path
     );
-    
+
     let content = GitService::get_file_content(
         &request.repository_path,
         &request.file_path,
-        request.commit.as_deref()
+        request.commit.as_deref(),
     )
     .await
     .map_err(|e| e.to_string())?;
-    
+
     Ok(content)
 }
 
@@ -362,20 +423,22 @@ pub async fn git_reset_to_commit(
 ) -> Result<GitOperationResult, String> {
     info!(
         "Resetting to commit '{}' with mode '{}' in repo '{}'",
-        request.commit_hash,
-        request.mode,
-        request.repository_path
+        request.commit_hash, request.mode, request.repository_path
     );
-    
+
     GitService::reset_to_commit(
         &request.repository_path,
         &request.commit_hash,
-        &request.mode
-    ).await
-        .map_err(|e| {
-            error!("Failed to reset to commit: path={}, commit={}, mode={}, error={}", request.repository_path, request.commit_hash, request.mode, e);
-            format!("Failed to reset: {}", e)
-        })
+        &request.mode,
+    )
+    .await
+    .map_err(|e| {
+        error!(
+            "Failed to reset to commit: path={}, commit={}, mode={}, error={}",
+            request.repository_path, request.commit_hash, request.mode, e
+        );
+        format!("Failed to reset: {}", e)
+    })
 }
 
 #[tauri::command]
@@ -387,11 +450,9 @@ pub async fn git_get_graph(
 ) -> Result<bitfun_core::service::git::GitGraph, String> {
     info!(
         "Getting git graph: repository_path={}, max_count={:?}, branch_name={:?}",
-        repository_path,
-        max_count,
-        branch_name
+        repository_path, max_count, branch_name
     );
-    
+
     GitService::get_git_graph_for_branch(&repository_path, max_count, branch_name.as_deref())
         .await
         .map_err(|e| e.to_string())
@@ -403,17 +464,19 @@ pub async fn git_cherry_pick(
     request: GitCherryPickRequest,
 ) -> Result<GitOperationResult, String> {
     let no_commit = request.no_commit.unwrap_or(false);
-    
+
     info!(
         "Cherry-picking commit '{}' in repo '{}' (no_commit: {})",
-        request.commit_hash,
-        request.repository_path,
-        no_commit
+        request.commit_hash, request.repository_path, no_commit
     );
-    
-    GitService::cherry_pick(&request.repository_path, &request.commit_hash, no_commit).await
+
+    GitService::cherry_pick(&request.repository_path, &request.commit_hash, no_commit)
+        .await
         .map_err(|e| {
-            error!("Failed to cherry-pick: path={}, commit={}, no_commit={}, error={}", request.repository_path, request.commit_hash, no_commit, e);
+            error!(
+                "Failed to cherry-pick: path={}, commit={}, no_commit={}, error={}",
+                request.repository_path, request.commit_hash, no_commit, e
+            );
             format!("Failed to cherry-pick: {}", e)
         })
 }
@@ -424,10 +487,14 @@ pub async fn git_cherry_pick_abort(
     request: GitRepositoryRequest,
 ) -> Result<GitOperationResult, String> {
     info!("Aborting cherry-pick in repo '{}'", request.repository_path);
-    
-    GitService::cherry_pick_abort(&request.repository_path).await
+
+    GitService::cherry_pick_abort(&request.repository_path)
+        .await
         .map_err(|e| {
-            error!("Failed to abort cherry-pick: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to abort cherry-pick: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to abort cherry-pick: {}", e)
         })
 }
@@ -437,11 +504,18 @@ pub async fn git_cherry_pick_continue(
     _state: State<'_, AppState>,
     request: GitRepositoryRequest,
 ) -> Result<GitOperationResult, String> {
-    info!("Continuing cherry-pick in repo '{}'", request.repository_path);
-    
-    GitService::cherry_pick_continue(&request.repository_path).await
+    info!(
+        "Continuing cherry-pick in repo '{}'",
+        request.repository_path
+    );
+
+    GitService::cherry_pick_continue(&request.repository_path)
+        .await
         .map_err(|e| {
-            error!("Failed to continue cherry-pick: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to continue cherry-pick: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to continue cherry-pick: {}", e)
         })
 }
@@ -452,10 +526,14 @@ pub async fn git_list_worktrees(
     request: GitRepositoryRequest,
 ) -> Result<Vec<bitfun_core::service::git::GitWorktreeInfo>, String> {
     info!("Listing worktrees for '{}'", request.repository_path);
-    
-    GitService::list_worktrees(&request.repository_path).await
+
+    GitService::list_worktrees(&request.repository_path)
+        .await
         .map_err(|e| {
-            error!("Failed to list worktrees: path={}, error={}", request.repository_path, e);
+            error!(
+                "Failed to list worktrees: path={}, error={}",
+                request.repository_path, e
+            );
             format!("Failed to list worktrees: {}", e)
         })
 }
@@ -468,14 +546,16 @@ pub async fn git_add_worktree(
     let create_branch = request.create_branch.unwrap_or(false);
     info!(
         "Adding worktree for branch '{}' in '{}' (create_branch: {})",
-        request.branch,
-        request.repository_path,
-        create_branch
+        request.branch, request.repository_path, create_branch
     );
-    
-    GitService::add_worktree(&request.repository_path, &request.branch, create_branch).await
+
+    GitService::add_worktree(&request.repository_path, &request.branch, create_branch)
+        .await
         .map_err(|e| {
-            error!("Failed to add worktree: path={}, branch={}, create_branch={}, error={}", request.repository_path, request.branch, create_branch, e);
+            error!(
+                "Failed to add worktree: path={}, branch={}, create_branch={}, error={}",
+                request.repository_path, request.branch, create_branch, e
+            );
             format!("Failed to add worktree: {}", e)
         })
 }
@@ -488,14 +568,16 @@ pub async fn git_remove_worktree(
     let force = request.force.unwrap_or(false);
     info!(
         "Removing worktree '{}' from '{}' (force: {})",
-        request.worktree_path,
-        request.repository_path,
-        force
+        request.worktree_path, request.repository_path, force
     );
-    
-    GitService::remove_worktree(&request.repository_path, &request.worktree_path, force).await
+
+    GitService::remove_worktree(&request.repository_path, &request.worktree_path, force)
+        .await
         .map_err(|e| {
-            error!("Failed to remove worktree: path={}, worktree_path={}, force={}, error={}", request.repository_path, request.worktree_path, force, e);
+            error!(
+                "Failed to remove worktree: path={}, worktree_path={}, force={}, error={}",
+                request.repository_path, request.worktree_path, force, e
+            );
             format!("Failed to remove worktree: {}", e)
         })
 }
@@ -529,12 +611,12 @@ pub async fn save_git_repo_history(
 ) -> Result<(), String> {
     let workspace_service = &state.workspace_service;
     let persistence = workspace_service.persistence();
-    
+
     let data = GitRepoHistoryData {
         repos: request.repos,
         saved_at: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     persistence
         .save_json("git_repo_history", &data, StorageOptions::default())
         .await
@@ -550,7 +632,7 @@ pub async fn load_git_repo_history(
 ) -> Result<Vec<GitRepoHistory>, String> {
     let workspace_service = &state.workspace_service;
     let persistence = workspace_service.persistence();
-    
+
     let data: Option<GitRepoHistoryData> = persistence
         .load_json("git_repo_history")
         .await
@@ -558,13 +640,9 @@ pub async fn load_git_repo_history(
             error!("Failed to load git repo history: {}", e);
             format!("Failed to load git repo history: {}", e)
         })?;
-    
+
     match data {
-        Some(data) => {
-            Ok(data.repos)
-        }
-        None => {
-            Ok(Vec::new())
-        }
+        Some(data) => Ok(data.repos),
+        None => Ok(Vec::new()),
     }
 }

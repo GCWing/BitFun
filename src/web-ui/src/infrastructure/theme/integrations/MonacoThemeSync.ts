@@ -158,7 +158,7 @@ export class MonacoThemeSync {
         inherit: true,
         rules: SEMANTIC_HIGHLIGHTING_RULES,
         colors: convertColorsToHex({
-          'editor.background': colors.background.primary,
+          'editor.background': colors.background.scene,
           'editor.foreground': colors.text.primary,
           'editor.selectionBackground': colors.accent[300], 
           'editorCursor.foreground': colors.accent[500],   
@@ -196,7 +196,7 @@ export class MonacoThemeSync {
     
     
     const baseColors: Record<string, string> = {
-      'editor.background': themeColors.background.primary,
+      'editor.background': themeColors.background.scene,
       'editor.foreground': themeColors.text.primary,
       'editorLineNumber.foreground': themeColors.text.muted,
       'editorCursor.foreground': themeColors.accent[500],
@@ -219,10 +219,6 @@ export class MonacoThemeSync {
     
     const mappedMonacoColors: Record<string, string> = {};
     if (monacoColors) {
-      
-      if (monacoColors.background) {
-        mappedMonacoColors['editor.background'] = monacoColors.background;
-      }
       if (monacoColors.foreground) {
         mappedMonacoColors['editor.foreground'] = monacoColors.foreground;
       }

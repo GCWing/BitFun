@@ -13,6 +13,10 @@
     "confirmDelete": "Are you sure you want to delete theme \"{{name}}\"?",
     "importSuccess": "Theme imported successfully!",
     "importFailed": "Failed to import theme. Please check the file format.",
+    "languageSectionHint": "Configure display language for the interface.",
+    "languageRowHint": "Choose one language pack as the active UI language.",
+    "themeSectionHint": "Select, import, export, or manage visual themes.",
+    "themeRowHint": "Pick an installed theme or manage custom themes.",
     "presets": {
       "bitfun-dark": {
         "name": "Dark",
@@ -37,10 +41,6 @@
       "bitfun-cyber": {
         "name": "Cyber",
         "description": "Tech-style theme - Deep black hole, neon future, ultimate tech aesthetics"
-      },
-      "bitfun-starry-night": {
-        "name": "Starry Night",
-        "description": "Starry theme - Deep night sky, sparkling stars, feel the tranquility and mystery of the universe"
       },
       "bitfun-slate": {
         "name": "Slate",

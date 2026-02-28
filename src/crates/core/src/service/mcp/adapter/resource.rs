@@ -12,20 +12,29 @@ pub struct ResourceAdapter;
 impl ResourceAdapter {
     /// Converts an MCP resource into a context block.
     pub fn to_context_block(resource: &MCPResource, content: Option<&MCPResourceContent>) -> Value {
+        let content_value = content.and_then(|c| c.content.as_ref());
+        let display_name = resource.title.as_ref().unwrap_or(&resource.name);
         json!({
             "type": "resource",
             "uri": resource.uri,
             "name": resource.name,
+            "title": resource.title,
+            "displayName": display_name,
             "description": resource.description,
             "mimeType": resource.mime_type,
-            "content": content.map(|c| &c.content),
+            "size": resource.size,
+            "content": content_value,
             "metadata": resource.metadata,
         })
     }
 
-    /// Converts MCP resource content to plain text.
+    /// Converts MCP resource content to plain text. Binary (blob) content is summarized.
     pub fn to_text(content: &MCPResourceContent) -> String {
-        format!("Resource: {}\n\n{}\n", content.uri, content.content)
+        let text = content
+            .content
+            .as_deref()
+            .unwrap_or_else(|| content.blob.as_ref().map_or("(empty)", |_| "(binary content)"));
+        format!("Resource: {}\n\n{}\n", content.uri, text)
     }
 
     /// Calculates a resource relevance score (0-1).

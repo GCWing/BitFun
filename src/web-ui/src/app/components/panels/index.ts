@@ -1,17 +1,12 @@
 /**
- * Application-level panel component exports
+ * Application-level panel component exports.
+ *
+ * Note: CenterPanel and ContentPanel have moved to scenes/session/
+ * as ChatPane and AuxPane respectively.
  */
 
-export { default as LeftPanel } from './LeftPanel';
-export { default as CenterPanel } from './CenterPanel';
-export { default as RightPanel } from './RightPanel';
-export type { RightPanelRef } from './RightPanel';
 export { default as FilesPanel } from './FilesPanel';
-export { default as SessionsPanel } from './SessionsPanel';
-export { default as TerminalSessionsPanel } from './TerminalSessionsPanel';
 
 // ContentCanvas component exports
 export { ContentCanvas, useCanvasStore } from './content-canvas';
 export type { ContentCanvasProps } from './content-canvas';
-
-

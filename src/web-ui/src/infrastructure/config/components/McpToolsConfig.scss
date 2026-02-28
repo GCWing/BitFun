@@ -1,0 +1,226 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.bitfun-mcp-tools {
+  // ─── JSON editor (MCP) ─────────────────────────────────────────────────────
+  &__json-editor {
+    padding: $size-gap-4;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    animation: bitfun-collection-slide-down 0.18s $easing-standard;
+  }
+
+  &__json-editor-header {
+    h3 {
+      margin: 0 0 $size-gap-1;
+      font-size: $font-size-sm;
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__json-hint {
+    margin: 0;
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    line-height: $line-height-relaxed;
+  }
+
+  &__json-textarea {
+    font-family: $font-family-mono;
+    font-size: $font-size-xs;
+    line-height: 1.6;
+  }
+
+  &__json-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+  }
+
+  &__json-examples {
+    padding-top: $size-gap-3;
+    border-top: 1px solid var(--border-subtle);
+
+    h4 {
+      margin: 0 0 $size-gap-2;
+      font-size: $font-size-xs;
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+  }
+
+  &__example {
+    & + & {
+      margin-top: $size-gap-3;
+    }
+
+    h5 {
+      margin: 0 0 $size-gap-1;
+      font-size: $font-size-xs;
+      font-weight: $font-weight-medium;
+      color: var(--color-text-secondary);
+    }
+
+    pre {
+      margin: 0;
+      padding: $size-gap-2 $size-gap-3;
+      background: var(--element-bg-medium);
+      border: 1px solid var(--border-subtle);
+      border-radius: $size-radius-sm;
+      font-family: $font-family-mono;
+      font-size: $font-size-xs;
+      color: var(--color-text-primary);
+      line-height: 1.6;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+  }
+
+  // ─── MCP status badge ────────────────────────────────────────────────────────
+  &__status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border-radius: $size-radius-sm;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+    border: 1px solid transparent;
+
+    &.is-healthy {
+      background: rgba($color-success, 0.1);
+      color: var(--color-success);
+      border-color: rgba($color-success, 0.25);
+    }
+
+    &.is-pending {
+      background: rgba($color-warning, 0.1);
+      color: var(--color-warning);
+      border-color: rgba($color-warning, 0.25);
+    }
+
+    &.is-error {
+      background: rgba($color-error, 0.1);
+      color: var(--color-error);
+      border-color: rgba($color-error, 0.25);
+    }
+  }
+
+  &__runtime-badge {
+    margin-left: 4px;
+  }
+
+  &__runtime-badge--ok {
+    background: rgba($color-success, 0.1);
+    color: var(--color-success);
+    border-color: rgba($color-success, 0.25);
+  }
+
+  &__runtime-badge--error {
+    background: rgba($color-error, 0.1);
+    color: var(--color-error);
+    border-color: rgba($color-error, 0.25);
+  }
+
+  &__server-details {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__server-detail-item {
+    display: flex;
+    align-items: baseline;
+    gap: $size-gap-2;
+    flex-wrap: wrap;
+  }
+
+  &__server-detail-label {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+  }
+
+  &__server-detail-value {
+    font-family: $font-family-mono;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    word-break: break-all;
+  }
+
+  // ─── Tools badges & properties ──────────────────────────────────────────────
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 1px 7px;
+    border-radius: $size-radius-sm;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    white-space: nowrap;
+
+    &--readonly {
+      background: rgba(#60a5fa, 0.12);
+      color: #60a5fa;
+    }
+
+    &--writable {
+      background: rgba(#f87171, 0.12);
+      color: #f87171;
+    }
+
+    &--concurrent {
+      background: rgba(#34d399, 0.12);
+      color: #34d399;
+    }
+
+    &--permission {
+      background: rgba(#fbbf24, 0.12);
+      color: #fbbf24;
+    }
+  }
+
+  &__properties {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-3;
+  }
+
+  &__property {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+  }
+
+  &__icon-check {
+    color: var(--color-success);
+    flex-shrink: 0;
+  }
+
+  &__icon-cross {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+
+  &__retry-btn {
+    padding: 4px 12px;
+    border-radius: $size-radius-base;
+    border: 1px solid var(--border-base);
+    background: var(--element-bg-medium);
+    color: var(--color-text-secondary);
+    font-size: $font-size-sm;
+    cursor: pointer;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-strong);
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, Wifi, Loader, Search, ChevronDown, ChevronUp, AlertTriangle, X, Settings, ArrowLeft, ExternalLink } from 'lucide-react';
-import { Button, Switch, Select, IconButton, NumberInput, Card, CardBody, Checkbox } from '@/component-library';
+import { Plus, Edit2, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Button, Switch, Select, IconButton, NumberInput, Card, Checkbox, Modal, Input, Textarea } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -12,7 +12,7 @@ import { configManager } from '../services/ConfigManager';
 import { PROVIDER_TEMPLATES } from '../services/modelConfigs';
 import { aiApi, systemAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
-import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent } from './common';
+import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
 import DefaultModelConfig from './DefaultModelConfig';
 import { createLogger } from '@/shared/utils/logger';
 import './AIModelConfig.scss';
@@ -52,21 +52,12 @@ const AIModelConfig: React.FC = () => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const notification = useNotification();
   
-  
-  const [mainTab, setMainTab] = useState<'default' | 'models' | 'proxy'>('default');
-  
-  
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   
   
   const [creationMode, setCreationMode] = useState<'selection' | 'form' | null>(null);
   
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
-  
-  const [selectedCategoryTab, setSelectedCategoryTab] = useState<'all' | 'text' | 'multimodal' | 'other'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  
   const [proxyConfig, setProxyConfig] = useState<ProxyConfig>({
     enabled: false,
     url: '',
@@ -93,45 +84,6 @@ const AIModelConfig: React.FC = () => {
     }
   };
   
-  
-  const filteredModels = useMemo(() => {
-    let filtered = aiModels;
-    
-    
-    if (selectedCategoryTab !== 'all') {
-      if (selectedCategoryTab === 'text') {
-        
-        filtered = filtered.filter(m => 
-          m.category === 'general_chat'
-        );
-      } else if (selectedCategoryTab === 'multimodal') {
-        
-        filtered = filtered.filter(m => 
-          m.category === 'multimodal' || 
-          m.category === 'image_generation' || 
-          m.category === 'speech_recognition'
-        );
-      } else if (selectedCategoryTab === 'other') {
-        
-        filtered = filtered.filter(m => 
-          m.category === 'search_enhanced'
-        );
-      }
-    }
-    
-    
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(m => 
-        m.name.toLowerCase().includes(query) ||
-        m.model_name.toLowerCase().includes(query) ||
-        m.provider.toLowerCase().includes(query)
-      );
-    }
-    
-    return filtered;
-  }, [aiModels, selectedCategoryTab, searchQuery]);
-
   // Provider options with translations (must be at top level, before any conditional returns)
   const providerOrder = ['zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'anthropic'];
   const providers = useMemo(() => {
@@ -406,8 +358,7 @@ const AIModelConfig: React.FC = () => {
     });
   };
 
-  const handleTest = async (config: AIModelConfigType, e: React.MouseEvent) => {
-    e.stopPropagation(); 
+  const handleTest = async (config: AIModelConfigType) => {
     if (!config.id) return;
     
     const configId = config.id;
@@ -444,6 +395,21 @@ const AIModelConfig: React.FC = () => {
     }
   };
 
+  const handleToggleEnabled = async (config: AIModelConfigType, enabled: boolean) => {
+    if (!config.id) return;
+
+    try {
+      const updatedModels = aiModels.map(model =>
+        model.id === config.id ? { ...model, enabled } : model
+      );
+      await configManager.setConfig('ai.models', updatedModels);
+      setAiModels(updatedModels);
+    } catch (error) {
+      log.error('Failed to toggle model status', { configId: config.id, enabled, error });
+      notification.error(t('messages.saveFailed'));
+    }
+  };
+
   
   const handleSaveProxy = async () => {
     setIsProxySaving(true);
@@ -456,6 +422,13 @@ const AIModelConfig: React.FC = () => {
     } finally {
       setIsProxySaving(false);
     }
+  };
+
+  const closeEditingModal = () => {
+    setIsEditing(false);
+    setEditingConfig(null);
+    setCreationMode(null);
+    setSelectedProviderId(null);
   };
 
   
@@ -553,110 +526,98 @@ const AIModelConfig: React.FC = () => {
   }
 
   
-  if (isEditing && editingConfig) {
-    const isFromTemplate = !editingConfig.id && currentTemplate;
-    
+  const renderEditingForm = () => {
+    if (!isEditing || !editingConfig) return null;
+    const isFromTemplate = !editingConfig.id && !!currentTemplate;
+
+    const handleCategoryChange = (value: string | number | (string | number)[]) => {
+      const category = value as ModelCategory;
+      setEditingConfig(prev => {
+        let defaultCapabilities: ModelCapability[] = ['text_chat'];
+        const updates: Partial<AIModelConfigType> = { category, capabilities: defaultCapabilities };
+        switch (category) {
+          case 'general_chat':
+            defaultCapabilities = ['text_chat', 'function_calling'];
+            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            break;
+          case 'multimodal':
+            defaultCapabilities = ['text_chat', 'image_understanding', 'function_calling'];
+            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            break;
+          case 'image_generation':
+            defaultCapabilities = ['image_generation'];
+            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/images/generations';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            break;
+          case 'search_enhanced':
+            defaultCapabilities = ['search'];
+            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/web_search';
+            updates.request_url = resolveRequestUrl(updates.base_url!, 'openai');
+            updates.model_name = 'search-api';
+            updates.provider = 'openai';
+            updates.context_window = 128000;
+            updates.max_tokens = 8192;
+            break;
+          case 'speech_recognition':
+            defaultCapabilities = ['speech_recognition'];
+            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            break;
+        }
+        updates.capabilities = defaultCapabilities;
+        return { ...prev, ...updates };
+      });
+    };
+
     return (
-      <ConfigPageLayout className="bitfun-ai-model-config">
-        <ConfigPageHeader
-          title={editingConfig.id ? t('editModel') : (isFromTemplate ? `${t('newModel')} - ${currentTemplate.name}` : t('newModel'))}
-          subtitle={t('editSubtitle')}
-        />
+      <>
+        {!editingConfig.id && (
+          <button className="bitfun-ai-model-config__back-button" onClick={handleBackToSelection}>
+            <ArrowLeft size={16} />
+            {t('providerSelection.backToSelection')}
+          </button>
+        )}
 
-        <ConfigPageContent className="bitfun-ai-model-config__content bitfun-ai-model-config__content--form">
-          
-          {!editingConfig.id && (
-            <button 
-              className="bitfun-ai-model-config__back-button"
-              onClick={handleBackToSelection}
-            >
-              <ArrowLeft size={16} />
-              {t('providerSelection.backToSelection')}
-            </button>
-          )}
-
-          <div className="bitfun-ai-model-config__form">
-            
+        <div className="bitfun-ai-model-config__form bitfun-ai-model-config__form--modal">
+          <ConfigPageSection
+            title={t('editSubtitle', { defaultValue: '基础模型参数配置' })}
+            className="bitfun-ai-model-config__edit-section"
+          >
             {isFromTemplate ? (
               <>
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.modelName')} *</label>
+                <ConfigPageRow label={`${t('form.modelName')} *`} align="center" wide>
                   <Select
                     value={editingConfig.model_name || ''}
                     onChange={(value) => {
                       const newModelName = value as string;
                       setEditingConfig(prev => {
-                        
-                        const oldAutoName = prev?.model_name ? `${currentTemplate.name} - ${prev.model_name}` : '';
+                        const oldAutoName = prev?.model_name ? `${currentTemplate?.name} - ${prev.model_name}` : '';
                         const isAutoGenerated = !prev?.name || prev.name === oldAutoName;
-                        
-                        return { 
-                          ...prev, 
+                        return {
+                          ...prev,
                           model_name: newModelName,
-                          
-                          name: isAutoGenerated ? `${currentTemplate.name} - ${newModelName}` : prev?.name
+                          name: isAutoGenerated && currentTemplate ? `${currentTemplate.name} - ${newModelName}` : prev?.name
                         };
                       });
                     }}
                     placeholder={t('providerSelection.selectModel')}
-                    options={currentTemplate.models.map(model => ({
-                      label: model,
-                      value: model
-                    }))}
+                    options={(currentTemplate?.models || []).map(model => ({ label: model, value: model }))}
                     searchable
                     allowCustomValue
                     searchPlaceholder={t('providerSelection.inputModelName')}
                     customValueHint={t('providerSelection.useCustomModel')}
                   />
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.configName')} *</label>
-                  <input
-                    type="text"
-                    value={editingConfig.name || ''}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder={t('form.configNamePlaceholder')}
-                  />
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.apiKey')} *</label>
-                  <input
-                    type="password"
-                    value={editingConfig.api_key || ''}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, api_key: e.target.value }))}
-                    placeholder={t('form.apiKeyPlaceholder')}
-                  />
-                  {currentTemplate.helpUrl && (
-                    <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                      <a 
-                        href={currentTemplate.helpUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ color: 'var(--color-primary)', cursor: 'pointer' }}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          try {
-                            await systemAPI.openExternal(currentTemplate.helpUrl!);
-                          } catch (error) {
-                            console.error('[AIModelConfig] Failed to open external URL:', error);
-                          }
-                        }}
-                      >
-                        {t('providerSelection.getApiKey')}
-                      </a>
-                    </small>
-                  )}
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.baseUrl')}</label>
-                  {currentTemplate.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 ? (
+                </ConfigPageRow>
+                <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
+                  <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={`${t('form.apiKey')} *`} align="center" wide>
+                  <Input type="password" value={editingConfig.api_key || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, api_key: e.target.value }))} placeholder={t('form.apiKeyPlaceholder')} inputSize="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
+                  {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 ? (
                     <Select
                       value={editingConfig.base_url || currentTemplate.baseUrl}
                       onChange={(value) => {
@@ -670,41 +631,35 @@ const AIModelConfig: React.FC = () => {
                         }));
                       }}
                       placeholder={t('form.baseUrl')}
-                      options={currentTemplate.baseUrlOptions.map(opt => ({
-                        label: opt.url,
-                        value: opt.url,
-                        description: `${opt.format.toUpperCase()} · ${opt.note}`
-                      }))}
+                      options={currentTemplate.baseUrlOptions.map(opt => ({ label: opt.url, value: opt.url, description: `${opt.format.toUpperCase()} · ${opt.note}` }))}
                     />
                   ) : (
-                    <input
-                      type="url"
-                      value={editingConfig.base_url || ''}
-                      onChange={(e) => setEditingConfig(prev => ({
-                        ...prev,
-                        base_url: e.target.value,
-                        request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
-                      }))}
-                      onFocus={(e) => e.target.select()}
-                      placeholder={currentTemplate.baseUrl}
-                    />
-                  )}
-                  {editingConfig.base_url && (
-                    <div className="bitfun-ai-model-config__resolved-url">
-                      <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
-                      <code className="resolved-url__value">
-                        {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
-                      </code>
-                      {!(currentTemplate.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0) && (
-                        <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
+                    <div className="bitfun-ai-model-config__control-stack">
+                      <Input
+                        type="url"
+                        value={editingConfig.base_url || ''}
+                        onChange={(e) => setEditingConfig(prev => ({
+                          ...prev,
+                          base_url: e.target.value,
+                          request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
+                        }))}
+                        onFocus={(e) => e.target.select()}
+                        placeholder={currentTemplate?.baseUrl}
+                        inputSize="small"
+                      />
+                      {editingConfig.base_url && (
+                        <div className="bitfun-ai-model-config__resolved-url">
+                          <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
+                          <code className="resolved-url__value">
+                            {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
+                          </code>
+                          <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
+                        </div>
                       )}
                     </div>
                   )}
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.provider')}</label>
+                </ConfigPageRow>
+                <ConfigPageRow label={t('form.provider')} description={t('providerSelection.formatHint')} align="center">
                   <Select
                     value={editingConfig.provider || 'openai'}
                     onChange={(value) => setEditingConfig(prev => ({
@@ -713,322 +668,112 @@ const AIModelConfig: React.FC = () => {
                       request_url: resolveRequestUrl(prev?.base_url || '', value as string)
                     }))}
                     placeholder={t('form.providerPlaceholder')}
-                    options={[
-                      { label: 'OpenAI', value: 'openai' },
-                      { label: 'Anthropic', value: 'anthropic' }
-                    ]}
+                    options={[{ label: 'OpenAI', value: 'openai' }, { label: 'Anthropic', value: 'anthropic' }]}
                   />
-                  <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                    {t('providerSelection.formatHint')}
-                  </small>
-                </div>
-
-                {/* Context Window */}
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.contextWindow')}</label>
-                  <NumberInput
-                    value={editingConfig.context_window || 128000}
-                    onChange={(v) => setEditingConfig(prev => ({ ...prev, context_window: v }))}
-                    min={1000}
-                    max={2000000}
-                    step={1000}
-                    size="small"
-                  />
-                  <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                    {t('form.contextWindowHint')}
-                  </small>
-                </div>
-
-                {/* Max Tokens */}
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.maxTokens')}</label>
-                  <NumberInput
-                    value={editingConfig.max_tokens || 8192}
-                    onChange={(v) => setEditingConfig(prev => ({ ...prev, max_tokens: v }))}
-                    min={1000}
-                    max={1000000}
-                    step={1000}
-                    size="small"
-                  />
-                  <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                    {t('form.maxTokensHint')}
-                  </small>
-                </div>
-
-                {/* Enable Thinking */}
-                <div className="bitfun-ai-model-config__form-field">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <label style={{ marginBottom: '4px' }}>{t('thinking.enable')}</label>
-                      <small style={{ display: 'block', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                        {t('thinking.enableHint')}
-                      </small>
-                    </div>
-                    <Switch
-                      checked={editingConfig.enable_thinking_process ?? false}
-                      onChange={(e) => setEditingConfig(prev => ({ ...prev, enable_thinking_process: e.target.checked }))}
-                    />
-                  </div>
-                </div>
-
+                </ConfigPageRow>
+                <ConfigPageRow label={t('form.contextWindow')} description={t('form.contextWindowHint')} align="center">
+                  <NumberInput value={editingConfig.context_window || 128000} onChange={(v) => setEditingConfig(prev => ({ ...prev, context_window: v }))} min={1000} max={2000000} step={1000} size="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={t('form.maxTokens')} description={t('form.maxTokensHint')} align="center">
+                  <NumberInput value={editingConfig.max_tokens || 8192} onChange={(v) => setEditingConfig(prev => ({ ...prev, max_tokens: v }))} min={1000} max={1000000} step={1000} size="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={t('thinking.enable')} description={t('thinking.enableHint')} align="center">
+                  <Switch checked={editingConfig.enable_thinking_process ?? false} onChange={(e) => setEditingConfig(prev => ({ ...prev, enable_thinking_process: e.target.checked }))} size="small" />
+                </ConfigPageRow>
               </>
             ) : (
               <>
-                
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('category.label')} *</label>
-                  <Select
-                    value={editingConfig.category || 'general_chat'}
-                    onChange={(value) => {
-                      const category = value as ModelCategory;
-                      setEditingConfig(prev => {
-                        
-                        let defaultCapabilities: ModelCapability[] = ['text_chat'];
-                        let updates: Partial<AIModelConfigType> = { category, capabilities: defaultCapabilities };
-                        
-                        switch (category) {
-                          case 'general_chat':
-                            defaultCapabilities = ['text_chat', 'function_calling'];
-                            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                            updates.request_url = resolveRequestUrl(updates.base_url, prev?.provider || 'openai');
-                            break;
-                          case 'multimodal':
-                            defaultCapabilities = ['text_chat', 'image_understanding', 'function_calling'];
-                            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                            updates.request_url = resolveRequestUrl(updates.base_url, prev?.provider || 'openai');
-                            break;
-                          case 'image_generation':
-                            defaultCapabilities = ['image_generation'];
-                            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/images/generations';
-                            updates.request_url = resolveRequestUrl(updates.base_url, prev?.provider || 'openai');
-                            break;
-                          case 'search_enhanced':
-                            defaultCapabilities = ['search'];
-                            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/web_search';
-                            updates.request_url = resolveRequestUrl(updates.base_url, 'openai');
-                            updates.model_name = 'search-api';
-                            updates.provider = 'openai';
-                            updates.context_window = 128000;
-                            updates.max_tokens = 8192;
-                            break;
-                          case 'speech_recognition':
-                            defaultCapabilities = ['speech_recognition'];
-                            updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                            updates.request_url = resolveRequestUrl(updates.base_url, prev?.provider || 'openai');
-                            break;
-                        }
-                        updates.capabilities = defaultCapabilities;
-                        return { ...prev, ...updates };
-                      });
-                    }}
-                    placeholder={t('category.placeholder')}
-                    options={[
-                      { label: t('category.general_chat'), value: 'general_chat' },
-                      { label: t('category.multimodal'), value: 'multimodal' },
-                      { label: t('category.image_generation'), value: 'image_generation' },
-                      { label: t('category.search_enhanced'), value: 'search_enhanced' },
-                      { label: t('category.speech_recognition'), value: 'speech_recognition' }
-                    ]}
-                  />
-                  <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                    {editingConfig.category && t(`categoryHints.${editingConfig.category}`)}
-                  </small>
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.configName')} *</label>
-                  <input
-                    type="text"
-                    value={editingConfig.name || ''}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder={t('form.configNamePlaceholder')}
-                  />
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.baseUrl')} *</label>
-                  <input
-                    type="url"
-                    value={editingConfig.base_url || ''}
-                    onChange={(e) => setEditingConfig(prev => ({
-                      ...prev,
-                      base_url: e.target.value,
-                      request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
-                    }))}
-                    onFocus={(e) => e.target.select()}
-                    placeholder={
-                      editingConfig.category === 'search_enhanced'
-                        ? 'https://open.bigmodel.cn/api/paas/v4/web_search'
-                        : 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
-                    }
-                  />
-                  {editingConfig.category === 'search_enhanced' && (
-                    <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                      {t('form.searchApiHint')}
-                    </small>
-                  )}
-                  {editingConfig.base_url && (
-                    <div className="bitfun-ai-model-config__resolved-url">
-                      <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
-                      <code className="resolved-url__value">
-                        {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
-                      </code>
-                      <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
-                    </div>
-                  )}
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.apiKey')} *</label>
-                  <input
-                    type="password"
-                    value={editingConfig.api_key || ''}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, api_key: e.target.value }))}
-                    placeholder={t('form.apiKeyPlaceholder')}
-                  />
-                </div>
+                <ConfigPageRow label={`${t('category.label')} *`} description={editingConfig.category ? t(`categoryHints.${editingConfig.category}`) : undefined} align="center">
+                  <Select value={editingConfig.category || 'general_chat'} onChange={handleCategoryChange} placeholder={t('category.placeholder')} options={[
+                    { label: t('category.general_chat'), value: 'general_chat' },
+                    { label: t('category.multimodal'), value: 'multimodal' },
+                    { label: t('category.image_generation'), value: 'image_generation' },
+                    { label: t('category.search_enhanced'), value: 'search_enhanced' },
+                    { label: t('category.speech_recognition'), value: 'speech_recognition' },
+                  ]} />
+                </ConfigPageRow>
+                <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
+                  <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={`${t('form.baseUrl')} *`} description={editingConfig.category === 'search_enhanced' ? t('form.searchApiHint') : undefined} align="center" wide>
+                  <div className="bitfun-ai-model-config__control-stack">
+                    <Input
+                      type="url"
+                      value={editingConfig.base_url || ''}
+                      onChange={(e) => setEditingConfig(prev => ({
+                        ...prev,
+                        base_url: e.target.value,
+                        request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
+                      }))}
+                      onFocus={(e) => e.target.select()}
+                      placeholder={editingConfig.category === 'search_enhanced' ? 'https://open.bigmodel.cn/api/paas/v4/web_search' : 'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
+                      inputSize="small"
+                    />
+                    {editingConfig.base_url && (
+                      <div className="bitfun-ai-model-config__resolved-url">
+                        <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
+                        <code className="resolved-url__value">
+                          {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
+                        </code>
+                        <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
+                      </div>
+                    )}
+                  </div>
+                </ConfigPageRow>
+                <ConfigPageRow label={`${t('form.apiKey')} *`} align="center" wide>
+                  <Input type="password" value={editingConfig.api_key || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, api_key: e.target.value }))} placeholder={t('form.apiKeyPlaceholder')} inputSize="small" />
+                </ConfigPageRow>
               </>
             )}
 
-            
             {!isFromTemplate && editingConfig.category !== 'search_enhanced' && (
               <>
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.modelName')} *</label>
-                  <input
-                    type="text"
-                    value={editingConfig.model_name || ''}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, model_name: e.target.value }))}
-                    placeholder={editingConfig.category === 'speech_recognition' ? 'glm-asr' : 'glm-4.7'}
-                  />
-                  {editingConfig.category === 'speech_recognition' && (
-                    <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                      {t('form.modelNameHint')}
-                    </small>
-                  )}
-                </div>
-
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.provider')}</label>
-                  <Select
-                    value={editingConfig.provider || 'openai'}
-                    onChange={(value) => setEditingConfig(prev => ({ ...prev, provider: value as string }))}
-                    placeholder={t('form.providerPlaceholder')}
-                    options={[
-                      { label: 'OpenAI', value: 'openai' },
-                      { label: 'Anthropic', value: 'anthropic' }
-                    ]}
-                  />
-                </div>
-
-                
+                <ConfigPageRow label={`${t('form.modelName')} *`} description={editingConfig.category === 'speech_recognition' ? t('form.modelNameHint') : undefined} align="center" wide>
+                  <Input value={editingConfig.model_name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, model_name: e.target.value }))} placeholder={editingConfig.category === 'speech_recognition' ? 'glm-asr' : 'glm-4.7'} inputSize="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={t('form.provider')} align="center">
+                  <Select value={editingConfig.provider || 'openai'} onChange={(value) => setEditingConfig(prev => ({ ...prev, provider: value as string }))} placeholder={t('form.providerPlaceholder')} options={[{ label: 'OpenAI', value: 'openai' }, { label: 'Anthropic', value: 'anthropic' }]} />
+                </ConfigPageRow>
                 {editingConfig.category !== 'speech_recognition' && (
                   <>
-                    <div className="bitfun-ai-model-config__form-field">
-                      <label>{t('form.contextWindow')}</label>
-                      <NumberInput
-                        value={editingConfig.context_window || 128000}
-                        onChange={(v) => setEditingConfig(prev => ({ ...prev, context_window: v }))}
-                        min={1000}
-                        max={2000000}
-                        step={1000}
-                        size="small"
-                      />
-                      <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                        {t('form.contextWindowHint')}
-                      </small>
-                    </div>
-
-                    
+                    <ConfigPageRow label={t('form.contextWindow')} description={t('form.contextWindowHint')} align="center">
+                      <NumberInput value={editingConfig.context_window || 128000} onChange={(v) => setEditingConfig(prev => ({ ...prev, context_window: v }))} min={1000} max={2000000} step={1000} size="small" />
+                    </ConfigPageRow>
                     {editingConfig.category !== 'multimodal' && (
-                      <div className="bitfun-ai-model-config__form-field">
-                        <label>{t('form.maxTokens')}</label>
-                        <NumberInput
-                          value={editingConfig.max_tokens || 65536}
-                          onChange={(v) => setEditingConfig(prev => ({ ...prev, max_tokens: v }))}
-                          min={1000}
-                          max={1000000}
-                          step={1000}
-                          size="small"
-                        />
-                        <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                          {t('form.maxTokensHint')}
-                        </small>
-                      </div>
+                      <ConfigPageRow label={t('form.maxTokens')} description={t('form.maxTokensHint')} align="center">
+                        <NumberInput value={editingConfig.max_tokens || 65536} onChange={(v) => setEditingConfig(prev => ({ ...prev, max_tokens: v }))} min={1000} max={1000000} step={1000} size="small" />
+                      </ConfigPageRow>
                     )}
                   </>
                 )}
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <label style={{ marginBottom: '4px' }}>{t('thinking.enable')}</label>
-                      <small style={{ display: 'block', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                        {t('thinking.enableHint')}
-                      </small>
-                    </div>
-                    <Switch
-                      checked={editingConfig.enable_thinking_process ?? false}
-                      onChange={(e) => setEditingConfig(prev => ({ ...prev, enable_thinking_process: e.target.checked }))}
-                    />
-                  </div>
-                </div>
-
-                
-                <div className="bitfun-ai-model-config__form-field">
-                  <label>{t('form.description')}</label>
-                  <textarea
-                    value={editingConfig.description || ''}
-                    onChange={(e) => setEditingConfig(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder={t('form.descriptionPlaceholder')}
-                    rows={2}
-                  />
-                </div>
+                <ConfigPageRow label={t('thinking.enable')} description={t('thinking.enableHint')} align="center">
+                  <Switch checked={editingConfig.enable_thinking_process ?? false} onChange={(e) => setEditingConfig(prev => ({ ...prev, enable_thinking_process: e.target.checked }))} size="small" />
+                </ConfigPageRow>
+                <ConfigPageRow label={t('form.description')} multiline>
+                  <Textarea value={editingConfig.description || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, description: e.target.value }))} placeholder={t('form.descriptionPlaceholder')} rows={2} />
+                </ConfigPageRow>
               </>
             )}
+          </ConfigPageSection>
 
-            
-            <div className="bitfun-ai-model-config__advanced-settings">
-              <button
-                type="button"
-                className="bitfun-ai-model-config__advanced-toggle"
-                onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-              >
-                {showAdvancedSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                <span>{t('advancedSettings.title')}</span>
-              </button>
-              
-              {showAdvancedSettings && (
-                <div className="bitfun-ai-model-config__advanced-content">
-                  
-                  {editingConfig.enable_thinking_process && (
-                    <div className="bitfun-ai-model-config__form-field">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <label style={{ marginBottom: '4px' }}>{t('thinking.preserve')}</label>
-                          <small style={{ display: 'block', color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                            {t('thinking.preserveHint')}
-                          </small>
-                        </div>
-                        <Switch
-                          checked={editingConfig.support_preserved_thinking ?? false}
-                          onChange={(e) => setEditingConfig(prev => ({ ...prev, support_preserved_thinking: e.target.checked }))}
-                        />
-                      </div>
-                    </div>
-                  )}
+          <ConfigPageSection
+            title={t('advancedSettings.title')}
+            className="bitfun-ai-model-config__edit-section"
+          >
+            <ConfigPageRow label={t('advancedSettings.title')} align="center">
+              <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} size="small" />
+            </ConfigPageRow>
 
-                  <div className="bitfun-ai-model-config__form-field">
-                    <Checkbox
-                      label={t('advancedSettings.skipSslVerify.label')}
-                      checked={editingConfig.skip_ssl_verify || false}
-                      onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))}
-                    />
+            {showAdvancedSettings && (
+              <>
+                {editingConfig.enable_thinking_process && (
+                  <ConfigPageRow label={t('thinking.preserve')} description={t('thinking.preserveHint')} align="center">
+                    <Switch checked={editingConfig.support_preserved_thinking ?? false} onChange={(e) => setEditingConfig(prev => ({ ...prev, support_preserved_thinking: e.target.checked }))} size="small" />
+                  </ConfigPageRow>
+                )}
+                <ConfigPageRow label={t('advancedSettings.skipSslVerify.label')} align="center">
+                  <div className="bitfun-ai-model-config__row-control--stack">
+                    <Checkbox label={t('advancedSettings.skipSslVerify.label')} checked={editingConfig.skip_ssl_verify || false} onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))} />
                     {editingConfig.skip_ssl_verify && (
                       <div className="bitfun-ai-model-config__warning">
                         <AlertTriangle size={16} />
@@ -1036,178 +781,56 @@ const AIModelConfig: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  
-                  
-                  <div className="bitfun-ai-model-config__form-field">
-                    <label>{t('advancedSettings.customHeaders.label')}</label>
-                    <small className="bitfun-ai-model-config__field-hint">
-                      {t('advancedSettings.customHeaders.hint')}
-                    </small>
-                    
-                    
+                </ConfigPageRow>
+                <ConfigPageRow label={t('advancedSettings.customHeaders.label')} description={t('advancedSettings.customHeaders.hint')} multiline>
+                  <div className="bitfun-ai-model-config__row-control--stack">
                     <div className="bitfun-ai-model-config__header-mode">
-                      <label>
-                        {t('advancedSettings.customHeaders.modeLabel')}
-                      </label>
+                      <label>{t('advancedSettings.customHeaders.modeLabel')}</label>
                       <div>
                         <label className="bitfun-ai-model-config__radio-label">
-                          <input
-                            type="radio"
-                            name="custom_headers_mode"
-                            value="merge"
-                            checked={(editingConfig.custom_headers_mode || 'merge') === 'merge'}
-                            onChange={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))}
-                          />
+                          <input type="radio" name="custom_headers_mode" value="merge" checked={(editingConfig.custom_headers_mode || 'merge') === 'merge'} onChange={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))} />
                           <span>{t('advancedSettings.customHeaders.modeMerge')}</span>
                         </label>
                         <label className="bitfun-ai-model-config__radio-label">
-                          <input
-                            type="radio"
-                            name="custom_headers_mode"
-                            value="replace"
-                            checked={editingConfig.custom_headers_mode === 'replace'}
-                            onChange={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))}
-                          />
+                          <input type="radio" name="custom_headers_mode" value="replace" checked={editingConfig.custom_headers_mode === 'replace'} onChange={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))} />
                           <span>{t('advancedSettings.customHeaders.modeReplace')}</span>
                         </label>
                       </div>
-                      <small>
-                        {editingConfig.custom_headers_mode === 'replace' 
-                          ? t('advancedSettings.customHeaders.modeReplaceHint')
-                          : t('advancedSettings.customHeaders.modeMergeHint')
-                        }
-                      </small>
+                      <small>{editingConfig.custom_headers_mode === 'replace' ? t('advancedSettings.customHeaders.modeReplaceHint') : t('advancedSettings.customHeaders.modeMergeHint')}</small>
                     </div>
-                    
-                    
                     <div className="bitfun-ai-model-config__custom-headers">
                       {Object.entries(editingConfig.custom_headers || {}).map(([key, value], index) => (
                         <div key={index} className="bitfun-ai-model-config__header-row">
-                          <input
-                            type="text"
-                            value={key}
-                            onChange={(e) => {
-                              const newHeaders = { ...editingConfig.custom_headers };
-                              const oldValue = newHeaders[key];
-                              delete newHeaders[key];
-                              if (e.target.value) {
-                                newHeaders[e.target.value] = oldValue;
-                              }
-                              setEditingConfig(prev => ({ ...prev, custom_headers: newHeaders }));
-                            }}
-                            placeholder={t('advancedSettings.customHeaders.keyPlaceholder')}
-                            className="bitfun-ai-model-config__header-key"
-                          />
-                          <input
-                            type="text"
-                            value={value}
-                            onChange={(e) => {
-                              const newHeaders = { ...editingConfig.custom_headers };
-                              newHeaders[key] = e.target.value;
-                              setEditingConfig(prev => ({ ...prev, custom_headers: newHeaders }));
-                            }}
-                            placeholder={t('advancedSettings.customHeaders.valuePlaceholder')}
-                            className="bitfun-ai-model-config__header-value"
-                          />
-                          <IconButton
-                            variant="ghost"
-                            size="small"
-                            onClick={() => {
-                              const newHeaders = { ...editingConfig.custom_headers };
-                              delete newHeaders[key];
-                              setEditingConfig(prev => ({ 
-                                ...prev, 
-                                custom_headers: Object.keys(newHeaders).length > 0 ? newHeaders : undefined 
-                              }));
-                            }}
-                            tooltip={t('actions.delete')}
-                          >
-                            <X size={14} />
-                          </IconButton>
+                          <Input value={key} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; const ov = nh[key]; delete nh[key]; if (e.target.value) nh[e.target.value] = ov; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.keyPlaceholder')} inputSize="small" className="bitfun-ai-model-config__header-key" />
+                          <Input value={value} onChange={(e) => { const nh = { ...editingConfig.custom_headers }; nh[key] = e.target.value; setEditingConfig(prev => ({ ...prev, custom_headers: nh })); }} placeholder={t('advancedSettings.customHeaders.valuePlaceholder')} inputSize="small" className="bitfun-ai-model-config__header-value" />
+                          <IconButton variant="ghost" size="small" onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }} tooltip={t('actions.delete')}><X size={14} /></IconButton>
                         </div>
                       ))}
-                      
-                      
-                      <Button
-                        variant="secondary"
-                        size="small"
-                        onClick={() => {
-                          const newHeaders = { ...editingConfig.custom_headers, '': '' };
-                          setEditingConfig(prev => ({ ...prev, custom_headers: newHeaders }));
-                        }}
-                        className="bitfun-ai-model-config__add-header-btn"
-                      >
-                        <Plus size={14} />
-                        {t('advancedSettings.customHeaders.addHeader')}
-                      </Button>
+                      <Button variant="secondary" size="small" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-ai-model-config__add-header-btn"><Plus size={14} />{t('advancedSettings.customHeaders.addHeader')}</Button>
                     </div>
                   </div>
-
-                  
-                  <div className="bitfun-ai-model-config__form-field">
-                    <label>{t('advancedSettings.customRequestBody.label')}</label>
-                    <small className="bitfun-ai-model-config__field-hint">
-                      {t('advancedSettings.customRequestBody.hint')}
-                    </small>
-                    <small
-                      className="bitfun-ai-model-config__field-hint"
-                      style={{ color: 'var(--color-primary)', marginTop: '4px' }}
-                    >
-                      {t('advancedSettings.customRequestBody.mergeHint')}
-                    </small>
-                    <textarea
-                      value={editingConfig.custom_request_body || ''}
-                      onChange={(e) => {
-                        setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }));
-                      }}
-                      placeholder={t('advancedSettings.customRequestBody.placeholder')}
-                      rows={8}
-                      style={{
-                        fontFamily: 'monospace',
-                        fontSize: '13px',
-                        lineHeight: '1.5',
-                        padding: '12px',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: '4px',
-                        resize: 'vertical',
-                        minHeight: '120px'
-                      }}
-                    />
-                    
+                </ConfigPageRow>
+                <ConfigPageRow label={t('advancedSettings.customRequestBody.label')} description={t('advancedSettings.customRequestBody.hint')} multiline>
+                  <div className="bitfun-ai-model-config__row-control--stack">
+                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--font-family-mono)', fontSize: '13px' }} />
                     {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {
-                      try {
-                        JSON.parse(editingConfig.custom_request_body);
-                        return (
-                          <small style={{ color: 'var(--color-success)', fontSize: '12px', marginTop: '4px' }}>
-                            {t('advancedSettings.customRequestBody.validJson')}
-                          </small>
-                        );
-                      } catch {
-                        return (
-                          <small style={{ color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' }}>
-                            {t('advancedSettings.customRequestBody.invalidJson')}
-                          </small>
-                        );
-                      }
+                      try { JSON.parse(editingConfig.custom_request_body); return <small className="bitfun-ai-model-config__json-status bitfun-ai-model-config__json-status--success">{t('advancedSettings.customRequestBody.validJson')}</small>; }
+                      catch { return <small className="bitfun-ai-model-config__json-status bitfun-ai-model-config__json-status--error">{t('advancedSettings.customRequestBody.invalidJson')}</small>; }
                     })()}
                   </div>
-                </div>
-              )}
-            </div>
+                </ConfigPageRow>
+              </>
+            )}
+          </ConfigPageSection>
 
-            <div className="bitfun-ai-model-config__form-actions">
-              <Button variant="secondary" onClick={() => { setIsEditing(false); setEditingConfig(null); setCreationMode(null); setSelectedProviderId(null); }}>
-                {t('actions.cancel')}
-              </Button>
-              <Button variant="primary" onClick={handleSave}>
-                {t('actions.save')}
-              </Button>
-            </div>
+          <div className="bitfun-ai-model-config__form-actions">
+            <Button variant="secondary" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
+            <Button variant="primary" onClick={handleSave}>{t('actions.save')}</Button>
           </div>
-        </ConfigPageContent>
-      </ConfigPageLayout>
+        </div>
+      </>
     );
-  }
+  };
 
   
   return (
@@ -1218,302 +841,238 @@ const AIModelConfig: React.FC = () => {
       />
 
       <ConfigPageContent className="bitfun-ai-model-config__content">
-        
-        <div className="bitfun-ai-model-config__tabs bitfun-ai-model-config__tabs--main">
-          <button
-            className={`bitfun-ai-model-config__tab ${mainTab === 'default' ? 'bitfun-ai-model-config__tab--active' : ''}`}
-            onClick={() => setMainTab('default')}
-          >
-            <span>{tDefault('tabs.default')}</span>
-          </button>
-          <button
-            className={`bitfun-ai-model-config__tab ${mainTab === 'models' ? 'bitfun-ai-model-config__tab--active' : ''}`}
-            onClick={() => setMainTab('models')}
-          >
-            <span>{tDefault('tabs.models')}</span>
-          </button>
-          <button
-            className={`bitfun-ai-model-config__tab ${mainTab === 'proxy' ? 'bitfun-ai-model-config__tab--active' : ''}`}
-            onClick={() => setMainTab('proxy')}
-          >
-            <span>{tDefault('tabs.proxy')}</span>
-          </button>
-        </div>
+        <ConfigPageSection
+          title={tDefault('tabs.default', { defaultValue: '默认模型分配' })}
+          description={tDefault('subtitle', { defaultValue: '为不同能力场景指定默认模型。' })}
+        >
+          <DefaultModelConfig />
+        </ConfigPageSection>
 
-        
-        <div className="bitfun-ai-model-config__tab-content">
-          
-          {mainTab === 'default' && (
-            <DefaultModelConfig />
-          )}
-
-          
-          {mainTab === 'models' && (
-            <>
-              
-        <div className="bitfun-ai-model-config__filters">
-          {aiModels.length > 0 && (
-            <div className="bitfun-ai-model-config__search">
-              <Search size={18} />
-              <input
-                type="text"
-                placeholder={t('search.placeholder')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          )}
-          <IconButton 
-            variant="primary" 
-            size="small"
-            onClick={handleCreateNew}
-            tooltip={t('actions.newConfig')}
-          >
-            <Plus size={16} />
-          </IconButton>
-        </div>
-
-        
-        {aiModels.length > 0 && (
-          <div className="bitfun-ai-model-config__category-tabs">
-            <button
-              className={`bitfun-ai-model-config__category-tab ${selectedCategoryTab === 'all' ? 'bitfun-ai-model-config__category-tab--active' : ''}`}
-              onClick={() => setSelectedCategoryTab('all')}
+        <ConfigPageSection
+          title={tDefault('tabs.models', { defaultValue: '已配置模型' })}
+          description={t('subtitle')}
+          extra={(
+            <IconButton
+              variant="primary"
+              size="small"
+              onClick={handleCreateNew}
+              tooltip={t('actions.newConfig')}
             >
-              {t('categories.all')}
-            </button>
-            <button
-              className={`bitfun-ai-model-config__category-tab ${selectedCategoryTab === 'text' ? 'bitfun-ai-model-config__category-tab--active' : ''}`}
-              onClick={() => setSelectedCategoryTab('text')}
-            >
-              {t('categories.text')}
-            </button>
-            <button
-              className={`bitfun-ai-model-config__category-tab ${selectedCategoryTab === 'multimodal' ? 'bitfun-ai-model-config__category-tab--active' : ''}`}
-              onClick={() => setSelectedCategoryTab('multimodal')}
-            >
-              {t('categories.multimodal')}
-            </button>
-            <button
-              className={`bitfun-ai-model-config__category-tab ${selectedCategoryTab === 'other' ? 'bitfun-ai-model-config__category-tab--active' : ''}`}
-              onClick={() => setSelectedCategoryTab('other')}
-            >
-              {t('categories.other')}
-            </button>
-          </div>
-        )}
-
-        
-        {aiModels.length === 0 ? (
-          <div className="bitfun-ai-model-config__empty">
-            <Wifi size={48} />
-            <p>{t('empty.noModels')}</p>
-            <Button variant="primary" onClick={handleCreateNew}>
               <Plus size={16} />
-              {t('actions.createFirst')}
-            </Button>
-          </div>
-        ) : filteredModels.length === 0 ? (
-          <div className="bitfun-ai-model-config__empty">
-            <Search size={48} />
-            <p>{t('empty.noMatchingModels')}</p>
-          </div>
-        ) : (
-          <div className="bitfun-ai-model-config__list">
-            {filteredModels.map(config => {
-              const isExpanded = expandedIds.has(config.id || '');
-
-              return (
-                <Card
-                  key={config.id}
-                  variant="default"
-                  padding="none"
-                  interactive
-                  className={`bitfun-ai-model-config__item ${isExpanded ? 'is-expanded' : ''}`}
-                >
-                  
-                  <div
-                    className="bitfun-ai-model-config__item-header"
-                    onClick={() => config.id && toggleExpanded(config.id)}
-                  >
-                    <div className="bitfun-ai-model-config__item-main">
-                      <div className="bitfun-ai-model-config__item-icon">
-                        <Wifi size={18} />
-                      </div>
-                      <div className="bitfun-ai-model-config__item-info">
-                        <div className="bitfun-ai-model-config__item-name">{config.name}</div>
-                        <div className="bitfun-ai-model-config__item-description">{config.model_name}</div>
-                      </div>
-                    </div>
-                    <div className="bitfun-ai-model-config__item-badges">
-                      
-                      {config.capabilities?.slice(0, 3).map(capability => (
-                        <span 
-                          key={capability}
-                          className={`bitfun-ai-model-config__capability-tag bitfun-ai-model-config__capability-tag--${capability}`}
-                        >
-                          {t(`capabilities.${capability}`)}
-                        </span>
-                      ))}
-                      {(config.capabilities?.length || 0) > 3 && (
-                        <span className="bitfun-ai-model-config__capability-tag bitfun-ai-model-config__capability-tag--more">
-                          +{(config.capabilities?.length || 0) - 3}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  
-                  {isExpanded && (
-                    <CardBody className="bitfun-ai-model-config__item-details">
-                      <div className="bitfun-ai-model-config__detail-section">
-                        <div className="bitfun-ai-model-config__detail-label">{t('details.basicInfo')}</div>
-                        <div className="bitfun-ai-model-config__properties">
-                          <div className="bitfun-ai-model-config__property">
-                            <span className="bitfun-ai-model-config__property-label">{t('details.modelName')}:</span>
-                            <span className="bitfun-ai-model-config__property-value">{config.model_name}</span>
-                          </div>
-                          <div className="bitfun-ai-model-config__property">
-                            <span className="bitfun-ai-model-config__property-label">{t('details.provider')}:</span>
-                            <span className="bitfun-ai-model-config__property-value">{config.provider}</span>
-                          </div>
-                          <div className="bitfun-ai-model-config__property">
-                            <span className="bitfun-ai-model-config__property-label">{t('details.apiUrl')}:</span>
-                            <span className="bitfun-ai-model-config__property-value">{config.base_url}</span>
-                          </div>
-                          <div className="bitfun-ai-model-config__property">
-                            <span className="bitfun-ai-model-config__property-label">{t('details.contextWindow')}:</span>
-                            <span className="bitfun-ai-model-config__property-value">{config.context_window?.toLocaleString() || '128,000'} {t('details.tokens')}</span>
-                          </div>
-                          <div className="bitfun-ai-model-config__property">
-                            <span className="bitfun-ai-model-config__property-label">{t('details.maxOutput')}:</span>
-                            <span className="bitfun-ai-model-config__property-value">{config.max_tokens?.toLocaleString() || '65,536'} {t('details.tokens')}</span>
-                          </div>
-                          {config.description && (
-                            <div className="bitfun-ai-model-config__property">
-                              <span className="bitfun-ai-model-config__property-label">{t('details.description')}:</span>
-                              <span className="bitfun-ai-model-config__property-value">{config.description}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      
-                      {config.id && testResults[config.id] && (
-                        <div className={`bitfun-ai-model-config__test-result ${testResults[config.id]!.success ? 'success' : 'error'}`}>
-                          {testResults[config.id]!.message}
-                        </div>
-                      )}
-
-                      
-                      <div className="bitfun-ai-model-config__item-actions">
-                        <button
-                          className="bitfun-ai-model-config__action-btn"
-                          onClick={(e) => handleTest(config, e)}
-                          disabled={config.id ? testingConfigs[config.id] : false}
-                        >
-                          {config.id && testingConfigs[config.id] ? (
-                            <Loader size={16} className="spinning" />
-                          ) : (
-                            <Wifi size={16} />
-                          )}
-                          {t('actions.test')}
-                        </button>
-                        <button
-                          className="bitfun-ai-model-config__action-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(config);
-                          }}
-                        >
-                          <Edit2 size={16} />
-                          {t('actions.edit')}
-                        </button>
-                        <button
-                          className="bitfun-ai-model-config__action-btn bitfun-ai-model-config__action-btn--danger"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(config.id!);
-                          }}
-                        >
-                          <Trash2 size={16} />
-                          {t('actions.delete')}
-                        </button>
-                      </div>
-                    </CardBody>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        )}
-            </>
+            </IconButton>
           )}
+        >
+          {aiModels.length === 0 ? (
+            <div className="bitfun-ai-model-config__empty">
+              <Wifi size={36} />
+              <p>{t('empty.noModels')}</p>
+              <Button variant="primary" size="small" onClick={handleCreateNew}>
+                <Plus size={14} />
+                {t('actions.createFirst')}
+              </Button>
+            </div>
+          ) : (
+            <div className="bitfun-ai-model-config__collection">
+              {aiModels.map(config => {
+                const isExpanded = expandedIds.has(config.id || '');
+                const testResult = config.id ? testResults[config.id] : null;
+                const isTesting = config.id ? !!testingConfigs[config.id] : false;
 
-          
-          {mainTab === 'proxy' && (
-            <div className="bitfun-ai-model-config__proxy-panel">
-              
-              <div className="bitfun-ai-model-config__proxy-switch-wrapper">
-                <Switch
-                  checked={proxyConfig.enabled}
-                  onChange={(e) => setProxyConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-                  label={t('proxy.enable')}
-                  description={t('proxy.enableHint')}
-                  size="medium"
-                />
-              </div>
+                const badge = (
+                  <>
+                    <span className="bitfun-ai-model-config__meta-tag">
+                      {t(`category.${config.category}`)}
+                    </span>
+                    <span className="bitfun-ai-model-config__meta-tag">
+                      {config.provider}
+                    </span>
+                    {testResult && (
+                      <span
+                        className={`bitfun-ai-model-config__status-dot ${testResult.success ? 'is-success' : 'is-error'}`}
+                        title={testResult.message}
+                      />
+                    )}
+                  </>
+                );
 
-              
-              <div className="bitfun-ai-model-config__form-field">
-                <label>{t('proxy.url')} *</label>
-                <input
-                  type="text"
-                  value={proxyConfig.url}
-                  onChange={(e) => setProxyConfig(prev => ({ ...prev, url: e.target.value }))}
-                  placeholder={t('proxy.urlPlaceholder')}
-                  disabled={!proxyConfig.enabled}
-                />
-                <small style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>
-                  {t('proxy.urlHint')}
-                </small>
-              </div>
+                const details = (
+                  <div className="bitfun-ai-model-config__details">
+                    <div className="bitfun-ai-model-config__details-section">
+                      <div className="bitfun-ai-model-config__details-section-title">
+                        {t('details.basicInfo', { defaultValue: '基础信息' })}
+                      </div>
+                      <div className="bitfun-ai-model-config__details-grid">
+                        <div className="bitfun-ai-model-config__details-item">
+                          <span className="bitfun-ai-model-config__details-label">{t('details.modelName')}</span>
+                          <span className="bitfun-ai-model-config__details-value">{config.model_name}</span>
+                        </div>
+                        <div className="bitfun-ai-model-config__details-item">
+                          <span className="bitfun-ai-model-config__details-label">{t('details.provider')}</span>
+                          <span className="bitfun-ai-model-config__details-value">{config.provider}</span>
+                        </div>
+                        <div className="bitfun-ai-model-config__details-item">
+                          <span className="bitfun-ai-model-config__details-label">{t('details.contextWindow')}</span>
+                          <span className="bitfun-ai-model-config__details-value">{config.context_window?.toLocaleString() || '128,000'}</span>
+                        </div>
+                        <div className="bitfun-ai-model-config__details-item">
+                          <span className="bitfun-ai-model-config__details-label">{t('details.maxOutput')}</span>
+                          <span className="bitfun-ai-model-config__details-value">{config.max_tokens?.toLocaleString() || '-'}</span>
+                        </div>
+                        <div className="bitfun-ai-model-config__details-item bitfun-ai-model-config__details-item--wide">
+                          <span className="bitfun-ai-model-config__details-label">{t('details.apiUrl')}</span>
+                          <span className="bitfun-ai-model-config__details-value">{config.base_url}</span>
+                        </div>
+                        {config.capabilities && config.capabilities.length > 0 && (
+                          <div className="bitfun-ai-model-config__details-item bitfun-ai-model-config__details-item--wide">
+                            <span className="bitfun-ai-model-config__details-label">{t('details.capabilities', { defaultValue: '能力' })}</span>
+                            <div className="bitfun-ai-model-config__details-tags">
+                              {config.capabilities.map(capability => (
+                                <span key={capability} className="bitfun-ai-model-config__details-tag">
+                                  {t(`capabilities.${capability}`, { defaultValue: capability })}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {config.description && (
+                          <div className="bitfun-ai-model-config__details-item bitfun-ai-model-config__details-item--wide">
+                            <span className="bitfun-ai-model-config__details-label">{t('details.description')}</span>
+                            <span className="bitfun-ai-model-config__details-value bitfun-ai-model-config__details-value--text">
+                              {config.description}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {testResult && (
+                      <div className="bitfun-ai-model-config__details-section">
+                        <div className="bitfun-ai-model-config__details-section-title">
+                          {t('actions.test')}
+                        </div>
+                        <div className={`bitfun-ai-model-config__test-result ${testResult.success ? 'success' : 'error'}`}>
+                          {testResult.message}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
 
-              <div className="bitfun-ai-model-config__form-field">
-                <label>{t('proxy.username')}</label>
-                <input
-                  type="text"
-                  value={proxyConfig.username || ''}
-                  onChange={(e) => setProxyConfig(prev => ({ ...prev, username: e.target.value }))}
-                  placeholder={t('proxy.usernamePlaceholder')}
-                  disabled={!proxyConfig.enabled}
-                />
-              </div>
+                const control = (
+                  <>
+                    <Switch
+                      checked={config.enabled}
+                      onChange={(e) => {
+                        void handleToggleEnabled(config, e.target.checked);
+                      }}
+                      size="small"
+                    />
+                    <button
+                      type="button"
+                      className="bitfun-collection-btn"
+                      onClick={() => void handleTest(config)}
+                      disabled={isTesting}
+                      title={t('actions.test')}
+                    >
+                      {isTesting ? <Loader size={14} className="spinning" /> : <Wifi size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="bitfun-collection-btn"
+                      onClick={() => handleEdit(config)}
+                      title={t('actions.edit')}
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="bitfun-collection-btn bitfun-collection-btn--danger"
+                      onClick={() => void handleDelete(config.id!)}
+                      title={t('actions.delete')}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
+                );
 
-              <div className="bitfun-ai-model-config__form-field">
-                <label>{t('proxy.password')}</label>
-                <input
-                  type="password"
-                  value={proxyConfig.password || ''}
-                  onChange={(e) => setProxyConfig(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder={t('proxy.passwordPlaceholder')}
-                  disabled={!proxyConfig.enabled}
-                />
-              </div>
-
-              <div className="bitfun-ai-model-config__proxy-actions">
-                <Button 
-                  variant="primary" 
-                  onClick={handleSaveProxy}
-                  disabled={isProxySaving || (proxyConfig.enabled && !proxyConfig.url)}
-                >
-                  {isProxySaving ? <Loader size={16} className="spinning" /> : t('proxy.save')}
-                </Button>
-              </div>
+                return (
+                  <ConfigCollectionItem
+                    key={config.id}
+                    label={config.name}
+                    badge={badge}
+                    control={control}
+                    details={details}
+                    expanded={isExpanded}
+                    onToggle={() => config.id && toggleExpanded(config.id)}
+                    disabled={!config.enabled}
+                  />
+                );
+              })}
             </div>
           )}
-        </div>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={tDefault('tabs.proxy', { defaultValue: '网络代理' })}
+          description={t('proxy.enableHint')}
+          extra={(
+            <Button
+              variant="primary"
+              size="small"
+              onClick={handleSaveProxy}
+              disabled={isProxySaving || (proxyConfig.enabled && !proxyConfig.url)}
+            >
+              {isProxySaving ? <Loader size={16} className="spinning" /> : t('proxy.save')}
+            </Button>
+          )}
+        >
+          <ConfigPageRow label={t('proxy.enable')} align="center">
+            <Switch
+              checked={proxyConfig.enabled}
+              onChange={(e) => setProxyConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('proxy.url')} description={t('proxy.urlHint')} align="center">
+            <Input
+              value={proxyConfig.url}
+              onChange={(e) => setProxyConfig(prev => ({ ...prev, url: e.target.value }))}
+              placeholder={t('proxy.urlPlaceholder')}
+              disabled={!proxyConfig.enabled}
+              inputSize="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('proxy.username')} align="center">
+            <Input
+              value={proxyConfig.username || ''}
+              onChange={(e) => setProxyConfig(prev => ({ ...prev, username: e.target.value }))}
+              placeholder={t('proxy.usernamePlaceholder')}
+              disabled={!proxyConfig.enabled}
+              inputSize="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow label={t('proxy.password')} align="center">
+            <Input
+              type="password"
+              value={proxyConfig.password || ''}
+              onChange={(e) => setProxyConfig(prev => ({ ...prev, password: e.target.value }))}
+              placeholder={t('proxy.passwordPlaceholder')}
+              disabled={!proxyConfig.enabled}
+              inputSize="small"
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
       </ConfigPageContent>
+
+      <Modal
+        isOpen={isEditing && !!editingConfig}
+        onClose={closeEditingModal}
+        title={editingConfig?.id
+          ? t('editModel')
+          : (currentTemplate ? `${t('newModel')} - ${currentTemplate.name}` : t('newModel'))}
+        size="large"
+      >
+        {renderEditingForm()}
+      </Modal>
     </ConfigPageLayout>
   );
 };

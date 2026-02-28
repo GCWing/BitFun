@@ -5,7 +5,7 @@
 .notification-container {
   position: fixed;
   bottom: 60px; 
-  right: 16px;
+  left: 16px;
   z-index: $z-notification;
   display: flex;
   flex-direction: column-reverse; 

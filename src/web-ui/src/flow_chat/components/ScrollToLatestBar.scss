@@ -12,14 +12,15 @@
   cursor: pointer;
   pointer-events: none;
   
-  // Default height: ChatInput focused but collapsed
-  height: 90px;
+  // Default height: ChatInput active (box ~80px + bottom gap 16px = 96px, add 24px margin)
+  height: 120px;
   
   transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   
   // ========== ChatInput collapsed ==========
   &--input-collapsed {
-    height: 50px;
+    // Pill height ~42px + bottom gap 16px = 58px, add 17px margin
+    height: 75px;
   }
   
   // ========== ChatInput expanded ==========
@@ -39,33 +40,23 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    
-    // Transparent-to-background gradient using theme-aware flowchat color
-    background: linear-gradient(
-      to bottom,
-      transparent 0%,
-      color-mix(in srgb, var(--color-bg-flowchat) 20%, transparent) 20%,
-      color-mix(in srgb, var(--color-bg-flowchat) 50%, transparent) 40%,
-      color-mix(in srgb, var(--color-bg-flowchat) 80%, transparent) 60%,
-      var(--color-bg-flowchat) 85%
-    );
-    
-    // Subtle glass blur
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    
-    // Mask
+    background: var(--color-bg-flowchat);
+
     mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      black 15%,
-      black 100%
+      rgba(0, 0, 0, 0.2) 20%,
+      rgba(0, 0, 0, 0.5) 40%,
+      rgba(0, 0, 0, 0.8) 60%,
+      black 85%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      black 15%,
-      black 100%
+      rgba(0, 0, 0, 0.2) 20%,
+      rgba(0, 0, 0, 0.5) 40%,
+      rgba(0, 0, 0, 0.8) 60%,
+      black 85%
     );
   }
   
@@ -147,10 +138,10 @@
 // ========== Responsive tweaks ==========
 @media (max-width: 768px) {
   .scroll-to-latest-bar {
-    height: 80px;
+    height: 110px;
     
     &--input-collapsed {
-      height: 45px;
+      height: 70px;
     }
     
     &__content {

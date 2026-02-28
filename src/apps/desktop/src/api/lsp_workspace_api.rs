@@ -6,9 +6,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bitfun_core::service::lsp::{get_workspace_manager, open_workspace_with_emitter, close_workspace, ServerState};
-use bitfun_core::service::lsp::types::CompletionItem;
 use bitfun_core::infrastructure::events::TransportEmitter;
+use bitfun_core::service::lsp::types::CompletionItem;
+use bitfun_core::service::lsp::{
+    close_workspace, get_workspace_manager, open_workspace_with_emitter, ServerState,
+};
 use bitfun_transport::TauriTransportAdapter;
 
 #[derive(Debug, Deserialize)]
@@ -182,11 +184,11 @@ pub async fn lsp_open_workspace(
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let workspace_path = PathBuf::from(&request.workspace_path);
-    
+
     let transport = Arc::new(TauriTransportAdapter::new(app_handle));
-    let emitter: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> = 
+    let emitter: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
-    
+
     open_workspace_with_emitter(workspace_path, Some(emitter))
         .await
         .map_err(|e| format!("Failed to open workspace: {}", e))?;
@@ -207,21 +209,31 @@ pub async fn lsp_close_workspace(request: OpenWorkspaceRequest) -> Result<(), St
 #[tauri::command]
 pub async fn lsp_open_document(request: OpenDocumentRequest) -> Result<(), String> {
     let workspace_path = PathBuf::from(&request.workspace_path);
-    
+
     let manager = get_workspace_manager(workspace_path.clone())
         .await
         .map_err(|e| {
             let error_msg = format!("Workspace not found: {}", e);
-            error!("Workspace not found: workspace_path={:?}, error={}", workspace_path, e);
+            error!(
+                "Workspace not found: workspace_path={:?}, error={}",
+                workspace_path, e
+            );
             error_msg
         })?;
 
     manager
-        .open_document(request.uri.clone(), request.language.clone(), request.content)
+        .open_document(
+            request.uri.clone(),
+            request.language.clone(),
+            request.content,
+        )
         .await
         .map_err(|e| {
             let error_msg = format!("Failed to open document: {}", e);
-            error!("Failed to open document: uri={}, language={}, error={}", request.uri, request.language, e);
+            error!(
+                "Failed to open document: uri={}, language={}, error={}",
+                request.uri, request.language, e
+            );
             error_msg
         })?;
 
@@ -283,7 +295,12 @@ pub async fn lsp_get_completions_workspace(
         .map_err(|e| format!("Workspace not found: {}", e))?;
 
     manager
-        .get_completions(&request.language, &request.uri, request.line, request.character)
+        .get_completions(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to get completions: {}", e))
 }
@@ -298,7 +315,12 @@ pub async fn lsp_get_hover_workspace(
         .map_err(|e| format!("Workspace not found: {}", e))?;
 
     manager
-        .get_hover(&request.language, &request.uri, request.line, request.character)
+        .get_hover(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to get hover: {}", e))
 }
@@ -313,7 +335,12 @@ pub async fn lsp_goto_definition_workspace(
         .map_err(|e| format!("Workspace not found: {}", e))?;
 
     manager
-        .goto_definition(&request.language, &request.uri, request.line, request.character)
+        .goto_definition(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to goto definition: {}", e))
 }
@@ -328,7 +355,12 @@ pub async fn lsp_find_references_workspace(
         .map_err(|e| format!("Workspace not found: {}", e))?;
 
     manager
-        .find_references(&request.language, &request.uri, request.line, request.character)
+        .find_references(
+            &request.language,
+            &request.uri,
+            request.line,
+            request.character,
+        )
         .await
         .map_err(|e| format!("Failed to find references: {}", e))
 }
@@ -343,7 +375,12 @@ pub async fn lsp_get_code_actions_workspace(
         .map_err(|e| format!("Workspace not found: {}", e))?;
 
     manager
-        .get_code_actions(&request.language, &request.uri, request.range, request.context)
+        .get_code_actions(
+            &request.language,
+            &request.uri,
+            request.range,
+            request.context,
+        )
         .await
         .map_err(|e| format!("Failed to get code actions: {}", e))
 }
@@ -391,9 +428,7 @@ pub async fn lsp_get_inlay_hints_workspace(
 }
 
 #[tauri::command]
-pub async fn lsp_rename_workspace(
-    request: RenameRequest,
-) -> Result<serde_json::Value, String> {
+pub async fn lsp_rename_workspace(request: RenameRequest) -> Result<serde_json::Value, String> {
     let workspace_path = PathBuf::from(&request.workspace_path);
     let manager = get_workspace_manager(workspace_path)
         .await
@@ -432,9 +467,7 @@ pub async fn lsp_get_document_highlight_workspace(
 }
 
 #[tauri::command]
-pub async fn lsp_get_server_state(
-    request: GetServerStateRequest,
-) -> Result<ServerState, String> {
+pub async fn lsp_get_server_state(request: GetServerStateRequest) -> Result<ServerState, String> {
     let workspace_path = PathBuf::from(&request.workspace_path);
     let manager = get_workspace_manager(workspace_path)
         .await
@@ -475,11 +508,11 @@ pub async fn lsp_stop_server_workspace(request: GetServerStateRequest) -> Result
 #[tauri::command]
 pub async fn lsp_list_workspaces() -> Result<Vec<String>, String> {
     use bitfun_core::service::lsp::get_all_workspace_paths;
-    
+
     let workspaces = get_all_workspace_paths()
         .await
         .map_err(|e| format!("Failed to get workspaces: {}", e))?;
-    
+
     Ok(workspaces)
 }
 
@@ -501,30 +534,28 @@ pub async fn lsp_detect_project(
     request: DetectProjectRequest,
 ) -> Result<serde_json::Value, String> {
     use bitfun_core::service::lsp::project_detector::ProjectDetector;
-    
+
     let workspace_path = PathBuf::from(&request.workspace_path);
     let project_info = ProjectDetector::detect(&workspace_path)
         .await
         .map_err(|e| format!("Failed to detect project: {}", e))?;
-    
+
     serde_json::to_value(&project_info)
         .map_err(|e| format!("Failed to serialize project info: {}", e))
 }
 
 #[tauri::command]
-pub async fn lsp_prestart_server(
-    request: PrestartServerRequest,
-) -> Result<(), String> {
+pub async fn lsp_prestart_server(request: PrestartServerRequest) -> Result<(), String> {
     let workspace_path = PathBuf::from(&request.workspace_path);
     let manager = get_workspace_manager(workspace_path)
         .await
         .map_err(|e| format!("Workspace not found: {}", e))?;
-    
+
     manager
         .prestart_server(&request.language)
         .await
         .map_err(|e| format!("Failed to pre-start server: {}", e))?;
-    
+
     Ok(())
 }
 
@@ -532,7 +563,6 @@ pub async fn lsp_prestart_server(
 pub async fn lsp_get_document_symbols_workspace(
     request: GetDocumentSymbolsRequest,
 ) -> Result<serde_json::Value, String> {
-
     let workspace_path = PathBuf::from(&request.workspace_path);
     let manager = get_workspace_manager(workspace_path)
         .await
@@ -550,7 +580,6 @@ pub async fn lsp_get_document_symbols_workspace(
 pub async fn lsp_get_semantic_tokens_workspace(
     request: GetSemanticTokensRequest,
 ) -> Result<serde_json::Value, String> {
-
     let workspace_path = PathBuf::from(&request.workspace_path);
     let manager = get_workspace_manager(workspace_path)
         .await
@@ -568,7 +597,6 @@ pub async fn lsp_get_semantic_tokens_workspace(
 pub async fn lsp_get_semantic_tokens_range_workspace(
     request: GetSemanticTokensRangeRequest,
 ) -> Result<serde_json::Value, String> {
-
     let workspace_path = PathBuf::from(&request.workspace_path);
     let manager = get_workspace_manager(workspace_path)
         .await

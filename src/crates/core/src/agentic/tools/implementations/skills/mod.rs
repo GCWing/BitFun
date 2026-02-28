@@ -2,6 +2,7 @@
 //!
 //! Provides Skill registry, loading, and configuration management functionality
 
+pub mod builtin;
 pub mod registry;
 pub mod types;
 
@@ -12,4 +13,3 @@ pub use types::{SkillData, SkillInfo, SkillLocation};
 pub fn get_skill_registry() -> &'static SkillRegistry {
     SkillRegistry::global()
 }
-

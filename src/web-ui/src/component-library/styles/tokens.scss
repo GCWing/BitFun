@@ -10,6 +10,7 @@ $color-bg-quaternary: #202024;
 $color-bg-elevated: #18181a;
 $color-bg-workbench: #121214;
 $color-bg-flowchat: #121214;
+$color-bg-scene: #16161a;
 $color-bg-tooltip: rgba(30, 30, 32, 0.92);
 
 $color-text-primary: #e8e8e8;
@@ -741,7 +742,8 @@ $badge-info-text: $color-info;
   --color-bg-quaternary: #{$color-bg-quaternary};
   --color-bg-elevated: #{$color-bg-elevated};
   --color-bg-workbench: #{$color-bg-workbench};
-  --color-bg-flowchat: #{$color-bg-flowchat};
+  --color-bg-scene: #{$color-bg-scene};
+  --color-bg-flowchat: var(--color-bg-scene); /* alias → use --color-bg-scene */
   --color-bg-tooltip: #{$color-bg-tooltip};
   
   --color-text-primary: #{$color-text-primary};

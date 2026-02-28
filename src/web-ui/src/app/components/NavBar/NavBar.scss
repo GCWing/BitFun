@@ -1,0 +1,265 @@
+/**
+ * NavBar styles — back/forward + drag region + window controls (32px).
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+@keyframes bitfun-logo-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bitfun-logo-menu-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
+.bitfun-nav-bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0 $size-gap-2;
+  gap: $size-gap-1;
+  background: var(--color-bg-primary);
+  user-select: none;
+
+  &--collapsed {
+    justify-content: flex-start;
+    // Add tiny horizontal breathing room so edge buttons keep full corner rendering.
+    padding: 0 calc(#{$size-gap-2} + 1px);
+  }
+
+  &--macos {
+    // Reserve left native titlebar area for traffic lights in overlay mode.
+    padding-left: calc(#{$size-gap-2} + 72px);
+    padding-right: 2px;
+
+    .bitfun-nav-bar__logo-menu {
+      position: fixed;
+      top: 7px;
+      right: 10px;
+      margin: 0;
+      z-index: $z-dropdown;
+    }
+  }
+
+  &--macos#{&}--collapsed {
+    padding-left: calc(#{$size-gap-2} + 1px);
+    padding-right: 2px;
+  }
+
+  // ── App logo ────────────────────────────────────────────
+
+  &__logo-menu {
+    position: relative;
+    flex-shrink: 0;
+    margin-right: $size-gap-1;
+  }
+
+  &__logo-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__logo {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    border-radius: $size-radius-sm;
+    pointer-events: none;
+  }
+
+  // ── Back / Forward buttons ──────────────────────────────
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover:not(.is-inactive) {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &.is-inactive {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  // ── WindowControls container ────────────────────────────
+  // WindowControls renders its own wrapper; just align it here.
+  .window-controls {
+    flex-shrink: 0;
+  }
+
+  &__menu {
+    position: fixed;
+    min-width: 220px;
+    z-index: $z-popover;
+    background: var(--color-bg-elevated, #1e1e22);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: $size-radius-base;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    padding: $size-gap-1 0;
+    transform-origin: top left;
+    animation: bitfun-logo-menu-in $motion-fast $easing-decelerate forwards;
+
+    &.is-closing {
+      animation: bitfun-logo-menu-out $motion-fast $easing-accelerate forwards;
+    }
+  }
+
+  &__menu-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: $size-gap-2 $size-gap-3;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: $font-size-sm;
+    text-align: left;
+    transition: color $motion-fast $easing-standard, background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+
+    span {
+      flex: 1;
+    }
+  }
+
+  &__menu-item-main {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  &__menu-item--workspace {
+    padding-right: $size-gap-2;
+  }
+
+  &__menu-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: $size-gap-1 0;
+  }
+
+  &__menu-section-title {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: $size-gap-1 $size-gap-3;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__menu-empty {
+    padding: $size-gap-2 $size-gap-3;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+  }
+
+  &__menu-workspaces {
+    max-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-nav-bar__btn,
+  .bitfun-nav-bar__menu-item,
+  .bitfun-nav-bar__panel-toggle {
+    transition: none;
+  }
+
+  .bitfun-nav-bar__menu,
+  .bitfun-nav-bar__menu.is-closing {
+    animation: none;
+  }
+}

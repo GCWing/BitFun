@@ -1,0 +1,7 @@
+/**
+ * GitSection — reuses nav-panel inline list styles; only add git-specific overrides if needed.
+ */
+
+.bitfun-nav-panel__inline-list--git {
+  // Same as SessionsSection; parent __inline-list already has border-left, margin, etc.
+}

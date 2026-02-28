@@ -8,20 +8,25 @@
   width: 100%;
 
   &__label {
-    font-size: 14px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.95);
+    font-size: var(--font-size-sm, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
     line-height: 1.4;
   }
 
   &__required {
-    color: #ef4444;
+    color: var(--color-error);
     margin-left: 4px;
   }
 
   &__wrapper {
     position: relative;
     width: 100%;
+    outline: none;
+  }
+
+  &:focus-within {
+    outline: none;
   }
 
   &__field {
@@ -30,35 +35,41 @@
     padding: 12px 14px;
     font-size: 14px;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.95);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1.5px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    color: var(--color-text-primary);
+    background: var(--element-bg-subtle);
+    border: 1.5px solid var(--border-base);
+    border-radius: 4px;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     resize: vertical;
     font-family: inherit;
 
     &::placeholder {
-      color: rgba(255, 255, 255, 0.35);
+      color: var(--color-text-muted);
+    }
+
+    &::selection {
+      border-radius: 2px;
+      background: var(--color-accent-300);
     }
 
     &:hover:not(:disabled) {
-      border-color: rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--border-medium);
+      background: var(--element-bg-soft);
     }
 
     &:focus {
-      outline: none;
-      border-color: rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.06);
+      outline: none !important;
+      border-color: var(--border-medium);
+      background: var(--element-bg-subtle);
     }
 
     &:focus-visible {
-      outline: none;
+      outline: none !important;
+      outline-offset: 0 !important;
     }
 
     &:disabled {
-      opacity: 0.4;
+      opacity: var(--opacity-disabled, 0.4);
       cursor: default;
     }
   }
@@ -77,29 +88,29 @@
 
   &__hint {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--color-text-muted);
     line-height: 1.4;
   }
 
   &__error-message {
     font-size: 12px;
-    color: #ef4444;
+    color: var(--color-error);
     line-height: 1.4;
   }
 
   &__count {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--color-text-muted);
     line-height: 1.4;
     white-space: nowrap;
   }
 
   &--error &__field {
-    border-color: rgba(239, 68, 68, 0.6);
+    border-color: var(--color-error-border);
 
     &:focus {
-      border-color: rgba(239, 68, 68, 0.6);
-      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--color-error-border);
+      background: var(--element-bg-subtle);
     }
 
     &:focus-visible {
@@ -113,15 +124,15 @@
   }
 
   &--filled &__field {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--element-bg-soft);
     border-color: transparent;
 
     &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.12);
+      background: var(--element-bg-base);
     }
 
     &:focus {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--element-bg-soft);
       border-color: transparent;
     }
   }
@@ -129,16 +140,16 @@
   &--outlined &__field {
     background: transparent;
     border-width: 1.5px;
-    border-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--border-subtle);
 
     &:hover:not(:disabled) {
-      border-color: rgba(255, 255, 255, 0.25);
-      background: rgba(255, 255, 255, 0.03);
+      border-color: var(--border-medium);
+      background: var(--element-bg-subtle);
     }
 
     &:focus {
-      border-color: rgba(255, 255, 255, 0.25);
-      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-medium);
+      background: var(--element-bg-subtle);
     }
   }
 }

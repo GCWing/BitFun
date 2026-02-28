@@ -20,8 +20,8 @@ export const bitfunCyberTheme: ThemeConfig = {
       quaternary: '#1f1f1f',     
       elevated: '#0d0d0d',       
       workbench: '#101010',      
-      flowchat: '#101010',       
-      tooltip: 'rgba(16, 16, 16, 0.95)',  
+      scene: '#141414',
+      tooltip: 'rgba(16, 16, 16, 0.95)',
     },
     
     text: {

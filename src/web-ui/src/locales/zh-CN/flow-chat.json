@@ -18,6 +18,9 @@
   "layout": {
     "noPanels": "BitFun",
     "noPanelsHint": "使用底部栏切换面板或按 <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> 展开面板",
+    "chatHiddenTitle": "聊天已隐藏",
+    "chatHiddenDesc": "你可以在右上角点击“聊天”重新打开。",
+    "chatHiddenAction": "重新打开聊天",
     "panelCollapseHintLeft": "<- 松开收起",
     "panelCollapseHintRight": "松开收起 ->",
     "panelMode": {
@@ -36,6 +39,8 @@
   "session": {
     "new": "新建会话",
     "newWithIndex": "新建会话 {{count}}",
+    "newCodeWithIndex": "新建 Code 会话 {{count}}",
+    "newCoworkWithIndex": "新建 Cowork 会话 {{count}}",
     "title": "会话",
     "chatWithAgent": "与{{name}}的对话",
     "rename": "重命名会话",
@@ -110,7 +115,9 @@
     "openMermaidEditor": "打开 Mermaid 编辑器",
     "mermaidDualModeDemo": "Mermaid 编辑器",
     "selectPromptTemplate": "选择提示词模板 (Ctrl+Shift+P)",
-    "willSendAfterStop": "将在停止后发送"
+    "willSendAfterStop": "将在停止后发送",
+    "openWorkspaceFolder": "打开工作区文件夹",
+    "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}"
   },
   "context": {
     "title": "上下文",
@@ -183,13 +190,18 @@
     "modeDescriptions": {
       "agentic": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
       "Plan": "先规划后执行，先明确需求并制定实施计划，再进行编码",
-      "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题"
+      "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题",
+      "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果"
     },
     "modeNames": {
       "agentic": "Agentic",
       "Plan": "Plan",
-      "debug": "Debug"
-    }
+      "debug": "Debug",
+      "Cowork": "Cowork"
+    },
+    "openFolder": "打开文件夹…",
+    "selectWorkspaceTitle": "选择工作区目录",
+    "switchWorkspaceFailed": "切换工作区失败：{{error}}"
   },
   "planner": {
     "title": "任务规划",
@@ -526,7 +538,10 @@
     },
     "mcp": {
       "confirmExecute": "确认执行",
-      "cancel": "取消"
+      "cancel": "取消",
+      "loadingApp": "加载交互应用中...",
+      "appLoadError": "加载应用失败",
+      "interactiveApp": "交互应用"
     },
     "default": {
       "waitingConfirm": "等待确认",
@@ -719,6 +734,7 @@
     "subtitleNight": "准备开始编码了吗？",
     "aiPartner": "您的 AI 编程伙伴",
     "featureIntro": "我是您的 AI 编程助手。我可以帮您理解复杂代码，快速实现新功能，重构老旧项目，或是解决那些让人头疼的 Bug。",
+    "featureIntroCowork": "我可以帮你整理桌面，搜集资料和制作PPT、PDF文档等等...",
     "lastTimeYouWere": "上次您正在处理：",
     "branch": "分支：",
     "aheadCommits": "领先 {{count}} 个提交",
@@ -744,5 +760,90 @@
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
     "modelNotConfigured": "未配置"
+  },
+  "coworkScope": {
+    "title": "选择 Cowork 工作区",
+    "description": "Cowork 模式需要一个工作区目录用于读写文件。你可以使用当前项目，或选择另一个目录。",
+    "recommended": "推荐",
+    "current": {
+      "title": "当前工作区",
+      "subtitle": "已打开：{{name}}",
+      "description": "产物保存在当前项目中。适合需要读取或修改项目文件的任务。"
+    },
+    "global": {
+      "title": "其他目录",
+      "subtitle": "选择目录",
+      "description": "用于在另一个目录中进行 Cowork 任务。输出会保存在该目录下。"
+    },
+    "errors": {
+      "noWorkspace": "当前没有打开的工作区",
+      "openFailed": "打开 Cowork 工作区失败"
+    }
+  },
+  "coworkExamples": {
+    "title": "示例",
+    "addPlugin": "添加插件",
+    "addPluginDialogTitle": "选择插件文件夹",
+    "addPluginSuccess": "插件安装成功：{{name}}",
+    "addPluginFailed": "插件安装失败：{{error}}",
+    "refresh": "换一换",
+    "close": "关闭",
+    "items": {
+      "desktop_cleanup": {
+        "title": "整理桌面截图",
+        "description": "对最近的截图分组、重命名并归档。",
+        "prompt": "请帮我整理桌面上最近的截图。\n\n第一步：先扫描我的桌面，统计有多少张截图/图片，并告诉我：\n\n- 总数量\n\n- 时间范围（最早到最新）\n\n第二步：只关注最近 14 天的截图。对每一张：\n\n- 识别它展示了什么\n\n- 建议一个更描述性的文件名\n\n- 建议它应该放到哪个文件夹（或是否可以删除）\n\n把相似的截图分组。开始任何改动之前，先把你的整理方案给我确认。\n\n我确认后：先只整理 10 个文件作为预览。如果总数超过 10 个，继续之前先跟我确认是否要处理剩下的。"
+      },
+      "vacation_plan": {
+        "title": "计划一下我的假期",
+        "description": "把行程拆到每天，并考虑预算、交通与备选方案。",
+        "prompt": "请帮我规划一次假期行程。\n\n基本信息：\n- 出发地：\n- 目的地（可多个备选）：\n- 时间：起止日期、总天数\n- 人数与偏好（亲子/情侣/朋友/独行）：\n- 预算范围：\n- 重点偏好（美食/自然/博物馆/购物/放松）：\n- 不能接受的点（早起/转机/长途自驾等）：\n\n请输出：\n1) 2-3 个目的地建议（含优缺点）\n2) 最优方案的按天行程（上午/下午/晚上）\n3) 交通与住宿建议\n4) 预算拆分\n5) 雨天/突发情况备选方案"
+      },
+      "make_ppt": {
+        "title": "做一个 PPT",
+        "description": "先给大纲与每页要点，再给讲稿与视觉风格建议。",
+        "prompt": "请帮我做一个 PPT。\n\n主题：\n受众：\n时长：\n场景（汇报/路演/培训/分享）：\n希望的风格（简洁/商务/活泼/极简）：\n\n最终交付：\n1) 目录结构\n2) 每一页的标题 + 3-5 个要点\n3) 关键页的讲稿（逐页，简短即可）\n4) 图表/配图建议（用什么图表达什么结论）\n5) 导出为 PPTX 文件（保存到 artifacts/）"
+      },
+      "todo_breakdown": {
+        "title": "把事情拆成待办",
+        "description": "把目标拆到可执行任务，并给优先级与时间预估。",
+        "prompt": "请把下面这件事拆成可执行的待办清单，并给出优先级与时间预估。\n\n目标：\n截止时间：\n当前进度：\n可用资源（人/预算/工具）：\n风险/不确定因素：\n\n请输出：\n1) 分阶段目标\n2) 具体任务列表（每项包含：负责人/预计耗时/前置条件/验收标准）\n3) 关键路径与风险点\n4) 明天就能开始的 3 件小事"
+      },
+      "optimize_week": {
+        "title": "优化一下我的一周",
+        "description": "从杂乱记录中找出规律、主题与行动点。",
+        "prompt": "请帮我从 [语音备忘录 / 会议纪要 / 文档 / 日记 / 指定文件夹] 中找出模式与洞察。我有一堆杂乱、非结构化的文件，想知道最近出现了哪些主题。\n\n第一步：先扫描文件夹并给我一个摘要：\n- 文件总数\n- 时间范围（最早到最新）\n- 内容类型分布\n\n在深入分析前，请先问我：\n- 我希望发现什么（重复主题 / 矛盾点 / 思考的演化 / 行动项 / 其它）\n- 是否需要优先某些文件或时间段\n- 我希望最终以什么形式呈现（摘要 / 报告 / 行动清单 / 时间线 / 其它）\n\n如果文件超过 20 个，请先只分析最近的 10 个。\n\n请给出你发现的 3-5 个主要模式，每个模式提供 2-3 个具体例子。等我确认方向正确后，再继续分析剩余文件。"
+      },
+      "weekly_plan": {
+        "title": "做一份本周计划",
+        "description": "结合优先级、会议与深度工作时间，排出可落地的周计划。",
+        "prompt": "请帮我做一份本周工作计划。\n\n输入信息：\n- 本周关键目标（最多 3 个）：\n- 已确定会议/固定安排：\n- 预计深度工作可用时段：\n- 本周必须完成的事项：\n- 可推迟的事项：\n\n请输出：\n1) 本周优先级排序\n2) 按天安排（每天 2-3 个核心任务）\n3) 风险与缓冲时间建议\n4) 每天收尾复盘清单（5 分钟）"
+      },
+      "meeting_minutes": {
+        "title": "整理会议纪要",
+        "description": "把讨论内容结构化成结论、行动项与风险。",
+        "prompt": "请帮我把会议内容整理成一份会议纪要。\n\n会议主题：\n参会人：\n时间：\n原始记录（可粘贴）：\n\n请输出：\n1) 会议结论（3-6 条）\n2) 决策项（Decision）\n3) 行动项（Action Items：负责人/截止时间/验收标准）\n4) 风险与待确认问题（Open Questions）\n5) 下次会议建议议程"
+      },
+      "reply_email": {
+        "title": "写一封邮件回复",
+        "description": "给出礼貌、清晰、可复制的邮件模板（含不同语气版本）。",
+        "prompt": "请帮我写一封邮件回复。\n\n对方邮件内容（可粘贴）：\n我的目标（确认/拒绝/推进/澄清）：\n语气（正式/友好/强硬但礼貌）：\n需要包含的信息点：\n\n请输出：\n1) 主题（Subject）建议\n2) 邮件正文（2 个版本：更正式/更简洁）\n3) 需要对方确认的问题列表（如有）"
+      },
+      "make_docx": {
+        "title": "写一份 Word 文档",
+        "description": "把内容结构化成文档，并导出为 DOCX。",
+        "prompt": "请帮我写一份文档，并导出为 .docx 文件。\n\n文档类型（PRD/方案/复盘/报告/SOP）：\n受众：\n语气（正式/友好/简洁）：\n必须包含的信息点：\n期望长度：\n\n最终交付：\n1) 建议目录结构\n2) 完整正文内容\n3) 导出为 DOCX 文件（保存到 artifacts/）"
+      },
+      "make_spreadsheet": {
+        "title": "做一张表格",
+        "description": "设计字段与公式，让表格能自动汇总与复用。",
+        "prompt": "请帮我设计一张表格结构（字段 + 示例行），用于下面的用途：\n\n用途：\n数据来源：\n需要的统计口径/汇总方式：\n输出格式偏好（周报/仪表盘/清单）：\n\n请输出：\n1) 推荐字段列表（含字段类型与说明）\n2) 示例数据（3-5 行）\n3) 常用公式/透视表建议\n4) 数据校验与填表规范"
+      },
+      "budget_plan": {
+        "title": "做个预算规划",
+        "description": "把预算拆到类别与时间，并给出控制与复盘方法。",
+        "prompt": "请帮我做一个预算规划。\n\n背景：\n- 预算周期（按月/按季度/按项目）：\n- 总预算：\n- 固定支出：\n- 可变支出：\n- 目标（省钱/更可控/为某目标攒钱）：\n\n请输出：\n1) 预算分类与比例建议\n2) 具体到类别的预算表（可复制到表格）\n3) 超支预案与调整规则\n4) 每周/每月复盘清单"
+      }
+    }
   }
 }

@@ -48,6 +48,16 @@ export const useApp = (): UseAppReturn => {
     });
   }, [state.layout.rightPanelCollapsed]);
 
+  const toggleChatPanel = useCallback(() => {
+    const nextChatCollapsed = !state.layout.chatCollapsed;
+    appManager.updateLayout({
+      chatCollapsed: nextChatCollapsed,
+      // Keep behavior aligned with editor-mode layout:
+      // when chat is hidden, ensure the right panel is visible to occupy center space.
+      rightPanelCollapsed: nextChatCollapsed ? false : state.layout.rightPanelCollapsed
+    });
+  }, [state.layout.chatCollapsed, state.layout.rightPanelCollapsed]);
+
   const switchLeftPanelTab = useCallback((tab: PanelType) => {
     appManager.updateLayout({
       leftPanelActiveTab: tab,
@@ -196,6 +206,7 @@ export const useApp = (): UseAppReturn => {
     toggleLeftPanel,
     toggleCenterPanel,
     toggleRightPanel,
+    toggleChatPanel,
     switchLeftPanelTab,
     updateLeftPanelWidth,
     updateCenterPanelWidth,
@@ -224,12 +235,13 @@ export const useApp = (): UseAppReturn => {
 
 // Layout helper hook
 export const useLayout = () => {
-  const { state, toggleLeftPanel, toggleRightPanel, switchLeftPanelTab, updateLeftPanelWidth } = useApp();
+  const { state, toggleLeftPanel, toggleRightPanel, toggleChatPanel, switchLeftPanelTab, updateLeftPanelWidth } = useApp();
   
   return {
     layout: state.layout,
     toggleLeftPanel,
     toggleRightPanel,
+    toggleChatPanel,
     switchLeftPanelTab,
     updateLeftPanelWidth
   };

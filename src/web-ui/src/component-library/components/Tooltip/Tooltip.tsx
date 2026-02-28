@@ -7,7 +7,10 @@ export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 export interface TooltipProps {
   content: React.ReactNode;
   children: React.ReactElement;
+  /** Preferred side of trigger (or of cursor when followCursor). */
   placement?: TooltipPlacement;
+  /** When true, tooltip appears near the mouse cursor instead of the trigger element. */
+  followCursor?: boolean;
   trigger?: 'hover' | 'click' | 'focus';
   delay?: number;
   disabled?: boolean;
@@ -122,10 +125,15 @@ const applyBoundaryConstraints = (
   return { top, left };
 };
 
+/** Cursor offset when followCursor: right 12px, down 8px so tooltip doesn't cover cursor */
+const CURSOR_OFFSET_X = 12;
+const CURSOR_OFFSET_Y = 8;
+
 export const Tooltip: React.FC<TooltipProps> = ({
   content,
   children,
   placement = 'top',
+  followCursor = false,
   trigger = 'hover',
   delay = 200,
   disabled = false,
@@ -135,6 +143,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [positionReady, setPositionReady] = useState(false);
   const [actualPlacement, setActualPlacement] = useState<TooltipPlacement>(placement);
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const triggerRef = useRef<HTMLElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -143,10 +152,23 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const viewportPadding = 8;
 
   const calculatePosition = useCallback(() => {
-    if (!triggerRef.current || !tooltipRef.current) return;
+    if (!tooltipRef.current) return;
+
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+
+    if (followCursor && mousePosition) {
+      let left = mousePosition.x + CURSOR_OFFSET_X;
+      let top = mousePosition.y + CURSOR_OFFSET_Y;
+      const pos = applyBoundaryConstraints({ top, left }, tooltipRect, viewportPadding);
+      setActualPlacement('bottom');
+      setPosition(pos);
+      setPositionReady(true);
+      return;
+    }
+
+    if (!triggerRef.current) return;
 
     const triggerRect = triggerRef.current.getBoundingClientRect();
-    const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
     const bestPlacement = determineBestPlacement(
       triggerRect,
@@ -163,10 +185,13 @@ export const Tooltip: React.FC<TooltipProps> = ({
     setActualPlacement(bestPlacement);
     setPosition(pos);
     setPositionReady(true);
-  }, [placement]);
+  }, [placement, followCursor, mousePosition]);
 
-  const showTooltip = () => {
+  const showTooltip = (e?: React.MouseEvent) => {
     if (disabled) return;
+    if (followCursor && e) {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    }
     timeoutRef.current = setTimeout(() => {
       setPositionReady(false);
       setVisible(true);
@@ -179,7 +204,21 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
     setVisible(false);
     setPositionReady(false);
+    if (followCursor) setMousePosition(null);
   };
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (followCursor && visible) {
+        setMousePosition({ x: e.clientX, y: e.clientY });
+      }
+      const childProps = children.props as Record<string, unknown>;
+      if (typeof childProps.onMouseMove === 'function') {
+        (childProps.onMouseMove as (e: React.MouseEvent) => void)(e);
+      }
+    },
+    [followCursor, visible, children.props]
+  );
 
   useEffect(() => {
     setActualPlacement(placement);
@@ -190,19 +229,32 @@ export const Tooltip: React.FC<TooltipProps> = ({
       requestAnimationFrame(() => {
         calculatePosition();
       });
-      window.addEventListener('scroll', calculatePosition, true);
+      if (!followCursor) {
+        window.addEventListener('scroll', calculatePosition, true);
+      }
       window.addEventListener('resize', calculatePosition);
       return () => {
-        window.removeEventListener('scroll', calculatePosition, true);
+        if (!followCursor) {
+          window.removeEventListener('scroll', calculatePosition, true);
+        }
         window.removeEventListener('resize', calculatePosition);
       };
     }
-  }, [visible, calculatePosition]);
+  }, [visible, followCursor, calculatePosition]);
+
+  useEffect(() => {
+    if (!followCursor || !visible) return;
+    const onMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    return () => window.removeEventListener('mousemove', onMouseMove);
+  }, [followCursor, visible]);
 
   const childProps = children.props as Record<string, unknown>;
 
   const handleMouseEnter = (e: React.MouseEvent) => {
-    if (trigger === 'hover') showTooltip();
+    if (trigger === 'hover') showTooltip(e);
     if (typeof childProps.onMouseEnter === 'function') {
       (childProps.onMouseEnter as (e: React.MouseEvent) => void)(e);
     }
@@ -243,6 +295,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     ref: triggerRef,
     onMouseEnter: handleMouseEnter,
     onMouseLeave: handleMouseLeave,
+    onMouseMove: followCursor ? handleMouseMove : (children.props as Record<string, unknown>).onMouseMove,
     onClick: handleClick,
     onFocus: handleFocus,
     onBlur: handleBlur,

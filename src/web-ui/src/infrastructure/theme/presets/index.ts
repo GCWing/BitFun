@@ -6,7 +6,6 @@ export { bitfunMidnightTheme } from './midnight-theme';
 export { bitfunChinaStyleTheme } from './china-style-theme';
 export { bitfunChinaNightTheme } from './china-night-theme';
 export { bitfunCyberTheme } from './cyber-theme';
-export { bitfunStarryNightTheme } from './starry-night-theme';
 export { bitfunSlateTheme } from './slate-theme';
 
 import { bitfunDarkTheme } from './dark-theme';
@@ -15,20 +14,18 @@ import { bitfunMidnightTheme } from './midnight-theme';
 import { bitfunChinaStyleTheme } from './china-style-theme';
 import { bitfunChinaNightTheme } from './china-night-theme';
 import { bitfunCyberTheme } from './cyber-theme';
-import { bitfunStarryNightTheme } from './starry-night-theme';
 import { bitfunSlateTheme } from './slate-theme';
 import { ThemeConfig } from '../types';
 
  
 export const builtinThemes: ThemeConfig[] = [
+  bitfunLightTheme,
   bitfunSlateTheme,
   bitfunDarkTheme,
-  bitfunLightTheme,
   bitfunMidnightTheme,
   bitfunChinaStyleTheme,
   bitfunChinaNightTheme,
   bitfunCyberTheme,
-  bitfunStarryNightTheme,
 ];
 
  

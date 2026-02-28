@@ -1,0 +1,322 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+.bt-tabbar {
+  position: relative;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+
+  // ── Tab rail ────────────────────────────────────────────────────────────
+  &__rail {
+    display: flex;
+    align-items: center;
+    padding: 0 $size-gap-4;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  &__sep {
+    flex-shrink: 0;
+    width: 1px;
+    height: 16px;
+    background: var(--border-subtle);
+    margin: 0 $size-gap-2;
+  }
+
+  // ── Tab ─────────────────────────────────────────────────────────────────
+  &__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: 9px $size-gap-3;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color $motion-fast $easing-standard, border-color $motion-fast $easing-standard;
+    border-radius: 0;
+    white-space: nowrap;
+    margin-bottom: -1px;
+    font-family: $font-family-sans;
+
+    &:hover { color: var(--color-text-secondary); }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      border-bottom-color: var(--color-primary);
+    }
+  }
+
+  &__team-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  &__tab-name {
+    font-weight: $font-weight-medium;
+  }
+
+  &__tab-count {
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    padding: 0 4px;
+    border-radius: 2px;
+    background: var(--element-bg-medium);
+    color: var(--color-text-muted);
+
+    .bt-tabbar__tab.is-active & {
+      background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+      color: var(--color-primary);
+    }
+  }
+
+  &__tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    color: var(--color-text-disabled);
+    opacity: 0;
+    transition: opacity $motion-fast $easing-standard, background $motion-fast $easing-standard;
+    cursor: pointer;
+
+    &:hover { background: var(--element-bg-medium); color: var(--color-text-muted); }
+  }
+
+  &__tab:hover &__tab-close { opacity: 1; }
+
+  // ── New button ────────────────────────────────────────────────────────
+  &__new {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 5px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: $font-size-xs;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    font-family: $font-family-sans;
+    margin: 8px 0;
+
+    &:hover, &.is-open {
+      color: var(--color-text-primary);
+      border-color: var(--border-medium);
+      background: var(--element-bg-subtle);
+    }
+  }
+
+  // ── Panel ────────────────────────────────────────────────────────────────
+  &__panel {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: $size-gap-4;
+    width: 280px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    z-index: $z-dropdown;
+    overflow: hidden;
+    padding: $size-gap-4;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    animation: tb-in $motion-fast $easing-decelerate;
+
+    &--wide { width: 360px; }
+  }
+
+  // ── Icon options ─────────────────────────────────────────────────────────
+  &__icon-row {
+    display: flex;
+    gap: $size-gap-2;
+    flex-wrap: wrap;
+  }
+
+  &__icon-opt {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover { background: var(--element-bg-medium); color: var(--color-text-primary); }
+    &.is-sel { background: var(--element-bg-medium); border-color: var(--border-medium); }
+  }
+
+  // ── Input field ───────────────────────────────────────────────────────────
+  &__field {
+    width: 100%;
+    padding: 7px $size-gap-3;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    font-size: $font-size-xs;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color $motion-fast $easing-standard;
+    font-family: $font-family-sans;
+
+    &::placeholder { color: var(--color-text-disabled); }
+    &:focus { border-color: var(--border-medium); }
+  }
+
+  &__panel-row {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
+  // ── Template panel ────────────────────────────────────────────────────────
+  &__tpl-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__tpl-title {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  &__close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background $motion-fast $easing-standard;
+    &:hover { background: var(--element-bg-medium); }
+  }
+
+  &__tpl-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__tpl-card {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    padding: $size-gap-3;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: $size-radius-sm;
+    text-align: left;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    font-family: $font-family-sans;
+
+    &:hover { background: var(--element-bg-subtle); border-color: var(--border-subtle); }
+  }
+
+  &__tpl-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-subtle);
+  }
+
+  &__tpl-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__tpl-name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+  }
+
+  &__tpl-desc {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__tpl-cnt {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--color-text-disabled);
+    background: var(--element-bg-medium);
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+
+  // ── Action buttons ────────────────────────────────────────────────────────
+  &__action {
+    padding: 5px 12px;
+    border-radius: 3px;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all $motion-fast $easing-standard;
+    font-family: $font-family-sans;
+    white-space: nowrap;
+
+    &--primary {
+      background: var(--color-primary);
+      color: #fff;
+      &:hover:not(:disabled) { opacity: 0.88; }
+      &:disabled { opacity: 0.35; cursor: not-allowed; }
+    }
+
+    &--ghost {
+      background: transparent;
+      color: var(--color-text-muted);
+      border-color: var(--border-subtle);
+      &:hover { background: var(--element-bg-subtle); color: var(--color-text-secondary); }
+    }
+  }
+
+  // ── Backdrop ─────────────────────────────────────────────────────────────
+  &__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(#{$z-dropdown} - 1);
+  }
+}
+
+@keyframes tb-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

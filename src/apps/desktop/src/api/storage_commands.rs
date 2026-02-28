@@ -1,7 +1,7 @@
 //! Storage Management API
 
-use bitfun_core::infrastructure::storage::{CleanupService, CleanupPolicy, CleanupResult};
 use crate::api::AppState;
+use bitfun_core::infrastructure::storage::{CleanupPolicy, CleanupResult, CleanupService};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::State;
@@ -32,7 +32,7 @@ pub struct StorageStats {
 pub async fn get_storage_paths(state: State<'_, AppState>) -> Result<StoragePathsInfo, String> {
     let workspace_service = &state.workspace_service;
     let path_manager = workspace_service.path_manager();
-    
+
     Ok(StoragePathsInfo {
         user_config_dir: path_manager.user_config_dir(),
         user_data_dir: path_manager.user_data_dir(),
@@ -51,9 +51,9 @@ pub async fn get_project_storage_paths(
 ) -> Result<ProjectStoragePathsInfo, String> {
     let workspace_service = &state.workspace_service;
     let path_manager = workspace_service.path_manager();
-    
+
     let workspace_path = PathBuf::from(workspace_path);
-    
+
     Ok(ProjectStoragePathsInfo {
         project_root: path_manager.project_root(&workspace_path),
         config_file: path_manager.project_config_file(&workspace_path),
@@ -79,11 +79,13 @@ pub struct ProjectStoragePathsInfo {
 pub async fn cleanup_storage(state: State<'_, AppState>) -> Result<CleanupResult, String> {
     let workspace_service = &state.workspace_service;
     let path_manager = workspace_service.path_manager();
-    
+
     let policy = CleanupPolicy::default();
     let cleanup_service = CleanupService::new((&**path_manager).clone(), policy);
-    
-    cleanup_service.cleanup_all().await
+
+    cleanup_service
+        .cleanup_all()
+        .await
         .map_err(|e| format!("Cleanup failed: {}", e))
 }
 
@@ -94,27 +96,27 @@ pub async fn cleanup_storage_with_policy(
 ) -> Result<CleanupResult, String> {
     let workspace_service = &state.workspace_service;
     let path_manager = workspace_service.path_manager();
-    
+
     let cleanup_service = CleanupService::new((&**path_manager).clone(), policy);
-    
-    cleanup_service.cleanup_all().await
+
+    cleanup_service
+        .cleanup_all()
+        .await
         .map_err(|e| format!("Cleanup failed: {}", e))
 }
 
 #[tauri::command]
-pub async fn get_storage_statistics(
-    state: State<'_, AppState>,
-) -> Result<StorageStats, String> {
+pub async fn get_storage_statistics(state: State<'_, AppState>) -> Result<StorageStats, String> {
     let workspace_service = &state.workspace_service;
     let path_manager = workspace_service.path_manager();
-    
+
     let config_size = calculate_dir_size(&path_manager.user_config_dir()).await?;
     let cache_size = calculate_dir_size(&path_manager.cache_root()).await?;
     let logs_size = calculate_dir_size(&path_manager.logs_dir()).await?;
     let temp_size = calculate_dir_size(&path_manager.temp_dir()).await?;
-    
+
     let total_size = config_size + cache_size + logs_size + temp_size;
-    
+
     Ok(StorageStats {
         total_size_mb: bytes_to_mb(total_size),
         config_size_mb: bytes_to_mb(config_size),
@@ -131,37 +133,46 @@ pub async fn initialize_project_storage(
 ) -> Result<(), String> {
     let workspace_service = &state.workspace_service;
     let path_manager = workspace_service.path_manager();
-    
+
     let workspace_path = PathBuf::from(workspace_path);
-    
-    path_manager.initialize_project_directories(&workspace_path).await
+
+    path_manager
+        .initialize_project_directories(&workspace_path)
+        .await
         .map_err(|e| format!("Failed to initialize project directories: {}", e))
 }
 
-fn calculate_dir_size(dir: &std::path::Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, String>> + Send + '_>> {
+fn calculate_dir_size(
+    dir: &std::path::Path,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, String>> + Send + '_>> {
     Box::pin(async move {
         let mut total = 0u64;
-        
+
         if !dir.exists() {
             return Ok(0);
         }
-        
-        let mut read_dir = tokio::fs::read_dir(dir).await
+
+        let mut read_dir = tokio::fs::read_dir(dir)
+            .await
             .map_err(|e| format!("Failed to read directory: {}", e))?;
-        
-        while let Some(entry) = read_dir.next_entry().await
-            .map_err(|e| format!("Failed to read directory entry: {}", e))? {
-            
-            let metadata = entry.metadata().await
+
+        while let Some(entry) = read_dir
+            .next_entry()
+            .await
+            .map_err(|e| format!("Failed to read directory entry: {}", e))?
+        {
+            let metadata = entry
+                .metadata()
+                .await
                 .map_err(|e| format!("Failed to get metadata: {}", e))?;
-            
+
             if metadata.is_dir() {
                 total += calculate_dir_size(&entry.path()).await?;
             } else {
                 total += metadata.len();
             }
         }
-        
+
         Ok(total)
     })
 }

@@ -67,15 +67,7 @@ html, body {
   
   // ==================== Startup mode ====================
   &--startup-mode {
-    // Keep theme background
     background: var(--color-bg-primary);
-    
-    // Main content fills available height
-    .bitfun-app-main-workspace {
-      height: calc(100vh - #{$header-height});
-      min-height: calc(100vh - #{$header-height});
-      max-height: calc(100vh - #{$header-height});
-    }
   }
   
   // ==================== Transitioning ====================
@@ -114,120 +106,16 @@ html, body {
 
 }
 
-// ==================== App header ====================
-.bitfun-app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: $header-height;
-  padding: $size-gap-2 $size-gap-4;
-  flex-shrink: 0;
-  position: relative;
-  z-index: $z-overlay; // Raise to overlay layer so search dropdown is not clipped.
-  overflow: visible; // Allow search dropdown overflow.
-
-  // macOS native titlebar (traffic lights) overlaps top-left; add spacing.
-  &.bitfun-app-header--macos-native-titlebar {
-    padding-left: calc(#{$size-gap-4} + 72px);
-  }
-  
-  // Borderless immersive style
-  background: var(--color-bg-primary);
-  border: none;
-  border-bottom: 1px solid var(--border-subtle);
-  
-  user-select: none;
-  -webkit-user-select: none;
-  transition: all $motion-base $easing-standard;
-
-  // Top highlight line
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, 
-      transparent 0%, 
-      var(--border-base) 25%, 
-      var(--border-medium) 50%, 
-      var(--border-base) 75%, 
-      transparent 100%
-    );
-    pointer-events: none;
-    z-index: $z-decoration;
-  }
-
-  // Shimmer effect
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, 
-      transparent 0%, 
-      var(--element-bg-subtle) 50%, 
-      transparent 100%
-    );
-    animation: shimmer 8s ease-in-out infinite;
-    pointer-events: none;
-    z-index: $z-decoration;
-  }
-  
-  // Startup sweep glow from left to right
-  &.bitfun-header--sweep-glow {
-    &::after {
-      left: -50%;
-      width: 50%;
-      height: 100%;
-      background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(100, 180, 255, 0.1) 30%,
-        rgba(100, 180, 255, 0.25) 50%,
-        rgba(100, 180, 255, 0.1) 70%,
-        transparent 100%
-      );
-      animation: header-sweep-glow 0.8s ease-in-out forwards;
-    }
-  }
-  
-  // Ensure content sits above visual effects
-  > * {
-    position: relative;
-    z-index: 1;
-  }
-}
-
-// ==================== Header glow on hover ====================
-// Moved to Header.scss for centralized styling.
-
-// ==================== Main content area ====================
+// ==================== Main content area (full height, no TitleBar) ====================
 .bitfun-app-main-workspace {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-top: 0; // Flush with header bottom border
-  height: calc(100vh - #{$header-height} - 36px);
-  min-height: calc(100vh - #{$header-height} - 36px);
-  max-height: calc(100vh - #{$header-height} - 36px);
+  margin-top: 0;
   width: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--color-bg-flowchat); // Match FlowChat background
-}
-
-// ==================== Bottom bar ====================
-.bitfun-app-bottom-bar {
-  flex-shrink: 0;
-  height: 36px;
   background: var(--color-bg-flowchat);
-  backdrop-filter: $blur-base;
-  -webkit-backdrop-filter: $blur-base;
-  border-top: 1px solid var(--border-subtle);
 }
 
 // ==================== Scrollbar styles ====================
@@ -238,43 +126,11 @@ html, body {
   .bitfun-app-layout {
     --header-height: 34px;
   }
-  
-  .bitfun-app-header {
-    padding: $size-gap-2 $size-gap-3;
-  }
-  
-  .bitfun-app-main-workspace {
-    height: calc(100vh - 34px - 36px);
-    min-height: calc(100vh - 34px - 36px);
-    max-height: calc(100vh - 34px - 36px);
-  }
-  
-  .bitfun-app-bottom-bar {
-    height: 36px;
-  }
 }
 
 @media (max-width: 768px) {
   .bitfun-app-layout {
     --header-height: 32px;
-  }
-  
-  .bitfun-app-header {
-    padding: $size-gap-1 $size-gap-3;
-    backdrop-filter: $blur-subtle;
-    -webkit-backdrop-filter: $blur-subtle;
-  }
-  
-  .bitfun-app-main-workspace {
-    height: calc(100vh - 32px - 36px);
-    min-height: calc(100vh - 32px - 36px);
-    max-height: calc(100vh - 32px - 36px);
-  }
-  
-  .bitfun-app-bottom-bar {
-    height: 36px;
-    backdrop-filter: $blur-subtle;
-    -webkit-backdrop-filter: $blur-subtle;
   }
 }
 
@@ -290,17 +146,11 @@ html, body {
   .bitfun-app-layout {
     background: var(--color-bg-flowchat);
   }
-  
-  .bitfun-app-header {
-    border-bottom-width: 2px;
-    border-bottom-color: var(--border-medium);
-  }
 }
 
 // ==================== Reduced motion preference ====================
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-app-header,
-  .bitfun-app-header::after {
+  .bitfun-app-layout * {
     transition: none;
     animation: none;
   }
@@ -309,24 +159,24 @@ html, body {
 // ==================== Animations ====================
 @keyframes shimmer {
   0%, 100% {
-    left: -100%;
+    transform: translateX(-100%);
   }
   50% {
-    left: 100%;
+    transform: translateX(100%);
   }
 }
 
 // Startup sweep glow: icy blue band from left to right, no delay.
 @keyframes header-sweep-glow {
   0% {
-    left: -50%;
-    opacity: 1;  // Visible immediately without fade-in
+    transform: translateX(-100%);
+    opacity: 1;
   }
   95% {
     opacity: 1;
   }
   100% {
-    left: 100%;
+    transform: translateX(300%);
     opacity: 0;
   }
 }

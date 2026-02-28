@@ -6,8 +6,6 @@ import { createLogger } from '@/shared/utils/logger';
 const log = createLogger('ModelConfigManager');
 const t = (key: string, options?: Record<string, unknown>) => i18nService.t(key, options);
 
-
-
 export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
   anthropic: {
     id: 'anthropic',
@@ -58,14 +56,14 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.zhipu.name'),
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     format: 'openai',
-    models: ['glm-4.7', 'glm-4.7-flash', 'glm-4.6'],
+    models: ['glm-5', 'glm-4.7', 'glm-4.6'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.zhipu.description'),
     helpUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     baseUrlOptions: [
       { url: 'https://open.bigmodel.cn/api/paas/v4', format: 'openai', note: 'default' },
-      { url: 'https://open.bigmodel.cn/api/anthropic', format: 'anthropic', note: 'anthropic' },
-      { url: 'https://open.bigmodel.cn/api/coding/paas', format: 'openai', note: 'codingPlan' },
+      { url: 'https://open.bigmodel.cn/api/anthropic', format: 'anthropic', note: 'Coding Plan' },
+      { url: 'https://open.bigmodel.cn/api/coding/paas', format: 'openai', note: 'Coding Plan' },
     ]
   },
 
@@ -74,10 +72,15 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.qwen.name'),
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     format: 'openai',
-    models: ['qwen3-max', 'qwen3-coder-plus', 'qwen3-coder-flash'],
+    models: ['qwen3.5-plus', 'glm-5', 'kimi-k2.5', 'MiniMax-M2.5', 'qwen3-max', 'qwen3-coder-plus', 'qwen3-coder-flash'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.qwen.description'),
-    helpUrl: 'https://dashscope.console.aliyun.com/apiKey'
+    helpUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    baseUrlOptions: [
+      { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', format: 'openai', note: 'default' },
+      { url: 'https://coding.dashscope.aliyuncs.com/v1', format: 'openai', note: 'Coding Plan' },
+      { url: 'https://coding.dashscope.aliyuncs.com/apps/anthropic', format: 'anthropic', note: 'Coding Plan' },
+    ]
   },
 
   volcengine: {
@@ -96,7 +99,6 @@ type ConfigChangeListener = (configs: ModelConfig[]) => void;
 
 class ModelConfigManager {
   private configs: ModelConfig[] = [];
-  
   private listeners: Set<ConfigChangeListener> = new Set();
 
   constructor() {
@@ -227,7 +229,6 @@ class ModelConfigManager {
     return newConfig;
   }
 
-  
   updateConfig(id: string, updates: Partial<ModelConfig>): boolean {
     const index = this.configs.findIndex(config => config.id === id);
     if (index === -1) return false;
@@ -242,13 +243,11 @@ class ModelConfigManager {
     return true;
   }
 
-  
   deleteConfig(id: string): boolean {
     const index = this.configs.findIndex(config => config.id === id);
     if (index === -1) return false;
 
     this.configs.splice(index, 1);
-    
     
     this.saveConfigs().catch(error => {
       log.error('Failed to delete config', { configId: id, error });
@@ -257,7 +256,6 @@ class ModelConfigManager {
     return true;
   }
 
-  
   cloneConfig(id: string): ModelConfig | null {
     const config = this.getConfigById(id);
     if (!config) return null;
@@ -270,12 +268,10 @@ class ModelConfigManager {
     return cloned;
   }
 
-  
   private generateId(): string {
     return `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  
   createFromTemplate(providerId: string, modelName: string): ModelConfig | null {
     const template = PROVIDER_TEMPLATES[providerId];
     if (!template) return null;
@@ -290,7 +286,6 @@ class ModelConfigManager {
     });
   }
 
-  
   resetToDefault(): void {
     this.configs = [];
     this.saveConfigs().catch(error => {
@@ -299,11 +294,9 @@ class ModelConfigManager {
   }
 }
 
-
 export const getAllTemplates = (): ProviderTemplate[] => {
   return Object.values(PROVIDER_TEMPLATES);
 };
-
 
 export const getFormatDisplayName = (format: ApiFormat): string => {
   switch (format) {
@@ -316,9 +309,7 @@ export const getFormatDisplayName = (format: ApiFormat): string => {
   }
 };
 
-
 export const modelConfigManager = new ModelConfigManager();
-
 
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   (window as any).modelConfigManager = modelConfigManager;

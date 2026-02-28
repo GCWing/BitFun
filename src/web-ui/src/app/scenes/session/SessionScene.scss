@@ -1,0 +1,313 @@
+/**
+ * SessionScene styles — ChatPane + Resizer + AuxPane layout.
+ * Resizer styles moved here from WorkspaceShell.scss.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+
+.bitfun-session-scene {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--color-bg-flowchat);
+  color: var(--color-text-primary);
+
+  &--dragging {
+    user-select: none;
+    cursor: col-resize;
+
+    * { pointer-events: none; }
+
+    .bitfun-pane-resizer { pointer-events: auto; }
+
+    .bitfun-session-scene__chat-pane,
+    .bitfun-session-scene__aux-pane { transition: none; }
+
+    .bitfun-dual-column__header,
+    .bitfun-dual-column__header-two-row,
+    .bitfun-dual-column__drop-indicator-content,
+    .bitfun-dual-column__dropdown {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    .bitfun-dual-column__header::after,
+    .bitfun-dual-column__header-two-row::after { display: none !important; }
+  }
+}
+
+
+.bitfun-session-scene__chat-pane {
+  flex: 1 1 auto;
+  min-width: 400px;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
+
+  &--dragging {
+    transition: none;
+    * { transition: none !important; animation: none !important; }
+  }
+}
+
+
+.bitfun-session-scene__aux-pane {
+  display: flex;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
+  max-width: 1200px;
+
+  transition: width $motion-base $easing-standard,
+              opacity $motion-base $easing-standard;
+
+  &--collapsed {
+    min-width: 0;
+    width: 0 !important;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  &--no-animation {
+    transition: none !important;
+    * { transition: none !important; animation: none !important; }
+  }
+
+  &--dragging {
+    transition: none;
+    * { transition: none !important; animation: none !important; }
+
+    .bitfun-dual-column__header,
+    .bitfun-dual-column__header-two-row,
+    .bitfun-dual-column__drop-indicator-content,
+    .bitfun-dual-column__dropdown {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    .bitfun-dual-column__header::after,
+    .bitfun-dual-column__header-two-row::after { display: none !important; }
+  }
+
+  &--editor-mode {
+    flex: 1 1 auto;
+    min-width: 300px;
+    max-width: none;
+  }
+
+  // Near-collapse warning
+  &--near-collapse {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to right,
+        rgba(88, 166, 255, 0.25) 0%,
+        rgba(88, 166, 255, 0.12) 50%,
+        transparent 100%
+      );
+      pointer-events: none;
+      z-index: 100;
+      animation: pane-collapse-pulse 0.8s ease-in-out infinite;
+    }
+
+    &::after {
+      content: var(--panel-collapse-hint-right, 'Release to collapse');
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(88, 166, 255, 0.9);
+      font-size: 13px;
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 101;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      animation: pane-collapse-hint 0.3s ease-out;
+    }
+  }
+}
+
+
+.bitfun-pane-resizer {
+  width: 1px;
+  flex-shrink: 0;
+  position: relative;
+  cursor: col-resize;
+  user-select: none;
+  z-index: $z-sticky;
+  background: var(--border-subtle);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -6px;
+    right: -6px;
+    background: transparent;
+  }
+
+  transition: all $motion-base $easing-standard,
+              width $motion-base $easing-standard,
+              opacity $motion-base $easing-standard;
+
+  &--collapsed {
+    width: 0;
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+    background: transparent;
+
+    &::before { display: none; }
+  }
+
+  &__line {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1px;
+    height: 36px;
+    background: transparent;
+    border-radius: $size-radius-sm;
+    transition: all $motion-base $easing-standard;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &__handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity $motion-base $easing-standard;
+    pointer-events: none;
+  }
+
+  &__icon {
+    color: rgba(128, 128, 128, 0.6);
+    transition: color $motion-base $easing-standard;
+  }
+
+  &:hover,
+  &--hovering {
+    .bitfun-pane-resizer__line {
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(88, 166, 255, 0.4) 20%,
+        rgba(88, 166, 255, 0.8) 50%,
+        rgba(88, 166, 255, 0.4) 80%,
+        transparent 100%
+      );
+      width: 2px;
+      height: 50px;
+      opacity: 1;
+    }
+    .bitfun-pane-resizer__handle { opacity: 1; }
+    .bitfun-pane-resizer__icon { color: rgba(88, 166, 255, 0.9); }
+  }
+
+  &--dragging {
+    .bitfun-pane-resizer__line {
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(88, 166, 255, 0.6) 20%,
+        rgba(88, 166, 255, 1) 50%,
+        rgba(88, 166, 255, 0.6) 80%,
+        transparent 100%
+      );
+      box-shadow: 0 0 12px rgba(88, 166, 255, 0.5);
+      width: 2px;
+      height: 60px;
+      opacity: 1;
+    }
+    .bitfun-pane-resizer__handle { opacity: 1; }
+    .bitfun-pane-resizer__icon { color: rgba(88, 166, 255, 1); }
+  }
+
+  &:focus {
+    outline: none;
+    .bitfun-pane-resizer__line {
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(88, 166, 255, 0.5) 20%,
+        rgba(88, 166, 255, 0.9) 50%,
+        rgba(88, 166, 255, 0.5) 80%,
+        transparent 100%
+      );
+      box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+      width: 2px;
+      height: 55px;
+      opacity: 1;
+    }
+    .bitfun-pane-resizer__handle { opacity: 1; }
+  }
+
+  &:focus-visible {
+    .bitfun-pane-resizer__line {
+      outline: 2px solid rgba(88, 166, 255, 0.8);
+      outline-offset: 2px;
+    }
+  }
+}
+
+
+@keyframes pane-collapse-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes pane-collapse-hint {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-session-scene,
+  .bitfun-session-scene__chat-pane,
+  .bitfun-session-scene__aux-pane,
+  .bitfun-pane-resizer,
+  .bitfun-pane-resizer__line,
+  .bitfun-pane-resizer__handle,
+  .bitfun-pane-resizer__icon {
+    transition: none;
+  }
+
+  .bitfun-session-scene__aux-pane--near-collapse {
+    &::before, &::after { animation: none; }
+  }
+}
+
+
+@media (hover: none) and (pointer: coarse) {
+  .bitfun-pane-resizer {
+    width: 8px;
+
+    &::before { left: -10px; right: -10px; }
+    &__line { width: 2px; opacity: 1; }
+    &__handle { opacity: 0.8; }
+  }
+}
+
+
+@media (prefers-contrast: high) {
+  .bitfun-pane-resizer {
+    &__line { background: currentColor; opacity: 1; }
+    &:hover &__line,
+    &--hovering &__line,
+    &--dragging &__line { background: currentColor; outline: 2px solid currentColor; }
+  }
+}

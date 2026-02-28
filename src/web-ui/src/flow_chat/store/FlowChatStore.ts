@@ -1083,7 +1083,7 @@ export class FlowChatStore {
             return prev;
           }
           
-          const VALID_AGENT_TYPES = ['agentic', 'debug', 'Plan'];
+          const VALID_AGENT_TYPES = ['agentic', 'debug', 'Plan', 'Cowork'];
           const rawAgentType = metadata.agentType || 'agentic';
           const validatedAgentType = VALID_AGENT_TYPES.includes(rawAgentType) ? rawAgentType : 'agentic';
           
