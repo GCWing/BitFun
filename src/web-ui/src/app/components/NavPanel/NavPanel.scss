@@ -37,6 +37,8 @@ $_section-header-height: 24px;
   &__content {
     flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
     // Dynamic clip-path origin — set via JS from anchor element measurement.
     // Fallback: ~20% from top (roughly the "Files" item in a typical layout).
     position: relative;
@@ -144,12 +146,15 @@ $_section-header-height: 24px;
     padding: 0 $size-gap-3;
     margin: 0 $size-gap-2;
     border-radius: 4px;
-    transition: background $motion-fast $easing-standard;
+    opacity: 0.4;
+    transition: background $motion-fast $easing-standard,
+                opacity $motion-fast $easing-standard;
 
     &--collapsible {
       cursor: pointer;
 
       &:hover {
+        opacity: 1;
         background: var(--element-bg-soft);
 
         .bitfun-nav-panel__section-label {
@@ -158,6 +163,7 @@ $_section-header-height: 24px;
       }
 
       &:active {
+        opacity: 1;
         background: var(--element-bg-medium);
       }
 
@@ -229,6 +235,7 @@ $_section-header-height: 24px;
   $_depart-easing: cubic-bezier(0.4, 0, 0.2, 1);
 
   &__workspace-header-slot {
+    flex-shrink: 0;
     transition: opacity $_depart-duration $_depart-easing;
 
     &.is-departing-up {
@@ -295,26 +302,31 @@ $_section-header-height: 24px;
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     cursor: pointer;
     text-align: left;
     font-size: $font-size-sm;
     font-weight: 400;
     width: 100%;
     position: relative;
+    opacity: 0.4;
     transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+                background $motion-fast $easing-standard,
+                opacity $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--color-text-primary);
+      opacity: 1;
+      color: var(--color-text-secondary);
       background: var(--element-bg-soft);
     }
 
     &:active {
+      opacity: 1;
       background: var(--element-bg-medium);
     }
 
     &.is-active {
+      opacity: 1;
       color: var(--color-text-primary);
       background: var(--element-bg-soft);
       font-weight: 500;
@@ -338,6 +350,7 @@ $_section-header-height: 24px;
     }
 
     &.is-open:not(.is-active) {
+      opacity: 1;
       color: var(--color-text-primary);
 
       .bitfun-nav-panel__item-icon {
@@ -355,12 +368,12 @@ $_section-header-height: 24px;
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    opacity: 0.65;
+    opacity: 0.5;
     transition: opacity $motion-fast $easing-standard,
                 color $motion-fast $easing-standard;
 
     .bitfun-nav-panel__item:hover & {
-      opacity: 0.9;
+      opacity: 0.75;
     }
   }
 

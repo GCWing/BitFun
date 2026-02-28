@@ -478,7 +478,8 @@
     "fileViewer": "File Viewer",
     "projectContext": "Profile",
     "capabilities": "Capabilities",
-    "team": "Team"
+    "team": "Team",
+    "skills": "Skills"
   },
   "welcomeScene": {
     "tabLabel": "Welcome",

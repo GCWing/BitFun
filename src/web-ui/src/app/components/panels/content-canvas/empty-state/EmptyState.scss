@@ -20,19 +20,6 @@
     text-align: center;
   }
 
-  // Logo
-  &__logo {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.8;
-  }
-
-  &__cube {
-    color: var(--color-text-tertiary, rgba(255, 255, 255, 0.3));
-    animation: canvas-empty-float 4s ease-in-out infinite;
-  }
-
   // Message
   &__message {
     p {
@@ -40,15 +27,5 @@
       font-size: 16px;
       color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
     }
-  }
-}
-
-// Slow floating animation
-@keyframes canvas-empty-float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-12px);
   }
 }

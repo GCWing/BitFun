@@ -18,6 +18,7 @@ import {
   UserCircle2,
   Users,
   SquareTerminal,
+  Puzzle,
 } from 'lucide-react';
 import type { NavSection } from './types';
 
@@ -64,6 +65,15 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: Users,
         behavior: 'scene',
         sceneId: 'team',
+        inlineExpandable: true,
+      },
+      {
+        tab: 'skills',
+        labelKey: 'nav.items.skills',
+        tooltipKey: 'nav.tooltips.skills',
+        Icon: Puzzle,
+        behavior: 'scene',
+        sceneId: 'skills',
         inlineExpandable: true,
       },
     ],

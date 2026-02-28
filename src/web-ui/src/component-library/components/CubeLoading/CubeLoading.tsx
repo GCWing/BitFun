@@ -1,14 +1,10 @@
-/**
- * CubeLoading - 3x3x3 cube loading animation
- */
-
 import React from 'react';
-import './CubeLoading.scss';
+import './Spiral.scss';
 
 export type CubeLoadingSize = 'small' | 'medium' | 'large';
 
 export interface CubeLoadingProps {
-  /** Size: small(32px) | medium(48px) | large(72px) */
+  /** Size: small(24px) | medium(40px) | large(60px) */
   size?: CubeLoadingSize;
   /** Loading text */
   text?: string;
@@ -16,17 +12,11 @@ export interface CubeLoadingProps {
   className?: string;
 }
 
-const BLOCKS = (() => {
-  const arr = [];
-  for (let x = -1; x <= 1; x++) {
-    for (let y = -1; y <= 1; y++) {
-      for (let z = -1; z <= 1; z++) {
-        arr.push({ x, y, z });
-      }
-    }
-  }
-  return arr;
-})();
+const sizeMap: Record<CubeLoadingSize, string> = {
+  small: '24px',
+  medium: '40px',
+  large: '60px',
+};
 
 export const CubeLoading: React.FC<CubeLoadingProps> = ({
   size = 'medium',
@@ -34,29 +24,27 @@ export const CubeLoading: React.FC<CubeLoadingProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`cube-loading cube-loading--${size} ${className}`}>
-      <div className="cube-loading__scene">
-        <div className="cube-loading__rubiks">
-          {BLOCKS.map(({ x, y, z }, i) => (
-            <div
-              key={i}
-              className="cube-loading__block"
-              style={{
-                transform: `translate3d(
-                  calc(var(--unit) * ${x}),
-                  calc(var(--unit) * ${-y}),
-                  calc(var(--unit) * ${z})
-                )`,
-              }}
-            >
-              <div className="cube-loading__face cube-loading__face--front" />
-              <div className="cube-loading__face cube-loading__face--back" />
-              <div className="cube-loading__face cube-loading__face--top" />
-              <div className="cube-loading__face cube-loading__face--bottom" />
-              <div className="cube-loading__face cube-loading__face--right" />
-              <div className="cube-loading__face cube-loading__face--left" />
-            </div>
-          ))}
+    <div
+      className={`cube-loading cube-loading--${size} ${className}`}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
+    >
+      <div
+        className="spiral-container"
+        style={{
+          '--uib-size': sizeMap[size],
+          '--uib-color': 'currentColor',
+          '--uib-speed': '0.9s',
+        } as React.CSSProperties}
+      >
+        <div className="spiral-inner">
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
+          <div className="spiral-dot" />
         </div>
       </div>
       {text && <div className="cube-loading__text">{text}</div>}

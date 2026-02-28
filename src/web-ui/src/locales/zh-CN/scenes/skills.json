@@ -1,0 +1,125 @@
+{
+  "nav": {
+    "title": "技能",
+    "categories": {
+      "discover": "探索",
+      "installed": "已安装"
+    },
+    "items": {
+      "market": "技能市场",
+      "installedAll": "全部",
+      "installedUser": "用户级",
+      "installedProject": "项目级"
+    }
+  },
+  "installed": {
+    "titleAll": "已安装技能",
+    "subtitleAll": "管理所有已安装的用户级和项目级技能",
+    "titleUser": "用户级技能",
+    "subtitleUser": "全局安装的用户级技能",
+    "titleProject": "项目级技能",
+    "subtitleProject": "当前工作区的项目级技能"
+  },
+  "toolbar": {
+    "searchPlaceholder": "搜索技能...",
+    "refreshTooltip": "刷新",
+    "addTooltip": "添加技能"
+  },
+  "filters": {
+    "all": "全部",
+    "user": "用户级",
+    "project": "项目级"
+  },
+  "section": {
+    "user": {
+      "description": "已为当前用户全局安装的技能"
+    },
+    "project": {
+      "description": "当前工作区的项目级技能"
+    }
+  },
+  "market": {
+    "title": "技能市场",
+    "subtitle": "搜索并下载可复用技能（默认下载到当前项目）",
+    "searchPlaceholder": "搜索市场技能...",
+    "refreshTooltip": "刷新市场结果",
+    "loading": "正在加载市场技能...",
+    "errorPrefix": "市场加载失败: ",
+    "empty": {
+      "noMatch": "没有找到匹配的市场技能",
+      "noSkills": "暂时没有可展示的市场技能"
+    },
+    "item": {
+      "sourceLabel": "来源: ",
+      "installs": "安装量: {{count}}",
+      "noDescription": "暂无简介",
+      "downloadProject": "下载到项目",
+      "installed": "已安装",
+      "installedTooltip": "该技能已安装",
+      "downloading": "下载中..."
+    },
+    "pagination": {
+      "prev": "上一页",
+      "next": "下一页",
+      "info": "第 {{current}} / {{total}} 页"
+    }
+  },
+  "form": {
+    "title": "添加技能",
+    "closeTooltip": "关闭",
+    "level": {
+      "label": "级别",
+      "user": "用户级（全局）",
+      "project": "项目级（当前工作空间）",
+      "projectDisabled": " - 需要先打开工作区",
+      "currentWorkspace": "当前工作区: {{path}}"
+    },
+    "path": {
+      "label": "技能文件夹路径",
+      "placeholder": "选择或输入技能文件夹路径",
+      "browseTooltip": "浏览",
+      "hint": "文件夹需包含有效的 SKILL.md 文件"
+    },
+    "validating": "校验中...",
+    "actions": {
+      "cancel": "取消",
+      "add": "添加",
+      "adding": "添加中..."
+    }
+  },
+  "list": {
+    "loading": "加载中...",
+    "errorPrefix": "加载失败: ",
+    "empty": {
+      "noMatch": "没有找到匹配的技能",
+      "noSkills": "还没有配置任何技能"
+    },
+    "item": {
+      "user": "用户级",
+      "project": "项目级",
+      "deleteTooltip": "删除",
+      "pathLabel": "路径:"
+    }
+  },
+  "deleteModal": {
+    "title": "确认删除",
+    "message": "确定要删除技能 \"{{name}}\" 吗？",
+    "warning": "此操作将删除技能文件夹，无法恢复。",
+    "cancel": "取消",
+    "delete": "删除"
+  },
+  "messages": {
+    "invalidPath": "请选择有效的技能文件夹",
+    "noWorkspace": "请先打开一个工作区才能添加项目级技能",
+    "addSuccess": "技能 \"{{name}}\" 添加成功",
+    "addFailed": "添加失败: {{error}}",
+    "deleteSuccess": "技能 \"{{name}}\" 已删除",
+    "deleteFailed": "删除失败: {{error}}",
+    "toggleSuccess": "技能 \"{{name}}\" 已{{status}}",
+    "toggleFailed": "切换状态失败: {{error}}",
+    "marketDownloadSuccess": "技能 \"{{name}}\" 下载成功",
+    "marketDownloadFailed": "下载失败: {{error}}",
+    "enabled": "启用",
+    "disabled": "禁用"
+  }
+}

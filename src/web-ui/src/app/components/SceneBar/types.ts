@@ -5,7 +5,7 @@
 import type { LucideIcon } from 'lucide-react';
 
 /** Scene tab identifier — max 3 open at a time */
-export type SceneTabId = 'welcome' | 'session' | 'terminal' | 'git' | 'settings' | 'file-viewer' | 'profile' | 'capabilities' | 'team';
+export type SceneTabId = 'welcome' | 'session' | 'terminal' | 'git' | 'settings' | 'file-viewer' | 'profile' | 'capabilities' | 'team' | 'skills';
 
 /** Static definition (from registry) for a scene tab type */
 export interface SceneTabDef {

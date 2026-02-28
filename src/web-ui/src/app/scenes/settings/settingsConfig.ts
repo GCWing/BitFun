@@ -12,7 +12,6 @@ export type ConfigTab =
   | 'ai-features'
   | 'ai-context'
   | 'prompt-templates'
-  | 'skills'
   | 'mcp-tools'
   | 'lsp'
   | 'debug'
@@ -48,7 +47,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
       { id: 'prompt-templates',  labelKey: 'configCenter.tabs.promptTemplates' },
       { id: 'agents',            labelKey: 'configCenter.tabs.agents'          },
       { id: 'ai-context',        labelKey: 'configCenter.tabs.aiContext'       },
-      { id: 'skills',            labelKey: 'configCenter.tabs.skills'          },
       { id: 'mcp-tools',         labelKey: 'configCenter.tabs.mcpTools'        },
     ],
   },

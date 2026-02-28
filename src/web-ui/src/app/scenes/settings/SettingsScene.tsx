@@ -14,7 +14,6 @@ const AIModelConfig        = lazy(() => import('../../../infrastructure/config/c
 const AIFeaturesConfig     = lazy(() => import('../../../infrastructure/config/components/AIFeaturesConfig'));
 const AIRulesMemoryConfig  = lazy(() => import('../../../infrastructure/config/components/AIRulesMemoryConfig'));
 const AgentsConfig         = lazy(() => import('../../../infrastructure/config/components/AgentsConfig'));
-const SkillsConfig         = lazy(() => import('../../../infrastructure/config/components/SkillsConfig'));
 const McpToolsConfig       = lazy(() => import('../../../infrastructure/config/components/McpToolsConfig'));
 const LspConfig            = lazy(() => import('../../../infrastructure/config/components/LspConfig'));
 const DebugConfig          = lazy(() => import('../../../infrastructure/config/components/DebugConfig'));
@@ -35,7 +34,6 @@ const SettingsScene: React.FC = () => {
     case 'ai-features':      Content = AIFeaturesConfig;     break;
     case 'ai-context':       Content = AIRulesMemoryConfig; break;
     case 'prompt-templates': Content = PromptTemplateConfig; break;
-    case 'skills':           Content = SkillsConfig;         break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'agents':           Content = AgentsConfig;         break;
     case 'lsp':              Content = LspConfig;            break;

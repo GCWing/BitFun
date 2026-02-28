@@ -1,0 +1,55 @@
+/**
+ * Badge — borderless status label styles.
+ * Variants: neutral | accent | purple | success | warning | error | info
+ */
+
+@use '../../styles/tokens.scss' as tokens;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: tokens.$badge-padding-y tokens.$badge-padding-x;
+  border-radius: tokens.$badge-border-radius;
+  font-size: tokens.$badge-font-size;
+  font-weight: tokens.$badge-font-weight;
+  line-height: 1;
+  border: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &--neutral {
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+  }
+
+  &--accent {
+    background: var(--color-accent-200);
+    color: var(--color-accent-500);
+  }
+
+  &--purple {
+    background: var(--color-purple-200);
+    color: var(--color-purple-500);
+  }
+
+  &--success {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+  }
+
+  &--warning {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+  }
+
+  &--error {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+  }
+
+  &--info {
+    background: var(--color-info-bg);
+    color: var(--color-info);
+  }
+}

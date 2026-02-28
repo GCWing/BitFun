@@ -700,7 +700,7 @@ const PersonaView: React.FC<{ workspacePath: string }> = () => {
           <div className={`${C}-card__head`}>
             <span className={`${C}-card__label`}>{t('cards.skills')}</span>
             <span className={`${C}-card__kpi`}>{t('kpi.skills', { count: enabledSkls })}</span>
-            <button type="button" className={`${C}-link`} onClick={() => navToSettings('skills')}>
+            <button type="button" className={`${C}-link`} onClick={() => window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'skills' } }))}>
               {t('actions.manage')} <ChevronRight size={11} />
             </button>
           </div>

@@ -9,7 +9,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { MessageSquare, Terminal, GitBranch, Settings, FileCode2, CircleUserRound, Blocks } from 'lucide-react';
+import { MessageSquare, Terminal, GitBranch, Settings, FileCode2, CircleUserRound, Blocks, Puzzle } from 'lucide-react';
 import type { SceneTabId } from '../components/SceneBar/types';
 import { useSceneManager } from '../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -23,6 +23,7 @@ const FileViewerScene = lazy(() => import('./file-viewer/FileViewerScene'));
 const ProfileScene    = lazy(() => import('./profile/ProfileScene'));
 const CapabilitiesScene = lazy(() => import('./capabilities/CapabilitiesScene'));
 const TeamScene       = lazy(() => import('./team/TeamScene'));
+const SkillsScene     = lazy(() => import('./skills/SkillsScene'));
 const WelcomeScene    = lazy(() => import('./welcome/WelcomeScene'));
 
 interface SceneViewportProps {
@@ -49,6 +50,7 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
               { id: 'file-viewer'  as SceneTabId, Icon: FileCode2,     labelKey: 'scenes.fileViewer'    },
               { id: 'profile'      as SceneTabId, Icon: CircleUserRound, labelKey: 'scenes.projectContext' },
               { id: 'capabilities' as SceneTabId, Icon: Blocks,        labelKey: 'scenes.capabilities'  },
+              { id: 'skills'       as SceneTabId, Icon: Puzzle,        labelKey: 'scenes.skills'        },
             ].map(({ id, Icon, labelKey }) => {
               const label = t(labelKey);
               return (
@@ -108,6 +110,8 @@ function renderScene(id: SceneTabId, workspacePath?: string, isEntering?: boolea
       return <CapabilitiesScene />;
     case 'team':
       return <TeamScene />;
+    case 'skills':
+      return <SkillsScene />;
     default:
       return null;
   }

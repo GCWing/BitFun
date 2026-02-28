@@ -478,7 +478,8 @@
     "fileViewer": "文件查看",
     "projectContext": "项目概况",
     "capabilities": "能力配置",
-    "team": "团队"
+    "team": "团队",
+    "skills": "技能"
   },
   "welcomeScene": {
     "tabLabel": "欢迎使用",

@@ -29,6 +29,7 @@ import ShellsSection from './sections/shells/ShellsSection';
 import ShellHubSection from './sections/shell-hub/ShellHubSection';
 import GitSection from './sections/git/GitSection';
 import TeamSection from './sections/team/TeamSection';
+import SkillsSection from './sections/skills/SkillsSection';
 import WorkspaceHeader from './components/WorkspaceHeader';
 import { useSceneStore } from '../../stores/sceneStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -43,6 +44,7 @@ const INLINE_SECTIONS: Partial<Record<PanelType, React.ComponentType>> = {
   'shell-hub': ShellHubSection,
   git: GitSection,
   team: TeamSection,
+  skills: SkillsSection,
 };
 
 type DepartDir = 'up' | 'anchor' | 'down' | null;
@@ -129,6 +131,9 @@ const MainNav: React.FC<MainNavProps> = ({
     }
     if (activeTabId === 'team') {
       setInlineExpanded(prev => (prev.has('team') ? prev : new Set([...prev, 'team'])));
+    }
+    if (activeTabId === 'skills') {
+      setInlineExpanded(prev => (prev.has('skills') ? prev : new Set([...prev, 'skills'])));
     }
   }, [activeTabId]);
 

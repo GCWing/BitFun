@@ -1,56 +1,109 @@
-import React, { useState } from 'react';
-import { Search, Bot, User } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Bot, User, SlidersHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Search, Switch, IconButton, Badge } from '@/component-library';
 import {
   useTeamStore,
   MOCK_AGENTS,
   type AgentWithCapabilities,
 } from '../teamStore';
-import { AGENT_ICON_MAP } from '../teamIcons';
-import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { CAPABILITY_ACCENT } from '../teamIcons';
 import './TeamHomePage.scss';
 
-// ─── Agent card ───────────────────────────────────────────────────────────────
+// ─── Agent list item ──────────────────────────────────────────────────────────
 
-const AgentCard: React.FC<{
+const AgentListItem: React.FC<{
   agent: AgentWithCapabilities;
   soloEnabled: boolean;
   onToggleSolo: (agentId: string, enabled: boolean) => void;
-}> = ({ agent, soloEnabled, onToggleSolo }) => {
-  const iconKey = (agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP;
-  const IconComp = AGENT_ICON_MAP[iconKey] ?? Bot;
+  index: number;
+}> = ({ agent, soloEnabled, onToggleSolo, index }) => {
+  const { t } = useTranslation('scenes/team');
+  const [expanded, setExpanded] = useState(false);
+
+  const toggleExpand = useCallback(() => setExpanded((v) => !v), []);
 
   return (
-    <div className="th-card">
-      <div className="th-card__head">
-        <div className="th-card__icon">
-          <IconComp size={16} />
+    <div
+      className={['th-list__item', expanded && 'is-expanded'].filter(Boolean).join(' ')}
+      style={{ '--item-index': index } as React.CSSProperties}
+    >
+      <div
+        className="th-list__item-row"
+        onClick={toggleExpand}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && toggleExpand()}
+      >
+        <div className="th-list__item-info">
+          <div className="th-list__item-name-row">
+            <span className="th-list__item-name">{agent.name}</span>
+            <Badge variant="neutral">
+              <User size={9} />
+              Agent
+            </Badge>
+            {agent.model && (
+              <Badge variant="neutral">{agent.model}</Badge>
+            )}
+          </div>
+          <p className="th-list__item-desc">{agent.description}</p>
         </div>
-        <span className="th-card__type">
-          <User size={9} />
-          Agent
-        </span>
-      </div>
-      <div className="th-card__name">{agent.name}</div>
-      <div className="th-card__desc">{agent.description}</div>
-      <div className="th-card__tags">
-        {agent.capabilities.slice(0, 3).map((c) => (
-          <span key={c.category} className="th-card__tag">
-            {c.category}
-          </span>
-        ))}
-      </div>
-      <div className="th-card__foot">
-        <span className="th-card__model">{agent.model ?? 'primary'}</span>
-        <div className="th-card__foot-right">
-          <button
-            className={`th-card__solo-toggle ${soloEnabled ? 'is-on' : ''}`}
-            type="button"
-            onClick={() => onToggleSolo(agent.id, !soloEnabled)}
+
+        <div className="th-list__item-meta">
+          {agent.capabilities.slice(0, 3).map((cap) => (
+            <span key={cap.category} className="th-list__cap-chip">
+              {cap.category}
+            </span>
+          ))}
+        </div>
+
+        <div className="th-list__item-action" onClick={(e) => e.stopPropagation()}>
+          <Switch
+            checked={soloEnabled}
+            onChange={() => onToggleSolo(agent.id, !soloEnabled)}
+            size="small"
+          />
+          <IconButton
+            variant="ghost"
+            size="small"
+            tooltip={t('manage')}
           >
-            {soloEnabled ? '可独立使用' : '仅团队协作'}
-          </button>
+            <SlidersHorizontal size={14} />
+          </IconButton>
         </div>
       </div>
+
+      {expanded && (
+        <div className="th-list__item-details">
+          <p className="th-list__detail-desc">{agent.description}</p>
+          <div className="th-list__cap-grid">
+            {agent.capabilities.map((cap) => (
+              <div key={cap.category} className="th-list__cap-row">
+                <span
+                  className="th-list__cap-label"
+                  style={{ color: CAPABILITY_ACCENT[cap.category] }}
+                >
+                  {cap.category}
+                </span>
+                <div className="th-list__cap-bar">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`th-list__cap-pip${i < cap.level ? ' is-filled' : ''}`}
+                      style={
+                        i < cap.level
+                          ? ({ backgroundColor: CAPABILITY_ACCENT[cap.category] } as React.CSSProperties)
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+                <span className="th-list__cap-level">{cap.level}/5</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -58,12 +111,11 @@ const AgentCard: React.FC<{
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const AgentsOverviewPage: React.FC = () => {
-  const { t } = useI18n('scenes/team');
+  const { t } = useTranslation('scenes/team');
   const { agentSoloEnabled, setAgentSoloEnabled } = useTeamStore();
   const [query, setQuery] = useState('');
 
-  const agents = MOCK_AGENTS;
-  const filteredAgents = agents.filter((a) => {
+  const filteredAgents = MOCK_AGENTS.filter((a) => {
     if (!query) return true;
     const q = query.toLowerCase();
     return a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
@@ -71,40 +123,52 @@ const AgentsOverviewPage: React.FC = () => {
 
   return (
     <div className="th">
-      <div className="th__bar">
-        <div className="th__title-wrap">
-          <h3 className="th__title">{t('agentsOverview.title')}</h3>
-          <span className="th__title-sub">{t('agentsOverview.subtitle')}</span>
-        </div>
-        <div className="th__search-wrap">
-          <Search size={12} className="th__search-ico" />
-          <input
-            className="th__search"
-            placeholder={t('home.search')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="th__body">
-        <section className="th__section th__section--agents">
-          <div className="th__section-head">
-            <span className="th__section-title">{t('agentsOverview.sectionTitle')}</span>
-            <span className="th__section-count">{filteredAgents.length}</span>
+      <div className="th__header">
+        <div className="th__header-inner">
+          <div className="th__title-row">
+            <div>
+              <h2 className="th__title">{t('agentsOverview.title')}</h2>
+              <p className="th__title-sub">{t('agentsOverview.subtitle')}</p>
+            </div>
           </div>
-          <div className="th__section-grid">
-            {filteredAgents.map((a) => (
-              <AgentCard
-                key={a.id}
-                agent={a}
-                soloEnabled={agentSoloEnabled[a.id] ?? false}
-                onToggleSolo={setAgentSoloEnabled}
-              />
-            ))}
+          <div className="th__toolbar">
+            <Search
+              placeholder={t('home.search')}
+              value={query}
+              onChange={setQuery}
+              clearable
+              size="small"
+            />
           </div>
-        </section>
+        </div>
       </div>
 
+      <div className="th__list-body">
+        <div className="th__list-inner">
+          <div className="th-list__section-head">
+            <span className="th-list__section-title">{t('agentsOverview.sectionTitle')}</span>
+            <span className="th-list__section-count">{filteredAgents.length}</span>
+          </div>
+          {filteredAgents.length === 0 ? (
+            <div className="th-list__empty">
+              <Bot size={28} strokeWidth={1.5} />
+              <span>{t('empty')}</span>
+            </div>
+          ) : (
+            <div className="th-list">
+              {filteredAgents.map((a, i) => (
+                <AgentListItem
+                  key={a.id}
+                  agent={a}
+                  soloEnabled={agentSoloEnabled[a.id] ?? false}
+                  onToggleSolo={setAgentSoloEnabled}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
