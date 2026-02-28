@@ -2,10 +2,12 @@
 
 use super::extract::{self, ESTIMATED_INSTALL_SIZE};
 use super::types::{DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Map, Value};
+use std::fs::File;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use tauri::{Emitter, Window};
+use tauri::{Emitter, Manager, Window};
 
 #[cfg(target_os = "windows")]
 #[derive(Default)]
@@ -18,6 +20,9 @@ struct WindowsInstallState {
 }
 
 const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
+const PAYLOAD_MANIFEST_FILE: &str = "payload-manifest.json";
+const EMBEDDED_PAYLOAD_ZIP: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/embedded_payload.zip"));
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -201,24 +206,67 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
         // Step 2: Extract / copy application files
         emit_progress(&window, "extract", 15, "Extracting application files...");
 
-        // In production, this would extract from an embedded archive.
-        // For development, we look for a payload directory next to the installer.
+        let mut extracted = false;
+        let mut used_debug_placeholder = false;
+        let mut checked_locations: Vec<String> = Vec::new();
+
+        if embedded_payload_available() {
+            checked_locations.push("embedded payload zip".to_string());
+            preflight_validate_payload_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?;
+            extract::extract_zip_bytes_with_filter(
+                EMBEDDED_PAYLOAD_ZIP,
+                &install_path,
+                should_install_payload_path,
+            )
+            .map_err(|e| format!("Embedded payload extraction failed: {}", e))?;
+            extracted = true;
+            log::info!("Extracted payload from embedded installer archive");
+        }
+
+        // Fallback to external payload locations for compatibility and local debug.
         let exe_dir = std::env::current_exe()
             .map_err(|e| e.to_string())?
             .parent()
             .unwrap_or_else(|| Path::new("."))
             .to_path_buf();
 
-        let payload_zip = exe_dir.join("payload.zip");
-        let payload_dir = exe_dir.join("payload");
+        if !extracted {
+            for candidate in build_payload_candidates(&window, &exe_dir) {
+                if candidate.is_zip {
+                    checked_locations.push(format!("zip: {}", candidate.path.display()));
+                    if !candidate.path.exists() {
+                        continue;
+                    }
+                    preflight_validate_payload_zip_file(&candidate.path, &candidate.label)?;
+                    extract::extract_zip_with_filter(
+                        &candidate.path,
+                        &install_path,
+                        should_install_payload_path,
+                    )
+                    .map_err(|e| format!("Extraction failed from {}: {}", candidate.label, e))?;
+                    extracted = true;
+                    log::info!("Extracted payload from {}", candidate.label);
+                    break;
+                }
 
-        if payload_zip.exists() {
-            extract::extract_zip(&payload_zip, &install_path)
-                .map_err(|e| format!("Extraction failed: {}", e))?;
-        } else if payload_dir.exists() {
-            extract::copy_directory(&payload_dir, &install_path)
-                .map_err(|e| format!("File copy failed: {}", e))?;
-        } else {
+                checked_locations.push(format!("dir: {}", candidate.path.display()));
+                if !candidate.path.exists() {
+                    continue;
+                }
+                preflight_validate_payload_dir(&candidate.path, &candidate.label)?;
+                extract::copy_directory_with_filter(
+                    &candidate.path,
+                    &install_path,
+                    should_install_payload_path,
+                )
+                .map_err(|e| format!("File copy failed from {}: {}", candidate.label, e))?;
+                extracted = true;
+                log::info!("Copied payload from {}", candidate.label);
+                break;
+            }
+        }
+
+        if !extracted {
             if cfg!(debug_assertions) {
                 // Development mode: create a placeholder to simplify local UI iteration.
                 log::warn!("No payload found - running in development mode");
@@ -227,15 +275,18 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
                     std::fs::write(&placeholder, "placeholder")
                         .map_err(|e| format!("Failed to write placeholder: {}", e))?;
                 }
+                used_debug_placeholder = true;
             } else {
-                return Err(
-                    "Installer payload is missing. Rebuild installer with valid payload files."
-                        .to_string(),
-                );
+                return Err(format!(
+                    "Installer payload is missing. Checked: {}",
+                    checked_locations.join(" | ")
+                ));
             }
         }
 
-        verify_installed_payload(&install_path)?;
+        if !used_debug_placeholder {
+            verify_installed_payload(&install_path)?;
+        }
 
         emit_progress(&window, "extract", 50, "Files extracted successfully");
 
@@ -341,21 +392,39 @@ pub async fn uninstall(install_path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let current_exe = std::env::current_exe().ok();
-        let running_from_install_dir = current_exe
+        let running_uninstall_binary = current_exe
             .as_ref()
-            .map(|exe| exe.starts_with(&install_path))
+            .and_then(|exe| exe.file_stem().map(|s| s.to_string_lossy().to_string()))
+            .map(|stem| stem.eq_ignore_ascii_case("uninstall"))
             .unwrap_or(false);
 
-        if running_from_install_dir {
+        let current_exe_parent = current_exe
+            .as_ref()
+            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()));
+        let running_from_install_dir = current_exe_parent
+            .as_ref()
+            .map(|parent| windows_path_eq_case_insensitive(parent, &install_path))
+            .unwrap_or(false);
+
+        append_uninstall_runtime_log(&format!(
+            "uninstall called: install_path='{}', current_exe='{}', running_uninstall_binary={}, running_from_install_dir={}",
+            install_path.display(),
+            current_exe
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<unknown>".to_string()),
+            running_uninstall_binary,
+            running_from_install_dir
+        ));
+
+        if running_uninstall_binary || running_from_install_dir {
             if install_path.exists() {
-                let cmd = format!(
-                    "ping 127.0.0.1 -n 3 > nul && rmdir /s /q \"{}\"",
+                schedule_windows_self_uninstall_cleanup(&install_path)?;
+            } else {
+                append_uninstall_runtime_log(&format!(
+                    "install path does not exist, skip cleanup schedule: {}",
                     install_path.display()
-                );
-                std::process::Command::new("cmd")
-                    .args(["/C", &cmd])
-                    .spawn()
-                    .map_err(|e| format!("Failed to schedule uninstall cleanup: {}", e))?;
+                ));
             }
             return Ok(());
         }
@@ -367,6 +436,102 @@ pub async fn uninstall(install_path: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn schedule_windows_self_uninstall_cleanup(install_path: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let temp_dir = std::env::temp_dir();
+    let pid = std::process::id();
+    let script_path = temp_dir.join(format!("bitfun-uninstall-{}.cmd", pid));
+    let log_path = temp_dir.join(format!("bitfun-uninstall-cleanup-{}.log", pid));
+
+    let script = format!(
+        r#"@echo off
+setlocal enableextensions
+set "TARGET=%~1"
+set "LOG=%~2"
+if "%TARGET%"=="" exit /b 2
+if "%LOG%"=="" set "LOG=%TEMP%\bitfun-uninstall-cleanup.log"
+echo [%DATE% %TIME%] cleanup start > "%LOG%"
+cd /d "%TEMP%"
+taskkill /f /im BitFun.exe >> "%LOG%" 2>&1
+set "DONE=0"
+for /L %%i in (1,1,30) do (
+  rmdir /s /q "%TARGET%" >> "%LOG%" 2>&1
+  if not exist "%TARGET%" (
+    echo [%DATE% %TIME%] cleanup success on try %%i >> "%LOG%"
+    set "DONE=1"
+    goto :cleanup_done
+  )
+  timeout /t 1 /nobreak >nul
+)
+:cleanup_done
+if "%DONE%"=="1" exit /b 0
+echo [%DATE% %TIME%] cleanup failed after retries >> "%LOG%"
+exit /b 1
+"#
+    );
+
+    std::fs::write(&script_path, script)
+        .map_err(|e| format!("Failed to write cleanup script: {}", e))?;
+
+    append_uninstall_runtime_log(&format!(
+        "scheduled cleanup script='{}', target='{}', cleanup_log='{}'",
+        script_path.display(),
+        install_path.display(),
+        log_path.display()
+    ));
+
+    let child = std::process::Command::new("cmd")
+        .arg("/C")
+        .arg("call")
+        .arg(&script_path)
+        .arg(install_path)
+        .arg(&log_path)
+        .current_dir(&temp_dir)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("Failed to schedule uninstall cleanup: {}", e))?;
+
+    append_uninstall_runtime_log(&format!(
+        "cleanup process spawned: pid={}",
+        child.id()
+    ));
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn windows_path_eq_case_insensitive(a: &Path, b: &Path) -> bool {
+    fn normalize(path: &Path) -> String {
+        let mut s = path.to_string_lossy().replace('/', "\\").to_lowercase();
+        while s.ends_with('\\') {
+            s.pop();
+        }
+        s
+    }
+    normalize(a) == normalize(b)
+}
+
+#[cfg(target_os = "windows")]
+fn append_uninstall_runtime_log(message: &str) {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let log_path = std::env::temp_dir().join("bitfun-uninstall-runtime.log");
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "[{}] {}", ts, message);
+    }
 }
 
 /// Launch the installed application.
@@ -458,6 +623,70 @@ fn is_running_as_uninstall_binary() -> bool {
         .and_then(|exe| exe.file_stem().map(|s| s.to_string_lossy().to_string()))
         .map(|stem| stem.eq_ignore_ascii_case("uninstall"))
         .unwrap_or(false)
+}
+
+fn embedded_payload_available() -> bool {
+    option_env!("EMBEDDED_PAYLOAD_AVAILABLE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
+#[derive(Debug)]
+struct PayloadCandidate {
+    label: String,
+    path: PathBuf,
+    is_zip: bool,
+}
+
+fn build_payload_candidates(window: &Window, exe_dir: &Path) -> Vec<PayloadCandidate> {
+    let mut candidates = Vec::new();
+
+    if let Ok(resource_dir) = window.app_handle().path().resource_dir() {
+        candidates.push(PayloadCandidate {
+            label: "resource_dir/payload.zip".to_string(),
+            path: resource_dir.join("payload.zip"),
+            is_zip: true,
+        });
+        candidates.push(PayloadCandidate {
+            label: "resource_dir/payload".to_string(),
+            path: resource_dir.join("payload"),
+            is_zip: false,
+        });
+        // Some bundle layouts keep runtime resources under a nested resources directory.
+        candidates.push(PayloadCandidate {
+            label: "resource_dir/resources/payload.zip".to_string(),
+            path: resource_dir.join("resources").join("payload.zip"),
+            is_zip: true,
+        });
+        candidates.push(PayloadCandidate {
+            label: "resource_dir/resources/payload".to_string(),
+            path: resource_dir.join("resources").join("payload"),
+            is_zip: false,
+        });
+    }
+
+    candidates.push(PayloadCandidate {
+        label: "exe_dir/payload.zip".to_string(),
+        path: exe_dir.join("payload.zip"),
+        is_zip: true,
+    });
+    candidates.push(PayloadCandidate {
+        label: "exe_dir/payload".to_string(),
+        path: exe_dir.join("payload"),
+        is_zip: false,
+    });
+    candidates.push(PayloadCandidate {
+        label: "exe_dir/resources/payload.zip".to_string(),
+        path: exe_dir.join("resources").join("payload.zip"),
+        is_zip: true,
+    });
+    candidates.push(PayloadCandidate {
+        label: "exe_dir/resources/payload".to_string(),
+        path: exe_dir.join("resources").join("payload"),
+        is_zip: false,
+    });
+
+    candidates
 }
 
 fn find_existing_ancestor(path: &Path) -> PathBuf {
@@ -598,17 +827,85 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
     write_root_config(&app_config_file, &root)
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PayloadManifest {
-    files: Vec<PayloadManifestFile>,
+fn preflight_validate_payload_zip_bytes(
+    zip_bytes: &[u8],
+    source_label: &str,
+) -> Result<(), String> {
+    let reader = Cursor::new(zip_bytes);
+    let mut archive = zip::ZipArchive::new(reader)
+        .map_err(|e| format!("Invalid zip from {source_label}: {e}"))?;
+    preflight_validate_payload_zip_archive(&mut archive, source_label)
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PayloadManifestFile {
-    path: String,
-    size: u64,
+fn preflight_validate_payload_zip_file(path: &Path, source_label: &str) -> Result<(), String> {
+    let file = File::open(path)
+        .map_err(|e| format!("Failed to open payload zip ({source_label}): {e}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("Invalid payload zip ({source_label}): {e}"))?;
+    preflight_validate_payload_zip_archive(&mut archive, source_label)
+}
+
+fn preflight_validate_payload_zip_archive<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    source_label: &str,
+) -> Result<(), String> {
+    let mut exe_size: Option<u64> = None;
+    for i in 0..archive.len() {
+        let file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read payload entry ({source_label}): {e}"))?;
+        if file.name().ends_with('/') {
+            continue;
+        }
+        let file_name = zip_entry_file_name(file.name());
+        if file_name.eq_ignore_ascii_case("BitFun.exe") {
+            exe_size = Some(file.size());
+            break;
+        }
+    }
+
+    let size = exe_size
+        .ok_or_else(|| format!("Payload from {source_label} does not contain BitFun.exe"))?;
+    validate_payload_exe_size(size, source_label)
+}
+
+fn preflight_validate_payload_dir(path: &Path, source_label: &str) -> Result<(), String> {
+    let app_exe = path.join("BitFun.exe");
+    let meta = std::fs::metadata(&app_exe).map_err(|_| {
+        format!(
+            "Payload directory from {source_label} does not contain {}",
+            app_exe.display()
+        )
+    })?;
+    validate_payload_exe_size(meta.len(), source_label)
+}
+
+fn validate_payload_exe_size(size: u64, source_label: &str) -> Result<(), String> {
+    if size < MIN_WINDOWS_APP_EXE_BYTES {
+        return Err(format!(
+            "Payload BitFun.exe from {source_label} is too small ({size} bytes)"
+        ));
+    }
+    Ok(())
+}
+
+fn zip_entry_file_name(entry_name: &str) -> &str {
+    entry_name
+        .rsplit(&['/', '\\'][..])
+        .next()
+        .unwrap_or(entry_name)
+}
+
+fn is_payload_manifest_path(relative_path: &Path) -> bool {
+    relative_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(|n| n.eq_ignore_ascii_case(PAYLOAD_MANIFEST_FILE))
+        .unwrap_or(false)
+}
+
+fn should_install_payload_path(relative_path: &Path) -> bool {
+    !is_payload_manifest_path(relative_path)
 }
 
 fn verify_installed_payload(install_path: &Path) -> Result<(), String> {
@@ -620,44 +917,6 @@ fn verify_installed_payload(install_path: &Path) -> Result<(), String> {
             "Installed BitFun.exe is too small ({} bytes). Payload is likely invalid.",
             app_meta.len()
         ));
-    }
-
-    let manifest_path = install_path.join("payload-manifest.json");
-    if !manifest_path.exists() {
-        // Keep compatibility with older installers that don't ship a manifest.
-        return Ok(());
-    }
-
-    let manifest_content = std::fs::read_to_string(&manifest_path)
-        .map_err(|e| format!("Failed to read payload manifest: {}", e))?;
-    let manifest: PayloadManifest = serde_json::from_str(&manifest_content)
-        .map_err(|e| format!("Invalid payload manifest format: {}", e))?;
-
-    if manifest.files.is_empty() {
-        return Err("Payload manifest has no files".to_string());
-    }
-
-    for file in manifest.files {
-        let rel_path = Path::new(&file.path);
-        if rel_path.is_absolute()
-            || rel_path
-                .components()
-                .any(|c| c == std::path::Component::ParentDir)
-        {
-            return Err(format!("Invalid payload manifest path: {}", file.path));
-        }
-
-        let absolute_path = install_path.join(rel_path);
-        let meta = std::fs::metadata(&absolute_path)
-            .map_err(|_| format!("Missing payload file: {}", file.path))?;
-        if meta.len() != file.size {
-            return Err(format!(
-                "Payload file size mismatch: {} (expected {}, got {})",
-                file.path,
-                file.size,
-                meta.len()
-            ));
-        }
     }
 
     Ok(())

@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+zip = "0.6"
 
 [dependencies]
 tauri = { version = "2", features = [] }

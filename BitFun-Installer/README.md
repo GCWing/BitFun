@@ -141,6 +141,7 @@ npm run installer:build
 ```
 
 Use this as the release entrypoint. `npm run tauri:build` does not prepare validated payload assets for production.
+Release artifacts embed payload files into the installer binary, so runtime installation does not depend on an external `payload` folder.
 
 Build the complete installer in fast mode (faster compile, less optimization):
 
@@ -199,6 +200,7 @@ Edit `src/styles/variables.css` — all colors, spacing, and animations are cont
 ### Adding Installer Payload
 
 Place the built BitFun application files in `src-tauri/payload/` before building the installer. The build script handles this automatically.
+During `cargo build`, the payload directory is packed into an embedded zip inside `bitfun-installer.exe`.
 
 ## Integration with CI/CD
 

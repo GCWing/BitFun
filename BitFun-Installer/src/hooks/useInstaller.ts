@@ -230,13 +230,16 @@ export function useInstaller(): UseInstallerReturn {
       await invoke('uninstall', { installPath: options.installPath });
       setUninstallProgress(100);
       setUninstallCompleted(true);
+      window.setTimeout(() => {
+        closeInstaller();
+      }, 600);
     } catch (err: any) {
       setUninstallError(typeof err === 'string' ? err : err.message || 'Uninstall failed');
       setUninstallProgress(0);
     } finally {
       setIsUninstalling(false);
     }
-  }, [isUninstalling, options.installPath]);
+  }, [closeInstaller, isUninstalling, options.installPath]);
 
   return {
     step, goTo, next, back,
