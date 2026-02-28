@@ -5,17 +5,20 @@ import { Search, IconButton, Badge } from '@/component-library';
 import {
   useTeamStore,
   MOCK_AGENTS,
+  MOCK_TEAMS,
   CAPABILITY_CATEGORIES,
   computeTeamCapabilities,
   type AgentWithCapabilities,
   type Team,
 } from '../teamStore';
+
+const EXAMPLE_TEAM_IDS = new Set(MOCK_TEAMS.map((t) => t.id));
 import { AGENT_ICON_MAP } from '../teamIcons';
 import './TeamHomePage.scss';
 
 // ─── Team list item ───────────────────────────────────────────────────────────
 
-const TeamListItem: React.FC<{ team: Team; index: number }> = ({ team, index }) => {
+const TeamListItem: React.FC<{ team: Team; index: number; isExample: boolean }> = ({ team, index, isExample }) => {
   const { t } = useTranslation('scenes/team');
   const { openTeamEditor } = useTeamStore();
   const [expanded, setExpanded] = useState(false);
@@ -52,6 +55,7 @@ const TeamListItem: React.FC<{ team: Team; index: number }> = ({ team, index }) 
         <div className="th-list__item-info">
           <div className="th-list__item-name-row">
             <span className="th-list__item-name">{team.name}</span>
+            {isExample && <Badge variant="neutral">示例</Badge>}
             <Badge variant="neutral">{strategyLabel}</Badge>
           </div>
           <p className="th-list__item-desc">{team.description || '—'}</p>
@@ -164,7 +168,10 @@ const ExpertTeamsPage: React.FC = () => {
         <div className="th__header-inner">
           <div className="th__title-row">
             <div>
-              <h2 className="th__title">{t('expertTeams.title')}</h2>
+              <div className="th__title-with-badge">
+                <h2 className="th__title">{t('expertTeams.title')}</h2>
+                <Badge variant="warning">WIP</Badge>
+              </div>
               <p className="th__title-sub">{t('expertTeams.subtitle')}</p>
             </div>
             <button type="button" className="th__create-btn" onClick={handleCreateTeam}>
@@ -198,7 +205,12 @@ const ExpertTeamsPage: React.FC = () => {
           ) : (
             <div className="th-list">
               {filteredTeams.map((team, i) => (
-                <TeamListItem key={team.id} team={team} index={i} />
+                <TeamListItem
+                  key={team.id}
+                  team={team}
+                  index={i}
+                  isExample={EXAMPLE_TEAM_IDS.has(team.id)}
+                />
               ))}
             </div>
           )}

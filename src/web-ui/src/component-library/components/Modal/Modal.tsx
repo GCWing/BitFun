@@ -10,6 +10,7 @@ export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  titleExtra?: React.ReactNode;
   children: React.ReactNode;
   size?: 'small' | 'medium' | 'large';
   contentInset?: boolean;
@@ -23,6 +24,7 @@ export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   title,
+  titleExtra,
   children,
   size = 'medium',
   contentInset = false,
@@ -253,7 +255,12 @@ export const Modal: React.FC<ModalProps> = ({
             ref={headerRef}
             className={`modal__header ${draggable ? 'modal__header--draggable' : ''}`}
           >
-            {title && <h2 className="modal__title">{title}</h2>}
+            {title && (
+              <div className="modal__title-group">
+                <h2 className="modal__title">{title}</h2>
+                {titleExtra && <span className="modal__title-extra">{titleExtra}</span>}
+              </div>
+            )}
             {showCloseButton && (
               <button
                 className="modal__close"

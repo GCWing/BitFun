@@ -25,6 +25,12 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+
+    // Hero mode: center everything
+    &--hero {
+      align-items: center;
+      justify-content: center;
+    }
   }
 
   &__view-header {
@@ -170,6 +176,63 @@
 // ── Market list ───────────────────────────────────────────────
 
 .bitfun-market {
+
+  // ── Hero (pre-search) ─────────────────────────────────────
+
+  &__hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: $size-gap-4;
+    padding: $size-gap-8 $size-gap-6;
+    width: min(100%, 480px);
+    animation: bitfun-market-item-in 0.3s $easing-decelerate both;
+  }
+
+  &__hero-title {
+    font-size: $font-size-3xl;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    margin: 0;
+    line-height: $line-height-tight;
+  }
+
+  &__hero-search {
+    width: 100%;
+    margin-top: $size-gap-2;
+
+    .search__wrapper {
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        rgba(255, 255, 255, 0.03) 100%
+      );
+      border: 1px solid var(--border-subtle);
+      border-radius: $size-radius-lg;
+    }
+  }
+
+  // ── Source attribution ─────────────────────────────────────
+
+  &__source-note {
+    font-size: $font-size-xs;
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    margin: $size-gap-2 0 0;
+    text-align: center;
+  }
+
+  &__source-link {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+      opacity: 0.9;
+      color: var(--color-primary);
+    }
+  }
 
   // ── List container ────────────────────────────────────────
 
@@ -521,6 +584,15 @@
       padding: $size-gap-4;
     }
   }
+}
+
+@keyframes bitfun-market-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.bitfun-market__spin {
+  animation: bitfun-market-spin 0.8s linear infinite;
 }
 
 @keyframes bitfun-market-row-shimmer {

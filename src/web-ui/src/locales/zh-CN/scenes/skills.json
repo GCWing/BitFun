@@ -61,7 +61,13 @@
     "pagination": {
       "prev": "上一页",
       "next": "下一页",
-      "info": "第 {{current}} / {{total}} 页"
+      "info": "第 {{current}} / {{total}} 页",
+      "infoMore": "第 {{current}} 页",
+      "loading": "加载中..."
+    },
+    "sourceNote": {
+      "prefix": "数据来源",
+      "suffix": " · 最多显示前 {{max}} 条结果"
     }
   },
   "form": {

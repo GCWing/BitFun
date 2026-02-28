@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal } from '@/component-library';
+import { Modal, Badge } from '@/component-library';
 import './RemoteConnectDialog.scss';
 
 type ConnectionType = 'nat' | 'relay';
@@ -83,6 +83,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={t('remoteConnect.title')}
+      titleExtra={<Badge variant="warning">WIP</Badge>}
       showCloseButton={true}
       size="small"
     >

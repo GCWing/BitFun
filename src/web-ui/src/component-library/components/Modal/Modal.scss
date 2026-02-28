@@ -118,11 +118,24 @@
     }
   }
 
+  &__title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
   &__title {
     margin: 0;
     font-size: 12px;
     font-weight: 500;
     color: var(--color-text-secondary);
+  }
+
+  &__title-extra {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 
 

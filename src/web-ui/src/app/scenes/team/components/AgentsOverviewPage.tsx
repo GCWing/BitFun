@@ -1,14 +1,61 @@
-import React, { useState, useCallback } from 'react';
-import { Bot, User, SlidersHorizontal } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Bot, Cpu, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Search, Switch, IconButton, Badge } from '@/component-library';
 import {
   useTeamStore,
-  MOCK_AGENTS,
   type AgentWithCapabilities,
+  type AgentKind,
 } from '../teamStore';
 import { CAPABILITY_ACCENT } from '../teamIcons';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
+import type { SubagentSource } from '@/infrastructure/api/service-api/SubagentAPI';
 import './TeamHomePage.scss';
+
+// ─── Agent badge ──────────────────────────────────────────────────────────────
+
+interface AgentBadgeConfig {
+  variant: 'accent' | 'info' | 'success' | 'purple' | 'neutral';
+  label: string;
+}
+
+function getAgentBadge(agentKind?: AgentKind, source?: SubagentSource): AgentBadgeConfig {
+  if (agentKind === 'mode') {
+    return { variant: 'accent', label: 'Agent' };
+  }
+  switch (source) {
+    case 'user':    return { variant: 'success', label: '用户 Sub-Agent' };
+    case 'project': return { variant: 'purple',  label: '项目 Sub-Agent' };
+    default:        return { variant: 'info',    label: 'Sub-Agent' };
+  }
+}
+
+// ─── Enrich capabilities ──────────────────────────────────────────────────────
+
+function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities {
+  if (agent.capabilities?.length) return agent;
+  const id   = agent.id.toLowerCase();
+  const name = agent.name.toLowerCase();
+
+  if (agent.agentKind === 'mode') {
+    if (id === 'agentic') return { ...agent, capabilities: [{ category: '编码', level: 5 }, { category: '分析', level: 4 }] };
+    if (id === 'plan')    return { ...agent, capabilities: [{ category: '分析', level: 5 }, { category: '文档', level: 3 }] };
+    if (id === 'debug')   return { ...agent, capabilities: [{ category: '编码', level: 5 }, { category: '分析', level: 3 }] };
+    if (id === 'cowork')  return { ...agent, capabilities: [{ category: '分析', level: 4 }, { category: '创意', level: 3 }] };
+  }
+
+  if (id === 'explore')     return { ...agent, capabilities: [{ category: '分析', level: 4 }, { category: '编码', level: 3 }] };
+  if (id === 'file_finder') return { ...agent, capabilities: [{ category: '分析', level: 3 }, { category: '编码', level: 2 }] };
+
+  if (name.includes('code') || name.includes('debug') || name.includes('test')) {
+    return { ...agent, capabilities: [{ category: '编码', level: 4 }] };
+  }
+  if (name.includes('doc') || name.includes('write')) {
+    return { ...agent, capabilities: [{ category: '文档', level: 4 }] };
+  }
+  return { ...agent, capabilities: [{ category: '分析', level: 3 }] };
+}
 
 // ─── Agent list item ──────────────────────────────────────────────────────────
 
@@ -22,6 +69,8 @@ const AgentListItem: React.FC<{
   const [expanded, setExpanded] = useState(false);
 
   const toggleExpand = useCallback(() => setExpanded((v) => !v), []);
+
+  const badge = getAgentBadge(agent.agentKind, agent.subagentSource);
 
   return (
     <div
@@ -38,9 +87,9 @@ const AgentListItem: React.FC<{
         <div className="th-list__item-info">
           <div className="th-list__item-name-row">
             <span className="th-list__item-name">{agent.name}</span>
-            <Badge variant="neutral">
-              <User size={9} />
-              Agent
+            <Badge variant={badge.variant}>
+              {agent.agentKind === 'mode' ? <Cpu size={9} /> : <Bot size={9} />}
+              {badge.label}
             </Badge>
             {agent.model && (
               <Badge variant="neutral">{agent.model}</Badge>
@@ -114,8 +163,50 @@ const AgentsOverviewPage: React.FC = () => {
   const { t } = useTranslation('scenes/team');
   const { agentSoloEnabled, setAgentSoloEnabled } = useTeamStore();
   const [query, setQuery] = useState('');
+  const [allAgents, setAllAgents] = useState<AgentWithCapabilities[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredAgents = MOCK_AGENTS.filter((a) => {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    Promise.all([
+      agentAPI.getAvailableModes().catch(() => []),
+      SubagentAPI.listSubagents().catch(() => []),
+    ]).then(([modes, subagents]) => {
+      if (cancelled) return;
+
+      const modeAgents: AgentWithCapabilities[] = modes.map((m) =>
+        enrichCapabilities({
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          isReadonly: m.isReadonly,
+          toolCount: m.toolCount,
+          defaultTools: m.defaultTools ?? [],
+          enabled: m.enabled,
+          capabilities: [],
+          agentKind: 'mode',
+        })
+      );
+
+      const subAgents: AgentWithCapabilities[] = subagents.map((s) =>
+        enrichCapabilities({
+          ...s,
+          capabilities: [],
+          agentKind: 'subagent',
+        })
+      );
+
+      setAllAgents([...modeAgents, ...subAgents]);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const filteredAgents = allAgents.filter((a) => {
     if (!query) return true;
     const q = query.toLowerCase();
     return a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
@@ -149,7 +240,12 @@ const AgentsOverviewPage: React.FC = () => {
             <span className="th-list__section-title">{t('agentsOverview.sectionTitle')}</span>
             <span className="th-list__section-count">{filteredAgents.length}</span>
           </div>
-          {filteredAgents.length === 0 ? (
+          {loading ? (
+            <div className="th-list__empty">
+              <Bot size={28} strokeWidth={1.5} />
+              <span>{t('loading', '加载中…')}</span>
+            </div>
+          ) : filteredAgents.length === 0 ? (
             <div className="th-list__empty">
               <Bot size={28} strokeWidth={1.5} />
               <span>{t('empty')}</span>
@@ -160,7 +256,7 @@ const AgentsOverviewPage: React.FC = () => {
                 <AgentListItem
                   key={a.id}
                   agent={a}
-                  soloEnabled={agentSoloEnabled[a.id] ?? false}
+                  soloEnabled={agentSoloEnabled[a.id] ?? a.enabled}
                   onToggleSolo={setAgentSoloEnabled}
                   index={i}
                 />

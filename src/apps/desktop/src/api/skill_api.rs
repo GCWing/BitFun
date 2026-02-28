@@ -23,8 +23,8 @@ use bitfun_core::util::process_manager;
 
 const SKILLS_SEARCH_API_BASE: &str = "https://skills.sh";
 const DEFAULT_MARKET_QUERY: &str = "skill";
-const DEFAULT_MARKET_LIMIT: u8 = 12;
-const MAX_MARKET_LIMIT: u8 = 50;
+const DEFAULT_MARKET_LIMIT: u32 = 12;
+const MAX_MARKET_LIMIT: u32 = 500;
 const MAX_OUTPUT_PREVIEW_CHARS: usize = 2000;
 const MARKET_DESC_FETCH_TIMEOUT_SECS: u64 = 4;
 const MARKET_DESC_FETCH_CONCURRENCY: usize = 6;
@@ -44,14 +44,14 @@ pub struct SkillValidationResult {
 #[serde(rename_all = "camelCase")]
 pub struct SkillMarketListRequest {
     pub query: Option<String>,
-    pub limit: Option<u8>,
+    pub limit: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillMarketSearchRequest {
     pub query: String,
-    pub limit: Option<u8>,
+    pub limit: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -463,13 +463,13 @@ pub async fn download_skill_market(
     })
 }
 
-fn normalize_market_limit(value: Option<u8>) -> u8 {
+fn normalize_market_limit(value: Option<u32>) -> u32 {
     value
         .unwrap_or(DEFAULT_MARKET_LIMIT)
         .clamp(1, MAX_MARKET_LIMIT)
 }
 
-async fn fetch_skill_market(query: &str, limit: u8) -> Result<Vec<SkillMarketItem>, String> {
+async fn fetch_skill_market(query: &str, limit: u32) -> Result<Vec<SkillMarketItem>, String> {
     let api_base =
         std::env::var("SKILLS_API_URL").unwrap_or_else(|_| SKILLS_SEARCH_API_BASE.into());
     let base_url = api_base.trim_end_matches('/');

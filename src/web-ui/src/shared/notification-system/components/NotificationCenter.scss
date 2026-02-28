@@ -82,6 +82,10 @@
   }
 
   &__filter {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 6px $size-gap-2;
     background: transparent;
     border: none;
