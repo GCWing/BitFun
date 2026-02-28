@@ -29,6 +29,7 @@ const EMBEDDED_PAYLOAD_ZIP: &[u8] =
 pub struct LaunchContext {
     pub mode: String,
     pub uninstall_path: Option<String>,
+    pub app_language: Option<String>,
 }
 
 /// Get the default installation path.
@@ -127,6 +128,7 @@ unsafe fn windows_sys_get_disk_free_space(
 #[tauri::command]
 pub fn get_launch_context() -> LaunchContext {
     let args: Vec<String> = std::env::args().collect();
+    let app_language = read_saved_app_language();
     if let Some(idx) = args.iter().position(|arg| arg == "--uninstall") {
         let uninstall_path = args
             .get(idx + 1)
@@ -135,6 +137,7 @@ pub fn get_launch_context() -> LaunchContext {
         return LaunchContext {
             mode: "uninstall".to_string(),
             uninstall_path,
+            app_language,
         };
     }
 
@@ -142,12 +145,14 @@ pub fn get_launch_context() -> LaunchContext {
         return LaunchContext {
             mode: "uninstall".to_string(),
             uninstall_path: guess_uninstall_path_from_exe(),
+            app_language,
         };
     }
 
     LaunchContext {
         mode: "install".to_string(),
         uninstall_path: None,
+        app_language,
     }
 }
 
@@ -709,6 +714,25 @@ fn ensure_app_config_path() -> Result<PathBuf, String> {
     std::fs::create_dir_all(&config_root)
         .map_err(|e| format!("Failed to create BitFun config directory: {}", e))?;
     Ok(config_root.join("app.json"))
+}
+
+fn read_saved_app_language() -> Option<String> {
+    let app_config_file = ensure_app_config_path().ok()?;
+    if !app_config_file.exists() {
+        return None;
+    }
+
+    let content = std::fs::read_to_string(&app_config_file).ok()?;
+    let root: Value = serde_json::from_str(&content).ok()?;
+    let lang = root.get("app")?.get("language")?.as_str()?;
+
+    match lang {
+        "zh-CN" => Some("zh-CN".to_string()),
+        "en-US" => Some("en-US".to_string()),
+        "zh" => Some("zh-CN".to_string()),
+        "en" => Some("en-US".to_string()),
+        _ => None,
+    }
 }
 
 fn read_or_create_root_config(app_config_file: &Path) -> Result<Value, String> {

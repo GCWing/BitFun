@@ -59,7 +59,16 @@
   "themeSetup": {
     "title": "Theme & Launch",
     "subtitle": "Choose your startup theme, then launch",
-    "skip": "Skip theme and launch"
+    "skip": "Skip theme and launch",
+    "themeNames": {
+      "bitfun-dark": "Dark",
+      "bitfun-light": "Light",
+      "bitfun-midnight": "Midnight",
+      "bitfun-china-style": "Ink Charm",
+      "bitfun-china-night": "Ink Night",
+      "bitfun-cyber": "Cyber",
+      "bitfun-slate": "Slate"
+    }
   },
   "complete": {
     "title": "Complete",

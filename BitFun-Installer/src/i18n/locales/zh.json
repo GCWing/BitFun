@@ -59,7 +59,16 @@
   "themeSetup": {
     "title": "主题与启动",
     "subtitle": "选择首次启动主题，然后开始使用",
-    "skip": "跳过主题并启动"
+    "skip": "跳过主题并启动",
+    "themeNames": {
+      "bitfun-dark": "暗色",
+      "bitfun-light": "亮色",
+      "bitfun-midnight": "午夜",
+      "bitfun-china-style": "墨韵",
+      "bitfun-china-night": "墨夜",
+      "bitfun-cyber": "赛博",
+      "bitfun-slate": "石板灰"
+    }
   },
   "complete": {
     "title": "完成",

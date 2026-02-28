@@ -4,6 +4,7 @@ export type InstallStep = 'lang' | 'options' | 'model' | 'progress' | 'theme' | 
 export interface LaunchContext {
   mode: 'install' | 'uninstall';
   uninstallPath: string | null;
+  appLanguage?: 'zh-CN' | 'en-US' | null;
 }
 
 export type ThemeId =
