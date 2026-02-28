@@ -1,17 +1,37 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search, ChevronDown, ChevronUp, Plus, Check, Bot } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, Check, Bot, Cpu } from 'lucide-react';
+import { Badge } from '@/component-library';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
+import type { SubagentSource } from '@/infrastructure/api/service-api/SubagentAPI';
 import {
   useTeamStore,
-  MOCK_AGENTS,
   CAPABILITY_CATEGORIES,
   CAPABILITY_COLORS,
   type AgentWithCapabilities,
   type CapabilityCategory,
+  type AgentKind,
 } from '../teamStore';
 import { AGENT_ICON_MAP } from '../teamIcons';
-import { isBuiltinSubAgent } from '@/infrastructure/agents/constants';
 import './AgentGallery.scss';
+
+// ─── Agent badge config ───────────────────────────────────────────────────────
+
+interface AgentBadgeConfig {
+  variant: 'accent' | 'info' | 'success' | 'purple' | 'neutral';
+  label: string;
+}
+
+function getAgentBadge(agentKind?: AgentKind, source?: SubagentSource): AgentBadgeConfig {
+  if (agentKind === 'mode') {
+    return { variant: 'accent', label: 'Agent' };
+  }
+  switch (source) {
+    case 'user':    return { variant: 'success', label: '用户 Sub-Agent' };
+    case 'project': return { variant: 'purple',  label: '项目 Sub-Agent' };
+    default:        return { variant: 'info',    label: 'Sub-Agent' };
+  }
+}
 
 // ─── Agent icon ───────────────────────────────────────────────────────────────
 
@@ -62,6 +82,7 @@ interface AgentCardProps {
 const AgentCard: React.FC<AgentCardProps> = ({ agent, isMember, onAdd, onRemove }) => {
   const [expanded, setExpanded] = useState(false);
   const primaryCap = agent.capabilities[0]?.category;
+  const badge = getAgentBadge(agent.agentKind, agent.subagentSource);
 
   return (
     <div className={`ag-card ${isMember ? 'is-member' : ''} ${!agent.enabled ? 'is-disabled' : ''}`}>
@@ -88,7 +109,13 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isMember, onAdd, onRemove 
           <span className="ag-card__desc">{agent.description}</span>
           <div className="ag-card__name-row">
             {!agent.enabled && <span className="ag-card__badge ag-card__badge--dim">已禁用</span>}
-            {agent.capabilities.slice(0, 3).map((c) => (
+            {/* Agent kind badge */}
+            <Badge variant={badge.variant}>
+              {agent.agentKind === 'mode' ? <Cpu size={9} /> : <Bot size={9} />}
+              {badge.label}
+            </Badge>
+            {/* Capability chips */}
+            {agent.capabilities.slice(0, 2).map((c) => (
               <span
                 key={c.category}
                 className="ag-card__badge"
@@ -126,7 +153,10 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isMember, onAdd, onRemove 
           <div className="ag-card__detail-meta">
             <span>{agent.toolCount} 个工具</span>
             {agent.model && <span>模型 · {agent.model}</span>}
-            <span>{agent.subagentSource === 'builtin' ? (isBuiltinSubAgent(agent.id) ? 'Sub-Agent' : '内置') : agent.subagentSource === 'user' ? '用户' : '项目'}</span>
+            <Badge variant={badge.variant}>
+              {agent.agentKind === 'mode' ? <Cpu size={9} /> : <Bot size={9} />}
+              {badge.label}
+            </Badge>
           </div>
           <button
             className={`ag-card__add-full ${isMember ? 'is-added' : ''}`}
@@ -140,11 +170,23 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isMember, onAdd, onRemove 
   );
 };
 
-// ─── Gallery ──────────────────────────────────────────────────────────────────
+// ─── Enrich capabilities ──────────────────────────────────────────────────────
 
-function enrichAgent(agent: AgentWithCapabilities): AgentWithCapabilities {
+function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities {
   if (agent.capabilities?.length) return agent;
+  const id   = agent.id.toLowerCase();
   const name = agent.name.toLowerCase();
+
+  if (agent.agentKind === 'mode') {
+    if (id === 'agentic') return { ...agent, capabilities: [{ category: '编码', level: 5 }, { category: '分析', level: 4 }] };
+    if (id === 'plan')    return { ...agent, capabilities: [{ category: '分析', level: 5 }, { category: '文档', level: 3 }] };
+    if (id === 'debug')   return { ...agent, capabilities: [{ category: '编码', level: 5 }, { category: '分析', level: 3 }] };
+    if (id === 'cowork')  return { ...agent, capabilities: [{ category: '分析', level: 4 }, { category: '创意', level: 3 }] };
+  }
+
+  if (id === 'explore')     return { ...agent, capabilities: [{ category: '分析', level: 4 }, { category: '编码', level: 3 }] };
+  if (id === 'file_finder') return { ...agent, capabilities: [{ category: '分析', level: 3 }, { category: '编码', level: 2 }] };
+
   if (name.includes('code') || name.includes('debug') || name.includes('test')) {
     return { ...agent, capabilities: [{ category: '编码', level: 4 }] };
   }
@@ -154,9 +196,11 @@ function enrichAgent(agent: AgentWithCapabilities): AgentWithCapabilities {
   return { ...agent, capabilities: [{ category: '分析', level: 3 }] };
 }
 
+// ─── Gallery ──────────────────────────────────────────────────────────────────
+
 const AgentGallery: React.FC = () => {
   const { teams, activeTeamId, addMember, removeMember } = useTeamStore();
-  const [agents, setAgents] = useState<AgentWithCapabilities[]>(MOCK_AGENTS);
+  const [agents, setAgents] = useState<AgentWithCapabilities[]>([]);
   const [query, setQuery] = useState('');
   const [activeCategories, setActiveCategories] = useState<Set<CapabilityCategory>>(new Set());
   const [showMembersOnly, setShowMembersOnly] = useState(false);
@@ -165,16 +209,40 @@ const AgentGallery: React.FC = () => {
   const memberIds = new Set(activeTeam?.members.map((m) => m.agentId) ?? []);
 
   useEffect(() => {
-    SubagentAPI.listSubagents()
-      .then((list) => {
-        const enriched = list.map((a) => enrichAgent(a as AgentWithCapabilities));
-        if (enriched.length > 0) {
-          const realIds = new Set(enriched.map((a) => a.id));
-          const mockOnly = MOCK_AGENTS.filter((a) => !realIds.has(a.id));
-          setAgents([...enriched, ...mockOnly]);
-        }
-      })
-      .catch(() => { /* keep mock */ });
+    let cancelled = false;
+
+    Promise.all([
+      agentAPI.getAvailableModes().catch(() => []),
+      SubagentAPI.listSubagents().catch(() => []),
+    ]).then(([modes, subagents]) => {
+      if (cancelled) return;
+
+      const modeAgents: AgentWithCapabilities[] = modes.map((m) =>
+        enrichCapabilities({
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          isReadonly: m.isReadonly,
+          toolCount: m.toolCount,
+          defaultTools: m.defaultTools ?? [],
+          enabled: m.enabled,
+          capabilities: [],
+          agentKind: 'mode',
+        })
+      );
+
+      const subAgents: AgentWithCapabilities[] = subagents.map((s) =>
+        enrichCapabilities({
+          ...s,
+          capabilities: [],
+          agentKind: 'subagent',
+        })
+      );
+
+      setAgents([...modeAgents, ...subAgents]);
+    });
+
+    return () => { cancelled = true; };
   }, []);
 
   const toggleCategory = useCallback((cat: CapabilityCategory) => {

@@ -13,6 +13,9 @@ export type TeamViewMode = 'formation' | 'list';
 export const CAPABILITY_CATEGORIES = ['编码', '文档', '分析', '测试', '创意', '运维'] as const;
 export type CapabilityCategory = (typeof CAPABILITY_CATEGORIES)[number];
 
+/** 'mode' = 主 Agent 模式（如 Agentic/Plan/Debug），'subagent' = 子 Agent */
+export type AgentKind = 'mode' | 'subagent';
+
 export interface AgentCapability {
   category: CapabilityCategory;
   level: number; // 1-5
@@ -21,6 +24,8 @@ export interface AgentCapability {
 export interface AgentWithCapabilities extends SubagentInfo {
   capabilities: AgentCapability[];
   iconKey?: string;
+  /** 区分 Agent 模式与 Sub-Agent */
+  agentKind?: AgentKind;
 }
 
 export interface TeamMember {
@@ -369,7 +374,7 @@ export const useTeamStore = create<TeamStoreState>((set) => ({
   openAgentsOverview: () => set({ page: 'agentsOverview' }),
   openExpertTeamsOverview: () => set({ page: 'expertTeamsOverview' }),
   openTeamEditor: (teamId) => set({ page: 'editor', activeTeamId: teamId }),
-  agentSoloEnabled: Object.fromEntries(MOCK_AGENTS.map((agent) => [agent.id, agent.enabled])),
+  agentSoloEnabled: {},
   setAgentSoloEnabled: (agentId, enabled) =>
     set((s) => ({
       agentSoloEnabled: {

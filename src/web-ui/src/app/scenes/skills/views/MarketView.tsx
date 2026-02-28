@@ -1,11 +1,15 @@
 /**
  * MarketView — skill marketplace browser.
- * List layout with prev/next pagination.
+ * Hero-centered search on first open; results appear after search.
+ * Loads one page at a time on demand.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Download, CheckCircle2, TrendingUp, Store, ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react';
+import {
+  RefreshCw, Download, CheckCircle2, TrendingUp, Store,
+  ChevronLeft, ChevronRight, Search as SearchIcon, Loader2,
+} from 'lucide-react';
 import { Search, Button, IconButton, Tooltip, Badge } from '@/component-library';
 import { configAPI } from '@/infrastructure/api';
 import { useCurrentWorkspace } from '@/infrastructure/hooks/useWorkspace';
@@ -16,17 +20,29 @@ import { createLogger } from '@/shared/utils/logger';
 const log = createLogger('SkillsScene:MarketView');
 
 const PAGE_SIZE = 10;
+const MAX_TOTAL_SKILLS = 500;
+const SKILLS_SOURCE_URL = 'https://skills.sh';
 
 const MarketView: React.FC = () => {
   const { t } = useTranslation('scenes/skills');
+
   const [marketKeyword, setMarketKeyword] = useState('');
   const [marketSkills, setMarketSkills] = useState<SkillMarketItem[]>([]);
   const [marketLoading, setMarketLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [marketError, setMarketError] = useState<string | null>(null);
   const [downloadingPackage, setDownloadingPackage] = useState<string | null>(null);
   const [installedSkills, setInstalledSkills] = useState<SkillInfo[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  // Always holds the last submitted query so pagination uses the same query
+  const activeQueryRef = useRef<string | undefined>(undefined);
+
+  const { hasWorkspace } = useCurrentWorkspace();
+  const notification = useNotification();
 
   const toggleExpand = useCallback((installId: string) => {
     setExpandedItems((prev) => {
@@ -37,25 +53,16 @@ const MarketView: React.FC = () => {
     });
   }, []);
 
-  const { hasWorkspace } = useCurrentWorkspace();
-  const notification = useNotification();
-
-  const loadMarketSkills = useCallback(async (query?: string) => {
-    try {
-      setMarketLoading(true);
-      setMarketError(null);
+  /** Fetch up to `limit` items from the API for the given query. */
+  const fetchSkills = useCallback(
+    async (query: string | undefined, limit: number): Promise<SkillMarketItem[]> => {
       const normalized = query?.trim();
-      const skillList = normalized
-        ? await configAPI.searchSkillMarket(normalized, 50)
-        : await configAPI.listSkillMarket(undefined, 50);
-      setMarketSkills(skillList);
-    } catch (err) {
-      log.error('Failed to load skill market', err);
-      setMarketError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setMarketLoading(false);
-    }
-  }, []);
+      return normalized
+        ? await configAPI.searchSkillMarket(normalized, limit)
+        : await configAPI.listSkillMarket(undefined, limit);
+    },
+    [],
+  );
 
   const loadInstalledSkills = useCallback(async () => {
     try {
@@ -66,16 +73,38 @@ const MarketView: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    loadMarketSkills();
+  /** Submit a search — resets all results state and loads the first page. */
+  const doSearch = useCallback(
+    async (query?: string) => {
+      setHasSearched(true);
+      setMarketLoading(true);
+      setMarketError(null);
+      setCurrentPage(0);
+      setExpandedItems(new Set());
+      activeQueryRef.current = query;
+      try {
+        const skillList = await fetchSkills(query, PAGE_SIZE);
+        setMarketSkills(skillList);
+        setHasMore(skillList.length >= PAGE_SIZE);
+      } catch (err) {
+        log.error('Failed to load skill market', err);
+        setMarketError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setMarketLoading(false);
+      }
+    },
+    [fetchSkills],
+  );
+
+  const handleMarketSearch = useCallback(() => {
+    doSearch(marketKeyword || undefined);
     loadInstalledSkills();
-  }, [loadMarketSkills, loadInstalledSkills]);
+  }, [doSearch, loadInstalledSkills, marketKeyword]);
 
-  // Reset to first page whenever results change
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [marketSkills]);
-
+  const handleRefresh = useCallback(() => {
+    doSearch(activeQueryRef.current);
+    loadInstalledSkills();
+  }, [doSearch, loadInstalledSkills]);
 
   const handleDownload = async (skill: SkillMarketItem) => {
     if (!hasWorkspace) {
@@ -89,19 +118,19 @@ const MarketView: React.FC = () => {
       notification.success(t('messages.marketDownloadSuccess', { name: installedName }));
       await loadInstalledSkills();
     } catch (err) {
-      notification.error(t('messages.marketDownloadFailed', { error: err instanceof Error ? err.message : String(err) }));
+      notification.error(
+        t('messages.marketDownloadFailed', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     } finally {
       setDownloadingPackage(null);
     }
   };
 
-  const handleMarketSearch = useCallback(() => {
-    loadMarketSkills(marketKeyword);
-  }, [loadMarketSkills, marketKeyword]);
-
   const installedSkillNames = useMemo(
     () => new Set(installedSkills.map((s) => s.name)),
-    [installedSkills]
+    [installedSkills],
   );
 
   const displayMarketSkills = useMemo(() => {
@@ -119,11 +148,98 @@ const MarketView: React.FC = () => {
     return entries.map((e) => e.skill);
   }, [marketSkills, installedSkillNames]);
 
-  const totalPages = Math.max(1, Math.ceil(displayMarketSkills.length / PAGE_SIZE));
+  const loadedPages = Math.ceil(displayMarketSkills.length / PAGE_SIZE);
+  const totalPages = hasMore ? loadedPages + 1 : Math.max(1, loadedPages);
   const paginatedSkills = displayMarketSkills.slice(
     currentPage * PAGE_SIZE,
-    (currentPage + 1) * PAGE_SIZE
+    (currentPage + 1) * PAGE_SIZE,
   );
+
+  /** Navigate to next page. Immediately jumps so the skeleton appears on the target page. */
+  const goToNextPage = useCallback(async () => {
+    const nextPage = currentPage + 1;
+    const neededCount = Math.min((nextPage + 1) * PAGE_SIZE, MAX_TOTAL_SKILLS);
+
+    if (displayMarketSkills.length >= neededCount) {
+      setCurrentPage(nextPage);
+      return;
+    }
+
+    if (!hasMore) return;
+
+    setCurrentPage(nextPage);
+
+    try {
+      setLoadingMore(true);
+      const skillList = await fetchSkills(activeQueryRef.current, neededCount);
+      setMarketSkills(skillList);
+      const hitCap = neededCount >= MAX_TOTAL_SKILLS;
+      setHasMore(!hitCap && skillList.length >= neededCount);
+    } catch (err) {
+      log.error('Failed to load more skills', err);
+      setCurrentPage(currentPage);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [currentPage, displayMarketSkills.length, hasMore, fetchSkills]);
+
+  const goToPrevPage = useCallback(() => {
+    setCurrentPage((p) => Math.max(0, p - 1));
+  }, []);
+
+  // ── Source attribution note ────────────────────────────────
+
+  const sourceNote = (
+    <p className="bitfun-market__source-note">
+      {t('market.sourceNote.prefix')}
+      {' '}
+      <a
+        href={SKILLS_SOURCE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="bitfun-market__source-link"
+      >
+        skills.sh
+      </a>
+      {t('market.sourceNote.suffix', { max: MAX_TOTAL_SKILLS })}
+    </p>
+  );
+
+  // ── Hero (pre-search) view ─────────────────────────────────
+
+  if (!hasSearched) {
+    return (
+      <div className="bitfun-skills-scene__view bitfun-skills-scene__view--hero">
+        <div className="bitfun-market__hero">
+          <h2 className="bitfun-market__hero-title">{t('market.title')}</h2>
+          <div className="bitfun-market__hero-search">
+            <Search
+              placeholder={t('market.searchPlaceholder')}
+              value={marketKeyword}
+              onChange={(value) => setMarketKeyword(value)}
+              onSearch={handleMarketSearch}
+              clearable
+              size="medium"
+              prefixIcon={<></>}
+              suffixContent={
+                <button
+                  type="button"
+                  className="bitfun-market__search-icon-btn"
+                  onClick={handleMarketSearch}
+                  aria-label={t('market.searchPlaceholder')}
+                >
+                  <SearchIcon size={15} />
+                </button>
+              }
+            />
+          </div>
+          {sourceNote}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Results view ───────────────────────────────────────────
 
   const renderSkeletonList = () => (
     <div className="bitfun-market__list" aria-busy="true">
@@ -151,6 +267,38 @@ const MarketView: React.FC = () => {
     </div>
   );
 
+  const showPagination = totalPages > 1 || hasMore;
+
+  const paginationBar = showPagination ? (
+    <div className="bitfun-market__pagination">
+      <IconButton
+        variant="ghost"
+        size="small"
+        onClick={goToPrevPage}
+        disabled={currentPage === 0 || loadingMore}
+        tooltip={t('market.pagination.prev')}
+      >
+        <ChevronLeft size={16} />
+      </IconButton>
+      <span className="bitfun-market__pagination-info">
+        {hasMore
+          ? t('market.pagination.infoMore', { current: currentPage + 1 })
+          : t('market.pagination.info', { current: currentPage + 1, total: totalPages })}
+      </span>
+      <IconButton
+        variant="ghost"
+        size="small"
+        onClick={goToNextPage}
+        disabled={(!hasMore && currentPage >= totalPages - 1) || loadingMore}
+        tooltip={loadingMore ? t('market.pagination.loading') : t('market.pagination.next')}
+      >
+        {loadingMore
+          ? <Loader2 size={16} className="bitfun-market__spin" />
+          : <ChevronRight size={16} />}
+      </IconButton>
+    </div>
+  ) : null;
+
   const renderContent = () => {
     if (marketLoading) {
       return renderSkeletonList();
@@ -171,6 +319,15 @@ const MarketView: React.FC = () => {
           <Store size={32} strokeWidth={1.5} />
           <span>{marketKeyword.trim() ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
         </div>
+      );
+    }
+
+    if (loadingMore && paginatedSkills.length === 0) {
+      return (
+        <>
+          {renderSkeletonList()}
+          {paginationBar}
+        </>
       );
     }
 
@@ -226,7 +383,10 @@ const MarketView: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="bitfun-market__list-item-action" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="bitfun-market__list-item-action"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Tooltip content={tooltipText}>
                       <span>
                         <Button
@@ -235,11 +395,7 @@ const MarketView: React.FC = () => {
                           onClick={() => handleDownload(skill)}
                           disabled={isDownloading || !hasWorkspace || isInstalled}
                         >
-                          {isInstalled ? (
-                            <CheckCircle2 size={13} />
-                          ) : (
-                            <Download size={13} />
-                          )}
+                          {isInstalled ? <CheckCircle2 size={13} /> : <Download size={13} />}
                           {isDownloading
                             ? t('market.item.downloading')
                             : isInstalled
@@ -249,7 +405,6 @@ const MarketView: React.FC = () => {
                       </span>
                     </Tooltip>
                   </div>
-
                 </div>
 
                 {isExpanded && (
@@ -261,12 +416,16 @@ const MarketView: React.FC = () => {
                     )}
                     {skill.source && (
                       <div className="bitfun-market__detail-row">
-                        <span className="bitfun-market__detail-label">{t('market.item.sourceLabel')}</span>
+                        <span className="bitfun-market__detail-label">
+                          {t('market.item.sourceLabel')}
+                        </span>
                         <span className="bitfun-market__detail-value">{skill.source}</span>
                       </div>
                     )}
                     <div className="bitfun-market__detail-row">
-                      <span className="bitfun-market__detail-label">{t('market.item.installs', { count: skill.installs ?? 0 })}</span>
+                      <span className="bitfun-market__detail-label">
+                        {t('market.item.installs', { count: skill.installs ?? 0 })}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -275,31 +434,7 @@ const MarketView: React.FC = () => {
           })}
         </div>
 
-        {totalPages > 1 && (
-          <div className="bitfun-market__pagination">
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={currentPage === 0}
-              tooltip={t('market.pagination.prev')}
-            >
-              <ChevronLeft size={16} />
-            </IconButton>
-            <span className="bitfun-market__pagination-info">
-              {t('market.pagination.info', { current: currentPage + 1, total: totalPages })}
-            </span>
-            <IconButton
-              variant="ghost"
-              size="small"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={currentPage >= totalPages - 1}
-              tooltip={t('market.pagination.next')}
-            >
-              <ChevronRight size={16} />
-            </IconButton>
-          </div>
-        )}
+        {paginationBar}
       </>
     );
   };
@@ -316,7 +451,7 @@ const MarketView: React.FC = () => {
             <IconButton
               variant="ghost"
               size="small"
-              onClick={() => loadMarketSkills(marketKeyword)}
+              onClick={handleRefresh}
               tooltip={t('market.refreshTooltip')}
             >
               <RefreshCw size={16} />
@@ -348,6 +483,7 @@ const MarketView: React.FC = () => {
       <div className="bitfun-skills-scene__view-content">
         <div className="bitfun-skills-scene__view-content-inner">
           {renderContent()}
+          {sourceNote}
         </div>
       </div>
     </div>

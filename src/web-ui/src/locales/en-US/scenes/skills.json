@@ -61,7 +61,13 @@
     "pagination": {
       "prev": "Previous page",
       "next": "Next page",
-      "info": "{{current}} / {{total}}"
+      "info": "{{current}} / {{total}}",
+      "infoMore": "Page {{current}}",
+      "loading": "Loading..."
+    },
+    "sourceNote": {
+      "prefix": "Source:",
+      "suffix": " · Up to {{max}} results"
     }
   },
   "form": {

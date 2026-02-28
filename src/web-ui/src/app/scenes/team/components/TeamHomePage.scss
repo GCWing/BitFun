@@ -48,11 +48,18 @@
   margin-bottom: $size-gap-3;
 }
 
+.th__title-with-badge {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  margin-bottom: 4px;
+}
+
 .th__title {
   font-size: $font-size-xl;
   font-weight: $font-weight-semibold;
   color: var(--th-text-main);
-  margin: 0 0 4px;
+  margin: 0;
   line-height: $line-height-tight;
 }
 
