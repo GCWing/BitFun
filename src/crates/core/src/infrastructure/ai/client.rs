@@ -112,11 +112,64 @@ impl AIClient {
         &self.config.format
     }
 
-    /// Whether to inject the GLM-specific `tool_stream` request field.
+    /// Whether the URL is Alibaba DashScope API.
+    /// Alibaba DashScope uses `enable_thinking`=true/false for thinking, not the `thinking` object.
+    fn is_dashscope_url(url: &str) -> bool {
+        url.contains("dashscope.aliyuncs.com")
+    }
+
+    /// Apply thinking-related fields onto the request body (mutates `request_body`).
     ///
-    /// `tool_stream` is only required by GLM; other providers can do tool streaming without this field.
-    /// Current rule: inject only for pure-version GLM models (no suffix) with version >= 4.6.
-    fn supports_glm_tool_stream(model_name: &str) -> bool {
+    /// * `enable` - whether thinking process is enabled
+    /// * `url` - request URL
+    /// * `model_name` - model name (e.g. for Claude budget_tokens in Anthropic format)
+    /// * `api_format` - "openai" or "anthropic"
+    /// * `max_tokens` - optional max_tokens (for Anthropic Claude budget_tokens)
+    fn apply_thinking_fields(
+        request_body: &mut serde_json::Value,
+        enable: bool,
+        url: &str,
+        model_name: &str,
+        api_format: &str,
+        max_tokens: Option<u32>,
+    ) {
+        if Self::is_dashscope_url(url) && api_format.eq_ignore_ascii_case("openai") {
+            request_body["enable_thinking"] = serde_json::json!(enable);
+            return;
+        }
+        let thinking_value = if enable {
+            if api_format.eq_ignore_ascii_case("anthropic") && model_name.starts_with("claude") {
+                let mut obj = serde_json::map::Map::new();
+                obj.insert(
+                    "type".to_string(),
+                    serde_json::Value::String("enabled".to_string()),
+                );
+                if let Some(m) = max_tokens {
+                    obj.insert(
+                        "budget_tokens".to_string(),
+                        serde_json::json!(10000u32.min(m * 3 / 4)),
+                    );
+                }
+                serde_json::Value::Object(obj)
+            } else {
+                serde_json::json!({ "type": "enabled" })
+            }
+        } else {
+            serde_json::json!({ "type": "disabled" })
+        };
+        request_body["thinking"] = thinking_value;
+    }
+
+    /// Whether to append the `tool_stream` request field.
+    ///
+    /// Only Zhipu (https://open.bigmodel.cn) uses this field; and only for GLM models (pure version >= 4.6).
+    /// Adding this parameter for non-Zhipu APIs may cause abnormal behavior:
+    /// 1) incomplete output; (Aliyun Coding Plan, 2026-02-28)
+    /// 2) extra `<tool_call>` prefix on some tool names. (Aliyun Coding Plan, 2026-02-28)
+    fn should_append_tool_stream(url: &str, model_name: &str) -> bool {
+        if !url.contains("open.bigmodel.cn") {
+            return false;
+        }
         Self::parse_glm_major_minor(model_name)
             .map(|(major, minor)| major > 4 || (major == 4 && minor >= 6))
             .unwrap_or(false)
@@ -240,6 +293,7 @@ impl AIClient {
     /// Build an OpenAI-format request body
     fn build_openai_request_body(
         &self,
+        url: &str,
         openai_messages: Vec<serde_json::Value>,
         openai_tools: Option<Vec<serde_json::Value>>,
         extra_body: Option<serde_json::Value>,
@@ -247,20 +301,23 @@ impl AIClient {
         let mut request_body = serde_json::json!({
             "model": self.config.model,
             "messages": openai_messages,
-            "temperature": 0.7,
-            "top_p": 1.0,
             "stream": true
         });
 
         let model_name = self.config.model.to_lowercase();
 
-        if Self::supports_glm_tool_stream(&model_name) {
+        if Self::should_append_tool_stream(url, &model_name) {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
-        request_body["thinking"] = serde_json::json!({
-            "type": if self.config.enable_thinking_process { "enabled" } else { "disabled" }
-        });
+        Self::apply_thinking_fields(
+            &mut request_body,
+            self.config.enable_thinking_process,
+            url,
+            &model_name,
+            "openai",
+            self.config.max_tokens,
+        );
 
         if let Some(max_tokens) = self.config.max_tokens {
             request_body["max_tokens"] = serde_json::json!(max_tokens);
@@ -310,6 +367,7 @@ impl AIClient {
     /// Build an Anthropic-format request body
     fn build_anthropic_request_body(
         &self,
+        url: &str,
         system_message: Option<String>,
         anthropic_messages: Vec<serde_json::Value>,
         anthropic_tools: Option<Vec<serde_json::Value>>,
@@ -326,27 +384,19 @@ impl AIClient {
 
         let model_name = self.config.model.to_lowercase();
 
-        // GLM-specific extension: only set `tool_stream` when the model requires it.
-        if Self::supports_glm_tool_stream(&model_name) {
+        // Zhipu extension: only set `tool_stream` for open.bigmodel.cn.
+        if Self::should_append_tool_stream(url, &model_name) {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
-        request_body["thinking"] = if self.config.enable_thinking_process {
-            if model_name.starts_with("claude") {
-                serde_json::json!({
-                    "type": "enabled",
-                    "budget_tokens": 10000u32.min(max_tokens * 3 / 4)
-                })
-            } else {
-                serde_json::json!({
-                    "type": "enabled"
-                })
-            }
-        } else {
-            serde_json::json!({
-                "type": "disabled"
-            })
-        };
+        Self::apply_thinking_fields(
+            &mut request_body,
+            self.config.enable_thinking_process,
+            url,
+            &model_name,
+            "anthropic",
+            Some(max_tokens),
+        );
 
         if let Some(system) = system_message {
             request_body["system"] = serde_json::Value::String(system);
@@ -461,7 +511,7 @@ impl AIClient {
 
         // Build request body
         let request_body =
-            self.build_openai_request_body(openai_messages, openai_tools, extra_body);
+            self.build_openai_request_body(&url, openai_messages, openai_tools, extra_body);
 
         let mut last_error = None;
         let base_wait_time_ms = 500;
@@ -595,6 +645,7 @@ impl AIClient {
 
         // Build request body
         let request_body = self.build_anthropic_request_body(
+            &url,
             system_message,
             anthropic_messages,
             anthropic_tools,
