@@ -2,7 +2,7 @@
 
 use super::extract::{self, ESTIMATED_INSTALL_SIZE};
 use super::types::{DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use tauri::{Emitter, Window};
@@ -16,6 +16,8 @@ struct WindowsInstallState {
     context_menu_registered: bool,
     added_to_path: bool,
 }
+
+const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -131,6 +133,13 @@ pub fn get_launch_context() -> LaunchContext {
         };
     }
 
+    if is_running_as_uninstall_binary() {
+        return LaunchContext {
+            mode: "uninstall".to_string(),
+            uninstall_path: guess_uninstall_path_from_exe(),
+        };
+    }
+
     LaunchContext {
         mode: "install".to_string(),
         uninstall_path: None,
@@ -177,10 +186,7 @@ pub fn validate_install_path(path: String) -> Result<bool, String> {
 
 /// Main installation command. Emits progress events to the frontend.
 #[tauri::command]
-pub async fn start_installation(
-    window: Window,
-    options: InstallOptions,
-) -> Result<(), String> {
+pub async fn start_installation(window: Window, options: InstallOptions) -> Result<(), String> {
     let install_path = PathBuf::from(&options.install_path);
     let install_dir_was_absent = !install_path.exists();
     #[cfg(target_os = "windows")]
@@ -213,14 +219,23 @@ pub async fn start_installation(
             extract::copy_directory(&payload_dir, &install_path)
                 .map_err(|e| format!("File copy failed: {}", e))?;
         } else {
-            // Development mode: create a placeholder
-            log::warn!("No payload found - running in development mode");
-            let placeholder = install_path.join("BitFun.exe");
-            if !placeholder.exists() {
-                std::fs::write(&placeholder, "placeholder")
-                    .map_err(|e| format!("Failed to write placeholder: {}", e))?;
+            if cfg!(debug_assertions) {
+                // Development mode: create a placeholder to simplify local UI iteration.
+                log::warn!("No payload found - running in development mode");
+                let placeholder = install_path.join("BitFun.exe");
+                if !placeholder.exists() {
+                    std::fs::write(&placeholder, "placeholder")
+                        .map_err(|e| format!("Failed to write placeholder: {}", e))?;
+                }
+            } else {
+                return Err(
+                    "Installer payload is missing. Rebuild installer with valid payload files."
+                        .to_string(),
+                );
             }
         }
+
+        verify_installed_payload(&install_path)?;
 
         emit_progress(&window, "extract", 50, "Files extracted successfully");
 
@@ -241,8 +256,12 @@ pub async fn start_installation(
             );
 
             emit_progress(&window, "registry", 60, "Registering application...");
-            registry::register_uninstall_entry(&install_path, "0.1.0", &uninstall_command)
-                .map_err(|e| format!("Registry error: {}", e))?;
+            registry::register_uninstall_entry(
+                &install_path,
+                env!("CARGO_PKG_VERSION"),
+                &uninstall_command,
+            )
+            .map_err(|e| format!("Registry error: {}", e))?;
             windows_state.uninstall_registered = true;
 
             // Desktop shortcut
@@ -263,7 +282,12 @@ pub async fn start_installation(
 
             // Context menu
             if options.context_menu {
-                emit_progress(&window, "context_menu", 80, "Adding context menu integration...");
+                emit_progress(
+                    &window,
+                    "context_menu",
+                    80,
+                    "Adding context menu integration...",
+                );
                 registry::register_context_menu(&install_path)
                     .map_err(|e| format!("Context menu error: {}", e))?;
                 windows_state.context_menu_registered = true;
@@ -272,8 +296,7 @@ pub async fn start_installation(
             // PATH
             if options.add_to_path {
                 emit_progress(&window, "path", 85, "Adding to system PATH...");
-                registry::add_to_path(&install_path)
-                    .map_err(|e| format!("PATH error: {}", e))?;
+                registry::add_to_path(&install_path).map_err(|e| format!("PATH error: {}", e))?;
                 windows_state.added_to_path = true;
             }
         }
@@ -429,6 +452,14 @@ fn guess_uninstall_path_from_exe() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+fn is_running_as_uninstall_binary() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.file_stem().map(|s| s.to_string_lossy().to_string()))
+        .map(|stem| stem.eq_ignore_ascii_case("uninstall"))
+        .unwrap_or(false)
+}
+
 fn find_existing_ancestor(path: &Path) -> PathBuf {
     let mut current = path.to_path_buf();
     while !current.exists() {
@@ -490,7 +521,10 @@ fn apply_first_launch_language(app_language: &str) -> Result<(), String> {
         .or_insert_with(|| Value::Object(Map::new()))
         .as_object_mut()
         .ok_or_else(|| "Invalid app config object".to_string())?;
-    app_obj.insert("language".to_string(), Value::String(app_language.to_string()));
+    app_obj.insert(
+        "language".to_string(),
+        Value::String(app_language.to_string()),
+    );
 
     write_root_config(&app_config_file, &root)
 }
@@ -516,7 +550,11 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
         .as_object_mut()
         .ok_or_else(|| "Invalid ai config object".to_string())?;
 
-    let model_id = format!("installer_{}_{}", model.provider, chrono::Utc::now().timestamp());
+    let model_id = format!(
+        "installer_{}_{}",
+        model.provider,
+        chrono::Utc::now().timestamp()
+    );
     let model_json = serde_json::json!({
         "id": model_id,
         "name": format!("{} - {}", model.provider, model.model_name),
@@ -558,6 +596,71 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
     default_models_obj.insert("fast".to_string(), Value::String(model_id));
 
     write_root_config(&app_config_file, &root)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PayloadManifest {
+    files: Vec<PayloadManifestFile>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PayloadManifestFile {
+    path: String,
+    size: u64,
+}
+
+fn verify_installed_payload(install_path: &Path) -> Result<(), String> {
+    let app_exe = install_path.join("BitFun.exe");
+    let app_meta = std::fs::metadata(&app_exe)
+        .map_err(|_| "Installed BitFun.exe is missing after extraction".to_string())?;
+    if app_meta.len() < MIN_WINDOWS_APP_EXE_BYTES {
+        return Err(format!(
+            "Installed BitFun.exe is too small ({} bytes). Payload is likely invalid.",
+            app_meta.len()
+        ));
+    }
+
+    let manifest_path = install_path.join("payload-manifest.json");
+    if !manifest_path.exists() {
+        // Keep compatibility with older installers that don't ship a manifest.
+        return Ok(());
+    }
+
+    let manifest_content = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("Failed to read payload manifest: {}", e))?;
+    let manifest: PayloadManifest = serde_json::from_str(&manifest_content)
+        .map_err(|e| format!("Invalid payload manifest format: {}", e))?;
+
+    if manifest.files.is_empty() {
+        return Err("Payload manifest has no files".to_string());
+    }
+
+    for file in manifest.files {
+        let rel_path = Path::new(&file.path);
+        if rel_path.is_absolute()
+            || rel_path
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+        {
+            return Err(format!("Invalid payload manifest path: {}", file.path));
+        }
+
+        let absolute_path = install_path.join(rel_path);
+        let meta = std::fs::metadata(&absolute_path)
+            .map_err(|_| format!("Missing payload file: {}", file.path))?;
+        if meta.len() != file.size {
+            return Err(format!(
+                "Payload file size mismatch: {} (expected {}, got {})",
+                file.path,
+                file.size,
+                meta.len()
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]

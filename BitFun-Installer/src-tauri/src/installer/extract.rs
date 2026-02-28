@@ -14,8 +14,7 @@ pub fn extract_zip(archive_path: &Path, target_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
 
-    let mut archive = zip::ZipArchive::new(file)
-        .with_context(|| "Failed to read zip archive")?;
+    let mut archive = zip::ZipArchive::new(file).with_context(|| "Failed to read zip archive")?;
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
@@ -61,4 +60,3 @@ pub fn copy_directory(source: &Path, target: &Path) -> Result<u64> {
 
     Ok(bytes_copied)
 }
-

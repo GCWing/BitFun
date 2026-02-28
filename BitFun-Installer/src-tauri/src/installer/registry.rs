@@ -33,6 +33,7 @@ pub fn register_uninstall_entry(
     key.set_value("InstallLocation", &install_path.to_string_lossy().as_ref())?;
     key.set_value("DisplayIcon", &icon_path)?;
     key.set_value("UninstallString", &uninstall_command)?;
+    key.set_value("QuietUninstallString", &uninstall_command)?;
     key.set_value("NoModify", &1u32)?;
     key.set_value("NoRepair", &1u32)?;
 
