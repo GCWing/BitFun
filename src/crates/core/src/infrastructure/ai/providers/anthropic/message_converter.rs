@@ -2,8 +2,8 @@
 //!
 //! Converts the unified message format to Anthropic Claude API format
 
-use log::warn;
 use crate::util::types::{Message, ToolDefinition};
+use log::warn;
 use serde_json::{json, Value};
 
 pub struct AnthropicMessageConverter;
@@ -42,24 +42,24 @@ impl AnthropicMessageConverter {
 
         // Anthropic requires user/assistant messages to alternate
         let merged_messages = Self::merge_consecutive_messages(anthropic_messages);
-        
+
         (system_message, merged_messages)
     }
-    
+
     /// Merge consecutive same-role messages to keep user/assistant alternating
     fn merge_consecutive_messages(messages: Vec<Value>) -> Vec<Value> {
         let mut merged: Vec<Value> = Vec::new();
-        
+
         for msg in messages {
             let role = msg.get("role").and_then(|r| r.as_str()).unwrap_or("");
-            
+
             if let Some(last) = merged.last_mut() {
                 let last_role = last.get("role").and_then(|r| r.as_str()).unwrap_or("");
-                
+
                 if last_role == role && role == "user" {
                     let current_content = msg.get("content");
                     let last_content = last.get_mut("content");
-                    
+
                     match (last_content, current_content) {
                         (Some(Value::Array(last_arr)), Some(Value::Array(curr_arr))) => {
                             last_arr.extend(curr_arr.clone());
@@ -100,16 +100,16 @@ impl AnthropicMessageConverter {
                     }
                 }
             }
-            
+
             merged.push(msg);
         }
-        
+
         merged
     }
 
     fn convert_user_message(msg: Message) -> Value {
         let content = msg.content.unwrap_or_default();
-        
+
         if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
             if parsed.is_array() {
                 return json!({
@@ -118,7 +118,7 @@ impl AnthropicMessageConverter {
                 });
             }
         }
-        
+
         json!({
             "role": "user",
             "content": content
@@ -135,14 +135,10 @@ impl AnthropicMessageConverter {
                     "type": "thinking",
                     "thinking": thinking
                 });
-                
-                // Append only when signature exists, to support APIs that do not require it.
-                if let Some(ref sig) = msg.thinking_signature {
-                    if !sig.is_empty() {
-                        thinking_block["signature"] = json!(sig);
-                    }
-                }
-                
+
+                thinking_block["signature"] =
+                    json!(msg.thinking_signature.as_deref().unwrap_or(""));
+
                 content.push(thinking_block);
             }
         }
