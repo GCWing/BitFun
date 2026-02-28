@@ -52,6 +52,7 @@
     "showChatPanel": "Show Chat Panel",
     "hideChatPanel": "Hide Chat Panel",
     "switchToToolbar": "Switch to Toolbar Mode",
+    "remoteConnect": "Remote Connect",
     "modeSwitchAriaLabel": "View mode switch",
     "modeCowork": "Cowork",
     "modeCoder": "Coder",
@@ -147,6 +148,14 @@
     "errorSelectParent": "Please select a parent directory",
     "errorEnterName": "Please enter a project name",
     "errorCreateFailed": "Failed to create project"
+  },
+  "remoteConnect": {
+    "title": "Remote Connect",
+    "hint": "Scan the QR code with your mobile device to establish a remote connection",
+    "qrPlaceholder": "QR Code",
+    "connectionType": "Connection Type",
+    "typeNatTraversal": "NAT Traversal",
+    "typeRelayServer": "Relay Server"
   },
   "about": {
     "close": "Close",

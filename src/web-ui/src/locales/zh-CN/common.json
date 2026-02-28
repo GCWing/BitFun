@@ -52,6 +52,7 @@
     "showChatPanel": "显示聊天面板",
     "hideChatPanel": "隐藏聊天面板",
     "switchToToolbar": "切换到工具栏模式",
+    "remoteConnect": "远程连接",
     "modeSwitchAriaLabel": "视图模式切换",
     "modeCowork": "Cowork",
     "modeCoder": "Coder",
@@ -147,6 +148,14 @@
     "errorSelectParent": "请选择父目录",
     "errorEnterName": "请输入工程名称",
     "errorCreateFailed": "创建工程失败"
+  },
+  "remoteConnect": {
+    "title": "远程连接",
+    "hint": "使用手机扫描二维码以建立远程连接",
+    "qrPlaceholder": "二维码",
+    "connectionType": "连接方式",
+    "typeNatTraversal": "内网穿透",
+    "typeRelayServer": "中间服务器"
   },
   "about": {
     "close": "关闭",
