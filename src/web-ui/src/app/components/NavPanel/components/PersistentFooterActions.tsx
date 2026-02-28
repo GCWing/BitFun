@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { Settings, Info, MoreVertical, PictureInPicture2 } from 'lucide-react';
+import { Settings, Info, MoreVertical, PictureInPicture2, Wifi } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '../../../hooks/useSceneManager';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import { AboutDialog } from '../../AboutDialog';
+import { RemoteConnectDialog } from '../../RemoteConnectDialog';
 
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
@@ -15,6 +16,7 @@ const PersistentFooterActions: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showRemoteConnect, setShowRemoteConnect] = useState(false);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
@@ -47,6 +49,11 @@ const PersistentFooterActions: React.FC = () => {
     enableToolbarMode();
   };
 
+  const handleRemoteConnect = () => {
+    closeMenu();
+    setShowRemoteConnect(true);
+  };
+
   return (
     <div className="bitfun-nav-panel__footer">
       <div className="bitfun-nav-panel__footer-more-wrap">
@@ -72,6 +79,16 @@ const PersistentFooterActions: React.FC = () => {
               className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
               role="menu"
             >
+              <button
+                type="button"
+                className="bitfun-nav-panel__footer-menu-item"
+                role="menuitem"
+                onClick={handleRemoteConnect}
+              >
+                <Wifi size={14} />
+                <span>{t('header.remoteConnect')}</span>
+              </button>
+              <div className="bitfun-nav-panel__footer-menu-divider" />
               <button
                 type="button"
                 className="bitfun-nav-panel__footer-menu-item"
@@ -107,6 +124,7 @@ const PersistentFooterActions: React.FC = () => {
 
       <NotificationButton className="bitfun-nav-panel__footer-btn" />
       <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+      <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
     </div>
   );
 };

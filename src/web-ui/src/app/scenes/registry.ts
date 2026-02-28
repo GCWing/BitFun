@@ -7,7 +7,7 @@
  *  - pinned = false: can be auto-evicted and manually closed.
  */
 
-import { MessageSquare, Terminal, GitBranch, Settings, FileCode2, CircleUserRound, Blocks, Users } from 'lucide-react';
+import { MessageSquare, Terminal, GitBranch, Settings, FileCode2, CircleUserRound, Blocks, Users, Puzzle } from 'lucide-react';
 import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
 
 export const MAX_OPEN_SCENES = 3;
@@ -83,6 +83,15 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     label: 'Team',
     labelKey: 'scenes.team',
     Icon: Users,
+    pinned: false,
+    singleton: true,
+    defaultOpen: false,
+  },
+  {
+    id: 'skills' as SceneTabId,
+    label: 'Skills',
+    labelKey: 'scenes.skills',
+    Icon: Puzzle,
     pinned: false,
     singleton: true,
     defaultOpen: false,

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Bot, Users, Plus, ArrowRight } from 'lucide-react';
+import { Bot, Users, Plus, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Search, IconButton, Badge } from '@/component-library';
 import {
   useTeamStore,
   MOCK_AGENTS,
@@ -8,17 +10,15 @@ import {
   type AgentWithCapabilities,
   type Team,
 } from '../teamStore';
-import { AGENT_ICON_MAP, TEAM_ICON_MAP } from '../teamIcons';
-import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { AGENT_ICON_MAP } from '../teamIcons';
 import './TeamHomePage.scss';
 
-// ─── Team card ────────────────────────────────────────────────────────────────
+// ─── Team list item ───────────────────────────────────────────────────────────
 
-const TeamCard: React.FC<{ team: Team }> = ({ team }) => {
-  const { t } = useI18n('scenes/team');
+const TeamListItem: React.FC<{ team: Team; index: number }> = ({ team, index }) => {
+  const { t } = useTranslation('scenes/team');
   const { openTeamEditor } = useTeamStore();
-  const iconKey = team.icon as keyof typeof TEAM_ICON_MAP;
-  const IconComp = TEAM_ICON_MAP[iconKey] ?? Users;
+  const [expanded, setExpanded] = useState(false);
 
   const caps = computeTeamCapabilities(team, MOCK_AGENTS);
   const topCaps = CAPABILITY_CATEGORIES
@@ -30,58 +30,111 @@ const TeamCard: React.FC<{ team: Team }> = ({ team }) => {
     .map((m) => MOCK_AGENTS.find((a) => a.id === m.agentId))
     .filter(Boolean) as AgentWithCapabilities[];
 
+  const strategyLabel =
+    team.strategy === 'collaborative'
+      ? t('home.strategyCollab')
+      : team.strategy === 'sequential'
+        ? t('home.strategySeq')
+        : t('home.strategyFree');
+
   return (
     <div
-      className="th-card th-card--team"
-      onClick={() => openTeamEditor(team.id)}
+      className={['th-list__item', expanded && 'is-expanded'].filter(Boolean).join(' ')}
+      style={{ '--item-index': index } as React.CSSProperties}
     >
-      <div className="th-card__head">
-        <div className="th-card__icon">
-          <IconComp size={16} />
+      <div
+        className="th-list__item-row"
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && setExpanded((v) => !v)}
+      >
+        <div className="th-list__item-info">
+          <div className="th-list__item-name-row">
+            <span className="th-list__item-name">{team.name}</span>
+            <Badge variant="neutral">{strategyLabel}</Badge>
+          </div>
+          <p className="th-list__item-desc">{team.description || '—'}</p>
         </div>
-        <span className="th-card__type th-card__type--team">
-          <Users size={9} />
-          团队
-        </span>
-      </div>
-      <div className="th-card__name">{team.name}</div>
-      <div className="th-card__desc">{team.description || '暂无描述'}</div>
-      <div className="th-card__members">
-        <div className="th-card__avatars">
-          {memberAgents.slice(0, 4).map((a) => {
-            const ik = (a.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP;
-            const IC = AGENT_ICON_MAP[ik] ?? Bot;
-            return (
-              <span key={a.id} className="th-card__avatar" title={a.name}>
-                <IC size={10} />
+
+        <div className="th-list__item-meta">
+          <div className="th-list__avatars">
+            {memberAgents.slice(0, 4).map((a) => {
+              const ik = (a.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP;
+              const IC = AGENT_ICON_MAP[ik] ?? Bot;
+              return (
+                <span key={a.id} className="th-list__avatar" title={a.name}>
+                  <IC size={9} />
+                </span>
+              );
+            })}
+            {team.members.length > 4 && (
+              <span className="th-list__avatar th-list__avatar--more">
+                +{team.members.length - 4}
               </span>
-            );
-          })}
-          {team.members.length > 4 && (
-            <span className="th-card__avatar th-card__avatar--more">
-              +{team.members.length - 4}
-            </span>
+            )}
+          </div>
+          <span className="th-list__member-count">
+            {t('home.members', { count: team.members.length })}
+          </span>
+        </div>
+
+        <div className="th-list__item-action" onClick={(e) => e.stopPropagation()}>
+          <IconButton
+            variant="ghost"
+            size="small"
+            tooltip={t('home.edit')}
+            onClick={() => openTeamEditor(team.id)}
+          >
+            <Pencil size={14} />
+          </IconButton>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="th-list__item-details">
+          {team.description && (
+            <p className="th-list__detail-desc">{team.description}</p>
+          )}
+          {memberAgents.length > 0 && (
+            <div className="th-list__detail-row">
+              <span className="th-list__detail-label">成员</span>
+              <div className="th-list__member-list">
+                {memberAgents.map((a) => {
+                  const ik = (a.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP;
+                  const IC = AGENT_ICON_MAP[ik] ?? Bot;
+                  const role = team.members.find((m) => m.agentId === a.id)?.role ?? 'member';
+                  const roleLabel =
+                    role === 'leader'
+                      ? t('composer.role.leader')
+                      : role === 'reviewer'
+                        ? t('composer.role.reviewer')
+                        : t('composer.role.member');
+                  return (
+                    <span key={a.id} className="th-list__member-chip">
+                      <IC size={10} />
+                      {a.name}
+                      <span className="th-list__member-role">{roleLabel}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {topCaps.length > 0 && (
+            <div className="th-list__detail-row">
+              <span className="th-list__detail-label">能力</span>
+              <div className="th-list__cap-chips">
+                {topCaps.map((c) => (
+                  <span key={c} className="th-list__cap-chip">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-        <span className="th-card__member-count">{team.members.length} 名成员</span>
-      </div>
-      {topCaps.length > 0 && (
-        <div className="th-card__tags">
-          {topCaps.map((c) => (
-            <span key={c} className="th-card__tag">
-              {c}
-            </span>
-          ))}
-        </div>
       )}
-      <div className="th-card__foot">
-        <span className="th-card__strategy">
-          {team.strategy === 'collaborative' ? '协作' : team.strategy === 'sequential' ? '顺序' : '自由'}
-        </span>
-        <span className="th-card__enter">
-          {t('home.edit')} <ArrowRight size={10} />
-        </span>
-      </div>
     </div>
   );
 };
@@ -89,14 +142,14 @@ const TeamCard: React.FC<{ team: Team }> = ({ team }) => {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const ExpertTeamsPage: React.FC = () => {
-  const { t } = useI18n('scenes/team');
+  const { t } = useTranslation('scenes/team');
   const { teams, addTeam, openTeamEditor } = useTeamStore();
   const [query, setQuery] = useState('');
 
-  const filteredTeams = teams.filter((t) => {
+  const filteredTeams = teams.filter((team) => {
     if (!query) return true;
     const q = query.toLowerCase();
-    return t.name.toLowerCase().includes(q) || (t.description?.toLowerCase().includes(q));
+    return team.name.toLowerCase().includes(q) || (team.description?.toLowerCase().includes(q));
   });
 
   const handleCreateTeam = () => {
@@ -107,37 +160,49 @@ const ExpertTeamsPage: React.FC = () => {
 
   return (
     <div className="th">
-      <div className="th__bar">
-        <div className="th__title-wrap">
-          <h3 className="th__title">{t('expertTeams.title')}</h3>
-          <span className="th__title-sub">{t('expertTeams.subtitle')}</span>
-        </div>
-        <div className="th__search-wrap">
-          <Search size={12} className="th__search-ico" />
-          <input
-            className="th__search"
-            placeholder={t('home.search')}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="th__body">
-        <section className="th__section th__section--teams">
-          <div className="th__section-head">
-            <span className="th__section-title">{t('expertTeams.sectionTitle')}</span>
-            <span className="th__section-count">{filteredTeams.length}</span>
-          </div>
-          <div className="th__section-grid">
-            {filteredTeams.map((t) => (
-              <TeamCard key={t.id} team={t} />
-            ))}
-            <button className="th-card th-card--add" onClick={handleCreateTeam}>
-              <Plus size={20} strokeWidth={1.5} />
-              <span>{t('home.createTeam')}</span>
+      <div className="th__header">
+        <div className="th__header-inner">
+          <div className="th__title-row">
+            <div>
+              <h2 className="th__title">{t('expertTeams.title')}</h2>
+              <p className="th__title-sub">{t('expertTeams.subtitle')}</p>
+            </div>
+            <button type="button" className="th__create-btn" onClick={handleCreateTeam}>
+              <Plus size={13} />
+              {t('home.createTeam')}
             </button>
           </div>
-        </section>
+          <div className="th__toolbar">
+            <Search
+              placeholder={t('home.search')}
+              value={query}
+              onChange={setQuery}
+              clearable
+              size="small"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="th__list-body">
+        <div className="th__list-inner">
+          <div className="th-list__section-head">
+            <span className="th-list__section-title">{t('expertTeams.sectionTitle')}</span>
+            <span className="th-list__section-count">{filteredTeams.length}</span>
+          </div>
+          {filteredTeams.length === 0 ? (
+            <div className="th-list__empty">
+              <Users size={28} strokeWidth={1.5} />
+              <span>{t('empty')}</span>
+            </div>
+          ) : (
+            <div className="th-list">
+              {filteredTeams.map((team, i) => (
+                <TeamListItem key={team.id} team={team} index={i} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
