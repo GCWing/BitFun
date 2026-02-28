@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Installation options passed from the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +34,27 @@ pub struct ModelConfig {
     pub base_url: String,
     pub model_name: String,
     pub format: String,
+    #[serde(default)]
+    pub config_name: Option<String>,
+    #[serde(default)]
+    pub custom_request_body: Option<String>,
+    #[serde(default)]
+    pub skip_ssl_verify: Option<bool>,
+    #[serde(default)]
+    pub custom_headers: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub custom_headers_mode: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTestResult {
+    pub success: bool,
+    pub response_time_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_response: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_details: Option<String>,
 }
 
 /// Progress update sent to the frontend

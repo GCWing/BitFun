@@ -7,6 +7,8 @@ import type {
   InstallOptions,
   InstallProgress,
   DiskSpaceInfo,
+  ModelConfig,
+  ConnectionTestResult,
   LaunchContext,
 } from '../types/installer';
 import { DEFAULT_OPTIONS } from '../types/installer';
@@ -29,6 +31,7 @@ export interface UseInstallerReturn {
   retryInstall: () => Promise<void>;
   backToOptions: () => void;
   saveModelConfig: () => Promise<void>;
+  testModelConnection: (modelConfig: ModelConfig) => Promise<ConnectionTestResult>;
   launchApp: () => Promise<void>;
   closeInstaller: () => void;
   refreshDiskSpace: (path: string) => Promise<void>;
@@ -214,6 +217,10 @@ export function useInstaller(): UseInstallerReturn {
     await invoke('set_model_config', { modelConfig: options.modelConfig });
   }, [options.modelConfig]);
 
+  const testModelConnection = useCallback(async (modelConfig: ModelConfig) => {
+    return invoke<ConnectionTestResult>('test_model_config_connection', { modelConfig });
+  }, []);
+
   const launchApp = useCallback(async () => {
     await invoke('launch_application', { installPath: options.installPath });
   }, [options.installPath]);
@@ -263,7 +270,7 @@ export function useInstaller(): UseInstallerReturn {
     options, setOptions,
     progress, isInstalling, installationCompleted, error, diskSpace,
     install, canConfirmProgress, confirmProgress, retryInstall, backToOptions,
-    saveModelConfig, launchApp, closeInstaller, refreshDiskSpace,
+    saveModelConfig, testModelConnection, launchApp, closeInstaller, refreshDiskSpace,
     isUninstallMode, isUninstalling, uninstallCompleted, uninstallError, uninstallProgress, startUninstall,
   };
 }

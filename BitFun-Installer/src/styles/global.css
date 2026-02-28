@@ -211,6 +211,201 @@ html, body, #root {
 .input:focus { border-color: var(--color-accent-400); background: var(--element-bg-soft); }
 .input::placeholder { color: var(--color-text-muted); }
 
+.bf-select {
+  position: relative;
+  width: 100%;
+}
+
+.bf-select-trigger {
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.bf-select-trigger:hover {
+  border-color: var(--border-medium);
+  background: var(--element-bg-soft);
+}
+
+.bf-select-trigger--open {
+  border-color: var(--color-accent-400);
+}
+
+.bf-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+}
+
+.bf-select-value--placeholder {
+  color: var(--color-text-muted);
+}
+
+.bf-select-caret {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  transition: transform var(--motion-fast) ease;
+}
+
+.bf-select-caret--open {
+  transform: rotate(180deg);
+}
+
+.bf-select-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 176px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.bf-select-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 2px 2px 6px;
+  background: var(--color-bg-secondary);
+}
+
+.bf-select-search-input {
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--element-bg-subtle);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.bf-select-search-input:focus {
+  border-color: var(--color-accent-400);
+  background: var(--element-bg-soft);
+}
+
+.bf-select-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.bf-select-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.bf-select-option:hover {
+  background: var(--element-bg-subtle);
+}
+
+.bf-select-option--active {
+  background: var(--element-bg-soft);
+}
+
+.bf-select-option-label {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+
+.bf-select-option-desc {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--color-text-muted);
+}
+
+.bf-select-empty {
+  padding: 8px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.model-setup-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.model-setup-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 22px 8px;
+}
+
+.model-setup-container {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.model-setup-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.model-setup-test-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.model-setup-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: var(--color-bg-primary);
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .model-setup-scroll {
+    padding: 8px 14px 6px;
+  }
+
+  .model-setup-footer {
+    padding: 8px 14px 10px;
+  }
+}
+
 .checkbox-group { display: flex; flex-direction: column; gap: 2px; }
 
 .checkbox-item {

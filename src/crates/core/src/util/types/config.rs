@@ -2,6 +2,34 @@ use log::warn;
 use crate::service::config::types::AIModelConfig;
 use serde::{Deserialize, Serialize};
 
+fn append_endpoint(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim();
+    if base.is_empty() {
+        return endpoint.to_string();
+    }
+    if base.ends_with(endpoint) {
+        return base.to_string();
+    }
+    format!("{}/{}", base.trim_end_matches('/'), endpoint)
+}
+
+fn resolve_request_url(base_url: &str, provider: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/').to_string();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('#') {
+        return stripped.trim_end_matches('/').to_string();
+    }
+
+    match provider.trim().to_ascii_lowercase().as_str() {
+        "openai" => append_endpoint(&trimmed, "chat/completions"),
+        "anthropic" => append_endpoint(&trimmed, "v1/messages"),
+        _ => trimmed,
+    }
+}
+
 /// AI client configuration (for AI requests)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfig {
@@ -41,11 +69,11 @@ impl TryFrom<AIModelConfig> for AIConfig {
             None
         };
 
-        // Use stored request_url if present, otherwise fall back to base_url (legacy configs)
+        // Use stored request_url if present; otherwise derive from base_url + provider for legacy configs.
         let request_url = other
             .request_url
             .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| other.base_url.clone());
+            .unwrap_or_else(|| resolve_request_url(&other.base_url, &other.provider));
 
         Ok(AIConfig {
             name: other.name.clone(),

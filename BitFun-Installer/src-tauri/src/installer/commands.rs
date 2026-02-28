@@ -1,12 +1,14 @@
 //! Tauri commands exposed to the frontend installer UI.
 
 use super::extract::{self, ESTIMATED_INSTALL_SIZE};
-use super::types::{DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig};
+use super::types::{ConnectionTestResult, DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::fs::File;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tauri::{Emitter, Manager, Window};
 
 #[cfg(target_os = "windows")]
@@ -603,7 +605,240 @@ pub fn set_model_config(model_config: ModelConfig) -> Result<(), String> {
     apply_first_launch_model(&model_config)
 }
 
+/// Validate model configuration connectivity from installer.
+#[tauri::command]
+pub async fn test_model_config_connection(model_config: ModelConfig) -> Result<ConnectionTestResult, String> {
+    let started_at = std::time::Instant::now();
+
+    let required_fields = [
+        ("baseUrl", model_config.base_url.trim()),
+        ("apiKey", model_config.api_key.trim()),
+        ("modelName", model_config.model_name.trim()),
+    ];
+    for (field, value) in required_fields {
+        if value.is_empty() {
+            return Ok(ConnectionTestResult {
+                success: false,
+                response_time_ms: started_at.elapsed().as_millis() as u64,
+                model_response: None,
+                error_details: Some(format!("Missing required field: {}", field)),
+            });
+        }
+    }
+
+    let test_result = run_model_connection_test(&model_config).await;
+    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+
+    match test_result {
+        Ok(model_response) => Ok(ConnectionTestResult {
+            success: true,
+            response_time_ms: elapsed_ms,
+            model_response,
+            error_details: None,
+        }),
+        Err(error_details) => Ok(ConnectionTestResult {
+            success: false,
+            response_time_ms: elapsed_ms,
+            model_response: None,
+            error_details: Some(error_details),
+        }),
+    }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+fn normalize_api_format(model: &ModelConfig) -> String {
+    let normalized = model.format.trim().to_ascii_lowercase();
+    if normalized == "anthropic" {
+        "anthropic".to_string()
+    } else {
+        "openai".to_string()
+    }
+}
+
+fn append_endpoint(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim();
+    if base.is_empty() {
+        return endpoint.to_string();
+    }
+    if base.ends_with(endpoint) {
+        return base.to_string();
+    }
+    format!("{}/{}", base.trim_end_matches('/'), endpoint)
+}
+
+fn resolve_request_url(base_url: &str, format: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/').to_string();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('#') {
+        return stripped.trim_end_matches('/').to_string();
+    }
+
+    match format {
+        "anthropic" => append_endpoint(&trimmed, "v1/messages"),
+        "openai" => append_endpoint(&trimmed, "chat/completions"),
+        _ => trimmed,
+    }
+}
+
+fn parse_custom_request_body(raw: &Option<String>) -> Result<Option<Map<String, Value>>, String> {
+    let Some(raw_value) = raw else {
+        return Ok(None);
+    };
+
+    let trimmed = raw_value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let parsed: Value =
+        serde_json::from_str(trimmed).map_err(|e| format!("customRequestBody is invalid JSON: {}", e))?;
+    let obj = parsed.as_object().ok_or_else(|| {
+        "customRequestBody must be a JSON object (for example: {\"temperature\": 0.7})".to_string()
+    })?;
+    Ok(Some(obj.clone()))
+}
+
+fn merge_json_object(target: &mut Map<String, Value>, source: &Map<String, Value>) {
+    for (key, value) in source {
+        target.insert(key.clone(), value.clone());
+    }
+}
+
+fn build_request_headers(model: &ModelConfig, format: &str) -> Result<HeaderMap, String> {
+    let mode = model
+        .custom_headers_mode
+        .as_deref()
+        .unwrap_or("merge")
+        .trim()
+        .to_ascii_lowercase();
+    if mode != "merge" && mode != "replace" {
+        return Err("customHeadersMode must be 'merge' or 'replace'".to_string());
+    }
+
+    let mut headers = HeaderMap::new();
+    if mode != "replace" {
+        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        if format == "anthropic" {
+            let api_key = HeaderValue::from_str(model.api_key.trim())
+                .map_err(|_| "apiKey contains unsupported header characters".to_string())?;
+            headers.insert(HeaderName::from_static("x-api-key"), api_key);
+            headers.insert(
+                HeaderName::from_static("anthropic-version"),
+                HeaderValue::from_static("2023-06-01"),
+            );
+        } else {
+            let bearer = format!("Bearer {}", model.api_key.trim());
+            let auth = HeaderValue::from_str(&bearer)
+                .map_err(|_| "apiKey contains unsupported header characters".to_string())?;
+            headers.insert(AUTHORIZATION, auth);
+        }
+    }
+
+    if let Some(custom_headers) = &model.custom_headers {
+        for (key, value) in custom_headers {
+            let key_trimmed = key.trim();
+            if key_trimmed.is_empty() {
+                continue;
+            }
+            let header_name = HeaderName::from_bytes(key_trimmed.as_bytes())
+                .map_err(|_| format!("Invalid custom header name: {}", key_trimmed))?;
+            let header_value = HeaderValue::from_str(value.trim())
+                .map_err(|_| format!("Invalid custom header value for '{}'", key_trimmed))?;
+            headers.insert(header_name, header_value);
+        }
+    }
+
+    Ok(headers)
+}
+
+fn truncate_error_text(raw: &str, limit: usize) -> String {
+    let compact = raw.replace('\n', " ").replace('\r', " ").trim().to_string();
+    if compact.chars().count() <= limit {
+        return compact;
+    }
+    compact.chars().take(limit).collect::<String>() + "..."
+}
+
+async fn run_model_connection_test(model: &ModelConfig) -> Result<Option<String>, String> {
+    let format = normalize_api_format(model);
+    let endpoint = resolve_request_url(&model.base_url, &format);
+    let headers = build_request_headers(model, &format)?;
+    let custom_request_body = parse_custom_request_body(&model.custom_request_body)?;
+
+    let mut payload = Map::new();
+    payload.insert("model".to_string(), Value::String(model.model_name.trim().to_string()));
+    if format == "anthropic" {
+        payload.insert("max_tokens".to_string(), Value::Number(16_u64.into()));
+        payload.insert(
+            "messages".to_string(),
+            serde_json::json!([{ "role": "user", "content": "hello" }]),
+        );
+    } else {
+        payload.insert("max_tokens".to_string(), Value::Number(16_u64.into()));
+        payload.insert("temperature".to_string(), serde_json::json!(0.1));
+        payload.insert(
+            "messages".to_string(),
+            serde_json::json!([{ "role": "user", "content": "hello" }]),
+        );
+    }
+    if let Some(extra) = custom_request_body.as_ref() {
+        merge_json_object(&mut payload, extra);
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .danger_accept_invalid_certs(model.skip_ssl_verify.unwrap_or(false))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .post(endpoint)
+        .headers(headers)
+        .json(&Value::Object(payload))
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    let status = response.status();
+    let response_body = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+    if !status.is_success() {
+        return Err(format!(
+            "HTTP {}: {}",
+            status.as_u16(),
+            truncate_error_text(&response_body, 260)
+        ));
+    }
+
+    let parsed_json = serde_json::from_str::<Value>(&response_body).unwrap_or(Value::Null);
+    let model_response = if format == "anthropic" {
+        parsed_json
+            .get("content")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    } else {
+        parsed_json
+            .get("choices")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|item| item.get("message"))
+            .and_then(|msg| msg.get("content"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    };
+
+    Ok(model_response)
+}
 
 fn emit_progress(window: &Window, step: &str, percent: u32, message: &str) {
     let progress = InstallProgress {
@@ -803,27 +1038,88 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
         .as_object_mut()
         .ok_or_else(|| "Invalid ai config object".to_string())?;
 
-    let model_id = format!(
-        "installer_{}_{}",
-        model.provider,
-        chrono::Utc::now().timestamp()
+    let model_id = format!("installer_{}_{}", model.provider, chrono::Utc::now().timestamp());
+    let display_name = model
+        .config_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| format!("{} - {}", model.provider, model.model_name));
+
+    let custom_request_body = parse_custom_request_body(&model.custom_request_body)?;
+    let api_format = normalize_api_format(model);
+    let request_url = resolve_request_url(model.base_url.trim(), &api_format);
+    let mut model_map = Map::new();
+    model_map.insert("id".to_string(), Value::String(model_id.clone()));
+    model_map.insert("name".to_string(), Value::String(display_name));
+    model_map.insert(
+        "provider".to_string(),
+        Value::String(api_format),
     );
-    let model_json = serde_json::json!({
-        "id": model_id,
-        "name": format!("{} - {}", model.provider, model.model_name),
-        "provider": model.format,
-        "model_name": model.model_name,
-        "base_url": model.base_url,
-        "api_key": model.api_key,
-        "enabled": true,
-        "category": "general_chat",
-        "capabilities": ["text_chat", "function_calling"],
-        "recommended_for": [],
-        "metadata": null,
-        "enable_thinking_process": false,
-        "support_preserved_thinking": false,
-        "skip_ssl_verify": false
-    });
+    model_map.insert(
+        "model_name".to_string(),
+        Value::String(model.model_name.trim().to_string()),
+    );
+    model_map.insert(
+        "base_url".to_string(),
+        Value::String(model.base_url.trim().to_string()),
+    );
+    model_map.insert("request_url".to_string(), Value::String(request_url));
+    model_map.insert(
+        "api_key".to_string(),
+        Value::String(model.api_key.trim().to_string()),
+    );
+    model_map.insert("enabled".to_string(), Value::Bool(true));
+    model_map.insert(
+        "category".to_string(),
+        Value::String("general_chat".to_string()),
+    );
+    model_map.insert(
+        "capabilities".to_string(),
+        Value::Array(vec![
+            Value::String("text_chat".to_string()),
+            Value::String("function_calling".to_string()),
+        ]),
+    );
+    model_map.insert("recommended_for".to_string(), Value::Array(Vec::new()));
+    model_map.insert("metadata".to_string(), Value::Null);
+    model_map.insert("enable_thinking_process".to_string(), Value::Bool(false));
+    model_map.insert("support_preserved_thinking".to_string(), Value::Bool(false));
+
+    if let Some(skip_ssl_verify) = model.skip_ssl_verify {
+        model_map.insert("skip_ssl_verify".to_string(), Value::Bool(skip_ssl_verify));
+    }
+    if let Some(headers) = &model.custom_headers {
+        let mut header_map = Map::new();
+        for (key, value) in headers {
+            let key_trimmed = key.trim();
+            if key_trimmed.is_empty() {
+                continue;
+            }
+            header_map.insert(
+                key_trimmed.to_string(),
+                Value::String(value.trim().to_string()),
+            );
+        }
+        if !header_map.is_empty() {
+            model_map.insert("custom_headers".to_string(), Value::Object(header_map));
+            let mode = model
+                .custom_headers_mode
+                .as_deref()
+                .unwrap_or("merge")
+                .trim()
+                .to_ascii_lowercase();
+            if mode == "merge" || mode == "replace" {
+                model_map.insert("custom_headers_mode".to_string(), Value::String(mode));
+            }
+        }
+    }
+    if let Some(extra_body) = custom_request_body {
+        model_map.insert("custom_request_body".to_string(), Value::Object(extra_body));
+    }
+
+    let model_json = Value::Object(model_map);
 
     let models_entry = ai_obj
         .entry("models".to_string())

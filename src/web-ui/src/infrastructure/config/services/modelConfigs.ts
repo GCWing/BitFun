@@ -56,7 +56,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.zhipu.name'),
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     format: 'openai',
-    models: ['glm-5', 'glm-4.7', 'glm-4.6'],
+    models: ['glm-5', 'glm-4.7'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.zhipu.description'),
     helpUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
