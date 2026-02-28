@@ -4,9 +4,9 @@
 
 use super::types::{
     InitializeResult as BitFunInitializeResult, MCPCapability, MCPPrompt, MCPPromptArgument,
-    MCPPromptMessage, MCPResource, MCPResourceContent, MCPServerInfo, MCPTool, MCPToolResult,
-    MCPToolResultContent, PromptsGetResult, PromptsListResult, ResourcesListResult,
-    ResourcesReadResult, ToolsListResult,
+    MCPPromptMessage, MCPPromptMessageContent, MCPResource, MCPResourceContent, MCPServerInfo,
+    MCPTool, MCPToolResult, MCPToolResultContent, PromptsGetResult, PromptsListResult,
+    ResourcesListResult, ResourcesReadResult, ToolsListResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use futures_util::StreamExt;
@@ -562,6 +562,7 @@ impl RemoteMCPTransport {
             .map_err(|e| BitFunError::MCPError(format!("MCP prompts/get failed: {}", e)))?;
 
         Ok(PromptsGetResult {
+            description: result.description,
             messages: result
                 .messages
                 .into_iter()
@@ -656,8 +657,13 @@ fn map_tool(tool: rmcp::model::Tool) -> MCPTool {
     let schema = Value::Object((*tool.input_schema).clone());
     MCPTool {
         name: tool.name.to_string(),
+        title: None,
         description: tool.description.map(|d| d.to_string()),
         input_schema: schema,
+        output_schema: None,
+        icons: None,
+        annotations: None,
+        meta: None,
     }
 }
 
@@ -665,8 +671,12 @@ fn map_resource(resource: rmcp::model::Resource) -> MCPResource {
     MCPResource {
         uri: resource.uri.clone(),
         name: resource.name.clone(),
+        title: None,
         description: resource.description.clone(),
         mime_type: resource.mime_type.clone(),
+        icons: None,
+        size: None,
+        annotations: None,
         metadata: None,
     }
 }
@@ -680,8 +690,11 @@ fn map_resource_content(contents: ResourceContents) -> MCPResourceContent {
             ..
         } => MCPResourceContent {
             uri,
-            content: text,
+            content: Some(text),
+            blob: None,
             mime_type,
+            annotations: None,
+            meta: None,
         },
         ResourceContents::BlobResourceContents {
             uri,
@@ -690,8 +703,11 @@ fn map_resource_content(contents: ResourceContents) -> MCPResourceContent {
             ..
         } => MCPResourceContent {
             uri,
-            content: blob,
+            content: None,
+            blob: Some(blob),
             mime_type,
+            annotations: None,
+            meta: None,
         },
     }
 }
@@ -699,6 +715,7 @@ fn map_resource_content(contents: ResourceContents) -> MCPResourceContent {
 fn map_prompt(prompt: rmcp::model::Prompt) -> MCPPrompt {
     MCPPrompt {
         name: prompt.name,
+        title: None,
         description: prompt.description,
         arguments: prompt.arguments.map(|args| {
             args.into_iter()
@@ -709,6 +726,7 @@ fn map_prompt(prompt: rmcp::model::Prompt) -> MCPPrompt {
                 })
                 .collect()
         }),
+        icons: None,
     }
 }
 
@@ -728,7 +746,10 @@ fn map_prompt_message(message: rmcp::model::PromptMessage) -> MCPPromptMessage {
         }
     };
 
-    MCPPromptMessage { role, content }
+    MCPPromptMessage {
+        role,
+        content: MCPPromptMessageContent::Plain(content),
+    }
 }
 
 fn map_tool_result(result: rmcp::model::CallToolResult) -> MCPToolResult {
@@ -753,6 +774,7 @@ fn map_tool_result(result: rmcp::model::CallToolResult) -> MCPToolResult {
             Some(mapped)
         },
         is_error: result.is_error.unwrap_or(false),
+        structured_content: None,
     }
 }
 
