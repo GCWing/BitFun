@@ -5,11 +5,22 @@
   "type": "module",
   "description": "BitFun Custom Installer - Modern branded installation experience",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "sync:model-i18n": "node scripts/sync-model-i18n.cjs",
+    "sync:theme-i18n": "node scripts/sync-theme-i18n.cjs",
+    "sync:i18n": "npm run sync:model-i18n && npm run sync:theme-i18n",
+    "dev": "npm run sync:i18n && vite",
+    "build": "npm run sync:i18n && tsc && vite build",
     "preview": "vite preview",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:dev": "npm run sync:i18n && tauri dev",
+    "tauri:build": "npm run sync:i18n && tauri build",
+    "tauri:build:fast": "npm run sync:i18n && tauri build -- --profile release-fast",
+    "tauri:build:exe": "npm run sync:i18n && tauri build --no-bundle",
+    "tauri:build:exe:fast": "npm run sync:i18n && tauri build --no-bundle -- --profile release-fast",
+    "installer:build": "node scripts/build-installer.cjs",
+    "installer:build:fast": "node scripts/build-installer.cjs --mode fast",
+    "installer:build:only": "node scripts/build-installer.cjs --skip-app-build",
+    "installer:build:only:fast": "node scripts/build-installer.cjs --skip-app-build --mode fast",
+    "installer:dev": "node scripts/build-installer.cjs --dev",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -25,6 +36,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.6.0",
+    "terser": "^5.46.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

@@ -4,6 +4,7 @@ export type InstallStep = 'lang' | 'options' | 'model' | 'progress' | 'theme' | 
 export interface LaunchContext {
   mode: 'install' | 'uninstall';
   uninstallPath: string | null;
+  appLanguage?: 'zh-CN' | 'en-US' | null;
 }
 
 export type ThemeId =
@@ -21,6 +22,18 @@ export interface ModelConfig {
   baseUrl: string;
   modelName: string;
   format: 'openai' | 'anthropic';
+  configName?: string;
+  customRequestBody?: string;
+  skipSslVerify?: boolean;
+  customHeaders?: Record<string, string>;
+  customHeadersMode?: 'merge' | 'replace';
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  responseTimeMs: number;
+  modelResponse?: string;
+  errorDetails?: string;
 }
 
 /** Installation options sent to the Rust backend */

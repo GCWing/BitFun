@@ -39,7 +39,68 @@
     "apiKey": "API key",
     "back": "Back",
     "skip": "Skip for now",
-    "nextTheme": "Next: Theme"
+    "nextTheme": "Next: Theme",
+    "description": "Configuring an AI model is required to use BitFun. Select a provider and enter your API information",
+    "providerLabel": "Model Provider",
+    "selectProvider": "Select a model provider...",
+    "customProvider": "Custom",
+    "getApiKey": "How to get an API Key?",
+    "modelNamePlaceholder": "Enter model name...",
+    "baseUrlPlaceholder": "e.g., https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "customRequestBodyPlaceholder": "{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+    "jsonValid": "Valid JSON format",
+    "jsonInvalid": "Invalid JSON format, please check syntax",
+    "skipSslVerify": "Skip SSL Certificate Verification",
+    "customHeadersModeMerge": "Merge Override",
+    "customHeadersModeReplace": "Replace All",
+    "addHeader": "Add Field",
+    "headerKey": "key",
+    "headerValue": "value",
+    "advancedShow": "Show advanced settings",
+    "advancedHide": "Hide advanced settings",
+    "providers": {
+      "anthropic": {
+        "name": "Anthropic Claude",
+        "description": "Anthropic Claude series models"
+      },
+      "minimax": {
+        "name": "MiniMax",
+        "description": "MiniMax M2 series large language models"
+      },
+      "moonshot": {
+        "name": "Moonshot AI",
+        "description": "Moonshot Kimi K2 series models"
+      },
+      "deepseek": {
+        "name": "DeepSeek",
+        "description": "DeepSeek V3 and R1 reasoning models"
+      },
+      "zhipu": {
+        "name": "Zhipu AI",
+        "description": "Zhipu AI GLM series models",
+        "urlOptions": {
+          "default": "OpenAI Format - Default",
+          "anthropic": "Anthropic Format",
+          "codingPlan": "OpenAI Format - CodingPlan"
+        }
+      },
+      "qwen": {
+        "name": "Qwen",
+        "description": "Alibaba Cloud Qwen3 series models"
+      },
+      "volcengine": {
+        "name": "Volcano Engine",
+        "description": "ByteDance Volcano Engine Doubao large language models"
+      }
+    },
+    "modelNameSelectPlaceholder": "Select a model...",
+    "customModel": "Use custom model name",
+    "testConnection": "Test Connection",
+    "testing": "Testing...",
+    "testSuccess": "Connection successful",
+    "testFailed": "Connection failed",
+    "modelSearchPlaceholder": "Search or enter a custom model name...",
+    "modelNoResults": "No matching models"
   },
   "progress": {
     "title": "Installing",
@@ -59,7 +120,16 @@
   "themeSetup": {
     "title": "Theme & Launch",
     "subtitle": "Choose your startup theme, then launch",
-    "skip": "Skip theme and launch"
+    "skip": "Skip theme and launch",
+    "themeNames": {
+      "bitfun-dark": "Dark",
+      "bitfun-light": "Light",
+      "bitfun-midnight": "Midnight",
+      "bitfun-china-style": "Ink Charm",
+      "bitfun-china-night": "Ink Night",
+      "bitfun-cyber": "Cyber",
+      "bitfun-slate": "Slate"
+    }
   },
   "complete": {
     "title": "Complete",

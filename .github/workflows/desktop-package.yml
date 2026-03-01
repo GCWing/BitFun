@@ -78,7 +78,7 @@ jobs:
           - os: macos-15
             name: macos-arm64
             target: aarch64-apple-darwin
-            build_command: npm run build:web && cd src/apps/desktop && npm exec -- tauri build --target aarch64-apple-darwin --bundles dmg
+            build_command: cd src/apps/desktop && npm exec -- tauri build --target aarch64-apple-darwin --bundles dmg
           - os: macos-15-intel
             name: macos-x64
             target: x86_64-apple-darwin

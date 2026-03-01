@@ -39,7 +39,68 @@
     "apiKey": "API Key",
     "back": "返回",
     "skip": "稍后配置",
-    "nextTheme": "下一步：主题"
+    "nextTheme": "下一步：主题",
+    "description": "配置 AI 模型是使用 BitFun 的前提，请选择模型服务商并填写 API 信息",
+    "providerLabel": "模型服务商",
+    "selectProvider": "选择模型服务商...",
+    "customProvider": "自定义",
+    "getApiKey": "如何获取 API Key？",
+    "modelNamePlaceholder": "输入模型名称...",
+    "baseUrlPlaceholder": "示例：https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "customRequestBodyPlaceholder": "{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+    "jsonValid": "JSON 格式有效",
+    "jsonInvalid": "JSON 格式错误，请检查语法",
+    "skipSslVerify": "跳过SSL证书验证",
+    "customHeadersModeMerge": "合并覆盖",
+    "customHeadersModeReplace": "完全替换",
+    "addHeader": "添加字段",
+    "headerKey": "key",
+    "headerValue": "value",
+    "advancedShow": "Show advanced settings",
+    "advancedHide": "Hide advanced settings",
+    "providers": {
+      "anthropic": {
+        "name": "Anthropic Claude",
+        "description": "Anthropic Claude 系列模型"
+      },
+      "minimax": {
+        "name": "MiniMax",
+        "description": "MiniMax M2 系列大语言模型"
+      },
+      "moonshot": {
+        "name": "月之暗面",
+        "description": "月之暗面 Kimi K2 系列模型"
+      },
+      "deepseek": {
+        "name": "DeepSeek",
+        "description": "DeepSeek V3 和 R1 推理模型"
+      },
+      "zhipu": {
+        "name": "智谱AI",
+        "description": "智谱AI GLM 系列模型",
+        "urlOptions": {
+          "default": "OpenAI格式-默认",
+          "anthropic": "Anthropic格式",
+          "codingPlan": "OpenAI格式-CodingPlan"
+        }
+      },
+      "qwen": {
+        "name": "通义千问",
+        "description": "阿里云通义千问 Qwen3 系列模型"
+      },
+      "volcengine": {
+        "name": "火山引擎",
+        "description": "字节跳动火山引擎豆包大模型"
+      }
+    },
+    "modelNameSelectPlaceholder": "选择模型...",
+    "customModel": "使用自定义模型名称",
+    "testConnection": "测试连接",
+    "testing": "测试中...",
+    "testSuccess": "连接成功",
+    "testFailed": "连接失败",
+    "modelSearchPlaceholder": "搜索或输入自定义模型名称...",
+    "modelNoResults": "没有匹配的模型"
   },
   "progress": {
     "title": "安装中",
@@ -59,7 +120,16 @@
   "themeSetup": {
     "title": "主题与启动",
     "subtitle": "选择首次启动主题，然后开始使用",
-    "skip": "跳过主题并启动"
+    "skip": "跳过主题并启动",
+    "themeNames": {
+      "bitfun-dark": "暗色",
+      "bitfun-light": "亮色",
+      "bitfun-midnight": "午夜",
+      "bitfun-china-style": "墨韵",
+      "bitfun-china-night": "墨夜",
+      "bitfun-cyber": "赛博",
+      "bitfun-slate": "石板灰"
+    }
   },
   "complete": {
     "title": "完成",

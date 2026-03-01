@@ -31,6 +31,7 @@ const log = createLogger('App');
  */
 // Minimum time (ms) the splash is shown, so the animation is never a flash.
 const MIN_SPLASH_MS = 900;
+const ENABLE_MAIN_ONBOARDING = false;
 
 function App() {
   // AI initialization
@@ -69,6 +70,13 @@ function App() {
 
   // Initialize onboarding: check first launch on startup
   useEffect(() => {
+    if (!ENABLE_MAIN_ONBOARDING) {
+      onboardingService.markCompleted().catch((error) => {
+        log.warn('Failed to persist onboarding completion while disabled', error);
+      });
+      return;
+    }
+
     onboardingService.initialize().catch((error) => {
       log.error('Failed to initialize onboarding service', error);
     });
@@ -76,6 +84,11 @@ function App() {
 
   // In development, trigger onboarding via window.showOnboarding()
   useEffect(() => {
+    if (!ENABLE_MAIN_ONBOARDING) {
+      delete (window as any).showOnboarding;
+      return;
+    }
+
     (window as any).showOnboarding = () => {
       forceShowOnboarding();
       log.debug('Onboarding activated via debug command');
@@ -245,7 +258,7 @@ function App() {
       <ViewModeProvider defaultMode="coder">
         <ToolbarModeProvider>
           {/* Onboarding overlay (first launch) */}
-          {isOnboardingActive && (
+          {ENABLE_MAIN_ONBOARDING && isOnboardingActive && (
             <OnboardingWizard 
               onComplete={handleOnboardingComplete}
             />

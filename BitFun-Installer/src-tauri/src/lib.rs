@@ -13,6 +13,7 @@ pub fn run() {
             commands::validate_install_path,
             commands::start_installation,
             commands::set_model_config,
+            commands::test_model_config_connection,
             commands::set_theme_preference,
             commands::uninstall,
             commands::launch_application,

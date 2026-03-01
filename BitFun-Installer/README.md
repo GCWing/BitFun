@@ -78,9 +78,19 @@ Language Select → Options → Progress → Model Setup → Theme Setup
 ### Setup
 
 ```bash
+cd ..
+npm ci
 cd BitFun-Installer
-npm install
+npm ci
 ```
+
+Or from repository root:
+
+```bash
+npm --prefix BitFun-Installer ci
+```
+
+Production installer builds call workspace desktop build scripts, so root dependencies are required.
 
 ### Repository Hygiene
 
@@ -107,6 +117,7 @@ Key behavior:
 - Windows uninstall registry entry points to:
   `"<installPath>\\uninstall.exe" --uninstall "<installPath>"`.
 - Launching with `--uninstall` opens the dedicated uninstall UI flow.
+- Launching `uninstall.exe` directly also enters uninstall mode automatically.
 
 Local debug command:
 
@@ -123,24 +134,47 @@ Core implementation:
 
 ### Build
 
-Build the complete installer (builds main app first):
+Build the complete installer in release mode (default, optimized):
 
 ```bash
-node scripts/build-installer.cjs
+npm run installer:build
+```
+
+Use this as the release entrypoint. `npm run tauri:build` does not prepare validated payload assets for production.
+Release artifacts embed payload files into the installer binary, so runtime installation does not depend on an external `payload` folder.
+
+Build the complete installer in fast mode (faster compile, less optimization):
+
+```bash
+npm run installer:build:fast
 ```
 
 Build installer only (skip main app build):
 
 ```bash
-node scripts/build-installer.cjs --skip-app-build
+npm run installer:build:only
+```
+
+`installer:build:only` now requires an existing valid desktop executable in target output paths. If payload validation fails, build exits with an error.
+
+Build installer only with fast mode:
+
+```bash
+npm run installer:build:only:fast
 ```
 
 ### Output
 
-The built installer will be at:
+The built executable will be at:
 
 ```
-src-tauri/target/release/bundle/nsis/BitFun-Installer_x.x.x_x64-setup.exe
+src-tauri/target/release/bitfun-installer.exe
+```
+
+Fast mode output path:
+
+```
+src-tauri/target/release-fast/bitfun-installer.exe
 ```
 
 ## Customization Guide
@@ -166,6 +200,7 @@ Edit `src/styles/variables.css` — all colors, spacing, and animations are cont
 ### Adding Installer Payload
 
 Place the built BitFun application files in `src-tauri/payload/` before building the installer. The build script handles this automatically.
+During `cargo build`, the payload directory is packed into an embedded zip inside `bitfun-installer.exe`.
 
 ## Integration with CI/CD
 
@@ -175,12 +210,12 @@ Add to your GitHub Actions workflow:
 - name: Build Installer
   run: |
     cd BitFun-Installer
-    npm install
-    node scripts/build-installer.cjs --skip-app-build
+    npm ci
+    npm run installer:build:only
 
 - name: Upload Installer
   uses: actions/upload-artifact@v4
   with:
-    name: BitFun-Setup
-    path: BitFun-Installer/src-tauri/target/release/bundle/nsis/*.exe
+    name: BitFun-Installer-Exe
+    path: BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
 ```

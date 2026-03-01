@@ -81,7 +81,6 @@ export function Options({
           <Checkbox checked={options.startMenu} onChange={(v) => update('startMenu', v)} label={t('options.startMenu')} />
           <Checkbox checked={options.contextMenu} onChange={(v) => update('contextMenu', v)} label={t('options.contextMenu')} />
           <Checkbox checked={options.addToPath} onChange={(v) => update('addToPath', v)} label={t('options.addToPath')} />
-          <Checkbox checked={options.launchAfterInstall} onChange={(v) => update('launchAfterInstall', v)} label={t('options.launchAfterInstall')} />
         </div>
       </div>
 

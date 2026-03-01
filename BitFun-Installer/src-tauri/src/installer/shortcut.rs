@@ -24,10 +24,7 @@ pub fn create_start_menu_shortcut(install_path: &Path) -> Result<()> {
     let exe_path = install_path.join("BitFun.exe");
 
     create_lnk(&shortcut_path, &exe_path, install_path)?;
-    log::info!(
-        "Created Start Menu shortcut at {}",
-        shortcut_path.display()
-    );
+    log::info!("Created Start Menu shortcut at {}", shortcut_path.display());
     Ok(())
 }
 
@@ -54,8 +51,8 @@ pub fn remove_start_menu_shortcut() -> Result<()> {
 
 /// Get the current user's Start Menu Programs directory.
 fn get_start_menu_dir() -> Result<PathBuf> {
-    let appdata = std::env::var("APPDATA")
-        .with_context(|| "APPDATA environment variable not set")?;
+    let appdata =
+        std::env::var("APPDATA").with_context(|| "APPDATA environment variable not set")?;
     Ok(PathBuf::from(appdata)
         .join("Microsoft")
         .join("Windows")
@@ -67,7 +64,7 @@ fn get_start_menu_dir() -> Result<PathBuf> {
 fn create_lnk(shortcut_path: &Path, target: &Path, _working_dir: &Path) -> Result<()> {
     let lnk = mslnk::ShellLink::new(target)
         .with_context(|| format!("Failed to create shell link for {}", target.display()))?;
-    
+
     // Note: mslnk has limited API. For full control (icon, arguments, etc.),
     // consider using the windows crate with IShellLink COM interface.
     lnk.create_lnk(shortcut_path)

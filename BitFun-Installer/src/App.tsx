@@ -58,6 +58,7 @@ function App() {
             options={installer.options}
             setOptions={installer.setOptions}
             onSkip={installer.next}
+            onTestConnection={installer.testModelConnection}
             onNext={async () => {
               await installer.saveModelConfig();
               installer.next();
