@@ -134,7 +134,7 @@ fn handle_text_message(
         } => {
             let room_id = room_id.unwrap_or_else(generate_room_id);
             let ok = room_manager.create_room(
-                &room_id, conn_id, &device_id, &device_type, &public_key, out_tx.clone(),
+                &room_id, conn_id, &device_id, &device_type, &public_key, Some(out_tx.clone()),
             );
             if ok {
                 send_json(out_tx, &OutboundProtocol::RoomCreated { room_id });
@@ -154,7 +154,7 @@ fn handle_text_message(
             let existing_peer = room_manager.get_peer_info(&room_id, conn_id);
 
             let ok = room_manager.join_room(
-                &room_id, conn_id, &device_id, &device_type, &public_key, out_tx.clone(),
+                &room_id, conn_id, &device_id, &device_type, &public_key, Some(out_tx.clone()),
             );
 
             if ok {
@@ -195,8 +195,13 @@ fn handle_text_message(
         }
 
         InboundMessage::Heartbeat => {
-            room_manager.heartbeat(conn_id);
-            send_json(out_tx, &OutboundProtocol::HeartbeatAck);
+            if room_manager.heartbeat(conn_id) {
+                send_json(out_tx, &OutboundProtocol::HeartbeatAck);
+            } else {
+                send_json(out_tx, &OutboundProtocol::Error {
+                    message: "Room not found or expired".into(),
+                });
+            }
         }
     }
 }

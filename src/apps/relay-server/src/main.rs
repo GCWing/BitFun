@@ -45,6 +45,8 @@ async fn main() -> anyhow::Result<()> {
     let mut app = Router::new()
         .route("/health", get(api::health_check))
         .route("/api/info", get(api::server_info))
+        .route("/api/rooms/{room_id}/join", post(api::join_room))
+        .route("/api/rooms/{room_id}/message", post(api::relay_message))
         .route("/api/rooms/{room_id}/poll", get(api::poll_messages))
         .route("/api/rooms/{room_id}/ack", post(api::ack_messages))
         .route("/ws", get(websocket::websocket_handler))

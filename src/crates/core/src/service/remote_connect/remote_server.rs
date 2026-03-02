@@ -9,7 +9,7 @@
 //! turn completion, etc.) is encrypted and relayed back to the mobile client.
 
 use anyhow::{anyhow, Result};
-use log::{error, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -32,6 +32,8 @@ pub enum RemoteCommand {
     },
     GetSessionMessages {
         session_id: String,
+        limit: Option<usize>,
+        before_message_id: Option<String>,
     },
     SendMessage {
         session_id: String,
@@ -41,6 +43,12 @@ pub enum RemoteCommand {
         session_id: String,
     },
     DeleteSession {
+        session_id: String,
+    },
+    SubscribeSession {
+        session_id: String,
+    },
+    UnsubscribeSession {
         session_id: String,
     },
     Ping,
@@ -74,6 +82,7 @@ pub enum RemoteResponse {
     Messages {
         session_id: String,
         messages: Vec<ChatMessage>,
+        has_more: bool,
     },
     MessageSent {
         session_id: String,
@@ -88,6 +97,12 @@ pub enum RemoteResponse {
         session_id: String,
     },
     SessionDeleted {
+        session_id: String,
+    },
+    SessionSubscribed {
+        session_id: String,
+    },
+    SessionUnsubscribed {
         session_id: String,
     },
     Pong,
@@ -135,13 +150,29 @@ fn resolve_agent_type(mobile_type: Option<&str>) -> &'static str {
 }
 
 /// Bridges remote commands to local session operations.
-pub struct SessionBridge {
+pub struct RemoteServer {
     shared_secret: [u8; 32],
+    active_subscriptions: std::sync::Mutex<std::collections::HashSet<String>>,
+    stream_tx: mpsc::UnboundedSender<EncryptedPayload>,
 }
 
-impl SessionBridge {
-    pub fn new(shared_secret: [u8; 32]) -> Self {
-        Self { shared_secret }
+impl Drop for RemoteServer {
+    fn drop(&mut self) {
+        if let Ok(subs) = self.active_subscriptions.lock() {
+            for sub_id in subs.iter() {
+                unregister_stream_forwarder(sub_id);
+            }
+        }
+    }
+}
+
+impl RemoteServer {
+    pub fn new(shared_secret: [u8; 32], stream_tx: mpsc::UnboundedSender<EncryptedPayload>) -> Self {
+        Self {
+            shared_secret,
+            active_subscriptions: std::sync::Mutex::new(std::collections::HashSet::new()),
+            stream_tx,
+        }
     }
 
     pub fn shared_secret(&self) -> &[u8; 32] {
@@ -179,13 +210,39 @@ impl SessionBridge {
     }
 
     pub async fn dispatch(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        use crate::agentic::{coordination::get_global_coordinator, core::SessionConfig};
+        match cmd {
+            RemoteCommand::Ping => RemoteResponse::Pong,
+            
+            RemoteCommand::GetWorkspaceInfo |
+            RemoteCommand::ListRecentWorkspaces |
+            RemoteCommand::SetWorkspace { .. } => {
+                self.handle_workspace_command(cmd).await
+            }
+
+            RemoteCommand::ListSessions |
+            RemoteCommand::CreateSession { .. } |
+            RemoteCommand::GetSessionMessages { .. } |
+            RemoteCommand::DeleteSession { .. } => {
+                self.handle_session_command(cmd).await
+            }
+
+            RemoteCommand::SendMessage { .. } |
+            RemoteCommand::CancelTask { .. } => {
+                self.handle_execution_command(cmd).await
+            }
+
+            RemoteCommand::SubscribeSession { .. } |
+            RemoteCommand::UnsubscribeSession { .. } => {
+                self.handle_subscription_command(cmd).await
+            }
+        }
+    }
+
+    async fn handle_workspace_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::infrastructure::get_workspace_path;
         use crate::service::workspace::get_global_workspace_service;
 
         match cmd {
-            RemoteCommand::Ping => return RemoteResponse::Pong,
-
             RemoteCommand::GetWorkspaceInfo => {
                 let ws_path = get_workspace_path();
                 let (project_name, git_branch) = if let Some(ref p) = ws_path {
@@ -203,14 +260,13 @@ impl SessionBridge {
                 } else {
                     (None, None)
                 };
-                return RemoteResponse::WorkspaceInfo {
+                RemoteResponse::WorkspaceInfo {
                     has_workspace: ws_path.is_some(),
                     path: ws_path.map(|p| p.to_string_lossy().to_string()),
                     project_name,
                     git_branch,
-                };
+                }
             }
-
             RemoteCommand::ListRecentWorkspaces => {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
@@ -229,11 +285,8 @@ impl SessionBridge {
                         last_opened: w.last_accessed.to_rfc3339(),
                     })
                     .collect();
-                return RemoteResponse::RecentWorkspaces {
-                    workspaces: entries,
-                };
+                RemoteResponse::RecentWorkspaces { workspaces: entries }
             }
-
             RemoteCommand::SetWorkspace { path } => {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
@@ -258,26 +311,27 @@ impl SessionBridge {
                         {
                             error!("Failed to initialize snapshot after remote workspace set: {e}");
                         }
-                        return RemoteResponse::WorkspaceUpdated {
+                        RemoteResponse::WorkspaceUpdated {
                             success: true,
                             path: Some(info.root_path.to_string_lossy().to_string()),
                             project_name: Some(info.name.clone()),
                             error: None,
-                        };
+                        }
                     }
-                    Err(e) => {
-                        return RemoteResponse::WorkspaceUpdated {
-                            success: false,
-                            path: None,
-                            project_name: None,
-                            error: Some(e.to_string()),
-                        };
-                    }
+                    Err(e) => RemoteResponse::WorkspaceUpdated {
+                        success: false,
+                        path: None,
+                        project_name: None,
+                        error: Some(e.to_string()),
+                    },
                 }
             }
-
-            _ => {}
+            _ => RemoteResponse::Error { message: "Unknown workspace command".into() },
         }
+    }
+
+    async fn handle_session_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
+        use crate::agentic::{coordination::get_global_coordinator, core::SessionConfig};
 
         let coordinator = match get_global_coordinator() {
             Some(c) => c,
@@ -322,7 +376,6 @@ impl SessionBridge {
                     message: e.to_string(),
                 },
             },
-
             RemoteCommand::CreateSession {
                 agent_type,
                 session_name: custom_name,
@@ -351,10 +404,10 @@ impl SessionBridge {
                     },
                 }
             }
-
-            RemoteCommand::GetSessionMessages { session_id } => {
-                match coordinator.get_messages(session_id).await {
-                    Ok(messages) => {
+            RemoteCommand::GetSessionMessages { session_id, limit, before_message_id } => {
+                let limit = limit.unwrap_or(50);
+                match coordinator.get_messages_paginated(session_id, limit, before_message_id.as_deref()).await {
+                    Ok((messages, has_more)) => {
                         let chat_msgs = messages
                             .into_iter()
                             .map(|m| {
@@ -396,6 +449,7 @@ impl SessionBridge {
                         RemoteResponse::Messages {
                             session_id: session_id.clone(),
                             messages: chat_msgs,
+                            has_more,
                         }
                     }
                     Err(e) => RemoteResponse::Error {
@@ -403,7 +457,33 @@ impl SessionBridge {
                     },
                 }
             }
+            RemoteCommand::DeleteSession { session_id } => {
+                match coordinator.delete_session(session_id).await {
+                    Ok(_) => RemoteResponse::SessionDeleted {
+                        session_id: session_id.clone(),
+                    },
+                    Err(e) => RemoteResponse::Error {
+                        message: e.to_string(),
+                    },
+                }
+            }
+            _ => RemoteResponse::Error { message: "Unknown session command".into() },
+        }
+    }
 
+    async fn handle_execution_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
+        use crate::agentic::coordination::get_global_coordinator;
+
+        let coordinator = match get_global_coordinator() {
+            Some(c) => c,
+            None => {
+                return RemoteResponse::Error {
+                    message: "Desktop session system not ready".into(),
+                };
+            }
+        };
+
+        match cmd {
             RemoteCommand::SendMessage {
                 session_id,
                 content,
@@ -434,7 +514,6 @@ impl SessionBridge {
                     },
                 }
             }
-
             RemoteCommand::CancelTask { session_id } => {
                 let session_mgr = coordinator.get_session_manager();
                 if let Some(session) = session_mgr.get_session(session_id) {
@@ -450,21 +529,47 @@ impl SessionBridge {
                     session_id: session_id.clone(),
                 }
             }
+            _ => RemoteResponse::Error { message: "Unknown execution command".into() },
+        }
+    }
 
-            RemoteCommand::DeleteSession { session_id } => {
-                match coordinator.delete_session(session_id).await {
-                    Ok(_) => RemoteResponse::SessionDeleted {
-                        session_id: session_id.clone(),
-                    },
-                    Err(e) => RemoteResponse::Error {
-                        message: e.to_string(),
-                    },
+    async fn handle_subscription_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
+        match cmd {
+            RemoteCommand::SubscribeSession { session_id } => {
+                let subscriber_id = format!("remote_stream_{}", session_id);
+                
+                let mut subs = self.active_subscriptions.lock().unwrap();
+                if !subs.contains(&subscriber_id) {
+                    if let Some((sub_id, mut stream_rx)) = register_stream_forwarder(session_id, self.shared_secret) {
+                        subs.insert(sub_id.clone());
+                        
+                        let stream_tx = self.stream_tx.clone();
+                        tokio::spawn(async move {
+                            while let Some(payload) = stream_rx.recv().await {
+                                let _ = stream_tx.send(payload);
+                            }
+                            debug!("Stream forwarder channel closed: {sub_id}");
+                        });
+                    }
+                }
+                
+                RemoteResponse::SessionSubscribed {
+                    session_id: session_id.clone(),
                 }
             }
-
-            _ => RemoteResponse::Error {
-                message: "Unknown command".into(),
-            },
+            RemoteCommand::UnsubscribeSession { session_id } => {
+                let subscriber_id = format!("remote_stream_{}", session_id);
+                
+                let mut subs = self.active_subscriptions.lock().unwrap();
+                if subs.remove(&subscriber_id) {
+                    unregister_stream_forwarder(&subscriber_id);
+                }
+                
+                RemoteResponse::SessionUnsubscribed {
+                    session_id: session_id.clone(),
+                }
+            }
+            _ => RemoteResponse::Error { message: "Unknown subscription command".into() },
         }
     }
 }
@@ -651,7 +756,8 @@ mod tests {
         let bob = KeyPair::generate();
         let shared = alice.derive_shared_secret(&bob.public_key_bytes());
 
-        let bridge = SessionBridge::new(shared);
+        let (stream_tx, _stream_rx) = mpsc::unbounded_channel::<EncryptedPayload>();
+        let bridge = RemoteServer::new(shared, stream_tx);
 
         let cmd_json = serde_json::json!({
             "cmd": "send_message",
@@ -680,7 +786,8 @@ mod tests {
     fn test_response_with_request_id() {
         let alice = KeyPair::generate();
         let shared = alice.derive_shared_secret(&alice.public_key_bytes());
-        let bridge = SessionBridge::new(shared);
+        let (stream_tx, _stream_rx) = mpsc::unbounded_channel::<EncryptedPayload>();
+        let bridge = RemoteServer::new(shared, stream_tx);
 
         let resp = RemoteResponse::Pong;
         let (enc, nonce) = bridge.encrypt_response(&resp, Some("req_xyz")).unwrap();

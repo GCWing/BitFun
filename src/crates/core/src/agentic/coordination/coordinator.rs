@@ -498,6 +498,16 @@ impl ConversationCoordinator {
         self.session_manager.get_messages(session_id).await
     }
 
+    /// Get session messages paginated
+    pub async fn get_messages_paginated(
+        &self,
+        session_id: &str,
+        limit: usize,
+        before_message_id: Option<&str>,
+    ) -> BitFunResult<(Vec<Message>, bool)> {
+        self.session_manager.get_messages_paginated(session_id, limit, before_message_id).await
+    }
+
     /// Subscribe to internal events
     ///
     /// For internal systems to subscribe to events (e.g., logging, monitoring)

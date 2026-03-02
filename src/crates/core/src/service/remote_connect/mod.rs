@@ -12,14 +12,14 @@ pub mod ngrok;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
-pub mod session_bridge;
+pub mod remote_server;
 
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};
 pub use qr_generator::QrGenerator;
 pub use relay_client::RelayClient;
-pub use session_bridge::SessionBridge;
+pub use remote_server::RemoteServer;
 
 use anyhow::Result;
 use log::{debug, error, info};
@@ -81,7 +81,7 @@ pub struct RemoteConnectService {
     device_identity: DeviceIdentity,
     pairing: Arc<RwLock<PairingProtocol>>,
     relay_client: Arc<RwLock<Option<RelayClient>>>,
-    session_bridge: Arc<RwLock<Option<SessionBridge>>>,
+    remote_server: Arc<RwLock<Option<RemoteServer>>>,
     active_method: Arc<RwLock<Option<ConnectionMethod>>>,
     ngrok_tunnel: Arc<RwLock<Option<ngrok::NgrokTunnel>>>,
     embedded_relay: Arc<RwLock<Option<embedded_relay::EmbeddedRelayHandle>>>,
@@ -97,7 +97,7 @@ impl RemoteConnectService {
             device_identity,
             pairing: Arc::new(RwLock::new(pairing)),
             relay_client: Arc::new(RwLock::new(None)),
-            session_bridge: Arc::new(RwLock::new(None)),
+            remote_server: Arc::new(RwLock::new(None)),
             active_method: Arc::new(RwLock::new(None)),
             ngrok_tunnel: Arc::new(RwLock::new(None)),
             embedded_relay: Arc::new(RwLock::new(None)),
@@ -183,7 +183,7 @@ impl RemoteConnectService {
 
         let pairing_arc = self.pairing.clone();
         let relay_arc = self.relay_client.clone();
-        let bridge_arc = self.session_bridge.clone();
+        let server_arc = self.remote_server.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -220,43 +220,17 @@ impl RemoteConnectService {
                         encrypted_data,
                         nonce,
                     } => {
-                        let is_paired = bridge_arc.read().await.is_some();
+                        let is_paired = server_arc.read().await.is_some();
 
                         if is_paired {
-                            let bridge_guard = bridge_arc.read().await;
-                            if let Some(ref bridge) = *bridge_guard {
-                                match bridge.decrypt_command(&encrypted_data, &nonce) {
+                            let server_guard = server_arc.read().await;
+                            if let Some(ref server) = *server_guard {
+                                match server.decrypt_command(&encrypted_data, &nonce) {
                                     Ok((cmd, request_id)) => {
                                         info!("Remote command: {cmd:?}");
 
-                                        // For SendMessage, register stream forwarder before dispatch
-                                        let stream_sub_id = if let session_bridge::RemoteCommand::SendMessage { session_id, .. } = &cmd {
-                                            let secret = *bridge.shared_secret();
-                                            if let Some((sub_id, mut stream_rx)) = session_bridge::register_stream_forwarder(session_id, secret) {
-                                                let relay_for_stream = relay_arc.clone();
-                                                let pairing_for_stream = pairing_arc.clone();
-                                                let sub_id_clone = sub_id.clone();
-                                                tokio::spawn(async move {
-                                                    while let Some((enc, nonce)) = stream_rx.recv().await {
-                                                        if let Some(ref client) = *relay_for_stream.read().await {
-                                                            let p = pairing_for_stream.read().await;
-                                                            if let Some(room) = p.room_id() {
-                                                                let _ = client.send_encrypted(room, &enc, &nonce).await;
-                                                            }
-                                                        }
-                                                    }
-                                                    debug!("Stream forwarder channel closed: {sub_id_clone}");
-                                                });
-                                                Some(sub_id)
-                                            } else {
-                                                None
-                                            }
-                                        } else {
-                                            None
-                                        };
-
-                                        let response = bridge.dispatch(&cmd).await;
-                                        match bridge.encrypt_response(&response, request_id.as_deref()) {
+                                        let response = server.dispatch(&cmd).await;
+                                        match server.encrypt_response(&response, request_id.as_deref()) {
                                             Ok((enc, resp_nonce)) => {
                                                 if let Some(ref client) = *relay_arc.read().await {
                                                     let p = pairing_arc.read().await;
@@ -267,19 +241,8 @@ impl RemoteConnectService {
                                             }
                                             Err(e) => {
                                                 error!("Failed to encrypt response: {e}");
-                                                // Clean up forwarder on error
-                                                if let Some(sub_id) = &stream_sub_id {
-                                                    session_bridge::unregister_stream_forwarder(sub_id);
-                                                }
                                             }
                                         }
-                                        // Note: stream forwarder is NOT unregistered here.
-                                        // It auto-cleans when the channel sender is dropped
-                                        // (which happens when the coordinator unsubscribes or
-                                        // the forwarder struct is dropped).
-                                        // The DialogTurnCompleted/Failed/Cancelled events are
-                                        // the last events for a turn; after that no more events
-                                        // flow and the forwarder becomes idle until next turn.
                                     }
                                     Err(e) => error!("Failed to decrypt command: {e}"),
                                 }
@@ -300,8 +263,23 @@ impl RemoteConnectService {
                                             Ok(true) => {
                                                 info!("Pairing verified successfully");
                                                 if let Some(s) = pw.shared_secret() {
-                                                    *bridge_arc.write().await =
-                                                        Some(SessionBridge::new(*s));
+                                                    let (stream_tx, mut stream_rx) = tokio::sync::mpsc::unbounded_channel::<remote_server::EncryptedPayload>();
+                                                    
+                                                    let relay_for_stream = relay_arc.clone();
+                                                    let pairing_for_stream = pairing_arc.clone();
+                                                    tokio::spawn(async move {
+                                                        while let Some((enc, nonce)) = stream_rx.recv().await {
+                                                            if let Some(ref client) = *relay_for_stream.read().await {
+                                                                let p = pairing_for_stream.read().await;
+                                                                if let Some(room) = p.room_id() {
+                                                                    let _ = client.send_encrypted(room, &enc, &nonce).await;
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+
+                                                    *server_arc.write().await =
+                                                        Some(RemoteServer::new(*s, stream_tx));
                                                 }
                                             }
                                             Ok(false) => {
@@ -319,13 +297,18 @@ impl RemoteConnectService {
                     relay_client::RelayEvent::PeerDisconnected { device_id } => {
                         info!("Peer disconnected: {device_id}");
                         pairing_arc.write().await.disconnect().await;
-                        *bridge_arc.write().await = None;
+                        *server_arc.write().await = None;
                     }
                     relay_client::RelayEvent::Disconnected => {
                         info!("Relay disconnected");
                     }
                     relay_client::RelayEvent::Error { message } => {
                         error!("Relay error: {message}");
+                        if message.contains("Room not found") {
+                            info!("Room expired, disconnecting");
+                            pairing_arc.write().await.disconnect().await;
+                            *server_arc.write().await = None;
+                        }
                     }
                     _ => {}
                 }
@@ -379,7 +362,7 @@ impl RemoteConnectService {
             client.disconnect().await;
         }
         *self.relay_client.write().await = None;
-        *self.session_bridge.write().await = None;
+        *self.remote_server.write().await = None;
         *self.active_method.write().await = None;
 
         if let Some(ref mut tunnel) = *self.ngrok_tunnel.write().await {

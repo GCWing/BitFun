@@ -581,6 +581,16 @@ impl SessionManager {
         self.history_manager.get_messages(session_id).await
     }
 
+    /// Get session's message history (paginated)
+    pub async fn get_messages_paginated(
+        &self,
+        session_id: &str,
+        limit: usize,
+        before_message_id: Option<&str>,
+    ) -> BitFunResult<(Vec<Message>, bool)> {
+        self.history_manager.get_messages_paginated(session_id, limit, before_message_id).await
+    }
+
     /// Get session's context messages (may be compressed)
     pub async fn get_context_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
         // Get context messages from compression manager (may be compressed)

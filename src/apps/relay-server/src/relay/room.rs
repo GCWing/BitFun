@@ -41,7 +41,7 @@ pub struct Participant {
     pub device_id: String,
     pub device_type: String,
     pub public_key: String,
-    pub tx: mpsc::UnboundedSender<OutboundMessage>,
+    pub tx: Option<mpsc::UnboundedSender<OutboundMessage>>,
     #[allow(dead_code)]
     pub joined_at: i64,
     pub last_heartbeat: i64,
@@ -91,9 +91,11 @@ impl RelayRoom {
     pub fn relay_to_peer(&self, sender_conn_id: ConnId, message: &str) -> bool {
         for p in &self.participants {
             if p.conn_id != sender_conn_id {
-                let _ = p.tx.send(OutboundMessage {
-                    text: message.to_string(),
-                });
+                if let Some(ref tx) = p.tx {
+                    let _ = tx.send(OutboundMessage {
+                        text: message.to_string(),
+                    });
+                }
                 return true;
             }
         }
@@ -104,9 +106,11 @@ impl RelayRoom {
     pub fn send_to(&self, conn_id: ConnId, message: &str) {
         for p in &self.participants {
             if p.conn_id == conn_id {
-                let _ = p.tx.send(OutboundMessage {
-                    text: message.to_string(),
-                });
+                if let Some(ref tx) = p.tx {
+                    let _ = tx.send(OutboundMessage {
+                        text: message.to_string(),
+                    });
+                }
                 return;
             }
         }
@@ -114,9 +118,11 @@ impl RelayRoom {
 
     pub fn broadcast(&self, message: &str) {
         for p in &self.participants {
-            let _ = p.tx.send(OutboundMessage {
-                text: message.to_string(),
-            });
+            if let Some(ref tx) = p.tx {
+                let _ = tx.send(OutboundMessage {
+                    text: message.to_string(),
+                });
+            }
         }
     }
 
@@ -137,7 +143,8 @@ impl RelayRoom {
                 break;
             }
         }
-        self.last_activity = now;
+        // Do not update room's last_activity here, so that if the other peer is inactive,
+        // we can still detect it.
     }
 
     fn touch(&mut self) {
@@ -234,7 +241,7 @@ impl RoomManager {
         device_id: &str,
         device_type: &str,
         public_key: &str,
-        tx: mpsc::UnboundedSender<OutboundMessage>,
+        tx: Option<mpsc::UnboundedSender<OutboundMessage>>,
     ) -> bool {
         if self.rooms.contains_key(room_id) {
             warn!("Room {room_id} already exists");
@@ -269,7 +276,7 @@ impl RoomManager {
         device_id: &str,
         device_type: &str,
         public_key: &str,
-        tx: mpsc::UnboundedSender<OutboundMessage>,
+        tx: Option<mpsc::UnboundedSender<OutboundMessage>>,
     ) -> bool {
         self.leave_current_room(conn_id);
 
@@ -365,12 +372,14 @@ impl RoomManager {
         }
     }
 
-    pub fn heartbeat(&self, conn_id: ConnId) {
+    pub fn heartbeat(&self, conn_id: ConnId) -> bool {
         if let Some(room_id) = self.conn_to_room.get(&conn_id) {
             if let Some(mut room) = self.rooms.get_mut(room_id.value()) {
                 room.update_heartbeat(conn_id);
+                return true;
             }
         }
+        false
     }
 
     /// Returns (device_id, device_type, public_key) of the peer.
@@ -391,6 +400,27 @@ impl RoomManager {
             }
         }
         None
+    }
+
+    /// Find conn_id by device_id in a specific room
+    pub fn get_conn_id_by_device(&self, room_id: &str, device_id: &str) -> Option<ConnId> {
+        if let Some(room) = self.rooms.get(room_id) {
+            for p in &room.participants {
+                if p.device_id == device_id {
+                    return Some(p.conn_id);
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if the room has a peer of the opposite device type
+    pub fn has_peer(&self, room_id: &str, my_device_type: &str) -> bool {
+        if let Some(room) = self.rooms.get(room_id) {
+            room.participants.iter().any(|p| p.device_type != my_device_type)
+        } else {
+            false
+        }
     }
 
     /// Clean up stale rooms based on last_activity rather than created_at.
@@ -417,9 +447,11 @@ impl RoomManager {
         if let Some(room) = self.rooms.get(room_id) {
             for p in &room.participants {
                 if p.conn_id != exclude_conn_id {
-                    let _ = p.tx.send(OutboundMessage {
-                        text: message.to_string(),
-                    });
+                    if let Some(ref tx) = p.tx {
+                        let _ = tx.send(OutboundMessage {
+                            text: message.to_string(),
+                        });
+                    }
                 }
             }
         }
@@ -432,7 +464,8 @@ impl RoomManager {
         direction: MessageDirection,
         since_seq: u64,
     ) -> Vec<BufferedMessage> {
-        if let Some(room) = self.rooms.get(room_id) {
+        if let Some(mut room) = self.rooms.get_mut(room_id) {
+            room.last_activity = Utc::now().timestamp();
             room.poll_messages(direction, since_seq)
         } else {
             Vec::new()
@@ -442,6 +475,7 @@ impl RoomManager {
     /// Acknowledge receipt of messages up to ack_seq.
     pub fn ack_messages(&self, room_id: &str, direction: MessageDirection, ack_seq: u64) {
         if let Some(mut room) = self.rooms.get_mut(room_id) {
+            room.last_activity = Utc::now().timestamp();
             room.ack_messages(direction, ack_seq);
         }
     }

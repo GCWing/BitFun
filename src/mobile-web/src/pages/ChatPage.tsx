@@ -24,21 +24,59 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, onBack }) =>
 
   const messages = getMessages(sessionId);
   const [input, setInput] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Track accumulated text for the current streaming assistant message
   const accumulatedTextRef = useRef('');
 
-  const loadMessages = useCallback(async () => {
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const loadMessages = useCallback(async (beforeId?: string) => {
+    if (isLoadingMore || (!hasMore && beforeId)) return;
+    
     try {
-      const msgs = await sessionMgr.getSessionMessages(sessionId);
-      setMessages(sessionId, msgs);
+      setIsLoadingMore(true);
+      const resp = await sessionMgr.getSessionMessages(sessionId, 50, beforeId);
+      
+      if (beforeId) {
+        // Prepend older messages
+        const currentMsgs = getMessages(sessionId);
+        setMessages(sessionId, [...resp.messages, ...currentMsgs]);
+      } else {
+        // Initial load
+        setMessages(sessionId, resp.messages);
+      }
+      
+      setHasMore(resp.has_more);
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setIsLoadingMore(false);
     }
-  }, [sessionMgr, sessionId, setMessages, setError]);
+  }, [sessionMgr, sessionId, setMessages, setError, getMessages, isLoadingMore, hasMore]);
+
+  // Handle scroll for lazy loading
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    // If scrolled near top, load more
+    if (container.scrollTop < 100 && hasMore && !isLoadingMore) {
+      const msgs = getMessages(sessionId);
+      if (msgs.length > 0) {
+        const firstMsgId = msgs[0].id;
+        loadMessages(firstMsgId);
+      }
+    }
+  }, [hasMore, isLoadingMore, getMessages, sessionId, loadMessages]);
 
   useEffect(() => {
+    // Subscribe to session stream when entering
+    sessionMgr.subscribeSession(sessionId).catch(console.error);
+    
+    // Initial load
     loadMessages();
 
     const unsub = sessionMgr.onStreamEvent((event) => {
@@ -87,12 +125,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, onBack }) =>
       }
     });
 
-    return unsub;
-  }, [sessionId, sessionMgr, setIsStreaming, appendMessage, updateLastMessage, setError, loadMessages]);
+    return () => {
+      unsub();
+      // Unsubscribe from session stream when leaving
+      sessionMgr.unsubscribeSession(sessionId).catch(console.error);
+    };
+  }, [sessionId, sessionMgr, setIsStreaming, appendMessage, updateLastMessage, setError]); // Removed loadMessages from deps to avoid re-triggering
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    // Only scroll to bottom on initial load or new message at bottom
+    if (!isLoadingMore) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isLoadingMore]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -142,7 +187,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, onBack }) =>
         )}
       </div>
 
-      <div className="chat-page__messages">
+      <div className="chat-page__messages" ref={messagesContainerRef} onScroll={handleScroll}>
+        {isLoadingMore && <div className="chat-page__loading">Loading older messages...</div>}
         {messages.map((m) => (
           <div key={m.id} className={`chat-msg chat-msg--${m.role}`}>
             <div className="chat-msg__role">{m.role === 'user' ? 'You' : 'BitFun'}</div>
@@ -169,7 +215,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, onBack }) =>
             </div>
           </div>
         ))}
-        <div ref={bottomRef} />
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="chat-page__input-bar">

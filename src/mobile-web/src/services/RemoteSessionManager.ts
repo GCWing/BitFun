@@ -143,12 +143,29 @@ export class RemoteSessionManager {
     return resp.session_id;
   }
 
-  async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-    const resp = await this.request<{ resp: string; messages: ChatMessage[] }>({
+  async getSessionMessages(
+    sessionId: string,
+    limit?: number,
+    beforeId?: string
+  ): Promise<{ messages: ChatMessage[]; has_more: boolean }> {
+    const resp = await this.request<{ resp: string; messages: ChatMessage[]; has_more: boolean }>({
       cmd: 'get_session_messages',
       session_id: sessionId,
+      limit,
+      before_message_id: beforeId,
     });
-    return resp.messages || [];
+    return {
+      messages: resp.messages || [],
+      has_more: resp.has_more || false,
+    };
+  }
+
+  async subscribeSession(sessionId: string): Promise<void> {
+    await this.request({ cmd: 'subscribe_session', session_id: sessionId });
+  }
+
+  async unsubscribeSession(sessionId: string): Promise<void> {
+    await this.request({ cmd: 'unsubscribe_session', session_id: sessionId });
   }
 
   async sendMessage(sessionId: string, content: string): Promise<string> {

@@ -24,16 +24,50 @@ use tokio::sync::mpsc;
 
 type ConnId = u64;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageDirection {
+    ToMobile,
+    ToDesktop,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BufferedMessage {
+    pub seq: u64,
+    pub timestamp: i64,
+    pub direction: MessageDirection,
+    pub encrypted_data: String,
+    pub nonce: String,
+}
+
 struct Participant {
     conn_id: ConnId,
     device_id: String,
     device_type: String,
     public_key: String,
-    tx: mpsc::UnboundedSender<String>,
+    tx: Option<mpsc::UnboundedSender<String>>,
+    last_activity: i64,
 }
 
 struct Room {
     participants: Vec<Participant>,
+    message_store: Vec<BufferedMessage>,
+    next_seq: u64,
+}
+
+impl Room {
+    fn buffer_message(&mut self, direction: MessageDirection, encrypted_data: String, nonce: String) -> u64 {
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        self.message_store.push(BufferedMessage {
+            seq,
+            timestamp: chrono::Utc::now().timestamp(),
+            direction,
+            encrypted_data,
+            nonce,
+        });
+        seq
+    }
 }
 
 struct RelayState {
@@ -93,9 +127,35 @@ pub async fn start_embedded_relay(port: u16) -> anyhow::Result<EmbeddedRelayHand
     let state = RelayState::new();
     let app_state = state.clone();
 
+    let cleanup_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            let now = chrono::Utc::now().timestamp();
+            let stale_ids: Vec<String> = cleanup_state.rooms
+                .iter()
+                .filter(|r| (now - r.participants.iter().map(|p| p.last_activity).max().unwrap_or(now)) > 300)
+                .map(|r| r.key().clone())
+                .collect();
+                
+            for id in stale_ids {
+                if let Some((_, room)) = cleanup_state.rooms.remove(&id) {
+                    for p in room.participants {
+                        cleanup_state.conn_to_room.remove(&p.conn_id);
+                    }
+                }
+            }
+        }
+    });
+
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/health", get(health))
+        .route("/api/rooms/{room_id}/join", axum::routing::post(join_room_http))
+        .route("/api/rooms/{room_id}/message", axum::routing::post(relay_message_http))
+        .route("/api/rooms/{room_id}/poll", get(poll_messages_http))
+        .route("/api/rooms/{room_id}/ack", axum::routing::post(ack_messages_http))
+        .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
@@ -180,7 +240,7 @@ fn handle_msg(
     let msg: Inbound = match serde_json::from_str(text) {
         Ok(m) => m,
         Err(e) => {
-            send(out_tx, &Outbound::Error { message: format!("bad message: {e}") });
+            send(&Some(out_tx.clone()), &Outbound::Error { message: format!("bad message: {e}") });
             return;
         }
     };
@@ -188,13 +248,17 @@ fn handle_msg(
     match msg {
         Inbound::CreateRoom { room_id, device_id, device_type, public_key } => {
             let room_id = room_id.unwrap_or_else(gen_room_id);
-            let mut room = Room { participants: Vec::with_capacity(2) };
+            let mut room = Room { 
+                participants: Vec::with_capacity(2),
+                message_store: Vec::new(),
+                next_seq: 1,
+            };
             room.participants.push(Participant {
-                conn_id, device_id, device_type, public_key, tx: out_tx.clone(),
+                conn_id, device_id, device_type, public_key, tx: Some(out_tx.clone()), last_activity: chrono::Utc::now().timestamp(),
             });
             state.rooms.insert(room_id.clone(), room);
             state.conn_to_room.insert(conn_id, room_id.clone());
-            send(out_tx, &Outbound::RoomCreated { room_id });
+            send(&Some(out_tx.clone()), &Outbound::RoomCreated { room_id });
         }
 
         Inbound::JoinRoom { room_id, device_id, device_type, public_key } => {
@@ -209,7 +273,8 @@ fn handle_msg(
                         device_id: device_id.clone(),
                         device_type: device_type.clone(),
                         public_key: public_key.clone(),
-                        tx: out_tx.clone(),
+                        tx: Some(out_tx.clone()),
+                        last_activity: chrono::Utc::now().timestamp(),
                     });
                     state.conn_to_room.insert(conn_id, room_id.clone());
                     true
@@ -233,24 +298,39 @@ fn handle_msg(
                     }
                 }
                 if let Some((pdid, pdt, ppk)) = existing_peer {
-                    send(out_tx, &Outbound::PeerJoined {
+                    send(&Some(out_tx.clone()), &Outbound::PeerJoined {
                         device_id: pdid, device_type: pdt, public_key: ppk,
                     });
                 }
             } else {
-                send(out_tx, &Outbound::Error { message: format!("cannot join room {room_id}") });
+                send(&Some(out_tx.clone()), &Outbound::Error { message: format!("cannot join room {room_id}") });
             }
         }
 
         Inbound::Relay { room_id, encrypted_data, nonce } => {
             if let Some(rid) = state.conn_to_room.get(&conn_id) {
-                if let Some(room) = state.rooms.get(rid.value()) {
+                if let Some(mut room) = state.rooms.get_mut(rid.value()) {
+                    let sender_type = room.participants.iter()
+                        .find(|p| p.conn_id == conn_id)
+                        .map(|p| p.device_type.clone())
+                        .unwrap_or_default();
+                    
+                    let direction = if sender_type == "desktop" {
+                        MessageDirection::ToMobile
+                    } else {
+                        MessageDirection::ToDesktop
+                    };
+                    
+                    room.buffer_message(direction, encrypted_data.clone(), nonce.clone());
+
                     let relay_json = serde_json::to_string(&Outbound::Relay {
                         room_id: room_id.clone(), encrypted_data, nonce,
                     }).unwrap_or_default();
                     for p in &room.participants {
                         if p.conn_id != conn_id {
-                            let _ = p.tx.send(relay_json.clone());
+                            if let Some(ref tx) = p.tx {
+                                let _ = tx.send(relay_json.clone());
+                            }
                         }
                     }
                 }
@@ -258,7 +338,16 @@ fn handle_msg(
         }
 
         Inbound::Heartbeat => {
-            send(out_tx, &Outbound::HeartbeatAck);
+            if let Some(room_id) = state.conn_to_room.get(&conn_id) {
+                if let Some(mut room) = state.rooms.get_mut(room_id.value()) {
+                    if let Some(p) = room.participants.iter_mut().find(|p| p.conn_id == conn_id) {
+                        p.last_activity = chrono::Utc::now().timestamp();
+                    }
+                }
+                send(&Some(out_tx.clone()), &Outbound::HeartbeatAck);
+            } else {
+                send(&Some(out_tx.clone()), &Outbound::Error { message: "Room not found".into() });
+            }
         }
     }
 }
@@ -274,7 +363,9 @@ fn on_disconnect(conn_id: ConnId, state: &Arc<RelayState>) {
                     device_id: p.device_id,
                 }).unwrap_or_default();
                 for other in &room.participants {
-                    let _ = other.tx.send(notif.clone());
+                    if let Some(ref tx) = other.tx {
+                        let _ = tx.send(notif.clone());
+                    }
                 }
             }
             should_remove = room.participants.is_empty();
@@ -285,13 +376,203 @@ fn on_disconnect(conn_id: ConnId, state: &Arc<RelayState>) {
     }
 }
 
-fn send(tx: &mpsc::UnboundedSender<String>, msg: &Outbound) {
-    if let Ok(json) = serde_json::to_string(msg) {
-        let _ = tx.send(json);
+fn send(tx: &Option<mpsc::UnboundedSender<String>>, msg: &Outbound) {
+    if let Some(tx) = tx {
+        if let Ok(json) = serde_json::to_string(msg) {
+            let _ = tx.send(json);
+        }
     }
 }
 
 fn gen_room_id() -> String {
     let bytes: [u8; 6] = rand::random();
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+// ── HTTP Handlers ───────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct JoinRoomRequest {
+    device_id: String,
+    device_type: String,
+    public_key: String,
+}
+
+async fn join_room_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    Json(body): Json<JoinRoomRequest>,
+) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
+    let conn_id = state.next_id.fetch_add(1, Ordering::Relaxed);
+    
+    let existing_peer = state.rooms.get(&room_id).and_then(|r| {
+        r.participants.first().map(|p| (p.device_id.clone(), p.device_type.clone(), p.public_key.clone()))
+    });
+
+    let ok = if let Some(mut room) = state.rooms.get_mut(&room_id) {
+        if room.participants.len() < 2 {
+            room.participants.push(Participant {
+                conn_id,
+                device_id: body.device_id.clone(),
+                device_type: body.device_type.clone(),
+                public_key: body.public_key.clone(),
+                tx: None, // HTTP client
+                last_activity: chrono::Utc::now().timestamp(),
+            });
+            state.conn_to_room.insert(conn_id, room_id.clone());
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if ok {
+        if let Some(room) = state.rooms.get(&room_id) {
+            for p in &room.participants {
+                if p.conn_id != conn_id {
+                    send(&p.tx, &Outbound::PeerJoined {
+                        device_id: body.device_id.clone(),
+                        device_type: body.device_type.clone(),
+                        public_key: body.public_key.clone(),
+                    });
+                }
+            }
+        }
+        
+        if let Some((pdid, pdt, ppk)) = existing_peer {
+            Ok(Json(serde_json::json!({
+                "status": "joined",
+                "peer": {
+                    "device_id": pdid,
+                    "device_type": pdt,
+                    "public_key": ppk
+                }
+            })))
+        } else {
+            Ok(Json(serde_json::json!({
+                "status": "joined",
+                "peer": null
+            })))
+        }
+    } else {
+        Err(axum::http::StatusCode::BAD_REQUEST)
+    }
+}
+
+#[derive(Deserialize)]
+struct RelayMessageRequest {
+    device_id: String,
+    encrypted_data: String,
+    nonce: String,
+}
+
+async fn relay_message_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    Json(body): Json<RelayMessageRequest>,
+) -> axum::http::StatusCode {
+    if let Some(mut room) = state.rooms.get_mut(&room_id) {
+        let sender_conn_id = room.participants.iter()
+            .find(|p| p.device_id == body.device_id)
+            .map(|p| p.conn_id);
+            
+        if let Some(conn_id) = sender_conn_id {
+            let sender_type = room.participants.iter()
+                .find(|p| p.conn_id == conn_id)
+                .map(|p| p.device_type.clone())
+                .unwrap_or_default();
+            
+            let direction = if sender_type == "desktop" {
+                MessageDirection::ToMobile
+            } else {
+                MessageDirection::ToDesktop
+            };
+            
+            room.buffer_message(direction, body.encrypted_data.clone(), body.nonce.clone());
+
+            let relay_json = serde_json::to_string(&Outbound::Relay {
+                room_id: room_id.clone(), 
+                encrypted_data: body.encrypted_data, 
+                nonce: body.nonce,
+            }).unwrap_or_default();
+            
+            for p in &room.participants {
+                if p.conn_id != conn_id {
+                    if let Some(ref tx) = p.tx {
+                        let _ = tx.send(relay_json.clone());
+                    }
+                }
+            }
+            return axum::http::StatusCode::OK;
+        }
+    }
+    axum::http::StatusCode::NOT_FOUND
+}
+
+#[derive(Deserialize)]
+struct PollQuery {
+    since_seq: Option<u64>,
+    device_type: Option<String>,
+}
+
+#[derive(Serialize)]
+struct PollResponse {
+    messages: Vec<BufferedMessage>,
+    peer_connected: bool,
+}
+
+async fn poll_messages_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    axum::extract::Query(query): axum::extract::Query<PollQuery>,
+) -> Result<Json<PollResponse>, axum::http::StatusCode> {
+    let since = query.since_seq.unwrap_or(0);
+    let direction_str = query.device_type.as_deref().unwrap_or("mobile");
+    let direction = match direction_str {
+        "desktop" => MessageDirection::ToDesktop,
+        _ => MessageDirection::ToMobile,
+    };
+    
+    if let Some(mut room) = state.rooms.get_mut(&room_id) {
+        if let Some(p) = room.participants.iter_mut().find(|p| p.device_type == direction_str) {
+            p.last_activity = chrono::Utc::now().timestamp();
+        }
+        let peer_connected = room.participants.iter().any(|p| p.device_type != direction_str);
+        let messages = room.message_store
+            .iter()
+            .filter(|m| m.direction == direction && m.seq > since)
+            .cloned()
+            .collect();
+        Ok(Json(PollResponse { messages, peer_connected }))
+    } else {
+        Ok(Json(PollResponse { messages: vec![], peer_connected: false }))
+    }
+}
+
+#[derive(Deserialize)]
+struct AckRequest {
+    ack_seq: u64,
+    device_type: Option<String>,
+}
+
+async fn ack_messages_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    Json(body): Json<AckRequest>,
+) -> axum::http::StatusCode {
+    let direction_str = body.device_type.as_deref().unwrap_or("mobile");
+    let direction = match direction_str {
+        "desktop" => MessageDirection::ToDesktop,
+        _ => MessageDirection::ToMobile,
+    };
+    
+    if let Some(mut room) = state.rooms.get_mut(&room_id) {
+        if let Some(p) = room.participants.iter_mut().find(|p| p.device_type == direction_str) {
+            p.last_activity = chrono::Utc::now().timestamp();
+        }
+        room.message_store.retain(|m| !(m.direction == direction && m.seq <= body.ack_seq));
+    }
+    axum::http::StatusCode::OK
 }

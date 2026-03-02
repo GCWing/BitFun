@@ -90,6 +90,35 @@ impl MessageHistoryManager {
             Ok(vec![])
         }
     }
+
+    /// Get paginated message history
+    pub async fn get_messages_paginated(
+        &self,
+        session_id: &str,
+        limit: usize,
+        before_message_id: Option<&str>,
+    ) -> BitFunResult<(Vec<Message>, bool)> {
+        let messages = self.get_messages(session_id).await?;
+        
+        if messages.is_empty() {
+            return Ok((vec![], false));
+        }
+
+        let end_idx = if let Some(before_id) = before_message_id {
+            messages.iter().position(|m| m.id == before_id).unwrap_or(0)
+        } else {
+            messages.len()
+        };
+
+        if end_idx == 0 {
+            return Ok((vec![], false));
+        }
+
+        let start_idx = end_idx.saturating_sub(limit);
+        let has_more = start_idx > 0;
+        
+        Ok((messages[start_idx..end_idx].to_vec(), has_more))
+    }
     
     /// Get recent N messages
     pub async fn get_recent_messages(&self, session_id: &str, count: usize) -> BitFunResult<Vec<Message>> {
