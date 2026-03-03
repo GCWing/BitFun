@@ -46,6 +46,8 @@
     "e2e:install": "cd tests/e2e && npm install",
     "e2e:test": "cd tests/e2e && npm test",
     "e2e:test:l0": "cd tests/e2e && npm run test:l0",
+    "e2e:test:l0:all": "cd tests/e2e && npm run test:l0:all",
+    "e2e:test:l1": "cd tests/e2e && npm run test:l1",
     "e2e:test:smoke": "cd tests/e2e && npm run test:smoke",
     "e2e:test:chat": "cd tests/e2e && npm run test:chat"
   },

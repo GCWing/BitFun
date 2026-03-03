@@ -4,4 +4,3 @@ export { StartupPage } from './StartupPage';
 export { ChatPage } from './ChatPage';
 export { Header } from './components/Header';
 export { ChatInput } from './components/ChatInput';
-export { MessageList } from './components/MessageList';

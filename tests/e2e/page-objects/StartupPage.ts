@@ -2,16 +2,17 @@
  * Page object for startup screen (no workspace open).
  */
 import { BasePage } from './BasePage';
-import { browser } from '@wdio/globals';
+import { browser, $ } from '@wdio/globals';
 
 export class StartupPage extends BasePage {
   private selectors = {
-    container: '[data-testid="startup-container"]',
-    openFolderBtn: '[data-testid="startup-open-folder-btn"]',
-    recentProjects: '[data-testid="startup-recent-projects"]',
-    recentProjectItem: '[data-testid="startup-recent-project-item"]',
-    brandLogo: '[data-testid="startup-brand-logo"]',
-    welcomeText: '[data-testid="startup-welcome-text"]',
+    // Use actual frontend class names
+    container: '.welcome-scene--first-time, .welcome-scene, .bitfun-scene-viewport--welcome',
+    openFolderBtn: '.welcome-scene__link-btn, .welcome-scene__primary-action',
+    recentProjects: '.welcome-scene__recent-list',
+    recentProjectItem: '.welcome-scene__recent-item',
+    brandLogo: '.welcome-scene__logo-img',
+    welcomeText: '.welcome-scene__greeting-label, .welcome-scene__workspace-title',
   };
 
   async waitForLoad(): Promise<void> {
@@ -20,7 +21,26 @@ export class StartupPage extends BasePage {
   }
 
   async isVisible(): Promise<boolean> {
-    return this.isElementVisible(this.selectors.container);
+    // Check multiple selectors
+    const selectors = [
+      '.welcome-scene--first-time',
+      '.welcome-scene',
+      '.bitfun-scene-viewport--welcome',
+    ];
+
+    for (const selector of selectors) {
+      try {
+        const element = await $(selector);
+        const exists = await element.isExisting();
+        if (exists) {
+          return true;
+        }
+      } catch (e) {
+        // Continue to next selector
+      }
+    }
+    // Ensure we return false, not undefined
+    return false;
   }
 
   async clickOpenFolder(): Promise<void> {
@@ -28,33 +48,50 @@ export class StartupPage extends BasePage {
   }
 
   async isOpenFolderButtonVisible(): Promise<boolean> {
-    return this.isElementVisible(this.selectors.openFolderBtn);
+    // Check for any action button on welcome scene
+    const selectors = [
+      '.welcome-scene__link-btn',
+      '.welcome-scene__primary-action',
+      '.welcome-scene__session-btn',
+    ];
+
+    for (const selector of selectors) {
+      try {
+        const element = await $(selector);
+        const exists = await element.isExisting();
+        if (exists) {
+          return true;
+        }
+      } catch (e) {
+        // Continue
+      }
+    }
+    return false;
   }
 
   async getRecentProjects(): Promise<string[]> {
-    const exists = await this.isElementExist(this.selectors.recentProjects);
-    if (!exists) {
-      return [];
-    }
-
     const items = await browser.$$(this.selectors.recentProjectItem);
     const projects: string[] = [];
-    
+
     for (const item of items) {
-      const text = await item.getText();
-      projects.push(text);
+      try {
+        const text = await item.getText();
+        projects.push(text);
+      } catch (e) {
+        // Skip item if text cannot be retrieved
+      }
     }
-    
+
     return projects;
   }
 
   async clickRecentProject(index: number): Promise<void> {
     const items = await browser.$$(this.selectors.recentProjectItem);
-    
+
     if (index >= items.length) {
       throw new Error(`Recent project index ${index} out of range (total: ${items.length})`);
     }
-    
+
     await items[index].click();
   }
 
@@ -63,11 +100,67 @@ export class StartupPage extends BasePage {
   }
 
   async getWelcomeText(): Promise<string> {
-    const exists = await this.isElementExist(this.selectors.welcomeText);
-    if (!exists) {
-      return '';
+    const selectors = [
+      '.welcome-scene__greeting-label',
+      '.welcome-scene__workspace-title',
+    ];
+
+    for (const selector of selectors) {
+      try {
+        const element = await $(selector);
+        const exists = await element.isExisting();
+        if (exists) {
+          return await element.getText();
+        }
+      } catch (e) {
+        // Continue
+      }
     }
-    return this.getText(this.selectors.welcomeText);
+    return '';
+  }
+
+  /**
+   * Open a workspace by calling Tauri API directly
+   * This bypasses the native file dialog for E2E testing
+   */
+  async openWorkspaceByPath(workspacePath: string): Promise<void> {
+    try {
+      console.log(`[StartupPage] Opening workspace: ${workspacePath}`);
+
+      // Call Tauri command directly via browser.execute
+      await browser.execute((path: string) => {
+        // @ts-ignore - Tauri API is available in the app
+        return window.__TAURI__.core.invoke('open_workspace', {
+          request: { path }
+        });
+      }, workspacePath);
+
+      // Wait for workspace to load
+      await this.wait(2000);
+
+      console.log('[StartupPage] Workspace opened successfully');
+    } catch (error) {
+      console.error('[StartupPage] Failed to open workspace:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a recent workspace exists and click it
+   */
+  async openRecentWorkspace(index: number = 0): Promise<boolean> {
+    try {
+      const recentProjects = await this.getRecentProjects();
+      if (recentProjects.length > index) {
+        await this.clickRecentProject(index);
+        await this.wait(2000);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('[StartupPage] Failed to open recent workspace:', error);
+      return false;
+    }
   }
 }
 

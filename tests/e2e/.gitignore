@@ -1,0 +1,18 @@
+# E2E Test Reports and Artifacts
+reports/
+*.log
+
+# Screenshots
+screenshots/
+
+# WebDriverIO generated files
+.tmp/
+allure-results/
+allure-report/
+
+# Node modules (if any local dependencies)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db

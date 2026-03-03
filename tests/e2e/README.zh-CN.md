@@ -4,103 +4,77 @@
 
 使用 WebDriverIO + tauri-driver 的 E2E 测试框架。
 
-## 前置条件
+> 完整文档请参阅 [E2E-TESTING-GUIDE.zh-CN.md](E2E-TESTING-GUIDE.zh-CN.md)
 
-### 1. 安装 tauri-driver
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
+# 安装 tauri-driver
 cargo install tauri-driver --locked
-```
 
-### 2. 构建应用
-
-```bash
-# 在项目根目录执行
+# 构建应用
 npm run desktop:build
+
+# 安装测试依赖
+cd tests/e2e && npm install
 ```
 
-确保存在 `apps/desktop/target/release/BitFun.exe`（Windows）或 `apps/desktop/target/release/bitfun`（Linux）。
-
-### 3. 安装 E2E 依赖
+### 2. 运行测试
 
 ```bash
 cd tests/e2e
-npm install
-```
 
-## 运行测试
-
-### 运行 L0 smoke 测试
-
-```bash
-cd tests/e2e
+# L0 冒烟测试 (最快)
 npm run test:l0
-```
+npm run test:l0:all
 
-### 运行所有 smoke 测试
+# L1 功能测试
+npm run test:l1
 
-```bash
-cd tests/e2e
-npm run test:smoke
-```
-
-### 运行全部测试
-
-```bash
-cd tests/e2e
+# 运行所有测试
 npm test
 ```
+
+## 测试级别
+
+| 级别 | 目的 | 运行时间 | AI需求 |
+|------|------|----------|--------|
+| L0 | 冒烟测试 - 验证基本功能 | < 1分钟 | 不需要 |
+| L1 | 功能测试 - 验证功能特性 | 5-15分钟 | 不需要(mock) |
+| L2 | 集成测试 - 完整系统验证 | 15-60分钟 | 需要 |
 
 ## 目录结构
 
 ```
 tests/e2e/
-├── config/                 # WebDriverIO 配置
-│   ├── wdio.conf.ts       # 主配置
-│   └── capabilities.ts    # 平台能力配置
-├── specs/                  # 测试用例
-│   ├── l0-smoke.spec.ts   # L0 smoke 测试
-│   ├── startup/           # 启动相关测试
-│   └── chat/              # 聊天相关测试
-├── page-objects/           # Page Object 模型
-├── helpers/                # 辅助工具
-└── fixtures/               # 测试数据
+├── specs/           # 测试用例
+├── page-objects/    # Page Object 模型
+├── helpers/         # 辅助工具
+├── fixtures/        # 测试数据
+└── config/          # 配置文件
 ```
 
-## 故障排除
+## 常见问题
 
-### 1. 找不到 tauri-driver
-
-确保已安装 tauri-driver，并且 `~/.cargo/bin` 已加入 PATH：
+### tauri-driver 找不到
 
 ```bash
 cargo install tauri-driver --locked
 ```
 
-### 2. 未构建应用
-
-请先构建应用：
+### 应用未构建
 
 ```bash
 npm run desktop:build
 ```
 
-### 3. 测试超时
+### 测试超时
 
-Tauri 应用启动可能较慢；如有需要请在配置中调整超时时间。
+Debug 构建启动较慢，可在配置中调整超时时间。
 
-## 添加测试
+## 更多信息
 
-1. 在 `specs/` 下创建新的 `.spec.ts` 文件
-2. 使用 Page Object 模式
-3. 为被测 UI 元素添加 `data-testid` 属性
-
-## data-testid 命名
-
-格式：`{module}-{component}-{element}`
-
-示例：
-- `header-container` – 页头容器
-- `chat-input-send-btn` – 聊天发送按钮
-- `startup-open-folder-btn` – 启动页“打开文件夹”按钮
-
+- [完整测试指南](E2E-TESTING-GUIDE.zh-CN.md) - 测试编写规范、最佳实践、测试计划
+- [BitFun 项目结构](../../AGENTS.md)

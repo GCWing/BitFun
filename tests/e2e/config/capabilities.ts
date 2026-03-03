@@ -4,6 +4,12 @@
 
 import * as path from 'path';
 import * as os from 'os';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// ESM-compatible __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Get the application path based on the current platform
@@ -16,14 +22,14 @@ export function getApplicationPath(buildType: 'debug' | 'release' = 'release'): 
   let appName: string;
   
   if (isWindows) {
-    appName = 'BitFun.exe';
+    appName = 'bitfun-desktop.exe';
   } else if (isMac) {
     appName = 'BitFun.app/Contents/MacOS/BitFun';
   } else {
-    appName = 'bitfun';
+    appName = 'bitfun-desktop';
   }
   
-  return path.resolve(__dirname, '..', '..', '..', 'apps', 'desktop', 'target', buildType, appName);
+  return path.resolve(__dirname, '..', '..', '..', 'target', buildType, appName);
 }
 
 /**
