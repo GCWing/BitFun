@@ -24,6 +24,7 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 dashmap = "5.5"
 rand = "0.8"
 base64 = "0.21"
+sha2 = "0.10"
 
 [profile.release]
 opt-level = 3

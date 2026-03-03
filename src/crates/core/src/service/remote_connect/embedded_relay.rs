@@ -74,6 +74,10 @@ struct RelayState {
     rooms: DashMap<String, Room>,
     conn_to_room: DashMap<ConnId, String>,
     next_id: AtomicU64,
+    /// Global content-addressed store: sha256 hex -> file bytes.
+    content_store: DashMap<String, Arc<Vec<u8>>>,
+    /// Per-room file manifests: room_id -> (relative_path -> sha256 hex).
+    room_manifests: DashMap<String, std::collections::HashMap<String, String>>,
 }
 
 impl RelayState {
@@ -82,6 +86,8 @@ impl RelayState {
             rooms: DashMap::new(),
             conn_to_room: DashMap::new(),
             next_id: AtomicU64::new(1),
+            content_store: DashMap::new(),
+            room_manifests: DashMap::new(),
         })
     }
 }
@@ -158,6 +164,10 @@ pub async fn start_embedded_relay(port: u16, static_dir: Option<&str>) -> anyhow
         .route("/api/rooms/{room_id}/message", axum::routing::post(relay_message_http))
         .route("/api/rooms/{room_id}/poll", get(poll_messages_http))
         .route("/api/rooms/{room_id}/ack", axum::routing::post(ack_messages_http))
+        .route("/api/rooms/{room_id}/upload-web", axum::routing::post(upload_web_http))
+        .route("/api/rooms/{room_id}/check-web-files", axum::routing::post(check_web_files_http))
+        .route("/api/rooms/{room_id}/upload-web-files", axum::routing::post(upload_web_files_http))
+        .route("/r/{room_id}/{*rest}", get(serve_room_web_http))
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(app_state);
 
@@ -618,4 +628,205 @@ async fn ack_messages_http(
         room.message_store.retain(|m| !(m.direction == direction && m.seq <= body.ack_seq));
     }
     axum::http::StatusCode::OK
+}
+
+// ── Mobile-web upload & serving (content-addressed in-memory store) ─────
+
+fn hex_sha256(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
+}
+
+#[derive(Deserialize)]
+struct UploadWebRequest {
+    files: std::collections::HashMap<String, String>,
+}
+
+async fn upload_web_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    Json(body): Json<UploadWebRequest>,
+) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+
+    if !state.rooms.contains_key(&room_id) {
+        return Err(axum::http::StatusCode::NOT_FOUND);
+    }
+
+    let mut manifest = std::collections::HashMap::new();
+    let mut written = 0usize;
+    let mut reused = 0usize;
+
+    for (rel_path, b64_content) in &body.files {
+        if rel_path.contains("..") {
+            continue;
+        }
+        let decoded = B64.decode(b64_content).map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+        let hash = hex_sha256(&decoded);
+
+        if !state.content_store.contains_key(&hash) {
+            state.content_store.insert(hash.clone(), Arc::new(decoded));
+            written += 1;
+        } else {
+            reused += 1;
+        }
+        manifest.insert(rel_path.clone(), hash);
+    }
+
+    state.room_manifests.insert(room_id.clone(), manifest);
+    info!("Room {room_id}: upload-web complete (new={written}, reused={reused})");
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "files_written": written,
+        "files_reused": reused
+    })))
+}
+
+#[derive(Deserialize)]
+struct FileManifestEntry {
+    path: String,
+    hash: String,
+    #[allow(dead_code)]
+    size: u64,
+}
+
+#[derive(Deserialize)]
+struct CheckWebFilesRequest {
+    files: Vec<FileManifestEntry>,
+}
+
+async fn check_web_files_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    Json(body): Json<CheckWebFilesRequest>,
+) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
+    if !state.rooms.contains_key(&room_id) {
+        return Err(axum::http::StatusCode::NOT_FOUND);
+    }
+
+    let mut manifest = std::collections::HashMap::new();
+    let mut needed = Vec::new();
+    let mut existing_count = 0usize;
+
+    for entry in &body.files {
+        if entry.path.contains("..") {
+            continue;
+        }
+        manifest.insert(entry.path.clone(), entry.hash.clone());
+        if state.content_store.contains_key(&entry.hash) {
+            existing_count += 1;
+        } else {
+            needed.push(entry.path.clone());
+        }
+    }
+
+    state.room_manifests.insert(room_id.clone(), manifest);
+
+    info!(
+        "Room {room_id}: check-web-files total={}, existing={existing_count}, needed={}",
+        body.files.len(),
+        needed.len()
+    );
+
+    Ok(Json(serde_json::json!({
+        "needed": needed,
+        "existing_count": existing_count,
+        "total_count": body.files.len()
+    })))
+}
+
+#[derive(Deserialize)]
+struct UploadWebFilesEntry {
+    content: String,
+    hash: String,
+}
+
+#[derive(Deserialize)]
+struct UploadWebFilesRequest {
+    files: std::collections::HashMap<String, UploadWebFilesEntry>,
+}
+
+async fn upload_web_files_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path(room_id): axum::extract::Path<String>,
+    Json(body): Json<UploadWebFilesRequest>,
+) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+
+    if !state.rooms.contains_key(&room_id) {
+        return Err(axum::http::StatusCode::NOT_FOUND);
+    }
+
+    let mut stored = 0usize;
+    for (rel_path, entry) in &body.files {
+        if rel_path.contains("..") {
+            continue;
+        }
+        let decoded = B64.decode(&entry.content).map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+        let actual_hash = hex_sha256(&decoded);
+        if actual_hash != entry.hash {
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
+
+        if !state.content_store.contains_key(&actual_hash) {
+            state.content_store.insert(actual_hash.clone(), Arc::new(decoded));
+            stored += 1;
+        }
+
+        if let Some(mut manifest) = state.room_manifests.get_mut(&room_id) {
+            manifest.insert(rel_path.clone(), actual_hash);
+        }
+    }
+
+    info!("Room {room_id}: upload-web-files stored {stored} new files");
+    Ok(Json(serde_json::json!({ "status": "ok", "files_stored": stored })))
+}
+
+async fn serve_room_web_http(
+    State(state): State<Arc<RelayState>>,
+    axum::extract::Path((room_id, rest)): axum::extract::Path<(String, String)>,
+) -> Result<axum::response::Response, axum::http::StatusCode> {
+    use axum::body::Body;
+    use axum::http::header;
+    use axum::response::IntoResponse;
+
+    let file_path = if rest.is_empty() { "index.html" } else { rest.trim_start_matches('/') };
+    let file_path = if file_path.is_empty() { "index.html" } else { file_path };
+
+    let manifest = state
+        .room_manifests
+        .get(&room_id)
+        .ok_or(axum::http::StatusCode::NOT_FOUND)?;
+
+    let hash = manifest
+        .get(file_path)
+        .or_else(|| manifest.get("index.html"))
+        .ok_or(axum::http::StatusCode::NOT_FOUND)?;
+
+    let content = state
+        .content_store
+        .get(hash)
+        .ok_or(axum::http::StatusCode::NOT_FOUND)?;
+
+    let mime = mime_from_ext(file_path);
+    Ok(([(header::CONTENT_TYPE, mime)], Body::from(content.value().as_ref().clone())).into_response())
+}
+
+fn mime_from_ext(path: &str) -> &'static str {
+    match path.rsplit('.').next() {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "application/javascript; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("json") => "application/json",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("ico") => "image/x-icon",
+        Some("woff2") => "font/woff2",
+        Some("woff") => "font/woff",
+        Some("ttf") => "font/ttf",
+        Some("wasm") => "application/wasm",
+        _ => "application/octet-stream",
+    }
 }
