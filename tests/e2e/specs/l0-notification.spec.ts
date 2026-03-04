@@ -25,7 +25,6 @@ describe('L0 Notification', () => {
       hasWorkspace = await chatInput.isExisting();
       
       console.log('[L0] Has workspace:', hasWorkspace);
-      // 验证能够检测到工作区状态
       expect(typeof hasWorkspace).toBe('boolean');
     });
 
@@ -89,8 +88,6 @@ describe('L0 Notification', () => {
         }
       }
 
-      // 通知入口可能直接可见或在头部区域
-      // 验证能够检测到通知相关UI元素
       expect(entryFound || hasWorkspace).toBe(true);
     });
   });
@@ -112,7 +109,6 @@ describe('L0 Notification', () => {
         console.log('[L0] Notification center not visible (may need to be triggered)');
       }
 
-      // 验证通知中心结构存在性检查完成
       expect(typeof centerExists).toBe('boolean');
     });
 
@@ -132,7 +128,6 @@ describe('L0 Notification', () => {
         console.log('[L0] Notification container not visible');
       }
 
-      // 验证通知容器结构存在性检查完成
       expect(typeof containerExists).toBe('boolean');
     });
   });

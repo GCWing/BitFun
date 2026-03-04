@@ -34,7 +34,8 @@ describe('L1 File Tree', () => {
 
       if (!openedRecent) {
         // If no recent workspace, try to open current project directory
-        const testWorkspacePath = 'C:\\Users\\wuxiao\\BitFun';
+        // Use environment variable or default to relative path
+        const testWorkspacePath = process.env.E2E_TEST_WORKSPACE || process.cwd();
         console.log('[L1] Opening test workspace:', testWorkspacePath);
 
         try {
@@ -214,7 +215,6 @@ describe('L1 File Tree', () => {
         expect(filePath).toBeDefined();
       } else {
         console.log('[L1] No file nodes with data-file-path found');
-        // 没有文件节点时，验证检测完成
         expect(fileNodes.length).toBe(0);
       }
     });
@@ -230,7 +230,6 @@ describe('L1 File Tree', () => {
 
       console.log('[L1] Files:', files.length, 'Directories:', directories.length);
 
-      // 验证文件和目录检测完成
       expect(files.length).toBeGreaterThanOrEqual(0);
       expect(directories.length).toBeGreaterThanOrEqual(0);
     });
@@ -326,7 +325,6 @@ describe('L1 File Tree', () => {
         console.log('[L1] File selected, classes:', isSelected?.includes('selected'));
       }
 
-      // 验证文件选择完成
       expect(filePath).toBeDefined();
     });
 

@@ -110,7 +110,6 @@ describe('L1 Navigation', () => {
       await browser.pause(500);
 
       console.log('[L1] Navigation item clicked');
-      // 验证导航项文本已获取
       expect(itemText).toBeDefined();
     });
   });
@@ -207,7 +206,6 @@ describe('L1 Navigation', () => {
       const expandableSections = await browser.$$('.bitfun-nav-panel__section-header');
       console.log('[L1] Expandable sections:', expandableSections.length);
 
-      // 验证可展开区域检测完成
       expect(expandableSections.length).toBeGreaterThanOrEqual(0);
     });
 
@@ -220,7 +218,6 @@ describe('L1 Navigation', () => {
       const inlineLists = await browser.$$('.bitfun-nav-panel__inline-list');
       console.log('[L1] Inline lists found:', inlineLists.length);
 
-      // 验证内联列表检测完成
       expect(inlineLists.length).toBeGreaterThanOrEqual(0);
     });
   });

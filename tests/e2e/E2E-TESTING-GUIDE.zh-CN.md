@@ -244,16 +244,16 @@ npm test -- --spec ./specs/l0-smoke.spec.ts
 
 ```bash
 # Release 模式输出示例
-application: C:\Users\wuxiao\BitFun\target\release\bitfun-desktop.exe
-[0-0] Application: C:\Users\wuxiao\BitFun\target\release\bitfun-desktop.exe
+application: <PROJECT_ROOT>\target\release\bitfun-desktop.exe
+[0-0] Application: <PROJECT_ROOT>\target\release\bitfun-desktop.exe
                                           ^^^^^^^^
 
 # Dev 模式输出示例
-application: C:\Users\wuxiao\BitFun\target\debug\bitfun-desktop.exe
+application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
                                         ^^^^^
 Debug build detected, checking dev server...    ← Dev 模式特有
 Dev server is already running on port 1422      ← Dev 模式特有
-[0-0] Application: C:\Users\wuxiao\BitFun\target\debug\bitfun-desktop.exe
+[0-0] Application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
 ```
 
 **快速检查命令**：

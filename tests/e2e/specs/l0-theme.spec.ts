@@ -25,7 +25,6 @@ describe('L0 Theme', () => {
       hasWorkspace = await chatInput.isExisting();
       
       console.log('[L0] Has workspace:', hasWorkspace);
-      // 验证能够检测到工作区状态
       expect(typeof hasWorkspace).toBe('boolean');
     });
 
@@ -108,8 +107,6 @@ describe('L0 Theme', () => {
         console.log('[L0] Theme selector not found directly - may be in settings panel');
       }
 
-      // 主题选择器可能直接可见或在设置面板中
-      // 验证能够检测到主题相关UI元素
       expect(selectorFound || hasWorkspace).toBe(true);
     });
   });

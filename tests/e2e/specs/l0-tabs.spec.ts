@@ -25,7 +25,6 @@ describe('L0 Tab Bar', () => {
       hasWorkspace = await chatInput.isExisting();
       
       console.log('[L0] Has workspace:', hasWorkspace);
-      // 验证能够检测到工作区状态
       expect(typeof hasWorkspace).toBe('boolean');
     });
 
@@ -66,8 +65,6 @@ describe('L0 Tab Bar', () => {
         console.log('[L0] This is expected if no files have been opened');
       }
 
-      // 标签栏可能存在（如果有打开的文件）
-      // 验证能够检测到标签栏相关结构
       expect(typeof tabBarFound).toBe('boolean');
     });
   });
@@ -106,8 +103,6 @@ describe('L0 Tab Bar', () => {
         console.log('[L0] No open tabs found - expected if no files opened');
       }
 
-      // 标签可能存在（如果有打开的文件）
-      // 验证能够检测到标签相关结构
       expect(typeof tabsFound).toBe('boolean');
     });
 
@@ -140,8 +135,6 @@ describe('L0 Tab Bar', () => {
         console.log('[L0] No tab close buttons found');
       }
 
-      // 关闭按钮可能存在（如果有打开的标签）
-      // 验证能够检测到关闭按钮相关结构
       expect(typeof closeBtnFound).toBe('boolean');
     });
   });
@@ -165,7 +158,6 @@ describe('L0 Tab Bar', () => {
         console.log('[L0] Main content area (alternative) found:', altExists);
       }
 
-      // 主内容区域应该存在
       expect(hasWorkspace).toBe(true);
     });
   });

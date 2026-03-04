@@ -64,8 +64,6 @@ describe('L1 Editor', () => {
         console.log('[L1] Editor not found - no file may be open');
       }
 
-      // 编辑器可能存在（如果有打开的文件）
-      // 验证能够检测到编辑器相关结构
       expect(typeof editorFound).toBe('boolean');
     });
 
@@ -87,7 +85,6 @@ describe('L1 Editor', () => {
         expect(editorId).toBeDefined();
       } else {
         console.log('[L1] Monaco editor not visible');
-        // 编辑器未打开时，验证检测完成
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -176,8 +173,6 @@ describe('L1 Editor', () => {
         console.log('[L1] Tab bar not found - may not have multiple files open');
       }
 
-      // 标签栏可能存在（如果有多个打开的文件）
-      // 验证能够检测到标签栏相关结构
       expect(typeof tabBarFound).toBe('boolean');
     });
 
@@ -196,7 +191,6 @@ describe('L1 Editor', () => {
         console.log('[L1] First tab text:', tabText);
       }
 
-      // 验证标签检测完成
       expect(tabs.length).toBeGreaterThanOrEqual(0);
     });
   });
@@ -227,7 +221,6 @@ describe('L1 Editor', () => {
       await browser.pause(300);
 
       console.log('[L1] Switched back to first tab');
-      // 验证标签切换完成
       expect(tabs.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -292,8 +285,6 @@ describe('L1 Editor', () => {
         }
       }
 
-      // 状态栏可能存在
-      // 验证能够检测到状态栏相关结构
       expect(typeof statusFound).toBe('boolean');
     });
   });

@@ -166,16 +166,16 @@ When running tests, check the first few lines of output:
 
 ```bash
 # Release Mode Output Example
-application: C:\Users\wuxiao\BitFun\target\release\bitfun-desktop.exe
-[0-0] Application: C:\Users\wuxiao\BitFun\target\release\bitfun-desktop.exe
+application: <PROJECT_ROOT>\target\release\bitfun-desktop.exe
+[0-0] Application: <PROJECT_ROOT>\target\release\bitfun-desktop.exe
                                           ^^^^^^^^
 
 # Dev Mode Output Example
-application: C:\Users\wuxiao\BitFun\target\debug\bitfun-desktop.exe
+application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
                                         ^^^^^
 Debug build detected, checking dev server...    ← Dev mode specific
 Dev server is already running on port 1422      ← Dev mode specific
-[0-0] Application: C:\Users\wuxiao\BitFun\target\debug\bitfun-desktop.exe
+[0-0] Application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
 ```
 
 **Quick Check Command**:

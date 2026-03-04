@@ -64,8 +64,6 @@ describe('L1 Git Panel', () => {
         console.log('[L1] Git panel not found - may need to navigate to Git view');
       }
 
-      // Git面板可能存在
-      // 验证能够检测到Git相关结构
       expect(typeof gitFound).toBe('boolean');
     });
 
@@ -89,7 +87,6 @@ describe('L1 Git Panel', () => {
         isRepository: repoExists,
       });
 
-      // 验证Git状态检测完成
       expect(typeof notRepoExists).toBe('boolean');
       expect(typeof loadingExists).toBe('boolean');
       expect(typeof repoExists).toBe('boolean');
@@ -113,7 +110,6 @@ describe('L1 Git Panel', () => {
         expect(branchText.length).toBeGreaterThan(0);
       } else {
         console.log('[L1] Branch element not found - may not be in git repo');
-        // 不在Git仓库中时，验证检测完成
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -158,8 +154,6 @@ describe('L1 Git Panel', () => {
         console.log('[L1] No file changes displayed');
       }
 
-      // 文件变更可能存在
-      // 验证能够检测到变更相关结构
       expect(typeof changesFound).toBe('boolean');
     });
 
@@ -190,8 +184,6 @@ describe('L1 Git Panel', () => {
         console.log('[L1] No status indicators found');
       }
 
-      // 状态指示器可能存在
-      // 验证能够检测到状态相关结构
       expect(typeof statusFound).toBe('boolean');
     });
 
@@ -223,7 +215,6 @@ describe('L1 Git Panel', () => {
         expect(exists).toBe(true);
       } else {
         console.log('[L1] Commit message input not found');
-        // 不在Git仓库中时，验证检测完成
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -255,8 +246,6 @@ describe('L1 Git Panel', () => {
         console.log('[L1] No file action buttons found');
       }
 
-      // 文件操作按钮可能存在
-      // 验证能够检测到操作按钮相关结构
       expect(typeof actionsFound).toBe('boolean');
     });
   });
@@ -278,7 +267,6 @@ describe('L1 Git Panel', () => {
       const selectedFiles = await browser.$$('.wcv-file--selected');
       console.log('[L1] Currently selected files:', selectedFiles.length);
 
-      // 验证选中的文件检测完成
       expect(selectedFiles.length).toBeGreaterThanOrEqual(0);
     });
   });

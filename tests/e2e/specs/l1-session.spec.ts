@@ -86,7 +86,6 @@ describe('L1 Session', () => {
           expect(validModeStrings).toContain(mode);
         }
       } else {
-        // 会话场景不存在时，验证检测完成
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -108,8 +107,6 @@ describe('L1 Session', () => {
         console.log('[L1] Sessions section not found directly');
       }
 
-      // 会话区域可能存在
-      // 验证能够检测到会话相关结构
       expect(typeof exists).toBe('boolean');
     });
 
@@ -160,8 +157,6 @@ describe('L1 Session', () => {
         console.log('[L1] New session button not found');
       }
 
-      // 新会话按钮可能存在
-      // 验证能够检测到按钮相关结构
       expect(typeof buttonFound).toBe('boolean');
     });
 
@@ -190,7 +185,6 @@ describe('L1 Session', () => {
         console.log('[L1] New session button clicked');
       }
 
-      // 验证新会话按钮点击完成
       expect(typeof exists).toBe('boolean');
     });
   });
@@ -221,7 +215,6 @@ describe('L1 Session', () => {
       await browser.pause(500);
 
       console.log('[L1] Switched back to first session');
-      // 验证会话切换完成
       expect(sessionItems.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -260,8 +253,6 @@ describe('L1 Session', () => {
       const exists = await renameOption.isExisting();
 
       console.log('[L1] Rename option exists:', exists);
-      // 重命名选项可能存在
-      // 验证能够检测到相关结构
       expect(typeof exists).toBe('boolean');
     });
 
@@ -275,8 +266,6 @@ describe('L1 Session', () => {
       const exists = await deleteOption.isExisting();
 
       console.log('[L1] Delete option exists:', exists);
-      // 删除选项可能存在
-      // 验证能够检测到相关结构
       expect(typeof exists).toBe('boolean');
     });
   });
@@ -311,7 +300,6 @@ describe('L1 Session', () => {
         console.log('[L1] Mode after toggle:', newMode);
       }
 
-      // 验证面板模式切换完成
       expect(typeof resizerExists).toBe('boolean');
     });
   });

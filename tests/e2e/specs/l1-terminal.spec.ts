@@ -64,8 +64,6 @@ describe('L1 Terminal', () => {
         console.log('[L1] Terminal not found - may need to be opened');
       }
 
-      // 终端可能存在
-      // 验证能够检测到终端相关结构
       expect(typeof terminalFound).toBe('boolean');
     });
 
@@ -86,8 +84,6 @@ describe('L1 Terminal', () => {
         expect(terminalId).toBeDefined();
       } else {
         console.log('[L1] Terminal with data attributes not found');
-        // 终端可能未打开
-        // 验证能够检测到相关结构
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -114,8 +110,6 @@ describe('L1 Terminal', () => {
         expect(viewportExists).toBe(true);
       } else {
         console.log('[L1] xterm.js not visible');
-        // xterm.js可能未显示
-        // 验证能够检测到相关结构
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -136,8 +130,6 @@ describe('L1 Terminal', () => {
         expect(size.width).toBeGreaterThan(0);
         expect(size.height).toBeGreaterThan(0);
       } else {
-        // 终端可能未打开
-        // 验证能够检测到相关结构
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -162,7 +154,6 @@ describe('L1 Terminal', () => {
       await browser.pause(200);
 
       console.log('[L1] Terminal clicked');
-      // 验证终端点击完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -189,7 +180,6 @@ describe('L1 Terminal', () => {
       await browser.pause(200);
 
       console.log('[L1] Typed test input into terminal');
-      // 验证键盘输入完成
       expect(typeof exists).toBe('boolean');
     });
   });
@@ -232,8 +222,6 @@ describe('L1 Terminal', () => {
 
         expect(scrollHeight).toBeDefined();
       } else {
-        // 视口可能未显示
-        // 验证能够检测到相关结构
         expect(typeof exists).toBe('boolean');
       }
     });

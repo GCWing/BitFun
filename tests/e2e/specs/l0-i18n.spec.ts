@@ -25,7 +25,6 @@ describe('L0 Internationalization', () => {
       hasWorkspace = await chatInput.isExisting();
       
       console.log('[L0] Has workspace:', hasWorkspace);
-      // 验证能够检测到工作区状态
       expect(typeof hasWorkspace).toBe('boolean');
     });
 
@@ -87,8 +86,6 @@ describe('L0 Internationalization', () => {
         console.log('[L0] Language selector not found directly - may be in settings panel');
       }
 
-      // 语言选择器可能直接可见或在设置面板中
-      // 验证能够检测到语言相关UI元素
       expect(selectorFound || hasWorkspace).toBe(true);
     });
   });

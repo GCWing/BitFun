@@ -37,7 +37,6 @@ describe('L0 Observe - Keep window open', () => {
     }
 
     console.log('[Observe] Done');
-    // 验证观察测试完成
     expect(title).toBeDefined();
   });
 });

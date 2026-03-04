@@ -40,7 +40,8 @@ describe('L1 Chat Input Validation', () => {
 
       if (!openedRecent) {
         // If no recent workspace, try to open current project directory
-        const testWorkspacePath = 'C:\\Users\\wuxiao\\BitFun';
+        // Use environment variable or default to relative path
+        const testWorkspacePath = process.env.E2E_TEST_WORKSPACE || process.cwd();
         console.log('[L1] Opening test workspace:', testWorkspacePath);
 
         try {
@@ -227,7 +228,7 @@ describe('L1 Chat Input Validation', () => {
         return;
       }
       
-      const testMessage = 'E2E L1 test - please ignore';
+      const testMessage = 'Test message';
       await chatInput.typeMessage(testMessage);
       
       const countBefore = await chatPage.getMessageCount();

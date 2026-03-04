@@ -124,7 +124,6 @@ describe('L1 Chat', () => {
       await browser.pause(500);
 
       console.log('[L1] Message sent via send button');
-      // 验证消息已输入
       expect(typed).toBe('L1 test message');
     });
 
@@ -140,7 +139,6 @@ describe('L1 Chat', () => {
       await browser.pause(500);
 
       console.log('[L1] Message sent via Enter key');
-      // 验证消息已输入
       expect(typed).toBe('L1 test with Enter');
     });
 
@@ -193,7 +191,6 @@ describe('L1 Chat', () => {
       const exists = await stopBtn.isExisting();
 
       console.log('[L1] Stop/cancel button exists:', exists);
-      // 验证停止按钮存在性检测完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -212,7 +209,6 @@ describe('L1 Chat', () => {
       const isVisible = await cancelBtn.isDisplayed().catch(() => false);
 
       console.log('[L1] Stop button visible during streaming:', isVisible);
-      // 验证停止按钮可见性检测完成
       expect(typeof isVisible).toBe('boolean');
     });
   });
@@ -292,7 +288,6 @@ describe('L1 Chat', () => {
       const exists = await loadingIndicator.isExisting();
 
       console.log('[L1] Loading indicator exists:', exists);
-      // 验证加载指示器存在性检测完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -306,7 +301,6 @@ describe('L1 Chat', () => {
       const exists = await streamingIndicator.isExisting();
 
       console.log('[L1] Streaming indicator exists:', exists);
-      // 验证流式指示器存在性检测完成
       expect(typeof exists).toBe('boolean');
     });
   });

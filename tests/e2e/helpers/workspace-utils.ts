@@ -32,7 +32,8 @@ export async function ensureWorkspaceOpen(startupPage: StartupPage): Promise<boo
   }
 
   // If no recent workspace, try to open current project directory
-  const testWorkspacePath = 'C:\\Users\\wuxiao\\BitFun';
+  // Use environment variable or default to relative path
+  const testWorkspacePath = process.env.E2E_TEST_WORKSPACE || process.cwd();
   console.log('[WorkspaceUtils] Opening test workspace:', testWorkspacePath);
 
   try {

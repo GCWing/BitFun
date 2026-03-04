@@ -76,7 +76,7 @@ export const config: Options.Testrunner = {
     '../specs/l0-smoke.spec.ts',
     '../specs/l0-open-workspace.spec.ts',
     '../specs/l0-open-settings.spec.ts',
-    // '../specs/l0-observe.spec.ts', // 排除: 此测试用于手动观察，运行时间60秒
+    // '../specs/l0-observe.spec.ts', // Excluded: Manual observation test, takes 60s
     '../specs/l0-navigation.spec.ts',
     '../specs/l0-tabs.spec.ts',
     '../specs/l0-theme.spec.ts',

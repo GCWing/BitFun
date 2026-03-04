@@ -82,7 +82,6 @@ describe('L1 Dialog', () => {
         console.log('[L1] No confirm dialog open');
       }
 
-      // 验证对话框结构检测完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -97,7 +96,6 @@ describe('L1 Dialog', () => {
 
       if (!exists) {
         console.log('[L1] No confirm dialog open to test buttons');
-        // 对话框未打开时，验证检测完成
         expect(typeof exists).toBe('boolean');
         return;
       }
@@ -125,7 +123,6 @@ describe('L1 Dialog', () => {
         }
       }
 
-      // 验证对话框类型检测完成
       expect(Array.isArray(types)).toBe(true);
     });
   });
@@ -150,7 +147,6 @@ describe('L1 Dialog', () => {
         expect(inputExists).toBe(true);
       } else {
         console.log('[L1] No input dialog open');
-        // 对话框未打开时，验证检测完成
         expect(typeof exists).toBe('boolean');
       }
     });
@@ -165,7 +161,6 @@ describe('L1 Dialog', () => {
       const exists = await description.isExisting();
 
       console.log('[L1] Input dialog description exists:', exists);
-      // 验证输入对话框描述区域检测完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -179,7 +174,6 @@ describe('L1 Dialog', () => {
       const exists = await inputDialog.isExisting();
 
       if (!exists) {
-        // 对话框未打开时，验证检测完成
         expect(typeof exists).toBe('boolean');
         return;
       }
@@ -192,7 +186,6 @@ describe('L1 Dialog', () => {
         console.log('[L1] Input dialog buttons:', buttons.length);
       }
 
-      // 验证输入对话框动作区域检测完成
       expect(typeof actionsExist).toBe('boolean');
     });
   });
@@ -209,7 +202,6 @@ describe('L1 Dialog', () => {
 
       if (!exists) {
         console.log('[L1] No dialog open to test ESC close');
-        // 对话框未打开时，验证检测完成
         expect(typeof exists).toBe('boolean');
         return;
       }
@@ -222,7 +214,6 @@ describe('L1 Dialog', () => {
       const stillOpen = await modalAfter.isExisting();
 
       console.log('[L1] Dialog still open after ESC:', stillOpen);
-      // 验证ESC键行为检测完成
       expect(typeof stillOpen).toBe('boolean');
     });
 
@@ -237,7 +228,6 @@ describe('L1 Dialog', () => {
 
       if (!exists) {
         console.log('[L1] No modal overlay to test click close');
-        // 没有遮罩层时，验证检测完成
         expect(typeof exists).toBe('boolean');
         return;
       }
@@ -246,7 +236,6 @@ describe('L1 Dialog', () => {
       await browser.pause(300);
 
       console.log('[L1] Clicked modal overlay');
-      // 验证点击遮罩层行为完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -261,7 +250,6 @@ describe('L1 Dialog', () => {
 
       if (!exists) {
         console.log('[L1] No dialog content to test focus');
-        // 对话框未打开时，验证检测完成
         expect(typeof exists).toBe('boolean');
         return;
       }
@@ -274,7 +262,6 @@ describe('L1 Dialog', () => {
       });
 
       console.log('[L1] Active element in dialog:', activeElement);
-      // 验证对话框焦点检测完成
       expect(activeElement).toBeDefined();
     });
   });
@@ -297,7 +284,6 @@ describe('L1 Dialog', () => {
         }
       }
 
-      // 验证模态框尺寸检测完成
       expect(Array.isArray(sizes)).toBe(true);
     });
 
@@ -311,7 +297,6 @@ describe('L1 Dialog', () => {
       const exists = await draggableModal.isExisting();
 
       console.log('[L1] Draggable modal exists:', exists);
-      // 验证可拖拽模态框检测完成
       expect(typeof exists).toBe('boolean');
     });
 
@@ -325,7 +310,6 @@ describe('L1 Dialog', () => {
       const exists = await resizableModal.isExisting();
 
       console.log('[L1] Resizable modal exists:', exists);
-      // 验证可调整大小模态框检测完成
       expect(typeof exists).toBe('boolean');
     });
   });

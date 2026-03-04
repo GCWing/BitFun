@@ -62,7 +62,6 @@ describe('L0 Navigation Panel', () => {
         console.error('[L0] CRITICAL: Neither welcome nor workspace UI found');
       }
 
-      // 验证应用处于有效状态：要么是启动页，要么是工作区
       expect(isStartup || hasWorkspace).toBe(true);
     });
 
@@ -167,7 +166,6 @@ describe('L0 Navigation Panel', () => {
         console.log('[L0] Navigation sections not found (may use different structure)');
       }
 
-      // 导航区域应该存在
       expect(sectionsFound).toBe(true);
     });
   });
@@ -195,7 +193,6 @@ describe('L0 Navigation Panel', () => {
       const isClickable = await firstItem.isClickable();
       console.log('[L0] First nav item clickable:', isClickable);
 
-      // 导航项应该是可点击的
       expect(isClickable).toBe(true);
     });
   });

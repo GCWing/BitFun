@@ -89,7 +89,6 @@ describe('L1 UI Navigation', () => {
         console.log('[L1] Maximize toggle not available or failed:', (e as Error).message);
       }
 
-      // 验证最大化切换操作尝试完成
       expect(initialInfo === null || typeof initialInfo === 'object').toBe(true);
     });
 
@@ -228,7 +227,6 @@ describe('L1 UI Navigation', () => {
       } catch (e) {
         // getLogs might not be supported in all environments
         console.log('[L1] Could not get browser logs:', (e as Error).message);
-        // 验证日志获取尝试完成
         expect(typeof e).toBe('object');
       }
     });

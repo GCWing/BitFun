@@ -189,8 +189,6 @@ describe('L1 Settings', () => {
         expect(panelExists).toBe(true);
       } else {
         console.log('[L1] Settings panel not detected');
-        // 设置面板可能未打开
-        // 验证能够检测到相关结构
         expect(typeof panelExists).toBe('boolean');
       }
     });
@@ -233,8 +231,6 @@ describe('L1 Settings', () => {
         }
       }
 
-      // 设置内容区域可能存在
-      // 验证能够检测到相关结构
       expect(typeof contentFound).toBe('boolean');
     });
   });
@@ -276,8 +272,6 @@ describe('L1 Settings', () => {
       const exists = await themeSection.isExisting();
 
       console.log('[L1] Theme settings section exists:', exists);
-      // 主题设置区域可能存在
-      // 验证能够检测到相关结构
       expect(typeof exists).toBe('boolean');
     });
 
@@ -291,8 +285,6 @@ describe('L1 Settings', () => {
       const exists = await modelSection.isExisting();
 
       console.log('[L1] Model settings section exists:', exists);
-      // 模型设置区域可能存在
-      // 验证能够检测到相关结构
       expect(typeof exists).toBe('boolean');
     });
   });
@@ -322,7 +314,6 @@ describe('L1 Settings', () => {
         }
       }
 
-      // 验证设置面板关闭操作完成
       expect(typeof backdropExists).toBe('boolean');
     });
   });

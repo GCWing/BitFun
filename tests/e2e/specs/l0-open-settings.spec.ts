@@ -26,7 +26,6 @@ describe('L0 Settings Panel', () => {
 
       if (hasWorkspace) {
         console.log('[L0] Workspace already open');
-        // 工作区已打开，验证状态检测完成
         expect(typeof hasWorkspace).toBe('boolean');
         return;
       }
@@ -77,7 +76,6 @@ describe('L0 Settings Panel', () => {
         hasWorkspace = false;
       }
 
-      // 验证工作区状态检测完成
       expect(typeof hasWorkspace).toBe('boolean');
     });
   });
