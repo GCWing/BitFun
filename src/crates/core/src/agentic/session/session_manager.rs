@@ -6,6 +6,7 @@ use crate::agentic::core::{
     CompressionState, DialogTurn, DialogTurnState, Message, ProcessingPhase, Session,
     SessionConfig, SessionState, SessionSummary, TurnStats,
 };
+use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::{CompressionManager, MessageHistoryManager};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -463,6 +464,7 @@ impl SessionManager {
         session_id: &str,
         user_input: String,
         turn_id: Option<String>,
+        image_contexts: Option<Vec<ImageContextData>>,
     ) -> BitFunResult<String> {
         // Check if session exists
         let session = self
@@ -491,7 +493,13 @@ impl SessionManager {
         }
 
         // 2. Add user message to history and compression managers
-        let user_message = Message::user(user_input).with_turn_id(turn_id.clone());
+        let user_message = if let Some(images) =
+            image_contexts.as_ref().filter(|v| !v.is_empty()).cloned()
+        {
+            Message::user_multimodal(user_input, images).with_turn_id(turn_id.clone())
+        } else {
+            Message::user(user_input).with_turn_id(turn_id.clone())
+        };
         self.history_manager
             .add_message(session_id, user_message.clone())
             .await?;

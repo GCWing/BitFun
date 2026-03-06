@@ -291,7 +291,7 @@
     },
     "capabilities": {
       "text_chat": "对话",
-      "image_understanding": "识图",
+      "image_understanding": "多模态",
       "image_generation": "绘图",
       "search": "搜索",
       "function_calling": "工具",
@@ -322,7 +322,7 @@
     },
     "capabilityDescs": {
       "text_chat": "处理所有文本对话、代码生成、工具调用等任务",
-      "image_understanding": "分析和理解图片内容，支持图文混合对话",
+      "image_understanding": "当主模型不支持图片输入时，用于分析和理解图片内容",
       "image_generation": "根据文字描述生成图片（如 DALL-E、Stable Diffusion）",
       "search": "实时搜索网络信息，提供最新数据支持",
       "speech_recognition": "将语音转换为文字，支持语音输入功能（如智谱 GLM-ASR）"

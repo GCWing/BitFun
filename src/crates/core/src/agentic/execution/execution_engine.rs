@@ -5,18 +5,25 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::get_agent_registry;
-use crate::agentic::core::{Message, MessageHelper};
+use crate::agentic::core::{Message, MessageContent, MessageHelper};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
+use crate::agentic::image_analysis::{
+    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
+    ImageLimits,
+};
 use crate::agentic::session::SessionManager;
 use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::infrastructure::get_workspace_path;
+use crate::service::config::get_global_config_service;
+use crate::service::config::types::{ModelCapability, ModelCategory};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -55,6 +62,146 @@ impl ExecutionEngine {
         }
     }
 
+    fn estimate_request_tokens_internal(
+        messages: &mut [Message],
+        tools: Option<&[ToolDefinition]>,
+    ) -> usize {
+        let mut total: usize = messages.iter_mut().map(|m| m.get_tokens()).sum();
+        total += 3;
+
+        if let Some(tool_defs) = tools {
+            total += TokenCounter::estimate_tool_definitions_tokens(tool_defs);
+        }
+
+        total
+    }
+
+    fn is_redacted_image_context(image: &ImageContextData) -> bool {
+        let missing_path = image
+            .image_path
+            .as_ref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
+        let missing_data_url = image
+            .data_url
+            .as_ref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
+        let has_redaction_hint = image
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("has_data_url"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        missing_path && missing_data_url && has_redaction_hint
+    }
+
+    fn is_recoverable_historical_image_error(err: &BitFunError) -> bool {
+        match err {
+            BitFunError::Io(_) | BitFunError::Deserialization(_) => true,
+            BitFunError::Validation(msg) => {
+                msg.starts_with("Failed to decode image data")
+                    || msg.starts_with("Unsupported or unrecognized image format")
+                    || msg.starts_with("Invalid data URL format")
+                    || msg.starts_with("Data URL format error")
+            }
+            _ => false,
+        }
+    }
+
+    fn can_fallback_to_text_only(
+        images: &[ImageContextData],
+        err: &BitFunError,
+        is_current_turn_message: bool,
+    ) -> bool {
+        let is_redacted_payload_error = matches!(
+            err,
+            BitFunError::Validation(msg) if msg.starts_with("Image context missing image_path/data_url")
+        ) && !images.is_empty()
+            && images.iter().all(Self::is_redacted_image_context);
+
+        if is_redacted_payload_error {
+            return true;
+        }
+
+        if is_current_turn_message {
+            return false;
+        }
+
+        Self::is_recoverable_historical_image_error(err)
+    }
+
+    async fn build_ai_messages_for_send(
+        messages: &[Message],
+        provider: &str,
+        workspace_path: Option<&Path>,
+        current_turn_id: &str,
+    ) -> BitFunResult<Vec<AIMessage>> {
+        let limits = ImageLimits::for_provider(provider);
+
+        let mut result = Vec::with_capacity(messages.len());
+        let mut attached_image_count = 0usize;
+
+        for msg in messages {
+            match &msg.content {
+                MessageContent::Multimodal { text, images } => {
+                    let prompt = if text.trim().is_empty() {
+                        "(image attached)".to_string()
+                    } else {
+                        text.clone()
+                    };
+
+                    match process_image_contexts_for_provider(images, provider, workspace_path)
+                        .await
+                    {
+                        Ok(processed) => {
+                            let next_count = attached_image_count + processed.len();
+                            if next_count > limits.max_images_per_request {
+                                return Err(BitFunError::validation(format!(
+                                    "Too many images in one request: {} > {}",
+                                    next_count, limits.max_images_per_request
+                                )));
+                            }
+                            attached_image_count = next_count;
+
+                            let multimodal = build_multimodal_message_with_images(
+                                &prompt, &processed, provider,
+                            )?;
+                            result.extend(multimodal);
+                        }
+                        Err(err) => {
+                            if matches!(&err, BitFunError::Validation(msg) if msg.starts_with("Too many images in one request"))
+                            {
+                                return Err(err);
+                            }
+                            let is_current_turn_message =
+                                msg.metadata.turn_id.as_deref() == Some(current_turn_id);
+                            if Self::can_fallback_to_text_only(
+                                images,
+                                &err,
+                                is_current_turn_message,
+                            ) {
+                                // Degrade only for historical multimodal messages. Current-turn
+                                // image failures should still surface to users.
+                                warn!(
+                                    "Failed to rebuild multimodal payload, falling back to text-only message: message_id={}, provider={}, turn_id={:?}, current_turn_id={}, error={}",
+                                    msg.id, provider, msg.metadata.turn_id, current_turn_id, err
+                                );
+                                result.push(AIMessage::from(msg));
+                            } else {
+                                return Err(err);
+                            }
+                        }
+                    }
+                }
+                _ => result.push(AIMessage::from(msg)),
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Compress context, will emit compression events (Started, Completed, and Failed)
     pub async fn compress_messages(
         &self,
@@ -66,7 +213,7 @@ impl ExecutionEngine {
         context_window: usize,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         system_prompt_message: Message,
-    ) -> BitFunResult<Option<(usize, Vec<Message>, Vec<AIMessage>)>> {
+    ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         let event_subagent_parent_info = subagent_parent_info.map(|info| info.clone().into());
         let mut session = self
             .session_manager
@@ -134,10 +281,8 @@ impl ExecutionEngine {
                 let duration_ms = start_time.elapsed().as_millis() as u64;
 
                 // Recalculate tokens after compression
-                let new_ai_messages: Vec<AIMessage> =
-                    MessageHelper::convert_messages(&new_messages);
-                let compressed_tokens = TokenCounter::estimate_request_tokens(
-                    &new_ai_messages,
+                let compressed_tokens = Self::estimate_request_tokens_internal(
+                    &mut new_messages,
                     tool_definitions.as_deref(),
                 );
 
@@ -159,7 +304,7 @@ impl ExecutionEngine {
                 )
                 .await;
 
-                Ok(Some((compressed_tokens, new_messages, new_ai_messages)))
+                Ok(Some((compressed_tokens, new_messages)))
             }
             Err(e) => {
                 // Emit compression failed event
@@ -353,6 +498,83 @@ impl ExecutionEngine {
         let support_preserved_thinking = ai_client.config.support_preserved_thinking;
         let context_window = ai_client.config.context_window as usize;
 
+        // Detect whether the primary model supports multimodal image inputs.
+        // This is used by tools like `view_image` to decide between:
+        // - attaching image content for the primary model to analyze directly, or
+        // - using a dedicated vision model to pre-analyze into text.
+        let (resolved_primary_model_id, primary_supports_image_understanding) = {
+            let config_service = get_global_config_service().await.ok();
+            if let Some(service) = config_service {
+                let ai_config: crate::service::config::types::AIConfig =
+                    service.get_config(Some("ai")).await.unwrap_or_default();
+
+                let resolved_id = match model_id.as_str() {
+                    "primary" => ai_config
+                        .default_models
+                        .primary
+                        .clone()
+                        .unwrap_or_else(|| model_id.clone()),
+                    "fast" => ai_config
+                        .default_models
+                        .fast
+                        .clone()
+                        .or_else(|| ai_config.default_models.primary.clone())
+                        .unwrap_or_else(|| model_id.clone()),
+                    _ => model_id.clone(),
+                };
+
+                let model_cfg = ai_config
+                    .models
+                    .iter()
+                    .find(|m| m.id == resolved_id)
+                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
+                    .or_else(|| {
+                        ai_config
+                            .models
+                            .iter()
+                            .find(|m| m.model_name == resolved_id)
+                    })
+                    .or_else(|| {
+                        ai_config.models.iter().find(|m| {
+                            m.model_name == ai_client.config.model
+                                && m.provider == ai_client.config.format
+                        })
+                    });
+
+                let supports = model_cfg.is_some_and(|m| {
+                    m.capabilities
+                        .iter()
+                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
+                        || matches!(m.category, ModelCategory::Multimodal)
+                });
+
+                (resolved_id, supports)
+            } else {
+                warn!(
+                    "Config service unavailable, assuming primary model is text-only for image input gating"
+                );
+                (model_id.clone(), false)
+            }
+        };
+
+        let mut execution_context_vars = context.context.clone();
+        execution_context_vars.insert(
+            "primary_model_id".to_string(),
+            resolved_primary_model_id.clone(),
+        );
+        execution_context_vars.insert(
+            "primary_model_name".to_string(),
+            ai_client.config.model.clone(),
+        );
+        execution_context_vars.insert(
+            "primary_model_provider".to_string(),
+            ai_client.config.format.clone(),
+        );
+        execution_context_vars.insert(
+            "primary_model_supports_image_understanding".to_string(),
+            primary_supports_image_understanding.to_string(),
+        );
+
         // Loop to execute model rounds
         loop {
             // Check round limit
@@ -369,11 +591,10 @@ impl ExecutionEngine {
                 enable_thinking,
                 support_preserved_thinking,
             );
-            let mut ai_messages = MessageHelper::convert_messages(&messages);
 
             // Check and compress before sending AI request
             let current_tokens =
-                TokenCounter::estimate_request_tokens(&ai_messages, tool_definitions.as_deref());
+                Self::estimate_request_tokens_internal(&mut messages, tool_definitions.as_deref());
             debug!(
                 "Round {} token usage before send: {} / {} tokens ({:.1}%)",
                 round_index,
@@ -414,7 +635,7 @@ impl ExecutionEngine {
                     )
                     .await
                 {
-                    Ok(Some((compressed_tokens, compressed_messages, compressed_ai_messages))) => {
+                    Ok(Some((compressed_tokens, compressed_messages))) => {
                         info!(
                             "Round {} compression completed: messages {} -> {}, tokens {} -> {}",
                             round_index,
@@ -425,7 +646,6 @@ impl ExecutionEngine {
                         );
 
                         messages = compressed_messages;
-                        ai_messages = compressed_ai_messages;
                     }
                     Ok(None) => {
                         debug!("All turns need to be kept, no compression performed");
@@ -440,7 +660,7 @@ impl ExecutionEngine {
             }
 
             // Create round context
-            let mut round_context_vars = context.context.clone();
+            let mut round_context_vars = execution_context_vars.clone();
             if context.skip_tool_confirmation {
                 round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
             }
@@ -452,7 +672,7 @@ impl ExecutionEngine {
                 round_number: round_index,
                 messages: messages.clone(),
                 available_tools: available_tools.clone(),
-                model_name: model_id.clone(),
+                model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
                 cancellation_token: CancellationToken::new(),
@@ -464,6 +684,15 @@ impl ExecutionEngine {
                 round_index,
                 messages.len()
             );
+
+            let workspace_path = get_workspace_path();
+            let ai_messages = Self::build_ai_messages_for_send(
+                &messages,
+                &ai_client.config.format,
+                workspace_path.as_deref(),
+                &context.dialog_turn_id,
+            )
+            .await?;
 
             let round_result = self
                 .round_executor

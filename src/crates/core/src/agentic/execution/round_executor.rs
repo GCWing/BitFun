@@ -6,6 +6,7 @@ use super::stream_processor::StreamProcessor;
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::Message;
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
+use crate::agentic::image_analysis::ImageContextData as ModelImageContextData;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::MessageContent;
@@ -16,6 +17,7 @@ use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use dashmap::DashMap;
 use log::{debug, error, warn};
+use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -454,7 +456,32 @@ impl RoundExecutor {
         // Create tool result messages (also need to set turn_id and round_id)
         let dialog_turn_id = context.dialog_turn_id.clone();
         let round_id_clone = round_id.clone();
-        let tool_result_messages: Vec<Message> = tool_results
+        let primary_supports_images = context
+            .context_vars
+            .get("primary_model_supports_image_understanding")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(false);
+        let extract_attached_image = |result: &JsonValue| -> Option<ModelImageContextData> {
+            if !primary_supports_images {
+                return None;
+            }
+            let mode = result.get("mode").and_then(|v| v.as_str())?;
+            if mode != "attached_to_primary_model" {
+                return None;
+            }
+            let image_value = result.get("image")?;
+            serde_json::from_value::<ModelImageContextData>(image_value.clone()).ok()
+        };
+        let mut injected_images = Vec::new();
+        for result in &tool_results {
+            if result.tool_name == "view_image" && !result.is_error {
+                if let Some(image_ctx) = extract_attached_image(&result.result) {
+                    injected_images.push(image_ctx);
+                }
+            }
+        }
+
+        let mut tool_result_messages: Vec<Message> = tool_results
             .into_iter()
             .map(|result| {
                 Message::tool_result(result)
@@ -462,6 +489,18 @@ impl RoundExecutor {
                     .with_round_id(round_id_clone.clone())
             })
             .collect();
+
+        if !injected_images.is_empty() {
+            let reminder_text = format!(
+                "<system-reminder>\nAttached {} image(s) from view_image tool.\n</system-reminder>",
+                injected_images.len()
+            );
+            tool_result_messages.push(
+                Message::user_multimodal(reminder_text, injected_images)
+                    .with_turn_id(dialog_turn_id.clone())
+                    .with_round_id(round_id_clone.clone()),
+            );
+        }
 
         let has_more_rounds = !has_end_turn_tool && !tool_result_messages.is_empty();
 

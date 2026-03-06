@@ -169,7 +169,10 @@ export class FlowChatManager {
     sessionId?: string,
     displayMessage?: string,
     agentType?: string,
-    switchToMode?: string
+    switchToMode?: string,
+    options?: {
+      imageContexts?: import('@/infrastructure/api/service-api/ImageAnalysisAPI').ImageContextData[];
+    }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;
     
@@ -177,7 +180,15 @@ export class FlowChatManager {
       throw new Error('No active session');
     }
 
-    return sendMessageModule(this.context, message, targetSessionId, displayMessage, agentType, switchToMode);
+    return sendMessageModule(
+      this.context,
+      message,
+      targetSessionId,
+      displayMessage,
+      agentType,
+      switchToMode,
+      options
+    );
   }
 
   async cancelCurrentTask(): Promise<boolean> {

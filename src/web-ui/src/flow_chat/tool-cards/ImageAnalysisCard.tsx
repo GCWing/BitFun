@@ -1,14 +1,16 @@
 /**
  * Image analysis tool card - compact mode
- * Used for AnalyzeImage tool
+ * Used for view_image tool
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Loader2, Clock, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import './ImageAnalysisCard.scss';
+
+const imageAnalysisExpandedStateCache = new Map<string, boolean>();
 
 export const ImageAnalysisCard: React.FC<ToolCardProps> = ({
   toolItem,
@@ -16,7 +18,14 @@ export const ImageAnalysisCard: React.FC<ToolCardProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { toolCall, toolResult, status } = toolItem;
+  const toolId = toolItem.id || toolCall?.id;
   const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!toolId) return;
+    const cached = imageAnalysisExpandedStateCache.get(toolId);
+    setIsExpanded(cached ?? false);
+  }, [toolId]);
 
   const getStatusIcon = () => {
     switch (status) {
@@ -66,10 +75,15 @@ export const ImageAnalysisCard: React.FC<ToolCardProps> = ({
 
   const getAnalysisResult = () => {
     if (!toolResult?.result) return null;
-    
-    const result = toolResult.result;
-    
-    if (result.analysis || result.description || result.content) {
+
+    const raw = toolResult.result;
+    const result =
+      (raw?.analysis || raw?.description || raw?.content) ? raw :
+      (raw?.result?.analysis || raw?.result?.description || raw?.result?.content) ? raw.result :
+      (raw?.data?.analysis || raw?.data?.description || raw?.data?.content) ? raw.data :
+      null;
+
+    if (result) {
       return {
         analysis: result.analysis || result.description || result.content,
         modelUsed: result.model_used || result.model,
@@ -80,10 +94,17 @@ export const ImageAnalysisCard: React.FC<ToolCardProps> = ({
     return null;
   };
 
-  const handleToggleExpand = () => {
-    setIsExpanded(!isExpanded);
+  const handleToggleExpand = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('tool-card-toggle'));
+    setIsExpanded(prev => {
+      const next = !prev;
+      if (toolId) {
+        imageAnalysisExpandedStateCache.set(toolId, next);
+      }
+      return next;
+    });
     onExpand?.();
-  };
+  }, [onExpand, toolId]);
 
   const analysisInfo = useMemo(() => getAnalysisInfo(), [toolCall?.input]);
   const analysisResult = useMemo(() => getAnalysisResult(), [toolResult?.result]);
@@ -181,4 +202,3 @@ export const ImageAnalysisCard: React.FC<ToolCardProps> = ({
     />
   );
 };
-

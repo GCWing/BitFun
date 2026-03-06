@@ -2,6 +2,7 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import type { ImageContextData as ImageInputContextData } from './ImageAnalysisAPI';
 
 
 
@@ -44,6 +45,8 @@ export interface StartDialogTurnRequest {
   userInput: string;
   turnId?: string; 
   agentType: string; 
+  /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
+  imageContexts?: ImageInputContextData[];
 }
 
  

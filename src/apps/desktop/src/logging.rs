@@ -13,9 +13,9 @@ use tauri_plugin_log::{fern, Target, TargetKind};
 
 const SESSION_DIR_PATTERN: &str = r"^\d{8}T\d{6}$";
 const MAX_LOG_SESSIONS: usize = 50;
-const LOG_RETENTION_DAYS: i64 = 7;
 static SESSION_LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
-static CURRENT_LOG_LEVEL: AtomicU8 = AtomicU8::new(level_filter_to_u8(log::LevelFilter::Info));
+// Default to Debug in early development for easier diagnostics
+static CURRENT_LOG_LEVEL: AtomicU8 = AtomicU8::new(level_filter_to_u8(log::LevelFilter::Debug));
 
 fn get_thread_id() -> u64 {
     let thread_id = thread::current().id();
@@ -71,27 +71,9 @@ const fn u8_to_level_filter(value: u8) -> log::LevelFilter {
     }
 }
 
-fn resolve_default_level(is_debug: bool) -> log::LevelFilter {
-    match std::env::var("BITFUN_LOG_LEVEL") {
-        Ok(val) => parse_log_level(&val).unwrap_or_else(|| {
-            eprintln!(
-                "Warning: Invalid BITFUN_LOG_LEVEL '{}', falling back to default",
-                val
-            );
-            if is_debug {
-                log::LevelFilter::Debug
-            } else {
-                log::LevelFilter::Info
-            }
-        }),
-        Err(_) => {
-            if is_debug {
-                log::LevelFilter::Debug
-            } else {
-                log::LevelFilter::Info
-            }
-        }
-    }
+// Default to Debug in early development for easier diagnostics
+fn resolve_default_level(_is_debug: bool) -> log::LevelFilter {
+    log::LevelFilter::Debug
 }
 
 pub fn parse_log_level(value: &str) -> Option<log::LevelFilter> {
@@ -287,10 +269,6 @@ fn format_log_plain(
     ))
 }
 
-fn parse_session_timestamp(name: &str) -> Option<chrono::NaiveDateTime> {
-    chrono::NaiveDateTime::parse_from_str(name, "%Y%m%dT%H%M%S").ok()
-}
-
 pub async fn cleanup_old_log_sessions() {
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
@@ -333,29 +311,10 @@ async fn do_cleanup_log_sessions(
         return Ok(());
     }
 
-    let now = Local::now().naive_local();
-    let retention_threshold = now - chrono::Duration::days(LOG_RETENTION_DAYS);
-
     let excess_count = session_dirs.len() - max_sessions;
-    let to_delete: Vec<_> = session_dirs
-        .into_iter()
-        .take(excess_count)
-        .filter(|name| {
-            parse_session_timestamp(name)
-                .map(|ts| ts < retention_threshold)
-                .unwrap_or(false)
-        })
-        .collect();
+    let to_delete: Vec<_> = session_dirs.into_iter().take(excess_count).collect();
 
-    if to_delete.is_empty() {
-        return Ok(());
-    }
-
-    log::info!(
-        "Cleaning up {} old log session(s) older than {} days",
-        to_delete.len(),
-        LOG_RETENTION_DAYS
-    );
+    log::info!("Cleaning up {} old log session(s)", to_delete.len());
 
     for session_name in to_delete {
         let session_path = logs_root.join(&session_name);

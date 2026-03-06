@@ -3,45 +3,28 @@ import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
 import ChatPage from './pages/ChatPage';
-import { RelayConnection } from './services/RelayConnection';
+import { RelayHttpClient } from './services/RelayHttpClient';
 import { RemoteSessionManager } from './services/RemoteSessionManager';
-import { useMobileStore } from './services/store';
-import './styles/mobile.scss';
+import { ThemeProvider } from './theme';
+import './styles/index.scss';
 
 type Page = 'pairing' | 'workspace' | 'sessions' | 'chat';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
-  const relayRef = useRef<RelayConnection | null>(null);
+  const clientRef = useRef<RelayHttpClient | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
 
-  const handlePaired = useCallback((relay: RelayConnection, sessionMgr: RemoteSessionManager) => {
-    relayRef.current = relay;
-    sessionMgrRef.current = sessionMgr;
-
-    relay.setMessageHandler((json: string) => {
-      sessionMgr.handleMessage(json);
-    });
-
-    // Listen for the initial sync that the desktop pushes right after pairing.
-    // This pre-populates workspace + sessions so the list page can render instantly.
-    sessionMgr.onInitialSync((data) => {
-      const store = useMobileStore.getState();
-      if (data.has_workspace) {
-        store.setCurrentWorkspace({
-          has_workspace: true,
-          path: data.path,
-          project_name: data.project_name,
-          git_branch: data.git_branch,
-        });
-      }
-      store.setSessions(data.sessions);
-    });
-
-    setPage('sessions');
-  }, []);
+  const handlePaired = useCallback(
+    (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => {
+      clientRef.current = client;
+      sessionMgrRef.current = sessionMgr;
+      setPage('sessions');
+    },
+    [],
+  );
 
   const handleOpenWorkspace = useCallback(() => {
     setPage('workspace');
@@ -89,5 +72,11 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <ThemeProvider>
+    <AppContent />
+  </ThemeProvider>
+);
 
 export default App;

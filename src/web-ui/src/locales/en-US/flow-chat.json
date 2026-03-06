@@ -568,11 +568,28 @@
       "readingFile": "Reading",
       "preparingRead": "Preparing to read"
     },
+    "terminalControl": {
+      "terminatingSession": "Terminating terminal",
+      "sessionKilled": "Terminal killed",
+      "killFailed": "Failed to kill terminal",
+      "preparingKill": "Preparing to kill terminal",
+      "interruptingSession": "Interrupting terminal",
+      "sessionInterrupted": "Terminal interrupted",
+      "interruptFailed": "Failed to interrupt terminal",
+      "preparingInterrupt": "Preparing to interrupt terminal"
+    },
     "imageAnalysis": {
       "parsingAnalysisInfo": "Parsing analysis info...",
       "unknownImage": "Unknown image",
       "clipboardImage": "Clipboard image",
-      "analyzeImageContent": "Analyze image content"
+      "analyzeImageContent": "Analyze image content",
+      "imageAnalysis": "Image analysis",
+      "completed": "Completed",
+      "analyzing": "Analyzing",
+      "preparing": "Preparing",
+      "analysisPrompt": "Analysis prompt",
+      "focusAreas": "Focus areas",
+      "analysisResult": "Analysis result"
     },
     "contextCompression": {
       "beforeUserMessage": "Before user message",

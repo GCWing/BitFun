@@ -43,12 +43,20 @@ pub async fn handle_openai_stream(
 ) {
     let mut stream = response.bytes_stream().eventsource();
     let idle_timeout = Duration::from_secs(600);
+    // Track whether a chunk with `finish_reason` was received.
+    // Some providers (e.g. MiniMax) close the stream after the final chunk
+    // without sending `[DONE]`, so we treat `Ok(None)` as a normal termination
+    // when a finish_reason has already been seen.
+    let mut received_finish_reason = false;
 
     loop {
         let sse_event = timeout(idle_timeout, stream.next()).await;
         let sse = match sse_event {
             Ok(Some(Ok(sse))) => sse,
             Ok(None) => {
+                if received_finish_reason {
+                    return;
+                }
                 let error_msg = "SSE stream closed before response completed";
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
@@ -144,6 +152,9 @@ pub async fn handle_openai_stream(
         }
 
         for unified_response in unified_responses {
+            if unified_response.finish_reason.is_some() {
+                received_finish_reason = true;
+            }
             let _ = tx_event.send(Ok(unified_response));
         }
     }

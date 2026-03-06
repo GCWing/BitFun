@@ -5,6 +5,10 @@ authors.workspace = true
 edition.workspace = true
 description = "BitFun Relay Server - WebSocket relay for Remote Connect"
 
+[lib]
+name = "bitfun_relay_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bitfun-relay-server"
 path = "src/main.rs"

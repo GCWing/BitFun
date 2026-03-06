@@ -30,6 +30,71 @@ pub struct AIClient {
 }
 
 impl AIClient {
+    const TEST_IMAGE_EXPECTED_CODE: &'static str = "BYGR";
+    const TEST_IMAGE_PNG_BASE64: &'static str =
+        "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAiklEQVR4nNXZwQkAQQzDQEX995wr4giLpgBj8NMDy6XdOc2XOImTOImTOImTOImTOImTOImTOImTOImTOImTOImTOImTOImTOImTOImTOImTuDm+Bzi+B8gvIHESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3ESJ3G+LvDXB5LJBXz4d6CTAAAAAElFTkSuQmCC";
+
+    fn image_test_response_matches_expected(response: &str) -> bool {
+        let upper = response.to_ascii_uppercase();
+
+        // Accept contiguous letters even when separated by spaces/punctuation.
+        let letters_only: String = upper.chars().filter(|c| c.is_ascii_alphabetic()).collect();
+        if letters_only.contains(Self::TEST_IMAGE_EXPECTED_CODE) {
+            return true;
+        }
+
+        let tokens: Vec<&str> = upper
+            .split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if tokens
+            .iter()
+            .any(|token| *token == Self::TEST_IMAGE_EXPECTED_CODE)
+        {
+            return true;
+        }
+
+        // Accept outputs like: "B Y G R".
+        let single_letter_stream: String = tokens
+            .iter()
+            .filter_map(|token| {
+                if token.len() == 1 {
+                    let ch = token.chars().next()?;
+                    if matches!(ch, 'R' | 'G' | 'B' | 'Y') {
+                        return Some(ch);
+                    }
+                }
+                None
+            })
+            .collect();
+        if single_letter_stream.contains(Self::TEST_IMAGE_EXPECTED_CODE) {
+            return true;
+        }
+
+        // Accept outputs like: "Blue, Yellow, Green, Red".
+        let color_word_stream: String = tokens
+            .iter()
+            .filter_map(|token| match *token {
+                "RED" => Some('R'),
+                "GREEN" => Some('G'),
+                "BLUE" => Some('B'),
+                "YELLOW" => Some('Y'),
+                _ => None,
+            })
+            .collect();
+        if color_word_stream.contains(Self::TEST_IMAGE_EXPECTED_CODE) {
+            return true;
+        }
+
+        // Last fallback: keep only RGBY letters and search code.
+        let color_letter_stream: String = upper
+            .chars()
+            .filter(|c| matches!(*c, 'R' | 'G' | 'B' | 'Y'))
+            .collect();
+        color_letter_stream.contains(Self::TEST_IMAGE_EXPECTED_CODE)
+    }
+
     /// Create an AIClient without proxy (backward compatible)
     pub fn new(config: AIConfig) -> Self {
         let skip_ssl_verify = config.skip_ssl_verify;
@@ -118,6 +183,13 @@ impl AIClient {
         url.contains("dashscope.aliyuncs.com")
     }
 
+    /// Whether the URL is MiniMax API.
+    /// MiniMax (api.minimaxi.com) uses `reasoning_split=true` to enable streamed thinking content
+    /// delivered via `delta.reasoning_details` rather than the standard `reasoning_content` field.
+    fn is_minimax_url(url: &str) -> bool {
+        url.contains("api.minimaxi.com")
+    }
+
     /// Apply thinking-related fields onto the request body (mutates `request_body`).
     ///
     /// * `enable` - whether thinking process is enabled
@@ -135,6 +207,12 @@ impl AIClient {
     ) {
         if Self::is_dashscope_url(url) && api_format.eq_ignore_ascii_case("openai") {
             request_body["enable_thinking"] = serde_json::json!(enable);
+            return;
+        }
+        if Self::is_minimax_url(url) && api_format.eq_ignore_ascii_case("openai") {
+            if enable {
+                request_body["reasoning_split"] = serde_json::json!(true);
+            }
             return;
         }
         let thinking_value = if enable {
@@ -912,6 +990,89 @@ impl AIClient {
                 Ok(ConnectionTestResult {
                     success: false,
                     response_time_ms,
+                    model_response: None,
+                    error_details: Some(error_msg),
+                })
+            }
+        }
+    }
+
+    pub async fn test_image_input_connection(&self) -> Result<ConnectionTestResult> {
+        let start_time = std::time::Instant::now();
+        let provider = self.config.format.to_ascii_lowercase();
+        let prompt = "Inspect the attached image and reply with exactly one 4-letter code for quadrant colors in TL,TR,BL,BR order using letters R,G,B,Y (R=red, G=green, B=blue, Y=yellow).";
+
+        let content = if provider == "anthropic" {
+            serde_json::json!([
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": Self::TEST_IMAGE_PNG_BASE64
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ])
+        } else {
+            serde_json::json!([
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": format!("data:image/png;base64,{}", Self::TEST_IMAGE_PNG_BASE64)
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ])
+        };
+
+        let test_messages = vec![Message {
+            role: "user".to_string(),
+            content: Some(content.to_string()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        }];
+
+        match self.send_message(test_messages, None).await {
+            Ok(response) => {
+                let matched = Self::image_test_response_matches_expected(&response.text);
+
+                if matched {
+                    Ok(ConnectionTestResult {
+                        success: true,
+                        response_time_ms: start_time.elapsed().as_millis() as u64,
+                        model_response: Some(response.text),
+                        error_details: None,
+                    })
+                } else {
+                    let detail = format!(
+                        "Image understanding verification failed: expected code '{}', got response '{}'",
+                        Self::TEST_IMAGE_EXPECTED_CODE, response.text
+                    );
+                    debug!("test image input connection failed: {}", detail);
+                    Ok(ConnectionTestResult {
+                        success: false,
+                        response_time_ms: start_time.elapsed().as_millis() as u64,
+                        model_response: Some(response.text),
+                        error_details: Some(detail),
+                    })
+                }
+            }
+            Err(e) => {
+                let error_msg = format!("{}", e);
+                debug!("test image input connection failed: {}", error_msg);
+                Ok(ConnectionTestResult {
+                    success: false,
+                    response_time_ms: start_time.elapsed().as_millis() as u64,
                     model_response: None,
                     error_details: Some(error_msg),
                 })

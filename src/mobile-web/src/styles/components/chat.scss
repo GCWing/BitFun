@@ -1,0 +1,192 @@
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-flowchat);
+  animation: fadeIn var(--motion-base) var(--easing-decelerate);
+}
+
+// Header — glassmorphism
+.chat-page__header {
+  display: flex;
+  flex-direction: column;
+  padding: var(--size-gap-2) var(--size-gap-3);
+  border-bottom: 1px dashed var(--border-base);
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--color-bg-elevated) 45%, transparent);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
+  gap: 2px;
+  position: relative;
+  z-index: 10;
+}
+
+.chat-page__header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-2);
+  min-height: 32px;
+}
+
+.chat-page__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: var(--size-gap-1);
+  flex-shrink: 0;
+  border-radius: var(--size-radius-sm);
+  transition: all var(--motion-fast) var(--easing-standard);
+
+  &:active {
+    background: var(--element-bg-subtle);
+    color: var(--color-text-primary);
+  }
+}
+
+.chat-page__header-center {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+}
+
+.chat-page__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.chat-page__header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--size-gap-1);
+  flex-shrink: 0;
+}
+
+.chat-page__theme-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--size-radius-sm);
+  transition: all var(--motion-fast) var(--easing-standard);
+
+  &:active {
+    background: var(--element-bg-subtle);
+  }
+}
+
+
+.chat-page__header-workspace {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--size-gap-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  justify-content: center;
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-accent-500);
+    opacity: 0.6;
+  }
+}
+
+.chat-page__workspace-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-accent-500);
+  font-weight: var(--font-weight-medium);
+  font-size: 11px;
+}
+
+.chat-page__workspace-branch {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-normal);
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+// Messages container
+.chat-page__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--size-gap-4) var(--size-gap-4) 100px;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-4);
+}
+
+.chat-page__load-more-indicator {
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: var(--size-gap-2) 0;
+}
+
+// Message items — FlowChat style (no bubbles)
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+// User message — card style, left-aligned
+.chat-msg--user {
+  align-items: flex-start;
+}
+
+.chat-msg__user-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-gap-2);
+  width: 100%;
+}
+
+.chat-msg__user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--size-radius-sm);
+  background: var(--color-accent-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-accent-500);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.chat-msg__user-content {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-primary);
+  word-break: break-word;
+  padding-top: 2px;
+}
+
+// Assistant message — full width, no wrapper
+.chat-msg--assistant {
+  align-items: flex-start;
+  gap: var(--size-gap-1);
+}

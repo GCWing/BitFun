@@ -31,6 +31,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
 base64 = { workspace = true }
+image = { workspace = true }
 md5 = { workspace = true }
 once_cell = { workspace = true }
 lazy_static = { workspace = true }
@@ -109,6 +110,9 @@ image = { workspace = true }
 
 # WebSocket client
 tokio-tungstenite = { workspace = true }
+
+# Relay server shared library (embedded relay reuses standalone relay logic)
+bitfun-relay-server = { path = "../../apps/relay-server" }
 
 # Event layer dependency (lowest layer)
 bitfun-events = { path = "../events" }

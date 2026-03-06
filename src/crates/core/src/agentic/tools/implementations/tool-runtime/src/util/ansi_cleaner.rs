@@ -21,8 +21,16 @@ fn floor_char_boundary(s: &str, index: usize) -> usize {
 /// - CSI sequences like `\033[K` (clear line), `\033[2J` (clear screen)
 ///
 /// Color codes, cursor movements, and other non-content sequences are ignored.
+///
+/// Empty lines are classified as either "real" (created by explicit `\n`) or
+/// "phantom" (intermediate rows filled when `ESC[row;colH` jumps over them).
+/// Phantom empty lines are omitted from output to avoid blank space artifacts
+/// from screen-mode rendering sequences.
 pub struct AnsiCleaner {
     lines: Vec<String>,
+    /// Parallel to `lines`: true = row was explicitly written via `\n`;
+    /// false = phantom row filled by a cursor-position jump (H sequence).
+    line_is_real: Vec<bool>,
     current_line: String,
     cursor_col: usize, // Track cursor column position for handling cursor movement sequences
     line_cleared: bool, // Track if line was just cleared with \x1b[K
@@ -34,6 +42,7 @@ impl AnsiCleaner {
     pub fn new() -> Self {
         Self {
             lines: Vec::new(),
+            line_is_real: Vec::new(),
             current_line: String::new(),
             cursor_col: 0,
             line_cleared: false,
@@ -45,45 +54,64 @@ impl AnsiCleaner {
     pub fn process(&mut self, input: &str) -> String {
         let mut parser = vte::Parser::new();
         parser.advance(self, input.as_bytes());
-        // Add last line if not empty
+        // Save last line if it has content
         if !self.current_line.is_empty() {
-            // Ensure lines has space for current row
             while self.lines.len() <= self.cursor_row {
                 self.lines.push(String::new());
+                self.line_is_real.push(false);
             }
             self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
+            // Non-empty lines are always included regardless of is_real,
+            // but mark true for consistency.
+            self.line_is_real[self.cursor_row] = true;
         }
-        // Trim trailing empty lines
-        let last_non_empty = self.lines.iter().rposition(|l| !l.is_empty());
-        match last_non_empty {
-            Some(idx) => self.lines[..=idx].join("\n"),
-            None => String::new(),
-        }
+        self.build_output()
     }
 
     /// Process input bytes and return cleaned plain text.
     pub fn process_bytes(&mut self, input: &[u8]) -> String {
         let mut parser = vte::Parser::new();
         parser.advance(self, input);
-        // Add last line if not empty
+        // Save last line if it has content
         if !self.current_line.is_empty() {
-            // Ensure lines has space for current row
             while self.lines.len() <= self.cursor_row {
                 self.lines.push(String::new());
+                self.line_is_real.push(false);
             }
             self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
+            self.line_is_real[self.cursor_row] = true;
         }
-        // Trim trailing empty lines
+        self.build_output()
+    }
+
+    /// Build the final output string, skipping phantom empty lines.
+    ///
+    /// A "phantom" empty line is one that was never explicitly written by `\n`
+    /// but was created as a placeholder when a cursor-position (`H`) sequence
+    /// jumped forward over multiple rows.  Real blank lines (from `\n\n`) are
+    /// preserved; only phantom ones are dropped.
+    fn build_output(&self) -> String {
         let last_non_empty = self.lines.iter().rposition(|l| !l.is_empty());
-        match last_non_empty {
-            Some(idx) => self.lines[..=idx].join("\n"),
-            None => String::new(),
+        let Some(idx) = last_non_empty else {
+            return String::new();
+        };
+
+        let mut result: Vec<&str> = Vec::with_capacity(idx + 1);
+        for (i, line) in self.lines[..=idx].iter().enumerate() {
+            let is_real = self.line_is_real.get(i).copied().unwrap_or(false);
+            // Keep the line if it has content OR if it was explicitly created by \n.
+            // Drop phantom empty lines (H-jump fillers that were never written to).
+            if !line.is_empty() || is_real {
+                result.push(line.as_str());
+            }
         }
+        result.join("\n")
     }
 
     /// Reset the cleaner state for reuse.
     pub fn reset(&mut self) {
         self.lines.clear();
+        self.line_is_real.clear();
         self.current_line.clear();
         self.cursor_col = 0;
         self.line_cleared = false;
@@ -128,13 +156,17 @@ impl Perform for AnsiCleaner {
     fn execute(&mut self, byte: u8) {
         match byte {
             b'\n' => {
-                // Line feed: move to next line
-                // Ensure lines has space for current row
+                // Line feed: move to next line.
+                // Intermediate rows pushed here are phantom (cursor jumped over them
+                // via a prior B/H sequence without writing).
                 while self.lines.len() <= self.cursor_row {
                     self.lines.push(String::new());
+                    self.line_is_real.push(false);
                 }
-                // Save current line content at cursor_row position (overwrites if exists)
+                // Save current line content at cursor_row position (overwrites if exists).
+                // Mark as real: \n explicitly visited this row.
                 self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
+                self.line_is_real[self.cursor_row] = true;
                 self.cursor_col = 0;
                 self.cursor_row += 1;
                 self.line_cleared = false;
@@ -220,16 +252,22 @@ impl Perform for AnsiCleaner {
                 // If we need to move to a different row, handle current line first
                 if target_row != self.cursor_row {
                     if !self.current_line.is_empty() {
-                        // Ensure lines has enough space
+                        // Ensure lines has enough space; new slots are phantom.
                         while self.lines.len() <= self.cursor_row {
                             self.lines.push(String::new());
+                            self.line_is_real.push(false);
                         }
                         self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
+                        // Line has content so it will always be included;
+                        // no need to update line_is_real here.
                     }
 
-                    // Fill in missing rows if needed
+                    // Fill rows between current position and target with phantom entries.
+                    // These rows are never written to by \n and are pure screen-layout
+                    // artifacts of the absolute-positioning sequence.
                     while self.lines.len() <= target_row {
                         self.lines.push(String::new());
+                        self.line_is_real.push(false);
                     }
 
                     // Load the target row
@@ -271,6 +309,7 @@ impl Perform for AnsiCleaner {
                 if *param == 2 {
                     // \033[2J - Erase entire display
                     self.lines.clear();
+                    self.line_is_real.clear();
                     self.current_line.clear();
                     self.cursor_col = 0;
                     self.cursor_row = 0;
@@ -436,10 +475,11 @@ mod tests {
 
     #[test]
     fn test_cursor_position() {
-        // \x1b[5;1H moves cursor to row 5, column 1
-        // This creates empty rows 1-4, then starts writing at row 5
+        // \x1b[5;1H moves cursor to row 5, column 1.
+        // Rows 1-4 are phantom (H-jump fillers, never written by \n), so they
+        // are omitted from output. Only real content rows are included.
         let input = "Header\x1b[5;1HNew content";
-        assert_eq!(strip_ansi(input), "Header\n\n\n\nNew content");
+        assert_eq!(strip_ansi(input), "Header\nNew content");
     }
 
     #[test]
@@ -465,7 +505,10 @@ mod tests {
     #[test]
     fn human_written_test() {
         let input = "\u{001b}[93mls\u{001b}[K\r\n\u{001b}[?25h\u{001b}[m\r\n\u{001b}[?25l    Directory: E:\\Projects\\ForTest\\basic-rust\u{001b}[32m\u{001b}[1m\u{001b}[5;1HMode                 LastWriteTime\u{001b}[m \u{001b}[32m\u{001b}[1m\u{001b}[3m        Length\u{001b}[23m Name\r\n----   \u{001b}[m \u{001b}[32m\u{001b}[1m             -------------\u{001b}[m \u{001b}[32m\u{001b}[1m        ------\u{001b}[m \u{001b}[32m\u{001b}[1m----\u{001b}[m\r\nd----           2026/1/10    19:23\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16C.bitfun\u{001b}[m\r\nd----           2026/1/10    21:18\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16C.worktrees\u{001b}[m\r\nd----           2026/1/10    19:21\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16Csrc\u{001b}[m\r\nd----           2026/1/10    19:21\u{001b}[16X\u{001b}[44m\u{001b}[1m\u{001b}[16Ctarget\r\n\u{001b}[?25h\u{001b}[?25l\u{001b}[m-a---           2026/1/10    19:23             57 .gitignore\r\n-a---           2026/1/10    19:21            154 Cargo.lock\r\n-a---           2026/1/10    19:21             81 Cargo.toml\u{001b}[15;1H\u{001b}[?25h";
-        let expected_output = "ls\n\n    Directory: E:\\Projects\\ForTest\\basic-rust\n\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\nd----           2026/1/10    19:23                .bitfun\nd----           2026/1/10    21:18                .worktrees\nd----           2026/1/10    19:21                src\nd----           2026/1/10    19:21                target\n-a---           2026/1/10    19:23             57 .gitignore\n-a---           2026/1/10    19:21            154 Cargo.lock\n-a---           2026/1/10    19:21             81 Cargo.toml";
+        // The blank line between "Directory:" and "Mode..." was produced by
+        // ESC[5;1H jumping from row 2 to row 4, leaving row 3 as a phantom
+        // empty line.  With phantom-line filtering it is now omitted.
+        let expected_output = "ls\n\n    Directory: E:\\Projects\\ForTest\\basic-rust\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\nd----           2026/1/10    19:23                .bitfun\nd----           2026/1/10    21:18                .worktrees\nd----           2026/1/10    19:21                src\nd----           2026/1/10    19:21                target\n-a---           2026/1/10    19:23             57 .gitignore\n-a---           2026/1/10    19:21            154 Cargo.lock\n-a---           2026/1/10    19:21             81 Cargo.toml";
         assert_eq!(strip_ansi(input), expected_output);
     }
 

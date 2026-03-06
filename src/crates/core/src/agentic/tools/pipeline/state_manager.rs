@@ -19,6 +19,32 @@ pub struct ToolStateManager {
 }
 
 impl ToolStateManager {
+    fn sanitize_tool_result_for_event(result: &serde_json::Value) -> serde_json::Value {
+        let mut sanitized = result.clone();
+        Self::redact_data_url_in_json(&mut sanitized);
+        sanitized
+    }
+
+    fn redact_data_url_in_json(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                let had_data_url = map.remove("data_url").is_some();
+                if had_data_url {
+                    map.insert("has_data_url".to_string(), serde_json::json!(true));
+                }
+                for child in map.values_mut() {
+                    Self::redact_data_url_in_json(child);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for child in arr {
+                    Self::redact_data_url_in_json(child);
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn new(event_queue: Arc<EventQueue>) -> Self {
         Self {
             tasks: Arc::new(DashMap::new()),
@@ -156,7 +182,7 @@ impl ToolStateManager {
             ToolExecutionState::Completed { result, duration_ms } => ToolEventData::Completed {
                 tool_id: task.tool_call.tool_id.clone(),
                 tool_name: task.tool_call.tool_name.clone(),
-                result: result.content(),
+                result: Self::sanitize_tool_result_for_event(&result.content()),
                 duration_ms: *duration_ms,
             },
             

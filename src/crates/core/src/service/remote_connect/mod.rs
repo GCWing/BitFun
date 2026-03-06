@@ -315,11 +315,17 @@ impl RemoteConnectService {
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
-                    relay_client::RelayEvent::PeerJoined {
+                    relay_client::RelayEvent::PairRequest {
+                        correlation_id,
                         public_key,
                         device_id,
+                        device_name: _,
                     } => {
-                        info!("Peer joined: {device_id}");
+                        info!("PairRequest from {device_id}");
+                        // Allow re-pairing: clear existing server so the
+                        // subsequent challenge-echo enters the pairing
+                        // verification branch instead of the command branch.
+                        *server_arc.write().await = None;
                         let mut p = pairing_arc.write().await;
                         match p.on_peer_joined(&public_key).await {
                             Ok(challenge) => {
@@ -330,21 +336,22 @@ impl RemoteConnectService {
                                         encryption::encrypt_to_base64(secret, &challenge_json)
                                     {
                                         if let Some(ref client) = *relay_arc.read().await {
-                                            if let Some(room) = p.room_id() {
-                                                let _ = client
-                                                    .send_encrypted(room, &enc, &nonce)
-                                                    .await;
-                                            }
+                                            let _ = client
+                                                .send_relay_response(
+                                                    &correlation_id, &enc, &nonce,
+                                                )
+                                                .await;
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!("Pairing error on peer_joined: {e}");
+                                error!("Pairing error on pair_request: {e}");
                             }
                         }
                     }
-                    relay_client::RelayEvent::MessageReceived {
+                    relay_client::RelayEvent::CommandReceived {
+                        correlation_id,
                         encrypted_data,
                         nonce,
                     } => {
@@ -361,15 +368,16 @@ impl RemoteConnectService {
                                             .encrypt_response(&response, request_id.as_deref())
                                         {
                                             Ok((enc, resp_nonce)) => {
-                                                if let Some(ref client) = *relay_arc.read().await {
-                                                    let p = pairing_arc.read().await;
-                                                    if let Some(room) = p.room_id() {
-                                                        let _ = client
-                                                            .send_encrypted(
-                                                                room, &enc, &resp_nonce,
-                                                            )
-                                                            .await;
-                                                    }
+                                                if let Some(ref client) =
+                                                    *relay_arc.read().await
+                                                {
+                                                    let _ = client
+                                                        .send_relay_response(
+                                                            &correlation_id,
+                                                            &enc,
+                                                            &resp_nonce,
+                                                        )
+                                                        .await;
                                                 }
                                             }
                                             Err(e) => {
@@ -397,50 +405,24 @@ impl RemoteConnectService {
                                             Ok(true) => {
                                                 info!("Pairing verified successfully");
                                                 if let Some(s) = pw.shared_secret() {
-                                                    let (stream_tx, mut stream_rx) = tokio::sync::mpsc::unbounded_channel::<remote_server::EncryptedPayload>();
-
-                                                    let relay_for_stream = relay_arc.clone();
-                                                    let pairing_for_stream = pairing_arc.clone();
-                                                    tokio::spawn(async move {
-                                                        while let Some((enc, nonce)) =
-                                                            stream_rx.recv().await
-                                                        {
-                                                            if let Some(ref client) =
-                                                                *relay_for_stream.read().await
-                                                            {
-                                                                let p = pairing_for_stream
-                                                                    .read()
-                                                                    .await;
-                                                                if let Some(room) = p.room_id() {
-                                                                    let _ = client
-                                                                        .send_encrypted(
-                                                                            room, &enc, &nonce,
-                                                                        )
-                                                                        .await;
-                                                                }
-                                                            }
-                                                        }
-                                                    });
-
-                                                    let server =
-                                                        RemoteServer::new(*s, stream_tx);
+                                                    let server = RemoteServer::new(*s);
 
                                                     let initial_sync =
                                                         server.generate_initial_sync().await;
-                                                    if let Ok((enc, nonce)) = server
+                                                    if let Ok((enc, resp_nonce)) = server
                                                         .encrypt_response(&initial_sync, None)
                                                     {
                                                         if let Some(ref client) =
                                                             *relay_arc.read().await
                                                         {
-                                                            if let Some(room) = pw.room_id() {
-                                                                info!("Sending initial sync to mobile after pairing");
-                                                                let _ = client
-                                                                    .send_encrypted(
-                                                                        room, &enc, &nonce,
-                                                                    )
-                                                                    .await;
-                                                            }
+                                                            info!("Sending initial sync to mobile after pairing");
+                                                            let _ = client
+                                                                .send_relay_response(
+                                                                    &correlation_id,
+                                                                    &enc,
+                                                                    &resp_nonce,
+                                                                )
+                                                                .await;
                                                         }
                                                     }
 
@@ -459,18 +441,13 @@ impl RemoteConnectService {
                             }
                         }
                     }
-                    relay_client::RelayEvent::PeerDisconnected { device_id } => {
-                        info!("Peer disconnected: {device_id}");
-                        pairing_arc.write().await.disconnect().await;
-                        *server_arc.write().await = None;
-                    }
                     relay_client::RelayEvent::Reconnected => {
-                        info!("Relay reconnected, resetting pairing state");
-                        pairing_arc.write().await.disconnect().await;
-                        *server_arc.write().await = None;
+                        info!("Relay reconnected — pairing + server preserved for mobile polling");
                     }
                     relay_client::RelayEvent::Disconnected => {
                         info!("Relay disconnected");
+                        pairing_arc.write().await.disconnect().await;
+                        *server_arc.write().await = None;
                     }
                     relay_client::RelayEvent::Error { message } => {
                         error!("Relay error: {message}");

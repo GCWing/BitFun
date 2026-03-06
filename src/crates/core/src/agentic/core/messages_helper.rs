@@ -13,22 +13,32 @@ impl MessageHelper {
             return;
         }
         if !enable_thinking {
-            messages
-                .iter_mut()
-                .for_each(|m| m.metadata.keep_thinking = false);
+            messages.iter_mut().for_each(|m| {
+                if m.metadata.keep_thinking {
+                    m.metadata.keep_thinking = false;
+                    m.metadata.tokens = None;
+                }
+            });
         } else if support_preserved_thinking {
-            messages
-                .iter_mut()
-                .for_each(|m| m.metadata.keep_thinking = true);
+            messages.iter_mut().for_each(|m| {
+                if !m.metadata.keep_thinking {
+                    m.metadata.keep_thinking = true;
+                    m.metadata.tokens = None;
+                }
+            });
         } else {
             let last_message_turn_id = messages.last().and_then(|m| m.metadata.turn_id.clone());
             if let Some(last_turn_id) = last_message_turn_id {
                 messages.iter_mut().for_each(|m| {
-                    m.metadata.keep_thinking = m
+                    let keep_thinking = m
                         .metadata
                         .turn_id
                         .as_ref()
                         .is_some_and(|cur_turn_id| cur_turn_id == &last_turn_id);
+                    if m.metadata.keep_thinking != keep_thinking {
+                        m.metadata.keep_thinking = keep_thinking;
+                        m.metadata.tokens = None;
+                    }
                 })
             } else {
                 // Find the index of the last user message (role is user and not <system-reminder>) from back to front
@@ -38,15 +48,21 @@ impl MessageHelper {
                     // Messages from the last user message onwards are messages for this turn
                     messages.iter_mut().enumerate().for_each(|(index, m)| {
                         let keep_thinking = index >= last_user_message_index;
-                        m.metadata.keep_thinking = keep_thinking;
+                        if m.metadata.keep_thinking != keep_thinking {
+                            m.metadata.keep_thinking = keep_thinking;
+                            m.metadata.tokens = None;
+                        }
                     })
                 } else {
                     // No user message found, should not reach here in practice
                     warn!("compute_keep_thinking_flags: no user message found");
 
-                    messages
-                        .iter_mut()
-                        .for_each(|m| m.metadata.keep_thinking = false);
+                    messages.iter_mut().for_each(|m| {
+                        if m.metadata.keep_thinking {
+                            m.metadata.keep_thinking = false;
+                            m.metadata.tokens = None;
+                        }
+                    });
                 }
             }
         }

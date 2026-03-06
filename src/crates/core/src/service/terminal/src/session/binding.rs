@@ -46,12 +46,15 @@ pub struct TerminalBindingOptions {
 /// - Get or create terminal sessions on demand
 /// - Bind existing terminal sessions to owners
 /// - Remove bindings and optionally close terminal sessions
+/// - Create and track background terminal sessions (one-to-many)
 ///
 /// # Thread Safety
 /// This struct is thread-safe and can be shared across async tasks.
 pub struct TerminalSessionBinding {
-    /// Mapping from owner_id to terminal_session_id
+    /// Mapping from owner_id to terminal_session_id (primary, one-to-one)
     bindings: Arc<DashMap<String, String>>,
+    /// Mapping from owner_id to background terminal session IDs (one-to-many)
+    background_bindings: Arc<DashMap<String, Vec<String>>>,
 }
 
 impl TerminalSessionBinding {
@@ -59,6 +62,7 @@ impl TerminalSessionBinding {
     pub fn new() -> Self {
         Self {
             bindings: Arc::new(DashMap::new()),
+            background_bindings: Arc::new(DashMap::new()),
         }
     }
 
@@ -146,16 +150,76 @@ impl TerminalSessionBinding {
         self.bindings.remove(owner_id).map(|(_, v)| v)
     }
 
+    /// Create a new background terminal session for the given owner.
+    ///
+    /// Unlike `get_or_create`, this always creates a fresh session and allows
+    /// multiple background sessions per owner. The session ID is returned immediately
+    /// after the session is started; the caller is responsible for sending commands.
+    ///
+    /// # Arguments
+    /// * `owner_id` - The external entity ID (e.g., chat_session_id)
+    /// * `options` - Options for creating the terminal session
+    ///
+    /// # Returns
+    /// The newly created background terminal session ID
+    pub async fn create_background_session(
+        &self,
+        owner_id: &str,
+        options: TerminalBindingOptions,
+    ) -> TerminalResult<String> {
+        let session_manager = get_session_manager()
+            .ok_or_else(|| TerminalError::Session("SessionManager not initialized".to_string()))?;
+
+        let session_id = options.session_id.unwrap_or_else(|| {
+            format!(
+                "bg-{}-{}",
+                &owner_id[..8.min(owner_id.len())],
+                &uuid::Uuid::new_v4().to_string()[..8]
+            )
+        });
+
+        let session_name = options
+            .session_name
+            .unwrap_or_else(|| format!("Background-{}", &session_id[..8.min(session_id.len())]));
+
+        let _session = session_manager
+            .create_session(
+                Some(session_id.clone()),
+                Some(session_name),
+                options.shell_type,
+                options.working_directory,
+                options.env,
+                options.cols,
+                options.rows,
+            )
+            .await?;
+
+        self.background_bindings
+            .entry(owner_id.to_string())
+            .or_default()
+            .push(session_id.clone());
+
+        Ok(session_id)
+    }
+
+    /// List all background terminal session IDs for the given owner.
+    pub fn list_background_sessions(&self, owner_id: &str) -> Vec<String> {
+        self.background_bindings
+            .get(owner_id)
+            .map(|v| v.clone())
+            .unwrap_or_default()
+    }
+
     /// Remove binding and close the associated terminal session
     ///
     /// This is the recommended way to clean up when an owner is being destroyed.
+    /// Also closes all background sessions associated with this owner.
     pub async fn remove(&self, owner_id: &str) -> TerminalResult<()> {
-        if let Some(terminal_session_id) = self.unbind(owner_id) {
-            let session_manager = get_session_manager().ok_or_else(|| {
-                TerminalError::Session("SessionManager not initialized".to_string())
-            })?;
+        let session_manager = get_session_manager()
+            .ok_or_else(|| TerminalError::Session("SessionManager not initialized".to_string()))?;
 
-            // Close the terminal session
+        // Close primary session
+        if let Some(terminal_session_id) = self.unbind(owner_id) {
             if let Err(e) = session_manager
                 .close_session(&terminal_session_id, false)
                 .await
@@ -164,7 +228,18 @@ impl TerminalSessionBinding {
                     "Failed to close terminal session {}: {}",
                     terminal_session_id, e
                 );
-                // Don't return error - the binding is already removed
+            }
+        }
+
+        // Close all background sessions
+        if let Some((_, bg_sessions)) = self.background_bindings.remove(owner_id) {
+            for bg_session_id in bg_sessions {
+                if let Err(e) = session_manager.close_session(&bg_session_id, false).await {
+                    warn!(
+                        "Failed to close background terminal session {}: {}",
+                        bg_session_id, e
+                    );
+                }
             }
         }
 
@@ -196,13 +271,21 @@ impl TerminalSessionBinding {
     /// Use this with caution - terminal sessions will become orphaned.
     pub fn clear(&self) {
         self.bindings.clear();
+        self.background_bindings.clear();
     }
 
-    /// Remove all bindings and close all associated terminal sessions
+    /// Remove all bindings and close all associated terminal sessions (primary + background)
     pub async fn remove_all(&self) -> TerminalResult<()> {
-        let bindings: Vec<(String, String)> = self.list_bindings();
+        let owner_ids: Vec<String> = self
+            .bindings
+            .iter()
+            .map(|e| e.key().clone())
+            .chain(self.background_bindings.iter().map(|e| e.key().clone()))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
 
-        for (owner_id, _) in bindings {
+        for owner_id in owner_ids {
             if let Err(e) = self.remove(&owner_id).await {
                 warn!("Failed to remove binding for {}: {}", owner_id, e);
             }

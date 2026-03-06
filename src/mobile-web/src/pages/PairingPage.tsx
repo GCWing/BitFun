@@ -1,16 +1,27 @@
 import React, { useEffect, useRef } from 'react';
-import { RelayConnection } from '../services/RelayConnection';
+import { RelayHttpClient } from '../services/RelayHttpClient';
 import { RemoteSessionManager } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 
 interface PairingPageProps {
-  onPaired: (relay: RelayConnection, sessionMgr: RemoteSessionManager) => void;
+  onPaired: (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => void;
 }
 
+const CubeLogo: React.FC = () => (
+  <div className="pairing-page__cube">
+    <div className="pairing-page__cube-inner">
+      <div className="pairing-page__cube-face pairing-page__cube-face--front" />
+      <div className="pairing-page__cube-face pairing-page__cube-face--back" />
+      <div className="pairing-page__cube-face pairing-page__cube-face--right" />
+      <div className="pairing-page__cube-face pairing-page__cube-face--left" />
+      <div className="pairing-page__cube-face pairing-page__cube-face--top" />
+      <div className="pairing-page__cube-face pairing-page__cube-face--bottom" />
+    </div>
+  </div>
+);
+
 const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
-  const { connectionState, setConnectionState, setError, error } = useMobileStore();
-  const relayRef = useRef<RelayConnection | null>(null);
-  // Track whether pairing has completed so we don't disconnect the live relay on unmount.
+  const { connectionStatus, setConnectionStatus, setError, error } = useMobileStore();
   const pairedRef = useRef(false);
 
   useEffect(() => {
@@ -18,76 +29,89 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
     const params = new URLSearchParams(hash.replace(/^#\/pair\?/, ''));
     const room = params.get('room');
     const pk = params.get('pk');
-    const did = params.get('did');
-    const relayWs = params.get('relay');
+    const relayParam = params.get('relay');
 
     if (!room || !pk) {
       setError('Invalid QR code: missing room or public key');
+      setConnectionStatus('error');
       return;
     }
 
-    // Use the explicit relay WebSocket URL from QR params,
-    // falling back to origin + pathname (for backward compat)
-    let wsBaseUrl: string;
-    if (relayWs) {
-      wsBaseUrl = relayWs;
+    let httpBaseUrl: string;
+    if (relayParam) {
+      httpBaseUrl = relayParam
+        .replace(/^wss:\/\//, 'https://')
+        .replace(/^ws:\/\//, 'http://')
+        .replace(/\/ws\/?$/, '')
+        .replace(/\/$/, '');
     } else {
-      const base = window.location.origin + window.location.pathname.replace(/\/$/, '');
-      wsBaseUrl = base.replace(/^https/, 'wss').replace(/^http/, 'ws');
+      const origin = window.location.origin;
+      const pathname = window.location.pathname
+        .replace(/\/[^/]*$/, '')
+        .replace(/\/r\/[^/]*$/, '');
+      httpBaseUrl = origin + pathname;
     }
 
-    const relay = new RelayConnection(wsBaseUrl, room, pk, did || '', {
-      onStateChange: (state) => {
-        setConnectionState(state);
-        if (state === 'paired') {
-          pairedRef.current = true;
-          const sessionMgr = new RemoteSessionManager(relay);
-          onPaired(relay, sessionMgr);
+    const client = new RelayHttpClient(httpBaseUrl, room);
+
+    (async () => {
+      try {
+        setConnectionStatus('pairing');
+        const initialSync = await client.pair(pk);
+        pairedRef.current = true;
+        setConnectionStatus('paired');
+
+        const sessionMgr = new RemoteSessionManager(client);
+
+        const store = useMobileStore.getState();
+        if (initialSync.has_workspace) {
+          store.setCurrentWorkspace({
+            has_workspace: true,
+            path: initialSync.path,
+            project_name: initialSync.project_name,
+            git_branch: initialSync.git_branch,
+          });
         }
-      },
-      onMessage: () => {},
-      onError: (msg) => setError(msg),
-    });
+        if (initialSync.sessions) {
+          store.setSessions(initialSync.sessions);
+        }
 
-    relayRef.current = relay;
-    relay.connect();
-
-    return () => {
-      // Only disconnect if pairing has not completed.
-      // After pairing, the relay is owned by App.tsx and must stay alive.
-      if (!pairedRef.current) {
-        relay.disconnect();
+        onPaired(client, sessionMgr);
+      } catch (e: any) {
+        setError(e?.message || 'Pairing failed');
+        setConnectionStatus('error');
       }
-    };
+    })();
   }, []);
 
   const stateLabels: Record<string, string> = {
-    disconnected: 'Disconnected',
-    connecting: 'Connecting to relay server...',
-    connected: 'Connected, exchanging keys...',
+    pairing: 'Connecting and pairing...',
     paired: 'Paired! Loading sessions...',
     error: 'Connection error',
   };
 
   const handleRetry = () => {
-    // Reload the page — browser will reconnect and re-join the room.
     window.location.reload();
   };
 
-  const showRetry = (connectionState === 'error' || connectionState === 'disconnected') && !!error;
+  const showRetry = connectionStatus === 'error';
+  const showSpinner = connectionStatus === 'pairing';
 
   return (
     <div className="pairing-page">
-      <div className="pairing-page__logo">BitFun</div>
-      <div className="pairing-page__spinner">
-        {connectionState !== 'error' && connectionState !== 'disconnected' && (
-          <div className="spinner" />
-        )}
+      <CubeLogo />
+      <div className="pairing-page__brand">BitFun Remote</div>
+
+      <div className="pairing-page__spinner-wrap">
+        {showSpinner && <div className="spinner" />}
       </div>
+
       <div className="pairing-page__state">
-        {stateLabels[connectionState] || connectionState}
+        {stateLabels[connectionStatus] || connectionStatus}
       </div>
+
       {error && <div className="pairing-page__error">{error}</div>}
+
       {showRetry && (
         <button className="pairing-page__retry" onClick={handleRetry}>
           Retry

@@ -16,6 +16,71 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ApiClient');
+const SENSITIVE_KEY_PATTERNS = [
+  'api_key',
+  'apikey',
+  'token',
+  'secret',
+  'password',
+  'authorization'
+];
+
+function isSensitiveKey(key: string): boolean {
+  const normalized = key.toLowerCase();
+  return SENSITIVE_KEY_PATTERNS.some(pattern => normalized.includes(pattern));
+}
+
+function maskSensitiveValue(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '***';
+  }
+  if (value.length <= 8) {
+    return '***';
+  }
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
+}
+
+function sanitizeForLog(value: unknown, parentKey?: string): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeForLog(item, parentKey));
+  }
+
+  if (typeof value !== 'object') {
+    if (parentKey && isSensitiveKey(parentKey)) {
+      return maskSensitiveValue(value);
+    }
+    return value;
+  }
+
+  const obj = value as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const [key, rawVal] of Object.entries(obj)) {
+    if (isSensitiveKey(key)) {
+      sanitized[key] = maskSensitiveValue(rawVal);
+      continue;
+    }
+
+    // For HTTP header maps, mask sensitive header values by header name.
+    if ((key === 'headers' || key === 'custom_headers') && rawVal && typeof rawVal === 'object') {
+      const headerObj = rawVal as Record<string, unknown>;
+      const maskedHeaders: Record<string, unknown> = {};
+      for (const [hKey, hVal] of Object.entries(headerObj)) {
+        maskedHeaders[hKey] = isSensitiveKey(hKey) ? maskSensitiveValue(hVal) : hVal;
+      }
+      sanitized[key] = maskedHeaders;
+      continue;
+    }
+
+    sanitized[key] = sanitizeForLog(rawVal, key);
+  }
+
+  return sanitized;
+}
 
 export class ApiClient implements IApiClient {
   private config: ApiConfig;
@@ -159,7 +224,11 @@ export class ApiClient implements IApiClient {
 
 
         if (this.config.enableLogging) {
-          log.debug('Request completed', { type: request.type, responseTime, config: request.config });
+          log.debug('Request completed', {
+            type: request.type,
+            responseTime,
+            config: sanitizeForLog(request.config)
+          });
         }
 
         return response.data;
@@ -191,7 +260,12 @@ export class ApiClient implements IApiClient {
 
 
       if (this.config.enableLogging) {
-        log.error('Request failed after retries', { requestId: request.id, retryCount: request.retryCount, error });
+        log.error('Request failed after retries', {
+          requestId: request.id,
+          retryCount: request.retryCount,
+          config: sanitizeForLog(request.config),
+          error
+        });
       }
 
       throw this.normalizeError(error as Error);
@@ -226,7 +300,7 @@ export class ApiClient implements IApiClient {
       } else {
         log.error('Command failed', {
           command: config.command,
-          args: config.args,
+          args: sanitizeForLog(config.args),
           error: errorMessage,
           rawError: error
         });
@@ -400,7 +474,11 @@ export function createLoggingMiddleware(): ApiMiddleware {
     try {
       const response = await next(request);
       const duration = Date.now() - startTime;
-      middlewareLog.debug('Request completed', { type: request.type, duration, config: request.config });
+      middlewareLog.debug('Request completed', {
+        type: request.type,
+        duration,
+        config: sanitizeForLog(request.config)
+      });
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;

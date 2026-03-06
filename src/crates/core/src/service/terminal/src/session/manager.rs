@@ -5,6 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use dashmap::DashMap;
 use futures::Stream;
 use log::warn;
 use tokio::sync::{mpsc, RwLock};
@@ -99,6 +100,9 @@ pub struct SessionManager {
 
     /// Shell integration scripts manager
     scripts_manager: ScriptsManager,
+
+    /// Per-session output taps for real-time output streaming
+    output_taps: Arc<DashMap<String, Vec<mpsc::Sender<String>>>>,
 }
 
 impl SessionManager {
@@ -114,6 +118,7 @@ impl SessionManager {
         let event_emitter = Arc::new(TerminalEventEmitter::new(1024));
         let integration_manager = Arc::new(ShellIntegrationManager::new());
         let binding = Arc::new(super::TerminalSessionBinding::new());
+        let output_taps = Arc::new(DashMap::new());
 
         let manager = Self {
             config,
@@ -125,6 +130,7 @@ impl SessionManager {
             session_integrations: Arc::new(RwLock::new(HashMap::new())),
             binding,
             scripts_manager,
+            output_taps,
         };
 
         // Start event forwarding
@@ -148,6 +154,7 @@ impl SessionManager {
         let sessions = self.sessions.clone();
         let pty_to_session = self.pty_to_session.clone();
         let session_integrations = self.session_integrations.clone();
+        let output_taps = self.output_taps.clone();
 
         tokio::spawn(async move {
             loop {
@@ -229,6 +236,11 @@ impl SessionManager {
                                             }
                                         }
                                     }
+                                }
+
+                                // Fan out raw data to output taps (e.g. background session file loggers)
+                                if let Some(mut senders) = output_taps.get_mut(&session_id) {
+                                    senders.retain(|tx| tx.try_send(data_str.clone()).is_ok());
                                 }
 
                                 TerminalEvent::Data {
@@ -1317,11 +1329,19 @@ impl SessionManager {
             .unregister_session(session_id)
             .await;
 
+        // Drop output taps so file-writing tasks can detect session end
+        self.output_taps.remove(session_id);
+
         // Remove session
         {
             let mut sessions = self.sessions.write().await;
             sessions.remove(session_id);
         }
+
+        // Remove any binding pointing to this session so the next get_or_create
+        // creates a fresh session rather than returning a stale ID.
+        // For primary sessions owner_id == session_id, so unbind(session_id) is sufficient.
+        self.binding.unbind(session_id);
 
         // Emit session destroyed event for frontend
         let _ = self
@@ -1387,6 +1407,20 @@ impl SessionManager {
         }
 
         self.pty_service.shutdown_all().await;
+    }
+
+    /// Subscribe to the raw PTY output of a specific session.
+    ///
+    /// Returns a receiver that yields raw output strings as they arrive from the PTY.
+    /// The receiver will return `None` (channel closed) when the session is destroyed.
+    /// Multiple subscriptions to the same session are supported.
+    pub fn subscribe_session_output(&self, session_id: &str) -> mpsc::Receiver<String> {
+        let (tx, rx) = mpsc::channel(256);
+        self.output_taps
+            .entry(session_id.to_string())
+            .or_default()
+            .push(tx);
+        rx
     }
 }
 

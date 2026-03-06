@@ -158,8 +158,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     return allModels
       .filter(m => {
         if (!m.enabled) return false;
-        // Text-only models for general chat.
-        return m.category === 'general_chat';
+        // Only show chat-capable models (exclude embeddings / image-gen / speech, etc.).
+        const capabilities = Array.isArray(m.capabilities) ? m.capabilities : [];
+        return capabilities.includes('text_chat');
       })
       .map(m => ({
         id: m.id || '',

@@ -445,6 +445,17 @@ impl TerminalApi {
             .await
     }
 
+    /// Subscribe to raw PTY output of a specific session.
+    ///
+    /// Returns a receiver that yields raw output strings as they arrive.
+    /// The channel closes when the session is destroyed.
+    pub fn subscribe_session_output(
+        &self,
+        session_id: &str,
+    ) -> tokio::sync::mpsc::Receiver<String> {
+        self.session_manager.subscribe_session_output(session_id)
+    }
+
     /// Subscribe to terminal events
     pub fn subscribe_events(&self) -> tokio::sync::mpsc::Receiver<TerminalEvent> {
         let (tx, rx) = tokio::sync::mpsc::channel(1024);

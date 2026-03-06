@@ -1,9 +1,8 @@
 //! WebSocket handler for the relay server.
 //!
-//! Each connected client sends/receives JSON messages following the relay protocol.
-//! The server never decrypts application data — it only handles room management
-//! and forwards encrypted payloads between paired devices.
-//! Desktop→mobile messages are also buffered for later polling.
+//! Only desktop clients connect via WebSocket. Mobile clients use HTTP.
+//! The relay bridges HTTP requests to the desktop via WebSocket using
+//! correlation IDs for request-response matching.
 
 use axum::{
     extract::{
@@ -18,43 +17,53 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-use crate::relay::room::{ConnId, OutboundMessage, RoomManager};
+use crate::relay::room::{ConnId, OutboundMessage, ResponsePayload, RoomManager};
 use crate::routes::api::AppState;
 
+/// Messages received from the desktop via WebSocket.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[allow(dead_code)]
 pub enum InboundMessage {
     CreateRoom {
         room_id: Option<String>,
         device_id: String,
+        #[allow(dead_code)]
         device_type: String,
         public_key: String,
     },
-    JoinRoom {
-        room_id: String,
-        device_id: String,
-        device_type: String,
-        public_key: String,
-    },
-    Relay {
-        room_id: String,
+    /// Desktop responds to a bridged HTTP request.
+    RelayResponse {
+        correlation_id: String,
         encrypted_data: String,
         nonce: String,
     },
     Heartbeat,
 }
 
+/// Messages sent to the desktop via WebSocket.
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[allow(dead_code)]
 pub enum OutboundProtocol {
-    RoomCreated { room_id: String },
-    PeerJoined { device_id: String, device_type: String, public_key: String },
-    Relay { room_id: String, encrypted_data: String, nonce: String },
+    RoomCreated {
+        room_id: String,
+    },
+    /// Mobile pairing request forwarded to desktop.
+    PairRequest {
+        correlation_id: String,
+        public_key: String,
+        device_id: String,
+        device_name: String,
+    },
+    /// Encrypted command from mobile forwarded to desktop.
+    Command {
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
     HeartbeatAck,
-    PeerDisconnected { device_id: String },
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 pub async fn websocket_handler(
@@ -86,9 +95,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             Ok(Message::Text(text)) => {
                 handle_text_message(&text, conn_id, &state.room_manager, &out_tx);
             }
-            Ok(Message::Ping(_)) => {
-                // Axum auto-replies Pong for Ping frames
-            }
+            Ok(Message::Ping(_)) => {}
             Ok(Message::Close(_)) => {
                 info!("WebSocket close from conn_id={conn_id}");
                 break;
@@ -113,14 +120,20 @@ fn handle_text_message(
     room_manager: &Arc<RoomManager>,
     out_tx: &mpsc::UnboundedSender<OutboundMessage>,
 ) {
-    debug!("Received from conn_id={conn_id}: {}", &text[..text.len().min(200)]);
+    debug!(
+        "Received from conn_id={conn_id}: {}",
+        &text[..text.len().min(200)]
+    );
     let msg: InboundMessage = match serde_json::from_str(text) {
         Ok(m) => m,
         Err(e) => {
             warn!("Invalid message from conn_id={conn_id}: {e}");
-            send_json(out_tx, &OutboundProtocol::Error {
-                message: format!("invalid message format: {e}"),
-            });
+            send_json(
+                out_tx,
+                &OutboundProtocol::Error {
+                    message: format!("invalid message format: {e}"),
+                },
+            );
             return;
         }
     };
@@ -129,78 +142,54 @@ fn handle_text_message(
         InboundMessage::CreateRoom {
             room_id,
             device_id,
-            device_type,
+            device_type: _,
             public_key,
         } => {
             let room_id = room_id.unwrap_or_else(generate_room_id);
             let ok = room_manager.create_room(
-                &room_id, conn_id, &device_id, &device_type, &public_key, Some(out_tx.clone()),
+                &room_id,
+                conn_id,
+                &device_id,
+                &public_key,
+                out_tx.clone(),
             );
             if ok {
                 send_json(out_tx, &OutboundProtocol::RoomCreated { room_id });
             } else {
-                send_json(out_tx, &OutboundProtocol::Error {
-                    message: "failed to create room".into(),
-                });
+                send_json(
+                    out_tx,
+                    &OutboundProtocol::Error {
+                        message: "failed to create room".into(),
+                    },
+                );
             }
         }
 
-        InboundMessage::JoinRoom {
-            room_id,
-            device_id,
-            device_type,
-            public_key,
-        } => {
-            let existing_peer = room_manager.get_peer_info(&room_id, conn_id);
-
-            let ok = room_manager.join_room(
-                &room_id, conn_id, &device_id, &device_type, &public_key, Some(out_tx.clone()),
-            );
-
-            if ok {
-                let joiner_notification = serde_json::to_string(&OutboundProtocol::PeerJoined {
-                    device_id: device_id.clone(),
-                    device_type: device_type.clone(),
-                    public_key: public_key.clone(),
-                }).unwrap_or_default();
-                room_manager.send_to_others_in_room(&room_id, conn_id, &joiner_notification);
-
-                if let Some((peer_did, peer_dt, peer_pk)) = existing_peer {
-                    send_json(out_tx, &OutboundProtocol::PeerJoined {
-                        device_id: peer_did,
-                        device_type: peer_dt,
-                        public_key: peer_pk,
-                    });
-                } else {
-                    warn!("No existing peer found for room {room_id} to send back to joiner");
-                }
-            } else {
-                send_json(out_tx, &OutboundProtocol::Error {
-                    message: format!("failed to join room {room_id}"),
-                });
-            }
-        }
-
-        InboundMessage::Relay {
-            room_id: _,
+        InboundMessage::RelayResponse {
+            correlation_id,
             encrypted_data,
             nonce,
         } => {
-            debug!("Relay message from conn_id={conn_id} data_len={}", encrypted_data.len());
-            if room_manager.relay_message(conn_id, &encrypted_data, &nonce) {
-                debug!("Relay message forwarded from conn_id={conn_id}");
-            } else {
-                warn!("Relay failed for conn_id={conn_id}: no peer found");
-            }
+            debug!("RelayResponse from desktop conn_id={conn_id} corr={correlation_id}");
+            room_manager.resolve_pending(
+                &correlation_id,
+                ResponsePayload {
+                    encrypted_data,
+                    nonce,
+                },
+            );
         }
 
         InboundMessage::Heartbeat => {
             if room_manager.heartbeat(conn_id) {
                 send_json(out_tx, &OutboundProtocol::HeartbeatAck);
             } else {
-                send_json(out_tx, &OutboundProtocol::Error {
-                    message: "Room not found or expired".into(),
-                });
+                send_json(
+                    out_tx,
+                    &OutboundProtocol::Error {
+                        message: "Room not found or expired".into(),
+                    },
+                );
             }
         }
     }

@@ -3,7 +3,9 @@
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use crate::api::context_upload_api::create_image_context_provider;
 use bitfun_core::agentic::{
     tools::framework::ToolUseContext,
     tools::{get_all_tools, get_readonly_tools},
@@ -171,7 +173,7 @@ pub async fn validate_tool_input(
                 read_file_timestamps: HashMap::new(),
                 options: None,
                 response_state: None,
-                image_context_provider: None,
+                image_context_provider: Some(Arc::new(create_image_context_provider())),
                 subagent_parent_info: None,
                 cancellation_token: None,
             };
@@ -210,7 +212,7 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
                 read_file_timestamps: HashMap::new(),
                 options: None,
                 response_state: None,
-                image_context_provider: None,
+                image_context_provider: Some(Arc::new(create_image_context_provider())),
                 subagent_parent_info: None,
                 cancellation_token: None,
             };

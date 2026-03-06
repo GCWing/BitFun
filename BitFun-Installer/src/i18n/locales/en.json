@@ -65,7 +65,11 @@
       },
       "minimax": {
         "name": "MiniMax",
-        "description": "MiniMax M2 series large language models"
+        "description": "MiniMax M2 series large language models",
+        "urlOptions": {
+          "default": "Anthropic Format - Default",
+          "openai": "OpenAI Compatible Format"
+        }
       },
       "moonshot": {
         "name": "Moonshot AI",
@@ -86,7 +90,12 @@
       },
       "qwen": {
         "name": "Qwen",
-        "description": "Alibaba Cloud Qwen3 series models"
+        "description": "Alibaba Cloud Qwen3 series models",
+        "urlOptions": {
+          "default": "OpenAI Format - Default",
+          "codingPlan": "OpenAI Format - Coding Plan",
+          "codingPlanAnthropic": "Anthropic Format - Coding Plan"
+        }
       },
       "volcengine": {
         "name": "Volcano Engine",

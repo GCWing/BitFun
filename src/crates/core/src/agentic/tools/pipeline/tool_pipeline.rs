@@ -699,6 +699,40 @@ impl ToolPipeline {
                             map.insert("turn_index".to_string(), serde_json::json!(n));
                         }
                     }
+
+                    if let Some(provider) = task.context.context_vars.get("primary_model_provider") {
+                        if !provider.is_empty() {
+                            map.insert(
+                                "primary_model_provider".to_string(),
+                                serde_json::json!(provider),
+                            );
+                        }
+                    }
+                    if let Some(model_id) = task.context.context_vars.get("primary_model_id") {
+                        if !model_id.is_empty() {
+                            map.insert("primary_model_id".to_string(), serde_json::json!(model_id));
+                        }
+                    }
+                    if let Some(model_name) = task.context.context_vars.get("primary_model_name") {
+                        if !model_name.is_empty() {
+                            map.insert(
+                                "primary_model_name".to_string(),
+                                serde_json::json!(model_name),
+                            );
+                        }
+                    }
+                    if let Some(supports_images) = task
+                        .context
+                        .context_vars
+                        .get("primary_model_supports_image_understanding")
+                    {
+                        if let Ok(flag) = supports_images.parse::<bool>() {
+                            map.insert(
+                                "primary_model_supports_image_understanding".to_string(),
+                                serde_json::json!(flag),
+                            );
+                        }
+                    }
                     
                     map
                 }),
@@ -887,4 +921,3 @@ impl ToolPipeline {
         }
     }
 }
-

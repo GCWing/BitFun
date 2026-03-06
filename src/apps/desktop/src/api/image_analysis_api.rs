@@ -2,7 +2,10 @@
 
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::coordination::ConversationCoordinator;
-use bitfun_core::agentic::image_analysis::*;
+use bitfun_core::agentic::image_analysis::{
+    resolve_vision_model_from_ai_config, AnalyzeImagesRequest, ImageAnalysisResult, ImageAnalyzer,
+    MessageEnhancer, SendEnhancedMessageRequest,
+};
 use log::error;
 use std::sync::Arc;
 use tauri::State;
@@ -21,65 +24,25 @@ pub async fn analyze_images(
             format!("Failed to get AI config: {}", e)
         })?;
 
-    let image_model_id = ai_config
-        .default_models
-        .image_understanding
-        .ok_or_else(|| {
-            error!("Image understanding model not configured");
-            "Image understanding model not configured".to_string()
-        })?;
-
-    let image_model_id = if image_model_id.is_empty() {
-        let vision_model = ai_config
-            .models
-            .iter()
-            .find(|m| {
-                m.enabled
-                    && m.capabilities.iter().any(|cap| {
-                        matches!(
-                        cap,
-                        bitfun_core::service::config::types::ModelCapability::ImageUnderstanding
-                    )
-                    })
-            })
-            .map(|m| m.id.as_str());
-
-        match vision_model {
-            Some(model_id) => model_id,
-            None => {
-                error!("No image understanding model found");
-                return Err(
-                    "Image understanding model not configured and no compatible model found.\n\n\
-                    Please add a model that supports image understanding\
-                    in [Settings → AI Model Config], enable 'image_understanding' capability, \
-                    and assign it in [Settings → Super Agent]."
-                        .to_string(),
-                );
-            }
-        }
-    } else {
-        &image_model_id
-    };
-
-    let image_model = ai_config
-        .models
-        .iter()
-        .find(|m| &m.id == image_model_id)
-        .ok_or_else(|| {
-            error!(
-                "Model not found: model_id={}, available_models={:?}",
-                image_model_id,
-                ai_config.models.iter().map(|m| &m.id).collect::<Vec<_>>()
-            );
-            format!("Model not found: {}", image_model_id)
-        })?
-        .clone();
+    let image_model = resolve_vision_model_from_ai_config(&ai_config).map_err(|e| {
+        error!(
+            "Image understanding model resolution failed: available_models={:?}, error={}",
+            ai_config.models.iter().map(|m| &m.id).collect::<Vec<_>>(),
+            e
+        );
+        format!(
+            "Image understanding model is not configured.\n\n\
+             Please select a model for [Settings → Default Model Config → Image Understanding Model].\n\n\
+             Details: {}",
+            e
+        )
+    })?;
 
     let workspace_path = state.workspace_path.read().await.clone();
 
     let ai_client = state
         .ai_client_factory
-        .get_client_by_id(image_model_id)
+        .get_client_by_id(&image_model.id)
         .await
         .map_err(|e| format!("Failed to create AI client: {}", e))?;
 

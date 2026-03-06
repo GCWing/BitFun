@@ -879,7 +879,8 @@ impl Default for AppConfig {
 impl Default for AppLoggingConfig {
     fn default() -> Self {
         Self {
-            level: "info".to_string(),
+            // Set to Debug in early development for easier diagnostics
+            level: "debug".to_string(),
         }
     }
 }

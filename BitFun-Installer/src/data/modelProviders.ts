@@ -45,8 +45,20 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.minimax.description',
     baseUrl: 'https://api.minimaxi.com/anthropic',
     format: 'anthropic',
-    models: ['MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
+    models: ['MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
     helpUrl: 'https://platform.minimax.io/',
+    baseUrlOptions: [
+      {
+        url: 'https://api.minimaxi.com/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.minimax.urlOptions.default',
+      },
+      {
+        url: 'https://api.minimaxi.com/v1',
+        format: 'openai',
+        noteKey: 'model.providers.minimax.urlOptions.openai',
+      },
+    ],
   },
   moonshot: {
     id: 'moonshot',
@@ -98,8 +110,25 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.qwen.description',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     format: 'openai',
-    models: ['qwen3-max', 'qwen3-coder-plus', 'qwen3-coder-flash'],
+    models: ['qwen3.5-plus', 'glm-5', 'kimi-k2.5', 'MiniMax-M2.5', 'qwen3-max', 'qwen3-coder-plus', 'qwen3-coder-flash'],
     helpUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    baseUrlOptions: [
+      {
+        url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        format: 'openai',
+        noteKey: 'model.providers.qwen.urlOptions.default',
+      },
+      {
+        url: 'https://coding.dashscope.aliyuncs.com/v1',
+        format: 'openai',
+        noteKey: 'model.providers.qwen.urlOptions.codingPlan',
+      },
+      {
+        url: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
+        format: 'anthropic',
+        noteKey: 'model.providers.qwen.urlOptions.codingPlanAnthropic',
+      },
+    ],
   },
   volcengine: {
     id: 'volcengine',

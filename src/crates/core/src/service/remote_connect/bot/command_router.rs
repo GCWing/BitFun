@@ -572,30 +572,15 @@ async fn select_session(
 ) -> HandleResult {
     use crate::agentic::coordination::get_global_coordinator;
 
-    let coordinator = match get_global_coordinator() {
-        Some(c) => c,
-        None => {
-            state.current_session_id = Some(session_id.to_string());
-            info!("Bot resumed session: {session_id}");
-            return HandleResult {
-                reply: format!(
-                    "Resumed session: {session_name}\n\n\
-                     You can now send messages to interact with the AI agent."
-                ),
-                forward_to_session: None,
-            };
-        }
-    };
+    if let Some(coordinator) = get_global_coordinator() {
+        let _ = coordinator.restore_session(session_id).await;
+    }
 
-    let _ = coordinator.restore_session(session_id).await;
     state.current_session_id = Some(session_id.to_string());
     info!("Bot resumed session: {session_id}");
 
-    let last_pair = coordinator
-        .get_messages(session_id)
-        .await
-        .ok()
-        .and_then(|msgs| extract_last_dialog_pair(&msgs));
+    let last_pair =
+        load_last_dialog_pair_from_turns(state.current_workspace.as_deref(), session_id).await;
 
     let mut reply = format!("Resumed session: {session_name}\n\n");
     if let Some((user_text, assistant_text)) = last_pair {
@@ -610,45 +595,52 @@ async fn select_session(
     HandleResult { reply, forward_to_session: None }
 }
 
-fn extract_last_dialog_pair(
-    messages: &[crate::agentic::core::Message],
+/// Load the last user/assistant dialog pair from ConversationPersistenceManager,
+/// the same data source the desktop frontend uses.
+async fn load_last_dialog_pair_from_turns(
+    workspace_path: Option<&str>,
+    session_id: &str,
 ) -> Option<(String, String)> {
-    use crate::agentic::core::MessageRole;
+    use crate::infrastructure::PathManager;
+    use crate::service::conversation::ConversationPersistenceManager;
 
     const MAX_USER_LEN: usize = 200;
     const MAX_AI_LEN: usize = 400;
 
-    // Find the index of the last assistant message with readable text.
-    let assistant_idx = messages.iter().rposition(|m| {
-        m.role == MessageRole::Assistant && message_text(m).is_some()
-    })?;
+    let wp = std::path::PathBuf::from(workspace_path?);
+    let pm = std::sync::Arc::new(PathManager::new().ok()?);
+    let conv_mgr = ConversationPersistenceManager::new(pm, wp).await.ok()?;
+    let turns = conv_mgr.load_session_turns(session_id).await.ok()?;
+    let turn = turns.last()?;
 
-    // Find the last user message that appears before the assistant message.
-    let user_idx = messages[..assistant_idx].iter().rposition(|m| {
-        m.role == MessageRole::User && message_text(m).is_some()
-    })?;
+    let user_text = strip_user_message_tags(&turn.user_message.content);
+    if user_text.is_empty() {
+        return None;
+    }
 
-    let user_text = truncate_text(&message_text(&messages[user_idx])?, MAX_USER_LEN);
-    let assistant_text = truncate_text(&message_text(&messages[assistant_idx])?, MAX_AI_LEN);
+    let mut ai_text = String::new();
+    for round in &turn.model_rounds {
+        for t in &round.text_items {
+            if t.is_subagent_item.unwrap_or(false) {
+                continue;
+            }
+            if !t.content.is_empty() {
+                if !ai_text.is_empty() {
+                    ai_text.push('\n');
+                }
+                ai_text.push_str(&t.content);
+            }
+        }
+    }
 
-    Some((user_text, assistant_text))
-}
+    if ai_text.is_empty() {
+        return None;
+    }
 
-fn message_text(msg: &crate::agentic::core::Message) -> Option<String> {
-    use crate::agentic::core::{MessageContent, MessageRole};
-    let raw = match &msg.content {
-        MessageContent::Text(t) if !t.trim().is_empty() => t.as_str(),
-        MessageContent::Mixed { text, .. } if !text.trim().is_empty() => text.as_str(),
-        _ => return None,
-    };
-    // User messages in agentic mode are wrapped with <user_query> and may contain
-    // a trailing <system_reminder> block — extract the visible portion only.
-    let cleaned = if msg.role == MessageRole::User {
-        strip_user_message_tags(raw)
-    } else {
-        raw.trim().to_string()
-    };
-    if cleaned.is_empty() { None } else { Some(cleaned) }
+    Some((
+        truncate_text(&user_text, MAX_USER_LEN),
+        truncate_text(&ai_text, MAX_AI_LEN),
+    ))
 }
 
 /// Strip XML wrapper tags injected by wrap_user_input before storing the message:

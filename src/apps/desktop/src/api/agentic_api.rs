@@ -6,8 +6,10 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
+use crate::api::context_upload_api::get_image_context;
 use bitfun_core::agentic::coordination::ConversationCoordinator;
 use bitfun_core::agentic::core::*;
+use bitfun_core::agentic::image_analysis::ImageContextData;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +48,8 @@ pub struct StartDialogTurnRequest {
     pub user_input: String,
     pub agent_type: String,
     pub turn_id: Option<String>,
+    #[serde(default)]
+    pub image_contexts: Option<Vec<ImageContextData>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -181,21 +185,129 @@ pub async fn start_dialog_turn(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: StartDialogTurnRequest,
 ) -> Result<StartDialogTurnResponse, String> {
-    let _stream = coordinator
-        .start_dialog_turn(
-            request.session_id,
-            request.user_input,
-            request.turn_id,
-            request.agent_type,
-            false,
-        )
-        .await
-        .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
+    let StartDialogTurnRequest {
+        session_id,
+        user_input,
+        agent_type,
+        turn_id,
+        image_contexts,
+    } = request;
+
+    if let Some(image_contexts) = image_contexts
+        .as_ref()
+        .filter(|images| !images.is_empty())
+        .cloned()
+    {
+        let resolved_image_contexts = resolve_missing_image_payloads(image_contexts)?;
+        coordinator
+            .start_dialog_turn_with_image_contexts(
+                session_id,
+                user_input,
+                resolved_image_contexts,
+                turn_id,
+                agent_type,
+            )
+            .await
+            .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
+    } else {
+        coordinator
+            .start_dialog_turn(
+                session_id,
+                user_input,
+                turn_id,
+                agent_type,
+                false,
+            )
+            .await
+            .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
+    }
 
     Ok(StartDialogTurnResponse {
         success: true,
         message: "Dialog turn started".to_string(),
     })
+}
+
+fn is_blank_text(value: Option<&String>) -> bool {
+    value.map(|s| s.trim().is_empty()).unwrap_or(true)
+}
+
+fn resolve_missing_image_payloads(
+    image_contexts: Vec<ImageContextData>,
+) -> Result<Vec<ImageContextData>, String> {
+    let mut resolved = Vec::with_capacity(image_contexts.len());
+
+    for mut image in image_contexts {
+        let missing_payload =
+            is_blank_text(image.image_path.as_ref()) && is_blank_text(image.data_url.as_ref());
+        if !missing_payload {
+            resolved.push(image);
+            continue;
+        }
+
+        let stored = get_image_context(&image.id).ok_or_else(|| {
+            format!(
+                "Image context not found for image_id={}. It may have expired. Please re-attach the image and retry.",
+                image.id
+            )
+        })?;
+
+        if is_blank_text(image.image_path.as_ref()) {
+            image.image_path = stored
+                .image_path
+                .clone()
+                .filter(|s| !s.trim().is_empty());
+        }
+        if is_blank_text(image.data_url.as_ref()) {
+            image.data_url = stored
+                .data_url
+                .clone()
+                .filter(|s| !s.trim().is_empty());
+        }
+        if image.mime_type.trim().is_empty() {
+            image.mime_type = stored.mime_type.clone();
+        }
+
+        let mut metadata = image.metadata.take().unwrap_or_else(|| serde_json::json!({}));
+        if !metadata.is_object() {
+            metadata = serde_json::json!({ "raw_metadata": metadata });
+        }
+        if let Some(obj) = metadata.as_object_mut() {
+            if !obj.contains_key("name") {
+                obj.insert("name".to_string(), serde_json::json!(stored.image_name));
+            }
+            if !obj.contains_key("width") {
+                obj.insert("width".to_string(), serde_json::json!(stored.width));
+            }
+            if !obj.contains_key("height") {
+                obj.insert("height".to_string(), serde_json::json!(stored.height));
+            }
+            if !obj.contains_key("file_size") {
+                obj.insert("file_size".to_string(), serde_json::json!(stored.file_size));
+            }
+            if !obj.contains_key("source") {
+                obj.insert("source".to_string(), serde_json::json!(stored.source));
+            }
+            obj.insert(
+                "resolved_from_upload_cache".to_string(),
+                serde_json::json!(true),
+            );
+        }
+        image.metadata = Some(metadata);
+
+        let still_missing =
+            is_blank_text(image.image_path.as_ref()) && is_blank_text(image.data_url.as_ref());
+        if still_missing {
+            return Err(format!(
+                "Image context {} is missing image_path/data_url after cache resolution",
+                image.id
+            ));
+        }
+
+        resolved.push(image);
+    }
+
+    Ok(resolved)
 }
 
 #[tauri::command]
@@ -396,6 +508,26 @@ fn message_to_dto(message: Message) -> MessageDTO {
 
     let content = match message.content {
         MessageContent::Text(text) => serde_json::json!({ "type": "text", "text": text }),
+        MessageContent::Multimodal { text, images } => {
+            let images: Vec<serde_json::Value> = images
+                .into_iter()
+                .map(|img| {
+                    serde_json::json!({
+                        "id": img.id,
+                        "image_path": img.image_path,
+                        "mime_type": img.mime_type,
+                        "metadata": img.metadata,
+                        "has_data_url": img.data_url.as_ref().is_some_and(|s| !s.is_empty()),
+                    })
+                })
+                .collect();
+
+            serde_json::json!({
+                "type": "multimodal",
+                "text": text,
+                "images": images,
+            })
+        }
         MessageContent::ToolResult {
             tool_id,
             tool_name,

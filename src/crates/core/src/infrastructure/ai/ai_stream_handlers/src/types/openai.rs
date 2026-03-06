@@ -8,8 +8,11 @@ struct PromptTokensDetails {
 
 #[derive(Debug, Deserialize)]
 struct OpenAIUsage {
+    #[serde(default)]
     prompt_tokens: u32,
+    #[serde(default)]
     completion_tokens: u32,
+    #[serde(default)]
     total_tokens: u32,
     prompt_tokens_details: Option<PromptTokensDetails>,
 }
@@ -35,11 +38,23 @@ struct Choice {
     finish_reason: Option<String>,
 }
 
+/// MiniMax `reasoning_details` array element.
+/// Only elements with `type == "reasoning.text"` carry thinking text.
+#[derive(Debug, Deserialize)]
+struct ReasoningDetail {
+    #[serde(rename = "type")]
+    detail_type: Option<String>,
+    text: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct Delta {
     #[allow(dead_code)]
     role: Option<String>,
+    /// Standard OpenAI-compatible reasoning field (DeepSeek, Qwen, etc.)
     reasoning_content: Option<String>,
+    /// MiniMax-specific reasoning field; used as fallback when `reasoning_content` is absent.
+    reasoning_details: Option<Vec<ReasoningDetail>>,
     content: Option<String>,
     tool_calls: Option<Vec<OpenAIToolCall>>,
 }
@@ -123,10 +138,33 @@ impl OpenAISSEData {
         let mut finish_reason = finish_reason;
         let Delta {
             reasoning_content,
+            reasoning_details,
             content,
             tool_calls,
             ..
         } = delta;
+
+        // Treat empty strings the same as absent fields (MiniMax sends `content: ""` in
+        // reasoning-only chunks).
+        let content = content.filter(|s| !s.is_empty());
+        let reasoning_content = reasoning_content.filter(|s| !s.is_empty());
+
+        // MiniMax uses `reasoning_details` instead of `reasoning_content`.
+        // Collect all "reasoning.text" entries and join them as a fallback.
+        let reasoning_content = reasoning_content.or_else(|| {
+            reasoning_details.and_then(|details| {
+                let text: String = details
+                    .into_iter()
+                    .filter(|d| d.detail_type.as_deref() == Some("reasoning.text"))
+                    .filter_map(|d| d.text)
+                    .collect();
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
+            })
+        });
 
         let mut responses = Vec::new();
 

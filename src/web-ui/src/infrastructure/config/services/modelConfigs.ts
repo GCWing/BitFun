@@ -23,10 +23,14 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.minimax.name'),
     baseUrl: 'https://api.minimaxi.com/anthropic',
     format: 'anthropic',
-    models: ['MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
+    models: ['MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.minimax.description'),
-    helpUrl: 'https://platform.minimax.io/'
+    helpUrl: 'https://platform.minimax.io/',
+    baseUrlOptions: [
+      { url: 'https://api.minimaxi.com/anthropic', format: 'anthropic', note: 'default' },
+      { url: 'https://api.minimaxi.com/v1', format: 'openai', note: 'OpenAI Compatible' },
+    ]
   },
 
   moonshot: {

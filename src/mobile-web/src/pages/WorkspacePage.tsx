@@ -66,13 +66,9 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
     }
   };
 
-  const handleContinue = () => {
-    onReady();
-  };
-
   if (loading) {
     return (
-      <div className="workspace-page">
+      <div className="workspace-page page-transition">
         <div className="workspace-page__loading">
           <div className="spinner" />
           <span>Loading workspace info...</span>
@@ -82,7 +78,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
   }
 
   return (
-    <div className="workspace-page">
+    <div className="workspace-page page-transition">
       <div className="workspace-page__header">
         <h1>Workspace</h1>
       </div>
@@ -98,19 +94,17 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
               <div className="workspace-page__project-path">{workspaceInfo.path}</div>
               {workspaceInfo.git_branch && (
                 <div className="workspace-page__git-branch">
-                  <span className="workspace-page__branch-icon">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" strokeWidth="1.3"/><circle cx="11" cy="4" r="2" stroke="currentColor" strokeWidth="1.3"/><circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 6V10M11 6V8C11 9.1046 10.1046 10 9 10H5" stroke="currentColor" strokeWidth="1.3"/></svg>
-                  </span>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" strokeWidth="1.3"/><circle cx="11" cy="4" r="2" stroke="currentColor" strokeWidth="1.3"/><circle cx="5" cy="12" r="2" stroke="currentColor" strokeWidth="1.3"/><path d="M5 6V10M11 6V8C11 9.1046 10.1046 10 9 10H5" stroke="currentColor" strokeWidth="1.3"/></svg>
                   {workspaceInfo.git_branch}
                 </div>
               )}
             </div>
             <div className="workspace-page__actions">
-              <button className="workspace-page__btn workspace-page__btn--primary" onClick={handleContinue}>
+              <button className="workspace-page__btn workspace-page__btn--primary" onClick={onReady}>
                 Continue
               </button>
               <button className="workspace-page__btn workspace-page__btn--secondary" onClick={handleShowRecent}>
-                Switch Workspace
+                Switch
               </button>
             </div>
           </div>
@@ -168,7 +162,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
 
         {switching && (
           <div className="workspace-page__switching">
-            <div className="spinner" />
+            <div className="spinner spinner--sm" />
             <span>Opening workspace...</span>
           </div>
         )}

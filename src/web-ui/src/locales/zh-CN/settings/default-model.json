@@ -25,11 +25,11 @@
     }
   },
   "optional": {
-    "title": "多模态模型配置",
+    "title": "扩展能力模型配置",
     "capabilities": {
       "image_understanding": {
-        "label": "图像理解",
-        "description": "分析图片、截图内容，支持图文混合对话"
+        "label": "图片理解模型",
+        "description": "当主模型不支持图片输入时，用于分析图片和截图内容"
       },
       "image_generation": {
         "label": "图像生成",

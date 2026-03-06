@@ -1,18 +1,20 @@
 //! Session bridge: translates remote commands into local session operations.
 //!
-//! The mobile client sends encrypted commands (list sessions, send message, etc.)
-//! which are decrypted and dispatched to the local SessionManager via the global
-//! ConversationCoordinator.
+//! Mobile clients send encrypted commands via the relay (HTTP → WS bridge).
+//! The desktop decrypts, dispatches, and returns encrypted responses.
 //!
-//! After a SendMessage command, a `RemoteEventForwarder` is registered as an
-//! internal event subscriber so that streaming progress (text chunks, tool events,
-//! turn completion, etc.) is encrypted and relayed back to the mobile client.
+//! Instead of streaming events to the mobile, the desktop maintains an
+//! in-memory `RemoteSessionStateTracker` per session. The mobile polls
+//! for state changes using the `PollSession` command, receiving only
+//! incremental updates (new messages + current active turn snapshot).
 
 use anyhow::{anyhow, Result};
+use dashmap::DashMap;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::mpsc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 
 use super::encryption;
 
@@ -33,18 +35,13 @@ pub enum RemoteCommand {
         path: String,
     },
     ListSessions {
-        /// Filter by workspace path. If omitted, falls back to the desktop's current workspace.
         workspace_path: Option<String>,
-        /// Max sessions to return per page (default 30, max 100).
         limit: Option<usize>,
-        /// Zero-based offset for pagination.
         offset: Option<usize>,
     },
     CreateSession {
         agent_type: Option<String>,
         session_name: Option<String>,
-        /// Workspace to bind the new session to. Falls back to the desktop's
-        /// current workspace when not provided.
         workspace_path: Option<String>,
     },
     GetSessionMessages {
@@ -55,10 +52,7 @@ pub enum RemoteCommand {
     SendMessage {
         session_id: String,
         content: String,
-        /// When provided, overrides the session's current agent type for this
-        /// turn (e.g. "agentic", "Plan", "debug").
         agent_type: Option<String>,
-        /// Images attached by the mobile user (base64 data-URL).
         images: Option<Vec<ImageAttachment>>,
     },
     CancelTask {
@@ -67,11 +61,16 @@ pub enum RemoteCommand {
     DeleteSession {
         session_id: String,
     },
-    SubscribeSession {
-        session_id: String,
+    /// Submit answers for an AskUserQuestion tool.
+    AnswerQuestion {
+        tool_id: String,
+        answers: serde_json::Value,
     },
-    UnsubscribeSession {
+    /// Incremental poll — returns only what changed since `since_version`.
+    PollSession {
         session_id: String,
+        since_version: u64,
+        known_msg_count: usize,
     },
     Ping,
 }
@@ -97,7 +96,6 @@ pub enum RemoteResponse {
     },
     SessionList {
         sessions: Vec<SessionInfo>,
-        /// Whether more sessions exist beyond this page.
         has_more: bool,
     },
     SessionCreated {
@@ -112,26 +110,13 @@ pub enum RemoteResponse {
         session_id: String,
         turn_id: String,
     },
-    StreamEvent {
-        session_id: String,
-        event_type: String,
-        payload: serde_json::Value,
-    },
     TaskCancelled {
         session_id: String,
     },
     SessionDeleted {
         session_id: String,
     },
-    SessionSubscribed {
-        session_id: String,
-    },
-    SessionUnsubscribed {
-        session_id: String,
-    },
-    /// Pushed to mobile immediately after pairing – contains the desktop's
-    /// current workspace info and session list so the mobile can display the
-    /// same data as the desktop without extra round-trips.
+    /// Pushed to mobile immediately after pairing.
     InitialSync {
         has_workspace: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -143,6 +128,22 @@ pub enum RemoteResponse {
         sessions: Vec<SessionInfo>,
         has_more_sessions: bool,
     },
+    /// Incremental poll response.
+    SessionPoll {
+        version: u64,
+        changed: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_state: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        new_messages: Option<Vec<ChatMessage>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        total_msg_count: Option<usize>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        active_turn: Option<ActiveTurnSnapshot>,
+    },
+    AnswerAccepted,
     Pong,
     Error {
         message: String,
@@ -157,10 +158,8 @@ pub struct SessionInfo {
     pub created_at: String,
     pub updated_at: String,
     pub message_count: usize,
-    /// Workspace path this session belongs to
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
-    /// Workspace display name (last path component)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_name: Option<String>,
 }
@@ -172,6 +171,23 @@ pub struct ChatMessage {
     pub content: String,
     pub timestamp: String,
     pub metadata: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<RemoteToolStatus>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
+    /// Ordered items preserving the interleaved display order from the desktop.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<ChatMessageItem>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessageItem {
+    #[serde(rename = "type")]
+    pub item_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool: Option<RemoteToolStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,29 +197,196 @@ pub struct RecentWorkspaceEntry {
     pub last_opened: String,
 }
 
-/// An encrypted (data, nonce) pair ready to be sent over the relay.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveTurnSnapshot {
+    pub turn_id: String,
+    pub status: String,
+    pub text: String,
+    pub thinking: String,
+    pub tools: Vec<RemoteToolStatus>,
+    pub round_index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<ChatMessageItem>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteToolStatus {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_preview: Option<String>,
+    /// Full tool input for interactive tools (e.g. AskUserQuestion).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_input: Option<serde_json::Value>,
+}
+
 pub type EncryptedPayload = (String, String);
 
-/// Strip XML wrapper tags that the agent system adds to user input before storage.
-/// e.g. "<user_query>\nHello\n</user_query>\n<system_reminder>...</system_reminder>"
-/// → "Hello"
+/// Convert ConversationPersistenceManager turns into mobile ChatMessages.
+/// This is the same data source the desktop frontend uses.
+fn turns_to_chat_messages(
+    turns: &[crate::service::conversation::DialogTurnData],
+) -> Vec<ChatMessage> {
+    let mut result = Vec::new();
+
+    for turn in turns {
+        result.push(ChatMessage {
+            id: turn.user_message.id.clone(),
+            role: "user".to_string(),
+            content: strip_user_input_tags(&turn.user_message.content),
+            timestamp: (turn.user_message.timestamp / 1000).to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+        });
+
+        // Collect ordered items across all rounds, preserving interleaved order
+        struct OrderedEntry {
+            order_index: usize,
+            item: ChatMessageItem,
+        }
+        let mut ordered: Vec<OrderedEntry> = Vec::new();
+        let mut tools_flat = Vec::new();
+        let mut thinking_parts = Vec::new();
+        let mut text_parts = Vec::new();
+
+        for round in &turn.model_rounds {
+            for t in &round.text_items {
+                if t.is_subagent_item.unwrap_or(false) {
+                    continue;
+                }
+                if !t.content.is_empty() {
+                    text_parts.push(t.content.clone());
+                    ordered.push(OrderedEntry {
+                        order_index: t.order_index.unwrap_or(usize::MAX),
+                        item: ChatMessageItem {
+                            item_type: "text".to_string(),
+                            content: Some(t.content.clone()),
+                            tool: None,
+                        },
+                    });
+                }
+            }
+            for t in &round.thinking_items {
+                if t.is_subagent_item.unwrap_or(false) {
+                    continue;
+                }
+                if !t.content.is_empty() {
+                    thinking_parts.push(t.content.clone());
+                    ordered.push(OrderedEntry {
+                        order_index: t.order_index.unwrap_or(usize::MAX),
+                        item: ChatMessageItem {
+                            item_type: "thinking".to_string(),
+                            content: Some(t.content.clone()),
+                            tool: None,
+                        },
+                    });
+                }
+            }
+            for t in &round.tool_items {
+                if t.is_subagent_item.unwrap_or(false) {
+                    continue;
+                }
+                let status_str = t.status.as_deref().unwrap_or(
+                    if t.tool_result.is_some() {
+                        "completed"
+                    } else {
+                        "running"
+                    },
+                );
+                let tool_status = RemoteToolStatus {
+                    id: t.id.clone(),
+                    name: t.tool_name.clone(),
+                    status: status_str.to_string(),
+                    duration_ms: t.duration_ms,
+                    start_ms: Some(t.start_time),
+                    input_preview: None,
+                    tool_input: None,
+                };
+                tools_flat.push(tool_status.clone());
+                ordered.push(OrderedEntry {
+                    order_index: t.order_index.unwrap_or(usize::MAX),
+                    item: ChatMessageItem {
+                        item_type: "tool".to_string(),
+                        content: None,
+                        tool: Some(tool_status),
+                    },
+                });
+            }
+        }
+
+        ordered.sort_by_key(|e| e.order_index);
+        let items: Vec<ChatMessageItem> = ordered.into_iter().map(|e| e.item).collect();
+
+        let ts = turn
+            .model_rounds
+            .last()
+            .map(|r| r.end_time.unwrap_or(r.start_time))
+            .unwrap_or(turn.start_time);
+
+        result.push(ChatMessage {
+            id: format!("{}_assistant", turn.turn_id),
+            role: "assistant".to_string(),
+            content: text_parts.join("\n\n"),
+            timestamp: (ts / 1000).to_string(),
+            metadata: None,
+            tools: if tools_flat.is_empty() { None } else { Some(tools_flat) },
+            thinking: if thinking_parts.is_empty() {
+                None
+            } else {
+                Some(thinking_parts.join("\n\n"))
+            },
+            items: if items.is_empty() { None } else { Some(items) },
+        });
+    }
+
+    result
+}
+
+/// Load historical chat messages from ConversationPersistenceManager.
+/// Uses the same data source as the desktop frontend.
+async fn load_chat_messages_from_conversation_persistence(
+    session_id: &str,
+) -> (Vec<ChatMessage>, bool) {
+    use crate::infrastructure::{get_workspace_path, PathManager};
+    use crate::service::conversation::ConversationPersistenceManager;
+
+    let Some(wp) = get_workspace_path() else {
+        return (vec![], false);
+    };
+    let Ok(pm) = PathManager::new() else {
+        return (vec![], false);
+    };
+    let pm = std::sync::Arc::new(pm);
+    let Ok(conv_mgr) = ConversationPersistenceManager::new(pm, wp).await else {
+        return (vec![], false);
+    };
+    let Ok(turns) = conv_mgr.load_session_turns(session_id).await else {
+        return (vec![], false);
+    };
+    (turns_to_chat_messages(&turns), false)
+}
+
 fn strip_user_input_tags(content: &str) -> String {
     let s = content.trim();
-    // Extract inner content of <user_query>...</user_query>
     if s.starts_with("<user_query>") {
         if let Some(end) = s.find("</user_query>") {
             let inner = s["<user_query>".len()..end].trim();
             return inner.to_string();
         }
     }
-    // Drop <system_reminder> section (can appear without <user_query> wrapper)
     if let Some(pos) = s.find("<system_reminder>") {
         return s[..pos].trim().to_string();
     }
     s.to_string()
 }
 
-/// Map mobile-friendly agent type names to the actual agent registry IDs.
 fn resolve_agent_type(mobile_type: Option<&str>) -> &'static str {
     match mobile_type {
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
@@ -214,8 +397,6 @@ fn resolve_agent_type(mobile_type: Option<&str>) -> &'static str {
     }
 }
 
-/// Decode a `data:image/...;base64,...` URL and save it as a file.
-/// Returns the absolute path to the saved image on success.
 fn save_data_url_image(
     dir: &std::path::Path,
     name: &str,
@@ -248,29 +429,348 @@ fn save_data_url_image(
     Some(path)
 }
 
+// ── RemoteSessionStateTracker ──────────────────────────────────────
+
+/// Mutable state snapshot updated by the event subscriber.
+#[derive(Debug)]
+struct TrackerState {
+    session_state: String,
+    title: String,
+    turn_id: Option<String>,
+    turn_status: String,
+    accumulated_text: String,
+    accumulated_thinking: String,
+    active_tools: Vec<RemoteToolStatus>,
+    round_index: usize,
+    /// Ordered items preserving the interleaved arrival order for real-time display.
+    active_items: Vec<ChatMessageItem>,
+}
+
+/// Tracks the real-time state of a session for polling by the mobile client.
+/// Subscribes to `AgenticEvent` and updates an in-memory snapshot.
+pub struct RemoteSessionStateTracker {
+    target_session_id: String,
+    version: AtomicU64,
+    state: RwLock<TrackerState>,
+}
+
+impl RemoteSessionStateTracker {
+    pub fn new(session_id: String) -> Self {
+        Self {
+            target_session_id: session_id,
+            version: AtomicU64::new(0),
+            state: RwLock::new(TrackerState {
+                session_state: "idle".to_string(),
+                title: String::new(),
+                turn_id: None,
+                turn_status: String::new(),
+                accumulated_text: String::new(),
+                accumulated_thinking: String::new(),
+                active_tools: Vec::new(),
+                round_index: 0,
+                active_items: Vec::new(),
+            }),
+        }
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version.load(Ordering::Relaxed)
+    }
+
+    fn bump_version(&self) {
+        self.version.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn snapshot_active_turn(&self) -> Option<ActiveTurnSnapshot> {
+        let s = self.state.read().unwrap();
+        s.turn_id.as_ref().map(|tid| ActiveTurnSnapshot {
+            turn_id: tid.clone(),
+            status: s.turn_status.clone(),
+            text: s.accumulated_text.clone(),
+            thinking: s.accumulated_thinking.clone(),
+            tools: s.active_tools.clone(),
+            round_index: s.round_index,
+            items: if s.active_items.is_empty() { None } else { Some(s.active_items.clone()) },
+        })
+    }
+
+    pub fn session_state(&self) -> String {
+        self.state.read().unwrap().session_state.clone()
+    }
+
+    pub fn title(&self) -> String {
+        self.state.read().unwrap().title.clone()
+    }
+
+    fn handle_event(&self, event: &crate::agentic::events::AgenticEvent) {
+        use bitfun_events::AgenticEvent as AE;
+
+        let is_direct = event.session_id() == Some(self.target_session_id.as_str());
+        let is_subagent = if !is_direct {
+            match event {
+                AE::TextChunk { subagent_parent_info, .. }
+                | AE::ThinkingChunk { subagent_parent_info, .. }
+                | AE::ToolEvent { subagent_parent_info, .. } => subagent_parent_info
+                    .as_ref()
+                    .map_or(false, |p| p.session_id == self.target_session_id),
+                _ => false,
+            }
+        } else {
+            false
+        };
+
+        if !is_direct && !is_subagent {
+            return;
+        }
+
+        match event {
+            AE::TextChunk { text, .. } => {
+                let mut s = self.state.write().unwrap();
+                s.accumulated_text.push_str(text);
+                if let Some(last) = s.active_items.last_mut() {
+                    if last.item_type == "text" {
+                        let c = last.content.get_or_insert_with(String::new);
+                        c.push_str(text);
+                    } else {
+                        s.active_items.push(ChatMessageItem {
+                            item_type: "text".to_string(),
+                            content: Some(text.clone()),
+                            tool: None,
+                        });
+                    }
+                } else {
+                    s.active_items.push(ChatMessageItem {
+                        item_type: "text".to_string(),
+                        content: Some(text.clone()),
+                        tool: None,
+                    });
+                }
+                drop(s);
+                self.bump_version();
+            }
+            AE::ThinkingChunk { content, .. } => {
+                let clean = content
+                    .replace("<thinking_end>", "")
+                    .replace("</thinking>", "")
+                    .replace("<thinking>", "");
+                let mut s = self.state.write().unwrap();
+                s.accumulated_thinking.push_str(&clean);
+                if let Some(last) = s.active_items.last_mut() {
+                    if last.item_type == "thinking" {
+                        let c = last.content.get_or_insert_with(String::new);
+                        c.push_str(&clean);
+                    } else {
+                        s.active_items.push(ChatMessageItem {
+                            item_type: "thinking".to_string(),
+                            content: Some(clean),
+                            tool: None,
+                        });
+                    }
+                } else {
+                    s.active_items.push(ChatMessageItem {
+                        item_type: "thinking".to_string(),
+                        content: Some(clean),
+                        tool: None,
+                    });
+                }
+                drop(s);
+                self.bump_version();
+            }
+            AE::ToolEvent { tool_event, .. } => {
+                if let Ok(val) = serde_json::to_value(tool_event) {
+                    let event_type = val
+                        .get("event_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let tool_id = val
+                        .get("tool_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let tool_name = val
+                        .get("tool_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let mut s = self.state.write().unwrap();
+                    match event_type {
+                        "Started" => {
+                            let input_preview = val
+                                .get("input")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.chars().take(100).collect());
+                            let tool_input = if tool_name == "AskUserQuestion" {
+                                val.get("params").cloned()
+                            } else {
+                                None
+                            };
+                            let tool_count = s.active_tools.len();
+                            let resolved_id = if tool_id.is_empty() {
+                                format!("{}-{}", tool_name, tool_count)
+                            } else {
+                                tool_id
+                            };
+                            let tool_status = RemoteToolStatus {
+                                id: resolved_id,
+                                name: tool_name,
+                                status: "running".to_string(),
+                                duration_ms: None,
+                                start_ms: Some(
+                                    std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_millis() as u64,
+                                ),
+                                input_preview,
+                                tool_input,
+                            };
+                            s.active_items.push(ChatMessageItem {
+                                item_type: "tool".to_string(),
+                                content: None,
+                                tool: Some(tool_status.clone()),
+                            });
+                            s.active_tools.push(tool_status);
+                        }
+                        "Completed" | "Succeeded" => {
+                            let duration = val
+                                .get("duration_ms")
+                                .and_then(|v| v.as_u64());
+                            if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
+                                (t.id == tool_id || t.name == tool_name) && t.status == "running"
+                            }) {
+                                t.status = "completed".to_string();
+                                t.duration_ms = duration;
+                            }
+                            if let Some(item) = s.active_items.iter_mut().rev().find(|i| {
+                                i.item_type == "tool" && i.tool.as_ref().map_or(false, |t| (t.id == tool_id || t.name == tool_name) && t.status == "running")
+                            }) {
+                                if let Some(t) = item.tool.as_mut() {
+                                    t.status = "completed".to_string();
+                                    t.duration_ms = duration;
+                                }
+                            }
+                        }
+                        "Failed" => {
+                            if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
+                                (t.id == tool_id || t.name == tool_name) && t.status == "running"
+                            }) {
+                                t.status = "failed".to_string();
+                            }
+                            if let Some(item) = s.active_items.iter_mut().rev().find(|i| {
+                                i.item_type == "tool" && i.tool.as_ref().map_or(false, |t| (t.id == tool_id || t.name == tool_name) && t.status == "running")
+                            }) {
+                                if let Some(t) = item.tool.as_mut() {
+                                    t.status = "failed".to_string();
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    drop(s);
+                    self.bump_version();
+                }
+            }
+            AE::DialogTurnStarted { turn_id, .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.turn_id = Some(turn_id.clone());
+                s.turn_status = "active".to_string();
+                s.accumulated_text.clear();
+                s.accumulated_thinking.clear();
+                s.active_tools.clear();
+                s.active_items.clear();
+                s.round_index = 0;
+                s.session_state = "running".to_string();
+                drop(s);
+                self.bump_version();
+            }
+            AE::DialogTurnCompleted { .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.turn_status = "completed".to_string();
+                s.turn_id = None;
+                s.accumulated_text.clear();
+                s.accumulated_thinking.clear();
+                s.active_tools.clear();
+                s.active_items.clear();
+                s.session_state = "idle".to_string();
+                drop(s);
+                self.bump_version();
+            }
+            AE::DialogTurnFailed { .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.turn_status = "failed".to_string();
+                s.turn_id = None;
+                s.session_state = "idle".to_string();
+                drop(s);
+                self.bump_version();
+            }
+            AE::DialogTurnCancelled { .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.turn_status = "cancelled".to_string();
+                s.turn_id = None;
+                s.session_state = "idle".to_string();
+                drop(s);
+                self.bump_version();
+            }
+            AE::ModelRoundStarted { round_index, .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.round_index = *round_index;
+                drop(s);
+                self.bump_version();
+            }
+            AE::SessionStateChanged { new_state, .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.session_state = new_state.clone();
+                drop(s);
+                self.bump_version();
+            }
+            AE::SessionTitleGenerated { title, .. } if is_direct => {
+                let mut s = self.state.write().unwrap();
+                s.title = title.clone();
+                drop(s);
+                self.bump_version();
+            }
+            _ => {}
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::agentic::events::EventSubscriber for Arc<RemoteSessionStateTracker> {
+    async fn on_event(
+        &self,
+        event: &crate::agentic::events::AgenticEvent,
+    ) -> crate::util::errors::BitFunResult<()> {
+        self.handle_event(event);
+        Ok(())
+    }
+}
+
+// ── RemoteServer ───────────────────────────────────────────────────
+
 /// Bridges remote commands to local session operations.
 pub struct RemoteServer {
     shared_secret: [u8; 32],
-    active_subscriptions: std::sync::Mutex<std::collections::HashSet<String>>,
-    stream_tx: mpsc::UnboundedSender<EncryptedPayload>,
+    state_trackers: Arc<DashMap<String, Arc<RemoteSessionStateTracker>>>,
 }
 
 impl Drop for RemoteServer {
     fn drop(&mut self) {
-        if let Ok(subs) = self.active_subscriptions.lock() {
-            for sub_id in subs.iter() {
-                unregister_stream_forwarder(sub_id);
+        use crate::agentic::coordination::get_global_coordinator;
+        if let Some(coordinator) = get_global_coordinator() {
+            for entry in self.state_trackers.iter() {
+                let sub_id = format!("remote_tracker_{}", entry.key());
+                coordinator.unsubscribe_internal(&sub_id);
             }
         }
     }
 }
 
 impl RemoteServer {
-    pub fn new(shared_secret: [u8; 32], stream_tx: mpsc::UnboundedSender<EncryptedPayload>) -> Self {
+    pub fn new(shared_secret: [u8; 32]) -> Self {
         Self {
             shared_secret,
-            active_subscriptions: std::sync::Mutex::new(std::collections::HashSet::new()),
-            stream_tx,
+            state_trackers: Arc::new(DashMap::new()),
         }
     }
 
@@ -311,35 +811,45 @@ impl RemoteServer {
     pub async fn dispatch(&self, cmd: &RemoteCommand) -> RemoteResponse {
         match cmd {
             RemoteCommand::Ping => RemoteResponse::Pong,
-            
-            RemoteCommand::GetWorkspaceInfo |
-            RemoteCommand::ListRecentWorkspaces |
-            RemoteCommand::SetWorkspace { .. } => {
-                self.handle_workspace_command(cmd).await
-            }
 
-            RemoteCommand::ListSessions { .. } |
-            RemoteCommand::CreateSession { .. } |
-            RemoteCommand::GetSessionMessages { .. } |
-            RemoteCommand::DeleteSession { .. } => {
-                self.handle_session_command(cmd).await
-            }
+            RemoteCommand::GetWorkspaceInfo
+            | RemoteCommand::ListRecentWorkspaces
+            | RemoteCommand::SetWorkspace { .. } => self.handle_workspace_command(cmd).await,
 
-            RemoteCommand::SendMessage { .. } |
-            RemoteCommand::CancelTask { .. } => {
+            RemoteCommand::ListSessions { .. }
+            | RemoteCommand::CreateSession { .. }
+            | RemoteCommand::GetSessionMessages { .. }
+            | RemoteCommand::DeleteSession { .. } => self.handle_session_command(cmd).await,
+
+            RemoteCommand::SendMessage { .. }
+            | RemoteCommand::CancelTask { .. }
+            | RemoteCommand::AnswerQuestion { .. } => {
                 self.handle_execution_command(cmd).await
             }
 
-            RemoteCommand::SubscribeSession { .. } |
-            RemoteCommand::UnsubscribeSession { .. } => {
-                self.handle_subscription_command(cmd).await
-            }
+            RemoteCommand::PollSession { .. } => self.handle_poll_command(cmd).await,
         }
     }
 
-    /// Build the initial sync payload that is pushed to the mobile right after
-    /// pairing completes. This reads the same disk source as the desktop UI's
-    /// `get_conversation_sessions` so the session lists are guaranteed consistent.
+    /// Ensure a state tracker exists for the given session and return it.
+    fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker> {
+        if let Some(tracker) = self.state_trackers.get(session_id) {
+            return tracker.clone();
+        }
+
+        let tracker = Arc::new(RemoteSessionStateTracker::new(session_id.to_string()));
+        self.state_trackers
+            .insert(session_id.to_string(), tracker.clone());
+
+        if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
+            let sub_id = format!("remote_tracker_{}", session_id);
+            coordinator.subscribe_internal(sub_id, tracker.clone());
+            info!("Registered state tracker for session {session_id}");
+        }
+
+        tracker
+    }
+
     pub async fn generate_initial_sync(&self) -> RemoteResponse {
         use crate::infrastructure::{get_workspace_path, PathManager};
         use crate::service::conversation::ConversationPersistenceManager;
@@ -403,6 +913,59 @@ impl RemoteServer {
         }
     }
 
+    // ── Poll command handler ────────────────────────────────────────
+
+    async fn handle_poll_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
+        let RemoteCommand::PollSession {
+            session_id,
+            since_version,
+            known_msg_count,
+        } = cmd
+        else {
+            return RemoteResponse::Error {
+                message: "expected poll_session".into(),
+            };
+        };
+
+        let tracker = self.ensure_tracker(session_id);
+        let current_version = tracker.version();
+
+        if *since_version == current_version && *since_version > 0 {
+            return RemoteResponse::SessionPoll {
+                version: current_version,
+                changed: false,
+                session_state: None,
+                title: None,
+                new_messages: None,
+                total_msg_count: None,
+                active_turn: None,
+            };
+        }
+
+        let (all_chat_msgs, _) =
+            load_chat_messages_from_conversation_persistence(session_id).await;
+        let total_msg_count = all_chat_msgs.len();
+        let skip = *known_msg_count;
+        let new_messages: Vec<ChatMessage> =
+            all_chat_msgs.into_iter().skip(skip).collect();
+
+        let active_turn = tracker.snapshot_active_turn();
+        let sess_state = tracker.session_state();
+        let title = tracker.title();
+
+        RemoteResponse::SessionPoll {
+            version: current_version,
+            changed: true,
+            session_state: Some(sess_state),
+            title: if title.is_empty() { None } else { Some(title) },
+            new_messages: Some(new_messages),
+            total_msg_count: Some(total_msg_count),
+            active_turn,
+        }
+    }
+
+    // ── Workspace commands ──────────────────────────────────────────
+
     async fn handle_workspace_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::infrastructure::get_workspace_path;
         use crate::service::workspace::get_global_workspace_service;
@@ -411,9 +974,7 @@ impl RemoteServer {
             RemoteCommand::GetWorkspaceInfo => {
                 let ws_path = get_workspace_path();
                 let (project_name, git_branch) = if let Some(ref p) = ws_path {
-                    let name = p
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string());
+                    let name = p.file_name().map(|n| n.to_string_lossy().to_string());
                     let branch = git2::Repository::open(p)
                         .ok()
                         .and_then(|repo| {
@@ -474,7 +1035,9 @@ impl RemoteServer {
                             )
                             .await
                         {
-                            error!("Failed to initialize snapshot after remote workspace set: {e}");
+                            error!(
+                                "Failed to initialize snapshot after remote workspace set: {e}"
+                            );
                         }
                         RemoteResponse::WorkspaceUpdated {
                             success: true,
@@ -491,9 +1054,13 @@ impl RemoteServer {
                     },
                 }
             }
-            _ => RemoteResponse::Error { message: "Unknown workspace command".into() },
+            _ => RemoteResponse::Error {
+                message: "Unknown workspace command".into(),
+            },
         }
     }
+
+    // ── Session commands ────────────────────────────────────────────
 
     async fn handle_session_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::agentic::{coordination::get_global_coordinator, core::SessionConfig};
@@ -508,18 +1075,17 @@ impl RemoteServer {
         };
 
         match cmd {
-            RemoteCommand::ListSessions { workspace_path, limit, offset } => {
-                // Only query the explicitly-requested workspace (or fall back to the
-                // desktop's current workspace when none is specified).  Sessions are
-                // served page-by-page so the frontend never needs to receive more than
-                // it intends to display.
+            RemoteCommand::ListSessions {
+                workspace_path,
+                limit,
+                offset,
+            } => {
                 use crate::infrastructure::{get_workspace_path, PathManager};
                 use crate::service::conversation::ConversationPersistenceManager;
 
                 let page_size = limit.unwrap_or(30).min(100);
                 let page_offset = offset.unwrap_or(0);
 
-                // Resolve which workspace to query
                 let effective_ws: Option<std::path::PathBuf> = workspace_path
                     .as_deref()
                     .map(std::path::PathBuf::from)
@@ -527,8 +1093,8 @@ impl RemoteServer {
 
                 if let Some(ref wp) = effective_ws {
                     let ws_str = wp.to_string_lossy().to_string();
-                    let workspace_name = wp.file_name()
-                        .map(|n| n.to_string_lossy().to_string());
+                    let workspace_name =
+                        wp.file_name().map(|n| n.to_string_lossy().to_string());
 
                     if let Ok(pm) = PathManager::new() {
                         let pm = std::sync::Arc::new(pm);
@@ -536,8 +1102,6 @@ impl RemoteServer {
                             Ok(conv_mgr) => {
                                 match conv_mgr.get_session_list().await {
                                     Ok(all_meta) => {
-                                        // The list is already sorted by last_active_at desc
-                                        // at persistence time; apply server-side pagination.
                                         let total = all_meta.len();
                                         let has_more = page_offset + page_size < total;
                                         let sessions: Vec<SessionInfo> = all_meta
@@ -545,8 +1109,10 @@ impl RemoteServer {
                                             .skip(page_offset)
                                             .take(page_size)
                                             .map(|s| {
-                                                let created = (s.created_at / 1000).to_string();
-                                                let updated = (s.last_active_at / 1000).to_string();
+                                                let created =
+                                                    (s.created_at / 1000).to_string();
+                                                let updated =
+                                                    (s.last_active_at / 1000).to_string();
                                                 SessionInfo {
                                                     session_id: s.session_id,
                                                     name: s.session_name,
@@ -559,17 +1125,25 @@ impl RemoteServer {
                                                 }
                                             })
                                             .collect();
-                                        return RemoteResponse::SessionList { sessions, has_more };
+                                        return RemoteResponse::SessionList {
+                                            sessions,
+                                            has_more,
+                                        };
                                     }
-                                    Err(e) => debug!("Session list read failed for {ws_str}: {e}"),
+                                    Err(e) => {
+                                        debug!("Session list read failed for {ws_str}: {e}")
+                                    }
                                 }
                             }
-                            Err(e) => debug!("ConversationPersistenceManager init failed for {ws_str}: {e}"),
+                            Err(e) => {
+                                debug!(
+                                    "ConversationPersistenceManager init failed for {ws_str}: {e}"
+                                )
+                            }
                         }
                     }
                 }
 
-                // Fallback: global in-memory sessions (no workspace available)
                 match coordinator.list_sessions().await {
                     Ok(summaries) => {
                         let total = summaries.len();
@@ -579,12 +1153,14 @@ impl RemoteServer {
                             .skip(page_offset)
                             .take(page_size)
                             .map(|s| {
-                                let created = s.created_at
+                                let created = s
+                                    .created_at
                                     .duration_since(std::time::UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs()
                                     .to_string();
-                                let updated = s.last_activity_at
+                                let updated = s
+                                    .last_activity_at
                                     .duration_since(std::time::UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs()
@@ -603,7 +1179,9 @@ impl RemoteServer {
                             .collect();
                         RemoteResponse::SessionList { sessions, has_more }
                     }
-                    Err(e) => RemoteResponse::Error { message: e.to_string() },
+                    Err(e) => RemoteResponse::Error {
+                        message: e.to_string(),
+                    },
                 }
             }
             RemoteCommand::CreateSession {
@@ -612,7 +1190,9 @@ impl RemoteServer {
                 workspace_path: requested_ws_path,
             } => {
                 use crate::infrastructure::{get_workspace_path, PathManager};
-                use crate::service::conversation::{ConversationPersistenceManager, SessionMetadata, SessionStatus};
+                use crate::service::conversation::{
+                    ConversationPersistenceManager, SessionMetadata, SessionStatus,
+                };
 
                 let agent = resolve_agent_type(agent_type.as_deref());
                 let session_name = custom_name
@@ -622,17 +1202,19 @@ impl RemoteServer {
                         "Cowork" => "Remote Cowork Session",
                         _ => "Remote Code Session",
                     });
-                // Determine the binding workspace BEFORE creating the session so that
-                // the workspace_path can be embedded in the SessionCreated event.
-                // This allows the desktop UI to filter out sessions from other workspaces.
                 let binding_ws_path: Option<std::path::PathBuf> = requested_ws_path
                     .as_deref()
                     .map(std::path::PathBuf::from)
                     .or_else(|| get_workspace_path());
-                let binding_ws_str = binding_ws_path.as_ref()
-                    .map(|p| p.to_string_lossy().to_string());
+                let binding_ws_str =
+                    binding_ws_path
+                        .as_ref()
+                        .map(|p| p.to_string_lossy().to_string());
 
-                debug!("Remote CreateSession: requested_ws={:?}, binding_ws={:?}", requested_ws_path, binding_ws_str);
+                debug!(
+                    "Remote CreateSession: requested_ws={:?}, binding_ws={:?}",
+                    requested_ws_path, binding_ws_str
+                );
                 match coordinator
                     .create_session_with_workspace(
                         None,
@@ -649,11 +1231,14 @@ impl RemoteServer {
                         if let Some(wp) = binding_ws_path {
                             if let Ok(pm) = PathManager::new() {
                                 let pm = std::sync::Arc::new(pm);
-                                if let Ok(conv_mgr) = ConversationPersistenceManager::new(pm, wp.clone()).await {
+                                if let Ok(conv_mgr) =
+                                    ConversationPersistenceManager::new(pm, wp.clone()).await
+                                {
                                     let now_ms = std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
                                         .unwrap_or_default()
-                                        .as_millis() as u64;
+                                        .as_millis()
+                                        as u64;
                                     let meta = SessionMetadata {
                                         session_id: session_id.clone(),
                                         session_name: session_name.to_string(),
@@ -672,10 +1257,16 @@ impl RemoteServer {
                                         todos: None,
                                         workspace_path: binding_ws_str,
                                     };
-                                    if let Err(e) = conv_mgr.save_session_metadata(&meta).await {
-                                        error!("Failed to sync remote session to workspace: {e}");
+                                    if let Err(e) =
+                                        conv_mgr.save_session_metadata(&meta).await
+                                    {
+                                        error!(
+                                            "Failed to sync remote session to workspace: {e}"
+                                        );
                                     } else {
-                                        info!("Remote session synced to workspace: {session_id}");
+                                        info!(
+                                            "Remote session synced to workspace: {session_id}"
+                                        );
                                     }
                                 }
                             }
@@ -688,72 +1279,27 @@ impl RemoteServer {
                     },
                 }
             }
-            RemoteCommand::GetSessionMessages { session_id, limit, before_message_id } => {
-                let limit = limit.unwrap_or(50);
-                let session_mgr = coordinator.get_session_manager();
-                if session_mgr.get_session(session_id).is_none() {
-                    let _ = coordinator.restore_session(session_id).await;
-                }
-                match coordinator.get_messages_paginated(session_id, limit, before_message_id.as_deref()).await {
-                    Ok((messages, has_more)) => {
-                        let chat_msgs = messages
-                            .into_iter()
-                            .map(|m| {
-                                use crate::agentic::core::MessageRole;
-                                let role = match m.role {
-                                    MessageRole::User => "user",
-                                    MessageRole::Assistant => "assistant",
-                                    MessageRole::Tool => "tool",
-                                    MessageRole::System => "system",
-                                };
-                                let raw_content = match &m.content {
-                                    crate::agentic::core::MessageContent::Text(t) => t.clone(),
-                                    crate::agentic::core::MessageContent::Mixed {
-                                        text, ..
-                                    } => text.clone(),
-                                    crate::agentic::core::MessageContent::ToolResult {
-                                        result_for_assistant,
-                                        result,
-                                        ..
-                                    } => result_for_assistant
-                                        .clone()
-                                        .unwrap_or_else(|| result.to_string()),
-                                };
-                                // Strip agent-internal XML tags from user messages
-                                let content = if matches!(m.role, MessageRole::User) {
-                                    strip_user_input_tags(&raw_content)
-                                } else {
-                                    raw_content
-                                };
-                                let ts = m
-                                    .timestamp
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs()
-                                    .to_string();
-                                ChatMessage {
-                                    id: m.id.clone(),
-                                    role: role.to_string(),
-                                    content,
-                                    timestamp: ts,
-                                    metadata: None,
-                                }
-                            })
-                            .collect();
-                        RemoteResponse::Messages {
-                            session_id: session_id.clone(),
-                            messages: chat_msgs,
-                            has_more,
-                        }
-                    }
-                    Err(e) => {
-                        RemoteResponse::Error {
-                            message: e.to_string(),
-                        }
-                    }
+            RemoteCommand::GetSessionMessages {
+                session_id,
+                limit: _,
+                before_message_id: _,
+            } => {
+                let (chat_msgs, has_more) =
+                    load_chat_messages_from_conversation_persistence(session_id).await;
+                RemoteResponse::Messages {
+                    session_id: session_id.clone(),
+                    messages: chat_msgs,
+                    has_more,
                 }
             }
             RemoteCommand::DeleteSession { session_id } => {
+                self.state_trackers.remove(session_id);
+                if let Some(coordinator) =
+                    crate::agentic::coordination::get_global_coordinator()
+                {
+                    let sub_id = format!("remote_tracker_{}", session_id);
+                    coordinator.unsubscribe_internal(&sub_id);
+                }
                 match coordinator.delete_session(session_id).await {
                     Ok(_) => RemoteResponse::SessionDeleted {
                         session_id: session_id.clone(),
@@ -763,9 +1309,13 @@ impl RemoteServer {
                     },
                 }
             }
-            _ => RemoteResponse::Error { message: "Unknown session command".into() },
+            _ => RemoteResponse::Error {
+                message: "Unknown session command".into(),
+            },
         }
     }
+
+    // ── Execution commands ──────────────────────────────────────────
 
     async fn handle_execution_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::agentic::coordination::get_global_coordinator;
@@ -786,6 +1336,8 @@ impl RemoteServer {
                 agent_type: requested_agent_type,
                 images,
             } => {
+                self.ensure_tracker(session_id);
+
                 let session_mgr = coordinator.get_session_manager();
                 let (session_agent_type, session_ws) = session_mgr
                     .get_session(session_id)
@@ -800,7 +1352,8 @@ impl RemoteServer {
                 if let Some(ws_path_str) = &session_ws {
                     use crate::infrastructure::{get_workspace_path, set_workspace_path};
                     let current = get_workspace_path();
-                    let current_str = current.as_ref().map(|p| p.to_string_lossy().to_string());
+                    let current_str =
+                        current.as_ref().map(|p| p.to_string_lossy().to_string());
                     if current_str.as_deref() != Some(ws_path_str.as_str()) {
                         info!("Remote send_message: temporarily setting workspace for session={session_id} to {ws_path_str}");
                         set_workspace_path(Some(std::path::PathBuf::from(ws_path_str)));
@@ -824,7 +1377,9 @@ impl RemoteServer {
                         let mut extra = String::new();
                         for (i, img) in imgs.iter().enumerate() {
                             if let Some(ref dir) = save_dir {
-                                if let Some(saved) = save_data_url_image(dir, &img.name, &img.data_url) {
+                                if let Some(saved) =
+                                    save_data_url_image(dir, &img.name, &img.data_url)
+                                {
                                     let path_str = saved.to_string_lossy();
                                     extra.push_str(&format!(
                                         "\n\n[Image: {}]\nPath: {}\nTip: You can use the AnalyzeImage tool with the image_path parameter.",
@@ -845,7 +1400,15 @@ impl RemoteServer {
                     content.clone()
                 };
 
-                info!("Remote send_message: session={session_id}, agent_type={agent_type}, images={}", images.as_ref().map_or(0, |v| v.len()));
+                let is_first_message = session_mgr
+                    .get_session(session_id)
+                    .map(|s| s.dialog_turn_ids.is_empty())
+                    .unwrap_or(true);
+
+                info!(
+                    "Remote send_message: session={session_id}, agent_type={agent_type}, images={}",
+                    images.as_ref().map_or(0, |v| v.len())
+                );
                 let turn_id = format!("turn_{}", chrono::Utc::now().timestamp_millis());
                 match coordinator
                     .start_dialog_turn(
@@ -857,10 +1420,35 @@ impl RemoteServer {
                     )
                     .await
                 {
-                    Ok(()) => RemoteResponse::MessageSent {
-                        session_id: session_id.clone(),
-                        turn_id,
-                    },
+                    Ok(()) => {
+                        if is_first_message {
+                            let sid = session_id.clone();
+                            let msg = content.clone();
+                            let ws = session_ws.clone();
+                            tokio::spawn(async move {
+                                if let Some(coord) = get_global_coordinator() {
+                                    match coord
+                                        .generate_session_title(&sid, &msg, Some(20))
+                                        .await
+                                    {
+                                        Ok(title) => {
+                                            Self::persist_session_title(&sid, &title, ws.as_ref())
+                                                .await;
+                                        }
+                                        Err(e) => {
+                                            debug!(
+                                                "Remote session title generation failed: {e}"
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        RemoteResponse::MessageSent {
+                            session_id: session_id.clone(),
+                            turn_id,
+                        }
+                    }
                     Err(e) => RemoteResponse::Error {
                         message: e.to_string(),
                     },
@@ -874,268 +1462,61 @@ impl RemoteServer {
                         .update_session_state(session_id, SessionState::Idle)
                         .await;
                     if let Some(last_turn_id) = session.dialog_turn_ids.last() {
-                        let _ = coordinator.cancel_dialog_turn(session_id, last_turn_id).await;
+                        let _ =
+                            coordinator.cancel_dialog_turn(session_id, last_turn_id).await;
                     }
                 }
                 RemoteResponse::TaskCancelled {
                     session_id: session_id.clone(),
                 }
             }
-            _ => RemoteResponse::Error { message: "Unknown execution command".into() },
+            RemoteCommand::AnswerQuestion { tool_id, answers } => {
+                use crate::agentic::tools::user_input_manager::get_user_input_manager;
+                let mgr = get_user_input_manager();
+                match mgr.send_answer(tool_id, answers.clone()) {
+                    Ok(()) => RemoteResponse::AnswerAccepted,
+                    Err(e) => RemoteResponse::Error { message: e },
+                }
+            }
+            _ => RemoteResponse::Error {
+                message: "Unknown execution command".into(),
+            },
         }
     }
 
-    async fn handle_subscription_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        match cmd {
-            RemoteCommand::SubscribeSession { session_id } => {
-                let subscriber_id = format!("remote_stream_{}", session_id);
-                
-                let mut subs = self.active_subscriptions.lock().unwrap();
-                if !subs.contains(&subscriber_id) {
-                    if let Some((sub_id, mut stream_rx)) = register_stream_forwarder(session_id, self.shared_secret) {
-                        subs.insert(sub_id.clone());
-                        
-                        let stream_tx = self.stream_tx.clone();
-                        tokio::spawn(async move {
-                            while let Some(payload) = stream_rx.recv().await {
-                                let _ = stream_tx.send(payload);
-                            }
-                            debug!("Stream forwarder channel closed: {sub_id}");
-                        });
-                    }
-                }
-                
-                RemoteResponse::SessionSubscribed {
-                    session_id: session_id.clone(),
-                }
-            }
-            RemoteCommand::UnsubscribeSession { session_id } => {
-                let subscriber_id = format!("remote_stream_{}", session_id);
-                
-                let mut subs = self.active_subscriptions.lock().unwrap();
-                if subs.remove(&subscriber_id) {
-                    unregister_stream_forwarder(&subscriber_id);
-                }
-                
-                RemoteResponse::SessionUnsubscribed {
-                    session_id: session_id.clone(),
-                }
-            }
-            _ => RemoteResponse::Error { message: "Unknown subscription command".into() },
-        }
-    }
-}
+    async fn persist_session_title(
+        session_id: &str,
+        title: &str,
+        workspace_path: Option<&String>,
+    ) {
+        use crate::infrastructure::{get_workspace_path, PathManager};
+        use crate::service::conversation::ConversationPersistenceManager;
 
-// ── Stream event forwarding ──────────────────────────────────────
+        let ws = workspace_path
+            .map(std::path::PathBuf::from)
+            .or_else(get_workspace_path);
+        let Some(wp) = ws else { return };
 
-/// Converts `AgenticEvent`s for a specific session into encrypted relay
-/// payloads and sends them through a channel.
-pub struct RemoteEventForwarder {
-    target_session_id: String,
-    shared_secret: [u8; 32],
-    payload_tx: mpsc::UnboundedSender<EncryptedPayload>,
-}
-
-impl RemoteEventForwarder {
-    pub fn new(
-        target_session_id: String,
-        shared_secret: [u8; 32],
-        payload_tx: mpsc::UnboundedSender<EncryptedPayload>,
-    ) -> Self {
-        Self {
-            target_session_id,
-            shared_secret,
-            payload_tx,
-        }
-    }
-
-    fn try_forward(&self, event: &crate::agentic::events::AgenticEvent) {
-        use bitfun_events::AgenticEvent as AE;
-
-        // Check if this is a direct event for our session, or a subagent event
-        // whose parent session is our target. Subagent events carry subagent_parent_info
-        // with the parent session id. We forward both cases so the mobile can see
-        // subagent tool calls and streaming text as part of the main session.
-        let is_direct = event.session_id() == Some(self.target_session_id.as_str());
-        let parent_turn_id: Option<String> = if !is_direct {
-            match event {
-                AE::TextChunk { subagent_parent_info, .. }
-                | AE::ThinkingChunk { subagent_parent_info, .. }
-                | AE::ToolEvent { subagent_parent_info, .. } => {
-                    subagent_parent_info.as_ref().and_then(|p| {
-                        if p.session_id == self.target_session_id {
-                            Some(p.dialog_turn_id.clone())
-                        } else {
-                            None
-                        }
-                    })
-                }
-                _ => None,
-            }
-        } else {
-            None
+        let pm = match PathManager::new() {
+            Ok(pm) => std::sync::Arc::new(pm),
+            Err(_) => return,
         };
-
-        // Only proceed if this is a direct event or a relevant subagent event
-        if !is_direct && parent_turn_id.is_none() {
-            return;
-        }
-
-        let session_id = self.target_session_id.clone();
-
-        let (event_type, payload) = match event {
-            AE::TextChunk { text, turn_id, .. } => {
-                // For subagent text chunks, use the parent turn_id so mobile groups them correctly
-                let effective_turn_id = parent_turn_id.as_deref().unwrap_or(turn_id.as_str());
-                (
-                    "text_chunk",
-                    serde_json::json!({ "text": text, "turn_id": effective_turn_id }),
-                )
-            }
-            AE::ThinkingChunk {
-                content, turn_id, ..
-            } => {
-                // Strip model-internal boundary markers (e.g. <thinking_end>) from thinking content
-                let clean_content = content
-                    .replace("<thinking_end>", "")
-                    .replace("</thinking>", "")
-                    .replace("<thinking>", "");
-                let effective_turn_id = parent_turn_id.as_deref().unwrap_or(turn_id.as_str());
-                (
-                    "thinking_chunk",
-                    serde_json::json!({ "content": clean_content, "turn_id": effective_turn_id }),
-                )
-            }
-            AE::ToolEvent {
-                tool_event,
-                turn_id,
-                ..
-            } => {
-                let effective_turn_id = parent_turn_id.as_deref().unwrap_or(turn_id.as_str());
-                (
-                    "tool_event",
-                    serde_json::json!({
-                        "turn_id": effective_turn_id,
-                        "tool_event": serde_json::to_value(tool_event).unwrap_or_default(),
-                    }),
-                )
-            }
-            // The following events are only forwarded for the direct (main) session
-            AE::DialogTurnStarted {
-                turn_id,
-                user_input,
-                ..
-            } => (
-                "stream_start",
-                serde_json::json!({ "turn_id": turn_id, "user_input": strip_user_input_tags(user_input) }),
-            ),
-            AE::DialogTurnCompleted {
-                turn_id,
-                total_rounds,
-                duration_ms,
-                ..
-            } => (
-                "stream_end",
-                serde_json::json!({
-                    "turn_id": turn_id,
-                    "total_rounds": total_rounds,
-                    "duration_ms": duration_ms,
-                }),
-            ),
-            AE::DialogTurnFailed {
-                turn_id, error, ..
-            } => (
-                "stream_error",
-                serde_json::json!({ "turn_id": turn_id, "error": error }),
-            ),
-            AE::DialogTurnCancelled { turn_id, .. } => (
-                "stream_cancelled",
-                serde_json::json!({ "turn_id": turn_id }),
-            ),
-            AE::ModelRoundStarted {
-                turn_id,
-                round_index,
-                ..
-            } => (
-                "round_started",
-                serde_json::json!({ "turn_id": turn_id, "round_index": round_index }),
-            ),
-            AE::ModelRoundCompleted {
-                turn_id,
-                has_tool_calls,
-                ..
-            } => (
-                "round_completed",
-                serde_json::json!({ "turn_id": turn_id, "has_tool_calls": has_tool_calls }),
-            ),
-            AE::SessionStateChanged { new_state, .. } => (
-                "session_state_changed",
-                serde_json::json!({ "new_state": new_state }),
-            ),
-            AE::SessionTitleGenerated { title, .. } => (
-                "session_title",
-                serde_json::json!({ "title": title }),
-            ),
-            _ => return,
+        let conv_mgr = match ConversationPersistenceManager::new(pm, wp).await {
+            Ok(m) => m,
+            Err(_) => return,
         };
-
-        let resp = RemoteResponse::StreamEvent {
-            session_id,
-            event_type: event_type.to_string(),
-            payload,
-        };
-
-        match encryption::encrypt_to_base64(
-            &self.shared_secret,
-            &serde_json::to_string(&resp).unwrap_or_default(),
-        ) {
-            Ok(encrypted) => {
-                let _ = self.payload_tx.send(encrypted);
-            }
-            Err(e) => {
-                error!("Failed to encrypt stream event: {e}");
+        if let Ok(Some(mut meta)) = conv_mgr.load_session_metadata(session_id).await {
+            meta.session_name = title.to_string();
+            meta.last_active_at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            if let Err(e) = conv_mgr.save_session_metadata(&meta).await {
+                error!("Failed to persist remote session title: {e}");
+            } else {
+                info!("Remote session title persisted: session_id={session_id}, title={title}");
             }
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl crate::agentic::events::EventSubscriber for RemoteEventForwarder {
-    async fn on_event(
-        &self,
-        event: &crate::agentic::events::AgenticEvent,
-    ) -> crate::util::errors::BitFunResult<()> {
-        self.try_forward(event);
-        Ok(())
-    }
-}
-
-/// Register a forwarder for a session. Returns the subscriber_id (for later unsubscription)
-/// and the receiving end of the encrypted payload channel.
-pub fn register_stream_forwarder(
-    session_id: &str,
-    shared_secret: [u8; 32],
-) -> Option<(String, mpsc::UnboundedReceiver<EncryptedPayload>)> {
-    use crate::agentic::coordination::get_global_coordinator;
-
-    let coordinator = get_global_coordinator()?;
-    let (tx, rx) = mpsc::unbounded_channel();
-    let subscriber_id = format!("remote_stream_{}", session_id);
-
-    let forwarder = RemoteEventForwarder::new(session_id.to_string(), shared_secret, tx);
-
-    coordinator.subscribe_internal(subscriber_id.clone(), forwarder);
-    info!("Registered remote stream forwarder: {subscriber_id}");
-    Some((subscriber_id, rx))
-}
-
-/// Unregister a previously registered forwarder.
-pub fn unregister_stream_forwarder(subscriber_id: &str) {
-    use crate::agentic::coordination::get_global_coordinator;
-
-    if let Some(coordinator) = get_global_coordinator() {
-        coordinator.unsubscribe_internal(subscriber_id);
-        info!("Unregistered remote stream forwarder: {subscriber_id}");
     }
 }
 
@@ -1150,8 +1531,7 @@ mod tests {
         let bob = KeyPair::generate();
         let shared = alice.derive_shared_secret(&bob.public_key_bytes());
 
-        let (stream_tx, _stream_rx) = mpsc::unbounded_channel::<EncryptedPayload>();
-        let bridge = RemoteServer::new(shared, stream_tx);
+        let bridge = RemoteServer::new(shared);
 
         let cmd_json = serde_json::json!({
             "cmd": "send_message",
@@ -1181,8 +1561,7 @@ mod tests {
     fn test_response_with_request_id() {
         let alice = KeyPair::generate();
         let shared = alice.derive_shared_secret(&alice.public_key_bytes());
-        let (stream_tx, _stream_rx) = mpsc::unbounded_channel::<EncryptedPayload>();
-        let bridge = RemoteServer::new(shared, stream_tx);
+        let bridge = RemoteServer::new(shared);
 
         let resp = RemoteResponse::Pong;
         let (enc, nonce) = bridge.encrypt_response(&resp, Some("req_xyz")).unwrap();

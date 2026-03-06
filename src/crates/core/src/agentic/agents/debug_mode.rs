@@ -364,6 +364,7 @@ Below is a snapshot of the current workspace's file structure.
             "MermaidInteractive".to_string(),
             "Log".to_string(),
             "ReadLints".to_string(),
+            "TerminalControl".to_string(),
         ]
     }
 

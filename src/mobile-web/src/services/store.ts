@@ -1,40 +1,43 @@
 import { create } from 'zustand';
-import type { SessionInfo, ChatMessage, WorkspaceInfo } from './RemoteSessionManager';
-import type { ConnectionState } from './RelayConnection';
+import type {
+  SessionInfo,
+  ChatMessage,
+  WorkspaceInfo,
+  ActiveTurnSnapshot,
+} from './RemoteSessionManager';
+
+export type ConnectionStatus = 'pairing' | 'paired' | 'error';
 
 interface MobileStore {
-  connectionState: ConnectionState;
-  setConnectionState: (s: ConnectionState) => void;
+  connectionStatus: ConnectionStatus;
+  setConnectionStatus: (s: ConnectionStatus) => void;
 
-  // Current workspace context (used when creating new sessions)
   currentWorkspace: WorkspaceInfo | null;
   setCurrentWorkspace: (w: WorkspaceInfo | null) => void;
 
   sessions: SessionInfo[];
   setSessions: (s: SessionInfo[]) => void;
   appendSessions: (s: SessionInfo[]) => void;
+  updateSessionName: (sessionId: string, name: string) => void;
 
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
 
-  // Per-session message storage
   messagesBySession: Record<string, ChatMessage[]>;
   getMessages: (sessionId: string) => ChatMessage[];
   setMessages: (sessionId: string, m: ChatMessage[]) => void;
-  appendMessage: (sessionId: string, m: ChatMessage) => void;
-  updateLastMessage: (sessionId: string, content: string) => void;
-  updateLastMessageFull: (sessionId: string, content: string, metadata: Record<string, any>) => void;
+  appendNewMessages: (sessionId: string, messages: ChatMessage[]) => void;
+
+  activeTurn: ActiveTurnSnapshot | null;
+  setActiveTurn: (t: ActiveTurnSnapshot | null) => void;
 
   error: string | null;
   setError: (e: string | null) => void;
-
-  isStreaming: boolean;
-  setIsStreaming: (v: boolean) => void;
 }
 
 export const useMobileStore = create<MobileStore>((set, get) => ({
-  connectionState: 'disconnected',
-  setConnectionState: (connectionState) => set({ connectionState }),
+  connectionStatus: 'pairing',
+  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
 
   currentWorkspace: null,
   setCurrentWorkspace: (currentWorkspace) => set({ currentWorkspace }),
@@ -43,6 +46,12 @@ export const useMobileStore = create<MobileStore>((set, get) => ({
   setSessions: (sessions) => set({ sessions }),
   appendSessions: (newSessions) =>
     set((state) => ({ sessions: [...state.sessions, ...newSessions] })),
+  updateSessionName: (sessionId, name) =>
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.session_id === sessionId ? { ...s, name } : s,
+      ),
+    })),
 
   activeSessionId: null,
   setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
@@ -55,37 +64,21 @@ export const useMobileStore = create<MobileStore>((set, get) => ({
     set((s) => ({
       messagesBySession: { ...s.messagesBySession, [sessionId]: m },
     })),
-  appendMessage: (sessionId, m) =>
+  appendNewMessages: (sessionId, messages) =>
     set((s) => {
+      if (messages.length === 0) return s;
       const prev = s.messagesBySession[sessionId] || [];
       return {
-        messagesBySession: { ...s.messagesBySession, [sessionId]: [...prev, m] },
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: [...prev, ...messages],
+        },
       };
     }),
-  updateLastMessage: (sessionId, content) =>
-    set((s) => {
-      const msgs = [...(s.messagesBySession[sessionId] || [])];
-      if (msgs.length > 0) {
-        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content };
-      }
-      return {
-        messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
-      };
-    }),
-  updateLastMessageFull: (sessionId, content, metadata) =>
-    set((s) => {
-      const msgs = [...(s.messagesBySession[sessionId] || [])];
-      if (msgs.length > 0) {
-        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content, metadata };
-      }
-      return {
-        messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
-      };
-    }),
+
+  activeTurn: null,
+  setActiveTurn: (activeTurn) => set({ activeTurn }),
 
   error: null,
   setError: (error) => set({ error }),
-
-  isStreaming: false,
-  setIsStreaming: (isStreaming) => set({ isStreaming }),
 }));

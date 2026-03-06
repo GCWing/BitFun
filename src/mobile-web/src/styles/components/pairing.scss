@@ -1,0 +1,89 @@
+.pairing-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--size-gap-6);
+  padding: var(--size-gap-8);
+  animation: fadeIn var(--motion-slow) var(--easing-decelerate);
+}
+
+// 3D Cube Logo
+.pairing-page__cube {
+  perspective: 200px;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--size-gap-2);
+}
+
+.pairing-page__cube-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  animation: cubeRotate 4s linear infinite;
+}
+
+.pairing-page__cube-face {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--color-accent-400);
+  background: var(--color-accent-100);
+  border-radius: var(--size-radius-sm);
+
+  &--front  { transform: translateZ(24px); }
+  &--back   { transform: rotateY(180deg) translateZ(24px); }
+  &--right  { transform: rotateY(90deg) translateZ(24px); }
+  &--left   { transform: rotateY(-90deg) translateZ(24px); }
+  &--top    { transform: rotateX(90deg) translateZ(24px); }
+  &--bottom { transform: rotateX(-90deg) translateZ(24px); }
+}
+
+.pairing-page__brand {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent-500);
+  letter-spacing: 0.5px;
+}
+
+.pairing-page__state {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.pairing-page__spinner-wrap {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pairing-page__error {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  text-align: center;
+  max-width: 280px;
+  padding: var(--size-gap-2) var(--size-gap-3);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--size-radius-base);
+}
+
+.pairing-page__retry {
+  padding: var(--size-gap-3) var(--size-gap-8);
+  background: var(--btn-default-bg);
+  color: var(--color-text-primary);
+  border: 1px solid var(--border-base);
+  border-radius: var(--size-radius-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--easing-standard);
+
+  &:active {
+    background: var(--btn-hover-bg);
+  }
+}

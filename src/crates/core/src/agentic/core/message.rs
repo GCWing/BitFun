@@ -1,3 +1,4 @@
+use crate::agentic::image_analysis::ImageContextData;
 use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall};
 use crate::util::TokenCounter;
 use log::warn;
@@ -27,6 +28,10 @@ pub enum MessageRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MessageContent {
     Text(String),
+    Multimodal {
+        text: String,
+        images: Vec<ImageContextData>,
+    },
     ToolResult {
         tool_id: String,
         tool_name: String,
@@ -85,6 +90,42 @@ impl From<Message> for AIMessage {
                 Self {
                     role: role.to_string(),
                     content,
+                    reasoning_content: None,
+                    thinking_signature: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                    name: None,
+                }
+            }
+            MessageContent::Multimodal { text, images } => {
+                let mut content = text;
+                if !images.is_empty() {
+                    content.push_str("\n\n[Attached image(s):\n");
+                    for image in images {
+                        let name = image
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.get("name"))
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_string)
+                            .or_else(|| {
+                                image
+                                    .image_path
+                                    .as_ref()
+                                    .filter(|s| !s.is_empty())
+                                    .cloned()
+                            })
+                            .unwrap_or_else(|| image.id.clone());
+
+                        content.push_str(&format!("- {} ({})\n", name, image.mime_type));
+                    }
+                    content.push(']');
+                }
+
+                Self {
+                    role: "user".to_string(),
+                    content: Some(content),
                     reasoning_content: None,
                     thinking_signature: None,
                     tool_calls: None,
@@ -213,6 +254,16 @@ impl Message {
         }
     }
 
+    pub fn user_multimodal(text: String, images: Vec<ImageContextData>) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            role: MessageRole::User,
+            content: MessageContent::Multimodal { text, images },
+            timestamp: SystemTime::now(),
+            metadata: MessageMetadata::default(),
+        }
+    }
+
     pub fn assistant(text: String) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -277,10 +328,13 @@ impl Message {
         if self.role != MessageRole::User {
             return false;
         }
-        if let MessageContent::Text(text) = &self.content {
-            if text.starts_with("<system-reminder>") {
-                return false;
-            }
+        let text = match &self.content {
+            MessageContent::Text(text) => Some(text.as_str()),
+            MessageContent::Multimodal { text, .. } => Some(text.as_str()),
+            _ => None,
+        };
+        if text.is_some_and(|t| t.starts_with("<system-reminder>")) {
+            return false;
         }
         true
     }
@@ -308,9 +362,80 @@ impl Message {
         if let Some(tokens) = self.metadata.tokens {
             return tokens;
         }
-        let tokens = TokenCounter::estimate_message_tokens(&AIMessage::from(&*self));
+        let tokens = self.estimate_tokens();
         self.metadata.tokens = Some(tokens);
         tokens
+    }
+
+    fn estimate_image_tokens(metadata: Option<&serde_json::Value>) -> usize {
+        let (width, height) = metadata
+            .and_then(|m| {
+                let w = m.get("width").and_then(|v| v.as_u64());
+                let h = m.get("height").and_then(|v| v.as_u64());
+                match (w, h) {
+                    (Some(w), Some(h)) if w > 0 && h > 0 => Some((w as u32, h as u32)),
+                    _ => None,
+                }
+            })
+            .unwrap_or((1024, 1024));
+
+        let tiles_w = (width + 511) / 512;
+        let tiles_h = (height + 511) / 512;
+        let tiles = (tiles_w.max(1) * tiles_h.max(1)) as usize;
+        50 + tiles * 200
+    }
+
+    fn estimate_tokens(&self) -> usize {
+        let mut total = 0usize;
+        total += 4;
+
+        match &self.content {
+            MessageContent::Text(text) => {
+                total += TokenCounter::estimate_tokens(text);
+            }
+            MessageContent::Multimodal { text, images } => {
+                total += TokenCounter::estimate_tokens(text);
+                for image in images {
+                    total += Self::estimate_image_tokens(image.metadata.as_ref());
+                }
+            }
+            MessageContent::Mixed {
+                reasoning_content,
+                text,
+                tool_calls,
+            } => {
+                if self.metadata.keep_thinking {
+                    if let Some(reasoning) = reasoning_content.as_ref() {
+                        total += TokenCounter::estimate_tokens(reasoning);
+                    }
+                }
+                total += TokenCounter::estimate_tokens(text);
+
+                for tool_call in tool_calls {
+                    total += TokenCounter::estimate_tokens(&tool_call.tool_name);
+                    if let Ok(json_str) = serde_json::to_string(&tool_call.arguments) {
+                        total += TokenCounter::estimate_tokens(&json_str);
+                    }
+                    total += 10;
+                }
+            }
+            MessageContent::ToolResult {
+                tool_name,
+                result,
+                result_for_assistant,
+                ..
+            } => {
+                if let Some(text) = result_for_assistant.as_ref().filter(|s| !s.is_empty()) {
+                    total += TokenCounter::estimate_tokens(text);
+                } else if let Ok(json_str) = serde_json::to_string(result) {
+                    total += TokenCounter::estimate_tokens(&json_str);
+                } else {
+                    total += TokenCounter::estimate_tokens(tool_name);
+                }
+            }
+        }
+
+        total
     }
 }
 
@@ -318,6 +443,11 @@ impl ToString for MessageContent {
     fn to_string(&self) -> String {
         match self {
             MessageContent::Text(text) => text.clone(),
+            MessageContent::Multimodal { text, images } => format!(
+                "Multimodal: text_length={}, images={}",
+                text.len(),
+                images.len()
+            ),
             MessageContent::ToolResult {
                 tool_id,
                 tool_name,

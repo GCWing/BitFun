@@ -568,11 +568,28 @@
       "readingFile": "正在读取",
       "preparingRead": "准备读取"
     },
+    "terminalControl": {
+      "terminatingSession": "正在终止终端",
+      "sessionKilled": "终端已终止",
+      "killFailed": "终止终端失败",
+      "preparingKill": "准备终止终端",
+      "interruptingSession": "正在中断终端",
+      "sessionInterrupted": "终端已中断",
+      "interruptFailed": "中断终端失败",
+      "preparingInterrupt": "准备中断终端"
+    },
     "imageAnalysis": {
       "parsingAnalysisInfo": "解析分析信息中...",
       "unknownImage": "未知图片",
       "clipboardImage": "剪贴板图片",
-      "analyzeImageContent": "分析图片内容"
+      "analyzeImageContent": "分析图片内容",
+      "imageAnalysis": "图片分析",
+      "completed": "已完成",
+      "analyzing": "正在分析",
+      "preparing": "准备分析",
+      "analysisPrompt": "分析提示",
+      "focusAreas": "关注点",
+      "analysisResult": "分析结果"
     },
     "contextCompression": {
       "beforeUserMessage": "用户消息前",

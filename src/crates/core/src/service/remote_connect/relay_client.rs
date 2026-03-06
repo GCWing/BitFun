@@ -1,11 +1,12 @@
 //! WebSocket client for connecting to the Relay Server.
 //!
-//! Manages the desktop-side WebSocket connection, sends/receives relay protocol messages,
-//! and dispatches events to the pairing and session bridge layers.
+//! Manages the desktop-side WebSocket connection. In the new architecture the
+//! relay bridges HTTP requests from mobile to the desktop via WebSocket.
+//! The desktop receives `PairRequest` and `Command` messages (with correlation
+//! IDs) and responds with `RelayResponse`.
 //!
-//! Supports automatic reconnect: when the connection drops, it retries with exponential
-//! backoff and re-creates the same room (same room_id + public_key) so that in-flight
-//! QR codes remain valid.
+//! Supports automatic reconnect with exponential backoff and room re-creation
+//! so that in-flight QR codes remain valid.
 
 use anyhow::{anyhow, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -23,36 +24,39 @@ type WsStream = tokio_tungstenite::WebSocketStream<
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RelayMessage {
+    // ── Outbound (desktop → relay) ──────────────────────────────────
     CreateRoom {
         room_id: Option<String>,
         device_id: String,
         device_type: String,
         public_key: String,
     },
-    RoomCreated {
-        room_id: String,
-    },
-    JoinRoom {
-        room_id: String,
-        device_id: String,
-        device_type: String,
-        public_key: String,
-    },
-    PeerJoined {
-        device_id: String,
-        device_type: String,
-        public_key: String,
-    },
-    Relay {
-        room_id: String,
+    /// Respond to a bridged HTTP request identified by `correlation_id`.
+    RelayResponse {
+        correlation_id: String,
         encrypted_data: String,
         nonce: String,
     },
     Heartbeat,
-    HeartbeatAck,
-    PeerDisconnected {
-        device_id: String,
+
+    // ── Inbound (relay → desktop) ───────────────────────────────────
+    RoomCreated {
+        room_id: String,
     },
+    /// Mobile pairing request forwarded by the relay.
+    PairRequest {
+        correlation_id: String,
+        public_key: String,
+        device_id: String,
+        device_name: String,
+    },
+    /// Encrypted command from mobile forwarded by the relay.
+    Command {
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    HeartbeatAck,
     Error {
         message: String,
     },
@@ -62,14 +66,27 @@ pub enum RelayMessage {
 #[derive(Debug, Clone)]
 pub enum RelayEvent {
     Connected,
-    RoomCreated { room_id: String },
-    PeerJoined { public_key: String, device_id: String },
-    MessageReceived { encrypted_data: String, nonce: String },
-    PeerDisconnected { device_id: String },
-    /// Emitted after a successful automatic reconnect + room recreation.
+    RoomCreated {
+        room_id: String,
+    },
+    /// Mobile wants to pair.
+    PairRequest {
+        correlation_id: String,
+        public_key: String,
+        device_id: String,
+        device_name: String,
+    },
+    /// Mobile sent an encrypted command.
+    CommandReceived {
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
     Reconnected,
     Disconnected,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,7 +97,6 @@ pub enum ConnectionState {
     Reconnecting,
 }
 
-/// Information kept to rebuild the room after a reconnect.
 #[derive(Debug, Clone, Default)]
 struct ReconnectCtx {
     ws_url: String,
@@ -114,7 +130,6 @@ impl RelayClient {
         self.state.read().await.clone()
     }
 
-    /// Connect to the relay server WebSocket endpoint and start background tasks.
     pub async fn connect(&self, ws_url: &str) -> Result<()> {
         *self.state.write().await = ConnectionState::Connecting;
 
@@ -123,7 +138,6 @@ impl RelayClient {
         info!("Connected to relay server at {ws_url}");
         *self.state.write().await = ConnectionState::Connected;
 
-        // Record the ws_url for future reconnect
         *self.reconnect_ctx.write().await = Some(ReconnectCtx {
             ws_url: ws_url.to_string(),
             ..Default::default()
@@ -134,22 +148,19 @@ impl RelayClient {
         Ok(())
     }
 
-    /// Wire up read / write / heartbeat tasks for a live stream.
     async fn launch_tasks(&self, ws_stream: WsStream) {
         let (mut ws_write, ws_read) = ws_stream.split();
         let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<RelayMessage>();
 
-        // Share cmd_tx so `send()` / `create_room()` / heartbeat can enqueue messages
         let cmd_tx_arc = self.cmd_tx.clone();
         let state_arc = self.state.clone();
         let room_id_arc = self.room_id.clone();
         let event_tx = self.event_tx.clone();
         let reconnect_arc = self.reconnect_ctx.clone();
 
-        // Store cmd_tx immediately (before spawning tasks, to avoid race with create_room)
         *cmd_tx_arc.write().await = Some(cmd_tx);
 
-        // ── Write task ────────────────────────────────────────────────────────
+        // ── Write task ──────────────────────────────────────────────────────
         tokio::spawn(async move {
             while let Some(msg) = cmd_rx.recv().await {
                 if let Ok(json) = serde_json::to_string(&msg) {
@@ -161,11 +172,10 @@ impl RelayClient {
             debug!("Write task exited");
         });
 
-        // ── Read task with reconnect loop ─────────────────────────────────────
+        // ── Read task with reconnect loop ───────────────────────────────────
         let mut ws_read = ws_read;
         tokio::spawn(async move {
             'outer: loop {
-                // Read messages until connection drops
                 while let Some(res) = ws_read.next().await {
                     match res {
                         Ok(Message::Text(text)) => {
@@ -191,7 +201,6 @@ impl RelayClient {
                     }
                 }
 
-                // Drop detected — enter reconnect loop
                 *state_arc.write().await = ConnectionState::Reconnecting;
                 info!("Relay connection dropped; will attempt reconnect");
 
@@ -224,19 +233,16 @@ impl RelayClient {
                                 mpsc::unbounded_channel::<RelayMessage>();
                             *cmd_tx_arc.write().await = Some(new_cmd_tx.clone());
 
-                            // New write task
                             tokio::spawn(async move {
                                 while let Some(msg) = new_cmd_rx.recv().await {
                                     if let Ok(json) = serde_json::to_string(&msg) {
-                                        if new_write.send(Message::Text(json)).await.is_err()
-                                        {
+                                        if new_write.send(Message::Text(json)).await.is_err() {
                                             break;
                                         }
                                     }
                                 }
                             });
 
-                            // Re-create the room so existing QR codes remain valid
                             if !ctx.room_id.is_empty() {
                                 let recreate = RelayMessage::CreateRoom {
                                     room_id: Some(ctx.room_id.clone()),
@@ -264,7 +270,7 @@ impl RelayClient {
             let _ = event_tx.send(RelayEvent::Disconnected);
         });
 
-        // ── Heartbeat task ────────────────────────────────────────────────────
+        // ── Heartbeat task ──────────────────────────────────────────────────
         let hb_state = self.state.clone();
         let hb_cmd = self.cmd_tx.clone();
         tokio::spawn(async move {
@@ -275,7 +281,7 @@ impl RelayClient {
                     break;
                 }
                 if st != ConnectionState::Connected {
-                    continue; // Don't heartbeat while reconnecting
+                    continue;
                 }
                 if let Some(tx) = hb_cmd.read().await.as_ref() {
                     let _ = tx.send(RelayMessage::Heartbeat);
@@ -295,16 +301,31 @@ impl RelayClient {
                 *room_id_store.write().await = Some(room_id.clone());
                 let _ = event_tx.send(RelayEvent::RoomCreated { room_id });
             }
-            RelayMessage::PeerJoined { device_id, public_key, .. } => {
-                info!("Peer joined: {device_id}");
-                let _ = event_tx.send(RelayEvent::PeerJoined { public_key, device_id });
+            RelayMessage::PairRequest {
+                correlation_id,
+                public_key,
+                device_id,
+                device_name,
+            } => {
+                info!("PairRequest from {device_id}");
+                let _ = event_tx.send(RelayEvent::PairRequest {
+                    correlation_id,
+                    public_key,
+                    device_id,
+                    device_name,
+                });
             }
-            RelayMessage::Relay { encrypted_data, nonce, .. } => {
-                let _ = event_tx.send(RelayEvent::MessageReceived { encrypted_data, nonce });
-            }
-            RelayMessage::PeerDisconnected { device_id } => {
-                info!("Peer disconnected: {device_id}");
-                let _ = event_tx.send(RelayEvent::PeerDisconnected { device_id });
+            RelayMessage::Command {
+                correlation_id,
+                encrypted_data,
+                nonce,
+            } => {
+                debug!("Command received, corr={correlation_id}");
+                let _ = event_tx.send(RelayEvent::CommandReceived {
+                    correlation_id,
+                    encrypted_data,
+                    nonce,
+                });
             }
             RelayMessage::HeartbeatAck => {
                 debug!("Heartbeat acknowledged");
@@ -317,7 +338,6 @@ impl RelayClient {
         }
     }
 
-    /// Send a protocol message to the relay server.
     pub async fn send(&self, msg: RelayMessage) -> Result<()> {
         let guard = self.cmd_tx.read().await;
         let tx = guard.as_ref().ok_or_else(|| anyhow!("not connected"))?;
@@ -325,17 +345,12 @@ impl RelayClient {
         Ok(())
     }
 
-    /// Create a room on the relay server.
-    ///
-    /// Also records the device_id / room_id / public_key in the reconnect context
-    /// so the room is automatically recreated after a transient disconnect.
     pub async fn create_room(
         &self,
         device_id: &str,
         public_key: &str,
         room_id: Option<&str>,
     ) -> Result<()> {
-        // Update reconnect context with room params
         if let Some(rid) = room_id {
             let mut guard = self.reconnect_ctx.write().await;
             if let Some(ref mut ctx) = *guard {
@@ -354,15 +369,15 @@ impl RelayClient {
         .await
     }
 
-    /// Send an E2E-encrypted relay message.
-    pub async fn send_encrypted(
+    /// Send a relay response back to the relay server for a bridged HTTP request.
+    pub async fn send_relay_response(
         &self,
-        room_id: &str,
+        correlation_id: &str,
         encrypted_data: &str,
         nonce: &str,
     ) -> Result<()> {
-        self.send(RelayMessage::Relay {
-            room_id: room_id.to_string(),
+        self.send(RelayMessage::RelayResponse {
+            correlation_id: correlation_id.to_string(),
             encrypted_data: encrypted_data.to_string(),
             nonce: nonce.to_string(),
         })
@@ -370,7 +385,6 @@ impl RelayClient {
     }
 
     pub async fn disconnect(&self) {
-        // Signal reconnect loop to stop by clearing the context and setting state
         *self.state.write().await = ConnectionState::Disconnected;
         *self.reconnect_ctx.write().await = None;
         *self.cmd_tx.write().await = None;
@@ -382,7 +396,6 @@ impl RelayClient {
     }
 }
 
-/// Open a plain WebSocket connection (no TLS negotiation needed — nginx handles TLS).
 async fn dial(ws_url: &str) -> Result<WsStream> {
     let (stream, _) = tokio_tungstenite::connect_async(ws_url)
         .await

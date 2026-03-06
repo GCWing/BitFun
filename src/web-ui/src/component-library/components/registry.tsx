@@ -1587,14 +1587,14 @@ All requirements met`,
       },
       {
         id: 'image-analysis-card',
-        name: 'AnalyzeImage - ????',
+        name: 'view_image - ????',
         description: '????????',
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
             <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Read - Success</h3>
             <ImageAnalysisCard
-              toolItem={createMockToolItem('AnalyzeImage',
+              toolItem={createMockToolItem('view_image',
                 {
                   image_path: '/path/to/screenshot.png',
                   analysis_prompt: 'Analyze the UI components',
@@ -1607,7 +1607,7 @@ All requirements met`,
                 },
                 'completed'
               )}
-              config={TOOL_CARD_CONFIGS['AnalyzeImage']}
+              config={TOOL_CARD_CONFIGS['view_image']}
               sessionId="preview-session"
             />
           </div>

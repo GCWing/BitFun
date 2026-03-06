@@ -2,7 +2,7 @@
 //!
 //! Responsible for persistent storage of sessions, messages, and tool states
 
-use crate::agentic::core::{DialogTurn, Message, Session, SessionState, SessionSummary};
+use crate::agentic::core::{DialogTurn, Message, MessageContent, Session, SessionState, SessionSummary};
 use crate::infrastructure::PathManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, info, warn};
@@ -46,6 +46,65 @@ impl PersistenceManager {
         Ok(dir)
     }
 
+    fn sanitize_messages_for_persistence(messages: &[Message]) -> Vec<Message> {
+        messages
+            .iter()
+            .map(Self::sanitize_message_for_persistence)
+            .collect()
+    }
+
+    fn sanitize_message_for_persistence(message: &Message) -> Message {
+        let mut sanitized = message.clone();
+
+        match &mut sanitized.content {
+            MessageContent::Multimodal { images, .. } => {
+                for image in images.iter_mut() {
+                    if image.data_url.as_ref().is_some_and(|v| !v.is_empty()) {
+                        image.data_url = None;
+
+                        let mut metadata = image
+                            .metadata
+                            .take()
+                            .unwrap_or_else(|| serde_json::json!({}));
+                        if !metadata.is_object() {
+                            metadata = serde_json::json!({ "raw_metadata": metadata });
+                        }
+                        if let Some(obj) = metadata.as_object_mut() {
+                            obj.insert("has_data_url".to_string(), serde_json::json!(true));
+                        }
+                        image.metadata = Some(metadata);
+                    }
+                }
+            }
+            MessageContent::ToolResult { result, .. } => {
+                Self::redact_data_url_in_json(result);
+            }
+            _ => {}
+        }
+
+        sanitized
+    }
+
+    fn redact_data_url_in_json(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                let had_data_url = map.remove("data_url").is_some();
+                if had_data_url {
+                    map.insert("has_data_url".to_string(), serde_json::json!(true));
+                }
+                for child in map.values_mut() {
+                    Self::redact_data_url_in_json(child);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for child in arr {
+                    Self::redact_data_url_in_json(child);
+                }
+            }
+            _ => {}
+        }
+    }
+
     // ============ Turn context snapshot (sent to model)============
 
     fn context_snapshots_dir(&self, session_id: &str) -> PathBuf {
@@ -70,7 +129,8 @@ impl PersistenceManager {
             .map_err(|e| BitFunError::io(format!("Failed to create context_snapshots directory: {}", e)))?;
 
         let snapshot_path = self.context_snapshot_path(session_id, turn_index);
-        let json = serde_json::to_string(messages).map_err(|e| {
+        let sanitized_messages = Self::sanitize_messages_for_persistence(messages);
+        let json = serde_json::to_string(&sanitized_messages).map_err(|e| {
             BitFunError::serialization(format!("Failed to serialize turn context snapshot: {}", e))
         })?;
         fs::write(&snapshot_path, json)
@@ -312,7 +372,8 @@ impl PersistenceManager {
         let dir = self.ensure_session_dir(session_id).await?;
         let messages_path = dir.join("messages.jsonl");
 
-        let json = serde_json::to_string(message)
+        let sanitized_message = Self::sanitize_message_for_persistence(message);
+        let json = serde_json::to_string(&sanitized_message)
             .map_err(|e| BitFunError::serialization(format!("Failed to serialize message: {}", e)))?;
 
         let mut file = fs::OpenOptions::new()
@@ -397,7 +458,8 @@ impl PersistenceManager {
         let dir = self.ensure_session_dir(session_id).await?;
         let compressed_path = dir.join("compressed_messages.jsonl");
 
-        let json = serde_json::to_string(message)
+        let sanitized_message = Self::sanitize_message_for_persistence(message);
+        let json = serde_json::to_string(&sanitized_message)
             .map_err(|e| BitFunError::serialization(format!("Failed to serialize compressed message: {}", e)))?;
 
         let mut file = fs::OpenOptions::new()
@@ -435,8 +497,10 @@ impl PersistenceManager {
             .await
             .map_err(|e| BitFunError::io(format!("Failed to open compressed message file: {}", e)))?;
 
+        let sanitized_messages = Self::sanitize_messages_for_persistence(messages);
+
         // Write all messages
-        for message in messages {
+        for message in &sanitized_messages {
             let json = serde_json::to_string(message)
                 .map_err(|e| BitFunError::serialization(format!("Failed to serialize compressed message: {}", e)))?;
 

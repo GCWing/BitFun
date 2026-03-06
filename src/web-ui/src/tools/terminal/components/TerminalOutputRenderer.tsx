@@ -1,7 +1,34 @@
 /**
  * Terminal output renderer based on xterm.js (read-only).
  * Uses TerminalActionManager to avoid per-instance EventBus listeners.
+ *
+ * Raw PTY output may contain absolute cursor-position sequences (ESC[row;colH)
+ * that assume existing content on screen.  When replayed in a fresh xterm.js
+ * these sequences leave blank rows at the top.  We strip them before writing
+ * so content flows sequentially; colors and relative movements are preserved.
  */
+
+/**
+ * Normalize absolute cursor-position sequences for fresh-context rendering.
+ *
+ * ESC[row;colH (CUP) and ESC[row;colf (HVP) reposition the cursor to an
+ * absolute screen coordinate.  In a live terminal the rows above that
+ * coordinate already contain shell prompts and prior output, so no blank space
+ * appears.  In a fresh xterm.js context those rows are empty, producing a
+ * large blank area before the first line of real content.
+ *
+ * We replace each such sequence with CR+LF so the two sections it separates
+ * stay on different lines (plain deletion would cause them to run together),
+ * while avoiding the blank-row artifact from coordinate-based positioning.
+ *
+ * Colors, bold, relative cursor movements and all other sequences are left
+ * untouched.
+ */
+function normalizeAbsoluteCursorPositions(content: string): string {
+  // Matches ESC [ <optional digits> ; <optional digits> H|f
+  // e.g. ESC[14;35H  ESC[18;1H  ESC[5;1H  ESC[H  ESC[;1H
+  return content.replace(/\x1b\[\d*;?\d*[Hf]/g, '\r\n');
+}
 
 import React, { useEffect, useRef, useCallback, memo, useId } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
@@ -195,16 +222,20 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
 
     const lastContent = lastContentRef.current;
     
+    // Compare raw content for incremental detection, but replace absolute
+    // cursor-position sequences with CR+LF before writing so a fresh xterm.js
+    // context does not show blank rows caused by ESC[row;colH jumps, while
+    // keeping the line boundary between the sections they separated.
     if (content.startsWith(lastContent) && lastContent.length > 0) {
       const newPart = content.slice(lastContent.length);
       if (newPart) {
-        terminal.write(newPart);
+        terminal.write(normalizeAbsoluteCursorPositions(newPart));
       }
     } else {
       terminal.clear();
       terminal.reset();
       if (content) {
-        terminal.write(content);
+        terminal.write(normalizeAbsoluteCursorPositions(content));
       }
     }
     

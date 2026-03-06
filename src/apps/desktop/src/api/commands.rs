@@ -197,6 +197,21 @@ pub async fn test_ai_config_connection(
     request: TestAIConfigConnectionRequest,
 ) -> Result<bitfun_core::util::types::ConnectionTestResult, String> {
     let model_name = request.config.name.clone();
+    let supports_image_input = request
+        .config
+        .capabilities
+        .iter()
+        .any(|cap| {
+            matches!(
+                cap,
+                bitfun_core::service::config::types::ModelCapability::ImageUnderstanding
+            )
+        })
+        || matches!(
+            request.config.category,
+            bitfun_core::service::config::types::ModelCategory::Multimodal
+        );
+
     let ai_config = match request.config.try_into() {
         Ok(config) => config,
         Err(e) => {
@@ -209,6 +224,64 @@ pub async fn test_ai_config_connection(
 
     match ai_client.test_connection().await {
         Ok(result) => {
+            if !result.success {
+                info!(
+                    "AI config connection test completed: model={}, success={}, response_time={}ms",
+                    model_name, result.success, result.response_time_ms
+                );
+                return Ok(result);
+            }
+
+            if supports_image_input {
+                match ai_client.test_image_input_connection().await {
+                    Ok(image_result) => {
+                        let response_time_ms =
+                            result.response_time_ms + image_result.response_time_ms;
+
+                        if !image_result.success {
+                            let image_error = image_result
+                                .error_details
+                                .unwrap_or_else(|| "Unknown image input test error".to_string());
+                            let merged = bitfun_core::util::types::ConnectionTestResult {
+                                success: false,
+                                response_time_ms,
+                                model_response: image_result.model_response.or(result.model_response),
+                                error_details: Some(format!(
+                                    "Basic connection passed, but multimodal image input test failed: {}",
+                                    image_error
+                                )),
+                            };
+                            info!(
+                                "AI config connection test completed: model={}, success={}, response_time={}ms",
+                                model_name, merged.success, merged.response_time_ms
+                            );
+                            return Ok(merged);
+                        }
+
+                        let merged = bitfun_core::util::types::ConnectionTestResult {
+                            success: true,
+                            response_time_ms,
+                            model_response: image_result
+                                .model_response
+                                .or(result.model_response),
+                            error_details: None,
+                        };
+                        info!(
+                            "AI config connection test completed: model={}, success={}, response_time={}ms",
+                            model_name, merged.success, merged.response_time_ms
+                        );
+                        return Ok(merged);
+                    }
+                    Err(e) => {
+                        error!(
+                            "AI config multimodal image input test failed unexpectedly: model={}, error={}",
+                            model_name, e
+                        );
+                        return Err(format!("Connection test failed: {}", e));
+                    }
+                }
+            }
+
             info!(
                 "AI config connection test completed: model={}, success={}, response_time={}ms",
                 model_name, result.success, result.response_time_ms
