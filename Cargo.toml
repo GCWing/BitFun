@@ -126,7 +126,6 @@ hostname = "0.4"
 
 # QR code generation
 qrcode = "0.14"
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 # WebSocket client
 tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
