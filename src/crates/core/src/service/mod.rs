@@ -17,6 +17,7 @@ pub mod runtime; // Managed runtime and capability management
 pub mod snapshot; // Snapshot-based change tracking
 pub mod system; // System command detection and execution
 pub mod remote_connect; // Remote Connect (phone → desktop)
+pub mod token_usage; // Token usage tracking
 pub mod workspace; // Workspace management // Diff calculation and merge service
 
 // Terminal is a standalone crate; re-export it here.
@@ -40,5 +41,9 @@ pub use snapshot::SnapshotService;
 pub use system::{
     check_command, check_commands, run_command, run_command_simple, CheckCommandResult,
     CommandOutput, SystemError,
+};
+pub use token_usage::{
+    ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
+    TokenUsageService, TokenUsageSummary,
 };
 pub use workspace::{WorkspaceManager, WorkspaceProvider, WorkspaceService};

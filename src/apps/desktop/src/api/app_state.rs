@@ -2,7 +2,7 @@
 
 use bitfun_core::agentic::{agents, tools};
 use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
-use bitfun_core::service::{ai_rules, config, filesystem, mcp, workspace};
+use bitfun_core::service::{ai_rules, config, filesystem, mcp, token_usage, workspace};
 use bitfun_core::util::errors::*;
 
 use serde::{Deserialize, Serialize};
@@ -37,12 +37,13 @@ pub struct AppState {
     pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
+    pub token_usage_service: Arc<token_usage::TokenUsageService>,
     pub statistics: Arc<RwLock<AppStatistics>>,
     pub start_time: std::time::Instant,
 }
 
 impl AppState {
-    pub async fn new_async() -> BitFunResult<Self> {
+    pub async fn new_async(token_usage_service: Arc<token_usage::TokenUsageService>) -> BitFunResult<Self> {
         let start_time = std::time::Instant::now();
 
         let config_service = config::get_global_config_service().await.map_err(|e| {
@@ -85,6 +86,7 @@ impl AppState {
                 None
             }
         };
+
         let statistics = Arc::new(RwLock::new(AppStatistics {
             sessions_created: 0,
             messages_processed: 0,
@@ -103,6 +105,7 @@ impl AppState {
             ai_rules_service,
             agent_registry,
             mcp_service,
+            token_usage_service,
             statistics,
             start_time,
         };

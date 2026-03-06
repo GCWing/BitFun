@@ -79,10 +79,12 @@ pub enum AgenticEvent {
     TokenUsageUpdated {
         session_id: String,
         turn_id: String,
+        model_id: String,
         input_tokens: usize,
         output_tokens: Option<usize>,
         total_tokens: usize,
         max_context_tokens: Option<usize>,
+        is_subagent: bool,
     },
 
     ContextCompressionStarted {

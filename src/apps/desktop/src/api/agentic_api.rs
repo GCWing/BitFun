@@ -30,6 +30,7 @@ pub struct SessionConfigDTO {
     pub max_turns: Option<usize>,
     pub enable_context_compression: Option<bool>,
     pub compression_threshold: Option<f32>,
+    pub model_name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -157,6 +158,7 @@ pub async fn create_session(
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: None,
+            model_id: c.model_name,
         })
         .unwrap_or_default();
 

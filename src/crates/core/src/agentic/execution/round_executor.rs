@@ -236,25 +236,24 @@ impl RoundExecutor {
         // If stream response contains usage info, update token statistics
         if let Some(ref usage) = stream_result.usage {
             debug!(
-                "Updating token stats from model response: input={}, output={}, total={}",
-                usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count
+                "Updating token stats from model response: input={}, output={}, total={}, is_subagent={}",
+                usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count, is_subagent
             );
 
-            // Subagent does not send token events
-            if !is_subagent {
-                self.emit_event(
-                    AgenticEvent::TokenUsageUpdated {
-                        session_id: context.session_id.clone(),
-                        turn_id: context.dialog_turn_id.clone(),
-                        input_tokens: usage.prompt_token_count as usize,
-                        output_tokens: Some(usage.candidates_token_count as usize),
-                        total_tokens: usage.total_token_count as usize,
-                        max_context_tokens: context_window,
-                    },
-                    EventPriority::Normal,
-                )
-                .await;
-            }
+            self.emit_event(
+                AgenticEvent::TokenUsageUpdated {
+                    session_id: context.session_id.clone(),
+                    turn_id: context.dialog_turn_id.clone(),
+                    model_id: context.model_name.clone(),
+                    input_tokens: usage.prompt_token_count as usize,
+                    output_tokens: Some(usage.candidates_token_count as usize),
+                    total_tokens: usage.total_token_count as usize,
+                    max_context_tokens: context_window,
+                    is_subagent,
+                },
+                EventPriority::Normal,
+            )
+            .await;
         }
 
         // Emit model round completed event

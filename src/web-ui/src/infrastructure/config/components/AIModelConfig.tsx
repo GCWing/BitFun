@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Plus, Edit2, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ArrowLeft, ExternalLink, BarChart3 } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, Checkbox, Modal, Input, Textarea } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
@@ -14,6 +14,7 @@ import { aiApi, systemAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
 import DefaultModelConfig from './DefaultModelConfig';
+import TokenStatsModal from './TokenStatsModal';
 import { createLogger } from '@/shared/utils/logger';
 import './AIModelConfig.scss';
 
@@ -54,6 +55,8 @@ const AIModelConfig: React.FC = () => {
   
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   
+  const [showTokenStats, setShowTokenStats] = useState(false);
+  const [selectedModelForStats, setSelectedModelForStats] = useState<{ id: string; name: string } | null>(null);
   
   const [creationMode, setCreationMode] = useState<'selection' | 'form' | null>(null);
   
@@ -978,6 +981,17 @@ const AIModelConfig: React.FC = () => {
                     <button
                       type="button"
                       className="bitfun-collection-btn"
+                      onClick={() => {
+                        setSelectedModelForStats({ id: config.id!, name: config.name });
+                        setShowTokenStats(true);
+                      }}
+                      title={t('actions.viewStats')}
+                    >
+                      <BarChart3 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="bitfun-collection-btn"
                       onClick={() => handleEdit(config)}
                       title={t('actions.edit')}
                     >
@@ -1073,6 +1087,18 @@ const AIModelConfig: React.FC = () => {
       >
         {renderEditingForm()}
       </Modal>
+
+      {selectedModelForStats && (
+        <TokenStatsModal
+          isOpen={showTokenStats}
+          onClose={() => {
+            setShowTokenStats(false);
+            setSelectedModelForStats(null);
+          }}
+          modelId={selectedModelForStats.id}
+          modelName={selectedModelForStats.name}
+        />
+      )}
     </ConfigPageLayout>
   );
 };

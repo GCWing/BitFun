@@ -127,14 +127,16 @@ impl TransportAdapter for TauriTransportAdapter {
                 "subagentParentInfo": subagent_parent_info,
             }))?;
         }
-        AgenticEvent::TokenUsageUpdated { session_id, turn_id, input_tokens, output_tokens, total_tokens, max_context_tokens } => {
+        AgenticEvent::TokenUsageUpdated { session_id, turn_id, model_id, input_tokens, output_tokens, total_tokens, max_context_tokens, is_subagent } => {
             self.app_handle.emit("agentic://token-usage-updated", json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
+                "modelId": model_id,
                 "inputTokens": input_tokens,
                 "outputTokens": output_tokens,
                 "totalTokens": total_tokens,
                 "maxContextTokens": max_context_tokens,
+                "isSubagent": is_subagent,
             }))?;
         }
         AgenticEvent::ContextCompressionStarted { session_id, turn_id, subagent_parent_info, compression_id, trigger, tokens_before, context_window, threshold } => {

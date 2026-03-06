@@ -157,7 +157,27 @@
     "delete": "删除",
     "test": "测试连接",
     "newConfig": "新建配置",
-    "createFirst": "创建第一个配置"
+    "createFirst": "创建第一个配置",
+    "viewStats": "查看统计"
+  },
+  "tokenStats": {
+    "title": "Token消耗统计",
+    "loading": "加载中...",
+    "noData": "暂无统计数据",
+    "totalTokens": "总消耗",
+    "inputTokens": "输入Token",
+    "outputTokens": "输出Token",
+    "cachedTokens": "缓存Token",
+    "sessionCount": "会话数",
+    "requestCount": "请求次数",
+    "firstUsed": "首次使用",
+    "lastUsed": "最近使用",
+    "clearStats": "清除统计",
+    "confirmClear": "确定要清除该模型的所有统计数据吗？此操作不可恢复。",
+    "rangeAll": "全部",
+    "range30Days": "近30天",
+    "range7Days": "近7天",
+    "includeSubagent": "包含子代理"
   },
   "empty": {
     "noModels": "暂无模型配置",

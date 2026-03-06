@@ -157,7 +157,27 @@
     "delete": "Delete",
     "test": "Test Connection",
     "newConfig": "New Configuration",
-    "createFirst": "Create First Configuration"
+    "createFirst": "Create First Configuration",
+    "viewStats": "View Statistics"
+  },
+  "tokenStats": {
+    "title": "Token Usage Statistics",
+    "loading": "Loading...",
+    "noData": "No statistics data available",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input Tokens",
+    "outputTokens": "Output Tokens",
+    "cachedTokens": "Cached Tokens",
+    "sessionCount": "Sessions",
+    "requestCount": "API Requests",
+    "firstUsed": "First Used",
+    "lastUsed": "Last Used",
+    "clearStats": "Clear Statistics",
+    "confirmClear": "Are you sure you want to clear all statistics for this model? This action cannot be undone.",
+    "rangeAll": "All",
+    "range30Days": "Last 30 Days",
+    "range7Days": "Last 7 Days",
+    "includeSubagent": "Include Subagent"
   },
   "empty": {
     "noModels": "No model configurations",
