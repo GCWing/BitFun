@@ -106,7 +106,6 @@ hostname = { workspace = true }
 
 # QR code generation
 qrcode = { workspace = true }
-image = { workspace = true }
 
 # WebSocket client
 tokio-tungstenite = { workspace = true }
