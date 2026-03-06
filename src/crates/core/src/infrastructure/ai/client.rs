@@ -250,25 +250,28 @@ impl AIClient {
             }
             return;
         }
-        let thinking_value = if enable {
-            if api_format.eq_ignore_ascii_case("anthropic") && model_name.starts_with("claude") {
-                let mut obj = serde_json::map::Map::new();
+
+        // Only add thinking field when enabled.
+        // Third-party APIs may not recognize the "thinking" parameter and return 400 errors.
+        if !enable {
+            return;
+        }
+
+        let thinking_value = if api_format.eq_ignore_ascii_case("anthropic") && model_name.starts_with("claude") {
+            let mut obj = serde_json::map::Map::new();
+            obj.insert(
+                "type".to_string(),
+                serde_json::Value::String("enabled".to_string()),
+            );
+            if let Some(m) = max_tokens {
                 obj.insert(
-                    "type".to_string(),
-                    serde_json::Value::String("enabled".to_string()),
+                    "budget_tokens".to_string(),
+                    serde_json::json!(10000u32.min(m * 3 / 4)),
                 );
-                if let Some(m) = max_tokens {
-                    obj.insert(
-                        "budget_tokens".to_string(),
-                        serde_json::json!(10000u32.min(m * 3 / 4)),
-                    );
-                }
-                serde_json::Value::Object(obj)
-            } else {
-                serde_json::json!({ "type": "enabled" })
             }
+            serde_json::Value::Object(obj)
         } else {
-            serde_json::json!({ "type": "disabled" })
+            serde_json::json!({ "type": "enabled" })
         };
         request_body["thinking"] = thinking_value;
     }

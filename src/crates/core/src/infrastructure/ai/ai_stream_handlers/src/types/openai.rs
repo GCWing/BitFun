@@ -63,7 +63,8 @@ struct Delta {
 #[derive(Debug, Deserialize, Clone)]
 struct OpenAIToolCall {
     #[allow(dead_code)]
-    index: usize,
+    #[serde(default)]
+    index: Option<usize>,
     #[allow(dead_code)]
     id: Option<String>,
     #[allow(dead_code)]
