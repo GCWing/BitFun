@@ -18,6 +18,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
 use std::sync::OnceLock;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 /// Subagent execution result
@@ -65,6 +66,17 @@ impl Drop for CancelTokenGuard {
     }
 }
 
+/// Outcome of a completed dialog turn, used to notify DialogScheduler
+#[derive(Debug, Clone)]
+pub enum TurnOutcome {
+    /// Turn completed normally
+    Completed,
+    /// Turn was cancelled by user
+    Cancelled,
+    /// Turn failed with an error
+    Failed,
+}
+
 /// Conversation coordinator
 pub struct ConversationCoordinator {
     session_manager: Arc<SessionManager>,
@@ -72,6 +84,8 @@ pub struct ConversationCoordinator {
     tool_pipeline: Arc<ToolPipeline>,
     event_queue: Arc<EventQueue>,
     event_router: Arc<EventRouter>,
+    /// Notifies DialogScheduler of turn outcomes; injected after construction
+    scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
 }
 
 impl ConversationCoordinator {
@@ -88,7 +102,14 @@ impl ConversationCoordinator {
             tool_pipeline,
             event_queue,
             event_router,
+            scheduler_notify_tx: OnceLock::new(),
         }
+    }
+
+    /// Inject the DialogScheduler notification channel after construction.
+    /// Called once during app initialization after the scheduler is created.
+    pub fn set_scheduler_notifier(&self, tx: mpsc::Sender<(String, TurnOutcome)>) {
+        let _ = self.scheduler_notify_tx.set(tx);
     }
 
     /// Create a new session
@@ -98,7 +119,8 @@ impl ConversationCoordinator {
         agent_type: String,
         config: SessionConfig,
     ) -> BitFunResult<Session> {
-        self.create_session_with_workspace(None, session_name, agent_type, config, None).await
+        self.create_session_with_workspace(None, session_name, agent_type, config, None)
+            .await
     }
 
     /// Create a new session with optional session ID
@@ -109,7 +131,8 @@ impl ConversationCoordinator {
         agent_type: String,
         config: SessionConfig,
     ) -> BitFunResult<Session> {
-        self.create_session_with_workspace(session_id, session_name, agent_type, config, None).await
+        self.create_session_with_workspace(session_id, session_name, agent_type, config, None)
+            .await
     }
 
     /// Create a new session with optional session ID and workspace binding.
@@ -561,6 +584,7 @@ impl ConversationCoordinator {
         let turn_id_clone = turn_id.clone();
         let session_workspace_path = session.config.workspace_path.clone();
         let effective_agent_type_clone = effective_agent_type.clone();
+        let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
 
         tokio::spawn(async move {
             // Note: Don't check cancellation here as cancel token hasn't been created yet
@@ -621,6 +645,10 @@ impl ConversationCoordinator {
                     let _ = session_manager
                         .update_session_state(&session_id_clone, SessionState::Idle)
                         .await;
+
+                    if let Some(tx) = &scheduler_notify_tx {
+                        let _ = tx.try_send((session_id_clone.clone(), TurnOutcome::Completed));
+                    }
                 }
                 Err(e) => {
                     let is_cancellation = matches!(&e, BitFunError::Cancelled(_));
@@ -632,6 +660,10 @@ impl ConversationCoordinator {
                         let _ = session_manager
                             .update_session_state(&session_id_clone, SessionState::Idle)
                             .await;
+
+                        if let Some(tx) = &scheduler_notify_tx {
+                            let _ = tx.try_send((session_id_clone.clone(), TurnOutcome::Cancelled));
+                        }
                     } else {
                         error!("Dialog turn execution failed: {}", e);
 
@@ -659,6 +691,10 @@ impl ConversationCoordinator {
                                 },
                             )
                             .await;
+
+                        if let Some(tx) = &scheduler_notify_tx {
+                            let _ = tx.try_send((session_id_clone.clone(), TurnOutcome::Failed));
+                        }
                     }
                 }
             }
@@ -765,7 +801,9 @@ impl ConversationCoordinator {
         limit: usize,
         before_message_id: Option<&str>,
     ) -> BitFunResult<(Vec<Message>, bool)> {
-        self.session_manager.get_messages_paginated(session_id, limit, before_message_id).await
+        self.session_manager
+            .get_messages_paginated(session_id, limit, before_message_id)
+            .await
     }
 
     /// Subscribe to internal events
@@ -830,7 +868,9 @@ impl ConversationCoordinator {
         if let Some(token) = cancel_token {
             if token.is_cancelled() {
                 debug!("Subagent task cancelled before execution");
-                return Err(BitFunError::Cancelled("Subagent task has been cancelled".to_string()));
+                return Err(BitFunError::Cancelled(
+                    "Subagent task has been cancelled".to_string(),
+                ));
             }
         }
 
@@ -851,7 +891,9 @@ impl ConversationCoordinator {
             if token.is_cancelled() {
                 debug!("Subagent task cancelled before AI call, cleaning up resources");
                 let _ = self.cleanup_subagent_resources(&session.session_id).await;
-                return Err(BitFunError::Cancelled("Subagent task has been cancelled".to_string()));
+                return Err(BitFunError::Cancelled(
+                    "Subagent task has been cancelled".to_string(),
+                ));
             }
         }
 

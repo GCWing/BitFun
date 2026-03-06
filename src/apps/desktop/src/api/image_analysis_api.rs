@@ -1,8 +1,11 @@
 //! Image Analysis API
 
 use crate::api::app_state::AppState;
-use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogTriggerSource};
-use bitfun_core::agentic::image_analysis::*;
+use bitfun_core::agentic::coordination::{DialogScheduler, DialogTriggerSource};
+use bitfun_core::agentic::image_analysis::{
+    resolve_vision_model_from_ai_config, AnalyzeImagesRequest, ImageAnalysisResult, ImageAnalyzer,
+    MessageEnhancer, SendEnhancedMessageRequest,
+};
 use log::error;
 use std::sync::Arc;
 use tauri::State;
@@ -56,7 +59,7 @@ pub async fn analyze_images(
 #[tauri::command]
 pub async fn send_enhanced_message(
     request: SendEnhancedMessageRequest,
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    scheduler: State<'_, Arc<DialogScheduler>>,
     _state: State<'_, AppState>,
 ) -> Result<(), String> {
     let enhanced_message = MessageEnhancer::enhance_with_image_analysis(
@@ -65,10 +68,10 @@ pub async fn send_enhanced_message(
         &request.other_contexts,
     );
 
-    let _stream = coordinator
-        .start_dialog_turn(
+    scheduler
+        .submit(
             request.session_id.clone(),
-            enhanced_message.clone(),
+            enhanced_message,
             Some(request.dialog_turn_id.clone()),
             request.agent_type.clone(),
             DialogTriggerSource::DesktopApi,

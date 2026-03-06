@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::tools::image_context::get_image_context;
-use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogTriggerSource};
+use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler, DialogTriggerSource};
 use bitfun_core::agentic::core::*;
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::infrastructure::get_workspace_path;
@@ -186,6 +186,7 @@ pub async fn create_session(
 pub async fn start_dialog_turn(
     _app: AppHandle,
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    scheduler: State<'_, Arc<DialogScheduler>>,
     request: StartDialogTurnRequest,
 ) -> Result<StartDialogTurnResponse, String> {
     let StartDialogTurnRequest {
@@ -214,8 +215,8 @@ pub async fn start_dialog_turn(
             .await
             .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
     } else {
-        coordinator
-            .start_dialog_turn(
+        scheduler
+            .submit(
                 session_id,
                 user_input,
                 turn_id,

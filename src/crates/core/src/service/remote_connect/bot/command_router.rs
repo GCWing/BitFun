@@ -207,7 +207,10 @@ Available commands:
 /help - Show this help message";
 
 pub fn paired_success_message() -> String {
-    format!("Pairing successful! BitFun is now connected.\n\n{}", HELP_MESSAGE)
+    format!(
+        "Pairing successful! BitFun is now connected.\n\n{}",
+        HELP_MESSAGE
+    )
 }
 
 pub fn main_menu_actions() -> Vec<BotAction> {
@@ -482,10 +485,8 @@ async fn handle_switch_workspace(state: &mut BotChatState) -> HandleResult {
     // global path only if the bot has not yet selected one.  Using || across
     // both sources simultaneously can mark two different workspaces as
     // [current] when the desktop and the bot session are on different paths.
-    let effective_current: Option<&str> = state
-        .current_workspace
-        .as_deref()
-        .or(current_ws.as_deref());
+    let effective_current: Option<&str> =
+        state.current_workspace.as_deref().or(current_ws.as_deref());
 
     let mut text = String::from("Select a workspace:\n\n");
     let mut options: Vec<(String, String)> = Vec::new();
@@ -654,7 +655,11 @@ async fn handle_new_session(state: &mut BotChatState, agent_type: &str) -> Handl
         Ok(session) => {
             let session_id = session.session_id.clone();
             state.current_session_id = Some(session_id.clone());
-            let label = if agent_type == "Cowork" { "cowork" } else { "coding" };
+            let label = if agent_type == "Cowork" {
+                "cowork"
+            } else {
+                "coding"
+            };
             let workspace = ws_path.as_deref().unwrap_or("(unknown)");
             HandleResult {
                 reply: format!(
@@ -691,10 +696,18 @@ async fn handle_number_selection(state: &mut BotChatState, n: usize) -> HandleRe
             let (path, name) = options[n - 1].clone();
             select_workspace(state, &path, &name).await
         }
-        Some(PendingAction::SelectSession { options, page, has_more }) => {
+        Some(PendingAction::SelectSession {
+            options,
+            page,
+            has_more,
+        }) => {
             if n < 1 || n > options.len() {
                 let max = options.len();
-                state.pending_action = Some(PendingAction::SelectSession { options, page, has_more });
+                state.pending_action = Some(PendingAction::SelectSession {
+                    options,
+                    page,
+                    has_more,
+                });
                 return HandleResult {
                     reply: format!("Invalid selection. Please enter 1-{max}."),
                     actions: vec![],
@@ -791,7 +804,11 @@ async fn count_workspace_sessions(workspace_path: &str) -> usize {
         Ok(m) => m,
         Err(_) => return 0,
     };
-    conv_mgr.get_session_list().await.map(|v| v.len()).unwrap_or(0)
+    conv_mgr
+        .get_session_list()
+        .await
+        .map(|v| v.len())
+        .unwrap_or(0)
 }
 
 fn build_workspace_switched_reply(name: &str, session_count: usize) -> String {

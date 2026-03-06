@@ -1227,9 +1227,11 @@ impl RemoteServer {
         let ws_path = get_workspace_path();
         let (has_workspace, path_str, project_name, git_branch) = if let Some(ref p) = ws_path {
             let name = p.file_name().map(|n| n.to_string_lossy().to_string());
-            let branch = git2::Repository::open(p)
-                .ok()
-                .and_then(|repo| repo.head().ok().and_then(|h| h.shorthand().map(String::from)));
+            let branch = git2::Repository::open(p).ok().and_then(|repo| {
+                repo.head()
+                    .ok()
+                    .and_then(|h| h.shorthand().map(String::from))
+            });
             (true, Some(p.to_string_lossy().to_string()), name, branch)
         } else {
             (false, None, None, None)
@@ -1385,9 +1387,7 @@ impl RemoteServer {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
                     None => {
-                        return RemoteResponse::RecentWorkspaces {
-                            workspaces: vec![],
-                        };
+                        return RemoteResponse::RecentWorkspaces { workspaces: vec![] };
                     }
                 };
                 let recent = ws_service.get_recent_workspaces().await;
@@ -1399,7 +1399,9 @@ impl RemoteServer {
                         last_opened: w.last_accessed.to_rfc3339(),
                     })
                     .collect();
-                RemoteResponse::RecentWorkspaces { workspaces: entries }
+                RemoteResponse::RecentWorkspaces {
+                    workspaces: entries,
+                }
             }
             RemoteCommand::SetWorkspace { path } => {
                 let ws_service = match get_global_workspace_service() {
