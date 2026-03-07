@@ -2,6 +2,7 @@
 
 use bitfun_core::agentic::{agents, tools};
 use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
+use bitfun_core::miniapp::{initialize_global_miniapp_manager, MiniAppManager, JsWorkerPool};
 use bitfun_core::service::{ai_rules, config, filesystem, mcp, workspace};
 use bitfun_core::util::errors::*;
 
@@ -37,6 +38,8 @@ pub struct AppState {
     pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
+    pub miniapp_manager: Arc<MiniAppManager>,
+    pub js_worker_pool: Option<Arc<JsWorkerPool>>,
     pub statistics: Arc<RwLock<AppStatistics>>,
     pub start_time: std::time::Instant,
 }
@@ -85,6 +88,20 @@ impl AppState {
                 None
             }
         };
+        let path_manager = workspace_service.path_manager().clone();
+        let miniapp_manager = Arc::new(MiniAppManager::new(path_manager.clone()));
+        initialize_global_miniapp_manager(miniapp_manager.clone());
+
+        let worker_host_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("worker_host.js");
+        let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path)
+            .ok()
+            .map(Arc::new);
+        if js_worker_pool.is_none() {
+            log::warn!("JsWorkerPool not initialized (missing worker_host.js or no Bun/Node)");
+        }
+
         let statistics = Arc::new(RwLock::new(AppStatistics {
             sessions_created: 0,
             messages_processed: 0,
@@ -103,6 +120,8 @@ impl AppState {
             ai_rules_service,
             agent_registry,
             mcp_service,
+            miniapp_manager,
+            js_worker_pool,
             statistics,
             start_time,
         };

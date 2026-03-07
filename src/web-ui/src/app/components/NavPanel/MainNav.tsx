@@ -30,6 +30,7 @@ import ShellHubSection from './sections/shell-hub/ShellHubSection';
 import GitSection from './sections/git/GitSection';
 import TeamSection from './sections/team/TeamSection';
 import SkillsSection from './sections/skills/SkillsSection';
+import ToolboxSection from './sections/toolbox/ToolboxSection';
 import WorkspaceHeader from './components/WorkspaceHeader';
 import { useSceneStore } from '../../stores/sceneStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -48,6 +49,7 @@ const INLINE_SECTIONS: Partial<Record<PanelType, React.ComponentType>> = {
   git: GitSection,
   team: TeamSection,
   skills: SkillsSection,
+  toolbox: ToolboxSection,
 };
 
 type DepartDir = 'up' | 'anchor' | 'down' | null;

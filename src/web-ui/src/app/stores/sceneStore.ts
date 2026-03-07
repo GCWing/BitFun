@@ -2,9 +2,9 @@
  * sceneStore — SceneBar tab lifecycle + scene navigation history.
  *
  * Tab rules:
- *   - Max MAX_OPEN_SCENES tabs total (pinned + dynamic).
- *   - Pinned tabs cannot be auto-evicted; users can still close manually.
- *   - Dynamic tabs are evicted by LRU when limit is exceeded.
+ *   - Max MAX_OPEN_SCENES tabs total (including fixed agent).
+ *   - Fixed tabs (e.g. session/agent) are never auto-evicted; closable controls manual close.
+ *   - When over capacity, the oldest replaceable tab (by openedAt, FIFO) is evicted.
  *   - 'welcome' tab is the default initial tab; it auto-closes the first time
  *     any other scene is explicitly opened.
  *
@@ -17,13 +17,44 @@
  */
 
 import { create } from 'zustand';
-import { SCENE_TAB_REGISTRY, MAX_OPEN_SCENES, getSceneDef } from '../scenes/registry';
+import { SCENE_TAB_REGISTRY, MAX_OPEN_SCENES, getSceneDef, getMiniAppSceneDef } from '../scenes/registry';
 import { getSceneNav } from '../scenes/nav-registry';
 import { useNavSceneStore } from './navSceneStore';
 import type { SceneTab, SceneTabId } from '../components/SceneBar/types';
 
 const AGENT_SCENE_ID: SceneTabId = 'session';
 const WELCOME_SCENE_ID: SceneTabId = 'welcome';
+
+function getSceneDefOrMiniapp(id: SceneTabId) {
+  const d = getSceneDef(id);
+  if (d) return d;
+  if (typeof id === 'string' && id.startsWith('miniapp:')) {
+    const appId = (id as string).slice('miniapp:'.length);
+    return getMiniAppSceneDef(appId);
+  }
+  return undefined;
+}
+
+function isFixedScene(id: SceneTabId): boolean {
+  return getSceneDefOrMiniapp(id)?.fixed === true;
+}
+
+function isClosableScene(id: SceneTabId): boolean {
+  const def = getSceneDefOrMiniapp(id);
+  return (def?.closable ?? !def?.pinned) !== false;
+}
+
+/** Pick the oldest replaceable tab by openedAt (FIFO). Fixed tabs are never replaceable. */
+function selectOldestReplaceableTab(tabs: SceneTab[]): SceneTab | undefined {
+  const replaceable = tabs
+    .filter(t => !isFixedScene(t.id))
+    .sort((a, b) => a.openedAt - b.openedAt);
+  return replaceable[0];
+}
+
+function buildSceneTab(id: SceneTabId, now: number): SceneTab {
+  return { id, openedAt: now, lastUsed: now };
+}
 
 interface SceneState {
   openTabs: SceneTab[];
@@ -41,9 +72,10 @@ interface SceneState {
 }
 
 function buildDefaultTabs(): SceneTab[] {
+  const now = Date.now();
   return SCENE_TAB_REGISTRY
     .filter(d => d.defaultOpen)
-    .map(d => ({ id: d.id, lastUsed: Date.now() }));
+    .map(d => buildSceneTab(d.id, now));
 }
 
 /**
@@ -99,7 +131,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         // If the first opened scene is not session, companion-open session alongside it
         let companionTabs = tabsWithoutWelcome;
         if (id !== AGENT_SCENE_ID && !tabsWithoutWelcome.some(t => t.id === AGENT_SCENE_ID)) {
-          companionTabs = [{ id: AGENT_SCENE_ID, lastUsed: 0 }, ...tabsWithoutWelcome];
+          companionTabs = [buildSceneTab(AGENT_SCENE_ID, 0), ...tabsWithoutWelcome];
         }
 
         set({
@@ -137,21 +169,16 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     }
 
     const def = getSceneDef(id);
-    if (!def) return;
+    const isMiniappTab = typeof id === 'string' && id.startsWith('miniapp:');
+    if (!def && !isMiniappTab) return;
 
     let next = [...openTabs];
 
-    // LRU eviction if at capacity
+    // Eviction: over capacity → remove oldest replaceable tab (FIFO); fixed (e.g. agent) never evicted
     if (next.length >= MAX_OPEN_SCENES) {
-      const evictable = next
-        .filter(t => {
-          const d = getSceneDef(t.id);
-          return !d?.pinned && t.id !== activeTabId;
-        })
-        .sort((a, b) => a.lastUsed - b.lastUsed);
-
-      if (evictable.length === 0) return;
-      const evictedId = evictable[0].id;
+      const victim = selectOldestReplaceableTab(next);
+      if (!victim) return;
+      const evictedId = victim.id;
       next = next.filter(t => t.id !== evictedId);
       const afterEvict = removeFromHistory(
         histUpdate.navHistory,
@@ -162,7 +189,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       Object.assign(histUpdate, afterEvict);
     }
 
-    next.push({ id, lastUsed: Date.now() });
+    next.push(buildSceneTab(id, Date.now()));
     set({ openTabs: ensureAgentFirst(next), activeTabId: id, ...histUpdate });
   },
 
@@ -172,8 +199,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
 
   closeScene: (id) => {
     const { openTabs, activeTabId, navHistory, navCursor } = get();
-    const def = getSceneDef(id);
-    if (def?.pinned) return;
+    if (!isClosableScene(id)) return;
 
     const nextTabs = openTabs.filter(t => t.id !== id);
 

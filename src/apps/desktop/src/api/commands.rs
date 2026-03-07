@@ -464,6 +464,10 @@ pub async fn open_workspace(
     {
         Ok(workspace_info) => {
             *state.workspace_path.write().await = Some(workspace_info.root_path.clone());
+            state
+                .miniapp_manager
+                .set_workspace_path(Some(workspace_info.root_path.clone()))
+                .await;
 
             if let Err(e) = bitfun_core::service::snapshot::initialize_global_snapshot_manager(
                 workspace_info.root_path.clone(),
@@ -531,7 +535,10 @@ pub async fn close_workspace(
     match state.workspace_service.close_workspace("default").await {
         Ok(_) => {
             *state.workspace_path.write().await = None;
-
+            state.miniapp_manager.set_workspace_path(None).await;
+            if let Some(ref pool) = state.js_worker_pool {
+                pool.stop_all().await;
+            }
             state.ai_rules_service.clear_workspace().await;
 
             state.agent_registry.clear_custom_subagents();

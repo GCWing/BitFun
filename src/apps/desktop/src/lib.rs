@@ -584,6 +584,27 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_status,
             api::remote_connect_api::remote_connect_configure_custom_server,
             api::remote_connect_api::remote_connect_configure_bot,
+            // MiniApp API
+            api::miniapp_api::list_miniapps,
+            api::miniapp_api::get_miniapp,
+            api::miniapp_api::create_miniapp,
+            api::miniapp_api::update_miniapp,
+            api::miniapp_api::delete_miniapp,
+            api::miniapp_api::get_miniapp_versions,
+            api::miniapp_api::rollback_miniapp,
+            api::miniapp_api::get_miniapp_storage,
+            api::miniapp_api::set_miniapp_storage,
+            api::miniapp_api::grant_miniapp_workspace,
+            api::miniapp_api::grant_miniapp_path,
+            api::miniapp_api::miniapp_runtime_status,
+            api::miniapp_api::miniapp_worker_call,
+            api::miniapp_api::miniapp_worker_stop,
+            api::miniapp_api::miniapp_worker_list_running,
+            api::miniapp_api::miniapp_install_deps,
+            api::miniapp_api::miniapp_recompile,
+            api::miniapp_api::miniapp_dialog_message,
+            api::miniapp_api::miniapp_import_from_path,
+            api::miniapp_api::miniapp_sync_from_fs,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = run_result {

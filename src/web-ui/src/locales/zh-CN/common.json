@@ -83,13 +83,23 @@
       "tools": "工具",
       "terminal": "Shell",
       "shellHub": "Shell Hub",
-      "git": "Git"
+      "git": "Git",
+      "miniApps": "工具箱"
     },
     "tooltips": {
       "persona": "智能体档案 — 身份、规则、记忆、知识与能力",
       "team": "它能叫谁帮忙 — 子智能体专家团队",
       "skills": "它懂什么专项知识 — 技能知识文件",
-      "tools": "它能用什么工具 — 内置工具与 MCP 服务"
+      "tools": "它能用什么工具 — 内置工具与 MCP 服务",
+      "toolbox": "AI 生成的即时可用应用 — MiniApp 工具箱"
+    },
+    "toolbox": {
+      "openGallery": "打开工具箱",
+      "newMiniApp": "新建应用",
+      "noApps": "暂无运行中的应用 · 打开工具箱启动",
+      "runningApps": "运行中",
+      "myApps": "已打开",
+      "stop": "停止"
     },
     "sections": {
       "workspace": "工作区",
@@ -559,7 +569,8 @@
     "projectContext": "项目概况",
     "capabilities": "能力配置",
     "team": "团队",
-    "skills": "技能"
+    "skills": "技能",
+    "toolbox": "工具箱"
   },
   "welcomeScene": {
     "tabLabel": "欢迎使用",

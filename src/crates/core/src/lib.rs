@@ -7,6 +7,7 @@ pub mod infrastructure; // Infrastructure layer - AI clients, storage, logging, 
 pub mod service;        // Service layer - Workspace, Config, FileSystem, Terminal, Git
 pub mod agentic;        // Agentic service layer - Agent system, tool system
 pub mod function_agents; // Function Agents - Function-based agents
+pub mod miniapp;        // MiniApp - AI-generated instant apps (Zero-Dialect Runtime)
 // Re-export debug_log from infrastructure for backward compatibility
 pub use infrastructure::debug_log as debug;
 

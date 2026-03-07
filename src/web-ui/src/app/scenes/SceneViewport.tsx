@@ -9,7 +9,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { MessageSquare, Terminal, GitBranch, Settings, FileCode2, CircleUserRound, Puzzle } from 'lucide-react';
+import { MessageSquare, Terminal, GitBranch, Settings, FileCode2, CircleUserRound, Puzzle, Wrench } from 'lucide-react';
 import type { SceneTabId } from '../components/SceneBar/types';
 import { useSceneManager } from '../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -23,7 +23,9 @@ const FileViewerScene = lazy(() => import('./file-viewer/FileViewerScene'));
 const ProfileScene    = lazy(() => import('./profile/ProfileScene'));
 const TeamScene       = lazy(() => import('./team/TeamScene'));
 const SkillsScene     = lazy(() => import('./skills/SkillsScene'));
+const ToolboxScene    = lazy(() => import('./toolbox/ToolboxScene'));
 const WelcomeScene    = lazy(() => import('./welcome/WelcomeScene'));
+const MiniAppScene    = lazy(() => import('./toolbox/MiniAppScene'));
 
 interface SceneViewportProps {
   workspacePath?: string;
@@ -49,6 +51,7 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
               { id: 'file-viewer'  as SceneTabId, Icon: FileCode2,     labelKey: 'scenes.fileViewer'    },
               { id: 'profile'      as SceneTabId, Icon: CircleUserRound, labelKey: 'scenes.projectContext' },
               { id: 'skills'       as SceneTabId, Icon: Puzzle,        labelKey: 'scenes.skills'        },
+              { id: 'toolbox'      as SceneTabId, Icon: Wrench,        labelKey: 'scenes.toolbox'       },
             ].map(({ id, Icon, labelKey }) => {
               const label = t(labelKey);
               return (
@@ -108,7 +111,12 @@ function renderScene(id: SceneTabId, workspacePath?: string, isEntering?: boolea
       return <TeamScene />;
     case 'skills':
       return <SkillsScene />;
+    case 'toolbox':
+      return <ToolboxScene />;
     default:
+      if (typeof id === 'string' && id.startsWith('miniapp:')) {
+        return <MiniAppScene appId={id.slice('miniapp:'.length)} />;
+      }
       return null;
   }
 }

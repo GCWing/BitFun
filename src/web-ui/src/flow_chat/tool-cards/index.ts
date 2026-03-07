@@ -31,6 +31,7 @@ import { GetFileDiffDisplay } from './GetFileDiffDisplay';
 import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
+import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 
 // Tool card config map - uses backend tool names
 export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
@@ -294,7 +295,19 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     description: 'Run commands in the terminal',
     displayMode: 'standard',
     primaryColor: '#10b981' // Teal, classic terminal color
-  }
+  },
+
+  // MiniApp tool
+  'InitMiniApp': {
+    toolName: 'InitMiniApp',
+    displayName: 'Init MiniApp',
+    icon: 'APP',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Create MiniApp skeleton for editing',
+    displayMode: 'standard',
+    primaryColor: '#7c8cef'
+  },
 };
 
 // Tool card component map - uses backend tool names
@@ -354,7 +367,10 @@ export const TOOL_CARD_COMPONENTS = {
   'TerminalControl': TerminalControlDisplay,
 
   // Bash tool
-  'Bash': TerminalToolCard
+  'Bash': TerminalToolCard,
+
+  // MiniApp tool
+  'InitMiniApp': InitMiniAppDisplay,
 };
 
 /**

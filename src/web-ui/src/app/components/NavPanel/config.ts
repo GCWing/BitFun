@@ -19,6 +19,7 @@ import {
   Users,
   SquareTerminal,
   Puzzle,
+  Sparkles,
 } from 'lucide-react';
 import type { NavSection } from './types';
 
@@ -84,6 +85,15 @@ export const NAV_SECTIONS: NavSection[] = [
     collapsible: true,
     defaultExpanded: false,
     items: [
+      {
+        tab: 'toolbox',
+        labelKey: 'nav.items.miniApps',
+        tooltipKey: 'nav.tooltips.toolbox',
+        Icon: Sparkles,
+        behavior: 'scene',
+        sceneId: 'toolbox',
+        inlineExpandable: true,
+      },
       {
         tab: 'git',
         labelKey: 'nav.items.git',

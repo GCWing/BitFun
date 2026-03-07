@@ -1,0 +1,84 @@
+.miniapp-tool-display {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.06));
+  font-size: 13px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    color: var(--accent-primary, #7c8cef);
+  }
+
+  &__label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-primary, #e2e2f0);
+  }
+
+  &__check {
+    color: var(--success, #50fa7b);
+  }
+
+  &__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-left: 22px;
+  }
+
+  &__app-name {
+    flex: 0 1 auto;
+    color: var(--text-secondary, #8b8ba7);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__meta {
+    font-size: 11px;
+    color: var(--text-tertiary, #6b6b87);
+    font-family: monospace;
+  }
+
+  &__open-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--accent-primary, #7c8cef);
+    background: transparent;
+    color: var(--accent-primary, #7c8cef);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+
+    &:hover {
+      background: var(--accent-primary, #7c8cef);
+      color: #fff;
+    }
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

@@ -146,6 +146,16 @@ impl PathManager {
         self.user_root.join("data")
     }
 
+    /// Get miniapps root directory: ~/.config/bitfun/data/miniapps/
+    pub fn miniapps_dir(&self) -> PathBuf {
+        self.user_data_dir().join("miniapps")
+    }
+
+    /// Get directory for a specific miniapp: ~/.config/bitfun/data/miniapps/{app_id}/
+    pub fn miniapp_dir(&self, app_id: &str) -> PathBuf {
+        self.miniapps_dir().join(app_id)
+    }
+
     /// Get user-level rules directory: ~/.config/bitfun/data/rules/
     pub fn user_rules_dir(&self) -> PathBuf {
         self.user_data_dir().join("rules")
@@ -298,6 +308,7 @@ impl PathManager {
             self.history_dir(),
             self.snippets_dir(),
             self.templates_dir(),
+            self.miniapps_dir(),
             self.logs_dir(),
             self.backups_dir(),
             self.temp_dir(),

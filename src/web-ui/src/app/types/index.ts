@@ -31,7 +31,7 @@ export interface AgentConfig {
 
 // Panel types - removed 'chat'; chat lives in the center panel.
 // 'profile' replaces legacy context naming.
-export type PanelType = 'sessions' | 'files' | 'git' | 'profile' | 'terminal' | 'capabilities' | 'team' | 'skills' | 'tools' | 'shell-hub';
+export type PanelType = 'sessions' | 'files' | 'git' | 'profile' | 'terminal' | 'capabilities' | 'team' | 'skills' | 'tools' | 'shell-hub' | 'toolbox';
 
 // Layout state - three-column layout support.
 // Strategy: fixed left/right widths with elastic center (floating layout).

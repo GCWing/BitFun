@@ -83,13 +83,23 @@
       "tools": "Tools",
       "terminal": "Shell",
       "shellHub": "Shell Hub",
-      "git": "Git"
+      "git": "Git",
+      "miniApps": "Toolbox"
     },
     "tooltips": {
       "persona": "Agent profile — identity, rules, memory, knowledge & capabilities",
       "team": "Who it can call — specialist sub-agents",
       "skills": "What it knows — specialized knowledge files",
-      "tools": "What it can use — built-in tools & MCP services"
+      "tools": "What it can use — built-in tools & MCP services",
+      "toolbox": "AI-generated instant apps — MiniApp Toolbox"
+    },
+    "toolbox": {
+      "openGallery": "Open Gallery",
+      "newMiniApp": "New App",
+      "noApps": "No apps running · Open Gallery to start one",
+      "runningApps": "Running",
+      "myApps": "Opened",
+      "stop": "Stop"
     },
     "sections": {
       "workspace": "Workspace",
@@ -559,7 +569,8 @@
     "projectContext": "Profile",
     "capabilities": "Capabilities",
     "team": "Team",
-    "skills": "Skills"
+    "skills": "Skills",
+    "toolbox": "Toolbox"
   },
   "welcomeScene": {
     "tabLabel": "Welcome",
