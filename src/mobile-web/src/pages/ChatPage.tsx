@@ -30,6 +30,14 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function truncateMiddle(str: string, maxLen: number): string {
+  if (!str || str.length <= maxLen) return str;
+  const keep = maxLen - 3;
+  const head = Math.ceil(keep * 0.6);
+  const tail = keep - head;
+  return str.slice(0, head) + '...' + str.slice(-tail);
+}
+
 function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     return navigator.clipboard.writeText(text);
@@ -1166,6 +1174,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     appendNewMessages,
     activeTurn,
     setActiveTurn,
+    error,
     setError,
     currentWorkspace,
     updateSessionName,
@@ -1210,6 +1219,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     const timer = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(timer);
   }, [isStreaming]);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [error, setError]);
 
   const loadMessages = useCallback(async (beforeId?: string) => {
     if (isLoadingMore || (!hasMore && beforeId)) return;
@@ -1465,9 +1480,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
               <div className="chat-page__header-workspace" title={currentWorkspace?.path}>
                 <span className="chat-page__workspace-name">{workspaceName}</span>
                 {gitBranch && (
-                  <span className="chat-page__workspace-branch">
+                  <span className="chat-page__workspace-branch" title={gitBranch}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-                    {gitBranch}
+                    {truncateMiddle(gitBranch, 28)}
                   </span>
                 )}
               </div>
@@ -1812,6 +1827,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="chat-page__toast" onClick={() => setError(null)}>
+          {error}
+        </div>
+      )}
     </div>
   );
 };

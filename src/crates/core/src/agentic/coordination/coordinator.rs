@@ -395,17 +395,17 @@ impl ConversationCoordinator {
     ///
     /// Strategy:
     /// 1. Vision model configured → analyze images → enhance user message with text descriptions → clear image_contexts
-    /// 2. No vision model → keep image_contexts as-is for multimodal fallback to primary model
+    /// 2. No vision model → reject with a user-friendly message
     async fn pre_analyze_images_if_needed(
         &self,
         user_input: String,
         image_contexts: Option<Vec<ImageContextData>>,
         session_id: &str,
         image_metadata: Option<serde_json::Value>,
-    ) -> (String, Option<Vec<ImageContextData>>) {
+    ) -> BitFunResult<(String, Option<Vec<ImageContextData>>)> {
         let images = match &image_contexts {
             Some(imgs) if !imgs.is_empty() => imgs,
-            _ => return (user_input, image_contexts),
+            _ => return Ok((user_input, image_contexts)),
         };
 
         use crate::agentic::image_analysis::{
@@ -416,9 +416,14 @@ impl ConversationCoordinator {
 
         let vision_model = match resolve_vision_model_from_global_config().await {
             Ok(m) => m,
-            Err(e) => {
-                info!("No vision model configured, using multimodal fallback: {}", e);
-                return (user_input, image_contexts);
+            Err(_e) => {
+                let is_chinese = Self::is_chinese_locale().await;
+                let msg = if is_chinese {
+                    "请先在桌面端「设置 → AI 模型」中配置图片理解模型，然后再发送图片。"
+                } else {
+                    "Please configure an Image Understanding Model in Settings → AI Models on the desktop app before sending images."
+                };
+                return Err(BitFunError::service(msg));
             }
         };
 
@@ -426,7 +431,7 @@ impl ConversationCoordinator {
             Ok(f) => f,
             Err(e) => {
                 warn!("Failed to get AI client factory for vision: {}", e);
-                return (user_input, image_contexts);
+                return Ok((user_input, image_contexts));
             }
         };
 
@@ -434,7 +439,7 @@ impl ConversationCoordinator {
             Ok(c) => c,
             Err(e) => {
                 warn!("Failed to create vision AI client: {}", e);
-                return (user_input, image_contexts);
+                return Ok((user_input, image_contexts));
             }
         };
 
@@ -476,7 +481,7 @@ impl ConversationCoordinator {
                 );
                 let enhanced =
                     MessageEnhancer::enhance_with_image_analysis(&user_input, &results, &[]);
-                (enhanced, None)
+                Ok((enhanced, None))
             }
             Err(e) => {
                 let duration_ms = analysis_start.elapsed().as_millis() as u64;
@@ -492,9 +497,22 @@ impl ConversationCoordinator {
                     "Vision pre-analysis failed, falling back to multimodal: session={}, error={}",
                     session_id, e
                 );
-                (user_input, image_contexts)
+                Ok((user_input, image_contexts))
             }
         }
+    }
+
+    async fn is_chinese_locale() -> bool {
+        use crate::service::config::get_global_config_service;
+        use crate::service::config::types::AppConfig;
+        let Ok(config_service) = get_global_config_service().await else {
+            return true;
+        };
+        let app: AppConfig = config_service
+            .get_config(Some("app"))
+            .await
+            .unwrap_or_default();
+        app.language.starts_with("zh")
     }
 
     async fn start_dialog_turn_internal(
@@ -667,9 +685,9 @@ impl ConversationCoordinator {
         // Auto vision pre-analysis: when images are present, try to use the configured
         // vision model to pre-analyze them, then enhance the user message with text descriptions.
         // This is the single authoritative code path for all image handling (desktop, remote, bot).
-        // Fallback: if no vision model is configured, pass images as multimodal to the primary model.
+        // If no vision model is configured, the request is rejected with a user-friendly message.
         let (user_input, image_contexts) =
-            self.pre_analyze_images_if_needed(user_input, image_contexts, &session_id, user_message_metadata.clone()).await;
+            self.pre_analyze_images_if_needed(user_input, image_contexts, &session_id, user_message_metadata.clone()).await?;
 
         let wrapped_user_input = self
             .wrap_user_input(&effective_agent_type, user_input)

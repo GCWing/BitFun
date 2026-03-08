@@ -385,7 +385,7 @@ impl RemoteConnectService {
                                             }
                                         }
                                     }
-                                    Err(e) => warn!("Failed to decrypt command (stale session?): {e}"),
+                                    Err(e) => debug!("Ignoring undecryptable command (likely stale mobile session): {e}"),
                                 }
                             }
                         } else {

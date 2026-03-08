@@ -360,11 +360,30 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   // ── Network group content ────────────────────────────────────────
 
+  const NGROK_USAGE_URL = 'https://dashboard.ngrok.com/legacy/usage';
+
   const renderNetworkContent = () => {
     if (isRelayConnected && connectedNetworkTab === networkTab) {
-      return renderConnectedView(
-        status?.peer_device_name ?? t('remoteConnect.stateConnected'),
-        handleDisconnectRelay,
+      return (
+        <>
+          {networkTab === 'ngrok' && (
+            <p className="bitfun-remote-connect__ngrok-usage-link">
+              <span
+                className="bitfun-remote-connect__description-link"
+                role="link"
+                tabIndex={0}
+                onClick={() => systemAPI.openExternal(NGROK_USAGE_URL)}
+                onKeyDown={(e) => { if (e.key === 'Enter') systemAPI.openExternal(NGROK_USAGE_URL); }}
+              >
+                {t('remoteConnect.ngrokUsageLink')}
+              </span>
+            </p>
+          )}
+          {renderConnectedView(
+            status?.peer_device_name ?? t('remoteConnect.stateConnected'),
+            handleDisconnectRelay,
+          )}
+        </>
       );
     }
     if (connectionResult && activeGroup === 'network') {

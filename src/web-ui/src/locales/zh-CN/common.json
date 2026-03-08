@@ -169,6 +169,7 @@
     "scanHint": "使用手机扫描二维码进行连接",
     "botHint": "将配对码发送给机器人完成配对",
     "connectedHint": "移动设备已连接，可以关闭此对话框。",
+    "ngrokUsageLink": "查看 ngrok 隧道用量与状态。",
     "serverUrl": "服务器地址",
     "currentIp": "当前 IP",
     "gatewayIp": "网关 IP",

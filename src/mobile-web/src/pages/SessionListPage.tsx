@@ -45,6 +45,14 @@ function isCoworkAgent(agentType: string): boolean {
   return agentType === 'cowork' || agentType === 'Cowork';
 }
 
+function truncateMiddle(str: string, maxLen: number): string {
+  if (!str || str.length <= maxLen) return str;
+  const keep = maxLen - 3;
+  const head = Math.ceil(keep * 0.6);
+  const tail = keep - head;
+  return str.slice(0, head) + '...' + str.slice(-tail);
+}
+
 function SessionTypeIcon({ agentType }: { agentType: string }) {
   if (isCoworkAgent(agentType)) {
     return (
@@ -234,15 +242,17 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         </span>
         <div className="session-list__workspace-copy">
           <span className="session-list__workspace-label">Workspace</span>
-          <span className="session-list__workspace-name">{workspaceDisplayName}</span>
+          <span className="session-list__workspace-name" title={workspaceDisplayName}>{truncateMiddle(workspaceDisplayName, 24)}</span>
         </div>
         {currentWorkspace?.git_branch && (
           <span className="session-list__workspace-branch">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-            {currentWorkspace.git_branch}
+            {truncateMiddle(currentWorkspace.git_branch, 20)}
           </span>
         )}
-        <span className="session-list__workspace-switch">Switch</span>
+        <span className="session-list__workspace-switch" aria-label="Switch workspace">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+        </span>
       </div>
 
       <div
@@ -285,7 +295,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               </div>
               <div className="session-list__create-copy">
                 <span className="session-list__create-title">Code Session</span>
-                <span className="session-list__create-desc">Implement, debug, review, and keep momentum.</span>
+                <span className="session-list__create-desc">For coding anywhere, anytime.</span>
               </div>
               <span className="session-list__create-arrow">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
@@ -301,7 +311,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               </div>
               <div className="session-list__create-copy">
                 <span className="session-list__create-title">Cowork Session</span>
-                <span className="session-list__create-desc">Discuss ideas, plan work, and stay collaborative.</span>
+                <span className="session-list__create-desc">For assisting with everyday work.</span>
               </div>
               <span className="session-list__create-arrow">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
@@ -339,13 +349,11 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 <div className="session-list__item-body">
                   <div className="session-list__item-top">
                     <div className="session-list__item-name">{s.name || 'Untitled Session'}</div>
-                    <div className="session-list__item-time">{formatTime(s.updated_at)}</div>
-                  </div>
-                  <div className="session-list__item-meta">
                     <span className={`session-list__agent-badge session-list__agent-badge--${s.agent_type}`}>
                       {agentLabel(s.agent_type)}
                     </span>
                   </div>
+                  <div className="session-list__item-time">{formatTime(s.updated_at)}</div>
                 </div>
               </div>
             ))}

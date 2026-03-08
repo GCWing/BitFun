@@ -267,3 +267,25 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
+
+.chat-page__toast {
+  position: fixed;
+  top: 48px;
+  left: 16px;
+  right: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(220, 50, 50, 0.92);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  z-index: 9999;
+  white-space: pre-line;
+  animation: toastSlideIn 0.25s ease-out;
+  backdrop-filter: blur(8px);
+}
+
+@keyframes toastSlideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}

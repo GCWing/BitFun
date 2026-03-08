@@ -94,7 +94,8 @@
   color: var(--color-accent-500);
   background: var(--color-accent-100);
   padding: 3px var(--size-gap-2);
-  @include squircle(999px);
+  @include squircle(8px);
+  word-break: break-all;
 }
 
 .workspace-page__actions {

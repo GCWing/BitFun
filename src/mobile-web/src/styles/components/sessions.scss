@@ -156,19 +156,16 @@
   background: var(--color-accent-100);
   color: var(--color-accent-500);
   font-size: 11px;
-  flex-shrink: 0;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
   white-space: nowrap;
 }
 
 .session-list__workspace-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--color-text-muted);
 }
 
@@ -396,24 +393,16 @@
 }
 
 .session-list__item-time {
-  flex-shrink: 0;
   font-size: 10px;
   color: var(--color-text-muted);
-}
-
-.session-list__item-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--size-gap-2);
-  margin-top: 8px;
+  margin-top: 2px;
 }
 
 .session-list__agent-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 9px;
+  min-height: 18px;
+  padding: 0 8px;
   @include squircle(999px);
   font-size: 10px;
   font-weight: var(--font-weight-semibold);

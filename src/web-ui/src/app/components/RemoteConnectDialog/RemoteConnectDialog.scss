@@ -221,6 +221,15 @@
   color: var(--color-text-secondary);
 }
 
+// ==================== Ngrok usage link ====================
+
+.bitfun-remote-connect__ngrok-usage-link {
+  text-align: center;
+  padding: 10px 0 2px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
 // ==================== Connected ====================
 
 .bitfun-remote-connect__connected {

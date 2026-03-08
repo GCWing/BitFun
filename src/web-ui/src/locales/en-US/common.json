@@ -169,6 +169,7 @@
     "scanHint": "Scan the QR code with your phone to connect",
     "botHint": "Send the pairing code to the bot to complete pairing",
     "connectedHint": "Mobile device connected. You can close this dialog.",
+    "ngrokUsageLink": "View ngrok tunnel usage & status.",
     "serverUrl": "Server URL",
     "currentIp": "Current IP",
     "gatewayIp": "Gateway IP",
