@@ -1,0 +1,669 @@
+//! Gemini message format converter
+
+use crate::util::types::{Message, ToolDefinition};
+use log::warn;
+use serde_json::{json, Map, Value};
+
+pub struct GeminiMessageConverter;
+
+impl GeminiMessageConverter {
+    pub fn convert_messages(messages: Vec<Message>, model_name: &str) -> (Option<Value>, Vec<Value>) {
+        let mut system_texts = Vec::new();
+        let mut contents = Vec::new();
+        let is_gemini_3 = model_name.contains("gemini-3");
+
+        for msg in messages {
+            match msg.role.as_str() {
+                "system" => {
+                    if let Some(content) = msg.content.filter(|content| !content.trim().is_empty())
+                    {
+                        system_texts.push(content);
+                    }
+                }
+                "user" => {
+                    let parts = Self::convert_content_parts(msg.content.as_deref(), false);
+                    Self::push_content(&mut contents, "user", parts);
+                }
+                "assistant" => {
+                    let mut parts = Vec::new();
+
+                    let mut pending_thought_signature = msg
+                        .thinking_signature
+                        .filter(|value| !value.trim().is_empty());
+                    let has_tool_calls = msg
+                        .tool_calls
+                        .as_ref()
+                        .map(|tool_calls| !tool_calls.is_empty())
+                        .unwrap_or(false);
+
+                    if let Some(content) = msg.content.as_deref().filter(|value| !value.trim().is_empty()) {
+                        if !has_tool_calls {
+                            if let Some(signature) = pending_thought_signature.take() {
+                                parts.push(json!({
+                                    "thoughtSignature": signature,
+                                }));
+                            }
+                        }
+                        parts.extend(Self::convert_content_parts(Some(content), true));
+                    }
+
+                    if let Some(tool_calls) = msg.tool_calls {
+                        for (tool_call_index, tool_call) in tool_calls.into_iter().enumerate() {
+                            let mut part = Map::new();
+                            part.insert(
+                                "functionCall".to_string(),
+                                json!({
+                                    "name": tool_call.name,
+                                    "args": tool_call.arguments,
+                                }),
+                            );
+
+                            match pending_thought_signature.take() {
+                                Some(signature) => {
+                                    part.insert(
+                                        "thoughtSignature".to_string(),
+                                        Value::String(signature),
+                                    );
+                                }
+                                None if is_gemini_3 && tool_call_index == 0 => {
+                                    part.insert(
+                                        "thoughtSignature".to_string(),
+                                        Value::String(
+                                            "skip_thought_signature_validator".to_string(),
+                                        ),
+                                    );
+                                }
+                                None => {}
+                            }
+
+                            parts.push(Value::Object(part));
+                        }
+                    }
+
+                    if let Some(signature) = pending_thought_signature {
+                        parts.push(json!({
+                            "thoughtSignature": signature,
+                        }));
+                    }
+
+                    Self::push_content(&mut contents, "model", parts);
+                }
+                "tool" => {
+                    let tool_name = msg.name.unwrap_or_default();
+                    if tool_name.is_empty() {
+                        warn!("Skipping Gemini tool response without tool name");
+                        continue;
+                    }
+
+                    let response = Self::parse_tool_response(msg.content.as_deref());
+                    let parts = vec![json!({
+                        "functionResponse": {
+                            "name": tool_name,
+                            "response": response,
+                        }
+                    })];
+
+                    Self::push_content(&mut contents, "user", parts);
+                }
+                _ => {
+                    warn!("Unknown Gemini message role: {}", msg.role);
+                }
+            }
+        }
+
+        let system_instruction = if system_texts.is_empty() {
+            None
+        } else {
+            Some(json!({
+                "parts": [{
+                    "text": system_texts.join("\n\n")
+                }]
+            }))
+        };
+
+        (system_instruction, contents)
+    }
+
+    pub fn convert_tools(tools: Option<Vec<ToolDefinition>>) -> Option<Vec<Value>> {
+        tools.and_then(|tool_defs| {
+            let declarations: Vec<Value> = tool_defs
+                .into_iter()
+                .map(|tool| {
+                    let parameters = Self::strip_unsupported_schema_fields(tool.parameters);
+                    json!({
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": parameters,
+                    })
+                })
+                .collect();
+
+            if declarations.is_empty() {
+                None
+            } else {
+                Some(vec![json!({
+                    "functionDeclarations": declarations,
+                })])
+            }
+        })
+    }
+
+    fn push_content(contents: &mut Vec<Value>, role: &str, parts: Vec<Value>) {
+        if parts.is_empty() {
+            return;
+        }
+
+        if let Some(last) = contents.last_mut() {
+            let last_role = last.get("role").and_then(Value::as_str).unwrap_or_default();
+            if last_role == role {
+                if let Some(existing_parts) = last.get_mut("parts").and_then(Value::as_array_mut) {
+                    existing_parts.extend(parts);
+                    return;
+                }
+            }
+        }
+
+        contents.push(json!({
+            "role": role,
+            "parts": parts,
+        }));
+    }
+
+    fn convert_content_parts(content: Option<&str>, is_model_role: bool) -> Vec<Value> {
+        let Some(content) = content else {
+            return Vec::new();
+        };
+
+        if content.trim().is_empty() {
+            return Vec::new();
+        }
+
+        let parsed = match serde_json::from_str::<Value>(content) {
+            Ok(parsed) if parsed.is_array() => parsed,
+            _ => return vec![json!({ "text": content })],
+        };
+
+        let mut parts = Vec::new();
+
+        if let Some(items) = parsed.as_array() {
+            for item in items {
+                let item_type = item.get("type").and_then(Value::as_str);
+                match item_type {
+                    Some("text") | Some("input_text") | Some("output_text") => {
+                        if let Some(text) = item.get("text").and_then(Value::as_str) {
+                            if !text.is_empty() {
+                                parts.push(json!({ "text": text }));
+                            }
+                        }
+                    }
+                    Some("image_url") if !is_model_role => {
+                        if let Some(url) = item.get("image_url").and_then(|value| {
+                            value
+                                .get("url")
+                                .and_then(Value::as_str)
+                                .or_else(|| value.as_str())
+                        }) {
+                            if let Some(part) = Self::convert_image_url_to_part(url) {
+                                parts.push(part);
+                            }
+                        }
+                    }
+                    Some("image") if !is_model_role => {
+                        let source = item.get("source");
+                        let mime_type = source
+                            .and_then(|value| value.get("media_type"))
+                            .and_then(Value::as_str);
+                        let data = source
+                            .and_then(|value| value.get("data"))
+                            .and_then(Value::as_str);
+
+                        if let (Some(mime_type), Some(data)) = (mime_type, data) {
+                            parts.push(json!({
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": data,
+                                }
+                            }));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if parts.is_empty() {
+            vec![json!({ "text": content })]
+        } else {
+            parts
+        }
+    }
+
+    fn convert_image_url_to_part(url: &str) -> Option<Value> {
+        let prefix = "data:";
+        if !url.starts_with(prefix) {
+            warn!("Gemini currently supports inline data URLs for image parts; skipping unsupported image URL");
+            return None;
+        }
+
+        let rest = &url[prefix.len()..];
+        let (mime_type, data) = rest.split_once(";base64,")?;
+        if mime_type.is_empty() || data.is_empty() {
+            return None;
+        }
+
+        Some(json!({
+            "inlineData": {
+                "mimeType": mime_type,
+                "data": data,
+            }
+        }))
+    }
+
+    fn parse_tool_response(content: Option<&str>) -> Value {
+        let Some(content) = content.filter(|value| !value.trim().is_empty()) else {
+            return json!({ "content": "Tool execution completed" });
+        };
+
+        match serde_json::from_str::<Value>(content) {
+            Ok(Value::Object(map)) => Value::Object(map),
+            Ok(value) => json!({ "content": value }),
+            Err(_) => json!({ "content": content }),
+        }
+    }
+
+    fn strip_unsupported_schema_fields(value: Value) -> Value {
+        match value {
+            Value::Object(mut map) => {
+                let all_of = map.remove("allOf");
+                let any_of = map.remove("anyOf");
+                let one_of = map.remove("oneOf");
+                let (normalized_type, nullable_from_type) =
+                    Self::normalize_schema_type(map.remove("type"));
+
+                let mut sanitized = Map::new();
+                for (key, value) in map {
+                    if key == "properties" {
+                        if let Value::Object(properties) = value {
+                            sanitized.insert(
+                                key,
+                                Value::Object(
+                                    properties
+                                        .into_iter()
+                                        .map(|(name, schema)| {
+                                            (name, Self::strip_unsupported_schema_fields(schema))
+                                        })
+                                        .collect(),
+                                ),
+                            );
+                        }
+                        continue;
+                    }
+
+                    if Self::is_supported_schema_key(&key) {
+                        sanitized.insert(key, Self::strip_unsupported_schema_fields(value));
+                    }
+                }
+
+                if let Some(all_of) = all_of {
+                    Self::merge_schema_variants(&mut sanitized, all_of, true);
+                }
+
+                let mut nullable = nullable_from_type;
+                if let Some(any_of) = any_of {
+                    nullable |= Self::merge_union_variants(&mut sanitized, any_of);
+                }
+                if let Some(one_of) = one_of {
+                    nullable |= Self::merge_union_variants(&mut sanitized, one_of);
+                }
+
+                if let Some(schema_type) = normalized_type {
+                    sanitized.insert("type".to_string(), Value::String(schema_type));
+                }
+                if nullable {
+                    sanitized.insert("nullable".to_string(), Value::Bool(true));
+                }
+
+                Value::Object(sanitized)
+            }
+            Value::Array(items) => Value::Array(
+                items
+                    .into_iter()
+                    .map(Self::strip_unsupported_schema_fields)
+                    .collect(),
+            ),
+            other => other,
+        }
+    }
+
+    fn is_supported_schema_key(key: &str) -> bool {
+        matches!(
+            key,
+            "type"
+                | "format"
+                | "description"
+                | "nullable"
+                | "enum"
+                | "items"
+                | "properties"
+                | "required"
+                | "minItems"
+                | "maxItems"
+                | "minimum"
+                | "maximum"
+                | "minLength"
+                | "maxLength"
+                | "pattern"
+        )
+    }
+
+    fn normalize_schema_type(type_value: Option<Value>) -> (Option<String>, bool) {
+        match type_value {
+            Some(Value::String(value)) if value != "null" => (Some(value), false),
+            Some(Value::String(_)) => (None, true),
+            Some(Value::Array(values)) => {
+                let mut types = values.into_iter().filter_map(|value| value.as_str().map(str::to_string));
+                let mut nullable = false;
+                let mut selected = None;
+
+                for value in types.by_ref() {
+                    if value == "null" {
+                        nullable = true;
+                    } else if selected.is_none() {
+                        selected = Some(value);
+                    }
+                }
+
+                (selected, nullable)
+            }
+            _ => (None, false),
+        }
+    }
+
+    fn merge_union_variants(target: &mut Map<String, Value>, variants: Value) -> bool {
+        let mut nullable = false;
+
+        if let Value::Array(variants) = variants {
+            for variant in variants {
+                let sanitized = Self::strip_unsupported_schema_fields(variant);
+                match sanitized {
+                    Value::Object(map) => {
+                        let is_null_only = map
+                            .get("type")
+                            .and_then(Value::as_str)
+                            .map(|value| value == "null")
+                            .unwrap_or(false)
+                            && map.len() == 1;
+
+                        if is_null_only {
+                            nullable = true;
+                            continue;
+                        }
+
+                        Self::merge_schema_map(target, map, false);
+                    }
+                    Value::String(value) if value == "null" => nullable = true,
+                    _ => {}
+                }
+            }
+        }
+
+        nullable
+    }
+
+    fn merge_schema_variants(target: &mut Map<String, Value>, variants: Value, preserve_required: bool) {
+        if let Value::Array(variants) = variants {
+            for variant in variants {
+                if let Value::Object(map) = Self::strip_unsupported_schema_fields(variant) {
+                    Self::merge_schema_map(target, map, preserve_required);
+                }
+            }
+        }
+    }
+
+    fn merge_schema_map(
+        target: &mut Map<String, Value>,
+        source: Map<String, Value>,
+        preserve_required: bool,
+    ) {
+        for (key, value) in source {
+            match key.as_str() {
+                "properties" => {
+                    if let Value::Object(source_props) = value {
+                        let target_props = target
+                            .entry(key)
+                            .or_insert_with(|| Value::Object(Map::new()));
+                        if let Value::Object(target_props) = target_props {
+                            for (prop_key, prop_value) in source_props {
+                                target_props.entry(prop_key).or_insert(prop_value);
+                            }
+                        }
+                    }
+                }
+                "required" if preserve_required => {
+                    if let Value::Array(source_required) = value {
+                        let target_required = target
+                            .entry(key)
+                            .or_insert_with(|| Value::Array(Vec::new()));
+                        if let Value::Array(target_required) = target_required {
+                            for item in source_required {
+                                if !target_required.contains(&item) {
+                                    target_required.push(item);
+                                }
+                            }
+                        }
+                    }
+                }
+                "nullable" => {
+                    if value.as_bool().unwrap_or(false) {
+                        target.insert(key, Value::Bool(true));
+                    }
+                }
+                "type" => {
+                    target.entry(key).or_insert(value);
+                }
+                _ => {
+                    target.entry(key).or_insert(value);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GeminiMessageConverter;
+    use crate::util::types::{Message, ToolCall, ToolDefinition};
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn converts_messages_to_gemini_format() {
+        let mut args = HashMap::new();
+        args.insert("city".to_string(), json!("Beijing"));
+
+        let messages = vec![
+            Message::system("You are helpful".to_string()),
+            Message::user("Hello".to_string()),
+            Message {
+                role: "assistant".to_string(),
+                content: Some("Working on it".to_string()),
+                reasoning_content: Some("Let me think".to_string()),
+                thinking_signature: Some("sig_1".to_string()),
+                tool_calls: Some(vec![ToolCall {
+                    id: "call_1".to_string(),
+                    name: "get_weather".to_string(),
+                    arguments: args.clone(),
+                }]),
+                tool_call_id: None,
+                name: None,
+            },
+            Message {
+                role: "tool".to_string(),
+                content: Some("Sunny".to_string()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: Some("call_1".to_string()),
+                name: Some("get_weather".to_string()),
+            },
+        ];
+
+        let (system_instruction, contents) =
+            GeminiMessageConverter::convert_messages(messages, "gemini-2.5-pro");
+
+        assert_eq!(
+            system_instruction.unwrap()["parts"][0]["text"],
+            json!("You are helpful")
+        );
+        assert_eq!(contents.len(), 3);
+        assert_eq!(contents[0]["role"], json!("user"));
+        assert_eq!(contents[1]["role"], json!("model"));
+        assert_eq!(contents[1]["parts"][0]["text"], json!("Working on it"));
+        assert_eq!(
+            contents[1]["parts"][1]["functionCall"]["name"],
+            json!("get_weather")
+        );
+        assert_eq!(contents[1]["parts"][1]["thoughtSignature"], json!("sig_1"));
+        assert_eq!(
+            contents[2]["parts"][0]["functionResponse"]["name"],
+            json!("get_weather")
+        );
+    }
+
+    #[test]
+    fn injects_skip_signature_for_first_synthetic_gemini_3_tool_call() {
+        let mut args = HashMap::new();
+        args.insert("city".to_string(), json!("Paris"));
+
+        let messages = vec![Message {
+            role: "assistant".to_string(),
+            content: None,
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: Some(vec![ToolCall {
+                id: "call_1".to_string(),
+                name: "get_weather".to_string(),
+                arguments: args,
+            }]),
+            tool_call_id: None,
+            name: None,
+        }];
+
+        let (_, contents) =
+            GeminiMessageConverter::convert_messages(messages, "gemini-3-flash-preview");
+
+        assert_eq!(contents.len(), 1);
+        assert_eq!(
+            contents[0]["parts"][0]["thoughtSignature"],
+            json!("skip_thought_signature_validator")
+        );
+    }
+
+    #[test]
+    fn converts_data_url_images_to_inline_data() {
+        let messages = vec![Message {
+            role: "user".to_string(),
+            content: Some(
+                json!([
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "data:image/png;base64,abc"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "Describe this image"
+                    }
+                ])
+                .to_string(),
+            ),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        }];
+
+        let (_, contents) = GeminiMessageConverter::convert_messages(messages, "gemini-2.5-pro");
+
+        assert_eq!(
+            contents[0]["parts"][0]["inlineData"]["mimeType"],
+            json!("image/png")
+        );
+        assert_eq!(
+            contents[0]["parts"][1]["text"],
+            json!("Describe this image")
+        );
+    }
+
+    #[test]
+    fn strips_unsupported_fields_from_tool_schema() {
+        let tools = Some(vec![ToolDefinition {
+            name: "get_weather".to_string(),
+            description: "Get weather".to_string(),
+            parameters: json!({
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "properties": {
+                    "city": { "type": "string" },
+                    "timezone": {
+                        "type": ["string", "null"]
+                    },
+                    "link": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "url": { "type": "string" }
+                                },
+                                "required": ["url"]
+                            },
+                            { "type": "null" }
+                        ]
+                    },
+                    "items": {
+                        "allOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "name": { "type": "string" }
+                                },
+                                "required": ["name"]
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "count": { "type": "integer" }
+                                },
+                                "required": ["count"]
+                            }
+                        ]
+                    }
+                },
+                "required": ["city"],
+                "additionalProperties": false,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false
+                }
+            }),
+        }]);
+
+        let converted = GeminiMessageConverter::convert_tools(tools).expect("converted tools");
+        let schema = &converted[0]["functionDeclarations"][0]["parameters"];
+
+        assert!(schema.get("$schema").is_none());
+        assert!(schema.get("additionalProperties").is_none());
+        assert!(schema["items"].get("additionalProperties").is_none());
+        assert_eq!(schema["properties"]["timezone"]["type"], json!("string"));
+        assert_eq!(schema["properties"]["timezone"]["nullable"], json!(true));
+        assert_eq!(schema["properties"]["link"]["type"], json!("object"));
+        assert_eq!(schema["properties"]["link"]["nullable"], json!(true));
+        assert_eq!(schema["properties"]["items"]["type"], json!("object"));
+        assert_eq!(
+            schema["properties"]["items"]["required"],
+            json!(["name", "count"])
+        );
+    }
+}

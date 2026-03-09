@@ -11,7 +11,7 @@ export type MessageStatus = 'pending' | 'sending' | 'sent' | 'error';
 export type ConversationStatus = 'pending' | 'completed' | 'failed' | 'cancelled';
 
 
-export type ApiFormat = 'openai' | 'responses' | 'anthropic';
+export type ApiFormat = 'openai' | 'responses' | 'anthropic' | 'gemini';
 
 
 export interface ToolExecution {

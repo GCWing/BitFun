@@ -7,6 +7,17 @@ const log = createLogger('ModelConfigManager');
 const t = (key: string, options?: Record<string, unknown>) => i18nService.t(key, options);
 
 export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
+  gemini: {
+    id: 'gemini',
+    name: t('settings/ai-model:providers.gemini.name'),
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    format: 'gemini',
+    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+    requiresApiKey: true,
+    description: t('settings/ai-model:providers.gemini.description'),
+    helpUrl: 'https://aistudio.google.com/app/apikey'
+  },
+
   anthropic: {
     id: 'anthropic',
     name: t('settings/ai-model:providers.anthropic.name'),
@@ -310,6 +321,8 @@ export const getFormatDisplayName = (format: ApiFormat): string => {
       return t('settings/ai-model:formats.responsesApi');
     case 'anthropic':
       return t('settings/ai-model:formats.claudeApi');
+    case 'gemini':
+      return t('settings/ai-model:formats.geminiApi');
     default:
       return format;
   }

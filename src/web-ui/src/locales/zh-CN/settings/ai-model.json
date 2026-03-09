@@ -22,6 +22,10 @@
     "formatHint": "已根据提供商自动选择，通常无需修改"
   },
   "providers": {
+    "gemini": {
+      "name": "Google Gemini",
+      "description": "Google Gemini 2.5 系列多模态模型"
+    },
     "anthropic": {
       "name": "Anthropic Claude",
       "description": "Anthropic Claude 系列模型"
@@ -150,7 +154,8 @@
   "formats": {
     "openaiCompatible": "OpenAI 兼容",
     "responsesApi": "OpenAI Responses API",
-    "claudeApi": "Claude API"
+    "claudeApi": "Claude API",
+    "geminiApi": "Gemini GenerateContent API"
   },
   "actions": {
     "save": "保存",

@@ -19,7 +19,7 @@ interface ModelConfigStepProps {
 }
 
 /** Provider display order */
-const PROVIDER_ORDER = ['zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'anthropic'];
+const PROVIDER_ORDER = ['zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'gemini', 'anthropic'];
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'error';
 
@@ -33,8 +33,8 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
   const [apiKey, setApiKey] = useState(modelConfig?.apiKey || '');
   const [baseUrl, setBaseUrl] = useState(modelConfig?.baseUrl || '');
   const [modelName, setModelName] = useState(modelConfig?.modelName || '');
-  const [customFormat, setCustomFormat] = useState<'openai' | 'responses' | 'anthropic'>(
-    (modelConfig?.format as 'openai' | 'responses' | 'anthropic') || 'openai'
+  const [customFormat, setCustomFormat] = useState<'openai' | 'responses' | 'anthropic' | 'gemini'>(
+    (modelConfig?.format as 'openai' | 'responses' | 'anthropic' | 'gemini') || 'openai'
   );
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
   const [testError, setTestError] = useState<string>('');
@@ -120,7 +120,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
     const effectiveModelName = modelName || (template?.models[0] || '');
 
     // Derive format
-    let format: 'openai' | 'responses' | 'anthropic' = customFormat;
+    let format: 'openai' | 'responses' | 'anthropic' | 'gemini' = customFormat;
     if (template) {
       if (template.baseUrlOptions?.length) {
         const effectiveUrl = baseUrl || template.baseUrl;
@@ -502,10 +502,11 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                 options={[
                   { label: 'OpenAI', value: 'openai' },
                   { label: 'OpenAI Responses', value: 'responses' },
-                  { label: 'Anthropic', value: 'anthropic' }
+                  { label: 'Anthropic', value: 'anthropic' },
+                  { label: 'Gemini', value: 'gemini' }
                 ]}
                 value={customFormat}
-                onChange={(val) => setCustomFormat(val as 'openai' | 'responses' | 'anthropic')}
+                onChange={(val) => setCustomFormat(val as 'openai' | 'responses' | 'anthropic' | 'gemini')}
                 placeholder={t('model.format.placeholder')}
               />
             </div>

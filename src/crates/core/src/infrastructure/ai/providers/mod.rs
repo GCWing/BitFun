@@ -4,6 +4,7 @@
 
 pub mod openai;
 pub mod anthropic;
+pub mod gemini;
 
 pub use anthropic::AnthropicMessageConverter;
-
+pub use gemini::GeminiMessageConverter;

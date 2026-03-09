@@ -27,9 +27,10 @@ const log = createLogger('AIModelConfig');
  *   - openai         → append '/chat/completions' unless already present
  *   - responses      → append '/responses' unless already present
  *   - anthropic      → append '/v1/messages' unless already present
+ *   - gemini         → append '/models/{model}:streamGenerateContent?alt=sse'
  *   - other          → use base_url as-is
  */
-function resolveRequestUrl(baseUrl: string, provider: string): string {
+function resolveRequestUrl(baseUrl: string, provider: string, modelName = ''): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
   if (trimmed.endsWith('#')) {
     return trimmed.slice(0, -1).replace(/\/+$/, '');
@@ -42,6 +43,19 @@ function resolveRequestUrl(baseUrl: string, provider: string): string {
   }
   if (provider === 'anthropic') {
     return trimmed.endsWith('v1/messages') ? trimmed : `${trimmed}/v1/messages`;
+  }
+  if (provider === 'gemini') {
+    if (!modelName.trim()) return trimmed;
+    if (trimmed.includes(':generateContent')) {
+      return trimmed.replace(':generateContent', ':streamGenerateContent?alt=sse');
+    }
+    if (trimmed.includes(':streamGenerateContent')) {
+      return trimmed.includes('alt=sse') ? trimmed : `${trimmed}${trimmed.includes('?') ? '&' : '?'}alt=sse`;
+    }
+    if (trimmed.includes('/models/')) {
+      return `${trimmed}:streamGenerateContent?alt=sse`;
+    }
+    return `${trimmed}/models/${modelName}:streamGenerateContent?alt=sse`;
   }
   return trimmed;
 }
@@ -78,6 +92,7 @@ const AIModelConfig: React.FC = () => {
       { label: 'OpenAI (chat/completions)', value: 'openai' },
       { label: 'OpenAI (responses)', value: 'responses' },
       { label: 'Anthropic (messages)', value: 'anthropic' },
+      { label: 'Gemini (generateContent)', value: 'gemini' },
     ],
     []
   );
@@ -101,7 +116,7 @@ const AIModelConfig: React.FC = () => {
   };
   
   // Provider options with translations (must be at top level, before any conditional returns)
-  const providerOrder = ['zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'anthropic'];
+  const providerOrder = ['zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'gemini', 'anthropic'];
   const providers = useMemo(() => {
     const sorted = Object.values(PROVIDER_TEMPLATES).sort((a, b) => {
       const indexA = providerOrder.indexOf(a.id);
@@ -154,7 +169,7 @@ const AIModelConfig: React.FC = () => {
     setEditingConfig({
       name: defaultModel ? `${providerName} - ${defaultModel}` : '',
       base_url: template.baseUrl,
-      request_url: resolveRequestUrl(template.baseUrl, template.format),
+      request_url: resolveRequestUrl(template.baseUrl, template.format, defaultModel),
       api_key: '',
       model_name: defaultModel,
       provider: template.format,  
@@ -229,7 +244,7 @@ const AIModelConfig: React.FC = () => {
         id: editingConfig.id || `model_${Date.now()}`,
         name: editingConfig.name,
         base_url: editingConfig.base_url,
-        request_url: editingConfig.request_url || resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai'),
+        request_url: editingConfig.request_url || resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai', editingConfig.model_name || ''),
         api_key: editingConfig.api_key || '',
         model_name: editingConfig.model_name || 'search-api', 
         provider: editingConfig.provider || 'openai',
@@ -555,17 +570,17 @@ const AIModelConfig: React.FC = () => {
           case 'general_chat':
             defaultCapabilities = ['text_chat', 'function_calling'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai', prev?.model_name || '');
             break;
           case 'multimodal':
             defaultCapabilities = ['text_chat', 'image_understanding', 'function_calling'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai', prev?.model_name || '');
             break;
           case 'image_generation':
             defaultCapabilities = ['image_generation'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/images/generations';
-            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai', prev?.model_name || '');
             break;
           case 'search_enhanced':
             defaultCapabilities = ['search'];
@@ -579,7 +594,7 @@ const AIModelConfig: React.FC = () => {
           case 'speech_recognition':
             defaultCapabilities = ['speech_recognition'];
             updates.base_url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai');
+            updates.request_url = resolveRequestUrl(updates.base_url!, prev?.provider || 'openai', prev?.model_name || '');
             break;
         }
         updates.capabilities = defaultCapabilities;
@@ -614,6 +629,7 @@ const AIModelConfig: React.FC = () => {
                         return {
                           ...prev,
                           model_name: newModelName,
+                          request_url: resolveRequestUrl(prev?.base_url || currentTemplate?.baseUrl || '', prev?.provider || currentTemplate?.format || 'openai', newModelName),
                           name: isAutoGenerated && currentTemplate ? `${currentTemplate.name} - ${newModelName}` : prev?.name
                         };
                       });
@@ -642,7 +658,7 @@ const AIModelConfig: React.FC = () => {
                         setEditingConfig(prev => ({
                           ...prev,
                           base_url: value as string,
-                          request_url: resolveRequestUrl(value as string, newProvider),
+                          request_url: resolveRequestUrl(value as string, newProvider, editingConfig.model_name || ''),
                           provider: newProvider
                         }));
                       }}
@@ -657,7 +673,7 @@ const AIModelConfig: React.FC = () => {
                         onChange={(e) => setEditingConfig(prev => ({
                           ...prev,
                           base_url: e.target.value,
-                          request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
+                          request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
                         }))}
                         onFocus={(e) => e.target.select()}
                         placeholder={currentTemplate?.baseUrl}
@@ -667,7 +683,7 @@ const AIModelConfig: React.FC = () => {
                         <div className="bitfun-ai-model-config__resolved-url">
                           <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
                           <code className="resolved-url__value">
-                            {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
+                            {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai', editingConfig.model_name || '')}
                           </code>
                           <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
                         </div>
@@ -681,7 +697,7 @@ const AIModelConfig: React.FC = () => {
                     onChange={(value) => setEditingConfig(prev => ({
                       ...prev,
                       provider: value as string,
-                      request_url: resolveRequestUrl(prev?.base_url || '', value as string)
+                      request_url: resolveRequestUrl(prev?.base_url || '', value as string, prev?.model_name || '')
                     }))}
                     placeholder={t('form.providerPlaceholder')}
                     options={requestFormatOptions}
@@ -719,7 +735,7 @@ const AIModelConfig: React.FC = () => {
                       onChange={(e) => setEditingConfig(prev => ({
                         ...prev,
                         base_url: e.target.value,
-                        request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai')
+                        request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
                       }))}
                       onFocus={(e) => e.target.select()}
                       placeholder={editingConfig.category === 'search_enhanced' ? 'https://open.bigmodel.cn/api/paas/v4/web_search' : 'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
@@ -729,7 +745,7 @@ const AIModelConfig: React.FC = () => {
                       <div className="bitfun-ai-model-config__resolved-url">
                         <span className="resolved-url__label">{t('form.resolvedUrlLabel')}</span>
                         <code className="resolved-url__value">
-                          {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}
+                          {resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai', editingConfig.model_name || '')}
                         </code>
                         <small className="resolved-url__hint">{t('form.forceUrlHint')}</small>
                       </div>
@@ -745,7 +761,7 @@ const AIModelConfig: React.FC = () => {
             {!isFromTemplate && editingConfig.category !== 'search_enhanced' && (
               <>
                 <ConfigPageRow label={`${t('form.modelName')} *`} description={editingConfig.category === 'speech_recognition' ? t('form.modelNameHint') : undefined} align="center" wide>
-                  <Input value={editingConfig.model_name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, model_name: e.target.value }))} placeholder={editingConfig.category === 'speech_recognition' ? 'glm-asr' : 'glm-4.7'} inputSize="small" />
+                  <Input value={editingConfig.model_name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, model_name: e.target.value, request_url: resolveRequestUrl(prev?.base_url || '', prev?.provider || 'openai', e.target.value) }))} placeholder={editingConfig.category === 'speech_recognition' ? 'glm-asr' : 'glm-4.7'} inputSize="small" />
                 </ConfigPageRow>
                 <ConfigPageRow label={t('form.provider')} align="center" wide>
                   <Select value={editingConfig.provider || 'openai'} onChange={(value) => setEditingConfig(prev => ({ ...prev, provider: value as string }))} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} />

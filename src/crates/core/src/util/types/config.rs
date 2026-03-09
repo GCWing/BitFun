@@ -13,7 +13,42 @@ fn append_endpoint(base_url: &str, endpoint: &str) -> String {
     format!("{}/{}", base.trim_end_matches('/'), endpoint)
 }
 
-fn resolve_request_url(base_url: &str, provider: &str) -> String {
+fn resolve_gemini_request_url(base_url: &str, model_name: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/').to_string();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('#') {
+        return stripped.trim_end_matches('/').to_string();
+    }
+
+    let stream_endpoint = ":streamGenerateContent?alt=sse";
+    if trimmed.contains(":generateContent") {
+        return trimmed.replace(":generateContent", stream_endpoint);
+    }
+    if trimmed.contains(":streamGenerateContent") {
+        if trimmed.contains("alt=sse") {
+            return trimmed;
+        }
+        if trimmed.contains('?') {
+            return format!("{}&alt=sse", trimmed);
+        }
+        return format!("{}?alt=sse", trimmed);
+    }
+    if trimmed.contains("/models/") {
+        return format!("{}{}", trimmed, stream_endpoint);
+    }
+
+    let model = model_name.trim();
+    if model.is_empty() {
+        return trimmed;
+    }
+
+    append_endpoint(&trimmed, &format!("models/{}{}", model, stream_endpoint))
+}
+
+fn resolve_request_url(base_url: &str, provider: &str, model_name: &str) -> String {
     let trimmed = base_url.trim().trim_end_matches('/').to_string();
     if trimmed.is_empty() {
         return String::new();
@@ -27,6 +62,7 @@ fn resolve_request_url(base_url: &str, provider: &str) -> String {
         "openai" => append_endpoint(&trimmed, "chat/completions"),
         "response" | "responses" => append_endpoint(&trimmed, "responses"),
         "anthropic" => append_endpoint(&trimmed, "v1/messages"),
+        "gemini" | "google" => resolve_gemini_request_url(&trimmed, model_name),
         _ => trimmed,
     }
 }
@@ -61,7 +97,7 @@ mod tests {
     #[test]
     fn resolves_openai_request_url() {
         assert_eq!(
-            resolve_request_url("https://api.openai.com/v1", "openai"),
+            resolve_request_url("https://api.openai.com/v1", "openai", ""),
             "https://api.openai.com/v1/chat/completions"
         );
     }
@@ -69,7 +105,7 @@ mod tests {
     #[test]
     fn resolves_responses_request_url() {
         assert_eq!(
-            resolve_request_url("https://api.openai.com/v1", "responses"),
+            resolve_request_url("https://api.openai.com/v1", "responses", ""),
             "https://api.openai.com/v1/responses"
         );
     }
@@ -77,7 +113,7 @@ mod tests {
     #[test]
     fn resolves_response_alias_request_url() {
         assert_eq!(
-            resolve_request_url("https://api.openai.com/v1", "response"),
+            resolve_request_url("https://api.openai.com/v1", "response", ""),
             "https://api.openai.com/v1/responses"
         );
     }
@@ -85,8 +121,20 @@ mod tests {
     #[test]
     fn keeps_forced_request_url() {
         assert_eq!(
-            resolve_request_url("https://api.openai.com/v1/responses#", "responses"),
+            resolve_request_url("https://api.openai.com/v1/responses#", "responses", ""),
             "https://api.openai.com/v1/responses"
+        );
+    }
+
+    #[test]
+    fn resolves_gemini_request_url() {
+        assert_eq!(
+            resolve_request_url(
+                "https://generativelanguage.googleapis.com/v1beta",
+                "gemini",
+                "gemini-2.5-pro"
+            ),
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse"
         );
     }
 }
@@ -111,7 +159,7 @@ impl TryFrom<AIModelConfig> for AIConfig {
         let request_url = other
             .request_url
             .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| resolve_request_url(&other.base_url, &other.provider));
+            .unwrap_or_else(|| resolve_request_url(&other.base_url, &other.provider, &other.model_name));
 
         Ok(AIConfig {
             name: other.name.clone(),

@@ -3,12 +3,13 @@
 //! Uses a modular architecture to separate provider-specific logic into the providers module
 
 use crate::infrastructure::ai::providers::anthropic::AnthropicMessageConverter;
+use crate::infrastructure::ai::providers::gemini::GeminiMessageConverter;
 use crate::infrastructure::ai::providers::openai::OpenAIMessageConverter;
 use crate::service::config::ProxyConfig;
 use crate::util::types::*;
 use crate::util::JsonChecker;
 use ai_stream_handlers::{
-    handle_anthropic_stream, handle_openai_stream, handle_responses_stream, UnifiedResponse,
+    handle_anthropic_stream, handle_gemini_stream, handle_openai_stream, handle_responses_stream, UnifiedResponse,
 };
 use anyhow::{anyhow, Result};
 use futures::StreamExt;
@@ -99,6 +100,10 @@ impl AIClient {
 
     fn is_responses_api_format(api_format: &str) -> bool {
         matches!(api_format.to_ascii_lowercase().as_str(), "response" | "responses")
+    }
+
+    fn is_gemini_api_format(api_format: &str) -> bool {
+        matches!(api_format.to_ascii_lowercase().as_str(), "gemini" | "google")
     }
 
     /// Create an AIClient without proxy (backward compatible)
@@ -374,6 +379,33 @@ impl AIClient {
         builder
     }
 
+    /// Apply Gemini-style request headers (merge/replace).
+    fn apply_gemini_headers(
+        &self,
+        mut builder: reqwest::RequestBuilder,
+    ) -> reqwest::RequestBuilder {
+        let has_custom_headers = self
+            .config
+            .custom_headers
+            .as_ref()
+            .map_or(false, |h| !h.is_empty());
+        let is_merge_mode = self.is_merge_headers_mode();
+
+        if has_custom_headers && !is_merge_mode {
+            return self.apply_custom_headers(builder);
+        }
+
+        builder = builder
+            .header("Content-Type", "application/json")
+            .header("x-goog-api-key", &self.config.api_key);
+
+        if has_custom_headers && is_merge_mode {
+            builder = self.apply_custom_headers(builder);
+        }
+
+        builder
+    }
+
     /// Build an OpenAI-format request body
     fn build_openai_request_body(
         &self,
@@ -571,6 +603,116 @@ impl AIClient {
         request_body
     }
 
+    /// Build a Gemini-format request body.
+    fn build_gemini_request_body(
+        &self,
+        system_instruction: Option<serde_json::Value>,
+        contents: Vec<serde_json::Value>,
+        gemini_tools: Option<Vec<serde_json::Value>>,
+        extra_body: Option<serde_json::Value>,
+    ) -> serde_json::Value {
+        let mut request_body = serde_json::json!({
+            "contents": contents,
+        });
+
+        if let Some(system_instruction) = system_instruction {
+            request_body["systemInstruction"] = system_instruction;
+        }
+
+        if let Some(max_tokens) = self.config.max_tokens {
+            request_body["generationConfig"] = serde_json::json!({
+                "maxOutputTokens": max_tokens,
+            });
+        }
+
+        if self.config.enable_thinking_process {
+            if request_body.get("generationConfig").is_none() {
+                request_body["generationConfig"] = serde_json::json!({});
+            }
+            request_body["generationConfig"]["thinkingConfig"] = serde_json::json!({
+                "includeThoughts": true,
+            });
+        }
+
+        if let Some(tools) = gemini_tools {
+            let tool_names = tools
+                .iter()
+                .flat_map(|tool| {
+                    tool.get("functionDeclarations")
+                        .and_then(|value| value.as_array())
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|declaration| {
+                            declaration
+                                .get("name")
+                                .and_then(|value| value.as_str())
+                                .map(str::to_string)
+                        })
+                })
+                .collect::<Vec<_>>();
+            debug!(target: "ai::gemini_stream_request", "\ntools: {:?}", tool_names);
+
+            if !tools.is_empty() {
+                request_body["tools"] = serde_json::Value::Array(tools);
+                request_body["toolConfig"] = serde_json::json!({
+                    "functionCallingConfig": {
+                        "mode": "AUTO"
+                    }
+                });
+            }
+        }
+
+        if let Some(extra) = extra_body {
+            if let Some(extra_obj) = extra.as_object() {
+                for (key, value) in extra_obj {
+                    request_body[key] = value.clone();
+                }
+                debug!(
+                    target: "ai::gemini_stream_request",
+                    "Applied extra_body overrides: {:?}",
+                    extra_obj.keys().collect::<Vec<_>>()
+                );
+            }
+        }
+
+        debug!(
+            target: "ai::gemini_stream_request",
+            "Gemini stream request body:\n{}",
+            serde_json::to_string_pretty(&request_body)
+                .unwrap_or_else(|_| "serialization failed".to_string())
+        );
+
+        request_body
+    }
+
+    fn resolve_gemini_request_url(base_url: &str, model_name: &str) -> String {
+        let trimmed = base_url.trim().trim_end_matches('/');
+        if trimmed.is_empty() {
+            return String::new();
+        }
+
+        let mut url = trimmed
+            .replace(":generateContent", ":streamGenerateContent")
+            .replace(":streamGenerateContent?alt=sse", ":streamGenerateContent");
+
+        if !url.contains(":streamGenerateContent") {
+            if url.contains("/models/") {
+                url = format!("{}:streamGenerateContent", url);
+            } else {
+                let encoded_model = urlencoding::encode(model_name);
+                url = format!("{}/models/{}:streamGenerateContent", url, encoded_model);
+            }
+        }
+
+        if url.contains("alt=sse") {
+            url
+        } else if url.contains('?') {
+            format!("{}&alt=sse", url)
+        } else {
+            format!("{}?alt=sse", url)
+        }
+    }
+
     fn extract_openai_tool_name(tool: &serde_json::Value) -> String {
         tool.get("function")
             .and_then(|f| f.get("name"))
@@ -616,6 +758,10 @@ impl AIClient {
         match self.get_api_format().to_lowercase().as_str() {
             "openai" => {
                 self.send_openai_stream(messages, tools, extra_body, max_tries)
+                    .await
+            }
+            format if Self::is_gemini_api_format(format) => {
+                self.send_gemini_stream(messages, tools, extra_body, max_tries)
                     .await
             }
             format if Self::is_responses_api_format(format) => {
@@ -756,6 +902,137 @@ impl AIClient {
 
         let error_msg = format!(
             "Stream request failed after {} attempts: {}",
+            max_tries,
+            last_error.unwrap_or_else(|| anyhow!("Unknown error"))
+        );
+        error!("{}", error_msg);
+        Err(anyhow!(error_msg))
+    }
+
+    /// Send a Gemini streaming request with retries.
+    async fn send_gemini_stream(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        extra_body: Option<serde_json::Value>,
+        max_tries: usize,
+    ) -> Result<StreamResponse> {
+        let url = Self::resolve_gemini_request_url(&self.config.request_url, &self.config.model);
+        debug!(
+            "Gemini config: model={}, request_url={}, max_tries={}",
+            self.config.model, url, max_tries
+        );
+
+        let (system_instruction, contents) =
+            GeminiMessageConverter::convert_messages(messages, &self.config.model);
+        let gemini_tools = GeminiMessageConverter::convert_tools(tools);
+        let request_body =
+            self.build_gemini_request_body(system_instruction, contents, gemini_tools, extra_body);
+
+        let mut last_error = None;
+        let base_wait_time_ms = 500;
+
+        for attempt in 0..max_tries {
+            let request_start_time = std::time::Instant::now();
+            let request_builder = self.apply_gemini_headers(self.client.post(&url));
+            let response_result = request_builder.json(&request_body).send().await;
+
+            let response = match response_result {
+                Ok(resp) => {
+                    let connect_time = request_start_time.elapsed().as_millis();
+                    let status = resp.status();
+
+                    if status.is_client_error() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                        error!(
+                            "Gemini Streaming API client error {}: {}",
+                            status, error_text
+                        );
+                        return Err(anyhow!(
+                            "Gemini Streaming API client error {}: {}",
+                            status,
+                            error_text
+                        ));
+                    }
+
+                    if status.is_success() {
+                        debug!(
+                            "Gemini stream request connected: {}ms, status: {}, attempt: {}/{}",
+                            connect_time,
+                            status,
+                            attempt + 1,
+                            max_tries
+                        );
+                        resp
+                    } else {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                        let error =
+                            anyhow!("Gemini Streaming API error {}: {}", status, error_text);
+                        warn!(
+                            "Gemini stream request failed: {}ms, attempt {}/{}, error: {}",
+                            connect_time,
+                            attempt + 1,
+                            max_tries,
+                            error
+                        );
+                        last_error = Some(error);
+
+                        if attempt < max_tries - 1 {
+                            let delay_ms = base_wait_time_ms * (1 << attempt.min(3));
+                            debug!(
+                                "Retrying Gemini after {}ms (attempt {})",
+                                delay_ms,
+                                attempt + 2
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        }
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    let connect_time = request_start_time.elapsed().as_millis();
+                    let error = anyhow!("Gemini stream request connection failed: {}", e);
+                    warn!(
+                        "Gemini stream request connection failed: {}ms, attempt {}/{}, error: {}",
+                        connect_time,
+                        attempt + 1,
+                        max_tries,
+                        e
+                    );
+                    last_error = Some(error);
+
+                    if attempt < max_tries - 1 {
+                        let delay_ms = base_wait_time_ms * (1 << attempt.min(3));
+                        debug!(
+                            "Retrying Gemini after {}ms (attempt {})",
+                            delay_ms,
+                            attempt + 2
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                    continue;
+                }
+            };
+
+            let (tx, rx) = mpsc::unbounded_channel();
+            let (tx_raw, rx_raw) = mpsc::unbounded_channel();
+
+            tokio::spawn(handle_gemini_stream(response, tx, Some(tx_raw)));
+
+            return Ok(StreamResponse {
+                stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
+                raw_sse_rx: Some(rx_raw),
+            });
+        }
+
+        let error_msg = format!(
+            "Gemini stream request failed after {} attempts: {}",
             max_tries,
             last_error.unwrap_or_else(|| anyhow!("Unknown error"))
         );
