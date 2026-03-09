@@ -39,6 +39,7 @@ import { Tooltip, IconButton } from '@/component-library';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
+const IME_ENTER_GUARD_MS = 120;
 
 export interface ChatInputProps {
   className?: string;
@@ -57,6 +58,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const richTextInputRef = useRef<HTMLDivElement>(null);
   const modeDropdownRef = useRef<HTMLDivElement>(null);
+  const isImeComposingRef = useRef(false);
+  const lastImeCompositionEndAtRef = useRef(0);
   
   const contexts = useContextStore(state => state.contexts);
   const addContext = useContextStore(state => state.addContext);
@@ -736,10 +739,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    const isComposing = (e.nativeEvent as KeyboardEvent).isComposing;
+    const isComposing = (e.nativeEvent as KeyboardEvent).isComposing || isImeComposingRef.current;
+    const justFinishedComposition = Date.now() - lastImeCompositionEndAtRef.current < IME_ENTER_GUARD_MS;
     
     if (e.key === 'Enter' && !e.shiftKey) {
-      if (isComposing) {
+      if (isComposing || justFinishedComposition) {
         return;
       }
       
@@ -758,6 +762,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       transition(SessionExecutionEvent.USER_CANCEL);
     }
   }, [handleSendOrCancel, derivedState, transition, templateState.fillState, moveToNextPlaceholder, moveToPrevPlaceholder, exitTemplateMode, slashCommandState, getFilteredModes, selectSlashCommandMode, canSwitchModes]);
+
+  const handleImeCompositionStart = useCallback(() => {
+    isImeComposingRef.current = true;
+  }, []);
+
+  const handleImeCompositionEnd = useCallback(() => {
+    isImeComposingRef.current = false;
+    lastImeCompositionEndAtRef.current = Date.now();
+  }, []);
 
   const handleImageInput = useCallback(() => {
     const remaining = CHAT_INPUT_CONFIG.image.maxCount - currentImageCount;
@@ -974,6 +987,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 value={inputState.value}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onCompositionStart={handleImeCompositionStart}
+                onCompositionEnd={handleImeCompositionEnd}
                 placeholder={t('input.placeholder')}
                 disabled={false}
                 contexts={contexts}

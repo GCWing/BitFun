@@ -4,7 +4,6 @@
  */
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import type { ContextItem } from '../../shared/types/context';
 import './RichTextInput.scss';
 
@@ -19,6 +18,8 @@ export interface RichTextInputProps {
   value: string;
   onChange: (value: string, contexts: ContextItem[]) => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  onCompositionStart?: () => void;
+  onCompositionEnd?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
   placeholder?: string;
@@ -34,6 +35,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   value,
   onChange,
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   onFocus,
   onBlur,
   placeholder = 'Describe your request...',
@@ -334,7 +337,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // IME composition: let the IME handle certain keys
-    const isComposing = (e.nativeEvent as KeyboardEvent).isComposing;
+    const isComposing = (e.nativeEvent as KeyboardEvent).isComposing || isComposingRef.current;
     
     // Handle tag deletion only when not composing
     if (!isComposing && e.key === 'Backspace' && internalRef.current) {
@@ -529,12 +532,14 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   // Handle IME composition
   const handleCompositionStart = useCallback(() => {
     isComposingRef.current = true;
-  }, []);
+    onCompositionStart?.();
+  }, [onCompositionStart]);
 
   const handleCompositionEnd = useCallback(() => {
     isComposingRef.current = false;
+    onCompositionEnd?.();
     handleInput();
-  }, [handleInput]);
+  }, [handleInput, onCompositionEnd]);
 
   return (
     <div

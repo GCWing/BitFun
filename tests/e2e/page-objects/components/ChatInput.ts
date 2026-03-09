@@ -298,6 +298,32 @@ export class ChatInput extends BasePage {
     }
     return false;
   }
+
+  async triggerCompositionStart(): Promise<void> {
+    await browser.execute((selector) => {
+      const input = document.querySelector(selector);
+      if (!input) return;
+
+      const event = typeof CompositionEvent !== 'undefined'
+        ? new CompositionEvent('compositionstart', { bubbles: true, data: '' })
+        : new Event('compositionstart', { bubbles: true });
+
+      input.dispatchEvent(event);
+    }, this.selectors.textarea);
+  }
+
+  async triggerCompositionEnd(): Promise<void> {
+    await browser.execute((selector) => {
+      const input = document.querySelector(selector);
+      if (!input) return;
+
+      const event = typeof CompositionEvent !== 'undefined'
+        ? new CompositionEvent('compositionend', { bubbles: true, data: '' })
+        : new Event('compositionend', { bubbles: true });
+
+      input.dispatchEvent(event);
+    }, this.selectors.textarea);
+  }
 }
 
 export default ChatInput;

@@ -100,6 +100,33 @@ describe('BitFun basic chat', () => {
       expect(placeholder.length).toBeGreaterThan(0);
       console.log('[Test] Input placeholder:', placeholder);
     });
+
+    it('should not send on Enter while IME composition is active', async function () {
+      if (!hasWorkspace) {
+        this.skip();
+        return;
+      }
+
+      const testMessage = 'IME composition guard message';
+      await chatInput.clear();
+      await chatInput.typeMessage(testMessage);
+      await chatInput.focus();
+
+      await chatInput.triggerCompositionStart();
+      await browser.keys(['Enter']);
+      await browser.pause(300);
+
+      const valueWhileComposing = await chatInput.getValue();
+      expect(valueWhileComposing).toContain(testMessage);
+
+      await chatInput.triggerCompositionEnd();
+      await browser.pause(180);
+      await browser.keys(['Enter']);
+      await browser.pause(800);
+
+      const valueAfterComposition = await chatInput.getValue();
+      expect(valueAfterComposition).toBe('');
+    });
   });
 
   describe('Send message (no wait for response)', () => {
