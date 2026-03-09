@@ -306,6 +306,8 @@ export const getFormatDisplayName = (format: ApiFormat): string => {
   switch (format) {
     case 'openai':
       return t('settings/ai-model:formats.openaiCompatible');
+    case 'responses':
+      return t('settings/ai-model:formats.responsesApi');
     case 'anthropic':
       return t('settings/ai-model:formats.claudeApi');
     default:

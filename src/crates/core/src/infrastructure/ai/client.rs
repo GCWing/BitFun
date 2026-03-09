@@ -7,7 +7,9 @@ use crate::infrastructure::ai::providers::openai::OpenAIMessageConverter;
 use crate::service::config::ProxyConfig;
 use crate::util::types::*;
 use crate::util::JsonChecker;
-use ai_stream_handlers::{handle_anthropic_stream, handle_openai_stream, UnifiedResponse};
+use ai_stream_handlers::{
+    handle_anthropic_stream, handle_openai_stream, handle_responses_stream, UnifiedResponse,
+};
 use anyhow::{anyhow, Result};
 use futures::StreamExt;
 use log::{debug, error, info, warn};
@@ -93,6 +95,10 @@ impl AIClient {
             .filter(|c| matches!(*c, 'R' | 'G' | 'B' | 'Y'))
             .collect();
         color_letter_stream.contains(Self::TEST_IMAGE_EXPECTED_CODE)
+    }
+
+    fn is_responses_api_format(api_format: &str) -> bool {
+        matches!(api_format.to_ascii_lowercase().as_str(), "response" | "responses")
     }
 
     /// Create an AIClient without proxy (backward compatible)
@@ -442,6 +448,63 @@ impl AIClient {
         request_body
     }
 
+    /// Build a Responses API request body.
+    fn build_responses_request_body(
+        &self,
+        instructions: Option<String>,
+        response_input: Vec<serde_json::Value>,
+        openai_tools: Option<Vec<serde_json::Value>>,
+        extra_body: Option<serde_json::Value>,
+    ) -> serde_json::Value {
+        let mut request_body = serde_json::json!({
+            "model": self.config.model,
+            "input": response_input,
+            "stream": true
+        });
+
+        if let Some(instructions) = instructions.filter(|value| !value.trim().is_empty()) {
+            request_body["instructions"] = serde_json::Value::String(instructions);
+        }
+
+        if let Some(max_tokens) = self.config.max_tokens {
+            request_body["max_output_tokens"] = serde_json::json!(max_tokens);
+        }
+
+        if let Some(extra) = extra_body {
+            if let Some(extra_obj) = extra.as_object() {
+                for (key, value) in extra_obj {
+                    request_body[key] = value.clone();
+                }
+                debug!(
+                    target: "ai::responses_stream_request",
+                    "Applied extra_body overrides: {:?}",
+                    extra_obj.keys().collect::<Vec<_>>()
+                );
+            }
+        }
+
+        debug!(
+            target: "ai::responses_stream_request",
+            "Responses stream request body (excluding tools):\n{}",
+            serde_json::to_string_pretty(&request_body)
+                .unwrap_or_else(|_| "serialization failed".to_string())
+        );
+
+        if let Some(tools) = openai_tools {
+            let tool_names = tools
+                .iter()
+                .map(|tool| Self::extract_openai_tool_name(tool))
+                .collect::<Vec<_>>();
+            debug!(target: "ai::responses_stream_request", "\ntools: {:?}", tool_names);
+            if !tools.is_empty() {
+                request_body["tools"] = serde_json::Value::Array(tools);
+                request_body["tool_choice"] = serde_json::Value::String("auto".to_string());
+            }
+        }
+
+        request_body
+    }
+
     /// Build an Anthropic-format request body
     fn build_anthropic_request_body(
         &self,
@@ -553,6 +616,10 @@ impl AIClient {
         match self.get_api_format().to_lowercase().as_str() {
             "openai" => {
                 self.send_openai_stream(messages, tools, extra_body, max_tries)
+                    .await
+            }
+            format if Self::is_responses_api_format(format) => {
+                self.send_responses_stream(messages, tools, extra_body, max_tries)
                     .await
             }
             "anthropic" => {
@@ -689,6 +756,120 @@ impl AIClient {
 
         let error_msg = format!(
             "Stream request failed after {} attempts: {}",
+            max_tries,
+            last_error.unwrap_or_else(|| anyhow!("Unknown error"))
+        );
+        error!("{}", error_msg);
+        Err(anyhow!(error_msg))
+    }
+
+    /// Send a Responses API streaming request with retries.
+    async fn send_responses_stream(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        extra_body: Option<serde_json::Value>,
+        max_tries: usize,
+    ) -> Result<StreamResponse> {
+        let url = self.config.request_url.clone();
+        debug!(
+            "Responses config: model={}, request_url={}, max_tries={}",
+            self.config.model, self.config.request_url, max_tries
+        );
+
+        let (instructions, response_input) =
+            OpenAIMessageConverter::convert_messages_to_responses_input(messages);
+        let openai_tools = OpenAIMessageConverter::convert_tools(tools);
+        let request_body =
+            self.build_responses_request_body(instructions, response_input, openai_tools, extra_body);
+
+        let mut last_error = None;
+        let base_wait_time_ms = 500;
+
+        for attempt in 0..max_tries {
+            let request_start_time = std::time::Instant::now();
+            let request_builder = self.apply_openai_headers(self.client.post(&url));
+            let response_result = request_builder.json(&request_body).send().await;
+
+            let response = match response_result {
+                Ok(resp) => {
+                    let connect_time = request_start_time.elapsed().as_millis();
+                    let status = resp.status();
+
+                    if status.is_client_error() {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                        error!("Responses API client error {}: {}", status, error_text);
+                        return Err(anyhow!("Responses API client error {}: {}", status, error_text));
+                    }
+
+                    if status.is_success() {
+                        debug!(
+                            "Responses request connected: {}ms, status: {}, attempt: {}/{}",
+                            connect_time,
+                            status,
+                            attempt + 1,
+                            max_tries
+                        );
+                        resp
+                    } else {
+                        let error_text = resp
+                            .text()
+                            .await
+                            .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                        let error = anyhow!("Responses API error {}: {}", status, error_text);
+                        warn!(
+                            "Responses request failed (attempt {}/{}): {}",
+                            attempt + 1,
+                            max_tries,
+                            error
+                        );
+                        last_error = Some(error);
+
+                        if attempt < max_tries - 1 {
+                            let delay_ms = base_wait_time_ms * (1 << attempt.min(3));
+                            debug!("Retrying after {}ms (attempt {})", delay_ms, attempt + 2);
+                            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                        }
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    let connect_time = request_start_time.elapsed().as_millis();
+                    let error = anyhow!("Responses request connection failed: {}", e);
+                    warn!(
+                        "Responses request connection failed: {}ms, attempt {}/{}, error: {}",
+                        connect_time,
+                        attempt + 1,
+                        max_tries,
+                        e
+                    );
+                    last_error = Some(error);
+
+                    if attempt < max_tries - 1 {
+                        let delay_ms = base_wait_time_ms * (1 << attempt.min(3));
+                        debug!("Retrying after {}ms (attempt {})", delay_ms, attempt + 2);
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                    continue;
+                }
+            };
+
+            let (tx, rx) = mpsc::unbounded_channel();
+            let (tx_raw, rx_raw) = mpsc::unbounded_channel();
+
+            tokio::spawn(handle_responses_stream(response, tx, Some(tx_raw)));
+
+            return Ok(StreamResponse {
+                stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
+                raw_sse_rx: Some(rx_raw),
+            });
+        }
+
+        let error_msg = format!(
+            "Responses request failed after {} attempts: {}",
             max_tries,
             last_error.unwrap_or_else(|| anyhow!("Unknown error"))
         );

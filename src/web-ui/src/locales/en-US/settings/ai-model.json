@@ -149,6 +149,7 @@
   },
   "formats": {
     "openaiCompatible": "OpenAI Compatible",
+    "responsesApi": "OpenAI Responses API",
     "claudeApi": "Claude API"
   },
   "actions": {

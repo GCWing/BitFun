@@ -37,7 +37,7 @@ export interface OnboardingModelConfig {
   modelName?: string;
   testPassed?: boolean;
   // Fields needed for saving the model config on completion
-  format?: 'openai' | 'anthropic';
+  format?: 'openai' | 'responses' | 'anthropic';
   configName?: string;
   customRequestBody?: string;
   skipSslVerify?: boolean;

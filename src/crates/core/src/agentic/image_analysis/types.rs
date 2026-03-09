@@ -117,7 +117,7 @@ impl ImageLimits {
     /// Get limits based on model provider
     pub fn for_provider(provider: &str) -> Self {
         match provider.to_lowercase().as_str() {
-            "openai" => Self {
+            "openai" | "response" | "responses" => Self {
                 max_size: 20 * 1024 * 1024, // 20MB
                 max_width: 2048,
                 max_height: 2048,

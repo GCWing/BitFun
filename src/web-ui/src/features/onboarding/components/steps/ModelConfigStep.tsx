@@ -33,8 +33,8 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
   const [apiKey, setApiKey] = useState(modelConfig?.apiKey || '');
   const [baseUrl, setBaseUrl] = useState(modelConfig?.baseUrl || '');
   const [modelName, setModelName] = useState(modelConfig?.modelName || '');
-  const [customFormat, setCustomFormat] = useState<'openai' | 'anthropic'>(
-    (modelConfig?.format as 'openai' | 'anthropic') || 'openai'
+  const [customFormat, setCustomFormat] = useState<'openai' | 'responses' | 'anthropic'>(
+    (modelConfig?.format as 'openai' | 'responses' | 'anthropic') || 'openai'
   );
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
   const [testError, setTestError] = useState<string>('');
@@ -120,7 +120,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
     const effectiveModelName = modelName || (template?.models[0] || '');
 
     // Derive format
-    let format: 'openai' | 'anthropic' = customFormat;
+    let format: 'openai' | 'responses' | 'anthropic' = customFormat;
     if (template) {
       if (template.baseUrlOptions?.length) {
         const effectiveUrl = baseUrl || template.baseUrl;
@@ -501,10 +501,11 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                 label={t('model.format.label')}
                 options={[
                   { label: 'OpenAI', value: 'openai' },
+                  { label: 'OpenAI Responses', value: 'responses' },
                   { label: 'Anthropic', value: 'anthropic' }
                 ]}
                 value={customFormat}
-                onChange={(val) => setCustomFormat(val as 'openai' | 'anthropic')}
+                onChange={(val) => setCustomFormat(val as 'openai' | 'responses' | 'anthropic')}
                 placeholder={t('model.format.placeholder')}
               />
             </div>

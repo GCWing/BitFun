@@ -100,7 +100,7 @@
     "searchApiHint": "智谱AI搜索API地址，或其他兼容的搜索API地址",
     "apiKey": "API密钥",
     "apiKeyPlaceholder": "输入您的 API Key",
-    "provider": "请求规范",
+    "provider": "请求格式",
     "providerPlaceholder": "选择请求格式",
     "contextWindow": "上下文窗口大小",
     "contextWindowHint": "模型支持的最大上下文窗口大小（用于计算token占用百分比）",
@@ -118,7 +118,7 @@
   "details": {
     "basicInfo": "基本信息",
     "modelName": "模型名称",
-    "provider": "请求规范",
+    "provider": "请求格式",
     "apiUrl": "API地址",
     "contextWindow": "上下文窗口",
     "maxOutput": "最大输出",
@@ -149,6 +149,7 @@
   },
   "formats": {
     "openaiCompatible": "OpenAI 兼容",
+    "responsesApi": "OpenAI Responses API",
     "claudeApi": "Claude API"
   },
   "actions": {

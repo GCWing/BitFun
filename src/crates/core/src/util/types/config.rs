@@ -25,6 +25,7 @@ fn resolve_request_url(base_url: &str, provider: &str) -> String {
 
     match provider.trim().to_ascii_lowercase().as_str() {
         "openai" => append_endpoint(&trimmed, "chat/completions"),
+        "response" | "responses" => append_endpoint(&trimmed, "responses"),
         "anthropic" => append_endpoint(&trimmed, "v1/messages"),
         _ => trimmed,
     }
@@ -51,6 +52,43 @@ pub struct AIConfig {
     pub skip_ssl_verify: bool,
     /// Custom JSON overriding default request body fields
     pub custom_request_body: Option<serde_json::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_request_url;
+
+    #[test]
+    fn resolves_openai_request_url() {
+        assert_eq!(
+            resolve_request_url("https://api.openai.com/v1", "openai"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn resolves_responses_request_url() {
+        assert_eq!(
+            resolve_request_url("https://api.openai.com/v1", "responses"),
+            "https://api.openai.com/v1/responses"
+        );
+    }
+
+    #[test]
+    fn resolves_response_alias_request_url() {
+        assert_eq!(
+            resolve_request_url("https://api.openai.com/v1", "response"),
+            "https://api.openai.com/v1/responses"
+        );
+    }
+
+    #[test]
+    fn keeps_forced_request_url() {
+        assert_eq!(
+            resolve_request_url("https://api.openai.com/v1/responses#", "responses"),
+            "https://api.openai.com/v1/responses"
+        );
+    }
 }
 
 impl TryFrom<AIModelConfig> for AIConfig {

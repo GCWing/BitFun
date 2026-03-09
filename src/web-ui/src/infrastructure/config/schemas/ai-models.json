@@ -116,6 +116,11 @@
                               "description": "GPT-3.5, GPT-4 等模型"
                             },
                             {
+                              "value": "responses",
+                              "label": "OpenAI Responses",
+                              "description": "OpenAI Responses API /responses 兼容模型"
+                            },
+                            {
                               "value": "anthropic",
                               "label": "Anthropic",
                               "description": "Claude 系列模型"

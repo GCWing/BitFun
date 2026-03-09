@@ -25,6 +25,7 @@ const log = createLogger('AIModelConfig');
  * Rules:
  *   - Ends with '#'  → strip '#', use as-is (force override)
  *   - openai         → append '/chat/completions' unless already present
+ *   - responses      → append '/responses' unless already present
  *   - anthropic      → append '/v1/messages' unless already present
  *   - other          → use base_url as-is
  */
@@ -35,6 +36,9 @@ function resolveRequestUrl(baseUrl: string, provider: string): string {
   }
   if (provider === 'openai') {
     return trimmed.endsWith('chat/completions') ? trimmed : `${trimmed}/chat/completions`;
+  }
+  if (provider === 'response' || provider === 'responses') {
+    return trimmed.endsWith('responses') ? trimmed : `${trimmed}/responses`;
   }
   if (provider === 'anthropic') {
     return trimmed.endsWith('v1/messages') ? trimmed : `${trimmed}/v1/messages`;
@@ -68,6 +72,15 @@ const AIModelConfig: React.FC = () => {
     password: ''
   });
   const [isProxySaving, setIsProxySaving] = useState(false);
+
+  const requestFormatOptions = useMemo(
+    () => [
+      { label: 'OpenAI (chat/completions)', value: 'openai' },
+      { label: 'OpenAI (responses)', value: 'responses' },
+      { label: 'Anthropic (messages)', value: 'anthropic' },
+    ],
+    []
+  );
 
   
   useEffect(() => {
@@ -662,7 +675,7 @@ const AIModelConfig: React.FC = () => {
                     </div>
                   )}
                 </ConfigPageRow>
-                <ConfigPageRow label={t('form.provider')} description={t('providerSelection.formatHint')} align="center">
+                <ConfigPageRow label={t('form.provider')} description={t('providerSelection.formatHint')} align="center" wide>
                   <Select
                     value={editingConfig.provider || 'openai'}
                     onChange={(value) => setEditingConfig(prev => ({
@@ -671,7 +684,7 @@ const AIModelConfig: React.FC = () => {
                       request_url: resolveRequestUrl(prev?.base_url || '', value as string)
                     }))}
                     placeholder={t('form.providerPlaceholder')}
-                    options={[{ label: 'OpenAI', value: 'openai' }, { label: 'Anthropic', value: 'anthropic' }]}
+                    options={requestFormatOptions}
                   />
                 </ConfigPageRow>
                 <ConfigPageRow label={t('form.contextWindow')} description={t('form.contextWindowHint')} align="center">
@@ -734,8 +747,8 @@ const AIModelConfig: React.FC = () => {
                 <ConfigPageRow label={`${t('form.modelName')} *`} description={editingConfig.category === 'speech_recognition' ? t('form.modelNameHint') : undefined} align="center" wide>
                   <Input value={editingConfig.model_name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, model_name: e.target.value }))} placeholder={editingConfig.category === 'speech_recognition' ? 'glm-asr' : 'glm-4.7'} inputSize="small" />
                 </ConfigPageRow>
-                <ConfigPageRow label={t('form.provider')} align="center">
-                  <Select value={editingConfig.provider || 'openai'} onChange={(value) => setEditingConfig(prev => ({ ...prev, provider: value as string }))} placeholder={t('form.providerPlaceholder')} options={[{ label: 'OpenAI', value: 'openai' }, { label: 'Anthropic', value: 'anthropic' }]} />
+                <ConfigPageRow label={t('form.provider')} align="center" wide>
+                  <Select value={editingConfig.provider || 'openai'} onChange={(value) => setEditingConfig(prev => ({ ...prev, provider: value as string }))} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} />
                 </ConfigPageRow>
                 {editingConfig.category !== 'speech_recognition' && (
                   <>
@@ -1104,4 +1117,3 @@ const AIModelConfig: React.FC = () => {
 };
 
 export default AIModelConfig;
-
