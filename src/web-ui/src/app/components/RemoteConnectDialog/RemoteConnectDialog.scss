@@ -246,10 +246,18 @@
 .bitfun-remote-connect__description {
   font-size: 12px;
   color: var(--color-text-muted);
-  text-align: center;
   line-height: 1.6;
   margin: 0;
+  width: 100%;
   max-width: 420px;
+}
+
+.bitfun-remote-connect__hint {
+  text-align: center;
+}
+
+.bitfun-remote-connect__description {
+  text-align: left;
 }
 
 .bitfun-remote-connect__description-link {
@@ -292,32 +300,33 @@
 
 // ==================== Input ====================
 
-.bitfun-remote-connect__input-group {
+.bitfun-remote-connect__field {
   width: 100%;
   max-width: 280px;
 
-  label {
-    display: block;
+  .bitfun-input-label {
     font-size: 12px;
     color: var(--color-text-muted);
-    margin-bottom: 4px;
+    margin-bottom: 0;
+  }
+
+  .bitfun-input-container {
+    min-height: 32px;
+  }
+
+  &--inline {
+    max-width: 360px;
+
+    .bitfun-input-container {
+      gap: 12px;
+    }
   }
 }
 
-.bitfun-remote-connect__input {
-  width: 100%;
-  padding: 6px 10px;
-  font-size: 13px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-primary);
-  outline: none;
-  box-sizing: border-box;
-
-  &:focus {
-    border-color: var(--color-accent);
-  }
+.bitfun-remote-connect__field-prefix {
+  min-width: 72px;
+  color: var(--color-text-secondary);
+  text-align: left;
 }
 
 // ==================== Buttons ====================
@@ -368,29 +377,36 @@
 
 .bitfun-remote-connect__bot-guide {
   width: 100%;
-  max-width: 380px;
+  max-width: 460px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
 
-  .bitfun-remote-connect__input-group {
+  .bitfun-remote-connect__field {
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin: 0 auto;
 
-    label {
+    .bitfun-input-label {
       text-align: center;
     }
+  }
+
+  .bitfun-remote-connect__field--inline {
+    align-items: stretch;
   }
 }
 
 .bitfun-remote-connect__steps {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  gap: 6px;
   width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 .bitfun-remote-connect__step {
@@ -398,7 +414,7 @@
   color: var(--color-text-muted);
   line-height: 1.6;
   margin: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .bitfun-remote-connect__step-link {

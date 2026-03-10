@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
-import { Modal, Badge } from '@/component-library';
+import { Modal, Badge, Input } from '@/component-library';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   remoteConnectAPI,
@@ -432,14 +432,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           )}
         </p>
         {networkTab === 'custom_server' && (
-          <div className="bitfun-remote-connect__input-group">
-            <label>{t('remoteConnect.serverUrl')}</label>
-            <input
-              type="url" className="bitfun-remote-connect__input"
-              placeholder="https://relay.example.com:9700"
-              value={customUrl} onChange={(e) => setCustomUrl(e.target.value)}
-            />
-          </div>
+          <Input
+            className="bitfun-remote-connect__field"
+            label={t('remoteConnect.serverUrl')}
+            type="url"
+            placeholder="https://relay.example.com:9700"
+            value={customUrl}
+            onChange={(e) => setCustomUrl(e.target.value)}
+          />
         )}
         {renderErrorBlock()}
         <button
@@ -471,14 +471,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               <p className="bitfun-remote-connect__step">2. {t('remoteConnect.botTgStep2')}</p>
               <p className="bitfun-remote-connect__step">3. {t('remoteConnect.botTgStep3')}</p>
             </div>
-            <div className="bitfun-remote-connect__input-group">
-              <label>Bot Token</label>
-              <input
-                type="text" className="bitfun-remote-connect__input"
-                placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-                value={tgToken} onChange={(e) => setTgToken(e.target.value)}
-              />
-            </div>
+            <Input
+              className="bitfun-remote-connect__field"
+              label="Bot Token"
+              type="text"
+              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+              value={tgToken}
+              onChange={(e) => setTgToken(e.target.value)}
+            />
           </div>
         ) : (
           <div className="bitfun-remote-connect__bot-guide">
@@ -512,16 +512,22 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               <p className="bitfun-remote-connect__step">2. {t('remoteConnect.botFeishuStep2')}</p>
               <p className="bitfun-remote-connect__step">3. {t('remoteConnect.botFeishuStep3')}</p>
             </div>
-            <div className="bitfun-remote-connect__input-group">
-              <label>App ID</label>
-              <input type="text" className="bitfun-remote-connect__input" placeholder="cli_xxxxxxxx"
-                value={feishuAppId} onChange={(e) => setFeishuAppId(e.target.value)} />
-            </div>
-            <div className="bitfun-remote-connect__input-group">
-              <label>App Secret</label>
-              <input type="password" className="bitfun-remote-connect__input" placeholder="xxxxxxxxxxxxxxxx"
-                value={feishuAppSecret} onChange={(e) => setFeishuAppSecret(e.target.value)} />
-            </div>
+            <Input
+              className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
+              type="text"
+              placeholder="cli_xxxxxxxx"
+              prefix={<span className="bitfun-remote-connect__field-prefix">App ID</span>}
+              value={feishuAppId}
+              onChange={(e) => setFeishuAppId(e.target.value)}
+            />
+            <Input
+              className="bitfun-remote-connect__field bitfun-remote-connect__field--inline"
+              type="password"
+              placeholder="xxxxxxxxxxxxxxxx"
+              prefix={<span className="bitfun-remote-connect__field-prefix">App Secret</span>}
+              value={feishuAppSecret}
+              onChange={(e) => setFeishuAppSecret(e.target.value)}
+            />
           </div>
         )}
         {renderErrorBlock()}
