@@ -16,32 +16,32 @@
 
 创建企业自建应用
 
-![创建企业自建应用](./images/1.png)
+![创建企业自建应用](./images/zh-CN//1.png)
 
 ### 第三步
 
 添加应用能力 - 机器人 - 添加
 
-![添加机器人](./images/2.png)
+![添加机器人](./images/zh-CN//2.png)
 
 ### 第四步
 
 权限管理 - 开通权限 - 搜索"im:" - 是否需要审核选择"免审权限" - 全选 - 确认开通权限
 
-![开通权限](./images/3.png)
+![开通权限](./images/zh-CN//3.png)
 
 ### 第五步
 
 凭证与基础信息 - 复制 App ID 和 App Secret
 
-![凭证与基础信息](./images/4.png)
+![凭证与基础信息](./images/zh-CN//4.png)
 
 ### 第六步
 
 打开 BitFun - 远程连接 - SMS 机器人 - Feishu 机器人 - 填写 App ID 和 App Secret - 连接
 
-![连接1](./images/5.png)
-![连接2](./images/6.png)
+![连接1](./images/zh-CN//5.png)
+![连接2](./images/zh-CN//6.png)
 
 ### 第七步
 
@@ -53,8 +53,8 @@
 
 添加事件 - 搜索"im.message" - 全选 - 确认添加
 
-![事件配置1](./images/7.png)
-![事件配置2](./images/8.png)
+![事件配置1](./images/zh-CN//7.png)
+![事件配置2](./images/zh-CN//8.png)
 
 ### 第九步
 
@@ -62,16 +62,17 @@
 
 添加回调 - 搜索"card.action.trigger" - 选中 - 确认添加
 
-![回调配置1](./images/9.png)
-![回调配置2](./images/10.png)
+![回调配置1](./images/zh-CN//9.png)
+![回调配置2](./images/zh-CN//10.png)
 
 ### 第十步
 
 发布机器人
 
-![发布机器人1](./images/11.png)
-![发布机器人2](./images/12.png)
-![发布机器人3](./images/13.png)
+![发布机器人1](./images/zh-CN//11.png)
+![发布机器人2](./images/zh-CN//12.png)
+![发布机器人3](./images/zh-CN//13.png)
+![发布机器人4](./images/zh-CN//14.png)
 
 ### 第十一步
 
@@ -81,4 +82,4 @@
 
 被机器人要求输入6位验证码 - 输入 - 发送 - 连接成功
 
-![验证](./images/14.png)
+![验证](./images/zh-CN//15.png)
