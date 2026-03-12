@@ -259,7 +259,17 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({ workspace, isActive, isSi
           className="bitfun-nav-panel__workspace-item-name-btn"
           onClick={() => { void handleCardNameClick(); }}
         >
-          <span className="bitfun-nav-panel__workspace-item-label">{workspaceDisplayName}</span>
+          <span className="bitfun-nav-panel__workspace-item-title">
+            <span className="bitfun-nav-panel__workspace-item-label">{workspaceDisplayName}</span>
+            {isDefaultAssistantWorkspace ? (
+              <span
+                className="bitfun-nav-panel__workspace-item-badge"
+                title={t('nav.workspaces.primaryAssistant')}
+              >
+                {t('nav.workspaces.primaryAssistant')}
+              </span>
+            ) : null}
+          </span>
           {currentBranch ? (
             <span className="bitfun-nav-panel__workspace-item-branch">
               <GitBranch size={11} />

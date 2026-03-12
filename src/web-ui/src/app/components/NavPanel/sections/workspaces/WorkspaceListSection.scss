@@ -253,6 +253,30 @@
     font-weight: 600;
   }
 
+  &__workspace-item-title {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  &__workspace-item-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent-200) 88%, transparent);
+    color: var(--color-accent-500);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
   &__workspace-item-branch {
     display: inline-flex;
     align-items: center;

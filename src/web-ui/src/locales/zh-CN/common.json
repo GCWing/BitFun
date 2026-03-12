@@ -168,6 +168,7 @@
       "empty": "暂无已打开工作区",
       "emptyProjects": "暂无普通工作区",
       "emptyAssistants": "暂无个人助理",
+      "primaryAssistant": "主助理",
       "closeFailed": "关闭工作区失败",
       "createAssistantFailed": "新建个人助理失败",
       "deleteAssistantFailed": "删除个人助理失败",

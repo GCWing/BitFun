@@ -168,6 +168,7 @@
       "empty": "No opened workspaces yet",
       "emptyProjects": "No project workspaces",
       "emptyAssistants": "No personal assistants",
+      "primaryAssistant": "Primary",
       "closeFailed": "Failed to close workspace",
       "createAssistantFailed": "Failed to create personal assistant",
       "deleteAssistantFailed": "Failed to delete personal assistant",
