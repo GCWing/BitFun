@@ -88,6 +88,8 @@ const CopyButton: React.FC<{ code: string }> = ({ code }) => {
 };
 
 const COMPUTER_LINK_PREFIX = 'computer://';
+const FILE_LINK_PREFIX = 'file://';
+const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
 
 const CODE_FILE_EXTENSIONS = new Set([
   'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'mts', 'cts',
@@ -120,9 +122,40 @@ const DOWNLOADABLE_EXTENSIONS = new Set([
   'ttf', 'otf', 'woff', 'woff2',
 ]);
 
+function normalizeFileLikeHref(rawHref: string): string {
+  let filePath = rawHref;
+
+  if (rawHref.startsWith(COMPUTER_LINK_PREFIX)) {
+    filePath = rawHref.slice(COMPUTER_LINK_PREFIX.length);
+  } else if (rawHref.startsWith(FILE_LINK_PREFIX)) {
+    filePath = rawHref.slice(FILE_LINK_PREFIX.length);
+  } else if (rawHref.startsWith('file:')) {
+    filePath = rawHref.slice('file:'.length);
+  }
+
+  if (filePath.startsWith(WORKSPACE_FOLDER_PLACEHOLDER)) {
+    filePath = filePath.slice(WORKSPACE_FOLDER_PLACEHOLDER.length);
+    if (filePath.startsWith('/')) {
+      filePath = filePath.slice(1);
+    }
+  }
+
+  // Normalize URI-like Windows absolute paths such as `/C:/Users/...`.
+  if (/^\/[A-Za-z]:[\\/]/.test(filePath)) {
+    filePath = filePath.slice(1);
+  }
+
+  try {
+    return decodeURIComponent(filePath);
+  } catch {
+    return filePath;
+  }
+}
+
 /**
- * Detect local file links: absolute paths, file:// URLs, and relative paths
- * pointing to downloadable files. Returns the file path or null.
+ * Detect local file links: absolute paths, file:// URLs, computer:// URLs, and
+ * relative paths pointing to downloadable files. Returns the normalized file
+ * path or null.
  *
  * - Absolute paths (`/Users/.../file.pdf`): use CODE_FILE_EXTENSIONS blacklist
  * - Relative paths (`report.pptx`, `./output.pdf`): use DOWNLOADABLE_EXTENSIONS whitelist
@@ -131,12 +164,16 @@ function isLocalFileLink(href: string): string | null {
   if (!href || href === '/') return null;
 
   let filePath: string;
-  if (href.startsWith('file://')) {
-    filePath = href.slice(7);
+  if (
+    href.startsWith(COMPUTER_LINK_PREFIX) ||
+    href.startsWith(FILE_LINK_PREFIX) ||
+    href.startsWith('file:')
+  ) {
+    filePath = normalizeFileLikeHref(href);
   } else if (href.includes('://') || href.startsWith('#') || href.startsWith('//')) {
     return null;
   } else {
-    filePath = href;
+    filePath = normalizeFileLikeHref(href);
   }
 
   if (filePath.startsWith('/')) {
@@ -376,7 +413,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
         typeof href === 'string' && href.startsWith(COMPUTER_LINK_PREFIX);
 
       if (isComputerLink && onGetFileInfo && onFileDownload) {
-        const filePath = href.slice(COMPUTER_LINK_PREFIX.length);
+        const filePath = normalizeFileLikeHref(href);
         return (
           <FileCard
             path={filePath}
@@ -387,7 +424,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
       }
       // Fallback: plain clickable link when only onFileDownload is available.
       if (isComputerLink && onFileDownload) {
-        const filePath = href.slice(COMPUTER_LINK_PREFIX.length);
+        const filePath = normalizeFileLikeHref(href);
         return (
           <button
             className="file-link"
