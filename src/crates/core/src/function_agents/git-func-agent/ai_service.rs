@@ -114,11 +114,12 @@ impl AIAnalysisService {
     }
 
     fn parse_commit_response(&self, response: &str) -> AgentResult<AICommitAnalysis> {
-        let json_str = self.extract_json_from_response(response)?;
+        let json_str = crate::util::extract_json_from_ai_response(response)
+            .ok_or_else(|| AgentError::analysis_error("Cannot extract JSON from response"))?;
 
-        let value: Value = serde_json::from_str(&json_str).map_err(|e| {
-            AgentError::analysis_error(format!("Failed to parse AI response: {}", e))
-        })?;
+        let value: Value = serde_json::from_str(&json_str)
+            .map_err(|e| AgentError::analysis_error(format!("Failed to parse AI response: {}", e)))?;
+
 
         Ok(AICommitAnalysis {
             commit_type: self.parse_commit_type(value["type"].as_str().unwrap_or("chore"))?,
@@ -137,33 +138,6 @@ impl AIAnalysisService {
         })
     }
 
-    fn extract_json_from_response(&self, response: &str) -> AgentResult<String> {
-        let trimmed = response.trim();
-
-        if trimmed.starts_with('{') {
-            return Ok(trimmed.to_string());
-        }
-
-        if let Some(start) = trimmed.find("```json") {
-            let json_start = start + 7;
-            if let Some(end_offset) = trimmed[json_start..].find("```") {
-                let json_end = json_start + end_offset;
-                let json_str = trimmed[json_start..json_end].trim();
-                return Ok(json_str.to_string());
-            }
-        }
-
-        if let Some(start) = trimmed.find('{') {
-            if let Some(end) = trimmed.rfind('}') {
-                let json_str = &trimmed[start..=end];
-                return Ok(json_str.to_string());
-            }
-        }
-
-        Err(AgentError::analysis_error(
-            "Cannot extract JSON from response",
-        ))
-    }
 
     fn truncate_diff_if_needed(&self, diff: &str, max_chars: usize) -> String {
         if diff.len() <= max_chars {

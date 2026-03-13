@@ -8,6 +8,7 @@ import './MyAgentScene.scss';
 const ProfileScene = lazy(() => import('../profile/ProfileScene'));
 const AgentsScene = lazy(() => import('../agents/AgentsScene'));
 const SkillsScene = lazy(() => import('../skills/SkillsScene'));
+const InsightsScene = lazy(() => import('./InsightsScene'));
 
 interface MyAgentSceneProps {
   workspacePath?: string;
@@ -96,6 +97,7 @@ const MyAgentScene: React.FC<MyAgentSceneProps> = ({ workspacePath }) => {
         )}
         {activeView === 'agents' && <AgentsScene />}
         {activeView === 'skills' && <SkillsScene />}
+        {activeView === 'insights' && <InsightsScene />}
       </Suspense>
     </div>
   );

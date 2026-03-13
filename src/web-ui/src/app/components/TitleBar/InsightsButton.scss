@@ -1,0 +1,65 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.insights-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0 $size-gap-1;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover {
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    display: block;
+  }
+
+  // ── Generating state ──────────────────────────────
+  &--generating {
+    color: var(--color-accent-400);
+  }
+
+  &__progress {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__progress-text {
+    font-size: $font-size-xs;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  &__spinner {
+    animation: insights-btn-spin 1s linear infinite;
+  }
+}
+
+@keyframes insights-btn-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insights-btn__spinner {
+    animation: none;
+  }
+  .insights-btn {
+    transition: none;
+  }
+}

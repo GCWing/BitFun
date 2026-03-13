@@ -198,7 +198,8 @@ impl ImageAnalyzer {
     }
 
     fn parse_analysis_response(response: &str, image_id: &str) -> ImageAnalysisResult {
-        let json_str = Self::extract_json_from_markdown(response).unwrap_or(response);
+        let extracted = crate::util::extract_json_from_ai_response(response);
+        let json_str = extracted.as_deref().unwrap_or(response);
 
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
             return ImageAnalysisResult {
@@ -253,27 +254,4 @@ impl ImageAnalyzer {
         }
     }
 
-    fn extract_json_from_markdown(text: &str) -> Option<&str> {
-        if let Some(start_idx) = text.find("<|begin_of_box|>") {
-            let content_start = start_idx + "<|begin_of_box|>".len();
-            if let Some(end_idx) = text[content_start..].find("<|end_of_box|>") {
-                let json_content = &text[content_start..content_start + end_idx].trim();
-                debug!("Extracted Zhipu AI box format JSON");
-                return Some(json_content);
-            }
-        }
-
-        let start_markers = ["```json\n", "```\n"];
-
-        for marker in &start_markers {
-            if let Some(start_idx) = text.find(marker) {
-                let content_start = start_idx + marker.len();
-                if let Some(end_idx) = text[content_start..].find("```") {
-                    return Some(&text[content_start..content_start + end_idx].trim());
-                }
-            }
-        }
-
-        None
-    }
 }

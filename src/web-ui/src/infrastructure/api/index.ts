@@ -29,9 +29,10 @@ import { sessionAPI } from './service-api/SessionAPI';
 import { i18nAPI } from './service-api/I18nAPI';
 import { btwAPI } from './service-api/BtwAPI';
 import { tokenUsageApi } from './tokenUsageApi';
+import { insightsApi } from './insightsApi';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, tokenUsageApi };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, tokenUsageApi, insightsApi };
 
 // Export types
 export type { GitRepoHistory };
@@ -57,6 +58,7 @@ export const bitfunAPI = {
   i18n: i18nAPI,
   btw: btwAPI,
   tokenUsage: tokenUsageApi,
+  insights: insightsApi,
 };
 
 // Default export

@@ -51,7 +51,13 @@
     "dialog:allow-message",
     "opener:default",
     "opener:allow-open-url",
-    "opener:allow-open-path",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$HOME/**" }
+      ]
+    },
     "opener:allow-reveal-item-in-dir",
     "fs:default",
     "fs:allow-read-file",

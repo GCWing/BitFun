@@ -83,7 +83,8 @@
       "tools": "工具",
       "terminal": "Shell",
       "git": "Git",
-      "miniApps": "小应用"
+      "miniApps": "小应用",
+      "insights": "洞察"
     },
     "tooltips": {
       "persona": "智能体档案 — 身份、规则、记忆、知识与能力",
@@ -108,7 +109,8 @@
       "title": "我的智能体",
       "categories": {
         "identity": "身份",
-        "collaboration": "协作"
+        "collaboration": "协作",
+        "analytics": "分析"
       }
     },
     "shell": {
@@ -724,5 +726,59 @@
       "newProject": "新建项目",
       "newProjectDesc": "从零开始创建一个全新的项目"
     }
+  },
+  "insights": {
+    "title": "洞察",
+    "buttonTooltip": "洞察",
+    "generating": "正在生成洞察...",
+    "generateNew": "生成新报告",
+    "generateBtn": "生成",
+    "history": "历史报告",
+    "noReports": "暂无报告，点击上方按钮生成第一份洞察报告。",
+    "backToList": "返回列表",
+    "openHtml": "打开完整报告",
+    "atAGlance": "概览",
+    "whatsWorking": "做得好的",
+    "whatsHindering": "遇到的阻碍",
+    "quickWins": "快速提升",
+    "lookingAhead": "展望未来",
+    "interactionStyle": "你如何使用 BitFun",
+    "sessions": "会话",
+    "messages": "消息",
+    "analyzed": "已分析",
+    "hours": "小时",
+    "days": "天",
+    "msgsPerDay": "消息/天",
+    "topGoals": "你的需求",
+    "topTools": "常用工具",
+    "languages": "编程语言",
+    "sessionTypes": "会话类型",
+    "projectAreas": "工作领域",
+    "bigWins": "亮眼成果",
+    "friction": "问题所在",
+    "suggestions": "建议",
+    "mdAdditions": "BITFUN.md 补充",
+    "featuresToTry": "推荐功能",
+    "usagePatterns": "使用模式",
+    "tryThisPrompt": "试试这个提示",
+    "horizon": "未来展望",
+    "error": "生成洞察报告失败",
+    "impact": "影响",
+    "rateLimited": "请求频率受限，正在逐个重试...",
+    "keepLatest5": "仅保留最近 5 份报告",
+    "openHtmlFailed": "打开报告失败",
+    "cancelBtn": "停止",
+    "outcomes": "结果分布",
+    "satisfaction": "满意度（推断）",
+    "responseTime": "响应时间分布",
+    "agentTypes": "智能体类型",
+    "medianResponseTime": "中位响应时间",
+    "avgResponseTime": "平均响应时间",
+    "frictionTypes": "主要摩擦类型",
+    "whatHelpedMost": "最有帮助的方面",
+    "toolErrors": "工具错误统计",
+    "timeOfDay": "按时段分布",
+    "lines": "行",
+    "files": "文件"
   }
 }

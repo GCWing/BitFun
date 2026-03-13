@@ -355,6 +355,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
           log.debug('Workspace selected', { workspace });
         }}
       />
+
     </>
   );
 };

@@ -10,6 +10,7 @@ import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/Toolb
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
 import NotificationButton from '../../TitleBar/NotificationButton';
+import InsightsButton from '../../TitleBar/InsightsButton';
 import { AboutDialog } from '../../AboutDialog';
 import { RemoteConnectDialog } from '../../RemoteConnectDialog';
 import {
@@ -222,6 +223,10 @@ const PersistentFooterActions: React.FC = () => {
         </button>
       </Tooltip>
 
+      <InsightsButton
+        className="bitfun-nav-panel__footer-btn"
+        tooltipPlacement="right"
+      />
       <NotificationButton className="bitfun-nav-panel__footer-btn" />
       <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
       <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
@@ -239,6 +244,7 @@ const PersistentFooterActions: React.FC = () => {
           onAgree={handleAgreeDisclaimer}
         />
       </Modal>
+
     </div>
   );
 };

@@ -83,7 +83,8 @@
       "tools": "Tools",
       "terminal": "Shell",
       "git": "Git",
-      "miniApps": "Mini App"
+      "miniApps": "Mini App",
+      "insights": "Insights"
     },
     "tooltips": {
       "persona": "Agent profile — identity, rules, memory, knowledge & capabilities",
@@ -108,7 +109,8 @@
       "title": "My Agent",
       "categories": {
         "identity": "Identity",
-        "collaboration": "Collaboration"
+        "collaboration": "Collaboration",
+        "analytics": "Analytics"
       }
     },
     "shell": {
@@ -724,5 +726,59 @@
       "newProject": "New Project",
       "newProjectDesc": "Create a brand new project from scratch."
     }
+  },
+  "insights": {
+    "title": "Insights",
+    "buttonTooltip": "Insights",
+    "generating": "Generating insights...",
+    "generateNew": "Generate New Report",
+    "generateBtn": "Generate",
+    "history": "Report History",
+    "noReports": "No reports yet. Generate your first insights report above.",
+    "backToList": "Back to list",
+    "openHtml": "Open Full Report",
+    "atAGlance": "At a Glance",
+    "whatsWorking": "What's working",
+    "whatsHindering": "What's hindering you",
+    "quickWins": "Quick wins to try",
+    "lookingAhead": "Looking ahead",
+    "interactionStyle": "How You Use BitFun",
+    "sessions": "Sessions",
+    "messages": "Messages",
+    "analyzed": "analyzed",
+    "hours": "Hours",
+    "days": "Days",
+    "msgsPerDay": "Msgs/Day",
+    "topGoals": "What You Wanted",
+    "topTools": "Top Tools Used",
+    "languages": "Languages",
+    "sessionTypes": "Session Types",
+    "projectAreas": "What You Work On",
+    "bigWins": "Impressive Things You Did",
+    "friction": "Where Things Go Wrong",
+    "suggestions": "Suggestions",
+    "mdAdditions": "BITFUN.md Additions",
+    "featuresToTry": "Features to Try",
+    "usagePatterns": "Usage Patterns",
+    "tryThisPrompt": "Try this prompt",
+    "horizon": "On the Horizon",
+    "error": "Failed to generate insights report",
+    "impact": "Impact",
+    "rateLimited": "Rate limited, retrying sequentially...",
+    "keepLatest5": "Only the 5 most recent reports are kept",
+    "openHtmlFailed": "Failed to open report",
+    "cancelBtn": "Stop",
+    "outcomes": "Outcomes",
+    "satisfaction": "Satisfaction (Inferred)",
+    "responseTime": "Response Time Distribution",
+    "agentTypes": "Agent Types",
+    "medianResponseTime": "Median Response",
+    "avgResponseTime": "Avg Response",
+    "frictionTypes": "Primary Friction Types",
+    "whatHelpedMost": "What Helped Most",
+    "toolErrors": "Tool Errors Encountered",
+    "timeOfDay": "Messages by Time of Day",
+    "lines": "Lines",
+    "files": "Files"
   }
 }

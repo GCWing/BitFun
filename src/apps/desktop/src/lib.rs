@@ -636,6 +636,12 @@ pub async fn run() {
             // Browser API
             api::browser_api::browser_webview_eval,
             api::browser_api::browser_get_url,
+            // Insights API
+            api::insights_api::generate_insights,
+            api::insights_api::get_latest_insights,
+            api::insights_api::load_insights_report,
+            api::insights_api::has_insights_data,
+            api::insights_api::cancel_insights_generation,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = run_result {

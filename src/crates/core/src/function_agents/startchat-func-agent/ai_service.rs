@@ -139,25 +139,20 @@ impl AIWorkStateService {
     }
 
     fn parse_complete_analysis(&self, response: &str) -> AgentResult<AIGeneratedAnalysis> {
-        let json_str = if let Some(start) = response.find('{') {
-            if let Some(end) = response.rfind('}') {
-                &response[start..=end]
-            } else {
-                response
-            }
-        } else {
-            response
-        };
+        let json_str = crate::util::extract_json_from_ai_response(response)
+            .ok_or_else(|| {
+                error!("Failed to extract JSON from analysis response: {}", response);
+                AgentError::internal_error("Failed to extract JSON from analysis response")
+            })?;
 
         debug!("Parsing JSON response: length={}", json_str.len());
 
-        let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
-            error!(
-                "Failed to parse complete analysis response: {}, response: {}",
-                e, response
-            );
-            AgentError::internal_error(format!("Failed to parse complete analysis response: {}", e))
-        })?;
+        let parsed: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| {
+                error!("Failed to parse complete analysis response: {}, response: {}", e, response);
+                AgentError::internal_error(format!("Failed to parse complete analysis response: {}", e))
+            })?;
+
 
         let summary = parsed["summary"]
             .as_str()
