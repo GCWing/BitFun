@@ -17,7 +17,6 @@ import { useApp } from '../../../../hooks/useApp';
 import type { SceneTabId } from '../../../SceneBar/types';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
-import type { SessionMode } from '../../../../stores/sessionModeStore';
 import './SessionsSection.scss';
 
 const MAX_VISIBLE_SESSIONS = 8;

@@ -216,6 +216,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
       if (!itemId) return;
 
+      // Wait two frames for Virtuoso to settle after instant scrollToIndex before
+      // searching the DOM. This avoids finding an element that Virtuoso is about
+      // to recycle when it processes the new scroll position.
+      await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+
       // Then focus the specific flow item (marker) within the DOM.
       // Retry a few times because virtualization/paint can lag behind the scroll.
       const maxAttempts = 120;
@@ -237,12 +242,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
             requestAnimationFrame(tryFocus);
           }
           return;
-        }
-
-        try {
-          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        } catch {
-          // ignore
         }
 
         el.classList.add('flowchat-flow-item--focused');

@@ -338,12 +338,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     stickToBottomRef.current = false;
 
     if (index === 0) {
-      virtuosoRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      virtuosoRef.current.scrollTo({ top: 0, behavior: 'auto' });
     } else {
       virtuosoRef.current.scrollToIndex({
         index,
         align: 'center',
-        behavior: 'smooth',
+        behavior: 'auto',
       });
     }
 
