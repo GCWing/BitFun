@@ -55,6 +55,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({ className = '' 
       ].filter(Boolean).join(' ')}
       onClick={() => notificationService.toggleCenter()}
       type="button"
+      data-testid="notification-button"
     >
       {activeNotification ? (
         <>

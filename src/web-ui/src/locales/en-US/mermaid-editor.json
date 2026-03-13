@@ -97,6 +97,18 @@
   "loading": {
     "processing": "Processing..."
   },
+  "export": {
+    "loading": {
+      "svgTitle": "Exporting SVG",
+      "svgMessage": "Generating SVG file...",
+      "pngTitle": "Exporting PNG",
+      "pngMessage": "Rendering diagram and generating PNG..."
+    },
+    "success": {
+      "svg": "SVG exported successfully",
+      "png": "PNG exported successfully"
+    }
+  },
   "panel": {
     "diagramName": "Mermaid Diagram"
   },

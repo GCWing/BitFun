@@ -114,38 +114,81 @@ export class MermaidService {
     return this.renderDiagram(sourceCode);
   }
 
-  /** Export as PNG. */
-  public async exportAsPNG(sourceCode: string, scale: number = 2): Promise<Blob> {
-    const svg = await this.exportAsSVG(sourceCode);
-    
+  /**
+   * Export as PNG by loading the self-contained SVG markup into an Image
+   * element, drawing it onto a canvas, and extracting the result as a Blob.
+   *
+   * This avoids html-to-image which re-serializes the DOM and often breaks
+   * foreignObject content and inline styles.
+   */
+  public async exportAsPNG(
+    sourceCode: string,
+    scale: number = 2,
+    svgMarkup?: string,
+    dims?: { width: number; height: number }
+  ): Promise<Blob> {
+    let svgContent = svgMarkup;
+    let width = dims?.width ?? 0;
+    let height = dims?.height ?? 0;
+
+    if (!svgContent) {
+      svgContent = await this.exportAsSVG(sourceCode);
+    }
+
+    if (!width || !height) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+      const svg = doc.documentElement;
+      const viewBox = svg.getAttribute('viewBox');
+      if (viewBox) {
+        const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+        if (parts.length >= 4) {
+          width = width || parts[2];
+          height = height || parts[3];
+        }
+      }
+      if (!width) width = parseFloat(svg.getAttribute('width') ?? '0') || 800;
+      if (!height) height = parseFloat(svg.getAttribute('height') ?? '0') || 600;
+    }
+
+    const e2eDelayMs = Number((window as Window & {
+      __BITFUN_E2E_PNG_EXPORT_DELAY_MS__?: number;
+    }).__BITFUN_E2E_PNG_EXPORT_DELAY_MS__ ?? 0);
+
+    if (e2eDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, e2eDelayMs));
+    }
+
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
+
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error('PNG export timed out')),
+        15000,
+      );
+      img.onload = () => { window.clearTimeout(timeout); resolve(); };
+      img.onerror = () => { window.clearTimeout(timeout); reject(new Error('Unable to load SVG as image')); };
+      img.src = dataUrl;
+    });
+
     const canvas = document.createElement('canvas');
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Unable to create canvas');
-    
-    const img = new Image();
-    const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(svgBlob);
-    
-    return new Promise((resolve, reject) => {
-      img.onload = () => {
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0);
-        
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(url);
-          blob ? resolve(blob) : reject(new Error('Unable to generate PNG'));
-        }, 'image/png');
-      };
-      
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Unable to load SVG'));
-      };
-      
-      img.src = url;
+
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(result => {
+        if (result) resolve(result);
+        else reject(new Error('Unable to generate PNG blob'));
+      }, 'image/png');
     });
+
+    return blob;
   }
 
   /** Dispose resources. */

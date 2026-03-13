@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Layers, Save, Download, Plus, Minus, Home, Edit3, MessageSquarePlus, Wrench } from 'lucide-react';
-import { IconButton, Button } from '@/component-library';
+import { IconButton } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './MermaidEditorHeader.css';
 
@@ -159,20 +159,16 @@ export const MermaidEditorHeader: React.FC<MermaidEditorHeaderProps> = ({
             <Save size={16} />
           </IconButton>
           
-          <div className="export-dropdown">
-            <IconButton
-              className="export-btn"
-              tooltip={t('header.export')}
-              tooltipPlacement="bottom"
-              size="small"
-            >
-              <Download size={16} />
-            </IconButton>
-            <div className="export-menu">
-              <Button variant="ghost" size="small" onClick={() => onExport('svg')}>SVG</Button>
-              <Button variant="ghost" size="small" onClick={() => onExport('png')}>PNG</Button>
-            </div>
-          </div>
+          <IconButton
+            className="export-btn"
+            onClick={() => onExport('png')}
+            tooltip={t('header.export')}
+            tooltipPlacement="bottom"
+            size="small"
+            data-testid="mermaid-export-png"
+          >
+            <Download size={16} />
+          </IconButton>
         </div>
       </div>
     </div>

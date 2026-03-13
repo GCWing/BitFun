@@ -16,3 +16,6 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# BitFun snapshot data - auto managed
+.bitfun/

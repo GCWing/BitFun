@@ -12,6 +12,10 @@ import { CubeLoading } from '@/component-library/components/CubeLoading';
 import { Sparkles } from 'lucide-react';
 import { aiApi } from '../../../infrastructure/api';
 import { useI18n } from '@/infrastructure/i18n';
+import { notificationService } from '@/shared/notification-system';
+
+import { downloadDir, join } from '@tauri-apps/api/path';
+import { writeFile } from '@tauri-apps/plugin-fs';
 import './MermaidEditor.css';
 
 /** Escape regex special characters. */
@@ -29,6 +33,130 @@ const detectDiagramType = (code: string): MermaidDiagramContext['diagramType'] =
   return 'other';
 };
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+
+const sanitizeFileName = (name: string) => name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'diagram';
+
+const createTimestampSuffix = () => {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+};
+
+const saveExportBlob = async (blob: Blob, baseName: string, extension: 'svg' | 'png') => {
+  const downloadsPath = await downloadDir();
+  const fileName = `${sanitizeFileName(baseName)}_${createTimestampSuffix()}.${extension}`;
+  const filePath = await join(downloadsPath, fileName);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  await writeFile(filePath, bytes);
+  return filePath;
+};
+
+/**
+ * Prepare a self-contained SVG element for export.
+ *
+ * cloneNode(true) already preserves:
+ *  - Mermaid's internal <style> block (with resolved theme colors)
+ *  - All inline styles set by applyBaseStyles (fill, stroke, etc.)
+ *
+ * We only need to: clean up interactive-only styles, set proper namespaces,
+ * add a background rect, and ensure dimensions are correct.
+ *
+ * IMPORTANT: Do NOT bulk-copy computed styles (getComputedStyle) onto elements —
+ * doing so injects hundreds of irrelevant CSS properties (width, display,
+ * overflow, …) that break SVG layout and rendering.
+ */
+const prepareExportSvg = (
+  sourceSvg: SVGElement,
+  dims: { width: number; height: number }
+) => {
+  const cloned = sourceSvg.cloneNode(true) as SVGElement;
+
+  const rootStyles = window.getComputedStyle(document.documentElement);
+  const previewContainer = sourceSvg.parentElement;
+  const previewBg = previewContainer
+    ? window.getComputedStyle(previewContainer).backgroundColor
+    : '';
+  const exportBgColor =
+    (previewBg && previewBg !== 'transparent' && previewBg !== 'rgba(0, 0, 0, 0)')
+      ? previewBg
+      : rootStyles.getPropertyValue('--mermaid-bg').trim()
+        || rootStyles.getPropertyValue('--color-bg-primary').trim()
+        || '#ffffff';
+
+  // Strip interactive-only styles irrelevant for static export.
+  cloned.style.transform = '';
+  cloned.style.transition = '';
+  cloned.style.transformOrigin = '';
+  cloned.style.position = '';
+  cloned.style.left = '';
+  cloned.style.top = '';
+  cloned.style.userSelect = '';
+  cloned.style.flexShrink = '';
+  cloned.style.width = '';
+  cloned.style.height = '';
+  cloned.style.minWidth = '';
+  cloned.style.minHeight = '';
+
+  cloned.setAttribute('width', String(dims.width));
+  cloned.setAttribute('height', String(dims.height));
+  cloned.setAttribute('xmlns', SVG_NS);
+  cloned.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+  if (!cloned.getAttribute('viewBox')) {
+    cloned.setAttribute('viewBox', `0 0 ${dims.width} ${dims.height}`);
+  }
+
+  // Ensure foreignObject HTML children carry the XHTML namespace
+  // (required for standalone SVG rendering / Image data-URI loading).
+  cloned.querySelectorAll('foreignObject').forEach(fo => {
+    Array.from(fo.children).forEach(child => {
+      if (!child.getAttribute('xmlns')) {
+        child.setAttribute('xmlns', XHTML_NS);
+      }
+    });
+  });
+
+  // Remove interactive helper attributes & styles from all descendants.
+  cloned.querySelectorAll('*').forEach(el => {
+    const htmlEl = el as HTMLElement;
+    if (htmlEl.style) {
+      htmlEl.style.cursor = '';
+      htmlEl.style.pointerEvents = '';
+      htmlEl.style.transition = '';
+    }
+    el.removeAttribute('data-original-fill');
+    el.removeAttribute('data-original-stroke');
+    el.removeAttribute('data-original-color');
+  });
+
+  // Insert a background rect that covers the full viewBox (which may have
+  // negative x/y offsets for padding), not just 0,0 → width,height.
+  const backgroundRect = document.createElementNS(SVG_NS, 'rect');
+  const viewBox = cloned.getAttribute('viewBox');
+  if (viewBox) {
+    const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+    if (parts.length >= 4) {
+      backgroundRect.setAttribute('x', String(parts[0]));
+      backgroundRect.setAttribute('y', String(parts[1]));
+      backgroundRect.setAttribute('width', String(parts[2]));
+      backgroundRect.setAttribute('height', String(parts[3]));
+    }
+  }
+  if (!backgroundRect.getAttribute('width')) {
+    backgroundRect.setAttribute('width', String(dims.width));
+    backgroundRect.setAttribute('height', String(dims.height));
+  }
+  backgroundRect.setAttribute('fill', exportBgColor);
+  const firstContent = Array.from(cloned.children).find(
+    c => !['style', 'defs'].includes(c.tagName.toLowerCase())
+  );
+  cloned.insertBefore(backgroundRect, firstContent ?? null);
+
+  return cloned;
+};
+
 export const MermaidEditor: React.FC<MermaidEditorProps> = React.memo(({
   initialSourceCode,
   onSave,
@@ -39,6 +167,7 @@ export const MermaidEditor: React.FC<MermaidEditorProps> = React.memo(({
   enableTooltips = true,
 }) => {
   const { t } = useI18n('mermaid-editor');
+  
   
   const {
     actions: { setSourceCode, setShowSourceEditor, setShowComponentLibrary, setLoading, setError },
@@ -118,21 +247,35 @@ export const MermaidEditor: React.FC<MermaidEditorProps> = React.memo(({
   }, [isDirty, onSave, sourceCode, setLoading, setError]);
 
   const handleExport = useCallback(async (format: string) => {
-    if (!onExport) return;
+    const loadingCtrl = notificationService.loading({
+      title: t('export.loading.pngTitle'),
+      message: t('export.loading.pngMessage'),
+    });
+
     try {
-      setLoading(true);
-      let exportData = sourceCode;
-      if (format === 'svg') {
-        const svgEl = document.querySelector('.mermaid-preview svg');
-        if (svgEl) exportData = new XMLSerializer().serializeToString(svgEl);
-      }
-      await onExport(format, exportData);
+      setError(null);
+
+      const svgEl = previewRef.current?.getSvgElement();
+      const dims = previewRef.current?.getSvgDimensions();
+      if (!svgEl) throw new Error(t('errors.exportFailed'));
+
+      const w = dims?.width ?? 800;
+      const h = dims?.height ?? 600;
+      const cloned = prepareExportSvg(svgEl, { width: w, height: h });
+      const svgData = new XMLSerializer().serializeToString(cloned);
+
+      const { mermaidService } = await import('../services/MermaidService');
+      const blob = await mermaidService.exportAsPNG(sourceCode, 2, svgData, { width: w, height: h });
+      const filePath = await saveExportBlob(blob, t('panel.diagramName'), 'png');
+      loadingCtrl.complete();
+      notificationService.success(filePath, { title: t('export.success.png') });
+      await onExport?.(format, '');
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.exportFailed'));
-    } finally {
-      setLoading(false);
+      const msg = err instanceof Error ? err.message : t('errors.exportFailed');
+      loadingCtrl.fail(`PNG ${t('errors.exportFailed')}: ${msg}`);
+      setError(msg);
     }
-  }, [onExport, sourceCode, setLoading, setError]);
+  }, [onExport, sourceCode, setError, t]);
 
   const handleComponentSelect = useCallback((component: MermaidComponent) => {
     setSourceCode(sourceCode + '\n' + component.code);
@@ -389,7 +532,7 @@ export const MermaidEditor: React.FC<MermaidEditorProps> = React.memo(({
   }, [floatingToolbar.isVisible]);
 
   return (
-    <div className={`mermaid-editor ${className}`} onClick={handleContainerClick}>
+    <div className={`mermaid-editor ${className}`} onClick={handleContainerClick} data-testid="mermaid-editor">
       <MermaidEditorHeader
         showComponentLibrary={showComponentLibrary}
         isDirty={isDirty}

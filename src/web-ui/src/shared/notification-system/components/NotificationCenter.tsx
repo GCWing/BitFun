@@ -329,7 +329,7 @@ export const NotificationCenter: React.FC = () => {
       showCloseButton={false}
       size="large"
     >
-      <div className="notification-center">
+      <div className="notification-center" data-testid="notification-center">
         
         <div className="notification-center__header">
           <h2 className="notification-center__title">{t('components:notificationCenter.title')}</h2>
@@ -401,7 +401,7 @@ export const NotificationCenter: React.FC = () => {
         <div className="notification-center__content">
           
           {activeTaskNotifications.length > 0 && (
-            <div className="notification-center__active-section">
+            <div className="notification-center__active-section" data-testid="notification-center-active-section">
               <div className="notification-center__active-section-title">
                 {t('components:notificationCenter.activeTasks.title', { count: activeTaskNotifications.length })}
               </div>

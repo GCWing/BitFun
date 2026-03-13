@@ -36,6 +36,8 @@ export interface MermaidPreviewRef {
   resetView: () => void;
   fitToContainer: () => void;
   getZoomLevel: () => number;
+  getSvgElement: () => SVGElement | null;
+  getSvgDimensions: () => { width: number; height: number } | null;
 }
 
 const RENDER_DEBOUNCE_DELAY = 200;
@@ -192,6 +194,8 @@ export const MermaidPreview = React.memo(forwardRef<MermaidPreviewRef, MermaidPr
   useImperativeHandle(ref, () => ({
     ...controls,
     fitToContainer: handleFitToContainer,
+    getSvgElement: () => svgRef.current,
+    getSvgDimensions: () => svgDimensionsRef.current,
   }), [controls, handleFitToContainer]);
 
   const renderDiagram = useCallback(async () => {

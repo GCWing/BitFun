@@ -243,61 +243,6 @@
   color: var(--color-text-primary, #e8e8e8) !important;
 }
 
-/* ==================== Export dropdown ==================== */
-.export-dropdown {
-  position: relative;
-}
-
-.export-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: var(--size-gap-1, 4px);
-  min-width: 100px;
-  background: var(--color-bg-elevated, #18181a);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
-  border-radius: var(--size-radius-sm, 6px);
-  box-shadow: var(--shadow-lg, 0 8px 16px rgba(0, 0, 0, 0.6));
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  transition: all 0.15s ease;
-  z-index: 100;
-}
-
-.export-dropdown:hover .export-menu,
-.export-dropdown:focus-within .export-menu {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.export-menu button {
-  display: block;
-  width: 100%;
-  padding: var(--size-gap-2, 8px) var(--size-gap-3, 12px);
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary, #a0a0a0);
-  font-size: var(--font-size-xs, 12px);
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.export-menu button:hover {
-  background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-  color: var(--color-text-primary, #e8e8e8);
-}
-
-.export-menu button:first-child {
-  border-radius: 5px 5px 0 0;
-}
-
-.export-menu button:last-child {
-  border-radius: 0 0 5px 5px;
-}
-
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
   .mermaid-editor-header {

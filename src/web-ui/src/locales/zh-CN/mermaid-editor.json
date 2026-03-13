@@ -97,6 +97,18 @@
   "loading": {
     "processing": "处理中..."
   },
+  "export": {
+    "loading": {
+      "svgTitle": "正在导出 SVG",
+      "svgMessage": "正在生成 SVG 文件...",
+      "pngTitle": "正在导出 PNG",
+      "pngMessage": "正在渲染图表并生成 PNG..."
+    },
+    "success": {
+      "svg": "SVG 导出成功",
+      "png": "PNG 导出成功"
+    }
+  },
   "panel": {
     "diagramName": "Mermaid图表"
   },
