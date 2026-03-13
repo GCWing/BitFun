@@ -30,6 +30,8 @@ const SCROLL_UP_THRESHOLD = 50;
 export interface VirtualMessageListRef {
   /** Scroll to a specific turn (1-based). */
   scrollToTurn: (turnIndex: number) => void;
+  /** Scroll to a specific virtual item index (0-based). */
+  scrollToIndex: (index: number) => void;
   /** Scroll to bottom. */
   scrollToBottom: () => void;
 }
@@ -42,11 +44,35 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   // false means the user is viewing history and auto-scroll is disabled.
   const [stickToBottom, setStickToBottom] = useState(true);
   const stickToBottomRef = useRef(true);
+  // When we programmatically navigate (e.g. jump to a marker), Virtuoso can briefly
+  // report "at bottom" due to thresholds, which would auto-reenable stick-to-bottom.
+  // Suppress that behavior for a short window after navigation.
+  const suppressAutoEnableStickToBottomRef = useRef(false);
+  const suppressAutoEnableTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Sync ref with state.
   useEffect(() => {
     stickToBottomRef.current = stickToBottom;
   }, [stickToBottom]);
+
+  useEffect(() => {
+    return () => {
+      if (suppressAutoEnableTimerRef.current) {
+        clearTimeout(suppressAutoEnableTimerRef.current);
+      }
+    };
+  }, []);
+
+  const beginNavigation = useCallback(() => {
+    suppressAutoEnableStickToBottomRef.current = true;
+    if (suppressAutoEnableTimerRef.current) {
+      clearTimeout(suppressAutoEnableTimerRef.current);
+    }
+    // Long enough to cover the scroll + DOM focus + atBottom recalculation.
+    suppressAutoEnableTimerRef.current = setTimeout(() => {
+      suppressAutoEnableStickToBottomRef.current = false;
+    }, 900);
+  }, []);
   
   // Track whether we're at bottom (for button visibility).
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -282,6 +308,11 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (virtuosoRef.current && turnIndex >= 1 && turnIndex <= userMessageItems.length) {
       const targetItem = userMessageItems[turnIndex - 1];
       if (targetItem) {
+        beginNavigation();
+        // Immediately exit stick-to-bottom to avoid a race where followOutput / delayed
+        // scroll-to-bottom pulls us back down before state updates propagate.
+        stickToBottomRef.current = false;
+
         if (targetItem.index === 0) {
           virtuosoRef.current.scrollTo({
             top: 0,
@@ -299,9 +330,35 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
   }, [userMessageItems]);
 
+  const scrollToIndex = useCallback((index: number) => {
+    if (!virtuosoRef.current) return;
+    if (index < 0 || index >= virtualItems.length) return;
+
+    beginNavigation();
+    stickToBottomRef.current = false;
+
+    if (index === 0) {
+      virtuosoRef.current.scrollTo({ top: 0, behavior: 'auto' });
+    } else {
+      virtuosoRef.current.scrollToIndex({
+        index,
+        align: 'center',
+        behavior: 'auto',
+      });
+    }
+
+    setStickToBottom(false);
+  }, [virtualItems.length]);
+
   // Scroll to bottom.
   const scrollToBottom = useCallback(() => {
     if (virtuosoRef.current && virtualItems.length > 0) {
+      suppressAutoEnableStickToBottomRef.current = false;
+      if (suppressAutoEnableTimerRef.current) {
+        clearTimeout(suppressAutoEnableTimerRef.current);
+        suppressAutoEnableTimerRef.current = null;
+      }
+      stickToBottomRef.current = true;
       virtuosoRef.current.scrollTo({
         top: 999999999,
         behavior: 'smooth',
@@ -350,8 +407,9 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   // Expose methods to parent components.
   useImperativeHandle(ref, () => ({
     scrollToTurn,
+    scrollToIndex,
     scrollToBottom,
-  }), [scrollToTurn, scrollToBottom]);
+  }), [scrollToTurn, scrollToIndex, scrollToBottom]);
   
   // Processing state from the state machine.
   const activeSessionState = useActiveSessionState();
@@ -475,7 +533,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     
     setIsAtBottom(atBottom);
     
-    if (atBottom && !stickToBottomRef.current) {
+    if (atBottom && !stickToBottomRef.current && !suppressAutoEnableStickToBottomRef.current) {
+      stickToBottomRef.current = true;
       setStickToBottom(true);
     }
   }, []);
@@ -508,6 +567,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         
         // Exit stick-to-bottom only after scrolling up past threshold.
         if (scrollDelta < -SCROLL_UP_THRESHOLD) {
+          stickToBottomRef.current = false;
           setStickToBottom(false);
         }
         
@@ -519,8 +579,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   // followOutput: honor stick-to-bottom; suppress during delayed scroll to avoid jitter.
   const handleFollowOutput = useCallback(() => {
     if (suppressFollowOutputRef.current) return false;
-    return stickToBottom ? 'smooth' : false;
-  }, [stickToBottom]);
+    return stickToBottomRef.current ? 'smooth' : false;
+  }, []);
 
   // Empty state.
   if (virtualItems.length === 0) {

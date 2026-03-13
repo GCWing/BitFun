@@ -22,6 +22,9 @@ pub mod coordination;
 // Image analysis module
 pub mod image_analysis;
 
+// Ephemeral side-question module (used by desktop /btw overlay)
+pub mod side_question;
+
 // Agents module
 pub mod agents;
 pub mod workspace;
@@ -36,4 +39,5 @@ pub use execution::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
 pub use session::*;
+pub use side_question::*;
 pub use workspace::WorkspaceBinding;

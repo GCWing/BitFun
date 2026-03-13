@@ -32,6 +32,7 @@ import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
+import { BtwMarkerCard } from './BtwMarkerCard';
 
 // Tool card config map - uses backend tool names
 export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
@@ -237,6 +238,18 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#8b5cf6'
   },
 
+  // /btw in-stream marker (frontend-inserted tool item)
+  'BtwMarker': {
+    toolName: 'BtwMarker',
+    displayName: 'Side thread',
+    icon: 'BTW',
+    requiresConfirmation: false,
+    resultDisplayType: 'hidden',
+    description: 'Side thread marker (child session link)',
+    displayMode: 'compact',
+    primaryColor: '#7aa6ff'
+  },
+
   // Git version control tool
   'Git': {
     toolName: 'Git',
@@ -353,6 +366,8 @@ export const TOOL_CARD_COMPONENTS = {
   // AskUserQuestion tool
   'AskUserQuestion': AskUserQuestionCard,
 
+  // /btw marker
+  'BtwMarker': BtwMarkerCard,
 
   // Git version control
   'Git': GitToolDisplay,

@@ -182,8 +182,10 @@
   },
   "chatInput": {
     "switchMode": "切换模式",
+    "quickAction": "快捷操作",
     "currentMode": "当前模式: {{mode}}",
     "noMatchingMode": "没有匹配的模式",
+    "noMatchingCommand": "没有匹配的命令",
     "selectHint": "↑↓ 选择 · Enter 确认 · Esc 取消",
     "current": "当前",
     "professionalMode": "专业模式",
@@ -252,6 +254,25 @@
   "smartRecommendations": {
     "title": "💡 智能推荐",
     "close": "关闭"
+  },
+  "btw": {
+    "title": "BTW",
+    "hint": "不保存 · 使用当前对话上下文 · 无工具",
+    "placeholder": "问个小问题…",
+    "ask": "提问",
+    "asking": "思考中…",
+    "cancel": "停止",
+    "openThread": "打开子会话",
+    "threadLabel": "子会话",
+    "origin": "来自",
+    "parent": "父会话",
+    "turnLabel": "第 {{index}} 轮",
+    "back": "返回",
+    "backToParent": "返回父会话",
+    "empty": "请在 /btw 后面写上问题",
+    "error": "失败",
+    "close": "关闭",
+    "noSession": "当前没有可用于 /btw 的会话"
   },
   "flowChatHeader": {
     "previousTurn": "上一轮对话",

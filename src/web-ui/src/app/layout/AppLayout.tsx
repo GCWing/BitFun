@@ -27,6 +27,7 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
+import { shortcutManager } from '@/infrastructure/services/ShortcutManager';
 import './AppLayout.scss';
 
 const log = createLogger('AppLayout');
@@ -277,6 +278,27 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     };
     window.addEventListener('toolbar-send-message', handleToolbarSendMessage);
     return () => window.removeEventListener('toolbar-send-message', handleToolbarSendMessage);
+  }, []);
+
+  // Global /btw shortcut (Ctrl/Cmd+Alt+B): fill ChatInput with "/btw ".
+  React.useEffect(() => {
+    const unregister = shortcutManager.register(
+      'btw-fill',
+      { key: 'B', ctrl: true, alt: true },
+      () => {
+        const selected = (window.getSelection?.()?.toString() ?? '').trim();
+        const message = selected ? `/btw Explain this:\n\n${selected}` : '/btw ';
+        window.dispatchEvent(new CustomEvent('fill-chat-input', { detail: { message } }));
+      },
+      {
+        description: 'Fill /btw into chat input',
+        priority: 20
+      }
+    );
+
+    return () => {
+      unregister();
+    };
   }, []);
 
   // Toolbar cancel task

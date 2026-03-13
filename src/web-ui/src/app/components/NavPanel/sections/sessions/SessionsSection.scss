@@ -90,6 +90,29 @@
       outline: 1px solid var(--color-accent-500);
       outline-offset: -1px;
     }
+
+    &.is-child {
+      height: 24px;
+      font-size: 12px;
+      padding-left: calc(#{$size-gap-1} + 14px);
+      position: relative;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        width: 10px;
+        height: 1px;
+        background: var(--border-subtle);
+        opacity: 0.9;
+        transform: translateY(-50%);
+      }
+
+      .bitfun-nav-panel__inline-item-icon {
+        opacity: 0.55;
+      }
+    }
   }
 
   &__inline-item-icon {

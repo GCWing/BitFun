@@ -621,31 +621,33 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item }) => {
     
     case 'tool':
       return wrapContent(
-        <FlowToolCard
-          toolItem={item as FlowToolItem}
-          onConfirm={async (toolId: string, updatedInput?: any) => {
-            if (onToolConfirm) {
-              await onToolConfirm(toolId, updatedInput);
-            }
-          }}
-          onReject={async () => {
-            if (onToolReject) {
-              await onToolReject(item.id);
-            }
-          }}
-          onOpenInEditor={(filePath: string) => {
-            if (onFileViewRequest) {
-              onFileViewRequest(filePath, filePath.split(/[/\\]/).pop() || filePath);
-            }
-          }}
-          onOpenInPanel={(_panelType: string, data: any) => {
-            if (onTabOpen) {
-              // data contains the full tabInfo payload.
-              onTabOpen(data, sessionId);
-            }
-          }}
-          sessionId={sessionId}
-        />
+        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+          <FlowToolCard
+            toolItem={item as FlowToolItem}
+            onConfirm={async (toolId: string, updatedInput?: any) => {
+              if (onToolConfirm) {
+                await onToolConfirm(toolId, updatedInput);
+              }
+            }}
+            onReject={async () => {
+              if (onToolReject) {
+                await onToolReject(item.id);
+              }
+            }}
+            onOpenInEditor={(filePath: string) => {
+              if (onFileViewRequest) {
+                onFileViewRequest(filePath, filePath.split(/[/\\]/).pop() || filePath);
+              }
+            }}
+            onOpenInPanel={(_panelType: string, data: any) => {
+              if (onTabOpen) {
+                // data contains the full tabInfo payload.
+                onTabOpen(data, sessionId);
+              }
+            }}
+            sessionId={sessionId}
+          />
+        </div>
       );
     
     default:

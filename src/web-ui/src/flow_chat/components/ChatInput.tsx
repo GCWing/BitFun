@@ -16,7 +16,7 @@ import { SessionExecutionEvent } from '../state-machine/types';
 import TokenUsageIndicator from './TokenUsageIndicator';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
-import type { FlowChatState } from '../types/flow-chat';
+import type { FlowChatState, Session } from '../types/flow-chat';
 import type { FileContext, DirectoryContext } from '../../shared/types/context';
 import type { PromptTemplate } from '../../shared/types/prompt-template';
 import { SmartRecommendations } from './smart-recommendations';
@@ -36,6 +36,7 @@ import { useMessageSender } from '../hooks/useMessageSender';
 import { useTemplateEditor } from '../hooks/useTemplateEditor';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
+import { startBtwThread } from '../services/BtwThreadService';
 import { createLogger } from '@/shared/utils/logger';
 import { Tooltip, IconButton } from '@/component-library';
 import './ChatInput.scss';
@@ -106,6 +107,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
+
+  // /btw now creates a child session ("side thread") and adds a lightweight marker on the parent session.
+  const [btwOrigin, setBtwOrigin] = React.useState<Session['btwOrigin'] | null>(null);
+  const [btwParentTitle, setBtwParentTitle] = React.useState<string>('');
   
   useEffect(() => {
     setChatInputActive(inputState.isActive);
@@ -174,10 +179,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const [slashCommandState, setSlashCommandState] = useState<{
     isActive: boolean;
+    kind: 'modes' | 'actions';
     query: string;
     selectedIndex: number;
   }>({
     isActive: false,
+    kind: 'modes',
     query: '',
     selectedIndex: 0,
   });
@@ -193,6 +200,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             current: session.currentTokenUsage?.totalTokens || 0,
             max: session.maxContextTokens || 128128
           });
+          const nextOrigin = (session.btwOrigin ||
+            (session.sessionKind === 'btw' && session.parentSessionId ? { parentSessionId: session.parentSessionId } : null)) as any;
+          setBtwOrigin(nextOrigin);
+          const parentId = nextOrigin?.parentSessionId || session.parentSessionId;
+          const parent = parentId ? state.sessions.get(parentId) : undefined;
+          setBtwParentTitle(parent?.title || '');
         }
       }
     });
@@ -205,6 +218,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           current: session.currentTokenUsage?.totalTokens || 0,
           max: session.maxContextTokens || 128128
         });
+        const nextOrigin = (session.btwOrigin ||
+          (session.sessionKind === 'btw' && session.parentSessionId ? { parentSessionId: session.parentSessionId } : null)) as any;
+        setBtwOrigin(nextOrigin);
+        const parentId = nextOrigin?.parentSessionId || session.parentSessionId;
+        const parent = parentId ? state.sessions.get(parentId) : undefined;
+        setBtwParentTitle(parent?.title || '');
+      } else {
+        setBtwOrigin(null);
+        setBtwParentTitle('');
       }
     }
 
@@ -593,28 +615,93 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
     
     dispatchInput({ type: 'SET_VALUE', payload: text });
-    
-    if (derivedState?.isProcessing) {
+
+    const isBtwCommand = text.trim().toLowerCase().startsWith('/btw');
+    const isProcessing = !!derivedState?.isProcessing;
+
+    // Don't queue /btw while the main session is processing; /btw runs independently.
+    if (derivedState?.isProcessing && !isBtwCommand) {
       setQueuedInput(text);
     }
-    
+
     if (text.startsWith('/')) {
-      const query = text.slice(1).toLowerCase();
-      setSlashCommandState({
-        isActive: true,
-        query,
-        selectedIndex: 0,
-      });
-    } else {
-      if (slashCommandState.isActive) {
+      const afterSlash = text.slice(1);
+      const hasWhitespace = /\s/.test(afterSlash);
+      const firstToken = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
+      const query = firstToken;
+
+      // While the main session is running, expose a single quick action (/btw) via the same picker UX.
+      if (isProcessing) {
+        // Only show the picker for "/..." patterns that are plausibly a command (/ or /b...).
+        // Once the user types a space (starts composing the real question), stop showing the picker
+        // so Enter can submit "/btw ..." instead of selecting from the picker.
+        if (!hasWhitespace && (query === '' || query.startsWith('b'))) {
+          setSlashCommandState({
+            isActive: true,
+            kind: 'actions',
+            query,
+            selectedIndex: 0,
+          });
+        } else if (slashCommandState.isActive && slashCommandState.kind === 'actions') {
+          setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+        }
+        return;
+      }
+
+      // When idle, keep the picker for mode switching, but don't interfere with /btw being a real command.
+      if (!isBtwCommand) {
         setSlashCommandState({
-          isActive: false,
-          query: '',
+          isActive: true,
+          kind: 'modes',
+          query,
           selectedIndex: 0,
         });
+        return;
       }
     }
-  }, [contexts, derivedState, inputState.isActive, removeContext, setQueuedInput, slashCommandState.isActive]);
+
+    if (slashCommandState.isActive) {
+      setSlashCommandState({
+        isActive: false,
+        kind: 'modes',
+        query: '',
+        selectedIndex: 0,
+      });
+    }
+  }, [contexts, derivedState, inputState.isActive, removeContext, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+
+  const submitBtwFromInput = useCallback(async () => {
+    if (!derivedState) return;
+    if (!currentSessionId) {
+      notificationService.error(t('btw.noSession', { defaultValue: 'No active session for /btw' }));
+      return;
+    }
+
+    const message = inputState.value.trim();
+    const question = message.replace(/^\/btw\b/i, '').trim();
+
+    // Clear input without adding to main history.
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+    if (!question) {
+      notificationService.warning(t('btw.empty', { defaultValue: 'Please provide a question after /btw' }));
+      return;
+    }
+
+    try {
+      await startBtwThread({
+        parentSessionId: currentSessionId,
+        workspacePath,
+        question,
+        modelId: 'fast',
+        maxContextMessages: 60,
+      });
+    } catch (e) {
+      log.error('Failed to start /btw thread', { e });
+    }
+  }, [currentSessionId, derivedState, inputState.value, setQueuedInput, t, workspacePath]);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
@@ -633,6 +720,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!inputState.value.trim()) return;
     
     const message = inputState.value.trim();
+
+    if (message.toLowerCase().startsWith('/btw')) {
+      // When idle, /btw can be sent via the normal send button.
+      await submitBtwFromInput();
+      return;
+    }
     
     // Add to history before clearing (session-scoped)
     if (currentSessionId) {
@@ -650,7 +743,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.error('Failed to send message', { error });
       dispatchInput({ type: 'SET_VALUE', payload: message });
     }
-  }, [inputState.value, derivedState, transition, sendMessage, addToHistory]);
+  }, [inputState.value, derivedState, transition, sendMessage, addToHistory, setQueuedInput, submitBtwFromInput]);
   
   const getFilteredModes = useCallback(() => {
     if (!canSwitchModes) {
@@ -708,58 +801,138 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchInput({ type: 'CLEAR_VALUE' });
     setSlashCommandState({
       isActive: false,
+      kind: 'modes',
       query: '',
       selectedIndex: 0,
     });
   }, [requestModeChange]);
+
+  const getFilteredActions = useCallback(() => {
+    // For now we only support one action: /btw.
+    const items = [
+      {
+        id: 'btw',
+        command: '/btw',
+        label: t('btw.title', { defaultValue: 'Side question' }),
+      },
+    ];
+
+    const q = (slashCommandState.query || '').trim().toLowerCase();
+    if (!q) return items;
+
+    return items.filter(i => {
+      const cmd = i.command.slice(1).toLowerCase();
+      return cmd.includes(q) || i.label.toLowerCase().includes(q);
+    });
+  }, [slashCommandState.query, t]);
+
+  const selectSlashCommandAction = useCallback((actionId: string) => {
+    if (actionId !== 'btw') return;
+
+    const raw = inputState.value || '';
+    const lower = raw.trimStart().toLowerCase();
+
+    let next = raw;
+    if (!lower.startsWith('/btw')) {
+      next = '/btw ';
+    } else {
+      // Normalize to "/btw " + rest, preserving any already typed question.
+      const m = raw.match(/^(\s*)\/btw\b/i);
+      if (m) {
+        const leadingWs = m[1] || '';
+        const rest = raw.slice(m[0].length);
+        next = `${leadingWs}/btw ${rest.trimStart()}`;
+      } else {
+        next = '/btw ';
+      }
+    }
+
+    dispatchInput({ type: 'SET_VALUE', payload: next });
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+  }, [inputState.value]);
   
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (canSwitchModes && slashCommandState.isActive) {
-      const filteredModes = getFilteredModes();
-      
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSlashCommandState(prev => ({
-          ...prev,
-          selectedIndex: Math.min(prev.selectedIndex + 1, filteredModes.length - 1),
-        }));
+    // Local /btw shortcut (Ctrl/Cmd+Alt+B) should work even when ChatInput is focused.
+    if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!currentSessionId) {
+        notificationService.error(t('btw.noSession', { defaultValue: 'No active session for /btw' }));
         return;
       }
-      
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSlashCommandState(prev => ({
-          ...prev,
-          selectedIndex: Math.max(prev.selectedIndex - 1, 0),
-        }));
-        return;
-      }
-      
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (filteredModes.length > 0) {
-          selectSlashCommandMode(filteredModes[slashCommandState.selectedIndex].id);
+
+      const selected = (window.getSelection?.()?.toString() ?? '').trim();
+      const initial = selected ? `/btw Explain this:\n\n${selected}` : '/btw ';
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: initial });
+      window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+      return;
+    }
+
+    if (slashCommandState.isActive) {
+      if (!(slashCommandState.kind === 'modes' && !canSwitchModes)) {
+        const items = slashCommandState.kind === 'modes' ? getFilteredModes() : getFilteredActions();
+        const maxIndex = Math.max(0, items.length - 1);
+        
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSlashCommandState(prev => ({
+            ...prev,
+            selectedIndex: Math.min(prev.selectedIndex + 1, maxIndex),
+          }));
+          return;
         }
-        return;
-      }
-      
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setSlashCommandState({
-          isActive: false,
-          query: '',
-          selectedIndex: 0,
-        });
-        dispatchInput({ type: 'CLEAR_VALUE' });
-        return;
-      }
-      
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        if (filteredModes.length > 0) {
-          selectSlashCommandMode(filteredModes[slashCommandState.selectedIndex].id);
+        
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSlashCommandState(prev => ({
+            ...prev,
+            selectedIndex: Math.max(prev.selectedIndex - 1, 0),
+          }));
+          return;
         }
-        return;
+        
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (items.length > 0) {
+            if (slashCommandState.kind === 'modes') {
+              const mode = items[slashCommandState.selectedIndex] as any;
+              selectSlashCommandMode(mode.id);
+            } else {
+              const action = items[slashCommandState.selectedIndex] as any;
+              selectSlashCommandAction(action.id);
+            }
+          }
+          return;
+        }
+        
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          const kind = slashCommandState.kind;
+          setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+          // For mode switching picker, "/" is just a trigger and should be cleared on cancel.
+          if (kind === 'modes') {
+            dispatchInput({ type: 'CLEAR_VALUE' });
+          }
+          return;
+        }
+        
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          if (items.length > 0) {
+            if (slashCommandState.kind === 'modes') {
+              const mode = items[slashCommandState.selectedIndex] as any;
+              selectSlashCommandMode(mode.id);
+            } else {
+              const action = items[slashCommandState.selectedIndex] as any;
+              selectSlashCommandAction(action.id);
+            }
+          }
+          return;
+        }
       }
     }
     
@@ -869,9 +1042,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       
       e.preventDefault();
+
+      const isBtwCommand = inputState.value.trim().toLowerCase().startsWith('/btw');
+      if (isBtwCommand) {
+        // Allow /btw submission even while the main session is generating.
+        void submitBtwFromInput();
+        return;
+      }
+
       if (derivedState?.isProcessing) {
         return;
       }
+
       if (templateState.fillState?.isActive) {
         exitTemplateMode();
       }
@@ -882,7 +1064,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       transition(SessionExecutionEvent.USER_CANCEL);
     }
-  }, [handleSendOrCancel, derivedState, transition, templateState.fillState, moveToNextPlaceholder, moveToPrevPlaceholder, exitTemplateMode, slashCommandState, getFilteredModes, selectSlashCommandMode, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value]);
+  }, [handleSendOrCancel, submitBtwFromInput, derivedState, transition, templateState.fillState, moveToNextPlaceholder, moveToPrevPlaceholder, exitTemplateMode, slashCommandState, getFilteredModes, getFilteredActions, selectSlashCommandMode, selectSlashCommandAction, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -1092,6 +1274,44 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         )}
 
         <div className="bitfun-chat-input__container">
+          {!!btwOrigin?.parentSessionId && (
+            <div className="bitfun-chat-input__btw-origin" data-testid="btw-origin-banner">
+              <div className="bitfun-chat-input__btw-origin-text">
+                <span className="bitfun-chat-input__btw-origin-label">
+                  {t('btw.origin', { defaultValue: 'Asked from' })}
+                </span>
+                <span className="bitfun-chat-input__btw-origin-parent">
+                  {btwParentTitle || t('btw.parent', { defaultValue: 'parent session' })}
+                </span>
+                {btwOrigin?.parentTurnIndex ? (
+                  <span className="bitfun-chat-input__btw-origin-turn">
+                    {t('btw.turnLabel', { index: btwOrigin.parentTurnIndex, defaultValue: `turn ${btwOrigin.parentTurnIndex}` })}
+                  </span>
+                ) : null}
+              </div>
+              <IconButton
+                className="bitfun-chat-input__btw-origin-back"
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  const parentId = btwOrigin?.parentSessionId;
+                  if (!parentId) return;
+                  const requestId = btwOrigin?.requestId;
+                  const itemId = requestId ? `btw_marker_${requestId}` : undefined;
+                  globalEventBus.emit('flowchat:focus-item', {
+                    sessionId: parentId,
+                    turnIndex: btwOrigin?.parentTurnIndex,
+                    itemId,
+                  }, 'ChatInput');
+                }}
+                tooltip={t('btw.backToParent', { defaultValue: 'Back to parent session' })}
+                disabled={!btwOrigin?.parentSessionId}
+              >
+                {t('btw.back', { defaultValue: 'Back' })}
+              </IconButton>
+            </div>
+          )}
+
           {templateState.fillState?.isActive && (
 <div className="bitfun-chat-input__template-hint">
                 <span className="bitfun-chat-input__template-hint-text" dangerouslySetInnerHTML={{ __html: t('chatInput.templateHint') }} />
@@ -1137,7 +1357,40 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 }}
               />
               
-              {canSwitchModes && slashCommandState.isActive && (() => {
+              {slashCommandState.isActive && (() => {
+                if (slashCommandState.kind === 'actions') {
+                  const actions = getFilteredActions();
+                  return (
+                    <div className="bitfun-chat-input__slash-command-picker">
+                      <div className="bitfun-chat-input__slash-command-header">
+                        <span>{t('chatInput.quickAction', { defaultValue: 'Quick action' })}</span>
+                        <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
+                      </div>
+                      <div className="bitfun-chat-input__slash-command-list">
+                        {actions.length > 0 ? (
+                          actions.map((action, index) => (
+                            <div
+                              key={action.id}
+                              className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''}`}
+                              onClick={() => selectSlashCommandAction(action.id)}
+                              onMouseEnter={() => setSlashCommandState(prev => ({ ...prev, selectedIndex: index }))}
+                            >
+                              <span className="bitfun-chat-input__slash-command-name">{action.command}</span>
+                              <span className="bitfun-chat-input__slash-command-label">{action.label}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="bitfun-chat-input__slash-command-empty">
+                            {t('chatInput.noMatchingCommand', { defaultValue: 'No matching command' })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (!canSwitchModes) return null;
+
                 const filteredModes = getFilteredModes();
                 return (
                   <div className="bitfun-chat-input__slash-command-picker">

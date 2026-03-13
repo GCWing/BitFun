@@ -12,6 +12,7 @@ import { useVirtualItems, useActiveSession, useVisibleTurnInfo } from '../../sto
 import type { VirtualItem } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { startAutoSync } from '../../services/storeSync';
+import { useModernFlowChatStore } from '../../store/modernFlowChatStore';
 import { globalEventBus } from '../../../infrastructure/event-bus';
 import { getElementText, copyTextToClipboard } from '../../../shared/utils/textSelection';
 import type { FlowChatConfig, FlowToolItem, DialogTurn, ModelRound, FlowItem } from '../../types/flow-chat';
@@ -22,6 +23,7 @@ import type { LineRange } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import path from 'path-browserify';
 import { createLogger } from '@/shared/utils/logger';
+import { flowChatManager } from '../../services/FlowChatManager';
 import './ModernFlowChatContainer.scss';
 
 const log = createLogger('ModernFlowChatContainer');
@@ -132,6 +134,125 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = globalEventBus.on<{
+      sessionId: string;
+      turnIndex?: number;
+      itemId?: string;
+    }>('flowchat:focus-item', async ({ sessionId, turnIndex, itemId }) => {
+      if (!sessionId) return;
+
+      const waitFor = async (predicate: () => boolean, timeoutMs: number): Promise<boolean> => {
+        const start = performance.now();
+        while (performance.now() - start < timeoutMs) {
+          if (predicate()) return true;
+          await new Promise<void>(r => requestAnimationFrame(() => r()));
+        }
+        return predicate();
+      };
+
+      // Switch session first (if needed). Note: Modern virtual list methods are bound to
+      // the current render; after switching sessions we must wait a frame or two so
+      // VirtualMessageList updates its imperative ref and item map before scrolling.
+      if (activeSession?.sessionId !== sessionId) {
+        try {
+          await flowChatManager.switchChatSession(sessionId);
+        } catch (e) {
+          log.warn('Failed to switch session for focus request', { sessionId, e });
+          return;
+        }
+      }
+
+      // Wait until the modern store and list ref have caught up to the target session.
+      // This avoids a common race where scrollToTurn no-ops against the previous session's item list.
+      await waitFor(() => {
+        const modernActive = useModernFlowChatStore.getState().activeSession?.sessionId;
+        return modernActive === sessionId && !!virtualListRef.current;
+      }, 1500);
+
+      let resolvedVirtualIndex: number | undefined = undefined;
+      let resolvedTurnIndex = turnIndex;
+      if (itemId) {
+        const s = flowChatStore.getState().sessions.get(sessionId);
+        if (s) {
+          for (let i = 0; i < s.dialogTurns.length; i++) {
+            const t = s.dialogTurns[i];
+            const found = t.modelRounds?.some(r => r.items?.some(it => it.id === itemId));
+            if (found) {
+              resolvedTurnIndex = i + 1;
+              break;
+            }
+          }
+        }
+
+        // Prefer a precise virtual scroll target so the marker is actually rendered.
+        // Scrolling to the turn's user message can leave the marker far outside the rendered range.
+        const currentVirtualItems = useModernFlowChatStore.getState().virtualItems;
+        for (let i = 0; i < currentVirtualItems.length; i++) {
+          const vi = currentVirtualItems[i];
+          if (vi.type === 'model-round') {
+            const hit = vi.data?.items?.some((it: any) => it?.id === itemId);
+            if (hit) {
+              resolvedVirtualIndex = i;
+              break;
+            }
+          } else if (vi.type === 'explore-group') {
+            const hit = vi.data?.allItems?.some((it: any) => it?.id === itemId);
+            if (hit) {
+              resolvedVirtualIndex = i;
+              break;
+            }
+          }
+        }
+      }
+
+      // Scroll to the most precise target we have.
+      if (resolvedVirtualIndex != null && virtualListRef.current) {
+        virtualListRef.current.scrollToIndex(resolvedVirtualIndex);
+      } else if (resolvedTurnIndex && virtualListRef.current) {
+        virtualListRef.current.scrollToTurn(resolvedTurnIndex);
+      }
+
+      if (!itemId) return;
+
+      // Wait two frames for Virtuoso to settle after instant scrollToIndex before
+      // searching the DOM. This avoids finding an element that Virtuoso is about
+      // to recycle when it processes the new scroll position.
+      await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+
+      // Then focus the specific flow item (marker) within the DOM.
+      // Retry a few times because virtualization/paint can lag behind the scroll.
+      const maxAttempts = 120;
+      let attempts = 0;
+      const tryFocus = () => {
+        attempts++;
+        const el = document.querySelector(`[data-flow-item-id="${CSS.escape(itemId)}"]`) as HTMLElement | null;
+        if (!el) {
+          // Keep nudging the list to the right neighborhood; scrollToTurn can be preempted by
+          // stick-to-bottom mode during session switches or streaming updates.
+          if (attempts % 12 === 0 && virtualListRef.current) {
+            if (resolvedVirtualIndex != null) {
+              virtualListRef.current.scrollToIndex(resolvedVirtualIndex);
+            } else if (resolvedTurnIndex) {
+              virtualListRef.current.scrollToTurn(resolvedTurnIndex);
+            }
+          }
+          if (attempts < maxAttempts) {
+            requestAnimationFrame(tryFocus);
+          }
+          return;
+        }
+
+        el.classList.add('flowchat-flow-item--focused');
+        window.setTimeout(() => el.classList.remove('flowchat-flow-item--focused'), 1600);
+      };
+
+      requestAnimationFrame(tryFocus);
+    });
+
+    return unsubscribe;
+  }, [activeSession?.sessionId]);
 
   const handleToolConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
     try {

@@ -143,6 +143,7 @@ export class FlowChatStore {
         maxContextTokens: maxContextTokens || 128128,
         mode: mode || 'agentic',
         workspacePath,
+        btwThreads: [],
       };
 
       const newSessions = new Map(prev.sessions);
@@ -160,7 +161,13 @@ export class FlowChatStore {
    * Add a session created externally (e.g., from mobile remote) without switching the active session.
    * workspacePath is stored on the session so the sidebar can filter by current workspace.
    */
-  public addExternalSession(sessionId: string, title: string, mode: string, workspacePath?: string): void {
+  public addExternalSession(
+    sessionId: string,
+    title: string,
+    mode: string,
+    workspacePath?: string,
+    meta?: { parentSessionId?: string; sessionKind?: 'normal' | 'btw'; btwOrigin?: Session['btwOrigin'] }
+  ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
     });
@@ -184,6 +191,10 @@ export class FlowChatStore {
         mode: mode || 'agentic',
         isHistorical: false,
         workspacePath,
+        parentSessionId: meta?.parentSessionId,
+        sessionKind: meta?.sessionKind,
+        btwThreads: [],
+        btwOrigin: meta?.btwOrigin,
       };
 
       const newSessions = new Map(prev.sessions);
@@ -250,6 +261,120 @@ export class FlowChatStore {
         ...prev,
         sessions: newSessions
       };
+    });
+  }
+
+  /**
+   * Update session relationship metadata (parent/child grouping, kind, etc.).
+   * This is UI-only and does not affect backend behavior directly.
+   */
+  public updateSessionRelationship(
+    sessionId: string,
+    updates: { parentSessionId?: string; sessionKind?: 'normal' | 'btw' }
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const next: Session = {
+        ...session,
+        parentSessionId: updates.parentSessionId ?? session.parentSessionId,
+        sessionKind: updates.sessionKind ?? session.sessionKind,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, next);
+
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  public updateSessionBtwOrigin(sessionId: string, origin: Session['btwOrigin']): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const next: Session = {
+        ...session,
+        btwOrigin: { ...(session.btwOrigin || {}), ...(origin || {}) },
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, next);
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  public addBtwThreadMarker(
+    parentSessionId: string,
+    marker: {
+      requestId: string;
+      childSessionId: string;
+      title: string;
+      status: 'running' | 'done' | 'error';
+      createdAt: number;
+      parentDialogTurnId?: string;
+      parentTurnIndex?: number;
+      error?: string;
+    }
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(parentSessionId);
+      if (!session) return prev;
+
+      const existing = session.btwThreads || [];
+      if (existing.some(t => t.requestId === marker.requestId)) {
+        return prev;
+      }
+
+      const nextSession: Session = {
+        ...session,
+        btwThreads: [marker, ...existing].slice(0, 20),
+        lastActiveAt: Date.now(),
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(parentSessionId, nextSession);
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  public updateBtwThreadMarker(
+    parentSessionId: string,
+    requestId: string,
+    updates: Partial<{
+      status: 'running' | 'done' | 'error';
+      error?: string;
+      title: string;
+    }>
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(parentSessionId);
+      if (!session) return prev;
+
+      const existing = session.btwThreads || [];
+      if (existing.length === 0) return prev;
+
+      const nextThreads = existing.map(t => {
+        if (t.requestId !== requestId) return t;
+        return { ...t, ...updates };
+      });
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(parentSessionId, { ...session, btwThreads: nextThreads });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  public removeBtwThreadMarker(parentSessionId: string, requestId: string): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(parentSessionId);
+      if (!session) return prev;
+      const existing = session.btwThreads || [];
+      const nextThreads = existing.filter(t => t.requestId !== requestId);
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(parentSessionId, { ...session, btwThreads: nextThreads });
+      return { ...prev, sessions: newSessions };
     });
   }
 
@@ -1204,6 +1329,28 @@ export class FlowChatStore {
           log.warn('Failed to get model context window size, using default', { sessionId: metadata.sessionId, error });
         }
         
+        const parentSessionId = (metadata?.customMetadata?.parentSessionId ||
+          metadata?.custom_metadata?.parent_session_id ||
+          metadata?.custom_metadata?.parentSessionId) as string | undefined;
+        const sessionKind = (metadata?.customMetadata?.kind || metadata?.customMetadata?.sessionKind) as
+          | 'normal'
+          | 'btw'
+          | undefined;
+        const parentDialogTurnId = (metadata?.customMetadata?.parentDialogTurnId ||
+          metadata?.custom_metadata?.parent_dialog_turn_id ||
+          metadata?.custom_metadata?.parentDialogTurnId) as string | undefined;
+        const parentTurnIndexRaw = (metadata?.customMetadata?.parentTurnIndex ||
+          metadata?.custom_metadata?.parent_turn_index ||
+          metadata?.custom_metadata?.parentTurnIndex) as number | string | null | undefined;
+        const parentTurnIndex = typeof parentTurnIndexRaw === 'number'
+          ? parentTurnIndexRaw
+          : (typeof parentTurnIndexRaw === 'string' && parentTurnIndexRaw.trim()
+            ? Number(parentTurnIndexRaw)
+            : undefined);
+        const parentRequestId = (metadata?.customMetadata?.parentRequestId ||
+          metadata?.custom_metadata?.parent_request_id ||
+          metadata?.custom_metadata?.parentRequestId) as string | undefined;
+
         this.setState(prev => {
           if (prev.sessions.has(metadata.sessionId)) {
             return prev;
@@ -1235,6 +1382,17 @@ export class FlowChatStore {
             maxContextTokens,
             mode: validatedAgentType,
             workspacePath: (metadata as any).workspacePath || workspacePath,
+            parentSessionId: typeof parentSessionId === 'string' && parentSessionId.trim() ? parentSessionId : undefined,
+            sessionKind: sessionKind,
+            btwThreads: [],
+            btwOrigin: sessionKind === 'btw'
+              ? {
+                  requestId: typeof parentRequestId === 'string' && parentRequestId.trim() ? parentRequestId : undefined,
+                  parentSessionId: typeof parentSessionId === 'string' && parentSessionId.trim() ? parentSessionId : undefined,
+                  parentDialogTurnId: typeof parentDialogTurnId === 'string' && parentDialogTurnId.trim() ? parentDialogTurnId : undefined,
+                  parentTurnIndex: Number.isFinite(parentTurnIndex as number) ? (parentTurnIndex as number) : undefined,
+                }
+              : undefined,
           };
           
           const newSessions = new Map(prev.sessions);

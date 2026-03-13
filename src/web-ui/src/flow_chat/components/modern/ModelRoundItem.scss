@@ -150,3 +150,11 @@
 .model-round-item:has(.explore-region--collapsed) + .model-round-item:has(.explore-region--collapsed) {
   margin-top: -4px;
 }
+
+/* Focus highlight for programmatic "jump to marker" navigation. */
+.flowchat-flow-item.flowchat-flow-item--focused {
+  outline: 2px solid var(--border-accent);
+  outline-offset: 2px;
+  border-radius: 12px;
+  box-shadow: var(--glow-shadow-blue);
+}

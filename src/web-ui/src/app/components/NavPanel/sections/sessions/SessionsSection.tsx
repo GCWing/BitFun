@@ -93,27 +93,61 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [flowChatState.sessions, workspacePath]
   );
 
+  const { topLevelSessions, childrenByParent } = useMemo(() => {
+    const childMap = new Map<string, Session[]>();
+    const parents: Session[] = [];
+
+    const knownIds = new Set(sessions.map(s => s.sessionId));
+
+    for (const s of sessions) {
+      const pid = s.parentSessionId;
+      if (pid && typeof pid === 'string' && pid.trim() && knownIds.has(pid)) {
+        const list = childMap.get(pid) || [];
+        list.push(s);
+        childMap.set(pid, list);
+      } else {
+        parents.push(s);
+      }
+    }
+
+    // Stable ordering: children follow parent, sorted by activity.
+    for (const [pid, list] of childMap) {
+      childMap.set(pid, [...list].sort((a, b) => b.lastActiveAt - a.lastActiveAt));
+    }
+
+    return {
+      topLevelSessions: [...parents].sort((a, b) => b.lastActiveAt - a.lastActiveAt),
+      childrenByParent: childMap,
+    };
+  }, [sessions]);
+
   const sessionDisplayLimit = useMemo(() => {
     if (isActiveWorkspace) {
-      return showAll || sessions.length <= MAX_VISIBLE_SESSIONS
-        ? sessions.length
+      return showAll || topLevelSessions.length <= MAX_VISIBLE_SESSIONS
+        ? topLevelSessions.length
         : MAX_VISIBLE_SESSIONS;
     }
 
     return showAll
-      ? Math.min(sessions.length, INACTIVE_WORKSPACE_EXPANDED_SESSIONS)
-      : Math.min(sessions.length, INACTIVE_WORKSPACE_COLLAPSED_SESSIONS);
-  }, [isActiveWorkspace, sessions.length, showAll]);
+      ? Math.min(topLevelSessions.length, INACTIVE_WORKSPACE_EXPANDED_SESSIONS)
+      : Math.min(topLevelSessions.length, INACTIVE_WORKSPACE_COLLAPSED_SESSIONS);
+  }, [isActiveWorkspace, topLevelSessions.length, showAll]);
 
-  const visibleSessions = useMemo(
-    () => sessions.slice(0, sessionDisplayLimit),
-    [sessionDisplayLimit, sessions]
-  );
+  const visibleItems = useMemo(() => {
+    const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
+    const out: Array<{ session: Session; level: 0 | 1 }> = [];
+    for (const p of visibleParents) {
+      out.push({ session: p, level: 0 });
+      const children = childrenByParent.get(p.sessionId) || [];
+      for (const c of children) out.push({ session: c, level: 1 });
+    }
+    return out;
+  }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
 
   const toggleThreshold = isActiveWorkspace
     ? MAX_VISIBLE_SESSIONS
     : INACTIVE_WORKSPACE_COLLAPSED_SESSIONS;
-  const hiddenCount = Math.max(0, sessions.length - toggleThreshold);
+  const hiddenCount = Math.max(0, topLevelSessions.length - toggleThreshold);
 
   const activeSessionId = flowChatState.activeSessionId;
 
@@ -211,10 +245,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   return (
     <div className="bitfun-nav-panel__inline-list">
-      {sessions.length === 0 ? (
+      {topLevelSessions.length === 0 ? (
         <div className="bitfun-nav-panel__inline-empty">{t('nav.sessions.noSessions')}</div>
       ) : (
-        visibleSessions.map(session => {
+        visibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const sessionModeKey = resolveSessionModeType(session);
           const sessionTitle = resolveSessionTitle(session);
@@ -228,6 +262,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <div
               className={[
                 'bitfun-nav-panel__inline-item',
+                level === 1 && 'is-child',
                 activeTabId === AGENT_SCENE && session.sessionId === activeSessionId && 'is-active',
                 isEditing && 'is-editing',
               ]
@@ -317,7 +352,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         })
       )}
 
-      {sessions.length > toggleThreshold && (
+      {topLevelSessions.length > toggleThreshold && (
         <button
           type="button"
           className="bitfun-nav-panel__inline-toggle"

@@ -15,6 +15,7 @@ import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
 
 import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
+import type { FlowToolItem, FlowTextItem, ModelRound } from '../types/flow-chat';
 import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
@@ -227,6 +228,97 @@ export class FlowChatManager {
 
   addDialogTurn(sessionId: string, dialogTurn: DialogTurn): void {
     addDialogTurnModule(this.context, sessionId, dialogTurn);
+  }
+
+  /**
+   * Insert an in-stream /btw marker into the currently streaming turn, and split the streaming text item
+   * so subsequent chunks continue after the marker.
+   *
+   * This is best-effort; if we cannot locate an active streaming turn/round, it becomes a no-op.
+   */
+  public insertBtwMarkerIntoActiveStream(params: {
+    parentSessionId: string;
+    requestId: string;
+    childSessionId: string;
+    title: string;
+  }): void {
+    const { parentSessionId, requestId, childSessionId, title } = params;
+
+    const machine = stateMachineManager.get(parentSessionId);
+    const ctx = machine?.getContext?.();
+    const dialogTurnId = ctx?.currentDialogTurnId;
+    if (!dialogTurnId) return;
+
+    const session = this.context.flowChatStore.getState().sessions.get(parentSessionId);
+    const turn = session?.dialogTurns.find(t => t.id === dialogTurnId);
+    if (!turn) return;
+    if (turn.status !== 'processing' && turn.status !== 'image_analyzing') {
+      // Only inject into an actively streaming turn; otherwise we'd create dangling streaming items.
+      return;
+    }
+
+    const lastRound: ModelRound | undefined = (() => {
+      const streaming = [...turn.modelRounds].reverse().find(r => r.isStreaming);
+      if (streaming) return streaming;
+      return turn.modelRounds[turn.modelRounds.length - 1];
+    })();
+    if (!lastRound) return;
+
+    const roundId = lastRound.id;
+
+    if (!this.context.contentBuffers.has(parentSessionId)) {
+      this.context.contentBuffers.set(parentSessionId, new Map());
+    }
+    if (!this.context.activeTextItems.has(parentSessionId)) {
+      this.context.activeTextItems.set(parentSessionId, new Map());
+    }
+    const sessionBuffers = this.context.contentBuffers.get(parentSessionId)!;
+    const sessionActiveItems = this.context.activeTextItems.get(parentSessionId)!;
+
+    const existingTextItemId = sessionActiveItems.get(roundId);
+    if (existingTextItemId) {
+      // Freeze the existing streaming text item as "pre-marker".
+      this.context.flowChatStore.updateModelRoundItem(parentSessionId, dialogTurnId, existingTextItemId, {
+        isStreaming: false,
+        status: 'completed',
+      } as any);
+    }
+
+    // Reset buffer so the new tail text item starts fresh (no duplication).
+    sessionBuffers.set(roundId, '');
+
+    const markerId = `btw_marker_${requestId}`;
+    const markerItem: FlowToolItem = {
+      id: markerId,
+      type: 'tool',
+      timestamp: Date.now(),
+      status: 'completed',
+      toolName: 'BtwMarker',
+      toolCall: {
+        id: markerId,
+        input: {
+          requestId,
+          childSessionId,
+          title,
+        },
+      },
+      requiresConfirmation: false,
+    };
+    this.context.flowChatStore.addModelRoundItem(parentSessionId, dialogTurnId, markerItem as any, roundId);
+
+    const tailTextItemId = `btw_tail_${requestId}`;
+    const tailTextItem: FlowTextItem = {
+      id: tailTextItemId,
+      type: 'text',
+      content: '',
+      isStreaming: true,
+      isMarkdown: true,
+      timestamp: Date.now(),
+      status: 'streaming',
+    };
+    this.context.flowChatStore.addModelRoundItem(parentSessionId, dialogTurnId, tailTextItem as any, roundId);
+
+    sessionActiveItems.set(roundId, tailTextItemId);
   }
 
   addImageAnalysisPhase(

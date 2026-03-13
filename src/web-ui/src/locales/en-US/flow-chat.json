@@ -182,8 +182,10 @@
   },
   "chatInput": {
     "switchMode": "Switch Mode",
+    "quickAction": "Quick action",
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
+    "noMatchingCommand": "No matching command",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
     "professionalMode": "Professional Mode",
@@ -252,6 +254,25 @@
   "smartRecommendations": {
     "title": "💡 Smart Recommendations",
     "close": "Close"
+  },
+  "btw": {
+    "title": "Side question",
+    "hint": "Not saved · Uses current chat context · No tools",
+    "placeholder": "Ask a quick question…",
+    "ask": "Ask",
+    "asking": "Thinking…",
+    "cancel": "Stop",
+    "openThread": "Open thread",
+    "threadLabel": "Side thread",
+    "origin": "Asked from",
+    "parent": "parent session",
+    "turnLabel": "turn {{index}}",
+    "back": "Back",
+    "backToParent": "Back to parent session",
+    "empty": "Please provide a question after /btw",
+    "error": "Failed",
+    "close": "Close",
+    "noSession": "No active session for /btw"
   },
   "flowChatHeader": {
     "previousTurn": "Previous turn",

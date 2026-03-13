@@ -1,6 +1,7 @@
 //! Application state management
 
 use bitfun_core::agentic::{agents, tools};
+use bitfun_core::agentic::side_question::SideQuestionRuntime;
 use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
 use bitfun_core::miniapp::{initialize_global_miniapp_manager, JsWorkerPool, MiniAppManager};
 use bitfun_core::service::{ai_rules, config, filesystem, mcp, token_usage, workspace};
@@ -30,6 +31,7 @@ pub struct AppStatistics {
 pub struct AppState {
     pub ai_client: Arc<RwLock<Option<AIClient>>>,
     pub ai_client_factory: Arc<AIClientFactory>,
+    pub side_question_runtime: Arc<SideQuestionRuntime>,
     pub tool_registry: Arc<Vec<Arc<dyn tools::framework::Tool>>>,
     pub workspace_service: Arc<workspace::WorkspaceService>,
     pub workspace_identity_watch_service: Arc<workspace::WorkspaceIdentityWatchService>,
@@ -58,6 +60,7 @@ impl AppState {
         let ai_client_factory = AIClientFactory::get_global().await.map_err(|e| {
             BitFunError::service(format!("Failed to get global AIClientFactory: {}", e))
         })?;
+        let side_question_runtime = Arc::new(SideQuestionRuntime::new());
 
         let tool_registry = {
             let registry = tools::registry::get_global_tool_registry();
@@ -139,6 +142,7 @@ impl AppState {
         let app_state = Self {
             ai_client,
             ai_client_factory,
+            side_question_runtime,
             tool_registry,
             workspace_service,
             workspace_identity_watch_service,
