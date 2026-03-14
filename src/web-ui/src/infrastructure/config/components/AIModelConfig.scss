@@ -136,6 +136,13 @@
     }
   }
 
+  &__provider-group-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    flex-shrink: 0;
+  }
+
   &__meta-tag {
     flex-shrink: 0;
     font-size: $font-size-xs;

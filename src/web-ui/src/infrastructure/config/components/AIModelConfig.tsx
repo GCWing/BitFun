@@ -166,6 +166,12 @@ const AIModelConfig: React.FC = () => {
     ],
     []
   );
+  const requestFormatLabelMap = useMemo(
+    () => Object.fromEntries(
+      requestFormatOptions.map(option => [String(option.value), option.label])
+    ) as Record<string, string>,
+    [requestFormatOptions]
+  );
 
   const reasoningEffortOptions = useMemo(
     () => [
@@ -541,7 +547,7 @@ const AIModelConfig: React.FC = () => {
     setIsEditing(true);
   };
 
-  const handleAddModelToExistingProvider = (config: AIModelConfigType) => {
+  const handleEditProvider = (config: AIModelConfigType) => {
     resetRemoteModelDiscovery();
     setManualModelInput('');
     setShowApiKey(false);
@@ -581,6 +587,10 @@ const AIModelConfig: React.FC = () => {
     );
     setCreationMode('form');
     setIsEditing(true);
+  };
+
+  const handleAddModelToExistingProvider = (config: AIModelConfigType) => {
+    handleEditProvider(config);
   };
 
   
@@ -980,6 +990,7 @@ const AIModelConfig: React.FC = () => {
   const renderEditingForm = () => {
     if (!isEditing || !editingConfig) return null;
     const isFromTemplate = !editingConfig.id && !!currentTemplate;
+    const isProviderScopedEditing = !editingConfig.id;
     const currentProviderLabel = (editingConfig.name || currentTemplate?.name || t('providerSelection.customTitle')).trim() || t('providerSelection.customTitle');
     const configuredProviderModels = getConfiguredModelsForProvider(currentProviderLabel);
     const configuredProviderModelOptions: SelectOption[] = configuredProviderModels.map(model => ({
@@ -1119,7 +1130,7 @@ const AIModelConfig: React.FC = () => {
       <>
         <div className="bitfun-ai-model-config__form bitfun-ai-model-config__form--modal">
           <ConfigPageSection
-            title={t('editSubtitle')}
+            title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
             className="bitfun-ai-model-config__edit-section"
           >
             {isFromTemplate ? (
@@ -1259,69 +1270,73 @@ const AIModelConfig: React.FC = () => {
               </>
             ) : (
               <>
-                <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                  <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
-                </ConfigPageRow>
-                <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
-                  <div className="bitfun-ai-model-config__control-stack">
-                    <Input
-                      type="url"
-                      value={editingConfig.base_url || ''}
-                      onChange={(e) => {
+                {isProviderScopedEditing && (
+                  <>
+                    <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
+                      <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                    </ConfigPageRow>
+                    <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
+                      <div className="bitfun-ai-model-config__control-stack">
+                        <Input
+                          type="url"
+                          value={editingConfig.base_url || ''}
+                          onChange={(e) => {
+                            resetRemoteModelDiscovery();
+                            setEditingConfig(prev => ({
+                              ...prev,
+                              base_url: e.target.value,
+                              request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
+                            }));
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
+                          inputSize="small"
+                        />
+                        {editingConfig.base_url && (
+                          <div className="bitfun-ai-model-config__resolved-url">
+                            <Input
+                              value={resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai', editingConfig.model_name || '')}
+                              readOnly
+                              onFocus={(e) => e.target.select()}
+                              inputSize="small"
+                              className="bitfun-ai-model-config__resolved-url-input"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </ConfigPageRow>
+                    <ConfigPageRow label={`${t('form.apiKey')} *`} align="center" wide>
+                      <Input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={editingConfig.api_key || ''}
+                        onChange={(e) => {
+                          resetRemoteModelDiscovery();
+                          setEditingConfig(prev => ({ ...prev, api_key: e.target.value }));
+                        }}
+                        placeholder={t('form.apiKeyPlaceholder')}
+                        inputSize="small"
+                        suffix={apiKeySuffix}
+                      />
+                    </ConfigPageRow>
+                    <ConfigPageRow label={t('form.provider')} align="center" wide>
+                      <Select value={editingConfig.provider || 'openai'} onChange={(value) => {
+                        const provider = value as string;
                         resetRemoteModelDiscovery();
                         setEditingConfig(prev => ({
                           ...prev,
-                          base_url: e.target.value,
-                          request_url: resolveRequestUrl(e.target.value, prev?.provider || 'openai', prev?.model_name || '')
+                          provider,
+                          request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || ''),
+                          reasoning_effort: isResponsesProvider(provider) ? (prev?.reasoning_effort || 'medium') : undefined,
                         }));
-                      }}
-                      onFocus={(e) => e.target.select()}
-                      placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
-                      inputSize="small"
-                    />
-                    {editingConfig.base_url && (
-                      <div className="bitfun-ai-model-config__resolved-url">
-                        <Input
-                          value={resolveRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai', editingConfig.model_name || '')}
-                          readOnly
-                          onFocus={(e) => e.target.select()}
-                          inputSize="small"
-                          className="bitfun-ai-model-config__resolved-url-input"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </ConfigPageRow>
-                <ConfigPageRow label={`${t('form.apiKey')} *`} align="center" wide>
-                  <Input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={editingConfig.api_key || ''}
-                    onChange={(e) => {
-                      resetRemoteModelDiscovery();
-                      setEditingConfig(prev => ({ ...prev, api_key: e.target.value }));
-                    }}
-                    placeholder={t('form.apiKeyPlaceholder')}
-                    inputSize="small"
-                    suffix={apiKeySuffix}
-                  />
-                </ConfigPageRow>
+                      }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="small" />
+                    </ConfigPageRow>
+                  </>
+                )}
               </>
             )}
 
             {!isFromTemplate && (
               <>
-                <ConfigPageRow label={t('form.provider')} align="center" wide>
-                  <Select value={editingConfig.provider || 'openai'} onChange={(value) => {
-                    const provider = value as string;
-                    resetRemoteModelDiscovery();
-                    setEditingConfig(prev => ({
-                      ...prev,
-                      provider,
-                      request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || ''),
-                      reasoning_effort: isResponsesProvider(provider) ? (prev?.reasoning_effort || 'medium') : undefined,
-                    }));
-                  }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="small" />
-                </ConfigPageRow>
                 <ConfigPageRow label={`${t('form.modelSelection')} *`} description={editingConfig.category === 'speech_recognition' ? t('form.modelNameHint') : undefined} wide multiline>
                   <div className="bitfun-ai-model-config__control-stack">
                     <div className="bitfun-ai-model-config__model-picker-row">
@@ -1470,9 +1485,6 @@ const AIModelConfig: React.FC = () => {
         <span className="bitfun-ai-model-config__meta-tag">
           {t(`category.${config.category}`)}
         </span>
-        <span className="bitfun-ai-model-config__meta-tag">
-          {config.provider}
-        </span>
         {testResult && (
           <span
             className={`bitfun-ai-model-config__status-dot ${testResult.success ? 'is-success' : 'is-error'}`}
@@ -1496,10 +1508,6 @@ const AIModelConfig: React.FC = () => {
             <div className="bitfun-ai-model-config__details-item">
               <span className="bitfun-ai-model-config__details-label">{t('details.modelName')}</span>
               <span className="bitfun-ai-model-config__details-value">{config.model_name}</span>
-            </div>
-            <div className="bitfun-ai-model-config__details-item">
-              <span className="bitfun-ai-model-config__details-label">{t('details.provider')}</span>
-              <span className="bitfun-ai-model-config__details-value">{config.provider}</span>
             </div>
             <div className="bitfun-ai-model-config__details-item">
               <span className="bitfun-ai-model-config__details-label">{t('details.contextWindow')}</span>
@@ -1657,15 +1665,28 @@ const AIModelConfig: React.FC = () => {
                     <div className="bitfun-ai-model-config__provider-group-title">
                       <span>{group.providerName}</span>
                       <span className="bitfun-ai-model-config__provider-group-count">{group.models.length}</span>
+                      <span className="bitfun-ai-model-config__meta-tag">
+                        {requestFormatLabelMap[group.models[0]?.provider || 'openai'] || (group.models[0]?.provider || 'openai')}
+                      </span>
                     </div>
-                    <IconButton
-                      variant="ghost"
-                      size="small"
-                      onClick={() => handleAddModelToExistingProvider(group.models[0])}
-                      tooltip={t('actions.addModel')}
-                    >
-                      <Plus size={14} />
-                    </IconButton>
+                    <div className="bitfun-ai-model-config__provider-group-actions">
+                      <IconButton
+                        variant="ghost"
+                        size="small"
+                        onClick={() => handleEditProvider(group.models[0])}
+                        tooltip={t('actions.edit')}
+                      >
+                        <Edit2 size={14} />
+                      </IconButton>
+                      <IconButton
+                        variant="ghost"
+                        size="small"
+                        onClick={() => handleAddModelToExistingProvider(group.models[0])}
+                        tooltip={t('actions.addModel')}
+                      >
+                        <Plus size={14} />
+                      </IconButton>
+                    </div>
                   </div>
                   <div className="bitfun-ai-model-config__provider-group-list">
                     {group.models.map(config => renderModelCollectionItem(config))}
@@ -1733,7 +1754,9 @@ const AIModelConfig: React.FC = () => {
         onClose={closeEditingModal}
         title={editingConfig?.id
           ? t('editModel')
-          : (currentTemplate ? `${t('newModel')} - ${currentTemplate.name}` : t('newModel'))}
+          : (selectedModelDrafts.some(draft => !!draft.configId)
+            ? t('editProvider')
+            : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
         size="xlarge"
       >
         {renderEditingForm()}

@@ -286,7 +286,10 @@
     border-radius: 3px;
     color: var(--color-text-primary, #e8e8e8);
     font-size: var(--font-size-sm, 14px);
-    outline: none;
+    outline: none !important;
+    box-shadow: none !important;
+    appearance: none;
+    -webkit-appearance: none;
     transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
 
     &::placeholder {
@@ -297,9 +300,11 @@
       background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
     }
 
-    &:focus {
+    &:focus,
+    &:focus-visible {
       background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
-      box-shadow: inset 0 0 0 1px var(--color-accent-500, #60a5fa);
+      outline: none !important;
+      box-shadow: none !important;
     }
   }
 

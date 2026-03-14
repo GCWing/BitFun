@@ -52,16 +52,10 @@ export const DefaultModelConfig: React.FC = () => {
   const [defaultModels, setDefaultModels] = useState<DefaultModels>({ primary: null, fast: null });
   const [optionalCapabilities, setOptionalCapabilities] = useState<OptionalCapabilityModels>({});
 
-  
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
-      
       const [allModels, defaultModelsConfig] = await Promise.all([
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
         configManager.getConfig<any>('ai.default_models') || {},
@@ -69,13 +63,11 @@ export const DefaultModelConfig: React.FC = () => {
 
       setModels(allModels);
 
-      
       setDefaultModels({
         primary: defaultModelsConfig?.primary || null,
         fast: defaultModelsConfig?.fast || null,
       });
 
-      
       setOptionalCapabilities({
         image_understanding: defaultModelsConfig?.image_understanding,
         image_generation: defaultModelsConfig?.image_generation,
@@ -87,7 +79,23 @@ export const DefaultModelConfig: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    void loadData();
+
+    const unsubscribeModels = configManager.watch('ai.models', () => {
+      void loadData();
+    });
+    const unsubscribeDefaultModels = configManager.watch('ai.default_models', () => {
+      void loadData();
+    });
+
+    return () => {
+      unsubscribeModels();
+      unsubscribeDefaultModels();
+    };
+  }, [loadData]);
 
   
   const getModelName = useCallback((modelId: string | null | undefined): string | undefined => {
