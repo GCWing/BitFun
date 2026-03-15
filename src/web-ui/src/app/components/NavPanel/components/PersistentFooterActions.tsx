@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { Settings, Info, MoreVertical, PictureInPicture2, SquareTerminal, Wifi } from 'lucide-react';
+import { Settings, Info, MoreVertical, PictureInPicture2, SquareTerminal, Wifi, Globe } from 'lucide-react';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '../../../hooks/useSceneManager';
 import { useNavSceneStore } from '../../../stores/navSceneStore';
+import { useSceneStore } from '../../../stores/sceneStore';
+import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
@@ -19,10 +21,17 @@ import {
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
   const { openScene } = useSceneManager();
+  const activeTabId = useSceneStore((s) => s.activeTabId);
   const showSceneNav = useNavSceneStore((s) => s.showSceneNav);
   const navSceneId = useNavSceneStore((s) => s.navSceneId);
   const openNavScene = useNavSceneStore((s) => s.openNavScene);
   const closeNavScene = useNavSceneStore((s) => s.closeNavScene);
+
+  // Check if a browser panel is the active tab in the AuxPane canvas
+  const isBrowserPanelActiveInCanvas = useCanvasStore((s) => {
+    const activeTab = s.primaryGroup.tabs.find((t) => t.id === s.primaryGroup.activeTabId);
+    return activeTab?.content.type === 'browser';
+  });
   const { enableToolbarMode } = useToolbarModeContext();
   const { hasWorkspace } = useCurrentWorkspace();
   const { warning } = useNotification();
@@ -62,6 +71,23 @@ const PersistentFooterActions: React.FC = () => {
     }
     openNavScene('shell');
   }, [closeNavScene, navSceneId, openNavScene, showSceneNav]);
+
+  const handleOpenBrowser = useCallback(() => {
+    if (activeTabId === 'session') {
+      // Open browser as a panel in the AuxPane (right side of chat)
+      window.dispatchEvent(new CustomEvent('agent-create-tab', {
+        detail: {
+          type: 'browser',
+          title: t('scenes.browser'),
+          checkDuplicate: true,
+          duplicateCheckKey: 'browser-panel',
+          replaceExisting: false,
+        },
+      }));
+    } else {
+      openScene('browser');
+    }
+  }, [activeTabId, openScene, t]);
 
   const handleShowAbout = () => {
     closeMenu();
@@ -181,6 +207,18 @@ const PersistentFooterActions: React.FC = () => {
           onClick={handleOpenShell}
         >
           <SquareTerminal size={15} />
+        </button>
+      </Tooltip>
+
+      <Tooltip content={t('scenes.browser')} placement="right">
+        <button
+          type="button"
+          className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${(activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas)) ? ' is-active' : ''}`}
+          aria-label={t('scenes.browser')}
+          aria-pressed={activeTabId === 'browser' || (activeTabId === 'session' && isBrowserPanelActiveInCanvas)}
+          onClick={handleOpenBrowser}
+        >
+          <Globe size={15} />
         </button>
       </Tooltip>
 

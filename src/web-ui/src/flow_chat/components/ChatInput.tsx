@@ -421,11 +421,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const context = customEvent.detail?.context;
       
       if (context) {
-        if (richTextInputRef.current && (richTextInputRef.current as any).insertTag) {
-          (richTextInputRef.current as any).insertTag(context);
-          
-          richTextInputRef.current.focus();
+        if (!inputState.isActive) {
+          dispatchInput({ type: 'ACTIVATE' });
         }
+
+        setTimeout(() => {
+          if (richTextInputRef.current && (richTextInputRef.current as any).insertTag) {
+            const el = richTextInputRef.current;
+            el.focus();
+            const sel = window.getSelection();
+            if (sel) {
+              sel.selectAllChildren(el);
+              sel.collapseToEnd();
+            }
+            (el as any).insertTag(context);
+          }
+        }, 50);
       }
     };
 
@@ -434,7 +445,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('insert-context-tag', handleInsertContextTag);
     };
-  }, []);
+  }, [inputState.isActive]);
 
   React.useEffect(() => {
     const fetchAvailableModes = async () => {
@@ -1245,6 +1256,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const toggleExpand = useCallback(() => {
     dispatchInput({ type: 'TOGGLE_EXPAND' });
   }, []);
+
+  const focusRichTextInputSoon = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      richTextInputRef.current?.focus();
+    });
+  }, []);
   
   const handleActivate = useCallback((e?: React.MouseEvent) => {
     if (e?.target instanceof HTMLButtonElement || 
@@ -1257,13 +1274,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     
     if (!inputState.isActive) {
       dispatchInput({ type: 'ACTIVATE' });
-      setTimeout(() => {
-        if (richTextInputRef.current) {
-          richTextInputRef.current.focus();
-        }
-      }, 50);
+      focusRichTextInputSoon();
     }
-  }, [inputState.isActive]);
+  }, [focusRichTextInputSoon, inputState.isActive]);
 
   // Global space-to-activate: when collapsed and no editable element is focused
   useEffect(() => {
@@ -1289,16 +1302,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       e.preventDefault();
       dispatchInput({ type: 'ACTIVATE' });
-      setTimeout(() => {
-        if (richTextInputRef.current) {
-          richTextInputRef.current.focus();
-        }
-      }, 50);
+      focusRichTextInputSoon();
     };
 
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [derivedState?.canCancel, inputState.isActive, transition]);
+  }, [derivedState?.canCancel, focusRichTextInputSoon, inputState.isActive, transition]);
   
   const containerRef = useRef<HTMLDivElement>(null);
   

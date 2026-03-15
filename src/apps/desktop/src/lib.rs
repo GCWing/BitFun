@@ -633,6 +633,9 @@ pub async fn run() {
             api::miniapp_api::miniapp_dialog_message,
             api::miniapp_api::miniapp_import_from_path,
             api::miniapp_api::miniapp_sync_from_fs,
+            // Browser API
+            api::browser_api::browser_webview_eval,
+            api::browser_api::browser_pull_debug_logs,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = run_result {

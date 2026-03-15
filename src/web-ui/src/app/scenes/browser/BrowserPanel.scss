@@ -1,0 +1,131 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.browser-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--border-subtle);
+    background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+    flex-shrink: 0;
+  }
+
+  &__address {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    padding: 0 $size-gap-2;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--color-bg-primary);
+    color: var(--color-text-muted);
+
+    input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      outline: none;
+      box-shadow: none;
+      background: transparent;
+      color: var(--color-text-primary);
+      font-size: $font-size-sm;
+      appearance: none;
+      -webkit-appearance: none;
+      border-radius: 0;
+
+      &:focus,
+      &:focus-visible,
+      &:active {
+        outline: none;
+        box-shadow: none;
+        border: none;
+      }
+    }
+  }
+
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin: $size-gap-2 $size-gap-3 0;
+    padding: $size-gap-2 $size-gap-3;
+    border-radius: $size-radius-base;
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    color: var(--color-text-secondary);
+    font-size: $font-size-xs;
+    flex-shrink: 0;
+
+    svg {
+      color: var(--color-warning);
+      flex-shrink: 0;
+    }
+  }
+
+  &__content {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    background: var(--color-bg-primary);
+  }
+
+  &__iframe,
+  &__webview-host {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+
+  &__webview-host {
+    position: relative;
+  }
+
+  &__webview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $size-gap-2;
+    color: var(--color-text-muted);
+    font-size: $font-size-sm;
+    background:
+      radial-gradient(circle at top, color-mix(in srgb, var(--color-accent-500) 8%, transparent), transparent 42%),
+      var(--color-bg-primary);
+
+    span {
+      max-width: min(60%, 400px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__spinning {
+    animation: browser-panel-spin 0.8s linear infinite;
+  }
+
+  &__inspector-btn--active {
+    color: var(--color-accent-500) !important;
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent) !important;
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-accent-500) 22%, transparent) !important;
+    }
+  }
+}
+
+@keyframes browser-panel-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

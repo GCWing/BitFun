@@ -229,6 +229,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
             isFullscreen={false}
             isDragging={false}
             workspacePath={workspacePath}
+            showChatInput
           />
         </div>
       )}

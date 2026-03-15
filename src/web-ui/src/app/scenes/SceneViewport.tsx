@@ -23,6 +23,7 @@ const ProfileScene    = lazy(() => import('./profile/ProfileScene'));
 const AgentsScene       = lazy(() => import('./agents/AgentsScene'));
 const SkillsScene     = lazy(() => import('./skills/SkillsScene'));
 const MiniAppGalleryScene = lazy(() => import('./miniapps/MiniAppGalleryScene'));
+const BrowserScene    = lazy(() => import('./browser/BrowserScene'));
 const MyAgentScene    = lazy(() => import('./my-agent/MyAgentScene'));
 const ShellScene      = lazy(() => import('./shell/ShellScene'));
 const WelcomeScene    = lazy(() => import('./welcome/WelcomeScene'));
@@ -88,6 +89,8 @@ function renderScene(id: SceneTabId, workspacePath?: string, isEntering?: boolea
       return <SkillsScene />;
     case 'miniapps':
       return <MiniAppGalleryScene />;
+    case 'browser':
+      return <BrowserScene />;
     case 'my-agent':
       return <MyAgentScene workspacePath={workspacePath} />;
     case 'shell':

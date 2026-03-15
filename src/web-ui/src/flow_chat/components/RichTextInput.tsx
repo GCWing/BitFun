@@ -65,6 +65,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       case 'url': return context.title || context.url;
       case 'mermaid-node': return context.nodeText;
       case 'mermaid-diagram': return context.diagramTitle || 'Mermaid diagram';
+      case 'web-element': return context.tagName;
       default:
         // TypeScript exhaustiveness check
         const _exhaustive: never = context;
@@ -84,6 +85,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       case 'url': return `#link:${context.title || context.url}`;
       case 'mermaid-node': return `#chart:${context.nodeText}`;
       case 'mermaid-diagram': return `#mermaid:${context.diagramTitle || 'Mermaid diagram'}`;
+      case 'web-element': return `#element:${context.tagName}`;
       default:
         // TypeScript exhaustiveness check
         const _exhaustive: never = context;
@@ -112,6 +114,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         return context.diagramTitle ? `${context.diagramTitle} - ${context.nodeText}` : context.nodeText;
       case 'mermaid-diagram': 
         return `Mermaid diagram${context.diagramTitle ? ': ' + context.diagramTitle : ''} (${context.diagramCode.length} chars)`;
+      case 'web-element':
+        return context.path;
       default:
         // TypeScript exhaustiveness check
         const _exhaustive: never = context;

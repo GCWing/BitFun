@@ -6,7 +6,7 @@ services:
     container_name: bitfun-relay
     restart: unless-stopped
     ports:
-      - "9700:9700"
+      - "${RELAY_HOST_BIND_IP:-0.0.0.0}:9700:9700"
     environment:
       - RELAY_PORT=9700
       - RELAY_STATIC_DIR=/app/static

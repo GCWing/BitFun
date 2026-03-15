@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_NAME="bitfun-relay"
+RELAY_HOST_BIND_IP="127.0.0.1"
 
 usage() {
   cat <<'EOF'
@@ -77,9 +78,10 @@ else
   echo "Relay service is not created yet. Creating and starting it..."
 fi
 
-docker compose up -d
+RELAY_HOST_BIND_IP="$RELAY_HOST_BIND_IP" docker compose up -d
 
 echo ""
 echo "Relay service started."
+echo "Relay endpoint: http://127.0.0.1:9700"
 echo "Check status:  docker compose ps"
 echo "View logs:     docker compose logs -f relay-server"

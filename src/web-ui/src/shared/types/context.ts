@@ -24,7 +24,8 @@ export type ContextItem =
   | ImageContext
   | TerminalCommandContext
   | GitRefContext
-  | URLContext;
+  | URLContext
+  | WebElementContext;
 
 export interface FileContext extends BaseContext {
   type: 'file';
@@ -108,6 +109,22 @@ export interface URLContext extends BaseContext {
   description?: string;
 }
 
+export interface WebElementContext extends BaseContext {
+  type: 'web-element';
+  /** HTML tag name, e.g. "div", "button" */
+  tagName: string;
+  /** Absolute CSS selector path to the element */
+  path: string;
+  /** All HTML attributes of the element */
+  attributes: Record<string, string>;
+  /** Inner text content (truncated) */
+  textContent: string;
+  /** Outer HTML (truncated) */
+  outerHTML: string;
+  /** URL of the page where the element was captured */
+  sourceUrl?: string;
+}
+
 /**
  * Convenience alias for the discriminant used by `ContextItem`.
  */
@@ -172,6 +189,10 @@ export function isGitRefContext(context: ContextItem): context is GitRefContext 
 
 export function isURLContext(context: ContextItem): context is URLContext {
   return context.type === 'url';
+}
+
+export function isWebElementContext(context: ContextItem): context is WebElementContext {
+  return context.type === 'web-element';
 }
 
  

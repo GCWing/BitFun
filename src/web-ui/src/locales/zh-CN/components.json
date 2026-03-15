@@ -421,7 +421,14 @@
       "image": {
         "name": "图片",
         "description": "图片文件（用于多模态理解）"
+      },
+      "webElement": {
+        "name": "网页元素",
+        "description": "浏览器中捕获的 DOM 元素"
       }
+    },
+    "webElement": {
+      "from": "来自"
     },
     "diagram": {
       "defaultTitle": "Mermaid 图表",

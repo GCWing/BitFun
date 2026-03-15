@@ -19,7 +19,7 @@ import { useSceneStore } from '../stores/sceneStore';
 type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceBody from './WorkspaceBody';
-import { ChatInput, ToolbarMode, useToolbarModeContext } from '../../flow_chat';
+import { ToolbarMode, useToolbarModeContext } from '../../flow_chat';
 import { FloatingMiniChat } from './FloatingMiniChat';
 import { NewProjectDialog } from '../components/NewProjectDialog';
 import { AboutDialog } from '../components/AboutDialog';
@@ -409,9 +409,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             isMaximized={isMaximized}
             isEntering={transitionDir === 'entering'}
             isExiting={transitionDir === 'returning'}
-            sceneOverlay={!isWelcomeScene && !state.layout.chatCollapsed && isAgentScene ? (
-              <ChatInput onSendMessage={(_message: string) => {}} />
-            ) : undefined}
           />
         </main>
 

@@ -1,7 +1,7 @@
  
 
 import React from 'react';
-import { FileIcon, Code, Network } from 'lucide-react';
+import { FileIcon, Code, Network, Code2 as Code2Icon } from 'lucide-react';
 import { contextRegistry } from '../../services/ContextRegistry';
 import { 
   FileContextTransformer, 
@@ -23,6 +23,11 @@ import {
   ImageContextValidator, 
   ImageCardRenderer 
 } from './types/ImageContextImpl';
+import {
+  WebElementContextTransformer,
+  WebElementContextValidator,
+  WebElementCardRenderer,
+} from './types/WebElementContextImpl';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -146,6 +151,28 @@ export function registerDefaultContextTypes(): void {
     log.error('Failed to register image type', error as Error);
   }
   
+  try {
+    contextRegistry.register({
+      type: 'web-element',
+      displayName: i18nService.t('components:contextSystem.contextRegistry.webElement.name'),
+      description: i18nService.t('components:contextSystem.contextRegistry.webElement.description'),
+      icon: React.createElement(Code2Icon, { size: 16 }),
+      color: '#38bdf8',
+      category: 'reference',
+      transformer: new WebElementContextTransformer(),
+      validator: new WebElementContextValidator(),
+      renderer: new WebElementCardRenderer(),
+      config: {
+        maxSize: 50000,
+        cacheable: false,
+        priority: 6,
+      },
+    });
+    registeredCount++;
+  } catch (error) {
+    log.error('Failed to register web-element type', error as Error);
+  }
+
   const registeredTypes = contextRegistry.getAllTypes();
   log.info('Default context types registered', { count: registeredCount, types: registeredTypes });
 }

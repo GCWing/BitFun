@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, memo } from 'react';
-import { FlowChatContainer } from '../../../flow_chat';
+import { FlowChatContainer, ChatInput } from '../../../flow_chat';
 import { useCanvasStore } from '../../components/panels/content-canvas/stores/canvasStore';
 import type { LineRange } from '@/component-library';
 import path from 'path-browserify';
@@ -21,13 +21,15 @@ interface ChatPaneProps {
   isFullscreen: boolean;
   workspacePath?: string;
   isDragging?: boolean;
+  showChatInput?: boolean;
 }
 
 const ChatPaneInner: React.FC<ChatPaneProps> = ({
   width: _width,
   isFullscreen,
   workspacePath,
-  isDragging: _isDragging = false
+  isDragging: _isDragging = false,
+  showChatInput = false,
 }) => {
   const addTab = useCanvasStore(state => state.addTab);
 
@@ -94,6 +96,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
           theme: 'auto'
         }}
       />
+      {showChatInput && <ChatInput onSendMessage={(_message: string) => {}} />}
     </div>
   );
 };

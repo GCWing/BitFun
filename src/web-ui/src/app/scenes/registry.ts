@@ -19,6 +19,7 @@ import {
   Puzzle,
   Boxes,
   UserCircle2,
+  Globe,
 } from 'lucide-react';
 import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
 
@@ -115,6 +116,15 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     label: 'Mini App',
     labelKey: 'scenes.miniApps',
     Icon: Boxes,
+    pinned: false,
+    singleton: true,
+    defaultOpen: false,
+  },
+  {
+    id: 'browser' as SceneTabId,
+    label: 'Browser',
+    labelKey: 'scenes.browser',
+    Icon: Globe,
     pinned: false,
     singleton: true,
     defaultOpen: false,

@@ -421,7 +421,14 @@
       "image": {
         "name": "Image",
         "description": "Image file (for multimodal understanding)"
+      },
+      "webElement": {
+        "name": "Web element",
+        "description": "DOM element captured from the browser"
       }
+    },
+    "webElement": {
+      "from": "from"
     },
     "diagram": {
       "defaultTitle": "Mermaid diagram",

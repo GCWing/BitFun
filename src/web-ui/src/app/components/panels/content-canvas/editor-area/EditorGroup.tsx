@@ -160,6 +160,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
               >
                 <FlexiblePanel
                   content={tab.content as any}
+                  isActive={group.activeTabId === tab.id}
                   onContentChange={group.activeTabId === tab.id ? handleContentChange : undefined}
                   onDirtyStateChange={group.activeTabId === tab.id ? handleDirtyStateChange : undefined}
                   onInteraction={onInteraction}

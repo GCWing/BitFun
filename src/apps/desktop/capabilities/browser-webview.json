@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "browser-webview",
+  "description": "Minimal permissions for embedded browser webviews to emit events back to the host",
+  "webviews": ["embedded-browser-*"],
+  "local": true,
+  "remote": {
+    "urls": ["https://*", "http://*"]
+  },
+  "permissions": [
+    "core:event:allow-emit"
+  ]
+}

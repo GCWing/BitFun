@@ -611,8 +611,6 @@ const MainNav: React.FC<MainNavProps> = ({
     [isAssistantNavMode]
   );
   const myAgentEntryLabel = t('nav.actions.openMyAgent');
-
-
   return (
     <>
       <div className="bitfun-nav-panel__workspace-toolbar">

@@ -175,6 +175,18 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
               return `[Git Ref: ${ctx.refValue}]`;
             case 'url':
               return `[URL: ${ctx.url}]`;
+            case 'web-element': {
+              const attrStr = Object.entries(ctx.attributes)
+                .map(([k, v]) => `${k}="${v}"`)
+                .join(' ');
+              const lines = [
+                `[Web Element: <${ctx.tagName}${attrStr ? ' ' + attrStr : ''}>]`,
+                `CSS Path: ${ctx.path}`,
+              ];
+              if (ctx.textContent) lines.push(`Text Content: ${ctx.textContent}`);
+              if (ctx.outerHTML) lines.push(`Outer HTML:\n\`\`\`html\n${ctx.outerHTML}\n\`\`\``);
+              return lines.join('\n');
+            }
             default:
               return '';
           }

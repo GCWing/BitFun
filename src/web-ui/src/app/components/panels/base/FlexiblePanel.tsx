@@ -57,6 +57,10 @@ const TerminalTabPanel = React.lazy(() =>
   }))
 );
 
+const BrowserPanel = React.lazy(() =>
+  import('@/app/scenes/browser/BrowserPanel')
+);
+
 const TaskDetailPanel = React.lazy(() => 
   import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
     default: module.TaskDetailPanel 
@@ -83,6 +87,8 @@ import './FlexiblePanel.scss';
 
 interface ExtendedFlexiblePanelProps extends FlexiblePanelProps {
   onDirtyStateChange?: (isDirty: boolean) => void;
+  /** Whether this panel is the active/visible tab in its EditorGroup */
+  isActive?: boolean;
 }
 
 const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
@@ -92,7 +98,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
   onInteraction,
   workspacePath,
   onBeforeClose,
-  onDirtyStateChange
+  onDirtyStateChange,
+  isActive = true,
 }) => {
   const { t } = useI18n('components');
 
@@ -726,6 +733,16 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               childSessionId={content.data?.childSessionId}
               parentSessionId={content.data?.parentSessionId}
               workspacePath={content.data?.workspacePath || workspacePath}
+            />
+          </React.Suspense>
+        );
+
+      case 'browser':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.terminal')}</div>}>
+            <BrowserPanel
+              isActive={isActive}
+              initialUrl={content.data?.url}
             />
           </React.Suspense>
         );

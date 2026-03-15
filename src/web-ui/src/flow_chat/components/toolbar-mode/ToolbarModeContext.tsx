@@ -101,6 +101,11 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
   
   const enableToolbarMode = useCallback(async () => {
     try {
+      // Signal all native webview overlays (browser panel/scene) to hide themselves
+      // immediately, before any window resize operations, to prevent them from
+      // covering the toolbar UI during the transition.
+      window.dispatchEvent(new CustomEvent('toolbar-mode-activating'));
+
       const win = getCurrentWindow();
       const isMacOS =
         typeof window !== 'undefined' &&

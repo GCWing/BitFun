@@ -15,7 +15,8 @@ import {
   ClipboardList,
   Image,
   Network,
-  MessageSquareQuote
+  MessageSquareQuote,
+  Globe,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -212,7 +213,15 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false
-  }
+  },
+  'browser': {
+    type: 'browser',
+    displayName: 'Browser',
+    icon: Globe,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
 };
 
 /**
