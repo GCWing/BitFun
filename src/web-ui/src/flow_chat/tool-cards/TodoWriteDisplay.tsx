@@ -124,59 +124,43 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   }, [hoveredTask, inProgressTasks]);
 
   return (
-    <div className={`flow-tool-card todo-write-card mode-${displayMode} status-${status}`}>
-      <div className="tool-card-header">
-        <div className="tool-info">
-          <span className="tool-icon">
-            {isLoading ? (
-              <Loader2 className="animate-spin" size={12} />
-            ) : isAllCompleted ? (
-              <CheckCircle2 size={12} className="tool-icon--completed" />
-            ) : (
-              <ListTodo size={12} />
-            )}
-          </span>
-          <span className={`tool-label ${isAllCompleted ? 'tool-label--completed' : ''}`}>
-            {isAllCompleted ? t('toolCards.todoWrite.allCompleted') : t('toolCards.todoWrite.tasks')}
-          </span>
+    <div className={`flow-tool-card todo-write-card mode-${displayMode} status-${status} ${isAllCompleted ? 'all-completed' : ''}`}>
+      <div
+        className={`tool-card-header ${todosToDisplay.length > 0 ? 'clickable' : ''}`}
+        onClick={todosToDisplay.length > 0 ? () => setExpandedState(!isExpanded) : undefined}
+      >
+        <div className="todo-header-center">
+          {isAllCompleted ? (
+            <>
+              <CheckCircle2 size={11} className="all-completed-icon" />
+              <span className="all-completed-label">{t('toolCards.todoWrite.allCompleted')}</span>
+            </>
+          ) : (
+            <>
+              {todosToDisplay.length > 0 && (
+                <div className="track-dots">
+                  {todosToDisplay.map((todo: any, idx: number) => renderTrackDot(todo, idx))}
+                </div>
+              )}
+
+              {!isExpanded && todosToDisplay.length > 0 && currentDisplayTask && (
+                <div className={`current-task-inline current-task-inline--${currentDisplayTask.status}`}>
+                  <span className="inline-task-text">{currentDisplayTask.content}</span>
+                  {inProgressTasks.length > 1 && !hoveredTask && (
+                    <span className="inline-task-more">+{inProgressTasks.length - 1}</span>
+                  )}
+                </div>
+              )}
+
+              {todosToDisplay.length > 0 && (
+                <div className="todo-track">
+                  <span className="track-stats">{taskStats.completed}/{taskStats.total}</span>
+                  {isExpanded ? <ChevronUp size={12} className="expand-icon" /> : <ChevronDown size={12} className="expand-icon" />}
+                </div>
+              )}
+            </>
+          )}
         </div>
-        
-        {!isExpanded && todosToDisplay.length > 0 && currentDisplayTask && (
-          <div className={`current-task-inline current-task-inline--${currentDisplayTask.status}`}>
-            {currentDisplayTask.status === 'completed' && (
-              <CheckCircle2 size={11} className="inline-task-icon inline-task-icon--completed" />
-            )}
-            {currentDisplayTask.status === 'in_progress' && (
-              <PlayCircle size={11} className="inline-task-icon inline-task-icon--in-progress" />
-            )}
-            {currentDisplayTask.status === 'pending' && (
-              <Circle size={11} className="inline-task-icon inline-task-icon--pending" />
-            )}
-            {currentDisplayTask.status === 'cancelled' && (
-              <XCircle size={11} className="inline-task-icon inline-task-icon--cancelled" />
-            )}
-            <span className="inline-task-text">{currentDisplayTask.content}</span>
-            {inProgressTasks.length > 1 && !hoveredTask && (
-              <span className="inline-task-more">+{inProgressTasks.length - 1}</span>
-            )}
-          </div>
-        )}
-        
-        {todosToDisplay.length > 0 && (
-          <div className="todo-track">
-            <div className="track-dots">
-              {todosToDisplay.map((todo: any, idx: number) => renderTrackDot(todo, idx))}
-            </div>
-            <button 
-              className={`track-expand-btn ${isExpanded ? 'expanded' : ''}`}
-              onClick={() => setExpandedState(!isExpanded)}
-              title={isExpanded ? t('toolCards.todoWrite.collapseList') : t('toolCards.todoWrite.expandList')}
-            >
-              <span className="track-stats">{taskStats.completed}/{taskStats.total}</span>
-              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-          </div>
-        )}
       </div>
 
       {isExpanded && todosToDisplay.length > 0 && (

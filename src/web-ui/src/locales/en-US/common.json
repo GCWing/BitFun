@@ -97,9 +97,9 @@
       "shell": "Shell"
     },
     "displayModes": {
-      "pro": "Pro Mode",
+      "pro": "Expert Mode",
       "assistant": "Assistant Mode",
-      "switchToPro": "Click to switch to Pro mode",
+      "switchToPro": "Click to switch to Expert mode",
       "switchToAssistant": "Click to switch to Assistant mode",
       "proDesc": "Best for focused, one-shot tasks with a clear goal.",
       "assistantDesc": "Best for ongoing work with context and personal preferences."
