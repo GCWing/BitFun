@@ -25,6 +25,7 @@ $_nav-collapsed-width: 80px;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   padding: 0 $size-gap-2 $size-gap-2 $size-gap-2;
+  gap: $size-gap-2;
 }
 
 // ── Left column: NavBar on top, NavPanel below ───────────

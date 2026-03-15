@@ -4,10 +4,18 @@
 
 ![BitFun](./png/BitFun_title.png)
 
+**有个性，有记忆的 AI 助理**
+
+工作交给它，生活留给你
+
+面向编程与知识工作的 AI Agent 工作台
+
 </div>
+
 <div align="center">
 
 [![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
+[![Website](https://img.shields.io/badge/Website-openbitfun.com-6f42c1?style=flat-square)](https://openbitfun.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue?style=flat-square)](https://github.com/GCWing/BitFun)
 
@@ -15,85 +23,95 @@
 
 ---
 
-## 写在前面的话
+## 简介
 
-AI 时代，真正的人机协同不是简单的ChatBox，而是一个懂你、陪你并且随时随地替你做事的伙伴。BitFun 的探索，从这里开始。
+AI 时代，真正的人机协同不是简单的 ChatBox，而是一个懂你、陪你、自我成长并且随时随地替你做事的伙伴。BitFun 的探索，从这里开始。
 
-## 什么是 BitFun
+BitFun 是一款内置 **Code Agent** 与 **Cowork Agent** 的新一代 AI 助理，有记忆、有个性，能自我迭代。可通过手机扫码或 Telegram / 飞书 Bot 随时遥控桌面端——下达指令、实时查看每一步执行过程，让 Agent 在后台替你做事。
 
-BitFun 是一个以 **"有个性、有记忆的 AI 助理"** 为核心的新一代 Agent 系统。
 
-每一位用户都拥有属于自己的 Agent 助理——它记得你的习惯与偏好，拥有独特的性格设定，并随时间持续成长。在这个助理之上，BitFun 默认内置了 **Code Agent**（代码代理）与 **Cowork Agent**（桌面端工作助理）两种专业能力，并提供统一的扩展机制供用户按需定制更多 Agent 角色。
+![BitFun 产品界面](./png/first_screen_screenshot-zh-CN.png)
 
-你的助理不只存在于桌面——可以通过多种媒体方式联系，比如通过 Telegram、WhatsApp 等社交平台，都可以随时随地向它下达指令，任务在后台持续推进，你只需在方便时查看进度或给出反馈。
+---
 
-以 **Rust + TypeScript** 构建，追求极致轻量与流畅的跨平台体验。
+## 双模式协同
 
-![BitFun](./png/first_screen_screenshot-zh-CN.png)
+BitFun 提供两种模式，适配不同场景需求：
 
-### Agent 体系
+- **助理模式（Assistant Mode）**：有温度，记住偏好，具备长期记忆。适合持续协作类任务，如维护项目、延续你的审美与工作习惯。
+- **专业模式（Professional Mode）**：省 token，直达执行，干净上下文。适合即时执行类任务，如修一个 bug、改一处样式。
+
+---
+
+## 远程遥控
+
+
+扫码配对，手机即刻变成桌面 Agent 的远程指挥中心。一条消息，桌面上的 AI 立刻开始工作。
+
+桌面端生成二维码，手机浏览器扫码打开即可使用，无需安装 App。
+
+除手机扫码外，也支持接入 Telegram / 飞书 Bot 远程下达指令，并实时查看 Agent 的执行进度。
+
+| 特性 | 说明 |
+|---|---|
+| **扫码配对** | 扫描桌面端二维码，密钥交换完成，一次绑定长期连接 |
+| **完整遥控** | 查看会话列表、切换模式、下达指令，桌面端一切尽在掌控 |
+| **实时推流** | Agent 执行的每一步、每个工具调用，手机端实时可见 |
+
+
+
+## Agent 体系
 
 | Agent | 定位 | 核心能力 |
 |---|---|---|
-| **个人助理（WIP🚧）**（默认） | 你专属的 AI 伙伴 | 长期记忆、个性设定、跨场景调度、持续成长 |
-| **Code Agent** | 代码代理 | 对话驱动编码，多模式任务执行，自主读/改/跑/验证 |
-| **Cowork Agent** | 知识工作代理 | 文件管理、文档生成、报告整理、多步任务自主执行 |
+| **个人助理**（Beta） | 你专属的 AI 伙伴 | 长期记忆、个性设定；按需调度 Code / Cowork / 自定义 Agent，并可自我迭代成长 |
+| **Code Agent** | 代码代理 | 四种模式：Agentic（自主读改跑验证）/ Plan（先规划后执行）/ Debug（插桩取证→根因定位）/ Review（基于仓库规范审查） |
+| **Cowork Agent** | 知识工作代理 | 内置 PDF / DOCX / XLSX / PPTX 处理，可从 Skill 市场按需获取和扩展能力包 |
 | **自定义 Agent** | 垂域专家 | 通过 Markdown 快速定义专属领域 Agent |
 
-### Code Agent 工作模式
 
-Code Agent 专为软件开发设计，支持多种工作模式覆盖从日常编码到疑难排查的全流程，并深度集成 MCP、Skills、Rules 等扩展体系：
+## 生态扩展
 
-| 模式 | 场景 | 特点 |
-|---|---|---|
-| **Agentic** | 日常编码 | 对话驱动，AI 自主完成读/改/跑/验证 |
-| **Plan** | 复杂任务 | 先规划后执行，关键改动点提前对齐 |
-| **Debug** | 疑难问题 | 插桩取证 → 路径对比 → 根因定位 → 验证修复 |
-| **Review** | 代码审查 | 基于仓库关键规范进行代码审查 |
+> 它会自己成长。
 
+Mini Apps 从对话中涌现，Skills 在社区里更新，Agent 在协作中进化。
 
-### Cowork Agent 工作方式
-
-Cowork Agent 专为日常工作设计，遵循"先澄清、再执行、可追踪"的协作原则，内置多个常用办公Skill，并对接skill市场：
-
-| Skill | 触发场景 | 核心能力 |
-|---|---|---|
-| **PDF** | 处理 .pdf 文件 | 读取/提取文本与表格、合并/拆分/旋转、添加水印、填写表单、加密解密、OCR 扫描版 |
-| **DOCX** | 创建或编辑 Word 文档 | 创建/编辑 .docx、样式/目录/页眉页脚、插入图片、批注与追踪修订 |
-| **XLSX** | 处理电子表格 | 创建/分析 .xlsx/.csv，公式与格式化，财务模型规范（颜色编码、公式校验） |
-| **PPTX** | 制作演示文稿 | 从零创建/编辑 .pptx，视觉设计规范，自动 QA 视觉检查 |
-| **agent-browser** | 需要操控网页 | 浏览器自动化：打开网页、点击/填表、截图、抓取数据、Web 测试 |
-| **skill-creator** | 创建自定义 Skill | 引导创作新 Skill，扩展 Agent 的专业能力范围 |
-| **find-skills** | 寻找现成能力包 | 从 Skill 市场发现并安装社区贡献的可复用 Skill |
+| 扩展层 | 说明 |
+|---|---|
+| **Mini Apps** | 从一句需求生成可运行界面，并可一键打包成桌面应用 |
+| **Skills 市场** | 安装社区能力包，让 Agent 快速获得新技能 |
+| **MCP 协议** | 接入外部工具和资源，把 Agent 的能力延伸到系统之外 |
+| **自定义 Agent** | 用 Markdown 定义角色、记忆和能力范围 |
+| **ACP 协议（WIP）** | 结构化多 Agent 通信标准，让 BitFun 与主流 AI 工具互联协作 |
 
 ---
 
-### 扩展能力
+## 平台支持
 
-- **MCP 协议**：通过 MCP 服务器扩展外部工具与资源，支持MCP APP
-- **Skills**：Markdown/脚本等能力包，教 Agent 完成特定任务（自动读取 Cursor、Claude Code、Codex 等配置）
-- **Agent 自定义**：通过 Markdown 快速定义专属 Agent 的性格、记忆与能力范围
-- **Rules**：项目/全局级规范注入，自动读取 Cursor 等主流工具配置
-- **Hooks（WIP🚧）**：在任务关键节点注入确定性自动化逻辑
+项目采用 Rust + TypeScript 技术栈，支持跨平台和多形态复用，确保你的 Agent 助理随时在线、随处可达。
+
+| 形态 | 支持平台 | 状态 |
+|---|---|---|
+| **Desktop**| Windows、macOS | ✅ 已支持 （Tauri） |
+| **远程控制** | 手机浏览器、Telegram、飞书 | ✅ 已支持 |
 
 ---
-
 
 ## 快速开始
 
-### 直接使用
+### 直接下载使用
 
-桌面端程序在 [Release](https://github.com/GCWing/BitFun/releases) 处下载最新安装包，安装后配置模型即可开始使用。
+在 [Releases](https://github.com/GCWing/BitFun/releases) 页面下载最新桌面端安装包，安装后配置模型即可开始使用。
 
-其他形态暂时仅是规范雏形未完成开发，如有需要请从源码构建。
+> CLI、Server 和原生移动 App 仍在规划或开发中；当前已支持桌面端与远程控制能力。
 
 ### 从源码构建
 
-请确保已安装以下前置依赖：
+**前置依赖：**
 
-- Node.js（推荐 LTS 版本）
-- pnpm
-- Rust 工具链（通过 [rustup](https://rustup.rs/) 安装）
+- [Node.js](https://nodejs.org/)（推荐 LTS 版本）
+- [pnpm](https://pnpm.io/)
+- [Rust 工具链](https://rustup.rs/)
 - [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)（桌面端开发需要）
 
 ```bash
@@ -109,36 +127,31 @@ pnpm run desktop:build
 
 更多详情请参阅[贡献指南](./CONTRIBUTING_CN.md)。
 
-## 平台支持
-
-项目采用 Rust + TypeScript 技术栈，支持跨平台和多形态复用，确保你的 Agent 助理随时在线、随处可达。
-
-| 形态 | 支持平台 | 状态 |
-|------|----------|------|
-| **Desktop**（Tauri） | Windows、macOS | ✅ 已支持 |
-| **CLI** | Windows、macOS、Linux | 🚧 开发中 |
-| **Server** | - | 🚧 开发中 |
-| **手机端**（独立 App） | iOS、Android | 🚧 开发中 |
-| **社交平台接入** | Telegram、WhatsApp、Discord 等 | 🚧 开发中 |
-
-
+---
 
 ## 贡献
-欢迎大家贡献好的创意和代码，我们对AI生成代码抱有最大的接纳程度, 请PR优先提交至dev分支，我们会定期审视后同步到主干。
 
-我们重点关注的贡献方向：
-1. 贡献好的想法/创意(功能、交互、视觉等)，提交问题
-2. 优化Agent系统和效果
-3. 对提升系统稳定性和完善基础能力
-4. 扩展生态（SKill、MCP、LSP插件，或者对某些垂域开发场景的更好支持）
+欢迎大家贡献好的创意和代码，我们对 AI 生成代码抱有最大的接纳程度。请 PR 优先提交至 `dev` 分支，我们会定期审视后同步到主干。
 
+**我们重点关注的贡献方向：**
 
-## 声明
-1. 本项目为业余时间探索、研究构建下一代人机协同交互，非商用盈利项目
-2. 本项目 97%+ 由 Vibe Coding 完成，代码问题也欢迎指正，可通过AI进行重构优化。
-3. 项目依赖和参考了众多开源软件，感谢所有开源作者，**如侵犯您的相关权益请联系我们整改**。
+1. 贡献好的想法 / 创意（功能、交互、视觉等），提交 Issue
+2. 优化 Agent 系统和效果
+3. 提升系统稳定性和完善基础能力
+4. 扩展生态（Skill、MCP、LSP 插件，或对某些垂域开发场景的更好支持）
 
 ---
+
+## 声明
+
+1. 本项目为业余时间探索、研究构建下一代人机协同交互，非商用盈利项目。
+2. 本项目 97%+ 由 Vibe Coding 完成，代码问题也欢迎指正，可通过 AI 进行重构优化。
+3. 本项目依赖和参考了众多开源软件，感谢所有开源作者。**如侵犯您的相关权益请联系我们整改。**
+
+---
+
 <div align="center">
+
 世界正在被改写，这一次，你我皆是执笔人
+
 </div>

@@ -191,7 +191,7 @@
     "noMatchingCommand": "No matching command",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
-    "professionalMode": "Professional Mode",
+    "professionalMode": "Expert Mode",
     "designMode": "Design Mode",
     "templateHint": "Press <kbd>Tab</kbd> for next placeholder, <kbd>Shift+Tab</kbd> for previous, <kbd>Esc</kbd> to exit",
     "templateProgress": "{{current}} / {{total}}",
