@@ -14,7 +14,7 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, FolderOpen, FolderPlus, History, Check, Bot } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Badge, Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useNavSceneStore } from '../../stores/navSceneStore';
@@ -616,7 +616,6 @@ const MainNav: React.FC<MainNavProps> = ({
   return (
     <>
       <div className="bitfun-nav-panel__workspace-toolbar">
-        <Tooltip content={navModeHint} placement="right" followCursor>
           <button
             type="button"
             className={[
@@ -653,7 +652,10 @@ const MainNav: React.FC<MainNavProps> = ({
               )}
             </span>
             <span className="bitfun-nav-panel__mode-switch-copy">
-              <span className="bitfun-nav-panel__mode-switch-label">{navModeLabel}</span>
+              <span className="bitfun-nav-panel__mode-switch-label">
+                {navModeLabel}
+                {isAssistantNavMode && <Badge variant="neutral">Beta</Badge>}
+              </span>
               <span className="bitfun-nav-panel__mode-switch-sub">
                 <span className="bitfun-nav-panel__mode-switch-desc">
                   <span className="bitfun-nav-panel__mode-switch-desc-main">{navModeDesc}</span>
@@ -662,7 +664,6 @@ const MainNav: React.FC<MainNavProps> = ({
               </span>
             </span>
           </button>
-        </Tooltip>
         <div className="bitfun-nav-panel__workspace-create-group">
           {isAssistantNavMode ? (
             <Tooltip content={createSessionTooltip} placement="right" followCursor>

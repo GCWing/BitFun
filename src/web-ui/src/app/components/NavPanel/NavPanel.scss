@@ -231,6 +231,9 @@ $_section-header-height: 24px;
   }
 
   &__mode-switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-size: 13px;
     font-weight: 600;
     line-height: 1.15;
