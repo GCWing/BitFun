@@ -572,6 +572,10 @@ impl AIClient {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.config.api_key));
 
+        if self.config.base_url.contains("openbitfun.com") {
+            builder = builder.header("X-Verification-Code", "from_bitfun");
+        }
+
         if has_custom_headers && is_merge_mode {
             builder = self.apply_custom_headers(builder);
         }
@@ -606,6 +610,10 @@ impl AIClient {
                 .header("anthropic-version", "2023-06-01");
         }
 
+        if url.contains("openbitfun.com") {
+            builder = builder.header("X-Verification-Code", "from_bitfun");
+        }
+
         if has_custom_headers && is_merge_mode {
             builder = self.apply_custom_headers(builder);
         }
@@ -636,6 +644,10 @@ impl AIClient {
                 "Authorization",
                 format!("Bearer {}", self.config.api_key),
             );
+
+        if self.config.base_url.contains("openbitfun.com") {
+            builder = builder.header("X-Verification-Code", "from_bitfun");
+        }
 
         if has_custom_headers && is_merge_mode {
             builder = self.apply_custom_headers(builder);
