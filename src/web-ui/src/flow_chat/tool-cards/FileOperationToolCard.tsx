@@ -42,6 +42,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   
   const prevIsParamsStreamingRef = useRef(isParamsStreaming);
   const userCollapsedRef = useRef(false);
+  const hasInitializedCompletionEffectRef = useRef(false);
+  const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
   
   useEffect(() => {
     const prevIsParamsStreaming = prevIsParamsStreamingRef.current;
@@ -108,13 +110,33 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const currentFile = files.find(f => f.filePath === currentFilePath);
 
   useEffect(() => {
-    if (status === 'completed' && toolResult?.success && sessionId && currentFilePath) {
-      eventBus.emit(SNAPSHOT_EVENTS.FILE_OPERATION_COMPLETED, {
-        toolName: toolItem.toolName,
-        toolResult
-      }, sessionId, currentFilePath);
+    const completionEndTime = toolItem.endTime ?? null;
+    const isCompletedSuccess = status === 'completed' && Boolean(toolResult?.success);
+
+    if (!hasInitializedCompletionEffectRef.current) {
+      hasInitializedCompletionEffectRef.current = true;
+      previousCompletionEndTimeRef.current = completionEndTime;
+      return;
     }
-  }, [status, toolResult, sessionId, currentFilePath, toolItem.toolName, eventBus]);
+
+    const shouldEmitCompletionEvent =
+      isCompletedSuccess &&
+      completionEndTime !== null &&
+      previousCompletionEndTimeRef.current !== completionEndTime &&
+      Boolean(sessionId) &&
+      Boolean(currentFilePath);
+
+    previousCompletionEndTimeRef.current = completionEndTime;
+
+    if (!shouldEmitCompletionEvent || !sessionId || !currentFilePath) {
+      return;
+    }
+
+    eventBus.emit(SNAPSHOT_EVENTS.FILE_OPERATION_COMPLETED, {
+      toolName: toolItem.toolName,
+      toolResult
+    }, sessionId, currentFilePath);
+  }, [status, toolResult, sessionId, currentFilePath, toolItem.toolName, toolItem.endTime, eventBus]);
 
   const getToolDisplayInfo = () => {
     const toolMap: Record<string, { icon: string; name: string }> = {

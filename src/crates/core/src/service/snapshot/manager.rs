@@ -7,7 +7,7 @@ use crate::service::snapshot::types::{
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock as StdRwLock};
 use tokio::sync::RwLock;
@@ -17,9 +17,6 @@ use tokio::sync::RwLock;
 /// Manages all components of the snapshot system.
 pub struct SnapshotManager {
     snapshot_service: Arc<RwLock<SnapshotService>>,
-    original_tools: Vec<Arc<dyn Tool>>,
-    file_modification_tools: HashSet<String>,
-    initialized: bool,
 }
 
 impl SnapshotManager {
@@ -36,56 +33,7 @@ impl SnapshotManager {
         let mut snapshot_service = SnapshotService::new(workspace_dir, config);
         snapshot_service.initialize().await?;
         let snapshot_service = Arc::new(RwLock::new(snapshot_service));
-
-        let original_tools = ToolRegistry::new().get_all_tools();
-
-        let file_modification_tools = [
-            "Write",
-            "Edit",
-            "Delete",
-            "write_file",
-            "edit_file",
-            "create_file",
-            "delete_file",
-            "rename_file",
-            "move_file",
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-
-        Ok(Self {
-            snapshot_service,
-            original_tools,
-            file_modification_tools,
-            initialized: true,
-        })
-    }
-
-    /// Returns whether the tool modifies files.
-    fn is_file_modification_tool(&self, tool_name: &str) -> bool {
-        self.file_modification_tools.contains(tool_name)
-    }
-
-    /// Returns wrapped tool list.
-    pub fn get_wrapped_tools(&self) -> Vec<Arc<dyn Tool>> {
-        if !self.initialized {
-            error!("Snapshot manager not initialized");
-            return vec![];
-        }
-
-        let mut wrapped_tools: Vec<Arc<dyn Tool>> = Vec::new();
-
-        for tool in &self.original_tools {
-            if self.is_file_modification_tool(tool.name()) {
-                let wrapped_tool: Arc<dyn Tool> = Arc::new(WrappedTool::new(tool.clone()));
-                wrapped_tools.push(wrapped_tool);
-            } else {
-                wrapped_tools.push(tool.clone());
-            }
-        }
-
-        wrapped_tools
+        Ok(Self { snapshot_service })
     }
 
     /// Records a file change.
@@ -340,18 +288,20 @@ fn snapshot_managers() -> &'static StdRwLock<HashMap<PathBuf, Arc<SnapshotManage
     SNAPSHOT_MANAGERS.get_or_init(|| StdRwLock::new(HashMap::new()))
 }
 
+/// Ensures the registry always exposes the same tool implementation that will be
+/// executed at runtime. File-modifying tools are wrapped once at registration time
+/// so tool definitions, permission checks, and execution all share one source of truth.
+pub fn wrap_tool_for_snapshot_tracking(tool: Arc<dyn Tool>) -> Arc<dyn Tool> {
+    if WrappedTool::is_file_modification_tool_name(tool.name()) {
+        Arc::new(WrappedTool::new(tool))
+    } else {
+        tool
+    }
+}
+
+/// Compatibility helper that returns a fresh snapshot-aware tool list.
 pub fn get_snapshot_wrapped_tools() -> Vec<Arc<dyn Tool>> {
-    ToolRegistry::new()
-        .get_all_tools()
-        .into_iter()
-        .map(|tool| {
-            if WrappedTool::is_file_modification_tool_name(tool.name()) {
-                Arc::new(WrappedTool::new(tool)) as Arc<dyn Tool>
-            } else {
-                tool
-            }
-        })
-        .collect()
+    ToolRegistry::new().get_all_tools()
 }
 
 /// Wrapped tool
