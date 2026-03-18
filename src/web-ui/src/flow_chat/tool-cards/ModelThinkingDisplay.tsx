@@ -1,88 +1,71 @@
 /**
  * Model thinking display component.
- * Shows internal model reasoning.
- * - Streaming: muted text, incremental output.
- * - Completed: auto-collapses, click to expand.
+ * Default expanded. Collapses when isLastItem becomes false
+ * (i.e. the next atomic step has started).
+ * Applies typewriter effect during streaming.
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
+import { useTypewriter } from '../hooks/useTypewriter';
 import './ModelThinkingDisplay.scss';
-
-// Idle timeout after content stops growing (ms).
-const CONTENT_IDLE_TIMEOUT = 500;
 
 interface ModelThinkingDisplayProps {
   thinkingItem: FlowThinkingItem;
+  /** Whether this is the last item in the current round. */
+  isLastItem?: boolean;
 }
 
-export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thinkingItem }) => {
+export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thinkingItem, isLastItem = true }) => {
   const { t } = useTranslation('flow-chat');
-  const { content, isStreaming, isCollapsed, status } = thinkingItem;
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
+  const { content, isStreaming, status } = thinkingItem;
   const contentRef = useRef<HTMLDivElement>(null);
-  
-  // Time-based heuristic to detect content growth.
-  const [isContentGrowing, setIsContentGrowing] = useState(true);
-  const lastContentRef = useRef(content);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  useEffect(() => {
-    if (content !== lastContentRef.current) {
-      lastContentRef.current = content;
-      setIsContentGrowing(true);
-      
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      
-      timeoutRef.current = setTimeout(() => {
-        setIsContentGrowing(false);
-      }, CONTENT_IDLE_TIMEOUT);
-    }
-    
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [content]);
-  
-  useEffect(() => {
-    if (status === 'completed' || !isStreaming) {
-      setIsContentGrowing(false);
-    }
-  }, [status, isStreaming]);
 
-  // Auto-collapse when streaming ends and the item is still expanded.
+  const isActive = isStreaming || status === 'streaming';
+  const displayContent = useTypewriter(content, isActive);
+
+  const [isExpanded, setIsExpanded] = useState(true);
+  const userToggledRef = useRef(false);
+
   useEffect(() => {
-    if (!isStreaming && !isCollapsed && status === 'completed') {
-      // Give the user a moment to see the full content.
-      const timer = setTimeout(() => {
-        // Parent state controls collapse; keep a local expanded flag here.
-        setIsExpanded(false);
-      }, 500);
-      return () => clearTimeout(timer);
+    if (userToggledRef.current) return;
+    if (!isLastItem) {
+      setIsExpanded(false);
     }
-  }, [isStreaming, isCollapsed, status]);
+  }, [isLastItem]);
+
+  // Auto-scroll to bottom while content grows.
+  useEffect(() => {
+    if (isExpanded && contentRef.current) {
+      const el = contentRef.current;
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (gap < 80) {
+        requestAnimationFrame(() => {
+          if (contentRef.current) {
+            contentRef.current.scrollTop = contentRef.current.scrollHeight;
+          }
+        });
+      }
+    }
+  }, [displayContent, isExpanded]);
+
+  // Scroll-state detection for fade gradients.
+  const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
 
   const checkScrollState = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
-    
-    const hasScroll = el.scrollHeight > el.clientHeight;
-    const atTop = el.scrollTop <= 5;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
-    
-    setScrollState({ hasScroll, atTop, atBottom });
+    setScrollState({
+      hasScroll: el.scrollHeight > el.clientHeight,
+      atTop: el.scrollTop <= 5,
+      atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 5,
+    });
   }, []);
 
   useEffect(() => {
     if (isExpanded) {
-      // Delay to wait for DOM layout.
       const timer = setTimeout(checkScrollState, 50);
       return () => clearTimeout(timer);
     }
@@ -93,48 +76,41 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
     return t('toolCards.think.thinkingCharacters', { count: content.length });
   }, [content, t]);
 
-  if (isStreaming || status === 'streaming') {
-    const hasContent = content && content.length > 0;
-    // Only show shimmer when content is actively growing.
-    const isActivelyStreaming = status === 'streaming' && isContentGrowing;
-    return (
-      <div className="flow-thinking-item streaming">
-        <div className="thinking-header">
-          <span className="thinking-label">{t('toolCards.think.thinking')}</span>
-        </div>
-        <div className={`thinking-content streaming ${hasContent && isActivelyStreaming ? 'thinking-content--has-content' : ''}`}>
-          {content}
-        </div>
-      </div>
-    );
-  }
-
   const handleToggleClick = () => {
-    // Notify VirtualMessageList to prevent auto-scroll on user toggle.
     window.dispatchEvent(new CustomEvent('tool-card-toggle'));
-    setIsExpanded(!isExpanded);
+    userToggledRef.current = true;
+    setIsExpanded(prev => !prev);
   };
 
+  const headerLabel = isExpanded
+    ? (isActive ? t('toolCards.think.thinking') : t('toolCards.think.thinkingProcess'))
+    : contentLengthText;
+
+  const wrapperClassName = [
+    'flow-thinking-item',
+    isExpanded ? 'expanded' : 'collapsed',
+  ].filter(Boolean).join(' ');
+
+  const renderedContent = isActive ? displayContent : content;
+
   return (
-    <div className={`flow-thinking-item collapsed ${isExpanded ? 'expanded' : ''}`}>
-      <div 
+    <div className={wrapperClassName}>
+      <div
         className="thinking-collapsed-header"
         onClick={handleToggleClick}
       >
         <ChevronRight size={14} className="thinking-chevron" />
-        <span className="thinking-label">
-          {isExpanded ? t('toolCards.think.thinkingProcess') : contentLengthText}
-        </span>
+        <span className="thinking-label">{headerLabel}</span>
       </div>
 
       <div className={`thinking-expand-container ${isExpanded ? 'thinking-expand-container--open' : ''}`}>
         <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`}>
-          <div 
+          <div
             ref={contentRef}
-            className="thinking-content expanded"
+            className={`thinking-content expanded`}
             onScroll={checkScrollState}
           >
-            {content.split('\n').map((line: string, index: number) => (
+            {renderedContent.split('\n').map((line: string, index: number) => (
               <div key={index} className="thinking-line">
                 {line || '\u00A0'}
               </div>
@@ -145,4 +121,3 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
     </div>
   );
 };
-

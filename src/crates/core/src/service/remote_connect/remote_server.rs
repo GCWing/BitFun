@@ -1687,11 +1687,9 @@ impl RemoteExecutionDispatcher {
                             working_directory: workspace,
                             session_id: Some(sid.clone()),
                             session_name: Some(name),
-                            env: Some({
-                                let mut m = std::collections::HashMap::new();
-                                m.insert("BITFUN_NONINTERACTIVE".to_string(), "1".to_string());
-                                m
-                            }),
+                            env: Some(
+                                crate::agentic::tools::implementations::bash_tool::BashTool::noninteractive_env(),
+                            ),
                             ..Default::default()
                         },
                     )

@@ -52,6 +52,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const isComposingRef = useRef(false);
   const lastContextIdsRef = useRef<Set<string>>(new Set());
   const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
+  const isLocalChangeRef = useRef(false);
 
   // Display name without the # prefix
   const getContextDisplayName = (context: ContextItem): string => {
@@ -216,7 +217,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     };
     
     internalRef.current.childNodes.forEach(traverse);
-    return text.trim();
+    return sanitizeText(text).trim();
   };
 
   // Detect @ mention
@@ -302,9 +303,90 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
   }, [onMentionStateChange, internalRef]);
 
+  const sanitizeText = (text: string): string => {
+    // Strip zero-width and control characters that WebKit/WebView may inject
+    // (e.g. from dead-key sequences, function keys, arrow keys, etc.)
+    // Preserve normal whitespace: space (0x20), tab (0x09), newline (0x0A), carriage return (0x0D).
+    return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200F\u2028\u2029\uFEFF\u2060\u00AD]/g, '');
+  };
+
+  /** Compute the cursor's character offset within the editor. */
+  const getCursorOffset = useCallback((editor: HTMLElement): number => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return -1;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return -1;
+    const preRange = document.createRange();
+    preRange.selectNodeContents(editor);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().length;
+  }, []);
+
+  /** Restore the cursor to a character offset within the editor. */
+  const setCursorOffset = useCallback((editor: HTMLElement, offset: number) => {
+    let remaining = offset;
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      const len = (node.textContent || '').length;
+      if (remaining <= len) {
+        const sel = window.getSelection();
+        if (sel) {
+          sel.collapse(node, remaining);
+        }
+        return;
+      }
+      remaining -= len;
+    }
+    // Offset past all text – place cursor at end
+    const sel = window.getSelection();
+    if (sel) {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }, []);
+
   const handleInput = useCallback(() => {
     if (isComposingRef.current) return;
-    
+
+    const editor = internalRef.current;
+
+    // Scrub any invisible characters the browser may have inserted.
+    // Save and restore the cursor (as a character offset) so cleaning
+    // never disturbs the caret position.
+    if (editor) {
+      const cursorOffset = getCursorOffset(editor);
+      let didClean = false;
+      let removedBeforeCursor = 0;
+
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+      let charsSoFar = 0;
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        const original = node.textContent || '';
+        const cleaned = sanitizeText(original);
+        if (cleaned !== original) {
+          // Count how many invisible chars were removed before the cursor
+          if (cursorOffset >= 0) {
+            if (cursorOffset > charsSoFar) {
+              const relevantSlice = original.slice(0, Math.min(cursorOffset - charsSoFar, original.length));
+              removedBeforeCursor += relevantSlice.length - sanitizeText(relevantSlice).length;
+            }
+          }
+          node.textContent = cleaned;
+          didClean = true;
+        }
+        charsSoFar += original.length;
+      }
+
+      if (didClean && cursorOffset >= 0) {
+        setCursorOffset(editor, Math.max(cursorOffset - removedBeforeCursor, 0));
+      }
+    }
+
     const textContent = extractTextContent();
     const visibleContextIds = new Set(
       Array.from(internalRef.current?.querySelectorAll<HTMLElement>('[data-context-id]') ?? [])
@@ -313,6 +395,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     );
     const visibleContexts = contexts.filter(context => visibleContextIds.has(context.id));
 
+    isLocalChangeRef.current = true;
     onChange(textContent, visibleContexts);
     
     // Ensure detection runs after DOM updates
@@ -320,6 +403,21 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       detectMention();
     });
   }, [contexts, onChange, detectMention, internalRef]);
+
+  const handleBeforeInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+    const inputEvent = e.nativeEvent as InputEvent;
+    const inputType = inputEvent.inputType;
+
+    // Only act on insertText – block attempts to insert purely-invisible content.
+    // We intentionally avoid a blanket whitelist so that we never accidentally
+    // block browser-internal input types (cursor movement, spellcheck, etc.).
+    if (inputType === 'insertText' && inputEvent.data != null) {
+      const cleaned = sanitizeText(inputEvent.data);
+      if (cleaned.length === 0) {
+        e.preventDefault();
+      }
+    }
+  }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
@@ -473,8 +571,15 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
   }, [insertTagAtCursor, insertTagReplacingMention, onMentionStateChange, internalRef]);
 
-  // Initialize and sync value changes
+  // Initialize and sync value changes from external sources.
+  // Skip syncing when the change originated from local user input
+  // to avoid resetting the cursor position.
   useEffect(() => {
+    if (isLocalChangeRef.current) {
+      isLocalChangeRef.current = false;
+      return;
+    }
+
     const editor = internalRef.current;
     if (!editor) return;
 
@@ -572,6 +677,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       ref={internalRef}
       className={`rich-text-input ${isFocused ? 'rich-text-input--focused' : ''} ${className}`}
       contentEditable={!disabled}
+      onBeforeInput={handleBeforeInput}
       onInput={handleInput}
       onPaste={handlePaste}
       onKeyDown={handleKeyDown}

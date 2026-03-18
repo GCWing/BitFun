@@ -254,14 +254,17 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         className={`model-round-item model-round-item--${round.isStreaming ? 'streaming' : 'complete'}`}
       >
         {groupedItems.map((group, groupIndex) => {
+          const isLastGroup = groupIndex === groupedItems.length - 1;
+          const isLast = isLastRound && isLastGroup;
           switch (group.type) {
             case 'explore':
-              return group.items.map(item => (
+              return group.items.map((item, itemIdx) => (
                 <FlowItemRenderer 
                   key={item.id}
                   item={item}
                   turnId={turnId}
                   roundId={round.id}
+                  isLastItem={isLast && itemIdx === group.items.length - 1}
                 />
               ));
             
@@ -272,6 +275,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   item={group.item}
                   turnId={turnId}
                   roundId={round.id}
+                  isLastItem={isLast}
                 />
               );
             
@@ -471,12 +475,13 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
         className="subagent-items-container"
         data-parent-tool-id={parentTaskToolId}
       >
-        {items.map((item) => (
+        {items.map((item, idx) => (
           <SubagentItemRenderer 
             key={item.id}
             item={item}
             turnId={turnId}
             roundId={roundId}
+            isLastItem={idx === items.length - 1}
           />
         ))}
       </div>
@@ -487,7 +492,7 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
 /**
  * Subagent item renderer (used inside the container, no collapse logic).
  */
-const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundId: string }>(({ item }) => {
+const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundId: string; isLastItem?: boolean }>(({ item, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -530,7 +535,7 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
     
     case 'thinking':
       return (
-        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} />
+        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
       );
     
     case 'tool':
@@ -557,10 +562,11 @@ interface FlowItemRendererProps {
   item: FlowItem;
   turnId: string;
   roundId: string;
+  isLastItem?: boolean;
 }
 
 // Do not memoize: streaming content updates frequently.
-const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item }) => {
+const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -616,7 +622,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item }) => {
     
     case 'thinking':
       return wrapContent(
-        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} />
+        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
       );
     
     case 'tool':

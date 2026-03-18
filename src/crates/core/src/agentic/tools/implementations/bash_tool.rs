@@ -63,6 +63,22 @@ impl BashTool {
         Self
     }
 
+    /// Build environment variables that suppress interactive behaviors
+    /// (pagers, editors, prompts) so agent-driven commands never block.
+    pub fn noninteractive_env() -> std::collections::HashMap<String, String> {
+        let mut env = std::collections::HashMap::new();
+        env.insert("BITFUN_NONINTERACTIVE".to_string(), "1".to_string());
+        // Disable git pager globally (prevents `less`/`more` from blocking)
+        env.insert("GIT_PAGER".to_string(), "cat".to_string());
+        // Disable generic pager for other tools (man, etc.)
+        env.insert("PAGER".to_string(), "cat".to_string());
+        // Prevent git from prompting for credentials or SSH passphrases
+        env.insert("GIT_TERMINAL_PROMPT".to_string(), "0".to_string());
+        // Ensure git never opens an interactive editor (e.g. for commit messages)
+        env.insert("GIT_EDITOR".to_string(), "true".to_string());
+        env
+    }
+
     /// Resolve shell configuration for bash tool.
     /// If configured shell doesn't support integration, falls back to system default.
     async fn resolve_shell() -> ResolvedShell {
@@ -452,11 +468,7 @@ Usage notes:
                         &chat_session_id[..8.min(chat_session_id.len())]
                     )),
                     shell_type: shell_type.clone(),
-                    env: Some({
-                        let mut env = std::collections::HashMap::new();
-                        env.insert("BITFUN_NONINTERACTIVE".to_string(), "1".to_string());
-                        env
-                    }),
+                    env: Some(Self::noninteractive_env()),
                     ..Default::default()
                 },
             )
@@ -670,11 +682,7 @@ impl BashTool {
                     session_id: None,
                     session_name: None,
                     shell_type,
-                    env: Some({
-                        let mut env = std::collections::HashMap::new();
-                        env.insert("BITFUN_NONINTERACTIVE".to_string(), "1".to_string());
-                        env
-                    }),
+                    env: Some(Self::noninteractive_env()),
                     ..Default::default()
                 },
             )
