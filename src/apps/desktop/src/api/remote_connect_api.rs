@@ -208,6 +208,8 @@ pub struct RemoteConnectStatusResponse {
     /// Independent bot connection info — e.g. "Telegram(7096812005)".
     /// Present when a bot is active, regardless of relay pairing state.
     pub bot_connected: Option<String>,
+    /// Bot verbose mode setting — when true, intermediate progress is sent to users.
+    pub bot_verbose_mode: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -436,6 +438,7 @@ pub async fn remote_connect_status() -> Result<RemoteConnectStatusResponse, Stri
     let peer = service.peer_device_name().await;
     let peer_user_id = service.trusted_mobile_user_id().await;
     let bot_connected = service.bot_connected_info().await;
+    let bot_verbose_mode = bot::load_bot_persistence().verbose_mode;
 
     Ok(RemoteConnectStatusResponse {
         is_connected: state == PairingState::Connected,
@@ -444,6 +447,7 @@ pub async fn remote_connect_status() -> Result<RemoteConnectStatusResponse, Stri
         peer_device_name: peer,
         peer_user_id,
         bot_connected,
+        bot_verbose_mode,
     })
 }
 
@@ -512,5 +516,21 @@ pub async fn remote_connect_configure_bot(request: ConfigureBotRequest) -> Resul
         service.update_bot_config(bot_config);
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remote_connect_get_bot_verbose_mode() -> Result<bool, String> {
+    let data = bot::load_bot_persistence();
+    Ok(data.verbose_mode)
+}
+
+#[tauri::command]
+pub async fn remote_connect_set_bot_verbose_mode(verbose: bool) -> Result<(), String> {
+    log::info!("remote_connect_set_bot_verbose_mode called with verbose={}", verbose);
+    let mut data = bot::load_bot_persistence();
+    data.verbose_mode = verbose;
+    bot::save_bot_persistence(&data);
+    log::info!("Saved bot verbose_mode={} to persistence", verbose);
     Ok(())
 }

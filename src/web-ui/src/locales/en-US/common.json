@@ -395,6 +395,8 @@
     "botFeishuStep1Suffix": " and create a Custom App",
     "botFeishuStep2": "Enable Bot capability and configure Permissions & Scopes and Events & Callbacks",
     "botFeishuStep3": "Copy App ID and App Secret below",
+    "botVerboseMode": "Verbose Mode",
+    "botConciseMode": "Concise Mode",
     "openNgrokSetup": "Open ngrok setup page",
     "disclaimerTitle": "Remote Connect Disclaimer",
     "disclaimerIntro": "Before enabling Remote Connect, please read and accept the following:",

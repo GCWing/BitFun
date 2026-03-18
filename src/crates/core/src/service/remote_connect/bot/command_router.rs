@@ -27,12 +27,28 @@ impl BotLanguage {
     }
 }
 
+/// Display mode for bot sessions - Professional or Assistant
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum BotDisplayMode {
+    /// Professional mode: can create Code/Cowork sessions
+    #[serde(rename = "pro")]
+    Pro,
+    /// Assistant mode: can create Claw sessions
+    #[serde(rename = "assistant")]
+    #[default]
+    Assistant,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BotChatState {
     pub chat_id: String,
     pub paired: bool,
     pub current_workspace: Option<String>,
+    pub current_assistant: Option<String>,
     pub current_session_id: Option<String>,
+    /// Display mode: Professional (Pro) or Assistant
+    #[serde(default)]
+    pub display_mode: BotDisplayMode,
     #[serde(skip)]
     pub pending_action: Option<PendingAction>,
     /// Pending file downloads awaiting user confirmation.
@@ -49,7 +65,9 @@ impl BotChatState {
             chat_id,
             paired: false,
             current_workspace: None,
+            current_assistant: None,
             current_session_id: None,
+            display_mode: BotDisplayMode::Assistant,
             pending_action: None,
             pending_files: std::collections::HashMap::new(),
         }
@@ -70,6 +88,9 @@ pub async fn current_bot_language() -> BotLanguage {
 #[derive(Debug, Clone)]
 pub enum PendingAction {
     SelectWorkspace {
+        options: Vec<(String, String)>,
+    },
+    SelectAssistant {
         options: Vec<(String, String)>,
     },
     SelectSession {
@@ -93,9 +114,12 @@ pub enum PendingAction {
 pub enum BotCommand {
     Start,
     SwitchWorkspace,
+    SwitchAssistant,
+    SwitchMode(BotDisplayMode),
     ResumeSession,
     NewCodeSession,
     NewCoworkSession,
+    NewClawSession,
     CancelTask(Option<String>),
     Help,
     PairingCode(String),
@@ -207,9 +231,13 @@ pub fn parse_command(text: &str) -> BotCommand {
     match trimmed {
         "/start" => BotCommand::Start,
         "/switch_workspace" => BotCommand::SwitchWorkspace,
+        "/switch_assistant" => BotCommand::SwitchAssistant,
+        "/pro" => BotCommand::SwitchMode(BotDisplayMode::Pro),
+        "/assistant" => BotCommand::SwitchMode(BotDisplayMode::Assistant),
         "/resume_session" => BotCommand::ResumeSession,
         "/new_code_session" => BotCommand::NewCodeSession,
         "/new_cowork_session" => BotCommand::NewCoworkSession,
+        "/new_claw_session" => BotCommand::NewClawSession,
         "/help" => BotCommand::Help,
         "0" => BotCommand::NextPage,
         _ => {
@@ -252,19 +280,29 @@ pub fn help_message(language: BotLanguage) -> &'static str {
     if language.is_chinese() {
         "\
 可用命令：
-/switch_workspace - 列出并切换工作区
-/resume_session - 恢复已有会话
-/new_code_session - 创建新的编码会话
-/new_cowork_session - 创建新的协作会话
+/switch_workspace - 列出并切换工作区（专业模式）
+/switch_assistant - 列出并切换助理（助理模式）
+/pro - 切换到专业模式（可创建 Code/Cowork 会话）
+/assistant - 切换到助理模式（可创建助理会话）
+/verbose - 开启详细模式（显示任务执行过程）
+/concise - 开启简洁模式（仅显示最终结果）
+/new_code_session - 创建新的编码会话（专业模式）
+/new_cowork_session - 创建新的协作会话（专业模式）
+/new_claw_session - 创建新的助理会话（助理模式）
 /cancel_task - 取消当前任务
 /help - 显示帮助信息"
     } else {
         "\
 Available commands:
-/switch_workspace - List and switch workspaces
-/resume_session - Resume an existing session
-/new_code_session - Create a new coding session
-/new_cowork_session - Create a new cowork session
+/switch_workspace - List and switch workspaces (Expert mode)
+/switch_assistant - List and switch assistants (Assistant mode)
+/pro - Switch to Expert mode (can create Code/Cowork sessions)
+/assistant - Switch to Assistant mode (can create Claw sessions)
+/verbose - Enable verbose mode (show task execution progress)
+/concise - Enable concise mode (only show final results)
+/new_code_session - Create a new coding session (Expert mode)
+/new_cowork_session - Create a new cowork session (Expert mode)
+/new_claw_session - Create a new claw session (Assistant mode)
 /cancel_task - Cancel the current task
 /help - Show this help message"
     }
@@ -313,6 +351,30 @@ fn label_new_cowork_session(language: BotLanguage) -> &'static str {
     }
 }
 
+fn label_new_claw_session(language: BotLanguage) -> &'static str {
+    if language.is_chinese() {
+        "新建助理会话"
+    } else {
+        "New Claw Session"
+    }
+}
+
+fn label_switch_assistant(language: BotLanguage) -> &'static str {
+    if language.is_chinese() {
+        "切换助理"
+    } else {
+        "Switch Assistant"
+    }
+}
+
+fn label_help(language: BotLanguage) -> &'static str {
+    if language.is_chinese() {
+        "帮助"
+    } else {
+        "Help"
+    }
+}
+
 fn label_cancel_task(language: BotLanguage) -> &'static str {
     if language.is_chinese() {
         "取消任务"
@@ -329,6 +391,22 @@ fn label_next_page(language: BotLanguage) -> &'static str {
     }
 }
 
+fn label_switch_pro_mode(language: BotLanguage) -> &'static str {
+    if language.is_chinese() {
+        "专业模式"
+    } else {
+        "Expert Mode"
+    }
+}
+
+fn label_switch_assistant_mode(language: BotLanguage) -> &'static str {
+    if language.is_chinese() {
+        "助理模式"
+    } else {
+        "Assistant Mode"
+    }
+}
+
 fn other_label(language: BotLanguage) -> &'static str {
     if language.is_chinese() {
         "其他"
@@ -337,20 +415,47 @@ fn other_label(language: BotLanguage) -> &'static str {
     }
 }
 
-pub fn main_menu_actions(language: BotLanguage) -> Vec<BotAction> {
+pub fn main_menu_actions(language: BotLanguage, display_mode: BotDisplayMode) -> Vec<BotAction> {
+    let is_pro = display_mode == BotDisplayMode::Pro;
+
+    if is_pro {
+        // Pro mode: show workspace switch
+        vec![
+            BotAction::primary(label_switch_workspace(language), "/switch_workspace"),
+            BotAction::secondary(label_resume_session(language), "/resume_session"),
+            BotAction::secondary(label_switch_assistant_mode(language), "/assistant"),
+            BotAction::secondary(label_new_code_session(language), "/new_code_session"),
+            BotAction::secondary(label_new_cowork_session(language), "/new_cowork_session"),
+            BotAction::secondary(label_help(language), "/help"),
+        ]
+    } else {
+        // Assistant mode: show assistant switch (not workspace)
+        vec![
+            BotAction::primary(label_switch_assistant(language), "/switch_assistant"),
+            BotAction::secondary(label_resume_session(language), "/resume_session"),
+            BotAction::secondary(label_switch_pro_mode(language), "/pro"),
+            BotAction::secondary(label_new_claw_session(language), "/new_claw_session"),
+            BotAction::secondary(label_help(language), "/help"),
+        ]
+    }
+}
+
+fn pro_mode_actions(language: BotLanguage) -> Vec<BotAction> {
     vec![
-        BotAction::primary(label_switch_workspace(language), "/switch_workspace"),
-        BotAction::secondary(label_resume_session(language), "/resume_session"),
-        BotAction::secondary(label_new_code_session(language), "/new_code_session"),
+        BotAction::primary(label_new_code_session(language), "/new_code_session"),
         BotAction::secondary(label_new_cowork_session(language), "/new_cowork_session"),
-        BotAction::secondary(
-            if language.is_chinese() {
-                "帮助（发送 /help 查看菜单）"
-            } else {
-                "Help (send /help for menu)"
-            },
-            "/help",
-        ),
+        BotAction::secondary(label_switch_workspace(language), "/switch_workspace"),
+        BotAction::secondary(label_switch_assistant_mode(language), "/assistant"),
+        BotAction::secondary(label_help(language), "/help"),
+    ]
+}
+
+fn assistant_mode_actions(language: BotLanguage) -> Vec<BotAction> {
+    vec![
+        BotAction::primary(label_new_claw_session(language), "/new_claw_session"),
+        BotAction::secondary(label_switch_assistant(language), "/switch_assistant"),
+        BotAction::secondary(label_switch_pro_mode(language), "/pro"),
+        BotAction::secondary(label_help(language), "/help"),
     ]
 }
 
@@ -361,19 +466,53 @@ fn workspace_required_actions(language: BotLanguage) -> Vec<BotAction> {
     )]
 }
 
-fn session_entry_actions(language: BotLanguage) -> Vec<BotAction> {
-    vec![
-        BotAction::primary(label_resume_session(language), "/resume_session"),
-        BotAction::secondary(label_new_code_session(language), "/new_code_session"),
-        BotAction::secondary(label_new_cowork_session(language), "/new_cowork_session"),
-    ]
+fn assistant_required_actions(language: BotLanguage) -> Vec<BotAction> {
+    vec![BotAction::primary(
+        label_switch_assistant(language),
+        "/switch_assistant",
+    )]
 }
 
-fn new_session_actions(language: BotLanguage) -> Vec<BotAction> {
-    vec![
-        BotAction::primary(label_new_code_session(language), "/new_code_session"),
-        BotAction::secondary(label_new_cowork_session(language), "/new_cowork_session"),
-    ]
+fn session_entry_actions(language: BotLanguage, display_mode: BotDisplayMode) -> Vec<BotAction> {
+    let is_pro = display_mode == BotDisplayMode::Pro;
+    if is_pro {
+        vec![
+            BotAction::primary(label_resume_session(language), "/resume_session"),
+            BotAction::secondary(label_new_code_session(language), "/new_code_session"),
+            BotAction::secondary(label_new_cowork_session(language), "/new_cowork_session"),
+            BotAction::secondary(label_switch_workspace(language), "/switch_workspace"),
+            BotAction::secondary(label_switch_assistant_mode(language), "/assistant"),
+            BotAction::secondary(label_help(language), "/help"),
+        ]
+    } else {
+        vec![
+            BotAction::primary(label_resume_session(language), "/resume_session"),
+            BotAction::secondary(label_new_claw_session(language), "/new_claw_session"),
+            BotAction::secondary(label_switch_assistant(language), "/switch_assistant"),
+            BotAction::secondary(label_switch_pro_mode(language), "/pro"),
+            BotAction::secondary(label_help(language), "/help"),
+        ]
+    }
+}
+
+fn new_session_actions(language: BotLanguage, display_mode: BotDisplayMode) -> Vec<BotAction> {
+    let is_pro = display_mode == BotDisplayMode::Pro;
+    if is_pro {
+        vec![
+            BotAction::primary(label_new_code_session(language), "/new_code_session"),
+            BotAction::secondary(label_new_cowork_session(language), "/new_cowork_session"),
+            BotAction::secondary(label_switch_workspace(language), "/switch_workspace"),
+            BotAction::secondary(label_switch_assistant_mode(language), "/assistant"),
+            BotAction::secondary(label_help(language), "/help"),
+        ]
+    } else {
+        vec![
+            BotAction::primary(label_new_claw_session(language), "/new_claw_session"),
+            BotAction::secondary(label_switch_assistant(language), "/switch_assistant"),
+            BotAction::secondary(label_switch_pro_mode(language), "/pro"),
+            BotAction::secondary(label_help(language), "/help"),
+        ]
+    }
 }
 
 fn cancel_task_actions(language: BotLanguage, command: impl Into<String>) -> Vec<BotAction> {
@@ -403,7 +542,7 @@ pub async fn handle_command(
             if state.paired {
                 HandleResult {
                     reply: help_message(language).to_string(),
-                    actions: main_menu_actions(language),
+                    actions: main_menu_actions(language, state.display_mode),
                     forward_to_session: None,
                 }
             } else {
@@ -412,6 +551,43 @@ pub async fn handle_command(
                     actions: vec![],
                     forward_to_session: None,
                 }
+            }
+        }
+        BotCommand::SwitchMode(new_mode) => {
+            if !state.paired {
+                return not_paired(language);
+            }
+            state.display_mode = new_mode;
+            let mode_name = if new_mode == BotDisplayMode::Pro {
+                if language.is_chinese() { "专业模式" } else { "Expert Mode" }
+            } else {
+                if language.is_chinese() { "助理模式" } else { "Assistant Mode" }
+            };
+            let desc = if new_mode == BotDisplayMode::Pro {
+                if language.is_chinese() {
+                    "适合目标明确、一次完成的即时任务。"
+                } else {
+                    "Best for focused, one-shot tasks with a clear goal."
+                }
+            } else {
+                if language.is_chinese() {
+                    "适合持续推进、需要延续上下文和个人偏好的任务。"
+                } else {
+                    "Best for ongoing work with context and personal preferences."
+                }
+            };
+            HandleResult {
+                reply: if language.is_chinese() {
+                    format!("已切换到 {}\n\n{}\n\n你现在可以：", mode_name, desc)
+                } else {
+                    format!("Switched to {}\n\n{}\n\nYou can now:", mode_name, desc)
+                },
+                actions: if new_mode == BotDisplayMode::Pro {
+                    pro_mode_actions(language)
+                } else {
+                    assistant_mode_actions(language)
+                },
+                forward_to_session: None,
             }
         }
         BotCommand::PairingCode(_) => HandleResult {
@@ -431,18 +607,34 @@ pub async fn handle_command(
             }
             handle_switch_workspace(state).await
         }
+        BotCommand::SwitchAssistant => {
+            if !state.paired {
+                return not_paired(language);
+            }
+            handle_switch_assistant(state).await
+        }
         BotCommand::ResumeSession => {
             if !state.paired {
                 return not_paired(language);
             }
-            if state.current_workspace.is_none() {
-                return need_workspace(language);
+            if state.display_mode == BotDisplayMode::Pro {
+                if state.current_workspace.is_none() {
+                    return need_workspace(language);
+                }
+            } else {
+                if state.current_assistant.is_none() {
+                    return need_assistant(language);
+                }
             }
             handle_resume_session(state, 0).await
         }
         BotCommand::NewCodeSession => {
             if !state.paired {
                 return not_paired(language);
+            }
+            // Code session only available in Pro mode
+            if state.display_mode != BotDisplayMode::Pro {
+                return wrong_mode_for_pro(language);
             }
             if state.current_workspace.is_none() {
                 return need_workspace(language);
@@ -453,10 +645,25 @@ pub async fn handle_command(
             if !state.paired {
                 return not_paired(language);
             }
+            // Cowork session only available in Pro mode
+            if state.display_mode != BotDisplayMode::Pro {
+                return wrong_mode_for_pro(language);
+            }
             if state.current_workspace.is_none() {
                 return need_workspace(language);
             }
             handle_new_session(state, "Cowork").await
+        }
+        BotCommand::NewClawSession => {
+            if !state.paired {
+                return not_paired(language);
+            }
+            // Claw session only available in Assistant mode
+            if state.display_mode != BotDisplayMode::Assistant {
+                return wrong_mode_for_assistant(language);
+            }
+            // Claw sessions don't need workspace
+            handle_new_session(state, "Claw").await
         }
         BotCommand::CancelTask(turn_id) => {
             if !state.paired {
@@ -508,6 +715,42 @@ fn need_workspace(language: BotLanguage) -> HandleResult {
             "No workspace selected. Use /switch_workspace first.".to_string()
         },
         actions: workspace_required_actions(language),
+        forward_to_session: None,
+    }
+}
+
+fn need_assistant(language: BotLanguage) -> HandleResult {
+    HandleResult {
+        reply: if language.is_chinese() {
+            "尚未选择助理。请先使用 /switch_assistant。".to_string()
+        } else {
+            "No assistant selected. Use /switch_assistant first.".to_string()
+        },
+        actions: assistant_required_actions(language),
+        forward_to_session: None,
+    }
+}
+
+fn wrong_mode_for_pro(language: BotLanguage) -> HandleResult {
+    HandleResult {
+        reply: if language.is_chinese() {
+            "该会话只能在专业模式下创建。请先发送 /pro 切换到专业模式。".to_string()
+        } else {
+            "This session can only be created in Expert mode. Please send /pro to switch to Expert mode.".to_string()
+        },
+        actions: pro_mode_actions(language),
+        forward_to_session: None,
+    }
+}
+
+fn wrong_mode_for_assistant(language: BotLanguage) -> HandleResult {
+    HandleResult {
+        reply: if language.is_chinese() {
+            "该会话只能在助理模式下创建。请先发送 /assistant 切换到助理模式。".to_string()
+        } else {
+            "This session can only be created in Assistant mode. Please send /assistant to switch to Assistant mode.".to_string()
+        },
+        actions: assistant_mode_actions(language),
         forward_to_session: None,
     }
 }
@@ -701,14 +944,91 @@ async fn handle_switch_workspace(state: &mut BotChatState) -> HandleResult {
     }
 }
 
+async fn handle_switch_assistant(state: &mut BotChatState) -> HandleResult {
+    use crate::service::workspace::get_global_workspace_service;
+    let language = current_bot_language().await;
+
+    let ws_service = match get_global_workspace_service() {
+        Some(s) => s,
+        None => {
+            return HandleResult {
+                reply: if language.is_chinese() {
+                    "工作区服务不可用。".to_string()
+                } else {
+                    "Workspace service not available.".to_string()
+                },
+                actions: vec![],
+                forward_to_session: None,
+            };
+        }
+    };
+
+    let assistants = ws_service.get_assistant_workspaces().await;
+    if assistants.is_empty() {
+        return HandleResult {
+            reply: if language.is_chinese() {
+                "未找到助理。请先在 BitFun Desktop 中创建助理。".to_string()
+            } else {
+                "No assistants found. Please create an assistant in BitFun Desktop first.".to_string()
+            },
+            actions: assistant_mode_actions(language),
+            forward_to_session: None,
+        };
+    }
+
+    let effective_current: Option<&str> = state.current_assistant.as_deref();
+
+    let mut text = if language.is_chinese() {
+        String::from("请选择助理：\n\n")
+    } else {
+        String::from("Select an assistant:\n\n")
+    };
+    let mut options: Vec<(String, String)> = Vec::new();
+    for (i, ws) in assistants.iter().enumerate() {
+        let path = ws.root_path.to_string_lossy().to_string();
+        let is_current = effective_current == Some(path.as_str());
+        let marker = if is_current {
+            if language.is_chinese() {
+                " [当前]"
+            } else {
+                " [current]"
+            }
+        } else {
+            ""
+        };
+        text.push_str(&format!("{}. {}{}\n", i + 1, ws.name, marker));
+        options.push((path, ws.name.clone()));
+    }
+    text.push_str(if language.is_chinese() {
+        "\n请回复助理编号。"
+    } else {
+        "\nReply with the assistant number."
+    });
+
+    let action_labels: Vec<String> = options.iter().map(|(_, name)| name.clone()).collect();
+    state.pending_action = Some(PendingAction::SelectAssistant { options });
+    HandleResult {
+        reply: text,
+        actions: numbered_actions(&action_labels),
+        forward_to_session: None,
+    }
+}
+
 async fn handle_resume_session(state: &mut BotChatState, page: usize) -> HandleResult {
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::PathManager;
     let language = current_bot_language().await;
 
-    let ws_path = match &state.current_workspace {
-        Some(p) => std::path::PathBuf::from(p),
-        None => return need_workspace(language),
+    let ws_path = if state.display_mode == BotDisplayMode::Pro {
+        match &state.current_workspace {
+            Some(p) => std::path::PathBuf::from(p),
+            None => return need_workspace(language),
+        }
+    } else {
+        match &state.current_assistant {
+            Some(p) => std::path::PathBuf::from(p),
+            None => return need_assistant(language),
+        }
     };
 
     let page_size = 10usize;
@@ -760,15 +1080,22 @@ async fn handle_resume_session(state: &mut BotChatState, page: usize) -> HandleR
     };
 
     if all_meta.is_empty() {
-        return HandleResult {
-            reply: if language.is_chinese() {
-                "当前工作区没有会话。请使用 /new_code_session 或 /new_cowork_session 创建一个。"
-                    .to_string()
+        let reply = if language.is_chinese() {
+            if state.display_mode == BotDisplayMode::Pro {
+                "当前工作区没有会话。请使用 /new_code_session 或 /new_cowork_session 创建一个。".to_string()
             } else {
-                "No sessions found in this workspace. Use /new_code_session or /new_cowork_session to create one."
-                    .to_string()
-            },
-            actions: new_session_actions(language),
+                "当前工作区没有会话。请使用 /new_claw_session 创建一个。".to_string()
+            }
+        } else {
+            if state.display_mode == BotDisplayMode::Pro {
+                "No sessions found in this workspace. Use /new_code_session or /new_cowork_session to create one.".to_string()
+            } else {
+                "No sessions found in this workspace. Use /new_claw_session to create one.".to_string()
+            }
+        };
+        return HandleResult {
+            reply,
+            actions: new_session_actions(language, state.display_mode),
             forward_to_session: None,
         };
     }
@@ -876,7 +1203,10 @@ async fn handle_resume_session(state: &mut BotChatState, page: usize) -> HandleR
 async fn handle_new_session(state: &mut BotChatState, agent_type: &str) -> HandleResult {
     use crate::agentic::coordination::get_global_coordinator;
     use crate::agentic::core::SessionConfig;
+    use crate::service::workspace::get_global_workspace_service;
+
     let language = current_bot_language().await;
+    let is_claw = agent_type == "Claw";
 
     let coordinator = match get_global_coordinator() {
         Some(c) => c,
@@ -893,13 +1223,71 @@ async fn handle_new_session(state: &mut BotChatState, agent_type: &str) -> Handl
         }
     };
 
-    let ws_path = state.current_workspace.clone();
+    let ws_path = if is_claw {
+        // For Claw sessions, prefer current_assistant, or get/create default
+        if let Some(ref assistant_path) = state.current_assistant {
+            Some(assistant_path.clone())
+        } else {
+            let ws_service = match get_global_workspace_service() {
+                Some(s) => s,
+                None => {
+                    return HandleResult {
+                        reply: if language.is_chinese() {
+                            "工作区服务不可用。".to_string()
+                        } else {
+                            "Workspace service not available.".to_string()
+                        },
+                        actions: vec![],
+                        forward_to_session: None,
+                    };
+                }
+            };
+
+            // Get or create default assistant workspace
+            let workspaces = ws_service.get_assistant_workspaces().await;
+            let resolved = if let Some(default_ws) =
+                workspaces.into_iter().find(|w| w.assistant_id.is_none())
+            {
+                Some(default_ws.root_path.to_string_lossy().to_string())
+            } else {
+                match ws_service.create_assistant_workspace(None).await {
+                    Ok(ws_info) => Some(ws_info.root_path.to_string_lossy().to_string()),
+                    Err(e) => {
+                        return HandleResult {
+                            reply: if language.is_chinese() {
+                                format!("创建助理工作区失败：{}", e)
+                            } else {
+                                format!("Failed to create assistant workspace: {}", e)
+                            },
+                            actions: vec![],
+                            forward_to_session: None,
+                        };
+                    }
+                }
+            };
+            if let Some(ref path) = resolved {
+                state.current_assistant = Some(path.clone());
+            }
+            resolved
+        }
+    } else {
+        // For Code/Cowork sessions, use current workspace
+        state.current_workspace.clone()
+    };
+
     let session_name = match agent_type {
         "Cowork" => {
             if language.is_chinese() {
                 "远程协作会话"
             } else {
                 "Remote Cowork Session"
+            }
+        }
+        "Claw" => {
+            if language.is_chinese() {
+                "远程助理会话"
+            } else {
+                "Remote Claw Session"
             }
         }
         _ => {
@@ -911,15 +1299,11 @@ async fn handle_new_session(state: &mut BotChatState, agent_type: &str) -> Handl
         }
     };
 
-    let Some(workspace_path) = ws_path.clone() else {
-        return HandleResult {
-            reply: if language.is_chinese() {
-                "请先选择工作区。".to_string()
-            } else {
-                "Please select a workspace first.".to_string()
-            },
-            actions: vec![],
-            forward_to_session: None,
+    let Some(workspace_path) = ws_path else {
+        return if is_claw {
+            need_assistant(language)
+        } else {
+            need_workspace(language)
         };
     };
 
@@ -939,30 +1323,40 @@ async fn handle_new_session(state: &mut BotChatState, agent_type: &str) -> Handl
         Ok(session) => {
             let session_id = session.session_id.clone();
             state.current_session_id = Some(session_id.clone());
-            let label = if agent_type == "Cowork" {
-                if language.is_chinese() {
-                    "协作"
-                } else {
-                    "cowork"
+            let label = match agent_type {
+                "Cowork" => {
+                    if language.is_chinese() {
+                        "协作"
+                    } else {
+                        "cowork"
+                    }
                 }
-            } else {
-                if language.is_chinese() {
-                    "编码"
-                } else {
-                    "coding"
+                "Claw" => {
+                    if language.is_chinese() {
+                        "助理"
+                    } else {
+                        "claw"
+                    }
+                }
+                _ => {
+                    if language.is_chinese() {
+                        "编码"
+                    } else {
+                        "coding"
+                    }
                 }
             };
-            let workspace = workspace_path.as_str();
+            let workspace_display = workspace_path.clone();
             HandleResult {
                 reply: if language.is_chinese() {
                     format!(
                         "已创建新的{}会话：{}\n工作区：{}\n\n你现在可以发送消息与 AI 助手交互。",
-                        label, session_name, workspace
+                        label, session_name, workspace_display
                     )
                 } else {
                     format!(
                         "Created new {} session: {}\nWorkspace: {}\n\nYou can now send messages to interact with the AI agent.",
-                        label, session_name, workspace
+                        label, session_name, workspace_display
                     )
                 },
                 actions: vec![],
@@ -1020,6 +1414,42 @@ async fn handle_number_selection(state: &mut BotChatState, n: usize) -> HandleRe
             }
             let (path, name) = options[n - 1].clone();
             select_workspace(state, &path, &name).await
+        }
+        Some(PendingAction::SelectAssistant { options }) => {
+            if n < 1 || n > options.len() {
+                state.pending_action = Some(PendingAction::SelectAssistant { options });
+                return HandleResult {
+                    reply: if language.is_chinese() {
+                        format!(
+                            "无效选择。请输入 1-{}。",
+                            state
+                                .pending_action
+                                .as_ref()
+                                .map(|a| match a {
+                                    PendingAction::SelectAssistant { options } => options.len(),
+                                    _ => 0,
+                                })
+                                .unwrap_or(0)
+                        )
+                    } else {
+                        format!(
+                            "Invalid selection. Please enter 1-{}.",
+                            state
+                                .pending_action
+                                .as_ref()
+                                .map(|a| match a {
+                                    PendingAction::SelectAssistant { options } => options.len(),
+                                    _ => 0,
+                                })
+                                .unwrap_or(0)
+                        )
+                    },
+                    actions: vec![],
+                    forward_to_session: None,
+                };
+            }
+            let (path, name) = options[n - 1].clone();
+            select_assistant(state, &path, &name).await
         }
         Some(PendingAction::SelectSession {
             options,
@@ -1105,11 +1535,11 @@ async fn select_workspace(state: &mut BotChatState, path: &str, name: &str) -> H
             info!("Bot switched workspace to: {path}");
 
             let session_count = count_workspace_sessions(path).await;
-            let reply = build_workspace_switched_reply(language, name, session_count);
+            let reply = build_workspace_switched_reply(language, name, session_count, state.display_mode);
             let actions = if session_count > 0 {
-                session_entry_actions(language)
+                session_entry_actions(language, state.display_mode)
             } else {
-                new_session_actions(language)
+                new_session_actions(language, state.display_mode)
             };
             HandleResult {
                 reply,
@@ -1122,6 +1552,69 @@ async fn select_workspace(state: &mut BotChatState, path: &str, name: &str) -> H
                 format!("切换工作区失败：{e}")
             } else {
                 format!("Failed to switch workspace: {e}")
+            },
+            actions: vec![],
+            forward_to_session: None,
+        },
+    }
+}
+
+async fn select_assistant(state: &mut BotChatState, path: &str, name: &str) -> HandleResult {
+    use crate::service::workspace::get_global_workspace_service;
+    let language = current_bot_language().await;
+
+    let ws_service = match get_global_workspace_service() {
+        Some(s) => s,
+        None => {
+            return HandleResult {
+                reply: if language.is_chinese() {
+                    "工作区服务不可用。".to_string()
+                } else {
+                    "Workspace service not available.".to_string()
+                },
+                actions: vec![],
+                forward_to_session: None,
+            };
+        }
+    };
+
+    let path_buf = std::path::PathBuf::from(path);
+    match ws_service.open_workspace(path_buf).await {
+        Ok(info) => {
+            if let Err(e) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
+                info.root_path.clone(),
+                None,
+            )
+            .await
+            {
+                error!("Failed to init snapshot after bot assistant switch: {e}");
+            }
+            state.current_assistant = Some(path.to_string());
+            state.current_session_id = None;
+            info!("Bot switched assistant to: {path}");
+
+            let session_count = count_workspace_sessions(path).await;
+            let reply = if language.is_chinese() {
+                format!("已切换到助理：{}\n\n会话数：{}", name, session_count)
+            } else {
+                format!("Switched to assistant: {}\n\nSessions: {}", name, session_count)
+            };
+            let actions = if session_count > 0 {
+                session_entry_actions(language, state.display_mode)
+            } else {
+                new_session_actions(language, state.display_mode)
+            };
+            HandleResult {
+                reply,
+                actions,
+                forward_to_session: None,
+            }
+        }
+        Err(e) => HandleResult {
+            reply: if language.is_chinese() {
+                format!("切换助理失败：{e}")
+            } else {
+                format!("Failed to switch assistant: {e}")
             },
             actions: vec![],
             forward_to_session: None,
@@ -1153,41 +1646,68 @@ fn build_workspace_switched_reply(
     language: BotLanguage,
     name: &str,
     session_count: usize,
+    display_mode: BotDisplayMode,
 ) -> String {
-    let mut reply = if language.is_chinese() {
-        format!("已切换到工作区：{name}\n\n")
+    let is_pro = display_mode == BotDisplayMode::Pro;
+    let mode_label = if is_pro {
+        if language.is_chinese() { "专业模式" } else { "Expert Mode" }
     } else {
-        format!("Switched to workspace: {name}\n\n")
+        if language.is_chinese() { "助理模式" } else { "Assistant Mode" }
     };
+
+    let mut reply = if language.is_chinese() {
+        format!("已切换到工作区：{}\n当前模式：{}\n\n", name, mode_label)
+    } else {
+        format!("Switched to workspace: {}\nCurrent mode: {}\n\n", name, mode_label)
+    };
+
     if session_count > 0 {
         if language.is_chinese() {
             reply.push_str(&format!(
-                "这个工作区已有 {session_count} 个会话。你想做什么？\n\n\
-                 /resume_session - 恢复已有会话\n\
-                 /new_code_session - 开始新的编码会话\n\
-                 /new_cowork_session - 开始新的协作会话"
+                "这个工作区已有 {session_count} 个会话。你想做什么？\n\n"
             ));
         } else {
             let s = if session_count == 1 { "" } else { "s" };
             reply.push_str(&format!(
-                "This workspace has {session_count} existing session{s}. What would you like to do?\n\n\
-                 /resume_session - Resume an existing session\n\
-                 /new_code_session - Start a new coding session\n\
-                 /new_cowork_session - Start a new cowork session"
+                "This workspace has {session_count} existing session{s}. What would you like to do?\n\n"
             ));
         }
     } else {
         if language.is_chinese() {
+            reply.push_str("这个工作区还没有会话。你想做什么？\n\n");
+        } else {
+            reply.push_str("No sessions found in this workspace. What would you like to do?\n\n");
+        }
+    }
+
+    if is_pro {
+        if language.is_chinese() {
             reply.push_str(
-                "这个工作区还没有会话。你想做什么？\n\n\
+                "/resume_session - 恢复已有会话\n\
                  /new_code_session - 开始新的编码会话\n\
-                 /new_cowork_session - 开始新的协作会话",
+                 /new_cowork_session - 开始新的协作会话\n\
+                 /assistant - 切换到助理模式"
             );
         } else {
             reply.push_str(
-                "No sessions found in this workspace. What would you like to do?\n\n\
+                "/resume_session - Resume an existing session\n\
                  /new_code_session - Start a new coding session\n\
-                 /new_cowork_session - Start a new cowork session",
+                 /new_cowork_session - Start a new cowork session\n\
+                 /assistant - Switch to Assistant mode"
+            );
+        }
+    } else {
+        if language.is_chinese() {
+            reply.push_str(
+                "/resume_session - 恢复已有会话\n\
+                 /new_claw_session - 开始新的助理会话\n\
+                 /pro - 切换到专业模式"
+            );
+        } else {
+            reply.push_str(
+                "/resume_session - Resume an existing session\n\
+                 /new_claw_session - Start a new claw session\n\
+                 /pro - Switch to Expert mode"
             );
         }
     }
@@ -1324,7 +1844,7 @@ async fn handle_cancel_task(
                 } else {
                     "No active session to cancel.".to_string()
                 },
-                actions: session_entry_actions(language),
+                actions: session_entry_actions(language, state.display_mode),
                 forward_to_session: None,
             };
         }
@@ -1689,6 +2209,15 @@ async fn handle_chat_message(
                 actions: vec![],
                 forward_to_session: None,
             },
+            PendingAction::SelectAssistant { .. } => HandleResult {
+                reply: if language.is_chinese() {
+                    "请回复助理编号。".to_string()
+                } else {
+                    "Please reply with the assistant number.".to_string()
+                },
+                actions: vec![],
+                forward_to_session: None,
+            },
             PendingAction::SelectSession { has_more, .. } => HandleResult {
                 reply: if has_more {
                     if language.is_chinese() {
@@ -1711,7 +2240,7 @@ async fn handle_chat_message(
         };
     }
 
-    if state.current_workspace.is_none() {
+    if state.display_mode == BotDisplayMode::Pro && state.current_workspace.is_none() {
         return HandleResult {
             reply: if language.is_chinese() {
                 "尚未选择工作区。请先使用 /switch_workspace 选择工作区。".to_string()
@@ -1723,15 +2252,26 @@ async fn handle_chat_message(
         };
     }
     if state.current_session_id.is_none() {
-        return HandleResult {
-            reply: if language.is_chinese() {
-                "当前没有活动会话。请使用 /resume_session 恢复已有会话，或使用 /new_code_session /new_cowork_session 创建新会话。"
+        let reply = if language.is_chinese() {
+            if state.display_mode == BotDisplayMode::Pro {
+                "当前没有活动会话。请使用 /resume_session 恢复已有会话，或使用 /new_code_session、/new_cowork_session 创建新会话。"
                     .to_string()
             } else {
-                "No active session. Use /resume_session to resume one or /new_code_session /new_cowork_session to create a new one."
+                "当前没有活动会话。请使用 /resume_session 恢复已有会话，或使用 /new_claw_session 创建新会话。"
                     .to_string()
-            },
-            actions: session_entry_actions(language),
+            }
+        } else {
+            if state.display_mode == BotDisplayMode::Pro {
+                "No active session. Use /resume_session to resume one or /new_code_session, /new_cowork_session to create a new one."
+                    .to_string()
+            } else {
+                "No active session. Use /resume_session to resume one or /new_claw_session to create a new one."
+                    .to_string()
+            }
+        };
+        return HandleResult {
+            reply,
+            actions: session_entry_actions(language, state.display_mode),
             forward_to_session: None,
         };
     }
@@ -1776,7 +2316,8 @@ async fn handle_chat_message(
 pub async fn execute_forwarded_turn(
     forward: ForwardRequest,
     interaction_handler: Option<BotInteractionHandler>,
-    _message_sender: Option<BotMessageSender>,
+    message_sender: Option<BotMessageSender>,
+    verbose_mode: bool,
 ) -> ForwardedTurnResult {
     use crate::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
     use crate::service::remote_connect::remote_server::{
@@ -1813,41 +2354,102 @@ pub async fn execute_forwarded_turn(
 
     let result = tokio::time::timeout(std::time::Duration::from_secs(3600), async {
         let mut response = String::new();
+        let mut thinking_buf = String::new();
+        // Cache tool params from ToolStarted so we can display them on ToolCompleted.
+        let mut tool_params_cache: std::collections::HashMap<String, Option<serde_json::Value>> =
+            std::collections::HashMap::new();
+
         loop {
             match event_rx.recv().await {
                 Ok(event) => match event {
-                    TrackerEvent::ThinkingChunk(_) | TrackerEvent::ThinkingEnd => {}
-                    TrackerEvent::TextChunk(t) => response.push_str(&t),
+                    TrackerEvent::ThinkingChunk(chunk) => {
+                        thinking_buf.push_str(&chunk);
+                    }
+                    TrackerEvent::ThinkingEnd => {
+                        if verbose_mode && !thinking_buf.trim().is_empty() {
+                            if let Some(sender) = message_sender.as_ref() {
+                                let content = truncate_at_char_boundary(&thinking_buf, 500);
+                                let msg = if language.is_chinese() {
+                                    format!("[思考过程]\n{content}")
+                                } else {
+                                    format!("[Thinking]\n{content}")
+                                };
+                                sender(msg).await;
+                            }
+                        }
+                        thinking_buf.clear();
+                    }
+                    TrackerEvent::TextChunk(t) => {
+                        response.push_str(&t);
+                    }
                     TrackerEvent::ToolStarted {
                         tool_id,
                         tool_name,
                         params,
-                    } if tool_name == "AskUserQuestion" => {
-                        if let Some(questions_value) =
-                            params.and_then(|p| p.get("questions").cloned())
-                        {
-                            if let Ok(questions) =
-                                serde_json::from_value::<Vec<BotQuestion>>(questions_value)
+                    } => {
+                        if tool_name == "AskUserQuestion" {
+                            if let Some(questions_value) =
+                                params.and_then(|p| p.get("questions").cloned())
                             {
-                                let request = build_question_prompt(
-                                    language,
-                                    tool_id,
-                                    questions,
-                                    0,
-                                    Vec::new(),
-                                    false,
-                                    None,
-                                );
-                                if let Some(handler) = interaction_handler.as_ref() {
-                                    handler(request).await;
+                                if let Ok(questions) =
+                                    serde_json::from_value::<Vec<BotQuestion>>(questions_value)
+                                {
+                                    let request = build_question_prompt(
+                                        language,
+                                        tool_id,
+                                        questions,
+                                        0,
+                                        Vec::new(),
+                                        false,
+                                        None,
+                                    );
+                                    if let Some(handler) = interaction_handler.as_ref() {
+                                        handler(request).await;
+                                    }
                                 }
+                            }
+                        } else {
+                            tool_params_cache.insert(tool_id, params);
+                        }
+                    }
+                    TrackerEvent::ToolCompleted {
+                        tool_id,
+                        tool_name,
+                        duration_ms,
+                        success,
+                    } => {
+                        if verbose_mode {
+                            if let Some(sender) = message_sender.as_ref() {
+                                let params_str = tool_params_cache
+                                    .remove(&tool_id)
+                                    .flatten()
+                                    .and_then(|p| format_tool_params_slim(&p))
+                                    .unwrap_or_default();
+                                let duration_str = duration_ms
+                                    .map(|ms| {
+                                        if ms >= 1000 {
+                                            format!("{:.1}s", ms as f64 / 1000.0)
+                                        } else {
+                                            format!("{}ms", ms)
+                                        }
+                                    })
+                                    .unwrap_or_default();
+                                let status = if success { "OK" } else { "FAILED" };
+                                let msg = if params_str.is_empty() {
+                                    format!("[{tool_name}] {status} {duration_str}")
+                                } else {
+                                    format!(
+                                        "[{tool_name}] {params_str}\n=> {status} {duration_str}"
+                                    )
+                                };
+                                sender(msg).await;
                             }
                         }
                     }
                     TrackerEvent::TurnCompleted => break,
                     TrackerEvent::TurnFailed(e) => {
                         let msg = if language.is_chinese() {
-                            format!("错误：{e}")
+                            format!("错误: {e}")
                         } else {
                             format!("Error: {e}")
                         };
@@ -1867,7 +2469,6 @@ pub async fn execute_forwarded_turn(
                             full_text: msg,
                         };
                     }
-                    _ => {}
                 },
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     log::warn!("Bot event receiver lagged by {n} events");
@@ -1878,9 +2479,6 @@ pub async fn execute_forwarded_turn(
             }
         }
 
-        // Use the tracker's authoritative accumulated_text as the full
-        // response — it is maintained directly from AgenticEvent and is not
-        // subject to broadcast channel lag.
         let full_text = tracker.accumulated_text();
         let full_text = if full_text.is_empty() {
             response
@@ -1922,4 +2520,56 @@ pub async fn execute_forwarded_turn(
         },
         full_text: String::new(),
     })
+}
+
+fn truncate_at_char_boundary(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        return s.to_string();
+    }
+    let mut end = max_len;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &s[..end])
+}
+
+/// Format tool params into a compact display string for bot messages.
+/// Filters out large string values and truncates remaining ones.
+fn format_tool_params_slim(params: &serde_json::Value) -> Option<String> {
+    const MAX_VAL_LEN: usize = 120;
+    match params {
+        serde_json::Value::Object(obj) => {
+            let parts: Vec<String> = obj
+                .iter()
+                .filter_map(|(k, v)| {
+                    let val_str = match v {
+                        serde_json::Value::String(s) => {
+                            if s.len() > MAX_VAL_LEN {
+                                return None;
+                            }
+                            s.clone()
+                        }
+                        serde_json::Value::Bool(b) => b.to_string(),
+                        serde_json::Value::Number(n) => n.to_string(),
+                        serde_json::Value::Null => "null".to_string(),
+                        _ => {
+                            let json = serde_json::to_string(v).unwrap_or_default();
+                            if json.len() > MAX_VAL_LEN {
+                                return None;
+                            }
+                            json
+                        }
+                    };
+                    Some(format!("{k}: {val_str}"))
+                })
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join(", "))
+            }
+        }
+        serde_json::Value::String(s) => Some(truncate_at_char_boundary(s, MAX_VAL_LEN)),
+        _ => None,
+    }
 }

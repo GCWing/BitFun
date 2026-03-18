@@ -41,6 +41,26 @@ export const lightTheme: Record<string, string> = {
   '--color-purple-700': 'rgba(149, 54, 204, 0.8)',
   '--color-purple-800': 'rgba(149, 54, 204, 0.9)',
 
+  '--color-pink-50': 'rgba(236, 72, 153, 0.04)',
+  '--color-pink-100': 'rgba(236, 72, 153, 0.08)',
+  '--color-pink-200': 'rgba(236, 72, 153, 0.14)',
+  '--color-pink-300': 'rgba(236, 72, 153, 0.22)',
+  '--color-pink-400': 'rgba(236, 72, 153, 0.36)',
+  '--color-pink-500': '#EC4899',
+  '--color-pink-600': '#DB2777',
+  '--color-pink-700': 'rgba(219, 39, 119, 0.8)',
+  '--color-pink-800': 'rgba(219, 39, 119, 0.9)',
+
+  '--color-orange-50': 'rgba(255, 149, 0, 0.04)',
+  '--color-orange-100': 'rgba(255, 149, 0, 0.08)',
+  '--color-orange-200': 'rgba(255, 149, 0, 0.14)',
+  '--color-orange-300': 'rgba(255, 149, 0, 0.22)',
+  '--color-orange-400': 'rgba(255, 149, 0, 0.36)',
+  '--color-orange-500': '#FF9500',
+  '--color-orange-600': '#CC7A00',
+  '--color-orange-700': 'rgba(204, 122, 0, 0.8)',
+  '--color-orange-800': 'rgba(204, 122, 0, 0.9)',
+
   '--color-success': '#34C759',
   '--color-success-bg': 'rgba(52, 199, 89, 0.08)',
   '--color-success-border': 'rgba(52, 199, 89, 0.25)',
@@ -66,6 +86,7 @@ export const lightTheme: Record<string, string> = {
 
   '--glow-blue': '0 2px 8px rgba(0, 122, 255, 0.08)',
   '--glow-purple': '0 2px 8px rgba(175, 82, 222, 0.08)',
+  '--glow-orange': '0 2px 8px rgba(255, 149, 0, 0.08)',
   '--glow-mixed': '0 2px 8px rgba(0, 122, 255, 0.06), 0 2px 8px rgba(175, 82, 222, 0.04)',
 
   '--shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.04)',

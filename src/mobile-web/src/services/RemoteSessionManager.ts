@@ -23,6 +23,12 @@ export interface RecentWorkspaceEntry {
   last_opened: string;
 }
 
+export interface AssistantEntry {
+  path: string;
+  name: string;
+  assistant_id?: string;
+}
+
 export interface SessionInfo {
   session_id: string;
   name: string;
@@ -173,6 +179,25 @@ export class RemoteSessionManager {
     error?: string;
   }> {
     return this.request({ cmd: 'set_workspace', path });
+  }
+
+  async listAssistants(): Promise<AssistantEntry[]> {
+    const resp = await this.request<{
+      resp: string;
+      assistants: AssistantEntry[];
+    }>({ cmd: 'list_assistants' });
+    return resp.assistants || [];
+  }
+
+  async setAssistant(
+    path: string,
+  ): Promise<{
+    success: boolean;
+    path?: string;
+    name?: string;
+    error?: string;
+  }> {
+    return this.request({ cmd: 'set_assistant', path });
   }
 
   async listSessions(

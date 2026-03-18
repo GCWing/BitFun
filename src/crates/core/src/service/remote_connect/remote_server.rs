@@ -245,6 +245,10 @@ pub enum RemoteCommand {
     SetWorkspace {
         path: String,
     },
+    ListAssistants,
+    SetAssistant {
+        path: String,
+    },
     ListSessions {
         workspace_path: Option<String>,
         limit: Option<usize>,
@@ -351,6 +355,15 @@ pub enum RemoteResponse {
         success: bool,
         path: Option<String>,
         project_name: Option<String>,
+        error: Option<String>,
+    },
+    AssistantList {
+        assistants: Vec<AssistantEntry>,
+    },
+    AssistantUpdated {
+        success: bool,
+        path: Option<String>,
+        name: Option<String>,
         error: Option<String>,
     },
     SessionList {
@@ -501,6 +514,13 @@ pub struct RecentWorkspaceEntry {
     pub path: String,
     pub name: String,
     pub last_opened: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantEntry {
+    pub path: String,
+    pub name: String,
+    pub assistant_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -918,11 +938,20 @@ struct TrackerState {
 pub enum TrackerEvent {
     TextChunk(String),
     ThinkingChunk(String),
+    /// All thinking content for the current round has been emitted.
+    /// Carries the full accumulated thinking text so consumers can send
+    /// a single summary instead of per-chunk messages.
     ThinkingEnd,
     ToolStarted {
         tool_id: String,
         tool_name: String,
         params: Option<serde_json::Value>,
+    },
+    ToolCompleted {
+        tool_id: String,
+        tool_name: String,
+        duration_ms: Option<u64>,
+        success: bool,
     },
     TurnCompleted,
     TurnFailed(String),
@@ -1021,6 +1050,11 @@ impl RemoteSessionStateTracker {
     /// therefore authoritative.
     pub fn accumulated_text(&self) -> String {
         self.state.read().unwrap().accumulated_text.clone()
+    }
+
+    /// Return the full accumulated thinking text for the current turn.
+    pub fn accumulated_thinking(&self) -> String {
+        self.state.read().unwrap().accumulated_thinking.clone()
     }
 
     /// Returns true if the turn has ended (completed/failed/cancelled) but
@@ -1269,6 +1303,7 @@ impl RemoteSessionStateTracker {
 
                     let mut s = self.state.write().unwrap();
                     let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
+                    let mut pending_tool_event: Option<TrackerEvent> = None;
                     match event_type {
                         "EarlyDetected" => {
                             Self::upsert_active_tool(
@@ -1364,6 +1399,12 @@ impl RemoteSessionStateTracker {
                                     t.duration_ms = duration;
                                 }
                             }
+                            pending_tool_event = Some(TrackerEvent::ToolCompleted {
+                                tool_id: tool_id.clone(),
+                                tool_name: tool_name.clone(),
+                                duration_ms: duration,
+                                success: true,
+                            });
                         }
                         "Failed" => {
                             if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
@@ -1384,6 +1425,12 @@ impl RemoteSessionStateTracker {
                                     t.status = "failed".to_string();
                                 }
                             }
+                            pending_tool_event = Some(TrackerEvent::ToolCompleted {
+                                tool_id: tool_id.clone(),
+                                tool_name: tool_name.clone(),
+                                duration_ms: None,
+                                success: false,
+                            });
                         }
                         "Cancelled" => {
                             if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
@@ -1415,6 +1462,9 @@ impl RemoteSessionStateTracker {
                     }
                     drop(s);
                     self.bump_version();
+                    if let Some(evt) = pending_tool_event {
+                        let _ = self.event_tx.send(evt);
+                    }
                 }
             }
             AE::DialogTurnStarted { turn_id, .. } if is_direct => {
@@ -1797,7 +1847,9 @@ impl RemoteServer {
 
             RemoteCommand::GetWorkspaceInfo
             | RemoteCommand::ListRecentWorkspaces
-            | RemoteCommand::SetWorkspace { .. } => self.handle_workspace_command(cmd).await,
+            | RemoteCommand::SetWorkspace { .. }
+            | RemoteCommand::ListAssistants
+            | RemoteCommand::SetAssistant { .. } => self.handle_workspace_command(cmd).await,
 
             RemoteCommand::ListSessions { .. }
             | RemoteCommand::CreateSession { .. }
@@ -2271,6 +2323,63 @@ impl RemoteServer {
                     },
                 }
             }
+            RemoteCommand::ListAssistants => {
+                let ws_service = match get_global_workspace_service() {
+                    Some(s) => s,
+                    None => {
+                        return RemoteResponse::AssistantList { assistants: vec![] };
+                    }
+                };
+                let assistants = ws_service.get_assistant_workspaces().await;
+                let entries = assistants
+                    .into_iter()
+                    .map(|w| AssistantEntry {
+                        path: w.root_path.to_string_lossy().to_string(),
+                        name: w.name.clone(),
+                        assistant_id: w.assistant_id.clone(),
+                    })
+                    .collect();
+                RemoteResponse::AssistantList { assistants: entries }
+            }
+            RemoteCommand::SetAssistant { path } => {
+                let ws_service = match get_global_workspace_service() {
+                    Some(s) => s,
+                    None => {
+                        return RemoteResponse::AssistantUpdated {
+                            success: false,
+                            path: None,
+                            name: None,
+                            error: Some("Workspace service not available".into()),
+                        };
+                    }
+                };
+                let path_buf = std::path::PathBuf::from(path);
+                match ws_service.open_workspace(path_buf).await {
+                    Ok(info) => {
+                        if let Err(e) =
+                            crate::service::snapshot::initialize_snapshot_manager_for_workspace(
+                                info.root_path.clone(),
+                                None,
+                            )
+                            .await
+                        {
+                            error!("Failed to initialize snapshot after remote assistant set: {e}");
+                        }
+                        RemoteResponse::AssistantUpdated {
+                            success: true,
+                            path: Some(info.root_path.to_string_lossy().to_string()),
+                            name: Some(info.name.clone()),
+                            error: None,
+                        }
+                    }
+                    Err(e) => RemoteResponse::AssistantUpdated {
+                        success: false,
+                        path: None,
+                        name: None,
+                        error: Some(e.to_string()),
+                    },
+                }
+            }
             _ => RemoteResponse::Error {
                 message: "Unknown workspace command".into(),
             },
@@ -2372,26 +2481,63 @@ impl RemoteServer {
                 workspace_path: requested_ws_path,
             } => {
                 let agent = resolve_agent_type(agent_type.as_deref());
-                let session_name =
-                    custom_name
-                        .as_deref()
-                        .filter(|n| !n.is_empty())
-                        .unwrap_or(match agent {
-                            "Cowork" => "Remote Cowork Session",
-                            _ => "Remote Code Session",
-                        });
-                let binding_ws_str = requested_ws_path
+                let is_claw = agent == "Claw";
+
+                let session_name = custom_name
                     .as_deref()
-                    .filter(|path| !path.is_empty())
-                    .map(ToOwned::to_owned);
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or(match agent {
+                        "Cowork" => "Remote Cowork Session",
+                        "Claw" => "Remote Claw Session",
+                        _ => "Remote Code Session",
+                    });
+
+                let binding_ws_str = if is_claw {
+                    // For Claw sessions, get or create default assistant workspace
+                    use crate::service::workspace::get_global_workspace_service;
+
+                    let ws_service = match get_global_workspace_service() {
+                        Some(s) => s,
+                        None => {
+                            return RemoteResponse::Error {
+                                message: "Workspace service not available".to_string(),
+                            };
+                        }
+                    };
+
+                    let workspaces = ws_service.get_assistant_workspaces().await;
+                    if let Some(default_ws) = workspaces.into_iter().find(|w| w.assistant_id.is_none()) {
+                        Some(default_ws.root_path.to_string_lossy().to_string())
+                    } else {
+                        match ws_service.create_assistant_workspace(None).await {
+                            Ok(ws_info) => Some(ws_info.root_path.to_string_lossy().to_string()),
+                            Err(e) => {
+                                return RemoteResponse::Error {
+                                    message: format!("Failed to create assistant workspace: {}", e),
+                                };
+                            }
+                        }
+                    }
+                } else {
+                    // For Code/Cowork sessions, use provided workspace
+                    requested_ws_path
+                        .as_deref()
+                        .filter(|path| !path.is_empty())
+                        .map(ToOwned::to_owned)
+                };
 
                 debug!(
-                    "Remote CreateSession: requested_ws={:?}, binding_ws={:?}",
-                    requested_ws_path, binding_ws_str
+                    "Remote CreateSession: agent={}, requested_ws={:?}, binding_ws={:?}",
+                    agent, requested_ws_path, binding_ws_str
                 );
+
                 let Some(binding_ws_str) = binding_ws_str else {
                     return RemoteResponse::Error {
-                        message: "workspace_path is required for CreateSession".to_string(),
+                        message: if is_claw {
+                            "Failed to get or create assistant workspace".to_string()
+                        } else {
+                            "workspace_path is required for CreateSession".to_string()
+                        },
                     };
                 };
 

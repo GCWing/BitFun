@@ -334,9 +334,12 @@ impl TelegramBot {
         let commands = serde_json::json!({
             "commands": [
                 { "command": "switch_workspace", "description": "List and switch workspaces" },
+                { "command": "pro", "description": "Switch to Expert mode (Code/Cowork)" },
+                { "command": "assistant", "description": "Switch to Assistant mode (Claw)" },
                 { "command": "resume_session", "description": "Resume an existing session" },
-                { "command": "new_code_session", "description": "Create a new coding session" },
-                { "command": "new_cowork_session", "description": "Create a new cowork session" },
+                { "command": "new_code_session", "description": "Create coding session (Expert)" },
+                { "command": "new_cowork_session", "description": "Create cowork session (Expert)" },
+                { "command": "new_claw_session", "description": "Create claw session (Assistant)" },
                 { "command": "cancel_task", "description": "Cancel the current task" },
                 { "command": "help", "description": "Show available commands" },
             ]
@@ -703,7 +706,8 @@ impl TelegramBot {
                         msg_bot.send_message(chat_id, &text).await.ok();
                     })
                 });
-                let result = execute_forwarded_turn(forward, Some(handler), Some(sender)).await;
+                let verbose_mode = load_bot_persistence().verbose_mode;
+                let result = execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
                 bot.send_message(chat_id, &result.display_text).await.ok();
                 bot.notify_files_ready(chat_id, &result.full_text).await;
             });

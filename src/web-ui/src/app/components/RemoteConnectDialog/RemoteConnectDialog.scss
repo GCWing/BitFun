@@ -455,3 +455,47 @@
   width: 100%;
 }
 
+// ==================== Bot mode selector ====================
+
+.bitfun-remote-connect__mode-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px;
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.bitfun-remote-connect__mode-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text-secondary);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &.is-active {
+    background: var(--color-accent-600, #2563eb);
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500, #3b82f6) 55%, transparent);
+    outline-offset: 1px;
+  }
+}
+

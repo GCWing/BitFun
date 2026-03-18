@@ -41,6 +41,26 @@ export const darkTheme: Record<string, string> = {
   '--color-purple-700': 'rgba(124, 58, 237, 0.8)',
   '--color-purple-800': 'rgba(124, 58, 237, 0.9)',
 
+  '--color-pink-50': 'rgba(236, 72, 153, 0.04)',
+  '--color-pink-100': 'rgba(236, 72, 153, 0.08)',
+  '--color-pink-200': 'rgba(236, 72, 153, 0.15)',
+  '--color-pink-300': 'rgba(236, 72, 153, 0.25)',
+  '--color-pink-400': 'rgba(236, 72, 153, 0.4)',
+  '--color-pink-500': '#ec4899',
+  '--color-pink-600': '#db2777',
+  '--color-pink-700': 'rgba(219, 39, 119, 0.8)',
+  '--color-pink-800': 'rgba(219, 39, 119, 0.9)',
+
+  '--color-orange-50': 'rgba(249, 115, 22, 0.04)',
+  '--color-orange-100': 'rgba(249, 115, 22, 0.08)',
+  '--color-orange-200': 'rgba(249, 115, 22, 0.15)',
+  '--color-orange-300': 'rgba(249, 115, 22, 0.25)',
+  '--color-orange-400': 'rgba(249, 115, 22, 0.4)',
+  '--color-orange-500': '#f97316',
+  '--color-orange-600': '#ea580c',
+  '--color-orange-700': 'rgba(234, 88, 12, 0.8)',
+  '--color-orange-800': 'rgba(234, 88, 12, 0.9)',
+
   '--color-success': '#34d399',
   '--color-success-bg': 'rgba(52, 211, 153, 0.1)',
   '--color-success-border': 'rgba(52, 211, 153, 0.3)',
@@ -66,6 +86,7 @@ export const darkTheme: Record<string, string> = {
 
   '--glow-blue': '0 12px 32px rgba(225, 171, 128, 0.25), 0 6px 16px rgba(225, 171, 128, 0.18), 0 3px 8px rgba(0, 0, 0, 0.1)',
   '--glow-purple': '0 12px 32px rgba(139, 92, 246, 0.25), 0 6px 16px rgba(124, 58, 237, 0.18), 0 3px 8px rgba(0, 0, 0, 0.1)',
+  '--glow-orange': '0 12px 32px rgba(249, 115, 22, 0.25), 0 6px 16px rgba(234, 88, 12, 0.18), 0 3px 8px rgba(0, 0, 0, 0.1)',
   '--glow-mixed': '0 12px 32px rgba(225, 171, 128, 0.2), 0 6px 16px rgba(139, 92, 246, 0.15), 0 3px 8px rgba(0, 0, 0, 0.1)',
 
   '--shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.9)',

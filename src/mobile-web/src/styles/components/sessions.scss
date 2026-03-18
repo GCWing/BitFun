@@ -37,16 +37,24 @@
 .session-list__header-copy {
   display: flex;
   flex-direction: column;
+  gap: 0;
   min-width: 0;
 
   h1 {
     margin: 0;
     font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-bold);
     color: var(--color-text-primary);
     letter-spacing: 0.01em;
     width: fit-content;
   }
+}
+
+.session-list__header-user-id {
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
 }
 
 .session-list__header-kicker {
@@ -98,49 +106,69 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: var(--size-gap-3) var(--size-gap-4) 0;
   padding: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--color-accent-200);
   @include squircle(20px);
-  background: var(--color-bg-elevated);
-  box-shadow: var(--shadow-sm);
+  background: var(--color-accent-50);
   cursor: pointer;
   transition: transform var(--motion-fast) var(--easing-standard),
     background var(--motion-fast) var(--easing-standard);
 
   &:active {
     transform: translateY(1px);
-    background: var(--element-bg-subtle);
+    background: var(--color-accent-100);
   }
 }
 
-.session-list__identity-bar {
+/* Mode Toggle - Inline pill style */
+.session-list__mode-toggle {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: var(--size-gap-3) var(--size-gap-4) 0;
-  padding: 10px 14px;
+  gap: 6px;
+  padding: 4px;
   border: 1px solid var(--border-subtle);
   @include squircle(16px);
-  background: var(--color-bg-elevated);
-  box-shadow: var(--shadow-sm);
+  background: var(--color-bg-secondary);
 }
 
-.session-list__identity-label {
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
+.session-list__mode-toggle-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  @include squircle(12px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--easing-standard);
 
-.session-list__identity-value {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  &.is-active {
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-sm);
+
+    &.is-active:first-child {
+      color: var(--color-accent-500);
+    }
+
+    &.is-active:last-child {
+      color: var(--color-pink-500);
+    }
+  }
+
+  &:active:not(.is-active) {
+    background: var(--element-bg-subtle);
+  }
 }
 
 .session-list__workspace-icon {
@@ -167,7 +195,7 @@
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-accent-500);
 }
 
 .session-list__workspace-name {
@@ -253,6 +281,83 @@
   flex-shrink: 0;
 }
 
+.session-list__hint {
+  background: var(--color-pink-100);
+  color: var(--color-pink-600);
+  border: 1px solid var(--color-pink-200);
+}
+
+/* Assistant Bar - Same layout as workspace bar but for assistant mode */
+.session-list__assistant-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-pink-200);
+  @include squircle(20px);
+  background: var(--color-pink-50);
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--easing-standard),
+    background var(--motion-fast) var(--easing-standard);
+
+  &:active {
+    transform: translateY(1px);
+    background: var(--color-pink-100);
+  }
+}
+
+.session-list__assistant-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  @include squircle(10px);
+  color: var(--color-pink-500);
+  background: var(--color-pink-100);
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.session-list__assistant-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.session-list__assistant-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-pink-500);
+}
+
+.session-list__assistant-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-list__assistant-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
 .session-list__create-row {
   display: flex;
   flex-direction: column;
@@ -294,6 +399,10 @@
   &--cowork {
     border-color: var(--color-purple-200);
   }
+
+  &--claw {
+    border-color: var(--color-pink-200);
+  }
 }
 
 .session-list__create-icon {
@@ -311,6 +420,11 @@
 .session-list__create-btn--cowork .session-list__create-icon {
   color: var(--color-purple-500);
   background: var(--color-purple-100);
+}
+
+.session-list__create-btn--claw .session-list__create-icon {
+  color: var(--color-pink-500);
+  background: var(--color-pink-100);
 }
 
 .session-list__create-copy {
@@ -394,6 +508,12 @@
     color: var(--color-purple-500);
     background: var(--color-purple-100);
   }
+
+  &--claw,
+  &--Claw {
+    color: var(--color-pink-500);
+    background: var(--color-pink-100);
+  }
 }
 
 .session-list__item-body {
@@ -456,6 +576,13 @@
     color: var(--color-purple-500);
     border-color: var(--color-purple-200);
   }
+
+  &--claw,
+  &--Claw {
+    background: var(--color-pink-100);
+    color: var(--color-pink-500);
+    border-color: var(--color-pink-200);
+  }
 }
 
 .session-list__empty {
@@ -492,6 +619,174 @@
   text-align: center;
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* Picker Overlay */
+.session-list__picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn var(--motion-fast) var(--easing-standard);
+}
+
+.session-list__picker-modal {
+  width: 100%;
+  max-height: 60vh;
+  background: var(--color-bg-elevated);
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+  animation: slideUp var(--motion-base) var(--easing-decelerate);
+}
+
+.session-list__picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-gap-4);
+  border-bottom: 1px solid var(--border-subtle);
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-primary);
+  }
+}
+
+.session-list__picker-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+
+  &:active {
+    background: var(--element-bg-subtle);
+  }
+}
+
+.session-list__picker-list {
+  padding: var(--size-gap-3);
+  max-height: calc(60vh - 60px);
+  overflow-y: auto;
+}
+
+.session-list__picker-empty {
+  padding: var(--size-gap-6);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.session-list__picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  @include squircle(16px);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--motion-fast) var(--easing-standard);
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &:active {
+    transform: scale(0.99);
+    background: var(--element-bg-subtle);
+  }
+
+  // Assistant mode (pink)
+  &.is-selected {
+    border-color: var(--color-pink-500);
+    background: var(--color-pink-50);
+
+    svg {
+      color: var(--color-pink-500);
+    }
+  }
+
+  // Workspace mode (blue)
+  &--workspace.is-selected {
+    border-color: var(--color-accent-500);
+    background: var(--color-accent-50);
+
+    svg {
+      color: var(--color-accent-500);
+    }
+  }
+
+  svg {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+}
+
+.session-list__picker-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  @include squircle(10px);
+  color: var(--color-pink-500);
+  background: var(--color-pink-100);
+  flex-shrink: 0;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: inherit;
+  }
+
+  // Workspace mode (blue)
+  .session-list__picker-item--workspace & {
+    color: var(--color-accent-500);
+    background: var(--color-accent-100);
+  }
+}
+
+.session-list__picker-item-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes sessionItemIn {
