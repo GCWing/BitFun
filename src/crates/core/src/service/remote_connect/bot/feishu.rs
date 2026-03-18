@@ -16,7 +16,7 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use super::command_router::{
     current_bot_language, execute_forwarded_turn, handle_command, main_menu_actions,
     paired_success_message, parse_command, welcome_message, BotAction, BotActionStyle,
-    BotChatState, BotInteractionHandler, BotInteractiveRequest, BotLanguage, BotMessageSender,
+    BotChatState, BotDisplayMode, BotInteractionHandler, BotInteractiveRequest, BotLanguage, BotMessageSender,
     HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
@@ -827,6 +827,22 @@ impl FeishuBot {
                 },
             ),
             (
+                "/pro",
+                if language.is_chinese() {
+                    "专业模式"
+                } else {
+                    "Expert Mode"
+                },
+            ),
+            (
+                "/assistant",
+                if language.is_chinese() {
+                    "助理模式"
+                } else {
+                    "Assistant Mode"
+                },
+            ),
+            (
                 "/resume_session",
                 if language.is_chinese() {
                     "恢复会话"
@@ -848,6 +864,14 @@ impl FeishuBot {
                     "新建协作会话"
                 } else {
                     "New Cowork Session"
+                },
+            ),
+            (
+                "/new_claw_session",
+                if language.is_chinese() {
+                    "新建助理会话"
+                } else {
+                    "New Claw Session"
                 },
             ),
             (
@@ -1152,7 +1176,7 @@ impl FeishuBot {
                     info!("Feishu pairing successful, chat_id={chat_id}");
                     let result = HandleResult {
                         reply: paired_success_message(language),
-                        actions: main_menu_actions(language),
+                        actions: main_menu_actions(language, BotDisplayMode::Assistant),
                         forward_to_session: None,
                     };
                     self.send_handle_result(&chat_id, &result).await.ok();
@@ -1486,7 +1510,7 @@ impl FeishuBot {
                     state.paired = true;
                     let result = HandleResult {
                         reply: paired_success_message(language),
-                        actions: main_menu_actions(language),
+                        actions: main_menu_actions(language, BotDisplayMode::Assistant),
                         forward_to_session: None,
                     };
                     self.send_handle_result(chat_id, &result).await.ok();
@@ -1548,7 +1572,8 @@ impl FeishuBot {
                         }
                     })
                 });
-                let result = execute_forwarded_turn(forward, Some(handler), Some(sender)).await;
+                let verbose_mode = load_bot_persistence().verbose_mode;
+                let result = execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
                 if let Err(err) = bot.send_message(&cid, &result.display_text).await {
                     warn!("Failed to send Feishu final message to {cid}: {err}");
                 }

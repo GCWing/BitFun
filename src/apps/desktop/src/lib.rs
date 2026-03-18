@@ -611,6 +611,8 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_set_form_state,
             api::remote_connect_api::remote_connect_configure_custom_server,
             api::remote_connect_api::remote_connect_configure_bot,
+            api::remote_connect_api::remote_connect_get_bot_verbose_mode,
+            api::remote_connect_api::remote_connect_set_bot_verbose_mode,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,

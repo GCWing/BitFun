@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   WorkspaceInfo,
   ActiveTurnSnapshot,
+  AssistantEntry,
 } from './RemoteSessionManager';
 
 export type ConnectionStatus = 'idle' | 'pairing' | 'paired' | 'error';
@@ -14,6 +15,9 @@ interface MobileStore {
 
   currentWorkspace: WorkspaceInfo | null;
   setCurrentWorkspace: (w: WorkspaceInfo | null) => void;
+
+  currentAssistant: AssistantEntry | null;
+  setCurrentAssistant: (a: AssistantEntry | null) => void;
 
   authenticatedUserId: string | null;
   setAuthenticatedUserId: (userId: string | null) => void;
@@ -44,6 +48,9 @@ export const useMobileStore = create<MobileStore>((set, get) => ({
 
   currentWorkspace: null,
   setCurrentWorkspace: (currentWorkspace) => set({ currentWorkspace }),
+
+  currentAssistant: null,
+  setCurrentAssistant: (currentAssistant) => set({ currentAssistant }),
 
   authenticatedUserId: null,
   setAuthenticatedUserId: (authenticatedUserId) => set({ authenticatedUserId }),

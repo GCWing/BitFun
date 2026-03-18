@@ -87,6 +87,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [lanNetworkInfo, setLanNetworkInfo] = useState<{ localIp: string; gatewayIp: string | null } | null>(null);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
+  const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
 
   const [qrCopied, setQrCopied] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
@@ -141,6 +142,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           const s = await remoteConnectAPI.getStatus();
           if (cancelled) return;
           setStatus(s);
+          setBotVerboseMode(s.bot_verbose_mode);
 
           if (s.bot_connected) {
             const tab = botInfoToBotTab(s.bot_connected);
@@ -270,6 +272,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       setStatus(s);
     } catch { /* best effort */ }
   }, []);
+
+  const handleToggleBotVerboseMode = async () => {
+    const newMode = !botVerboseMode;
+    setBotVerboseMode(newMode);
+    await remoteConnectAPI.setBotVerboseMode(newMode);
+  };
 
   const handleCancelConnect = useCallback(async () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -507,7 +515,38 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const renderBotContent = () => {
     if (isBotConnected && connectedBotTab === botTab) {
-      return renderConnectedView(handleDisconnectBot);
+      return (
+        <div className="bitfun-remote-connect__connected">
+          <div className="bitfun-remote-connect__status">
+            <Badge variant="success">{t('remoteConnect.stateConnected')}</Badge>
+          </div>
+          <div className="bitfun-remote-connect__mode-selector">
+            <button
+              type="button"
+              className={`bitfun-remote-connect__mode-btn ${!botVerboseMode ? 'is-active' : ''}`}
+              onClick={handleToggleBotVerboseMode}
+              disabled={!botVerboseMode}
+            >
+              {t('remoteConnect.botConciseMode')}
+            </button>
+            <button
+              type="button"
+              className={`bitfun-remote-connect__mode-btn ${botVerboseMode ? 'is-active' : ''}`}
+              onClick={handleToggleBotVerboseMode}
+              disabled={botVerboseMode}
+            >
+              {t('remoteConnect.botVerboseMode')}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="bitfun-remote-connect__btn bitfun-remote-connect__btn--disconnect"
+            onClick={handleDisconnectBot}
+          >
+            {t('remoteConnect.disconnect')}
+          </button>
+        </div>
+      );
     }
     if (connectionResult && activeGroup === 'bot') {
       return renderPairingInProgress();

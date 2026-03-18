@@ -37,6 +37,7 @@ export interface RemoteConnectStatus {
   peer_device_name: string | null;
   peer_user_id: string | null;
   bot_connected: string | null;
+  bot_verbose_mode: boolean;
 }
 
 export interface LanNetworkInfo {
@@ -172,6 +173,24 @@ class RemoteConnectAPIService {
       });
     } catch (e) {
       log.error('configureBot failed', e);
+      throw e;
+    }
+  }
+
+  async getBotVerboseMode(): Promise<boolean> {
+    try {
+      return await this.adapter.request<boolean>('remote_connect_get_bot_verbose_mode');
+    } catch (e) {
+      log.error('getBotVerboseMode failed', e);
+      return false;
+    }
+  }
+
+  async setBotVerboseMode(verbose: boolean): Promise<void> {
+    try {
+      await this.adapter.request<void>('remote_connect_set_bot_verbose_mode', { verbose });
+    } catch (e) {
+      log.error('setBotVerboseMode failed', e);
       throw e;
     }
   }

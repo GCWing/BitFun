@@ -395,6 +395,8 @@
     "botFeishuStep1Suffix": "，创建企业自建应用",
     "botFeishuStep2": "启用机器人能力，配置权限管理和事件与回调",
     "botFeishuStep3": "将App ID和App Secret填入下方",
+    "botVerboseMode": "详细模式",
+    "botConciseMode": "简洁模式",
     "openNgrokSetup": "打开 ngrok 安装与配置页面",
     "disclaimerTitle": "远程连接免责声明",
     "disclaimerIntro": "启用远程连接前，请确认你已理解并接受以下事项：",

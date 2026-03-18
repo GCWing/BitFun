@@ -93,7 +93,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.minimax.name'),
     baseUrl: 'https://api.minimaxi.com/anthropic',
     format: 'anthropic',
-    models: ['MiniMax-M2.5', 'MiniMax-M2.1'],
+    models: ['MiniMax-M2.7-highspeed', 'MiniMax-M2.5-highspeed'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.minimax.description'),
     helpUrl: 'https://platform.minimax.io/',

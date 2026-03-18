@@ -55,6 +55,10 @@ pub struct BotPersistenceData {
     pub connections: Vec<SavedBotConnection>,
     #[serde(default)]
     pub form_state: RemoteConnectFormState,
+    /// Global verbose mode setting for all bot connections.
+    /// When true, intermediate tool execution progress is sent to the user.
+    #[serde(default)]
+    pub verbose_mode: bool,
 }
 
 impl BotPersistenceData {
