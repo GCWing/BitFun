@@ -54,6 +54,7 @@ impl DialogSubmissionPolicy {
     pub const fn for_source(trigger_source: DialogTriggerSource) -> Self {
         let (queue_priority, skip_tool_confirmation) = match trigger_source {
             DialogTriggerSource::AgentSession => (DialogQueuePriority::Low, true),
+            DialogTriggerSource::ScheduledJob => (DialogQueuePriority::Low, true),
             DialogTriggerSource::DesktopUi
             | DialogTriggerSource::DesktopApi
             | DialogTriggerSource::Cli => (DialogQueuePriority::Normal, false),

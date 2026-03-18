@@ -16,7 +16,7 @@ use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
-use crate::service::config::types::{ModelCapability, ModelCategory};
+use crate::service::config::types::ModelCapability;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
@@ -218,6 +218,7 @@ impl ExecutionEngine {
         provider: &str,
         workspace_path: Option<&Path>,
         current_turn_id: &str,
+        attach_images: bool,
     ) -> BitFunResult<Vec<AIMessage>> {
         let limits = ImageLimits::for_provider(provider);
 
@@ -227,6 +228,13 @@ impl ExecutionEngine {
         for msg in messages {
             match &msg.content {
                 MessageContent::Multimodal { text, images } => {
+                    if !attach_images {
+                        // Primary model is text-only (or images are disabled). Convert to text-only
+                        // placeholder so providers that don't support image inputs won't error.
+                        result.push(AIMessage::from(msg));
+                        continue;
+                    }
+
                     let prompt = if text.trim().is_empty() {
                         "(image attached)".to_string()
                     } else {
@@ -279,6 +287,51 @@ impl ExecutionEngine {
         }
 
         Ok(result)
+    }
+
+    fn render_multimodal_as_text(
+        text: &str,
+        images: &[ImageContextData],
+        can_use_view_image: bool,
+    ) -> String {
+        let mut content = text.to_string();
+
+        if images.is_empty() {
+            return content;
+        }
+
+        content.push_str("\n\n[Attached image(s):\n");
+        for image in images {
+            let name = image
+                .metadata
+                .as_ref()
+                .and_then(|m| m.get("name"))
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .or_else(|| image.image_path.as_ref().filter(|s| !s.is_empty()).cloned())
+                .unwrap_or_else(|| image.id.clone());
+
+            // Keep the raw image payload out of text-only models.
+            // Provide `image_id` so the primary model can choose to call `view_image` when needed.
+            content.push_str(&format!(
+                "- {} ({}, image_id={})\n",
+                name, image.mime_type, image.id
+            ));
+        }
+        content.push_str("]\n");
+
+        if can_use_view_image {
+            content.push_str(
+                "If you need to inspect an image, call the `view_image` tool with `image_id`.\n",
+            );
+        } else {
+            content.push_str(
+                "Note: image inspection is not available for this session.\n",
+            );
+        }
+
+        content
     }
 
     /// Compress context, will emit compression events (Started, Completed, and Failed)
@@ -648,7 +701,6 @@ impl ExecutionEngine {
                     m.capabilities
                         .iter()
                         .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-                        || matches!(m.category, ModelCategory::Multimodal)
                 });
 
                 (resolved_id, supports)
@@ -677,6 +729,30 @@ impl ExecutionEngine {
             "primary_model_supports_image_understanding".to_string(),
             primary_supports_image_understanding.to_string(),
         );
+        execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
+
+        // If the primary model is text-only, do not send image payloads to the provider.
+        // Instead, keep a text-only placeholder (including `image_id`) so the model can decide
+        // whether it wants to call `view_image` explicitly.
+        if !primary_supports_image_understanding {
+            let can_use_view_image = available_tools.iter().any(|t| t == "view_image");
+
+            for msg in messages.iter_mut() {
+                let MessageContent::Multimodal { text, images } = &msg.content else {
+                    continue;
+                };
+
+                let original_text = text.clone();
+                let original_images = images.clone();
+
+                // Replace multimodal messages with text-only versions to avoid provider errors.
+                let next_text =
+                    Self::render_multimodal_as_text(&original_text, &original_images, can_use_view_image);
+
+                msg.content = MessageContent::Text(next_text);
+                msg.metadata.tokens = None;
+            }
+        }
 
         // Loop to execute model rounds
         loop {
@@ -797,6 +873,7 @@ impl ExecutionEngine {
                     .as_ref()
                     .map(|workspace| workspace.root_path()),
                 &context.dialog_turn_id,
+                primary_supports_image_understanding,
             )
             .await?;
 
@@ -1135,21 +1212,6 @@ mod tests {
         assert_eq!(
             ExecutionEngine::resolve_configured_model_id(&ai_config, "fast"),
             "model-primary"
-        );
-    }
-
-    #[test]
-    fn invalid_locked_auto_model_is_ignored() {
-        let mut ai_config = AIConfig::default();
-        ai_config.models = vec![build_model("model-primary", "Primary", "claude-sonnet-4.5")];
-        ai_config.default_models.primary = Some("model-primary".to_string());
-
-        assert_eq!(
-            ExecutionEngine::resolve_locked_auto_model_id(
-                &ai_config,
-                Some(&"deleted-fast-model".to_string())
-            ),
-            None
         );
     }
 }

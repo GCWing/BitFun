@@ -19,6 +19,23 @@ impl SessionControlTool {
         Self
     }
 
+    fn current_workspace_session<'a>(
+        &self,
+        context: &'a ToolUseContext,
+        workspace: &str,
+    ) -> Option<&'a str> {
+        let current_session_id = context.session_id.as_deref()?;
+        let current_workspace = context.workspace_root()?;
+        let normalized_current_workspace =
+            normalize_path(&current_workspace.to_string_lossy().to_string());
+
+        if normalized_current_workspace == workspace {
+            Some(current_session_id)
+        } else {
+            None
+        }
+    }
+
     fn validate_session_id(session_id: &str) -> Result<(), String> {
         if session_id.is_empty() {
             return Err("session_id cannot be empty".to_string());
@@ -99,19 +116,24 @@ impl SessionControlTool {
         &self,
         workspace: &str,
         sessions: &[crate::agentic::core::SessionSummary],
+        current_session_id: Option<&str>,
     ) -> String {
         if sessions.is_empty() {
             return format!("No sessions found in workspace '{}'.", workspace);
         }
 
         let mut lines = vec![format!(
-            "Found {} session(s) in workspace '{}':",
+            "Found {} session(s) in workspace '{}'",
             sessions.len(),
             workspace
         )];
         lines.push(String::new());
+        if let Some(current_session_id) = current_session_id {
+            lines.push(format!("Note: '{}' is your session_id", current_session_id));
+            lines.push(String::new());
+        }
         lines.push(
-            "| Session ID | Session Name | Agent Type | Created At | Last Active At |".to_string(),
+            "| session_id | session_name | agent_type | created_at | last_active_at |".to_string(),
         );
         lines.push("| --- | --- | --- | --- | --- |".to_string());
         for session in sessions {
@@ -317,6 +339,23 @@ Optional inputs:
                         meta: None,
                     };
                 }
+                if let Some(tool_context) = context {
+                    if let Ok(workspace) = self.resolve_workspace(&parsed.workspace) {
+                        if self.current_workspace_session(tool_context, &workspace)
+                            == Some(session_id)
+                        {
+                            return ValidationResult {
+                                result: false,
+                                message: Some(
+                                    "cannot delete the current session from SessionControl"
+                                        .to_string(),
+                                ),
+                                error_code: Some(400),
+                                meta: None,
+                            };
+                        }
+                    }
+                }
             }
             SessionControlAction::List => {
                 if parsed.agent_type.is_some() {
@@ -421,6 +460,11 @@ Optional inputs:
                     BitFunError::tool("session_id is required for delete".to_string())
                 })?;
                 Self::validate_session_id(session_id).map_err(BitFunError::tool)?;
+                if self.current_workspace_session(context, &workspace) == Some(session_id) {
+                    return Err(BitFunError::tool(
+                        "cannot delete the current session from SessionControl".to_string(),
+                    ));
+                }
 
                 let existing_sessions = coordinator.list_sessions(workspace_path).await?;
                 if !existing_sessions
@@ -452,14 +496,16 @@ Optional inputs:
             }
             SessionControlAction::List => {
                 let sessions = coordinator.list_sessions(workspace_path).await?;
+                let current_session_id = self.current_workspace_session(context, &workspace);
                 let result_for_assistant =
-                    self.build_list_result_for_assistant(&workspace, &sessions);
+                    self.build_list_result_for_assistant(&workspace, &sessions, current_session_id);
 
                 Ok(vec![ToolResult::Result {
                     data: json!({
                         "success": true,
                         "action": "list",
                         "workspace": workspace.clone(),
+                        "current_session_id": current_session_id,
                         "count": sessions.len(),
                         "sessions": sessions,
                     }),

@@ -27,6 +27,8 @@ impl ClawMode {
                 "TerminalControl".to_string(),
                 "SessionControl".to_string(),
                 "SessionMessage".to_string(),
+                "SessionHistory".to_string(),
+                "Cron".to_string(),
             ],
         }
     }

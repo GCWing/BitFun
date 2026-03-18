@@ -54,6 +54,10 @@
     margin: 0 0 $size-gap-2 0;
   }
 
+  &__title--compact {
+    margin-bottom: 0;
+  }
+
   &__message {
     font-size: $font-size-sm;
     color: var(--color-text-secondary);

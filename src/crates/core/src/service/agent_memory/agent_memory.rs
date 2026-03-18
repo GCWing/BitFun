@@ -1,11 +1,6 @@
-use crate::agentic::core::{strip_prompt_markup, SessionSummary};
-use crate::agentic::persistence::PersistenceManager;
-use crate::infrastructure::try_get_path_manager_arc;
-use crate::service::session::DialogTurnData;
 use crate::util::errors::*;
-use log::{debug, warn};
+use log::debug;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 use tokio::fs;
 
 const MEMORY_DIR_NAME: &str = "memory";
@@ -15,8 +10,6 @@ const MEMORY_INDEX_TEMPLATE: &str = "# Memory Index\n";
 const MEMORY_INDEX_MAX_LINES: usize = 200;
 const DAILY_MEMORY_MAX_FILES: usize = 30;
 const TOPIC_MEMORY_MAX_FILES: usize = 30;
-const RECENT_WORKSPACE_SESSIONS_MAX_COUNT: usize = 5;
-const SESSION_MESSAGE_PREVIEW_CHAR_LIMIT: usize = 100;
 
 fn memory_dir_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join(BITFUN_DIR_NAME).join(MEMORY_DIR_NAME)
@@ -97,143 +90,6 @@ async fn list_memory_file_groups(memory_dir: &Path) -> BitFunResult<(Vec<String>
     Ok((daily_files, topic_files))
 }
 
-fn format_system_time_for_prompt(time: SystemTime) -> String {
-    let datetime: chrono::DateTime<chrono::Local> = time.into();
-    datetime.format("%Y-%m-%dT%H:%M:%S").to_string()
-}
-
-fn normalize_message_preview(content: &str) -> String {
-    let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.is_empty() {
-        return "(empty user message)".to_string();
-    }
-
-    normalized
-        .chars()
-        .take(SESSION_MESSAGE_PREVIEW_CHAR_LIMIT)
-        .collect()
-}
-
-fn escape_prompt_text(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
-fn build_turn_preview_value(turn: Option<&DialogTurnData>) -> String {
-    // Session previews should reflect the user's visible text, not injected prompt markup.
-    turn.map(|turn| normalize_message_preview(&strip_prompt_markup(&turn.user_message.content)))
-        .unwrap_or_else(|| "(no saved user messages)".to_string())
-}
-
-fn build_session_preview_tags(turns: &[DialogTurnData]) -> String {
-    match turns {
-        [] => "<user_message_preview>(no saved user messages)</user_message_preview>".to_string(),
-        [turn] => format!(
-            "<user_message_preview>{}</user_message_preview>",
-            escape_prompt_text(&build_turn_preview_value(Some(turn)))
-        ),
-        _ => format!(
-            "<first_user_message_preview>{}</first_user_message_preview>\n<last_user_message_preview>{}</last_user_message_preview>",
-            escape_prompt_text(&build_turn_preview_value(turns.first())),
-            escape_prompt_text(&build_turn_preview_value(turns.last())),
-        ),
-    }
-}
-
-async fn build_recent_workspace_sessions_content(
-    workspace_root: &Path,
-    current_session_id: Option<&str>,
-) -> String {
-    let path_manager = match try_get_path_manager_arc() {
-        Ok(path_manager) => path_manager,
-        Err(err) => {
-            warn!(
-                "Failed to initialize PathManager for workspace session prompt section: {}",
-                err
-            );
-            return "(workspace session data unavailable)".to_string();
-        }
-    };
-
-    let persistence_manager = match PersistenceManager::new(path_manager) {
-        Ok(manager) => manager,
-        Err(err) => {
-            warn!(
-                "Failed to initialize PersistenceManager for workspace session prompt section: {}",
-                err
-            );
-            return "(workspace session data unavailable)".to_string();
-        }
-    };
-
-    let recent_sessions = match persistence_manager.list_sessions(workspace_root).await {
-        Ok(sessions) => sessions
-            .into_iter()
-            .filter(|session| Some(session.session_id.as_str()) != current_session_id)
-            .take(RECENT_WORKSPACE_SESSIONS_MAX_COUNT)
-            .collect::<Vec<_>>(),
-        Err(err) => {
-            warn!(
-                "Failed to load workspace sessions for agent memory prompt: workspace={} error={}",
-                workspace_root.display(),
-                err
-            );
-            return "(workspace session data unavailable)".to_string();
-        }
-    };
-
-    if recent_sessions.is_empty() {
-        return "(no other recent workspace sessions found)".to_string();
-    }
-
-    let mut entries = Vec::with_capacity(recent_sessions.len());
-    for session in recent_sessions {
-        entries.push(
-            build_recent_workspace_session_entry(&persistence_manager, workspace_root, &session)
-                .await,
-        );
-    }
-
-    entries.join("\n\n")
-}
-
-async fn build_recent_workspace_session_entry(
-    persistence_manager: &PersistenceManager,
-    workspace_root: &Path,
-    session: &SessionSummary,
-) -> String {
-    let turns = match persistence_manager
-        .load_session_turns(workspace_root, &session.session_id)
-        .await
-    {
-        Ok(turns) => turns,
-        Err(err) => {
-            warn!(
-                "Failed to load session turns for agent memory prompt: session_id={} error={}",
-                session.session_id, err
-            );
-            Vec::new()
-        }
-    };
-
-    let preview_tags = build_session_preview_tags(&turns);
-
-    format!(
-        r#"<session id="{}" name="{}" created_at="{}" last_active_at="{}" turn_count="{}">
-{}
-</session>"#,
-        escape_prompt_text(&session.session_id),
-        escape_prompt_text(&session.session_name),
-        format_system_time_for_prompt(session.created_at),
-        format_system_time_for_prompt(session.last_activity_at),
-        session.turn_count,
-        preview_tags,
-    )
-}
-
 pub(crate) async fn ensure_workspace_memory_files_for_prompt(
     workspace_root: &Path,
 ) -> BitFunResult<()> {
@@ -262,7 +118,6 @@ pub(crate) async fn ensure_workspace_memory_files_for_prompt(
 
 pub(crate) async fn build_workspace_agent_memory_prompt(
     workspace_root: &Path,
-    current_session_id: Option<&str>,
 ) -> BitFunResult<String> {
     ensure_workspace_memory_files_for_prompt(workspace_root).await?;
 
@@ -277,18 +132,17 @@ You have access to a workspace memory space under `{memory_dir_display}`.
 
 Use it to preserve continuity across conversations. Save only information that is likely to help in future turns: durable preferences, project constraints, important decisions, ongoing plans, and meaningful outcomes. Do not save trivial chatter or temporary details.
 
-## How to use memory
-- Read: use Grep/Read to search and retrieve memories when past preferences, decisions, constraints, or ongoing work may matter, especially at the start of a new task, before making decisions, or when the user refers to prior plans or preferences.
-- Write: use Edit/Write to create or update memory files when something should survive beyond the current turn.
+## Memory usage
+Use Grep/Read to search and retrieve memories before you start acting on a task, or when the user mentions facts, preferences, decisions, or plans that are not present in the current context and memory may fill the gap.
 
-Write especially for:
+## Memory update
+Use Edit/Write to create or update memory files when something should survive beyond the current turn. Especially for:
 - stable user preferences
 - project constraints or conventions
 - important decisions
 - progress, plans, or handoff context
 - knowledge a future agent should not need to rediscover
-Heuristic: if you expect to want this in a future session, save a short note.
-Write once the information is clear enough to be useful. Prefer natural pauses or completed work; do not wait for a formal session end.
+Heuristic: if you expect to want this in a future session, save a short note. Remember to update memory when you complete a task.
 
 ## File roles
 - `memory.md`: the concise index. Link to important memory files with short summaries, not full details. Use it as a map, not the place for the full facts.
@@ -364,9 +218,6 @@ The following sections describe the memory files currently available in this wor
             .join("\n")
     };
 
-    let recent_workspace_sessions_content =
-        build_recent_workspace_sessions_content(workspace_root, current_session_id).await;
-
     section.push_str(&format!(
         r#"
 <memory_index description="The contents of `memory.md`, which acts as the high-level map for this memory space.{index_description_suffix}">
@@ -381,12 +232,9 @@ The following sections describe the memory files currently available in this wor
 {topic_files_content}
 </topic_memory_files>
 
-## Recent Sessions Preview
-Structured summaries for up to 5 recent sessions from this workspace, excluding the current session. User message previews are single-line and truncated to the first {SESSION_MESSAGE_PREVIEW_CHAR_LIMIT} characters.
+## Recent Sessions
 
-<recent_sessions>
-{recent_workspace_sessions_content}
-</recent_sessions>
+If you need the most detailed conversation history, first use SessionControl to list sessions in the current workspace, then use SessionHistory to retrieve the conversation history for the session you want.
 "#
     ));
 

@@ -243,6 +243,8 @@ pub enum ToolEventData {
         tool_id: String,
         tool_name: String,
         result: serde_json::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        result_for_assistant: Option<String>,
         duration_ms: u64,
     },
     Failed {

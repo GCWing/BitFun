@@ -189,6 +189,13 @@ impl ToolStateManager {
                 tool_id: task.tool_call.tool_id.clone(),
                 tool_name: task.tool_call.tool_name.clone(),
                 result: Self::sanitize_tool_result_for_event(&result.content()),
+                result_for_assistant: match result {
+                    crate::agentic::tools::framework::ToolResult::Result {
+                        result_for_assistant,
+                        ..
+                    } => result_for_assistant.clone(),
+                    _ => None,
+                },
                 duration_ms: *duration_ms,
             },
 

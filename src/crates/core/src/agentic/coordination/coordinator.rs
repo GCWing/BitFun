@@ -39,6 +39,7 @@ pub enum DialogTriggerSource {
     DesktopUi,
     DesktopApi,
     AgentSession,
+    ScheduledJob,
     RemoteRelay,
     Bot,
     Cli,
@@ -141,6 +142,19 @@ impl ConversationCoordinator {
         } else {
             "Please start bootstrap"
         }
+    }
+
+    async fn is_chinese_locale() -> bool {
+        use crate::service::config::get_global_config_service;
+        use crate::service::config::types::AppConfig;
+        let Ok(config_service) = get_global_config_service().await else {
+            return false;
+        };
+        let app: AppConfig = config_service
+            .get_config(Some("app"))
+            .await
+            .unwrap_or_default();
+        app.language.starts_with("zh")
     }
 
     fn assistant_bootstrap_system_reminder(
@@ -689,135 +703,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await
     }
 
-    /// Pre-analyze images using the configured vision model.
-    ///
-    /// Strategy:
-    /// 1. Vision model configured → analyze images → enhance user message with text descriptions → clear image_contexts
-    /// 2. No vision model → reject with a user-friendly message
-    async fn pre_analyze_images_if_needed(
-        &self,
-        user_input: String,
-        image_contexts: Option<Vec<ImageContextData>>,
-        session_id: &str,
-        image_metadata: Option<serde_json::Value>,
-        workspace: Option<WorkspaceBinding>,
-    ) -> BitFunResult<(String, Option<Vec<ImageContextData>>)> {
-        let images = match &image_contexts {
-            Some(imgs) if !imgs.is_empty() => imgs,
-            _ => return Ok((user_input, image_contexts)),
-        };
-
-        use crate::agentic::image_analysis::{
-            resolve_vision_model_from_global_config, AnalyzeImagesRequest, ImageAnalyzer,
-            MessageEnhancer,
-        };
-        use crate::infrastructure::ai::get_global_ai_client_factory;
-
-        let vision_model = match resolve_vision_model_from_global_config().await {
-            Ok(m) => m,
-            Err(_e) => {
-                let is_chinese = Self::is_chinese_locale().await;
-                let msg = if is_chinese {
-                    "请先在桌面端「设置 → AI 模型」中配置图片理解模型，然后再发送图片。"
-                } else {
-                    "Please configure an Image Understanding Model in Settings → AI Models on the desktop app before sending images."
-                };
-                return Err(BitFunError::service(msg));
-            }
-        };
-
-        let factory = match get_global_ai_client_factory().await {
-            Ok(f) => f,
-            Err(e) => {
-                warn!("Failed to get AI client factory for vision: {}", e);
-                return Ok((user_input, image_contexts));
-            }
-        };
-
-        let vision_client = match factory.get_client_by_id(&vision_model.id).await {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Failed to create vision AI client: {}", e);
-                return Ok((user_input, image_contexts));
-            }
-        };
-
-        let workspace_path = workspace.map(|binding| binding.root_path);
-        let request_workspace_path = workspace_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string());
-        let analyzer = ImageAnalyzer::new(workspace_path, vision_client);
-        let request = AnalyzeImagesRequest {
-            images: images.clone(),
-            user_message: Some(user_input.clone()),
-            session_id: session_id.to_string(),
-            workspace_path: request_workspace_path,
-        };
-
-        self.emit_event(AgenticEvent::ImageAnalysisStarted {
-            session_id: session_id.to_string(),
-            image_count: images.len(),
-            user_input: user_input.clone(),
-            image_metadata: image_metadata.clone(),
-        })
-        .await;
-
-        let analysis_start = std::time::Instant::now();
-
-        match analyzer.analyze_images(request, &vision_model).await {
-            Ok(results) => {
-                let duration_ms = analysis_start.elapsed().as_millis() as u64;
-
-                self.emit_event(AgenticEvent::ImageAnalysisCompleted {
-                    session_id: session_id.to_string(),
-                    success: true,
-                    duration_ms,
-                })
-                .await;
-
-                info!(
-                    "Vision pre-analysis completed: session={}, images={}, results={}, duration={}ms",
-                    session_id,
-                    images.len(),
-                    results.len(),
-                    duration_ms
-                );
-                let enhanced =
-                    MessageEnhancer::enhance_with_image_analysis(&user_input, &results, &[]);
-                Ok((enhanced, None))
-            }
-            Err(e) => {
-                let duration_ms = analysis_start.elapsed().as_millis() as u64;
-
-                self.emit_event(AgenticEvent::ImageAnalysisCompleted {
-                    session_id: session_id.to_string(),
-                    success: false,
-                    duration_ms,
-                })
-                .await;
-
-                warn!(
-                    "Vision pre-analysis failed, falling back to multimodal: session={}, error={}",
-                    session_id, e
-                );
-                Ok((user_input, image_contexts))
-            }
-        }
-    }
-
-    async fn is_chinese_locale() -> bool {
-        use crate::service::config::get_global_config_service;
-        use crate::service::config::types::AppConfig;
-        let Ok(config_service) = get_global_config_service().await else {
-            return true;
-        };
-        let app: AppConfig = config_service
-            .get_config(Some("app"))
-            .await
-            .unwrap_or_default();
-        app.language.starts_with("zh")
-    }
-
     async fn start_dialog_turn_internal(
         &self,
         session_id: String,
@@ -1052,20 +937,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_message_metadata = Some(metadata);
         }
 
-        // Auto vision pre-analysis: when images are present, try to use the configured
-        // vision model to pre-analyze them, then enhance the user message with text descriptions.
-        // This is the single authoritative code path for all image handling (desktop, remote, bot).
-        // If no vision model is configured, the request is rejected with a user-friendly message.
         let session_workspace = Self::session_workspace_binding(&session);
-        let (user_input, image_contexts) = self
-            .pre_analyze_images_if_needed(
-                user_input,
-                image_contexts,
-                &session_id,
-                user_message_metadata.clone(),
-                session_workspace.clone(),
-            )
-            .await?;
 
         let wrapped_user_input = self
             .wrap_user_input(

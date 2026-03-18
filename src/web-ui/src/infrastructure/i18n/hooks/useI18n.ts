@@ -41,7 +41,7 @@ export function useI18n(
   ns?: I18nNamespace | I18nNamespace[],
   options?: UseTranslationOptions<I18nNamespace>
 ): UseI18nReturn {
-  const { t, i18n, ready } = useTranslation(ns, options);
+  const { t: rawT, i18n, ready } = useTranslation(ns, options);
   
   const {
     currentLanguage,
@@ -52,6 +52,13 @@ export function useI18n(
   const changeLanguage = useCallback(async (locale: LocaleId) => {
     await i18nService.changeLanguage(locale);
   }, []);
+
+  const t = useCallback(
+    (key: string, translationOptions?: Record<string, unknown>) => {
+      return String(rawT(key, translationOptions as any));
+    },
+    [rawT]
+  );
 
   const currentLocaleMetadata = useMemo(
     () => i18nService.getCurrentLocaleMetadata(),
@@ -97,7 +104,7 @@ export function useI18n(
   );
 
   return {
-    t: (key, translationOptions) => String(t(key, translationOptions as any)),
+    t,
     i18n,
     currentLanguage,
     currentLocaleMetadata,

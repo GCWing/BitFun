@@ -59,16 +59,6 @@ interface UseMessageSenderReturn {
   isSending: boolean;
 }
 
-function formatImageContextLine(ctx: ImageContext): string {
-  const imgName = ctx.imageName || 'Untitled image';
-  const imgSize = ctx.fileSize ? ` (${(ctx.fileSize / 1024).toFixed(1)}KB)` : '';
-  const sourceLine = ctx.isLocal
-    ? `Path: ${ctx.imagePath}`
-    : `Image ID: ${ctx.id}`;
-
-  return `[Image: ${imgName}${imgSize}]\n${sourceLine}`;
-}
-
 export function useMessageSender(props: UseMessageSenderProps): UseMessageSenderReturn {
   const {
     currentSessionId,
@@ -164,7 +154,10 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
             case 'code-snippet':
               return `[Code Snippet: ${ctx.filePath}:${ctx.startLine}-${ctx.endLine}]`;
             case 'image':
-              return formatImageContextLine(ctx);
+              // Images are sent out-of-band via `imageContexts` so the backend can attach them
+              // (multimodal) or let the model call `view_image` (text-only). Avoid embedding
+              // "Image ID" references into the user prompt, which can cause redundant tool calls.
+              return '';
             case 'terminal-command':
               return `[Command: ${ctx.command}]`;
             case 'mermaid-node':

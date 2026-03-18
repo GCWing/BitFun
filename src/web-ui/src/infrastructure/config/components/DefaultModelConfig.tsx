@@ -234,11 +234,11 @@ export const DefaultModelConfig: React.FC = () => {
     return enabledModels.filter(m => {
       switch (capability) {
         case 'image_understanding':
-          return m.capabilities?.includes('image_understanding') || m.category === 'multimodal';
+          return m.capabilities?.includes('image_understanding');
         case 'image_generation':
-          return m.capabilities?.includes('image_generation') || m.category === 'image_generation';
+          return m.capabilities?.includes('image_generation');
         case 'speech_recognition':
-          return m.capabilities?.includes('speech_recognition') || m.category === 'speech_recognition';
+          return m.capabilities?.includes('speech_recognition');
         default:
           return true;
       }
@@ -318,8 +318,12 @@ export const DefaultModelConfig: React.FC = () => {
               value={configuredModelId || ''}
               onChange={(value) => handleCapabilityChange(capability, normalizeSelectValue(value))}
               placeholder={t('optional.selectModel')}
-              disabled={availableModels.length === 0}
-              options={availableModels.map(buildModelOption)}
+              // Allow clearing the selection even when there are no compatible models.
+              disabled={availableModels.length === 0 && !configuredModelId}
+              options={[
+                { label: t('optional.notSet'), value: '' },
+                ...availableModels.map(buildModelOption),
+              ]}
               renderOption={renderModelOption}
               renderValue={renderModelValue}
               className="default-model-config__model-select"

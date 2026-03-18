@@ -1193,7 +1193,7 @@ impl Default for AIModelConfig {
             presence_penalty: None,
             enabled: false,
             category: ModelCategory::GeneralChat,
-            capabilities: vec![ModelCapability::TextChat],
+            capabilities: vec![],
             recommended_for: vec![],
             metadata: None,
             enable_thinking_process: false,
@@ -1246,8 +1246,10 @@ impl Default for MinimapConfig {
 }
 
 impl AIModelConfig {
-    /// Infers the model category from the model name and provider (for backward compatibility
-    /// with older configs).
+    /// Legacy helper that infers the model category from the model name and provider.
+    ///
+    /// This is kept for one-off migrations/debugging, but runtime behavior should prefer
+    /// explicitly configured `category`/`capabilities`.
     pub fn infer_category_from_model_name(&self) -> ModelCategory {
         let model_name_lower = self.model_name.to_lowercase();
         let provider_lower = self.provider.to_lowercase();
@@ -1274,6 +1276,7 @@ impl AIModelConfig {
             || model_name_lower.contains("claude-3")
             || model_name_lower.contains("gemini-pro-vision")
             || model_name_lower.contains("gemini-1.5")
+            || model_name_lower.starts_with("kimi")
         {
             return ModelCategory::Multimodal;
         }
@@ -1288,7 +1291,10 @@ impl AIModelConfig {
         ModelCategory::GeneralChat
     }
 
-    /// Infers capability tags from the model category and name.
+    /// Legacy helper that infers capability tags from the model category and name.
+    ///
+    /// This is kept for one-off migrations/debugging, but runtime behavior should prefer
+    /// explicitly configured `category`/`capabilities`.
     pub fn infer_capabilities_from_model(&self) -> Vec<ModelCapability> {
         let mut capabilities = vec![];
         let model_name_lower = self.model_name.to_lowercase();
@@ -1331,16 +1337,31 @@ impl AIModelConfig {
         capabilities
     }
 
-    /// Auto-completes missing category and capability information (used for configuration
-    /// migration).
-    pub fn ensure_category_and_capabilities(&mut self) {
-        if self.category == ModelCategory::GeneralChat && self.capabilities.is_empty() {
-            self.category = self.infer_category_from_model_name();
-            self.capabilities = self.infer_capabilities_from_model();
+    fn default_capabilities_for_category(&self) -> Vec<ModelCapability> {
+        match self.category {
+            ModelCategory::GeneralChat => vec![ModelCapability::TextChat],
+            ModelCategory::Multimodal => {
+                vec![ModelCapability::TextChat, ModelCapability::ImageUnderstanding]
+            }
+            ModelCategory::ImageGeneration => vec![ModelCapability::ImageGeneration],
+            ModelCategory::Embedding => vec![ModelCapability::Embedding],
+            ModelCategory::SearchEnhanced => {
+                vec![ModelCapability::TextChat, ModelCapability::Search]
+            }
+            ModelCategory::CodeSpecialized => {
+                vec![ModelCapability::TextChat, ModelCapability::CodeSpecialized]
+            }
+            ModelCategory::SpeechRecognition => vec![ModelCapability::SpeechRecognition],
         }
+    }
 
+    /// Auto-completes missing capability information without rewriting explicit configuration.
+    ///
+    /// Important: we intentionally do not upgrade `category` or append inferred capabilities
+    /// based on the model name here. Runtime behavior should follow explicit configuration.
+    pub fn ensure_category_and_capabilities(&mut self) {
         if self.capabilities.is_empty() {
-            self.capabilities = self.infer_capabilities_from_model();
+            self.capabilities = self.default_capabilities_for_category();
         }
     }
 }

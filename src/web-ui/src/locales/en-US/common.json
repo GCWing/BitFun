@@ -165,6 +165,93 @@
       "showMore": "{{count}} more sessions",
       "showLess": "Show less"
     },
+    "scheduledJobs": {
+      "title": "Scheduled Jobs",
+      "open": "Open scheduled jobs",
+      "shortLabel": "Schedule",
+      "listTitle": "Jobs",
+      "assistantFallback": "Current assistant",
+      "loading": "Loading scheduled jobs...",
+      "never": "Not scheduled",
+      "nextRunLabel": "Next run",
+      "fields": {
+        "workspacePath": "Workspace path",
+        "session": "Session",
+        "name": "Job name",
+        "enabled": "Enabled",
+        "enabledHint": "Enable this job",
+        "scheduleKind": "Schedule type",
+        "at": "Run at",
+        "everyMs": "Interval (minutes)",
+        "anchorMs": "Anchor time (optional)",
+        "cronExpr": "Cron expression",
+        "timezone": "Timezone (optional)",
+        "prompt": "Prompt"
+      },
+      "placeholders": {
+        "workspacePath": "Enter workspace path",
+        "session": "Select or enter a session ID",
+        "name": "For example: Daily global news briefing",
+        "anchorMs": "Leave blank to use creation time",
+        "timezone": "For example: Asia/Shanghai",
+        "prompt": "Enter the message that should be sent when the schedule fires"
+      },
+      "scheduleKinds": {
+        "at": "One-time",
+        "every": "Interval",
+        "cron": "Cron"
+      },
+      "scheduleSummary": {
+        "every": "Every {{everyMinutes}} minutes",
+        "cron": "Cron: {{expr}}",
+        "cronWithTz": "Cron: {{expr}} · {{tz}}"
+      },
+      "status": {
+        "idle": "Idle",
+        "disabled": "Disabled",
+        "queued": "Queued",
+        "running": "Running",
+        "ok": "OK",
+        "error": "Error",
+        "cancelled": "Cancelled"
+      },
+      "actions": {
+        "refresh": "Refresh jobs",
+        "newJob": "New job",
+        "toggleEnabled": "Toggle enabled state",
+        "edit": "Edit job",
+        "delete": "Delete job",
+        "save": "Save changes",
+        "create": "Create job"
+      },
+      "editor": {
+        "editTitle": "Edit job",
+        "createTitle": "Create job"
+      },
+      "empty": {
+        "title": "No scheduled jobs yet",
+        "description": "Click the plus button to create your first scheduled job."
+      },
+      "deleteDialog": {
+        "title": "Delete job \"{{name}}\"?"
+      },
+      "messages": {
+        "loadFailed": "Failed to load scheduled jobs: {{error}}",
+        "saveFailed": "Failed to save scheduled job: {{error}}",
+        "updateFailed": "Failed to update scheduled job: {{error}}",
+        "deleteFailed": "Failed to delete scheduled job: {{error}}",
+        "deleteSuccess": "Scheduled job deleted",
+        "createSuccess": "Scheduled job created",
+        "updateSuccess": "Scheduled job updated",
+        "sessionRequired": "No session is available yet. Create a session for this assistant before adding scheduled jobs."
+      },
+      "validation": {
+        "nameRequired": "Please enter a job name",
+        "promptRequired": "Please enter the job prompt",
+        "workspaceRequired": "Please enter a workspace path",
+        "sessionRequired": "Please select a session"
+      }
+    },
     "workspaces": {
       "empty": "No opened workspaces yet",
       "emptyProjects": "No project workspaces",

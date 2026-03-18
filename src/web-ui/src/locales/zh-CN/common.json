@@ -165,6 +165,93 @@
       "showMore": "还有 {{count}} 个会话",
       "showLess": "收起"
     },
+    "scheduledJobs": {
+      "title": "定时任务",
+      "open": "打开定时任务",
+      "shortLabel": "定时任务",
+      "listTitle": "任务列表",
+      "assistantFallback": "当前助理",
+      "loading": "正在加载定时任务...",
+      "never": "未安排",
+      "nextRunLabel": "下次执行",
+      "fields": {
+        "workspacePath": "工作区路径",
+        "session": "会话",
+        "name": "任务名称",
+        "enabled": "启用状态",
+        "enabledHint": "启用该任务",
+        "scheduleKind": "调度方式",
+        "at": "执行时间",
+        "everyMs": "间隔（分钟）",
+        "anchorMs": "锚点时间（可选）",
+        "cronExpr": "Cron 表达式",
+        "timezone": "时区（可选）",
+        "prompt": "任务内容"
+      },
+      "placeholders": {
+        "workspacePath": "请输入工作区路径",
+        "session": "请选择或输入会话 ID",
+        "name": "例如：每日全球新闻简报",
+        "anchorMs": "留空则使用创建时刻",
+        "timezone": "例如：Asia/Shanghai",
+        "prompt": "请输入定时触发时发送给助理的内容"
+      },
+      "scheduleKinds": {
+        "at": "单次执行",
+        "every": "固定间隔",
+        "cron": "Cron"
+      },
+      "scheduleSummary": {
+        "every": "每 {{everyMinutes}} 分钟",
+        "cron": "Cron: {{expr}}",
+        "cronWithTz": "Cron: {{expr}} · {{tz}}"
+      },
+      "status": {
+        "idle": "待命",
+        "disabled": "已停用",
+        "queued": "已入队",
+        "running": "执行中",
+        "ok": "成功",
+        "error": "失败",
+        "cancelled": "已取消"
+      },
+      "actions": {
+        "refresh": "刷新任务列表",
+        "newJob": "新增任务",
+        "toggleEnabled": "切换启用状态",
+        "edit": "编辑任务",
+        "delete": "删除任务",
+        "save": "保存修改",
+        "create": "创建任务"
+      },
+      "editor": {
+        "editTitle": "编辑任务",
+        "createTitle": "新建任务"
+      },
+      "empty": {
+        "title": "还没有定时任务",
+        "description": "点击右上角的加号创建第一条定时任务。"
+      },
+      "deleteDialog": {
+        "title": "删除任务“{{name}}”？"
+      },
+      "messages": {
+        "loadFailed": "加载定时任务失败：{{error}}",
+        "saveFailed": "保存定时任务失败：{{error}}",
+        "updateFailed": "更新定时任务失败：{{error}}",
+        "deleteFailed": "删除定时任务失败：{{error}}",
+        "deleteSuccess": "定时任务已删除",
+        "createSuccess": "定时任务已创建",
+        "updateSuccess": "定时任务已更新",
+        "sessionRequired": "当前没有可用会话，请先为该助理创建一个会话后再添加定时任务。"
+      },
+      "validation": {
+        "nameRequired": "请输入任务名称",
+        "promptRequired": "请输入任务内容",
+        "workspaceRequired": "请输入工作区路径",
+        "sessionRequired": "请选择会话"
+      }
+    },
     "workspaces": {
       "empty": "暂无已打开工作区",
       "emptyProjects": "暂无普通工作区",

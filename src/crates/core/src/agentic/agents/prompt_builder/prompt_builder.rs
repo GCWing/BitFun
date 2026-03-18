@@ -349,12 +349,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         // Replace {AGENT_MEMORY}
         if result.contains(PLACEHOLDER_AGENT_MEMORY) {
             let workspace = Path::new(&self.context.workspace_path);
-            let agent_memory = match build_workspace_agent_memory_prompt(
-                workspace,
-                self.context.session_id.as_deref(),
-            )
-            .await
-            {
+            let agent_memory = match build_workspace_agent_memory_prompt(workspace).await {
                 Ok(prompt) => prompt,
                 Err(e) => {
                     warn!(

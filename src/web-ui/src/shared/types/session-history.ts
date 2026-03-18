@@ -110,6 +110,7 @@ export interface ToolCallData {
 export interface ToolResultData {
   result: any;
   success: boolean;
+  resultForAssistant?: string;
   error?: string;
   durationMs?: number;
 }

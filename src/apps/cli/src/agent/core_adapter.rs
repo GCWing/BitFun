@@ -279,6 +279,7 @@ impl Agent for CoreAgentAdapter {
                             tool_id,
                             tool_name,
                             result,
+                            result_for_assistant: _,
                             duration_ms,
                         } => {
                             let result_str = serde_json::to_string(&result)

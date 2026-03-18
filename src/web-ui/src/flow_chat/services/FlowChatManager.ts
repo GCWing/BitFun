@@ -190,7 +190,7 @@ export class FlowChatManager {
     agentType?: string,
     switchToMode?: string,
     options?: {
-      imageContexts?: import('@/infrastructure/api/service-api/ImageAnalysisAPI').ImageContextData[];
+      imageContexts?: import('@/infrastructure/api/service-api/ImageContextTypes').ImageContextData[];
       imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
     }
   ): Promise<void> {

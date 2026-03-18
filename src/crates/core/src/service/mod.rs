@@ -7,6 +7,7 @@ pub mod ai_memory; // AI memory point management
 pub mod ai_rules; // AI rules management
 pub(crate) mod bootstrap; // Workspace persona bootstrap helpers
 pub mod config; // Config management
+pub mod cron; // Scheduled jobs
 pub mod diff;
 pub mod filesystem; // FileSystem management
 pub mod git; // Git service
@@ -30,6 +31,9 @@ pub use ai_memory::{AIMemory, AIMemoryManager, MemoryType};
 pub use ai_rules::AIRulesService;
 pub use bootstrap::reset_workspace_persona_files_to_default;
 pub use config::{ConfigManager, ConfigProvider, ConfigService};
+pub use cron::{
+    get_global_cron_service, set_global_cron_service, CronEventSubscriber, CronService,
+};
 pub use diff::{
     DiffConfig, DiffHunk, DiffLine, DiffLineType, DiffOptions, DiffResult, DiffService,
 };

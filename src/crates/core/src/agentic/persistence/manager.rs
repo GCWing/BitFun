@@ -4,13 +4,18 @@
 //! message/compression persistence used by in-memory managers.
 
 use crate::agentic::core::{
-    CompressionState, Message, MessageContent, Session, SessionConfig, SessionState, SessionSummary,
+    strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
+    SessionState, SessionSummary,
 };
 use crate::infrastructure::PathManager;
-use crate::service::session::{DialogTurnData, SessionMetadata, SessionStatus};
+use crate::service::session::{
+    DialogTurnData, SessionMetadata, SessionStatus, SessionTranscriptExport,
+    SessionTranscriptExportOptions, SessionTranscriptIndexEntry, ToolItemData, TranscriptLineRange,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -21,8 +26,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
 
 const SESSION_SCHEMA_VERSION: u32 = 2;
+const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
 const JSON_WRITE_MAX_RETRIES: usize = 5;
 const JSON_WRITE_RETRY_BASE_DELAY_MS: u64 = 30;
+const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 
 static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static SESSION_INDEX_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
@@ -63,6 +70,97 @@ struct StoredSessionIndex {
     schema_version: u32,
     updated_at: u64,
     sessions: Vec<SessionMetadata>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredSessionTranscriptFile {
+    schema_version: u32,
+    #[serde(flatten)]
+    transcript: SessionTranscriptExport,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintPayload {
+    session_id: String,
+    tools: bool,
+    tool_inputs: bool,
+    thinking: bool,
+    turn_selectors: Option<Vec<String>>,
+    turns: Vec<TranscriptFingerprintTurn>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintTurn {
+    turn_id: String,
+    turn_index: usize,
+    status: String,
+    user: String,
+    assistant: Vec<TranscriptFingerprintTextBlock>,
+    tools: Vec<TranscriptFingerprintTool>,
+    thinking: Vec<TranscriptFingerprintTextBlock>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintTextBlock {
+    round_index: usize,
+    content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintTool {
+    tool_name: String,
+    tool_input: Option<String>,
+    result: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct TranscriptTextBlock {
+    round_index: usize,
+    content: String,
+}
+
+#[derive(Debug, Clone)]
+struct TranscriptToolBlock {
+    tool_name: String,
+    tool_input: Option<String>,
+    result: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+enum TranscriptRoundBlock {
+    Thinking(String),
+    Assistant(String),
+    Tool(TranscriptToolBlock),
+}
+
+#[derive(Debug, Clone)]
+struct TranscriptRoundData {
+    round_index: usize,
+    blocks: Vec<TranscriptRoundBlock>,
+}
+
+#[derive(Debug, Clone)]
+struct TranscriptSectionData {
+    turn_index: usize,
+    preview: String,
+    lines: Vec<String>,
+    turn_range: TranscriptLineRange,
+    user_range: TranscriptLineRange,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum TranscriptTurnSelector {
+    Index(isize),
+    Slice {
+        start: Option<isize>,
+        end: Option<isize>,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct ParsedTranscriptTurnSelector {
+    normalized: String,
+    selector: TranscriptTurnSelector,
 }
 
 pub struct PersistenceManager {
@@ -106,6 +204,11 @@ impl PersistenceManager {
             .join("snapshots")
     }
 
+    fn artifacts_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.session_dir(workspace_path, session_id)
+            .join("artifacts")
+    }
+
     fn turn_path(&self, workspace_path: &Path, session_id: &str, turn_index: usize) -> PathBuf {
         self.turns_dir(workspace_path, session_id)
             .join(format!("turn-{:04}.json", turn_index))
@@ -119,6 +222,16 @@ impl PersistenceManager {
     ) -> PathBuf {
         self.snapshots_dir(workspace_path, session_id)
             .join(format!("context-{:04}.json", turn_index))
+    }
+
+    fn transcript_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.artifacts_dir(workspace_path, session_id)
+            .join("transcript.txt")
+    }
+
+    fn transcript_meta_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.artifacts_dir(workspace_path, session_id)
+            .join("transcript.meta.json")
     }
 
     fn index_path(&self, workspace_path: &Path) -> PathBuf {
@@ -169,6 +282,18 @@ impl PersistenceManager {
         fs::create_dir_all(&dir)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to create snapshots directory: {}", e)))?;
+        Ok(dir)
+    }
+
+    async fn ensure_artifacts_dir(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<PathBuf> {
+        let dir = self.artifacts_dir(workspace_path, session_id);
+        fs::create_dir_all(&dir)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to create artifacts directory: {}", e)))?;
         Ok(dir)
     }
 
@@ -476,6 +601,523 @@ impl PersistenceManager {
             custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
             todos: existing.and_then(|value| value.todos.clone()),
             workspace_path: Some(workspace_path.to_string_lossy().to_string()),
+        }
+    }
+
+    fn turn_status_label(status: &crate::service::session::TurnStatus) -> &'static str {
+        match status {
+            crate::service::session::TurnStatus::InProgress => "inprogress",
+            crate::service::session::TurnStatus::Completed => "completed",
+            crate::service::session::TurnStatus::Error => "error",
+            crate::service::session::TurnStatus::Cancelled => "cancelled",
+        }
+    }
+
+    fn transcript_preview(content: &str) -> String {
+        let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.is_empty() {
+            return "(empty user message)".to_string();
+        }
+
+        let mut preview: String = normalized
+            .chars()
+            .take(SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT)
+            .collect();
+        if normalized.chars().count() > SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT {
+            preview.push_str("...");
+        }
+        preview
+    }
+
+    fn transcript_text_lines(content: &str) -> Vec<String> {
+        if content.is_empty() {
+            return vec!["(empty)".to_string()];
+        }
+
+        let lines = content
+            .lines()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+        if lines.is_empty() {
+            vec!["(empty)".to_string()]
+        } else {
+            lines
+        }
+    }
+
+    fn transcript_value_string(value: &serde_json::Value) -> String {
+        match value {
+            serde_json::Value::String(text) => text.clone(),
+            _ => serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
+        }
+    }
+
+    fn transcript_tool_input(item: &ToolItemData, tool_inputs: bool) -> Option<String> {
+        if !tool_inputs || item.tool_call.input.is_null() {
+            return None;
+        }
+
+        Some(Self::transcript_value_string(&item.tool_call.input))
+    }
+
+    fn transcript_tool_result(item: &ToolItemData) -> Option<String> {
+        item.tool_result.as_ref().and_then(|result| {
+            result
+                .result_for_assistant
+                .as_ref()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    if result.result.is_null() {
+                        None
+                    } else {
+                        Some(Self::transcript_value_string(&result.result))
+                    }
+                })
+        })
+    }
+
+    fn transcript_display_user_content(turn: &DialogTurnData) -> String {
+        turn.user_message
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("original_text"))
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| strip_prompt_markup(&turn.user_message.content))
+    }
+
+    fn transcript_assistant_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
+        turn.model_rounds
+            .iter()
+            .filter_map(|round| {
+                let content = round
+                    .text_items
+                    .iter()
+                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
+                    .map(|item| item.content.trim())
+                    .filter(|value| !value.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                if content.is_empty() {
+                    None
+                } else {
+                    Some(TranscriptTextBlock {
+                        round_index: round.round_index,
+                        content,
+                    })
+                }
+            })
+            .collect()
+    }
+
+    fn transcript_thinking_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
+        turn.model_rounds
+            .iter()
+            .filter_map(|round| {
+                let content = round
+                    .thinking_items
+                    .iter()
+                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
+                    .map(|item| item.content.trim())
+                    .filter(|value| !value.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                if content.is_empty() {
+                    None
+                } else {
+                    Some(TranscriptTextBlock {
+                        round_index: round.round_index,
+                        content,
+                    })
+                }
+            })
+            .collect()
+    }
+
+    fn transcript_tool_blocks(
+        turn: &DialogTurnData,
+        tool_inputs: bool,
+    ) -> Vec<TranscriptToolBlock> {
+        turn.model_rounds
+            .iter()
+            .flat_map(|round| round.tool_items.iter())
+            .filter(|item| !item.is_subagent_item.unwrap_or(false))
+            .map(|item| TranscriptToolBlock {
+                tool_name: item.tool_name.clone(),
+                tool_input: Self::transcript_tool_input(item, tool_inputs),
+                result: Self::transcript_tool_result(item),
+            })
+            .collect()
+    }
+
+    fn transcript_round_blocks(
+        turn: &DialogTurnData,
+        options: &SessionTranscriptExportOptions,
+    ) -> Vec<TranscriptRoundData> {
+        turn.model_rounds
+            .iter()
+            .filter_map(|round| {
+                let thinking_content = if options.thinking {
+                    round
+                        .thinking_items
+                        .iter()
+                        .filter(|item| !item.is_subagent_item.unwrap_or(false))
+                        .map(|item| item.content.trim())
+                        .filter(|value| !value.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n\n")
+                } else {
+                    String::new()
+                };
+
+                let assistant_content = round
+                    .text_items
+                    .iter()
+                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
+                    .map(|item| item.content.trim())
+                    .filter(|value| !value.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+
+                let tool_blocks = if options.tools {
+                    round
+                        .tool_items
+                        .iter()
+                        .filter(|item| !item.is_subagent_item.unwrap_or(false))
+                        .map(|item| TranscriptToolBlock {
+                            tool_name: item.tool_name.clone(),
+                            tool_input: Self::transcript_tool_input(item, options.tool_inputs),
+                            result: Self::transcript_tool_result(item),
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+
+                if thinking_content.is_empty()
+                    && assistant_content.is_empty()
+                    && tool_blocks.is_empty()
+                {
+                    return None;
+                }
+
+                let mut blocks = Vec::new();
+                if !thinking_content.is_empty() {
+                    blocks.push(TranscriptRoundBlock::Thinking(thinking_content));
+                }
+                if !assistant_content.is_empty() {
+                    blocks.push(TranscriptRoundBlock::Assistant(assistant_content));
+                }
+                for tool in tool_blocks {
+                    blocks.push(TranscriptRoundBlock::Tool(tool));
+                }
+
+                Some(TranscriptRoundData {
+                    round_index: round.round_index,
+                    blocks,
+                })
+            })
+            .collect()
+    }
+
+    fn transcript_fingerprint(
+        session_id: &str,
+        turns: &[DialogTurnData],
+        options: &SessionTranscriptExportOptions,
+    ) -> BitFunResult<String> {
+        let payload = TranscriptFingerprintPayload {
+            session_id: session_id.to_string(),
+            tools: options.tools,
+            tool_inputs: options.tool_inputs,
+            thinking: options.thinking,
+            turn_selectors: options.turns.clone(),
+            turns: turns
+                .iter()
+                .map(|turn| TranscriptFingerprintTurn {
+                    turn_id: turn.turn_id.clone(),
+                    turn_index: turn.turn_index,
+                    status: Self::turn_status_label(&turn.status).to_string(),
+                    user: Self::transcript_display_user_content(turn),
+                    assistant: Self::transcript_assistant_blocks(turn)
+                        .into_iter()
+                        .map(|block| TranscriptFingerprintTextBlock {
+                            round_index: block.round_index,
+                            content: block.content,
+                        })
+                        .collect(),
+                    tools: if options.tools {
+                        Self::transcript_tool_blocks(turn, options.tool_inputs)
+                            .into_iter()
+                            .map(|tool| TranscriptFingerprintTool {
+                                tool_name: tool.tool_name,
+                                tool_input: tool.tool_input,
+                                result: tool.result,
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
+                    thinking: if options.thinking {
+                        Self::transcript_thinking_blocks(turn)
+                            .into_iter()
+                            .map(|block| TranscriptFingerprintTextBlock {
+                                round_index: block.round_index,
+                                content: block.content,
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
+                })
+                .collect(),
+        };
+
+        let bytes = serde_json::to_vec(&payload).map_err(|e| {
+            BitFunError::serialization(format!("Failed to serialize transcript fingerprint: {}", e))
+        })?;
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
+    fn push_transcript_block(
+        lines: &mut Vec<String>,
+        label: &str,
+        body_lines: Vec<String>,
+    ) -> TranscriptLineRange {
+        let start_line = lines.len() + 1;
+        lines.push(format!("[{}]", label));
+        lines.extend(body_lines);
+        lines.push(format!("[/{}]", label));
+        TranscriptLineRange {
+            start_line,
+            end_line: lines.len(),
+        }
+    }
+
+    fn build_transcript_section(
+        turn: &DialogTurnData,
+        options: &SessionTranscriptExportOptions,
+    ) -> TranscriptSectionData {
+        let user_content = Self::transcript_display_user_content(turn);
+        let round_blocks = Self::transcript_round_blocks(turn, options);
+
+        let mut lines = Vec::new();
+        lines.push(format!("## Turn {}", turn.turn_index));
+        lines.push(String::new());
+
+        let user_range = Self::push_transcript_block(
+            &mut lines,
+            "user",
+            Self::transcript_text_lines(&user_content),
+        );
+
+        if !round_blocks.is_empty() {
+            lines.push(String::new());
+            for (round_index, round) in round_blocks.iter().enumerate() {
+                lines.push(format!("[assistant_round {}]", round.round_index));
+                for (block_index, block) in round.blocks.iter().enumerate() {
+                    match block {
+                        TranscriptRoundBlock::Thinking(content) => {
+                            lines.push("[thinking]".to_string());
+                            lines.extend(Self::transcript_text_lines(content));
+                            lines.push("[/thinking]".to_string());
+                        }
+                        TranscriptRoundBlock::Assistant(content) => {
+                            lines.push("[text]".to_string());
+                            lines.extend(Self::transcript_text_lines(content));
+                            lines.push("[/text]".to_string());
+                        }
+                        TranscriptRoundBlock::Tool(tool) => {
+                            lines.push("[tool]".to_string());
+                            lines.push(format!("name: {}", tool.tool_name));
+                            if let Some(tool_input) = tool.tool_input.as_ref() {
+                                lines.push("input:".to_string());
+                                lines.extend(Self::transcript_text_lines(tool_input));
+                            }
+                            if let Some(result) = tool.result.as_ref() {
+                                lines.push("result:".to_string());
+                                lines.extend(Self::transcript_text_lines(result));
+                            }
+                            lines.push("[/tool]".to_string());
+                        }
+                    }
+
+                    if block_index + 1 < round.blocks.len() {
+                        lines.push(String::new());
+                    }
+                }
+                lines.push(format!("[/assistant_round {}]", round.round_index));
+                if round_index + 1 < round_blocks.len() {
+                    lines.push(String::new());
+                }
+            }
+        }
+
+        TranscriptSectionData {
+            turn_index: turn.turn_index,
+            preview: Self::transcript_preview(&user_content),
+            turn_range: TranscriptLineRange {
+                start_line: 1,
+                end_line: lines.len(),
+            },
+            user_range,
+            lines,
+        }
+    }
+
+    fn offset_range(range: &TranscriptLineRange, offset: usize) -> TranscriptLineRange {
+        TranscriptLineRange {
+            start_line: range.start_line + offset,
+            end_line: range.end_line + offset,
+        }
+    }
+
+    fn format_range(range: &TranscriptLineRange) -> String {
+        format!("{}-{}", range.start_line, range.end_line)
+    }
+
+    fn parse_transcript_turn_selectors(
+        selectors: &[String],
+    ) -> BitFunResult<Vec<ParsedTranscriptTurnSelector>> {
+        if selectors.is_empty() {
+            return Err(BitFunError::Validation(
+                "turns cannot be an empty array".to_string(),
+            ));
+        }
+
+        selectors
+            .iter()
+            .map(|selector| Self::parse_transcript_turn_selector(selector))
+            .collect()
+    }
+
+    fn parse_transcript_turn_selector(
+        selector: &str,
+    ) -> BitFunResult<ParsedTranscriptTurnSelector> {
+        let normalized = selector.trim();
+        if normalized.is_empty() {
+            return Err(BitFunError::Validation(
+                "turns cannot contain empty selectors".to_string(),
+            ));
+        }
+
+        if normalized.matches(':').count() > 1 {
+            return Err(BitFunError::Validation(format!(
+                "Invalid turn selector '{}'. Use forms like ':20', '-20:', '10:30', or '15'.",
+                normalized
+            )));
+        }
+
+        let selector = if let Some((start, end)) = normalized.split_once(':') {
+            TranscriptTurnSelector::Slice {
+                start: if start.is_empty() {
+                    None
+                } else {
+                    Some(Self::parse_transcript_turn_value(start, normalized)?)
+                },
+                end: if end.is_empty() {
+                    None
+                } else {
+                    Some(Self::parse_transcript_turn_value(end, normalized)?)
+                },
+            }
+        } else {
+            TranscriptTurnSelector::Index(Self::parse_transcript_turn_value(
+                normalized, normalized,
+            )?)
+        };
+
+        Ok(ParsedTranscriptTurnSelector {
+            normalized: normalized.to_string(),
+            selector,
+        })
+    }
+
+    fn parse_transcript_turn_value(value: &str, selector: &str) -> BitFunResult<isize> {
+        value.parse::<isize>().map_err(|_| {
+            BitFunError::Validation(format!(
+                "Invalid turn selector '{}'. Use forms like ':20', '-20:', '10:30', or '15'.",
+                selector
+            ))
+        })
+    }
+
+    fn transcript_normalize_slice_bound(
+        total: usize,
+        bound: Option<isize>,
+        default: usize,
+    ) -> usize {
+        let Some(bound) = bound else {
+            return default;
+        };
+
+        let total = total as isize;
+        let normalized = if bound < 0 {
+            total.saturating_add(bound)
+        } else {
+            bound
+        };
+        normalized.clamp(0, total) as usize
+    }
+
+    fn transcript_normalize_index(total: usize, index: isize) -> Option<usize> {
+        let total = total as isize;
+        let normalized = if index < 0 {
+            total.saturating_add(index)
+        } else {
+            index
+        };
+
+        if normalized < 0 || normalized >= total {
+            None
+        } else {
+            Some(normalized as usize)
+        }
+    }
+
+    fn transcript_select_turn_indices(
+        total: usize,
+        selectors: &[ParsedTranscriptTurnSelector],
+    ) -> Vec<usize> {
+        let mut selected = vec![false; total];
+
+        for selector in selectors {
+            match selector.selector {
+                TranscriptTurnSelector::Index(index) => {
+                    if let Some(index) = Self::transcript_normalize_index(total, index) {
+                        selected[index] = true;
+                    }
+                }
+                TranscriptTurnSelector::Slice { start, end } => {
+                    let start = Self::transcript_normalize_slice_bound(total, start, 0);
+                    let end = Self::transcript_normalize_slice_bound(total, end, total);
+                    if start < end {
+                        selected[start..end].fill(true);
+                    }
+                }
+            }
+        }
+
+        selected
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, is_selected)| is_selected.then_some(index))
+            .collect()
+    }
+
+    fn transcript_omitted_turns_label(
+        turns: &[DialogTurnData],
+        start: usize,
+        end: usize,
+    ) -> String {
+        let start_turn = turns[start].turn_index;
+        let end_turn = turns[end].turn_index;
+        if start_turn == end_turn {
+            format!("(omitted turn {})", start_turn)
+        } else {
+            format!("(omitted turns {}-{})", start_turn, end_turn)
         }
     }
 
@@ -1105,6 +1747,198 @@ impl PersistenceManager {
         Ok(turns[start..].to_vec())
     }
 
+    pub async fn export_session_transcript(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        options: &SessionTranscriptExportOptions,
+    ) -> BitFunResult<SessionTranscriptExport> {
+        if self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .is_none()
+        {
+            return Err(BitFunError::NotFound(format!(
+                "Session metadata not found: {}",
+                session_id
+            )));
+        }
+
+        let transcript_path = self.transcript_path(workspace_path, session_id);
+        let transcript_meta_path = self.transcript_meta_path(workspace_path, session_id);
+
+        let parsed_turn_selectors = options
+            .turns
+            .as_ref()
+            .map(|selectors| Self::parse_transcript_turn_selectors(selectors))
+            .transpose()?;
+        let normalized_options = SessionTranscriptExportOptions {
+            tools: options.tools,
+            tool_inputs: options.tool_inputs,
+            thinking: options.thinking,
+            turns: parsed_turn_selectors.as_ref().map(|selectors| {
+                selectors
+                    .iter()
+                    .map(|selector| selector.normalized.clone())
+                    .collect()
+            }),
+        };
+
+        let all_turns = self.load_session_turns(workspace_path, session_id).await?;
+        let selected_indices = parsed_turn_selectors
+            .as_ref()
+            .map(|selectors| Self::transcript_select_turn_indices(all_turns.len(), selectors))
+            .unwrap_or_else(|| (0..all_turns.len()).collect::<Vec<_>>());
+        let turns = selected_indices
+            .iter()
+            .map(|&index| all_turns[index].clone())
+            .collect::<Vec<_>>();
+
+        let source_fingerprint =
+            Self::transcript_fingerprint(session_id, &turns, &normalized_options)?;
+        if transcript_path.exists() {
+            if let Some(stored) = self
+                .read_json_optional::<StoredSessionTranscriptFile>(&transcript_meta_path)
+                .await?
+            {
+                if stored.transcript.source_fingerprint == source_fingerprint
+                    && stored.transcript.index_range.start_line > 0
+                    && stored.transcript.index_range.end_line > 0
+                {
+                    return Ok(stored.transcript);
+                }
+            }
+        }
+
+        self.ensure_artifacts_dir(workspace_path, session_id)
+            .await?;
+
+        let generated_at = Self::system_time_to_unix_ms(SystemTime::now());
+        let sections = selected_indices
+            .iter()
+            .map(|&index| {
+                (
+                    index,
+                    Self::build_transcript_section(&all_turns[index], &normalized_options),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut lines = vec!["## Index".to_string()];
+
+        let mut index = Vec::with_capacity(sections.len());
+        if sections.is_empty() {
+            lines.push(if all_turns.is_empty() {
+                "(no persisted turns)".to_string()
+            } else {
+                "(no matching turns)".to_string()
+            });
+        } else {
+            let index_offset = lines.len() + sections.len() + 1;
+            let mut body_lines = Vec::new();
+
+            for (position, (source_index, section)) in sections.iter().enumerate() {
+                let omitted_range = if position == 0 {
+                    (*source_index > 0).then(|| (0, *source_index - 1))
+                } else {
+                    let previous_index = sections[position - 1].0;
+                    (*source_index > previous_index + 1)
+                        .then(|| (previous_index + 1, *source_index - 1))
+                };
+
+                if let Some((start, end)) = omitted_range {
+                    if !body_lines.is_empty() {
+                        body_lines.push(String::new());
+                    }
+                    body_lines.push(Self::transcript_omitted_turns_label(&all_turns, start, end));
+                    body_lines.push(String::new());
+                } else if !body_lines.is_empty() {
+                    body_lines.push(String::new());
+                }
+
+                let section_offset = index_offset + body_lines.len();
+                let turn_range = Self::offset_range(&section.turn_range, section_offset);
+                let user_range = Self::offset_range(&section.user_range, section_offset);
+
+                let index_line = format!(
+                    "- turn={} range={} preview=\"{}\"",
+                    section.turn_index,
+                    Self::format_range(&turn_range),
+                    section.preview.replace('"', "'")
+                );
+                lines.push(index_line);
+
+                index.push(SessionTranscriptIndexEntry {
+                    turn_index: section.turn_index,
+                    preview: section.preview.clone(),
+                    turn_range,
+                    user_range,
+                });
+
+                body_lines.extend(section.lines.iter().cloned());
+            }
+
+            if let Some((last_index, _)) = sections.last() {
+                if *last_index + 1 < all_turns.len() {
+                    body_lines.push(String::new());
+                    body_lines.push(Self::transcript_omitted_turns_label(
+                        &all_turns,
+                        *last_index + 1,
+                        all_turns.len() - 1,
+                    ));
+                }
+            }
+
+            lines.push(String::new());
+            lines.extend(body_lines);
+        }
+
+        let index_range = TranscriptLineRange {
+            start_line: 1,
+            end_line: lines
+                .iter()
+                .position(|line| line.is_empty())
+                .unwrap_or(lines.len()),
+        };
+
+        let transcript_content = lines.join("\n");
+        fs::write(&transcript_path, transcript_content)
+            .await
+            .map_err(|e| {
+                BitFunError::io(format!(
+                    "Failed to write transcript file {}: {}",
+                    transcript_path.display(),
+                    e
+                ))
+            })?;
+
+        let transcript = SessionTranscriptExport {
+            session_id: session_id.to_string(),
+            transcript_path: transcript_path.to_string_lossy().to_string(),
+            generated_at,
+            source_fingerprint,
+            includes_tools: normalized_options.tools,
+            includes_tool_inputs: normalized_options.tool_inputs,
+            includes_thinking: normalized_options.thinking,
+            turns: normalized_options.turns,
+            turn_count: turns.len(),
+            line_count: lines.len(),
+            index_range,
+            index,
+        };
+
+        self.write_json_atomic(
+            &transcript_meta_path,
+            &StoredSessionTranscriptFile {
+                schema_version: TRANSCRIPT_SCHEMA_VERSION,
+                transcript: transcript.clone(),
+            },
+        )
+        .await?;
+
+        Ok(transcript)
+    }
+
     pub async fn delete_turns_after(
         &self,
         workspace_path: &Path,
@@ -1425,5 +2259,129 @@ impl PersistenceManager {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PersistenceManager;
+    use crate::infrastructure::PathManager;
+    use crate::service::session::{
+        DialogTurnData, SessionMetadata, SessionTranscriptExportOptions, UserMessageData,
+    };
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("bitfun-session-transcript-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn transcript_turn_selectors_support_head_and_tail_ranges() {
+        let selectors = PersistenceManager::parse_transcript_turn_selectors(&[
+            ":1".to_string(),
+            "-3:".to_string(),
+        ])
+        .expect("selectors should parse");
+
+        let selected = PersistenceManager::transcript_select_turn_indices(8, &selectors);
+
+        assert_eq!(selected, vec![0, 5, 6, 7]);
+    }
+
+    #[test]
+    fn transcript_turn_selectors_deduplicate_and_sort_results() {
+        let selectors = PersistenceManager::parse_transcript_turn_selectors(&[
+            "4".to_string(),
+            "2:5".to_string(),
+            "-1".to_string(),
+        ])
+        .expect("selectors should parse");
+
+        let selected = PersistenceManager::transcript_select_turn_indices(6, &selectors);
+
+        assert_eq!(selected, vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn transcript_turn_selectors_reject_invalid_syntax() {
+        let error = PersistenceManager::parse_transcript_turn_selectors(&["1:2:3".to_string()])
+            .expect_err("selector should be rejected");
+
+        assert!(
+            error.to_string().contains("Invalid turn selector"),
+            "unexpected error: {}",
+            error
+        );
+    }
+
+    #[tokio::test]
+    async fn export_session_transcript_handles_first_selected_turn_without_panicking() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Transcript test".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        let user_message = UserMessageData {
+            id: "user-1".to_string(),
+            content: "hello transcript".to_string(),
+            timestamp: 0,
+            metadata: None,
+        };
+        let mut turn =
+            DialogTurnData::new("turn-1".to_string(), 0, session_id.clone(), user_message);
+        turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let export = manager
+            .export_session_transcript(
+                workspace.path(),
+                &session_id,
+                &SessionTranscriptExportOptions::default(),
+            )
+            .await
+            .expect("transcript export should succeed");
+
+        assert_eq!(export.turn_count, 1);
+        assert_eq!(export.index.len(), 1);
+
+        let transcript = std::fs::read_to_string(&export.transcript_path)
+            .expect("transcript file should be readable");
+        assert!(transcript.contains("## Turn 0"));
+        assert!(transcript.contains("hello transcript"));
     }
 }

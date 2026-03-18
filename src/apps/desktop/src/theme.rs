@@ -242,7 +242,8 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
         .visible(false)
         .background_color(bg_color)
         .accept_first_mouse(true)
-        .initialization_script(&init_script);
+        .initialization_script(&init_script)
+        .disable_drag_drop_handler();
 
     #[cfg(target_os = "macos")]
     {
@@ -251,16 +252,6 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .traffic_light_position(tauri::LogicalPosition::new(12.0, 15.0))
             .hidden_title(true);
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        builder = builder.decorations(false);
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        builder = builder.disable_drag_drop_handler();
     }
 
     match builder.build() {

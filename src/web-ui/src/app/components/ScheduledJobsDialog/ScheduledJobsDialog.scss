@@ -1,0 +1,330 @@
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-scheduled-jobs-dialog {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-height: 620px;
+  max-height: 78vh;
+  background: var(--color-bg-primary);
+
+  &__sidebar {
+    border-right: 1px solid var(--color-border-default);
+    background: color-mix(in srgb, var(--element-bg-soft) 78%, transparent);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  &__sidebar-header,
+  &__editor-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--color-border-default);
+  }
+
+  &__sidebar-header {
+    align-items: flex-start;
+  }
+
+  &__editor-header {
+    align-items: center;
+  }
+
+  &__sidebar-title,
+  &__editor-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
+  &__sidebar-subtitle,
+  &__editor-subtitle,
+  &__title-target {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+
+  &__title-target {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
+  }
+
+  &__sidebar-actions,
+  &__editor-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__job-list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__job-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    cursor: pointer;
+    transition: border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard,
+      background $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
+
+    &:hover {
+      border-color: color-mix(
+        in srgb,
+        var(--color-primary, var(--color-accent-500)) 24%,
+        var(--color-border-default)
+      );
+      background: color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
+      transform: translateY(-1px);
+    }
+
+    &.is-selected {
+      border-color: color-mix(
+        in srgb,
+        var(--color-primary, var(--color-accent-500)) 52%,
+        var(--color-border-default)
+      );
+      background: color-mix(
+        in srgb,
+        var(--color-primary, var(--color-accent-500)) 18%,
+        var(--element-bg-base)
+      );
+      box-shadow:
+        inset 3px 0 0 var(--color-primary, var(--color-accent-500)),
+        0 0 0 1px color-mix(
+          in srgb,
+          var(--color-primary, var(--color-accent-500)) 18%,
+          transparent
+        );
+    }
+
+    &.is-selected .bitfun-scheduled-jobs-dialog__job-name {
+      color: color-mix(
+        in srgb,
+        var(--color-primary, var(--color-accent-500)) 65%,
+        var(--color-text-primary)
+      );
+    }
+  }
+
+  &__job-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__job-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  &__job-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__job-meta {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  &__job-error {
+    font-size: 12px;
+    color: var(--color-danger-500);
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  &__job-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  &__status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--element-bg-medium) 85%, transparent);
+    white-space: nowrap;
+
+    &.is-ok,
+    &.is-running,
+    &.is-queued {
+      color: var(--color-success-500);
+      background: color-mix(in srgb, var(--color-success-500) 12%, transparent);
+    }
+
+    &.is-error,
+    &.is-cancelled {
+      color: var(--color-danger-500);
+      background: color-mix(in srgb, var(--color-danger-500) 10%, transparent);
+    }
+  }
+
+  &__icon-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border-default);
+    border-radius: 8px;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.is-danger:hover:not(:disabled) {
+      color: var(--color-danger-500);
+      border-color: color-mix(in srgb, var(--color-danger-500) 45%, transparent);
+    }
+  }
+
+  &__empty {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+  }
+
+  &__empty-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
+  &__empty-text,
+  &__warning {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  &__editor {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  &__target-grid,
+  &__form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    padding: 16px 18px 0;
+  }
+
+  &__assistant-banner {
+    margin: 16px 18px 0;
+    padding: 14px 16px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 24%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  }
+
+  &__assistant-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+
+  &__assistant-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  &__prompt {
+    padding: 16px 18px 18px;
+  }
+
+  &__warning {
+    padding: 0 18px;
+    color: var(--color-danger-500);
+  }
+}
+
+@media (max-width: 1120px) {
+  .bitfun-scheduled-jobs-dialog {
+    grid-template-columns: 1fr;
+    max-height: none;
+
+    &__sidebar {
+      border-right: none;
+      border-bottom: 1px solid var(--color-border-default);
+      min-height: 240px;
+      max-height: 320px;
+    }
+
+    &__target-grid,
+    &__form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}

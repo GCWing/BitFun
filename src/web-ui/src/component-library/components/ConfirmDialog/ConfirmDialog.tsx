@@ -64,6 +64,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   previewMaxHeight = 200,
 }) => {
   const { t } = useI18n('components');
+  const hasMessage = message !== null && message !== undefined && message !== '';
   
   // Resolve i18n default values
   const resolvedConfirmText = confirmText ?? t('dialog.confirm.ok');
@@ -102,8 +103,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
         
         <div className="confirm-dialog__content">
-          <h3 className="confirm-dialog__title">{title}</h3>
-          <div className="confirm-dialog__message">{message}</div>
+          <h3 className={`confirm-dialog__title${hasMessage ? '' : ' confirm-dialog__title--compact'}`}>{title}</h3>
+          {hasMessage ? (
+            <div className="confirm-dialog__message">{message}</div>
+          ) : null}
           
           {preview && (
             <div 

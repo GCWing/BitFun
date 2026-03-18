@@ -66,8 +66,9 @@ pub trait Agent: Send + Sync + 'static {
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
         let prompt_components = PromptBuilder::new(context.clone());
         let template_name = self.prompt_template_name(context.model_name.as_deref());
-        let system_prompt_template = get_embedded_prompt(template_name)
-            .ok_or_else(|| BitFunError::Agent(format!("{} not found in embedded files", template_name)))?;
+        let system_prompt_template = get_embedded_prompt(template_name).ok_or_else(|| {
+            BitFunError::Agent(format!("{} not found in embedded files", template_name))
+        })?;
 
         let prompt = prompt_components
             .build_prompt_from_template(system_prompt_template)

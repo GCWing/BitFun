@@ -269,6 +269,7 @@ function handleCompleted(
     toolResult: {
       result: toolEvent.result,
       success: true,
+      resultForAssistant: toolEvent.result_for_assistant,
       duration_ms: toolEvent.duration_ms
     },
     status: 'completed',

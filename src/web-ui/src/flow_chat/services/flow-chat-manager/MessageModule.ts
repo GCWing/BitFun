@@ -15,7 +15,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { ensureBackendSession, retryCreateBackendSession } from './SessionModule';
 import { cleanupSessionBuffers } from './TextChunkModule';
-import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageAnalysisAPI';
+import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 
 const log = createLogger('MessageModule');
 
@@ -130,7 +130,9 @@ export async function sendMessage(
         images: options?.imageDisplayData,
       },
       modelRounds: [],
-      status: hasImages ? 'image_analyzing' : 'pending',
+      // Images are handled by the agent/tooling (e.g. `view_image`) or sent directly to multimodal
+      // primary models. We don't run a separate frontend "image pre-analysis" phase here.
+      status: 'pending',
       startTime: Date.now()
     };
 

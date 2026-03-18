@@ -42,6 +42,7 @@ export interface FlowToolItem extends FlowItem {
   toolResult?: {
     result: any;
     success: boolean;
+    resultForAssistant?: string;
     error?: string;
     duration_ms?: number;
   };

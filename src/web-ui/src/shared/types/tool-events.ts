@@ -36,6 +36,7 @@ export interface ToolStartEvent extends BaseToolEvent {
 export interface ToolCompleteEvent extends BaseToolEvent {
   type: 'tool_complete';
   result: any;
+  result_for_assistant?: string;
   duration_ms: number;
   success: boolean;
   error?: string;

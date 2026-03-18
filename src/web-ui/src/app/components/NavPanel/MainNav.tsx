@@ -13,7 +13,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, FolderOpen, FolderPlus, History, Check, Bot } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, Bot, Clock3 } from 'lucide-react';
 import { Badge, Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
 import { useSceneManager } from '../../hooks/useSceneManager';
@@ -28,6 +28,7 @@ import NavItem from './components/NavItem';
 import SectionHeader from './components/SectionHeader';
 import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
+import ScheduledJobsDialog from '../ScheduledJobsDialog/ScheduledJobsDialog';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
@@ -92,6 +93,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const openNavScene = useNavSceneStore(s => s.openNavScene);
   const activeTabId = useSceneStore(s => s.activeTabId);
   const setMyAgentView = useMyAgentStore(s => s.setActiveView);
+  const selectedAssistantWorkspaceId = useMyAgentStore((s) => s.selectedAssistantWorkspaceId);
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
   const { t } = useI18n('common');
   const {
@@ -211,12 +213,59 @@ const MainNav: React.FC<MainNavProps> = ({
     () => assistantWorkspacesList.find(workspace => !workspace.assistantId) ?? assistantWorkspacesList[0] ?? null,
     [assistantWorkspacesList]
   );
+  const selectedAssistantWorkspace = useMemo(() => {
+    if (!selectedAssistantWorkspaceId) {
+      return null;
+    }
+
+    return assistantWorkspacesList.find(
+      (workspace) => workspace.id === selectedAssistantWorkspaceId
+    ) ?? null;
+  }, [assistantWorkspacesList, selectedAssistantWorkspaceId]);
+  const resolvedAssistantWorkspace = useMemo(() => {
+    if (isAssistantWorkspaceActive && currentWorkspace?.workspaceKind === WorkspaceKind.Assistant) {
+      return currentWorkspace;
+    }
+
+    if (selectedAssistantWorkspace) {
+      return selectedAssistantWorkspace;
+    }
+
+    return defaultAssistantWorkspace;
+  }, [
+    currentWorkspace,
+    defaultAssistantWorkspace,
+    isAssistantWorkspaceActive,
+    selectedAssistantWorkspace,
+  ]);
+  const resolvedAssistantDisplayName = useMemo(() => {
+    if (!resolvedAssistantWorkspace) {
+      return '';
+    }
+
+    return resolvedAssistantWorkspace.identity?.name?.trim() || resolvedAssistantWorkspace.name;
+  }, [resolvedAssistantWorkspace]);
+  const resolvedAssistantSessionId = useMemo(() => {
+    const workspacePath = resolvedAssistantWorkspace?.rootPath;
+    if (!workspacePath) {
+      return undefined;
+    }
+
+    const workspaceSessions = Array.from(flowChatStore.getState().sessions.values())
+      .filter(session =>
+        (session.workspacePath || workspacePath) === workspacePath && !session.parentSessionId
+      )
+      .sort(compareSessionsForDisplay);
+
+    return workspaceSessions[0]?.sessionId;
+  }, [resolvedAssistantWorkspace]);
 
   const [defaultSessionMode, setDefaultSessionMode] = useState<'code' | 'cowork'>('code');
   const [navDisplayMode, setNavDisplayMode] = useState<NavDisplayMode>(getInitialNavDisplayMode);
   const [isModeSwitching, setIsModeSwitching] = useState(false);
   const [modeLogoSrc, setModeLogoSrc] = useState('/panda_1.png');
   const [modeLogoHoverSrc, setModeLogoHoverSrc] = useState('/panda_2.png');
+  const [isScheduledJobsDialogOpen, setIsScheduledJobsDialogOpen] = useState(false);
   const modeSwitchTimerRef = useRef<number | null>(null);
   const modeSwitchSwapTimerRef = useRef<number | null>(null);
 
@@ -413,6 +462,13 @@ const MainNav: React.FC<MainNavProps> = ({
     switchLeftPanelTab,
   ]);
 
+  const handleOpenScheduledJobsDialog = useCallback(() => {
+    if (resolvedAssistantWorkspace?.id) {
+      setSelectedAssistantWorkspaceId(resolvedAssistantWorkspace.id);
+    }
+    setIsScheduledJobsDialogOpen(true);
+  }, [resolvedAssistantWorkspace, setSelectedAssistantWorkspaceId]);
+
   const handleOpenProModeSession = useCallback(async () => {
     // 找到项目工作区（非 assistant 类型）
     const projectWorkspaces = openedWorkspacesList.filter(
@@ -593,6 +649,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const personaTooltip = t('nav.items.persona');
   const createSessionTooltip = t('nav.sessions.newClawSession');
   const createAssistantTooltip = t('nav.workspaces.actions.newAssistant');
+  const scheduledJobsTooltip = t('nav.scheduledJobs.open');
   const openProjectTooltip = t('header.openProject');
   const createCodeTooltip = t('nav.sessions.newCodeSession');
   const createCoworkTooltip = t('nav.sessions.newCoworkSession');
@@ -664,17 +721,31 @@ const MainNav: React.FC<MainNavProps> = ({
           </button>
         <div className="bitfun-nav-panel__workspace-create-group">
           {isAssistantNavMode ? (
-            <Tooltip content={createSessionTooltip} placement="right" followCursor>
-              <button
-                type="button"
-                className="bitfun-nav-panel__workspace-create-main bitfun-nav-panel__workspace-create-main--single"
-                onClick={() => { void handleCreateAssistantSession(); }}
-                aria-label={createSessionTooltip}
-              >
-                <Plus size={14} />
-                <span>{t('nav.sessions.newSession')}</span>
-              </button>
-            </Tooltip>
+            <>
+              <Tooltip content={createSessionTooltip} placement="right" followCursor>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-create-main bitfun-nav-panel__workspace-create-main--split-left"
+                  onClick={() => { void handleCreateAssistantSession(); }}
+                  aria-label={createSessionTooltip}
+                >
+                  <Plus size={14} />
+                  <span>{t('nav.sessions.newSession')}</span>
+                </button>
+              </Tooltip>
+              <Tooltip content={scheduledJobsTooltip} placement="right" followCursor>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-create-main bitfun-nav-panel__workspace-create-main--split-right"
+                  onClick={handleOpenScheduledJobsDialog}
+                  aria-label={scheduledJobsTooltip}
+                  disabled={!resolvedAssistantWorkspace}
+                >
+                  <Clock3 size={14} />
+                  <span>{t('nav.scheduledJobs.shortLabel')}</span>
+                </button>
+              </Tooltip>
+            </>
           ) : (
             <>
               <Tooltip content={createCodeTooltip} placement="right" followCursor>
@@ -830,6 +901,15 @@ const MainNav: React.FC<MainNavProps> = ({
       </div>
 
       {workspaceMenuPortal}
+      <ScheduledJobsDialog
+        isOpen={isScheduledJobsDialogOpen}
+        onClose={() => setIsScheduledJobsDialogOpen(false)}
+        targetWorkspacePath={resolvedAssistantWorkspace?.rootPath}
+        targetSessionId={resolvedAssistantSessionId}
+        assistantName={resolvedAssistantDisplayName}
+        hideTargetFields
+        listScope="workspace"
+      />
     </>
   );
 };

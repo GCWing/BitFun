@@ -2,7 +2,7 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import type { ImageContextData as ImageInputContextData } from './ImageAnalysisAPI';
+import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 
 
 

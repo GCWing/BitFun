@@ -214,6 +214,16 @@ impl PathManager {
         self.user_root.join("data")
     }
 
+    /// Get scheduled jobs directory: ~/.config/bitfun/data/cron/
+    pub fn user_cron_dir(&self) -> PathBuf {
+        self.user_data_dir().join("cron")
+    }
+
+    /// Get scheduled jobs persistence file: ~/.config/bitfun/data/cron/jobs.json
+    pub fn cron_jobs_file(&self) -> PathBuf {
+        self.user_cron_dir().join("jobs.json")
+    }
+
     /// Get miniapps root directory: ~/.config/bitfun/data/miniapps/
     pub fn miniapps_dir(&self) -> PathBuf {
         self.user_data_dir().join("miniapps")
@@ -374,6 +384,7 @@ impl PathManager {
             self.cache_dir(CacheType::Git),
             self.cache_dir(CacheType::Index),
             self.user_data_dir(),
+            self.user_cron_dir(),
             self.user_rules_dir(),
             self.history_dir(),
             self.snippets_dir(),
