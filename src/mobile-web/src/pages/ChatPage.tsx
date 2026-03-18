@@ -518,11 +518,36 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
 
 // ─── Thinking (ModelThinkingDisplay-style) ───────────────────────────────────
 
-const ThinkingBlock: React.FC<{ thinking: string; streaming?: boolean }> = ({ thinking, streaming }) => {
+const ThinkingBlock: React.FC<{
+  thinking: string;
+  streaming?: boolean;
+  isLastItem?: boolean;
+}> = ({ thinking, streaming, isLastItem = false }) => {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!streaming);
+  const userToggledRef = useRef(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ atTop: true, atBottom: true });
+  const displayedThinking = useTypewriter(thinking, !!streaming);
+
+  useEffect(() => {
+    if (userToggledRef.current) return;
+    if (streaming) {
+      setOpen(true);
+    } else if (!isLastItem) {
+      setOpen(false);
+    }
+  }, [streaming, isLastItem]);
+
+  useEffect(() => {
+    if (!streaming || !open) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (gap < 80) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [displayedThinking, streaming, open]);
 
   const handleScroll = useCallback(() => {
     const el = wrapperRef.current;
@@ -531,6 +556,11 @@ const ThinkingBlock: React.FC<{ thinking: string; streaming?: boolean }> = ({ th
       atTop: el.scrollTop < 4,
       atBottom: el.scrollHeight - el.scrollTop - el.clientHeight < 4,
     });
+  }, []);
+
+  const handleToggle = useCallback(() => {
+    userToggledRef.current = true;
+    setOpen(o => !o);
   }, []);
 
   if (!thinking && !streaming) return null;
@@ -542,7 +572,7 @@ const ThinkingBlock: React.FC<{ thinking: string; streaming?: boolean }> = ({ th
 
   return (
     <div className={`chat-thinking ${streaming ? 'chat-thinking--streaming' : ''}`}>
-      <button className="chat-thinking__toggle" onClick={() => setOpen(o => !o)}>
+      <button className="chat-thinking__toggle" onClick={handleToggle}>
         <span className={`chat-thinking__chevron ${open ? 'is-open' : ''}`}>
           <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
             <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -560,7 +590,7 @@ const ThinkingBlock: React.FC<{ thinking: string; streaming?: boolean }> = ({ th
               onScroll={handleScroll}
             >
               <div className="chat-thinking__content">
-                <MarkdownContent content={thinking} />
+                <MarkdownContent content={streaming ? displayedThinking : thinking} />
               </div>
             </div>
           )}
@@ -1411,11 +1441,13 @@ function renderStandardGroups(
   animate?: boolean,
   onFileDownload?: (path: string, onProgress?: (downloaded: number, total: number) => void) => Promise<void>,
   onGetFileInfo?: (path: string) => Promise<{ name: string; size: number; mimeType: string }>,
+  isActiveTurn?: boolean,
 ) {
   return groups.map((g, gi) => {
     if (g.type === 'thinking') {
       const text = g.entries.map(e => e.content || '').join('\n\n');
-      return <ThinkingBlock key={`${keyPrefix}-thinking-${gi}`} thinking={text} />;
+      const isLast = isActiveTurn && gi === groups.length - 1;
+      return <ThinkingBlock key={`${keyPrefix}-thinking-${gi}`} thinking={text} streaming={isLast} isLastItem={isLast} />;
     }
     if (g.type === 'tool') {
       const rendered: React.ReactNode[] = [];
@@ -1533,7 +1565,7 @@ function renderActiveTurnItems(
   };
 
   if (askEntries.length === 0) {
-    return renderStandardGroups(groupChatItems(items), 'active', now, onCancel, true, onFileDownload, onGetFileInfo);
+    return renderStandardGroups(groupChatItems(items), 'active', now, onCancel, true, onFileDownload, onGetFileInfo, true);
   }
 
   const beforeAskItems: ChatMessageItem[] = [];
@@ -1551,9 +1583,9 @@ function renderActiveTurnItems(
 
   return (
     <>
-      {renderStandardGroups(groupChatItems(beforeAskItems), 'active-before', now, onCancel, true, onFileDownload, onGetFileInfo)}
+      {renderStandardGroups(groupChatItems(beforeAskItems), 'active-before', now, onCancel, true, onFileDownload, onGetFileInfo, true)}
       {renderQuestionEntries(askEntries, 'active', onAnswer)}
-      {renderStandardGroups(groupChatItems(afterAskItems), 'active-after', now, onCancel, true, onFileDownload, onGetFileInfo)}
+      {renderStandardGroups(groupChatItems(afterAskItems), 'active-after', now, onCancel, true, onFileDownload, onGetFileInfo, true)}
     </>
   );
 }
@@ -2532,7 +2564,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
               {!hasRunningSubagent && (turn.thinking || turnIsActive) && (
                 <ThinkingBlock
                   thinking={turn.thinking}
-                  streaming={turnIsActive && !turn.thinking && !turn.text}
+                  streaming={turnIsActive}
+                  isLastItem={turnIsActive}
                 />
               )}
               {taskTools.map(t => (

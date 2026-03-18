@@ -95,9 +95,8 @@ function SessionTypeIcon({ agentType }: { agentType: string }) {
 /* Mode Selection Icons */
 const ProModeIcon = () => (
   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="16 18 22 12 16 6" />
-    <polyline points="8 6 2 12 8 18" />
-    <line x1="12" y1="2" x2="12" y2="22" />
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
   </svg>
 );
 
@@ -562,7 +561,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         )}
 
             {/* Session Creation Options */}
-            <section className="session-list__panel">
+            <section className={`session-list__panel ${!isProMode ? 'session-list__panel--assistant' : ''}`}>
               <div className="session-list__section-head">
                 <div>
                   <div className="session-list__section-kicker">{t('sessions.launch')}</div>
@@ -632,7 +631,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
             </section>
 
             {/* Session History */}
-            <section className="session-list__panel session-list__panel--sessions">
+            <section className={`session-list__panel session-list__panel--sessions ${!isProMode ? 'session-list__panel--assistant' : ''}`}>
               <div className="session-list__section-head">
                 <div>
                   <div className="session-list__section-kicker">{t('sessions.recent')}</div>

@@ -15,6 +15,7 @@ import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES } from '../tool-c
 export interface ExploreGroupStats {
   readCount: number;
   searchCount: number;
+  thinkingCount: number;
 }
 
 /**
@@ -66,8 +67,10 @@ interface ModernFlowChatState {
  * Check if ModelRound is explore-only (contains only exploration tools)
  * Explore-only rounds can be collapsed
  * 
- * Key check: must contain at least one collapsible tool
- * Pure text rounds (like final replies) should not be collapsed
+ * Key check: must contain at least one collapsible tool OR be a pure thinking round.
+ * Pure thinking rounds (thinking without critical tools) are merged into
+ * adjacent explore groups to reduce visual noise from standalone "thinking N chars" lines.
+ * Pure text rounds (like final replies) should not be collapsed.
  */
 function isExploreOnlyRound(round: ModelRound): boolean {
   if (!round.items || round.items.length === 0) return false;
@@ -75,6 +78,9 @@ function isExploreOnlyRound(round: ModelRound): boolean {
   const hasCollapsibleTool = round.items.some(item => 
     item.type === 'tool' && isCollapsibleTool((item as FlowToolItem).toolName)
   );
+  
+  const hasAnyTool = round.items.some(item => item.type === 'tool');
+  if (!hasAnyTool) return false;
   
   if (!hasCollapsibleTool) return false;
   
@@ -91,19 +97,22 @@ function isExploreOnlyRound(round: ModelRound): boolean {
 /**
  * Compute statistics for a single ModelRound
  */
-function computeRoundStats(round: ModelRound): { readCount: number; searchCount: number } {
+function computeRoundStats(round: ModelRound): { readCount: number; searchCount: number; thinkingCount: number } {
   let readCount = 0;
   let searchCount = 0;
+  let thinkingCount = 0;
   
   for (const item of round.items) {
     if (item.type === 'tool') {
       const toolName = (item as FlowToolItem).toolName;
       if (READ_TOOL_NAMES.has(toolName)) readCount++;
       else if (SEARCH_TOOL_NAMES.has(toolName)) searchCount++;
+    } else if (item.type === 'thinking') {
+      thinkingCount++;
     }
   }
   
-  return { readCount, searchCount };
+  return { readCount, searchCount, thinkingCount };
 }
 
 let cachedSession: Session | null = null;
@@ -163,6 +172,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       allItems: import('../types/flow-chat').FlowItem[];
       readCount: number;
       searchCount: number;
+      thinkingCount: number;
       startIndex: number;
       endIndex: number;
     }
@@ -178,6 +188,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           currentGroup.allItems.push(...round.items);
           currentGroup.readCount += stats.readCount;
           currentGroup.searchCount += stats.searchCount;
+          currentGroup.thinkingCount += stats.thinkingCount;
           currentGroup.endIndex = index;
         } else {
           currentGroup = {
@@ -185,6 +196,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             allItems: [...round.items],
             readCount: stats.readCount,
             searchCount: stats.searchCount,
+            thinkingCount: stats.thinkingCount,
             startIndex: index,
             endIndex: index,
           };
@@ -233,7 +245,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             groupId: group.rounds.map(r => r.id).join('-'),
             rounds: group.rounds,
             allItems: group.allItems,
-            stats: { readCount: group.readCount, searchCount: group.searchCount },
+            stats: { readCount: group.readCount, searchCount: group.searchCount, thinkingCount: group.thinkingCount },
             isGroupStreaming,
             isLastGroupInTurn: isLastGroup,
             isFollowedByCritical,

@@ -1,63 +1,25 @@
 /**
  * ModelThinking tool styles.
  * Shows internal model reasoning.
+ *
+ * Single DOM structure for both streaming and completed states.
+ * Streaming: expanded, muted text with ink-fade shimmer.
+ * Completed: auto-collapses via CSS grid-template-rows animation.
  */
 
 @use './_tool-card-common.scss';
 
 /* Minimal, borderless layout */
 .flow-thinking-item {
-  padding: 8px 0;
+  padding: 4px 0;
   margin: 4px 0;
   background: transparent;
   border: none;
-  transition: all 0.2s ease;
+  transition: padding 0.2s ease;
 
   &.streaming {
-    background: transparent;
+    padding: 8px 0;
   }
-
-  &.collapsed {
-    background: transparent;
-    border: none;
-    padding: 4px 0;
-  }
-}
-
-.thinking-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  height: 14px; /* Fixed height for alignment */
-}
-
-.thinking-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 12px;
-  height: 12px; /* Match Lucide icon size */
-  color: var(--text-tertiary, #6b7280);
-  opacity: 0.6;
-  
-  svg {
-    display: block; /* Remove inline SVG extra space */
-    width: 12px;
-    height: 12px;
-  }
-}
-
-.thinking-label {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: normal;
-  color: var(--text-tertiary, #6b7280);
-  opacity: 0.8;
-  line-height: 12px; /* Match icon height */
-  height: 12px; /* Fixed height */
 }
 
 .thinking-collapsed-header {
@@ -80,7 +42,7 @@
       opacity: 1;
     }
   }
-  
+
   .thinking-chevron {
     flex-shrink: 0;
     color: var(--text-tertiary, #6b7280);
@@ -90,11 +52,18 @@
   }
 
   .thinking-label {
+    font-size: 12px;
+    font-weight: normal;
+    color: var(--text-tertiary, #6b7280);
+    opacity: 0.8;
     line-height: 12px;
     height: 12px;
+    display: inline-flex;
+    align-items: center;
   }
 }
 
+/* Rotate chevron when expanded */
 .flow-thinking-item.expanded .thinking-chevron {
   transform: rotate(90deg);
 }
@@ -104,11 +73,11 @@
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.25s ease-out;
-  
+
   &--open {
     grid-template-rows: 1fr;
   }
-  
+
   > .thinking-content-wrapper {
     overflow: hidden;
   }
@@ -116,39 +85,34 @@
 
 .thinking-content {
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.4;
   font-family: var(--tool-card-font-mono);
   word-break: break-word;
   white-space: pre-wrap;
+  color: var(--tool-card-text-muted);
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  margin-top: 0;
+  max-height: none;
+  overflow-y: visible;
+  cursor: text;
+  user-select: text;
+}
 
-  &.streaming {
-    color: #9ca3af;
-    // Constrain height while streaming; scroll when overflow.
-    max-height: 300px;
-    overflow-y: auto;
-  }
-
-  &.expanded {
-    color: var(--tool-card-text-muted);
-    padding: 10px 12px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    margin-top: 0;
-    // No height limit when expanded.
-    max-height: none;
-    overflow-y: visible;
-    cursor: text;
-    user-select: text;
-    line-height: 1.4;
-
-  }
+/* During streaming, constrain height and auto-scroll */
+.flow-thinking-item.streaming .thinking-content {
+  color: #9ca3af;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 /* Content wrapper with fade gradients */
 .thinking-content-wrapper {
   position: relative;
-  
+  min-height: 0; /* Required for the 0fr grid trick */
+
   /* Top fade gradient */
   &::before {
     content: '';
@@ -161,7 +125,7 @@
     z-index: 1;
     opacity: 0;
     transition: opacity 0.2s ease;
-    
+
     background: linear-gradient(
       to bottom,
       var(--color-bg-primary, #121214) 0%,
@@ -170,7 +134,7 @@
       transparent 100%
     );
   }
-  
+
   /* Bottom fade gradient */
   &::after {
     content: '';
@@ -183,7 +147,7 @@
     z-index: 1;
     opacity: 0;
     transition: opacity 0.2s ease;
-    
+
     background: linear-gradient(
       to top,
       var(--color-bg-primary, #121214) 0%,
@@ -192,7 +156,7 @@
       transparent 100%
     );
   }
-  
+
   /* Show gradients when content scrolls */
   &.has-scroll {
     &::before,
@@ -200,12 +164,12 @@
       opacity: 1;
     }
   }
-  
+
   /* Hide top fade at the top */
   &.at-top::before {
     opacity: 0;
   }
-  
+
   /* Hide bottom fade at the bottom */
   &.at-bottom::after {
     opacity: 0;
@@ -278,4 +242,3 @@
     );
   }
 }
-

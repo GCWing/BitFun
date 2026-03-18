@@ -4,6 +4,7 @@ import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { BLANK_TARGET_INTERCEPT_SCRIPT } from './browserInspectorScript';
+import { validateUrl, checkConnectivity } from './browserUrlCheck';
 import './BrowserScene.scss';
 
 const log = createLogger('BrowserScene');
@@ -259,6 +260,9 @@ const BrowserScene: React.FC = () => {
     }
 
     try {
+      validateUrl(nextUrl);
+      await checkConnectivity(nextUrl);
+
       if (urlPollTimerRef.current) {
         clearInterval(urlPollTimerRef.current);
         urlPollTimerRef.current = null;
@@ -282,6 +286,7 @@ const BrowserScene: React.FC = () => {
               currentUrlRef.current = url;
               setInputValue(url);
               setCurrentUrl(url);
+              setError(null);
               evalWebview(label, BLANK_TARGET_INTERCEPT_SCRIPT).catch(() => {});
             }
           })

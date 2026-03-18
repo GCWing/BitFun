@@ -348,6 +348,7 @@
   "exploreRegion": {
     "readFiles": "读取了 {{count}} 个文件",
     "searchCount": "进行了 {{count}} 次搜索",
+    "thinkingCount": "思考了 {{count}} 次",
     "exploreCount": "执行了 {{count}} 次探索",
     "separator": "，",
     "collapse": "收起探索过程"

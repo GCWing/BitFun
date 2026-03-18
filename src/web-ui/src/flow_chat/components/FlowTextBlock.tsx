@@ -1,6 +1,7 @@
 /**
  * Streaming text block component.
- * Renders content directly without a typewriter delay.
+ * Applies a typewriter effect during streaming to smooth out
+ * the batched content updates from EventBatcher (~100ms).
  * Supports a streaming cursor indicator.
  */
 
@@ -8,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownRenderer } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
+import { useTypewriter } from '../hooks/useTypewriter';
 import './FlowTextBlock.scss';
 
 // Idle timeout (ms) after content stops growing.
@@ -32,6 +34,10 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const content = typeof textItem.content === 'string'
     ? textItem.content
     : String(textItem.content || '');
+
+  const isStreaming = textItem.isStreaming &&
+    (textItem.status === 'streaming' || textItem.status === 'running');
+  const displayContent = useTypewriter(content, isStreaming);
   
   // Heuristic: if content does not change for a while, streaming is done.
   const [isContentGrowing, setIsContentGrowing] = useState(true);
@@ -39,7 +45,6 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
-    // Reset idle timer on content changes.
     if (content !== lastContentRef.current) {
       lastContentRef.current = content;
       setIsContentGrowing(true);
@@ -60,14 +65,12 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     };
   }, [content]);
   
-  // Stop immediately when the item completes.
   useEffect(() => {
     if (textItem.status === 'completed' || !textItem.isStreaming) {
       setIsContentGrowing(false);
     }
   }, [textItem.status, textItem.isStreaming]);
   
-  // Show shimmer only while content is actively growing.
   const isActivelyStreaming = textItem.isStreaming && 
     (textItem.status === 'streaming' || textItem.status === 'running') &&
     isContentGrowing;
@@ -77,7 +80,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     <div className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming' : ''}`}>
       {textItem.isMarkdown ? (
         <MarkdownRenderer
-          content={content}
+          content={displayContent}
           isStreaming={isActivelyStreaming}
           onFileViewRequest={onFileViewRequest}
           onTabOpen={onTabOpen}
@@ -87,13 +90,12 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
         />
       ) : (
         <div className={`text-content ${isActivelyStreaming && hasContent ? 'text-content--streaming' : ''}`}>
-          {content}
+          {displayContent}
         </div>
       )}
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Custom comparator: compare only key fields.
   const prev = prevProps.textItem;
   const next = nextProps.textItem;
   return (

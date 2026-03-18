@@ -805,6 +805,18 @@ fn setup_panic_hook() {
 
         log::error!("Application panic at {}: {}", location, message);
 
+        // Known wry bug: WKWebView.URL() returns nil after navigating to an
+        // invalid address, causing url_from_webview to panic on unwrap().
+        // This is non-fatal — the webview is still alive — so we log and
+        // continue instead of killing the process.
+        // See: https://github.com/tauri-apps/wry/pull/1554
+        if location.contains("wry") && location.contains("wkwebview") {
+            log::warn!(
+                "Suppressed non-fatal wry/wkwebview panic, application continues"
+            );
+            return;
+        }
+
         if message.contains("WSAStartup") || message.contains("10093") || message.contains("hyper")
         {
             log::error!("Network-related crash detected, possible solutions:");

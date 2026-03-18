@@ -264,6 +264,10 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-accent-500);
+
+  .session-list__panel--assistant & {
+    color: var(--color-pink-500);
+  }
 }
 
 .session-list__section-title {

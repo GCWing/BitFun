@@ -5,7 +5,7 @@
   "webviews": ["embedded-browser-*"],
   "local": true,
   "remote": {
-    "urls": ["https://*", "http://*"]
+    "urls": ["https://*", "https://*:*", "http://*", "http://*:*"]
   },
   "permissions": [
     "core:event:allow-emit"

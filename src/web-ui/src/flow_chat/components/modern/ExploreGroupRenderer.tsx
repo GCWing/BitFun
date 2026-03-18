@@ -37,7 +37,8 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
     allItems, 
     stats, 
     isGroupStreaming,
-    isFollowedByCritical 
+    isFollowedByCritical,
+    isLastGroupInTurn
   } = data;
   
   // Track auto-collapse once to prevent flicker.
@@ -74,9 +75,12 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
   
   // Build summary text with i18n.
   const displaySummary = useMemo(() => {
-    const { readCount, searchCount } = stats;
+    const { readCount, searchCount, thinkingCount } = stats;
     
     const parts: string[] = [];
+    if (thinkingCount > 0) {
+      parts.push(t('exploreRegion.thinkingCount', { count: thinkingCount }));
+    }
     if (readCount > 0) {
       parts.push(t('exploreRegion.readFiles', { count: readCount }));
     }
@@ -117,11 +121,12 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
     return (
       <div className={className}>
         <div ref={containerRef} className="explore-region__content">
-          {allItems.map(item => (
+          {allItems.map((item, idx) => (
             <ExploreItemRenderer
               key={item.id}
               item={item}
               turnId={turnId}
+              isLastItem={isLastGroupInTurn && idx === allItems.length - 1}
             />
           ))}
         </div>
@@ -139,11 +144,12 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
       <div className="explore-region__content-wrapper">
         <div className="explore-region__content-inner">
           <div ref={containerRef} className="explore-region__content">
-            {allItems.map(item => (
+            {allItems.map((item, idx) => (
               <ExploreItemRenderer
                 key={item.id}
                 item={item}
                 turnId={turnId}
+                isLastItem={isLastGroupInTurn && idx === allItems.length - 1}
               />
             ))}
           </div>
@@ -160,9 +166,10 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
 interface ExploreItemRendererProps {
   item: FlowItem;
   turnId: string;
+  isLastItem?: boolean;
 }
 
-const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item }) => {
+const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -203,10 +210,17 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item }) => {
         />
       );
     
-    case 'thinking':
+    case 'thinking': {
+      const thinkingItem = item as FlowThinkingItem;
+      // Hide completed thinking inside explore groups — it adds no value
+      // when collapsed (the explore group summary already shows thinking count).
+      if (thinkingItem.status === 'completed' && !isLastItem) {
+        return null;
+      }
       return (
-        <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} />
+        <ModelThinkingDisplay thinkingItem={thinkingItem} isLastItem={isLastItem} />
       );
+    }
     
     case 'tool':
       return (

@@ -14,6 +14,7 @@ import { useSceneStore } from '@/app/stores/sceneStore';
 import { useContextStore } from '@/shared/context-system';
 import type { WebElementContext } from '@/shared/types/context';
 import { createInspectorScript, CANCEL_INSPECTOR_SCRIPT, BLANK_TARGET_INTERCEPT_SCRIPT } from './browserInspectorScript';
+import { validateUrl, checkConnectivity } from './browserUrlCheck';
 import './BrowserPanel.scss';
 
 const log = createLogger('BrowserPanel');
@@ -242,6 +243,9 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
     }
 
     try {
+      validateUrl(nextUrl);
+      await checkConnectivity(nextUrl);
+
       if (urlPollTimerRef.current) {
         clearInterval(urlPollTimerRef.current);
         urlPollTimerRef.current = null;
@@ -265,6 +269,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
               currentUrlRef.current = url;
               setInputValue(url);
               setCurrentUrl(url);
+              setError(null);
               evalWebview(label, BLANK_TARGET_INTERCEPT_SCRIPT).catch(() => {});
             }
           })
