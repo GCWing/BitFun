@@ -149,21 +149,16 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     scrollToBottom,
   }), [scrollToTurn, scrollToIndex, scrollToBottom]);
 
-  // ── Core scroll policy: processing → auto-scroll to bottom ────────────
+  // ── Initial scroll to bottom when processing starts ──────────────────
+  // Note: followOutput handles continuous auto-scroll, so we only need
+  // an initial scroll here. The 300ms interval was removed because it
+  // conflicted with followOutput and caused visual jitter.
   useEffect(() => {
     if (!isProcessing) return;
 
     if (virtuosoRef.current) {
-      virtuosoRef.current.scrollTo({ top: 999999999, behavior: 'smooth' });
+      virtuosoRef.current.scrollTo({ top: 999999999, behavior: 'auto' });
     }
-
-    const intervalId = setInterval(() => {
-      if (virtuosoRef.current) {
-        virtuosoRef.current.scrollTo({ top: 999999999, behavior: 'smooth' });
-      }
-    }, 300);
-
-    return () => clearInterval(intervalId);
   }, [isProcessing]);
 
   const handleFollowOutput = useCallback(() => {
