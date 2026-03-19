@@ -13,21 +13,12 @@ import { getProviderDisplayName } from '../services/modelConfigs';
 import type {
   AIModelConfig,
   DefaultModels,
-  OptionalCapabilityModels,
-  OptionalCapabilityType,
 } from '../types';
 import { ConfigPageRow } from './common';
 import { createLogger } from '@/shared/utils/logger';
 import './DefaultModelConfig.scss';
 
 const log = createLogger('DefaultModelConfig');
-
-
-const OPTIONAL_CAPABILITY_TYPES: OptionalCapabilityType[] = [
-  'image_understanding',
-  'image_generation',
-  'speech_recognition'
-];
 
 const normalizeSelectValue = (value: string | number | (string | number)[]): string | number =>
   Array.isArray(value) ? (value[0] ?? '') : value;
@@ -50,7 +41,6 @@ export const DefaultModelConfig: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [defaultModels, setDefaultModels] = useState<DefaultModels>({ primary: null, fast: null });
-  const [optionalCapabilities, setOptionalCapabilities] = useState<OptionalCapabilityModels>({});
 
   const loadData = useCallback(async () => {
     try {
@@ -66,12 +56,6 @@ export const DefaultModelConfig: React.FC = () => {
       setDefaultModels({
         primary: defaultModelsConfig?.primary || null,
         fast: defaultModelsConfig?.fast || null,
-      });
-
-      setOptionalCapabilities({
-        image_understanding: defaultModelsConfig?.image_understanding,
-        image_generation: defaultModelsConfig?.image_generation,
-        speech_recognition: defaultModelsConfig?.speech_recognition,
       });
     } catch (error) {
       log.error('Failed to load data', error);
@@ -203,47 +187,7 @@ export const DefaultModelConfig: React.FC = () => {
   };
 
   
-  const handleCapabilityChange = async (capability: OptionalCapabilityType, modelId: string | number) => {
-    const modelIdStr = modelId ? String(modelId) : null;
-    try {
-      const currentConfig = await configManager.getConfig<any>('ai.default_models') || {};
-
-      
-      await configManager.setConfig('ai.default_models', {
-        ...currentConfig,
-        [capability]: modelIdStr || undefined,
-      });
-
-      setOptionalCapabilities(prev => ({
-        ...prev,
-        [capability]: modelIdStr || undefined,
-      }));
-
-      notificationService.success(t('messages.capabilityUpdated'), { duration: 2000 });
-    } catch (error) {
-      log.error('Failed to update capability model', { capability, modelId: modelIdStr, error });
-      notificationService.error(t('messages.updateFailed'));
-    }
-  };
-
-  
   const enabledModels = models.filter(m => m.enabled);
-  
-  
-  const getModelsForCapability = (capability: OptionalCapabilityType): AIModelConfig[] => {
-    return enabledModels.filter(m => {
-      switch (capability) {
-        case 'image_understanding':
-          return m.capabilities?.includes('image_understanding');
-        case 'image_generation':
-          return m.capabilities?.includes('image_generation');
-        case 'speech_recognition':
-          return m.capabilities?.includes('speech_recognition');
-        default:
-          return true;
-      }
-    });
-  };
 
   if (loading) {
     return (
@@ -302,36 +246,6 @@ export const DefaultModelConfig: React.FC = () => {
           size="small"
         />
       </ConfigPageRow>
-
-      {OPTIONAL_CAPABILITY_TYPES.map(capability => {
-        const availableModels = getModelsForCapability(capability);
-        const configuredModelId = optionalCapabilities[capability];
-
-        return (
-          <ConfigPageRow
-            key={capability}
-            label={renderOptionalLabel(t(`optional.capabilities.${capability}.label`))}
-            description={t(`optional.capabilities.${capability}.description`)}
-            align="center"
-          >
-            <Select
-              value={configuredModelId || ''}
-              onChange={(value) => handleCapabilityChange(capability, normalizeSelectValue(value))}
-              placeholder={t('optional.selectModel')}
-              // Allow clearing the selection even when there are no compatible models.
-              disabled={availableModels.length === 0 && !configuredModelId}
-              options={[
-                { label: t('optional.notSet'), value: '' },
-                ...availableModels.map(buildModelOption),
-              ]}
-              renderOption={renderModelOption}
-              renderValue={renderModelValue}
-              className="default-model-config__model-select"
-              size="small"
-            />
-          </ConfigPageRow>
-        );
-      })}
     </div>
   );
 };

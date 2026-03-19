@@ -70,15 +70,8 @@ function uniqModelNames(modelNames: string[]): string[] {
 function getCapabilitiesByCategory(category: ModelCategory): ModelCapability[] {
   switch (category) {
     case 'general_chat':
-      return ['text_chat', 'function_calling'];
-    case 'multimodal':
-      return ['text_chat', 'image_understanding', 'function_calling'];
-    case 'image_generation':
-      return ['image_generation'];
-    case 'speech_recognition':
-      return ['speech_recognition'];
     default:
-      return ['text_chat'];
+      return ['text_chat', 'function_calling'];
   }
 }
 
@@ -200,9 +193,6 @@ const AIModelConfig: React.FC = () => {
   const categoryOptions = useMemo<SelectOption[]>(
     () => [
       { label: t('category.general_chat'), value: 'general_chat' },
-      { label: t('category.multimodal'), value: 'multimodal' },
-      { label: t('category.image_generation'), value: 'image_generation' },
-      { label: t('category.speech_recognition'), value: 'speech_recognition' },
     ],
     [t]
   );
@@ -210,9 +200,6 @@ const AIModelConfig: React.FC = () => {
   const categoryCompactLabels = useMemo<Record<ModelCategory, string>>(
     () => ({
       general_chat: t('categoryIcons.general_chat'),
-      multimodal: t('categoryIcons.multimodal'),
-      image_generation: t('categoryIcons.image_generation'),
-      speech_recognition: t('categoryIcons.speech_recognition'),
     }),
     [t]
   );
@@ -622,11 +609,6 @@ const AIModelConfig: React.FC = () => {
     setIsEditing(true);
   };
 
-  const handleAddModelToExistingProvider = (config: AIModelConfigType) => {
-    handleEditProvider(config);
-  };
-
-  
   const handleEdit = (config: AIModelConfigType) => {
     resetRemoteModelDiscovery();
     setManualModelInput('');
@@ -1391,7 +1373,7 @@ const AIModelConfig: React.FC = () => {
 
             {!isFromTemplate && (
               <>
-                <ConfigPageRow label={`${t('form.modelSelection')} *`} description={editingConfig.category === 'speech_recognition' ? t('form.modelNameHint') : undefined} wide multiline>
+                <ConfigPageRow label={`${t('form.modelSelection')} *`} wide multiline>
                   <div className="bitfun-ai-model-config__control-stack">
                     <div className="bitfun-ai-model-config__model-picker-row">
                       <Select
@@ -1402,7 +1384,7 @@ const AIModelConfig: React.FC = () => {
                             : [String(value)];
                           syncSelectedModelDrafts(nextModelNames, editingConfig, !!editingConfig.id);
                         }}
-                        placeholder={editingConfig.category === 'speech_recognition' ? 'glm-asr' : 'glm-4.7'}
+                        placeholder="glm-4.7"
                         options={availableModelOptions}
                         searchable
                         multiple={!editingConfig.id}
@@ -1731,14 +1713,6 @@ const AIModelConfig: React.FC = () => {
                         tooltip={t('actions.edit')}
                       >
                         <Edit2 size={14} />
-                      </IconButton>
-                      <IconButton
-                        variant="ghost"
-                        size="small"
-                        onClick={() => handleAddModelToExistingProvider(group.models[0])}
-                        tooltip={t('actions.addModel')}
-                      >
-                        <Plus size={14} />
                       </IconButton>
                     </div>
                   </div>

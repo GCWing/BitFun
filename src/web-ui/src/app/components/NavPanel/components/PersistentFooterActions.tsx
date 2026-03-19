@@ -124,6 +124,7 @@ const PersistentFooterActions: React.FC = () => {
   }, []);
 
   return (
+    <>
     <div className="bitfun-nav-panel__footer">
       <div className="bitfun-nav-panel__footer-left">
         <div className="bitfun-nav-panel__footer-more-wrap">
@@ -244,6 +245,7 @@ const PersistentFooterActions: React.FC = () => {
         onAgree={handleAgreeDisclaimer}
       />
     </Modal>
+    </>
   );
 };
 

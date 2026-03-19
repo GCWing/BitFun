@@ -68,16 +68,10 @@ export interface AIExperienceConfig {
 
 export type ModelCapability =
   | 'text_chat'
-  | 'image_understanding'
-  | 'image_generation'
-  | 'function_calling'
-  | 'speech_recognition';
+  | 'function_calling';
 
 export type ModelCategory = 
-  | 'general_chat'
-  | 'multimodal'
-  | 'image_generation'
-  | 'speech_recognition';
+  | 'general_chat';
 
 export interface ModelMetadata {
   category: ModelCategory;
@@ -87,28 +81,13 @@ export interface ModelMetadata {
 }
 
 
-export const CAPABILITY_LABELS: Record<ModelCapability, string> = {
-  text_chat: t('settings/ai-model:capabilities.text_chat'),
-  image_understanding: t('settings/ai-model:capabilities.image_understanding'),
-  image_generation: t('settings/ai-model:capabilities.image_generation'),
-  function_calling: t('settings/ai-model:capabilities.function_calling'),
-  speech_recognition: t('settings/ai-model:capabilities.speech_recognition')
-};
-
-
 export const CATEGORY_LABELS: Record<ModelCategory, string> = {
-  general_chat: t('settings/ai-model:category.general_chat'),
-  multimodal: t('settings/ai-model:category.multimodal'),
-  image_generation: t('settings/ai-model:category.image_generation'),
-  speech_recognition: t('settings/ai-model:category.speech_recognition')
+  general_chat: t('settings/ai-model:category.general_chat')
 };
 
 
 export const CATEGORY_ICONS: Record<ModelCategory, string> = {
-  general_chat: t('settings/ai-model:categoryIcons.general_chat'),
-  multimodal: t('settings/ai-model:categoryIcons.multimodal'),
-  image_generation: t('settings/ai-model:categoryIcons.image_generation'),
-  speech_recognition: t('settings/ai-model:categoryIcons.speech_recognition')
+  general_chat: t('settings/ai-model:categoryIcons.general_chat')
 };
 
 
@@ -168,10 +147,6 @@ export interface DefaultModelsConfig {
   primary?: string | null;
    
   fast?: string | null;
-   
-  image_understanding?: string | null;
-   
-  speech_recognition?: string | null;
 }
 
 export interface AIConfig {
@@ -582,16 +557,4 @@ export interface DefaultModels {
 
  
 export interface OptionalCapabilityModels {
-   
-  image_understanding?: string;
-   
-  image_generation?: string;
-   
-  speech_recognition?: string;
 }
-
- 
-export type OptionalCapabilityType =
-  | 'image_understanding'
-  | 'image_generation'
-  | 'speech_recognition';
