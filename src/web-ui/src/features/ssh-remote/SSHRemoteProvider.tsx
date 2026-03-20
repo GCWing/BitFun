@@ -133,8 +133,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     } else if (savedConn.authType.type === 'Agent') {
       authMethod = { type: 'Agent' };
     } else {
-      // Password auth — cannot auto-reconnect
-      log.warn('Cannot auto-reconnect: password auth requires user input', { connectionId: workspace.connectionId });
+      // Password auth cannot auto-reconnect because BitFun intentionally does not
+      // persist passwords. The user must reconnect manually after restarting the app.
+      log.warn('Skipping auto-reconnect: password auth requires user input', { connectionId: workspace.connectionId });
       return false;
     }
 
@@ -287,18 +288,13 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           // Re-initialize sessions now that the workspace is registered in the state manager
           void flowChatStore.initializeFromDisk(result.workspace.remotePath).catch(() => {});
         } else {
-          // Reconnection failed — keep workspace in sidebar, show red indicator
-          log.warn('Auto-reconnect failed, workspace kept in sidebar with error status', {
+          // Reconnection failed (or skipped for password auth) — remove the workspace
+          // from the sidebar. Password-auth workspaces can never auto-reconnect, and
+          // showing a permanently-broken entry would confuse the user.
+          log.warn('Auto-reconnect failed, removing workspace from sidebar', {
             connectionId: workspace.connectionId,
           });
-          setWorkspaceStatus(workspace.connectionId, 'error');
-          setConnectionError('Remote connection lost. Please reconnect manually.');
-          setStatus('error');
-
-          // Make sure the workspace appears in opened list even if reconnection failed
-          if (!isAlreadyOpened) {
-            await workspaceManager.openRemoteWorkspace(workspace).catch(() => {});
-          }
+          await workspaceManager.removeRemoteWorkspace(workspace.connectionId).catch(() => {});
         }
       }
     } catch (e) {
