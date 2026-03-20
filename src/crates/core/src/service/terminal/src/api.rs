@@ -45,6 +45,9 @@ pub struct CreateSessionRequest {
     /// Optional terminal dimensions
     pub cols: Option<u16>,
     pub rows: Option<u16>,
+    /// Optional remote connection ID (for remote workspace sessions)
+    #[serde(rename = "remoteConnectionId", skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 /// Response for session creation

@@ -32,6 +32,8 @@ export interface WorkspaceInfo {
     vibe?: string | null;
     emoji?: string | null;
   } | null;
+  connectionId?: string;
+  connectionName?: string;
 }
 
 export interface FileOperationRequest {

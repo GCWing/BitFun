@@ -43,4 +43,4 @@ pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
 pub use session::*;
 pub use side_question::*;
-pub use workspace::WorkspaceBinding;
+pub use workspace::{WorkspaceBackend, WorkspaceBinding};

@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use tool_runtime::fs::edit_file::edit_file;
 
-/// File edit tool
 pub struct FileEditTool;
 
 impl FileEditTool {
@@ -96,6 +95,56 @@ Usage:
 
         let resolved_path = resolve_path_with_workspace(file_path, context.workspace_root())?;
 
+        // When WorkspaceServices is available (both local and remote),
+        // use the abstract FS to read → edit in memory → write back.
+        if let Some(ws_fs) = context.ws_fs() {
+            let content = ws_fs
+                .read_file_text(&resolved_path)
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
+
+            let (new_content, match_count) = if replace_all {
+                let count = content.matches(old_string).count();
+                if count == 0 {
+                    return Err(BitFunError::tool(format!(
+                        "old_string not found in file: {}", resolved_path
+                    )));
+                }
+                (content.replace(old_string, new_string), count)
+            } else {
+                if !content.contains(old_string) {
+                    return Err(BitFunError::tool(format!(
+                        "old_string not found in file: {}", resolved_path
+                    )));
+                }
+                let count = content.matches(old_string).count();
+                if count > 1 {
+                    return Err(BitFunError::tool(format!(
+                        "old_string found {} times in file (expected exactly 1). Include more context to make it unique.", count
+                    )));
+                }
+                (content.replacen(old_string, new_string, 1), 1)
+            };
+
+            ws_fs
+                .write_file(&resolved_path, new_content.as_bytes())
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
+
+            let result = ToolResult::Result {
+                data: json!({
+                    "file_path": resolved_path,
+                    "old_string": old_string,
+                    "new_string": new_string,
+                    "success": true,
+                    "match_count": match_count,
+                }),
+                result_for_assistant: Some(format!("Successfully edited {}", resolved_path)),
+            };
+            return Ok(vec![result]);
+        }
+
+        // Fallback: direct local edit via tool-runtime (used when no services injected)
         let edit_result = edit_file(&resolved_path, old_string, new_string, replace_all)?;
 
         let result = ToolResult::Result {

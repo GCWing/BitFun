@@ -31,6 +31,7 @@ export interface SessionResponse {
   status: SessionStatus | string;
   cols: number;
   rows: number;
+  connectionId?: string;
 }
 
 export interface ShellInfo {

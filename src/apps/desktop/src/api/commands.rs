@@ -16,6 +16,14 @@ pub struct OpenWorkspaceRequest {
     pub path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenRemoteWorkspaceRequest {
+    pub remote_path: String,
+    pub connection_id: String,
+    pub connection_name: String,
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct CreateAssistantWorkspaceRequest {}
 
@@ -653,6 +661,89 @@ pub async fn open_workspace(
 }
 
 #[tauri::command]
+pub async fn open_remote_workspace(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: OpenRemoteWorkspaceRequest,
+) -> Result<WorkspaceInfoDto, String> {
+    use bitfun_core::service::workspace::WorkspaceCreateOptions;
+
+    let display_name = request
+        .remote_path
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .last()
+        .unwrap_or(&request.remote_path)
+        .to_string();
+
+    let options = WorkspaceCreateOptions {
+        scan_options: ScanOptions {
+            calculate_statistics: false,
+            ..ScanOptions::default()
+        },
+        auto_set_current: true,
+        add_to_recent: true,
+        workspace_kind: WorkspaceKind::Remote,
+        assistant_id: None,
+        display_name: Some(display_name),
+        description: None,
+        tags: Vec::new(),
+    };
+
+    match state
+        .workspace_service
+        .open_workspace_with_options(request.remote_path.clone().into(), options)
+        .await
+    {
+        Ok(mut workspace_info) => {
+            workspace_info.metadata.insert(
+                "connectionId".to_string(),
+                serde_json::Value::String(request.connection_id.clone()),
+            );
+            workspace_info.metadata.insert(
+                "connectionName".to_string(),
+                serde_json::Value::String(request.connection_name.clone()),
+            );
+
+            {
+                let manager = state.workspace_service.get_manager();
+                let mut manager = manager.write().await;
+                if let Some(ws) = manager.get_workspaces_mut().get_mut(&workspace_info.id) {
+                    ws.metadata = workspace_info.metadata.clone();
+                }
+            }
+            if let Err(e) = state.workspace_service.manual_save().await {
+                warn!("Failed to save workspace data after opening remote workspace: {}", e);
+            }
+
+            apply_active_workspace_context(&state, &app, &workspace_info).await;
+
+            // Also update the RemoteWorkspaceStateManager so tools can use this connection
+            let remote_workspace = crate::api::RemoteWorkspace {
+                connection_id: request.connection_id.clone(),
+                connection_name: request.connection_name.clone(),
+                remote_path: request.remote_path.clone(),
+            };
+            if let Err(e) = state.set_remote_workspace(remote_workspace).await {
+                warn!("Failed to set remote workspace state: {}", e);
+            }
+
+            info!(
+                "Remote workspace opened: name={}, remote_path={}, connection_id={}",
+                workspace_info.name,
+                workspace_info.root_path.display(),
+                request.connection_id
+            );
+            Ok(WorkspaceInfoDto::from_workspace_info(&workspace_info))
+        }
+        Err(e) => {
+            error!("Failed to open remote workspace: {}", e);
+            Err(format!("Failed to open remote workspace: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn create_assistant_workspace(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -903,12 +994,26 @@ pub async fn close_workspace(
     app: tauri::AppHandle,
     request: CloseWorkspaceRequest,
 ) -> Result<(), String> {
+    // Check if the workspace being closed is a remote workspace before closing it
+    let is_remote = state
+        .workspace_service
+        .get_workspace(&request.workspace_id)
+        .await
+        .map(|w| w.workspace_kind == WorkspaceKind::Remote)
+        .unwrap_or(false);
+
     match state
         .workspace_service
         .close_workspace(&request.workspace_id)
         .await
     {
         Ok(_) => {
+            // If it was a remote workspace, also clear the persisted remote workspace data
+            // so it doesn't get re-opened on next restart
+            if is_remote {
+                state.clear_remote_workspace().await;
+            }
+
             if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
                 apply_active_workspace_context(&state, &app, &workspace_info).await;
             } else {
@@ -1100,14 +1205,17 @@ pub async fn get_file_tree(
     request: GetFileTreeRequest,
 ) -> Result<serde_json::Value, String> {
     use std::path::Path;
+    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 
-    let path_buf = Path::new(&request.path);
-    if !path_buf.exists() {
-        return Err("Directory does not exist".to_string());
-    }
-
-    if !path_buf.is_dir() {
-        return Err("Path is not a directory".to_string());
+    let is_remote = is_remote_path(&request.path).await;
+    if !is_remote {
+        let path_buf = Path::new(&request.path);
+        if !path_buf.exists() {
+            return Err("Directory does not exist".to_string());
+        }
+        if !path_buf.is_dir() {
+            return Err("Path is not a directory".to_string());
+        }
     }
 
     let filesystem_service = &state.filesystem_service;
@@ -1134,7 +1242,7 @@ pub async fn get_file_tree(
                 json
             }
 
-            let root_name = path_buf
+            let root_name = Path::new(&request.path)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or(&request.path);
@@ -1164,14 +1272,17 @@ pub async fn get_directory_children(
     request: GetDirectoryChildrenRequest,
 ) -> Result<serde_json::Value, String> {
     use std::path::Path;
+    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 
-    let path_buf = Path::new(&request.path);
-    if !path_buf.exists() {
-        return Err("Directory does not exist".to_string());
-    }
-
-    if !path_buf.is_dir() {
-        return Err("Path is not a directory".to_string());
+    let is_remote = is_remote_path(&request.path).await;
+    if !is_remote {
+        let path_buf = Path::new(&request.path);
+        if !path_buf.exists() {
+            return Err("Directory does not exist".to_string());
+        }
+        if !path_buf.is_dir() {
+            return Err("Path is not a directory".to_string());
+        }
     }
 
     let filesystem_service = &state.filesystem_service;
@@ -1209,17 +1320,20 @@ pub async fn get_directory_children_paginated(
     request: GetDirectoryChildrenPaginatedRequest,
 ) -> Result<serde_json::Value, String> {
     use std::path::Path;
+    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 
     let offset = request.offset.unwrap_or(0);
     let limit = request.limit.unwrap_or(100);
 
-    let path_buf = Path::new(&request.path);
-    if !path_buf.exists() {
-        return Err("Directory does not exist".to_string());
-    }
-
-    if !path_buf.is_dir() {
-        return Err("Path is not a directory".to_string());
+    let is_remote = is_remote_path(&request.path).await;
+    if !is_remote {
+        let path_buf = Path::new(&request.path);
+        if !path_buf.exists() {
+            return Err("Directory does not exist".to_string());
+        }
+        if !path_buf.is_dir() {
+            return Err("Path is not a directory".to_string());
+        }
     }
 
     let filesystem_service = &state.filesystem_service;
@@ -1265,6 +1379,17 @@ pub async fn read_file_content(
     state: State<'_, AppState>,
     request: ReadFileContentRequest,
 ) -> Result<String, String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.file_path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        let bytes = remote_fs.read_file(&entry.connection_id, &request.file_path).await
+            .map_err(|e| format!("Failed to read remote file: {}", e))?;
+        return String::from_utf8(bytes)
+            .map_err(|e| format!("File is not valid UTF-8: {}", e));
+    }
+
     match state.filesystem_service.read_file(&request.file_path).await {
         Ok(result) => Ok(result.content),
         Err(e) => {
@@ -1282,6 +1407,16 @@ pub async fn write_file_content(
     state: State<'_, AppState>,
     request: WriteFileContentRequest,
 ) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.file_path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        remote_fs.write_file(&entry.connection_id, &request.file_path, request.content.as_bytes()).await
+            .map_err(|e| format!("Failed to write remote file: {}", e))?;
+        return Ok(());
+    }
+
     let full_path = request.file_path;
     let mut options = FileOperationOptions::default();
     options.backup_on_overwrite = false;
@@ -1335,21 +1470,57 @@ pub async fn reset_workspace_persona_files(
 }
 
 #[tauri::command]
-pub async fn check_path_exists(request: CheckPathExistsRequest) -> Result<bool, String> {
+pub async fn check_path_exists(
+    state: State<'_, AppState>,
+    request: CheckPathExistsRequest,
+) -> Result<bool, String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        return remote_fs.exists(&entry.connection_id, &request.path).await
+            .map_err(|e| format!("Failed to check remote path: {}", e));
+    }
+
     let path = std::path::Path::new(&request.path);
     Ok(path.exists())
 }
 
 #[tauri::command]
 pub async fn get_file_metadata(
+    state: State<'_, AppState>,
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
-    use std::fs;
     use std::time::SystemTime;
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+
+        let is_file = remote_fs.is_file(&entry.connection_id, &request.path).await
+            .unwrap_or(false);
+        let is_dir = remote_fs.is_dir(&entry.connection_id, &request.path).await
+            .unwrap_or(false);
+
+        let now_ms = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        return Ok(serde_json::json!({
+            "path": request.path,
+            "modified": now_ms,
+            "size": 0,
+            "is_file": is_file,
+            "is_dir": is_dir,
+            "is_remote": true
+        }));
+    }
 
     let path = std::path::Path::new(&request.path);
-
-    match fs::metadata(path) {
+    match std::fs::metadata(path) {
         Ok(metadata) => {
             let modified = metadata
                 .modified()
@@ -1385,6 +1556,16 @@ pub async fn rename_file(
     state: State<'_, AppState>,
     request: RenameFileRequest,
 ) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.old_path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        remote_fs.rename(&entry.connection_id, &request.old_path, &request.new_path).await
+            .map_err(|e| format!("Failed to rename remote file: {}", e))?;
+        return Ok(());
+    }
+
     state
         .filesystem_service
         .move_file(&request.old_path, &request.new_path)
@@ -1399,6 +1580,16 @@ pub async fn delete_file(
     state: State<'_, AppState>,
     request: DeleteFileRequest,
 ) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        remote_fs.remove_file(&entry.connection_id, &request.path).await
+            .map_err(|e| format!("Failed to delete remote file: {}", e))?;
+        return Ok(());
+    }
+
     state
         .filesystem_service
         .delete_file(&request.path)
@@ -1413,7 +1604,22 @@ pub async fn delete_directory(
     state: State<'_, AppState>,
     request: DeleteDirectoryRequest,
 ) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
     let recursive = request.recursive.unwrap_or(false);
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        if recursive {
+            remote_fs.remove_dir_all(&entry.connection_id, &request.path).await
+                .map_err(|e| format!("Failed to delete remote directory: {}", e))?;
+        } else {
+            remote_fs.remove_dir_all(&entry.connection_id, &request.path).await
+                .map_err(|e| format!("Failed to delete remote directory: {}", e))?;
+        }
+        return Ok(());
+    }
 
     state
         .filesystem_service
@@ -1429,6 +1635,16 @@ pub async fn create_file(
     state: State<'_, AppState>,
     request: CreateFileRequest,
 ) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        remote_fs.write_file(&entry.connection_id, &request.path, b"").await
+            .map_err(|e| format!("Failed to create remote file: {}", e))?;
+        return Ok(());
+    }
+
     let options = FileOperationOptions::default();
     state
         .filesystem_service
@@ -1444,6 +1660,16 @@ pub async fn create_directory(
     state: State<'_, AppState>,
     request: CreateDirectoryRequest,
 ) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        remote_fs.create_dir_all(&entry.connection_id, &request.path).await
+            .map_err(|e| format!("Failed to create remote directory: {}", e))?;
+        return Ok(());
+    }
+
     state
         .filesystem_service
         .create_directory(&request.path)
@@ -1461,9 +1687,35 @@ pub struct ListDirectoryFilesRequest {
 
 #[tauri::command]
 pub async fn list_directory_files(
+    state: State<'_, AppState>,
     request: ListDirectoryFilesRequest,
 ) -> Result<Vec<String>, String> {
     use std::path::Path;
+    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
+
+    if let Some(entry) = lookup_remote_connection(&request.path).await {
+        let remote_fs = state.get_remote_file_service_async().await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        let entries = remote_fs.read_dir(&entry.connection_id, &request.path).await
+            .map_err(|e| format!("Failed to read remote directory: {}", e))?;
+        let mut files: Vec<String> = entries.into_iter()
+            .filter(|e| !e.is_dir)
+            .filter(|e| {
+                if let Some(ref extensions) = request.extensions {
+                    if let Some(ext) = Path::new(&e.name).extension().and_then(|x| x.to_str()) {
+                        extensions.iter().any(|x| x.eq_ignore_ascii_case(ext))
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }
+            })
+            .map(|e| e.name)
+            .collect();
+        files.sort();
+        return Ok(files);
+    }
 
     let dir_path = Path::new(&request.path);
     if !dir_path.exists() {

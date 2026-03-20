@@ -336,7 +336,8 @@ impl RoundExecutor {
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
-                allowed_tools: context.available_tools.clone(), // Pass allowed tools list for security validation
+                allowed_tools: context.available_tools.clone(),
+                workspace_services: context.workspace_services.clone(),
             };
 
             // Read tool execution related configuration from global config

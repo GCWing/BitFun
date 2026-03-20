@@ -52,6 +52,7 @@ export enum WorkspaceType {
 export enum WorkspaceKind {
   Normal = 'normal',
   Assistant = 'assistant',
+  Remote = 'remote',
 }
 
 
@@ -86,6 +87,12 @@ export interface WorkspaceInfo {
   tags: string[];
   statistics?: ProjectStatistics;
   identity?: WorkspaceIdentity | null;
+  connectionId?: string;
+  connectionName?: string;
+}
+
+export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
+  return workspace?.workspaceKind === WorkspaceKind.Remote;
 }
 
 
@@ -139,6 +146,7 @@ export interface GlobalStateAPI {
 
   
   openWorkspace(path: string): Promise<WorkspaceInfo>;
+  openRemoteWorkspace(remotePath: string, connectionId: string, connectionName: string): Promise<WorkspaceInfo>;
   createAssistantWorkspace(): Promise<WorkspaceInfo>;
   deleteAssistantWorkspace(workspaceId: string): Promise<void>;
   resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
@@ -202,6 +210,8 @@ function mapWorkspaceKind(workspaceKind: APIWorkspaceInfo['workspaceKind']): Wor
   switch (workspaceKind) {
     case WorkspaceKind.Assistant:
       return WorkspaceKind.Assistant;
+    case WorkspaceKind.Remote:
+      return WorkspaceKind.Remote;
     default:
       return WorkspaceKind.Normal;
   }
@@ -246,6 +256,8 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
         }
       : undefined,
     identity: mapWorkspaceIdentity(workspace.identity),
+    connectionId: workspace.connectionId,
+    connectionName: workspace.connectionName,
   };
 }
 
@@ -292,6 +304,10 @@ export function createGlobalStateAPI(): GlobalStateAPI {
       }
       
       return mapWorkspaceInfo(await globalAPI.openWorkspace(path));
+    },
+
+    async openRemoteWorkspace(remotePath: string, connectionId: string, connectionName: string): Promise<WorkspaceInfo> {
+      return mapWorkspaceInfo(await globalAPI.openRemoteWorkspace(remotePath, connectionId, connectionName));
     },
 
     async createAssistantWorkspace(): Promise<WorkspaceInfo> {

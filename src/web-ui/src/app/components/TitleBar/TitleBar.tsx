@@ -23,6 +23,7 @@ import { NewProjectDialog } from '../NewProjectDialog';
 import { AboutDialog } from '../AboutDialog';
 import { AgentOrb } from './AgentOrb';
 import NotificationButton from './NotificationButton';
+import { RemoteConnectionIndicator } from './RemoteConnectionIndicator';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('TitleBar');
@@ -210,12 +211,12 @@ const TitleBar: React.FC<TitleBarProps> = ({
 
     void (async () => {
       try {
-        const { listen } = await import('@tauri-apps/api/event');
+        const { api } = await import('@/infrastructure/api/service-api/ApiClient');
 
-        unlistenFns.push(await listen('bitfun_menu_open_project', () => { void handleOpenProject(); }));
-        unlistenFns.push(await listen('bitfun_menu_new_project', () => { handleNewProject(); }));
-        unlistenFns.push(await listen('bitfun_menu_go_home', () => { handleGoHome(); }));
-        unlistenFns.push(await listen('bitfun_menu_about', () => { handleShowAbout(); }));
+        unlistenFns.push(await api.listen('bitfun_menu_open_project', () => { void handleOpenProject(); }));
+        unlistenFns.push(await api.listen('bitfun_menu_new_project', () => { handleNewProject(); }));
+        unlistenFns.push(await api.listen('bitfun_menu_go_home', () => { handleGoHome(); }));
+        unlistenFns.push(await api.listen('bitfun_menu_about', () => { handleShowAbout(); }));
       } catch (error) {
         log.debug('menubar listen failed', error);
       }
@@ -306,6 +307,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
 
         {/* Right: Notification + Settings + WindowControls */}
         <div className="bitfun-header-right">
+          <RemoteConnectionIndicator />
           <NotificationButton />
 
           <Tooltip content={t('header.configCenter')}>

@@ -7,26 +7,12 @@ use log::warn;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-/// Search for files matching a glob pattern with optional gitignore and hidden file filtering
-///
-/// # Arguments
-/// * `search_path` - The root directory to search in
-/// * `pattern` - Glob pattern relative to search_path (e.g., "*.rs", "**/*.txt")
-/// * `ignore` - If true, apply .gitignore rules
-/// * `ignore_hidden` - If true, skip hidden files; if false, include them
-///
-/// # Returns
-/// A Result containing a Vec of matched file paths as Strings
-///
-/// # Behavior
-/// - Symlinks are not followed;
 pub fn glob_with_ignore(
     search_path: &str,
     pattern: &str,
     ignore: bool,
     ignore_hidden: bool,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    // Validate search path
     let path = std::path::Path::new(search_path);
     if !path.exists() {
         return Err(format!("Search path '{}' does not exist", search_path).into());
@@ -35,47 +21,34 @@ pub fn glob_with_ignore(
         return Err(format!("Search path '{}' is not a directory", search_path).into());
     }
 
-    // Convert search_path to absolute path at the beginning
-    // Use dunce::canonicalize to avoid Windows UNC path format (\\?\)
     let search_path_abs = dunce::canonicalize(Path::new(search_path))?;
     let search_path_str = search_path_abs.to_string_lossy();
 
-    // Convert pattern to absolute form by joining with search_path
-    // This ensures pattern matching works with absolute paths
     let absolute_pattern = format!("{}/{}", search_path_str, pattern);
 
-    // Compile the glob pattern
     let glob = GlobBuilder::new(&absolute_pattern)
         .literal_separator(true)
         .build()?
         .compile_matcher();
 
-    // Build the directory walker with specified options using absolute path
     let walker = WalkBuilder::new(&search_path_abs)
-        .git_ignore(ignore) // Apply gitignore rules if ignore is true
-        .hidden(ignore_hidden) // Skip hidden files if ignore_hidden is true
+        .git_ignore(ignore)
+        .hidden(ignore_hidden)
         .build();
 
     let mut results = Vec::new();
 
-    // Walk the directory tree
     for entry in walker {
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {
-                // The filesystem can change during a walk (e.g. files deleted), or there may be
-                // broken/permission-denied entries. A single unreadable entry should not fail the
-                // entire glob.
                 warn!("Glob walker entry error (skipped): {}", err);
                 continue;
             }
         };
         let path = entry.path().to_path_buf();
 
-        // Match against the glob pattern using absolute path
-        // Since pattern is now absolute, match directly against the path
         if glob.is_match(&path) {
-            // Use dunce::simplified to convert UNC paths to standard Windows paths
             let simplified_path = dunce::simplified(&path);
             results.push(simplified_path.to_string_lossy().to_string());
         }
@@ -104,21 +77,33 @@ fn limit_paths(paths: &[String], limit: usize) -> Vec<String> {
 }
 
 fn call_glob(search_path: &str, pattern: &str, limit: usize) -> Result<Vec<String>, String> {
-    // Check if pattern targets whitelisted directories
     let is_whitelisted = pattern.starts_with(".bitfun")
         || pattern.contains("/.bitfun")
         || pattern.contains("\\.bitfun");
 
-    // Disable gitignore for whitelisted directories to allow searching
     let apply_gitignore = !is_whitelisted;
-
-    // Disable hidden file filtering for whitelisted directories
     let ignore_hidden_files = !is_whitelisted;
 
     let all_paths = glob_with_ignore(search_path, pattern, apply_gitignore, ignore_hidden_files)
         .map_err(|e| e.to_string())?;
     let limited_paths = limit_paths(&all_paths, limit);
     Ok(limited_paths)
+}
+
+fn build_remote_find_command(search_dir: &str, pattern: &str, limit: usize) -> String {
+    let name_pattern = if pattern.contains("**/") {
+        pattern.replacen("**/", "", 1)
+    } else {
+        pattern.to_string()
+    };
+
+    let escaped_dir = search_dir.replace('\'', "'\\''");
+    let escaped_pattern = name_pattern.replace('\'', "'\\''");
+
+    format!(
+        "find '{}' -maxdepth 10 -name '{}' -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -n {}",
+        escaped_dir, escaped_pattern, limit
+    )
 }
 
 pub struct GlobTool;
@@ -214,6 +199,43 @@ impl Tool for GlobTool {
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
             .unwrap_or(100);
+
+        // Remote workspace: use `find` via the workspace shell
+        if context.is_remote() {
+            let ws_shell = context.ws_shell().ok_or_else(|| {
+                BitFunError::tool("Workspace shell not available".to_string())
+            })?;
+
+            let search_dir = resolved_path.display().to_string();
+            let find_cmd = build_remote_find_command(&search_dir, pattern, limit);
+
+            let (stdout, _stderr, _exit_code) = ws_shell
+                .exec(&find_cmd, Some(30_000))
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to glob on remote: {}", e)))?;
+
+            let matches: Vec<String> = stdout
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(|l| l.to_string())
+                .collect();
+            let limited = limit_paths(&matches, limit);
+            let result_text = if limited.is_empty() {
+                format!("No files found matching pattern '{}'", pattern)
+            } else {
+                limited.join("\n")
+            };
+
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "pattern": pattern,
+                    "path": search_dir,
+                    "matches": limited,
+                    "match_count": limited.len()
+                }),
+                result_for_assistant: Some(result_text),
+            }]);
+        }
 
         let matches = call_glob(&resolved_path.display().to_string(), pattern, limit)
             .map_err(|e| BitFunError::tool(e))?;

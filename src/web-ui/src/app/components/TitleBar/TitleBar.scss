@@ -812,3 +812,56 @@ $_app-icon-size: 20px;
     opacity: 1 !important;
   }
 }
+
+// ==================== Remote Connection Indicator ====================
+
+.remote-connection-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: var(--color-success, #22c55e);
+  cursor: default;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: var(--element-bg-subtle);
+  }
+
+  .remote-connection-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    background-color: var(--color-success, #22c55e);
+    border-radius: 50%;
+    border: 1px solid var(--color-bg-primary);
+  }
+}
+
+.remote-connection-tooltip {
+  .remote-connection-tooltip-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .remote-connection-tooltip-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+
+    .remote-connection-name {
+      color: var(--color-text-secondary);
+    }
+
+    .remote-connection-path {
+      font-family: monospace;
+      font-size: 11px;
+      color: var(--color-text-secondary);
+    }
+  }
+}

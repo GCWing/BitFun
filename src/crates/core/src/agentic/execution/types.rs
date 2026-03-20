@@ -2,6 +2,7 @@
 
 use crate::agentic::core::Message;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
+use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -18,6 +19,8 @@ pub struct ExecutionContext {
     pub context: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
     pub skip_tool_confirmation: bool,
+    /// Workspace I/O services (filesystem + shell) injected into tools
+    pub workspace_services: Option<WorkspaceServices>,
 }
 
 /// Round context
@@ -35,6 +38,7 @@ pub struct RoundContext {
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
     pub cancellation_token: CancellationToken,
+    pub workspace_services: Option<WorkspaceServices>,
 }
 
 /// Round result

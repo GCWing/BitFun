@@ -1,6 +1,7 @@
 //! Tool framework - Tool interface definition and execution context
 use super::image_context::ImageContextProviderRef;
 use super::pipeline::SubagentParentInfo;
+use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
@@ -29,11 +30,29 @@ pub struct ToolUseContext {
     pub subagent_parent_info: Option<SubagentParentInfo>,
     // Cancel tool execution more timely, especially for tools like TaskTool that need to run for a long time
     pub cancellation_token: Option<CancellationToken>,
+    /// Workspace I/O services (filesystem + shell) — use these instead of
+    /// checking `get_remote_workspace_manager()` inside individual tools.
+    pub workspace_services: Option<WorkspaceServices>,
 }
 
 impl ToolUseContext {
     pub fn workspace_root(&self) -> Option<&Path> {
         self.workspace.as_ref().map(|binding| binding.root_path())
+    }
+
+    pub fn is_remote(&self) -> bool {
+        self.workspace
+            .as_ref()
+            .map(|ws| ws.is_remote())
+            .unwrap_or(false)
+    }
+
+    pub fn ws_fs(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceFileSystem> {
+        self.workspace_services.as_ref().map(|s| s.fs.as_ref())
+    }
+
+    pub fn ws_shell(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceShell> {
+        self.workspace_services.as_ref().map(|s| s.shell.as_ref())
     }
 }
 

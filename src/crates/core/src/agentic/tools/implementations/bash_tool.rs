@@ -8,7 +8,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::ToolExecutionProgressInfo;
 use async_trait::async_trait;
 use futures::StreamExt;
-use log::{debug, error};
+use log::{debug, error, info};
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
 use terminal_core::shell::{ShellDetector, ShellType};
@@ -394,6 +394,46 @@ Usage notes:
             .get("command")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("command is required".to_string()))?;
+
+        // Remote workspace: execute via injected workspace shell
+        if context.is_remote() {
+            if let Some(ws_shell) = context.ws_shell() {
+                info!("Executing command on remote workspace via SSH: {}", command_str);
+
+                let timeout_ms = input
+                    .get("timeout_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(120_000);
+
+                let (stdout, stderr, exit_code) = ws_shell
+                    .exec(command_str, Some(timeout_ms))
+                    .await
+                    .map_err(|e| BitFunError::tool(format!("Remote command execution failed: {}", e)))?;
+
+                let output = if stderr.is_empty() {
+                    stdout.clone()
+                } else {
+                    format!("{}\n{}", stdout, stderr)
+                };
+
+                let result = ToolResult::Result {
+                    data: json!({
+                        "command": command_str,
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "exit_code": exit_code,
+                        "duration_ms": start_time.elapsed().as_millis() as u64,
+                        "is_remote": true
+                    }),
+                    result_for_assistant: Some(format!(
+                        "[Remote SSH] Command executed on remote server:\n{}\n\nExit code: {}",
+                        output,
+                        exit_code
+                    )),
+                };
+                return Ok(vec![result]);
+            }
+        }
 
         let run_in_background = input
             .get("run_in_background")

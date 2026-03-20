@@ -562,6 +562,7 @@ mod tests {
             image_context_provider: None,
             subagent_parent_info: None,
             cancellation_token: None,
+            workspace_services: None,
         }
     }
 

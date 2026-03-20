@@ -46,6 +46,8 @@ export interface WorkspaceInfo {
   tags: string[];
   statistics?: ProjectStatistics | null;
   identity?: WorkspaceIdentity | null;
+  connectionId?: string;
+  connectionName?: string;
 }
 
 export interface UpdateAppStatusRequest {
@@ -54,6 +56,12 @@ export interface UpdateAppStatusRequest {
 
 export interface OpenWorkspaceRequest {
   path: string;
+}
+
+export interface OpenRemoteWorkspaceRequest {
+  remotePath: string;
+  connectionId: string;
+  connectionName: string;
 }
 
 export interface CreateAssistantWorkspaceRequest {}
@@ -124,6 +132,16 @@ export class GlobalAPI {
       });
     } catch (error) {
       throw createTauriCommandError('open_workspace', error, { path });
+    }
+  }
+
+  async openRemoteWorkspace(remotePath: string, connectionId: string, connectionName: string): Promise<WorkspaceInfo> {
+    try {
+      return await api.invoke('open_remote_workspace', {
+        request: { remotePath, connectionId, connectionName }
+      });
+    } catch (error) {
+      throw createTauriCommandError('open_remote_workspace', error, { remotePath, connectionId, connectionName });
     }
   }
 

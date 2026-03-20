@@ -19,7 +19,7 @@ serde_json = { workspace = true }
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/core" }
+bitfun-core = { path = "../../crates/core", features = ["ssh-remote"] }
 bitfun-transport = { path = "../../crates/transport", features = ["tauri-adapter"] }
 
 # Tauri
@@ -42,6 +42,7 @@ similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
 reqwest = { workspace = true }
+thiserror = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

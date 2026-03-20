@@ -40,6 +40,7 @@ import { workspaceManager } from '@/infrastructure/services/business/workspaceMa
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { WorkspaceKind } from '@/shared/types';
+import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser } from '@/features/ssh-remote';
 
 const DEFAULT_MODE_CONFIG_KEY = 'app.session_config.default_mode';
 const NAV_DISPLAY_MODE_STORAGE_KEY = 'bitfun.nav.displayMode';
@@ -88,6 +89,17 @@ const MainNav: React.FC<MainNavProps> = ({
   anchorNavSceneId = null,
 }) => {
   useMiniAppCatalogSync();
+
+  // SSH Remote state - use context instead of hook for consistent state
+  const sshRemote = useSSHRemoteContext();
+  const [isSSHConnectionDialogOpen, setIsSSHConnectionDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (sshRemote.showFileBrowser) {
+      setIsSSHConnectionDialogOpen(false);
+    }
+  }, [sshRemote.showFileBrowser]);
+
   const { state, switchLeftPanelTab } = useApp();
   const { openScene } = useSceneManager();
   const openNavScene = useNavSceneStore(s => s.openNavScene);
@@ -407,6 +419,23 @@ const MainNav: React.FC<MainNavProps> = ({
     await switchWorkspace(targetWorkspace);
   }, [closeWorkspaceMenu, recentWorkspaces, switchWorkspace]);
 
+  // SSH Remote handlers
+  const handleOpenRemoteSSH = useCallback(() => {
+    closeWorkspaceMenu();
+    setIsSSHConnectionDialogOpen(true);
+  }, [closeWorkspaceMenu]);
+
+  const handleSelectRemoteWorkspace = useCallback(async (path: string) => {
+    try {
+      await sshRemote.openWorkspace(path);
+      sshRemote.setShowFileBrowser(false);
+      // Close the SSH connection dialog as well
+      setIsSSHConnectionDialogOpen(false);
+    } catch (err) {
+      log.error('Failed to open remote workspace', err);
+    }
+  }, [sshRemote]);
+
   useEffect(() => {
     if (!workspaceMenuOpen) return;
 
@@ -614,6 +643,17 @@ const MainNav: React.FC<MainNavProps> = ({
       >
         <FolderPlus size={13} />
         <span>{t('header.newProject')}</span>
+      </button>
+      <button
+        type="button"
+        className="bitfun-nav-panel__workspace-menu-item"
+        role="menuitem"
+        onClick={handleOpenRemoteSSH}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-6v6" />
+        </svg>
+        <span>{t('ssh.remote.connect')}</span>
       </button>
       <div className="bitfun-nav-panel__workspace-menu-divider" role="separator" />
       <div className="bitfun-nav-panel__workspace-menu-section-title">
@@ -907,6 +947,22 @@ const MainNav: React.FC<MainNavProps> = ({
         hideTargetFields
         listScope="workspace"
       />
+
+      {/* SSH Remote Dialogs */}
+      <SSHConnectionDialog
+        open={isSSHConnectionDialogOpen}
+        onClose={() => setIsSSHConnectionDialogOpen(false)}
+      />
+      {sshRemote.showFileBrowser && sshRemote.connectionId && (
+        <RemoteFileBrowser
+          connectionId={sshRemote.connectionId}
+          onSelect={handleSelectRemoteWorkspace}
+          onCancel={() => {
+            sshRemote.setShowFileBrowser(false);
+            void sshRemote.disconnect();
+          }}
+        />
+      )}
     </>
   );
 };

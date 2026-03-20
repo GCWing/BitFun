@@ -269,11 +269,14 @@ impl Tool for TaskTool {
             .workspace_root()
             .map(|path| path.to_string_lossy().into_owned());
         if subagent_type == "Explore" || subagent_type == "FileFinder" {
-            let workspace_path = requested_workspace_path.as_deref().ok_or_else(|| {
-                BitFunError::tool(
-                    "workspace_path is required for Explore/FileFinder agent".to_string(),
-                )
-            })?;
+            let workspace_path = requested_workspace_path
+                .as_deref()
+                .or(current_workspace_path.as_deref())
+                .ok_or_else(|| {
+                    BitFunError::tool(
+                        "workspace_path is required for Explore/FileFinder agent".to_string(),
+                    )
+                })?;
 
             if workspace_path.is_empty() {
                 return Err(BitFunError::tool(
@@ -281,19 +284,22 @@ impl Tool for TaskTool {
                 ));
             }
 
-            // Validate workspace_path exists and is a directory
-            let path = std::path::Path::new(&workspace_path);
-            if !path.exists() {
-                return Err(BitFunError::tool(format!(
-                    "workspace_path '{}' does not exist",
-                    workspace_path
-                )));
-            }
-            if !path.is_dir() {
-                return Err(BitFunError::tool(format!(
-                    "workspace_path '{}' is not a directory",
-                    workspace_path
-                )));
+            // For remote workspaces, skip local filesystem validation — the path
+            // exists on the remote server, not locally.
+            if !context.is_remote() {
+                let path = std::path::Path::new(&workspace_path);
+                if !path.exists() {
+                    return Err(BitFunError::tool(format!(
+                        "workspace_path '{}' does not exist",
+                        workspace_path
+                    )));
+                }
+                if !path.is_dir() {
+                    return Err(BitFunError::tool(format!(
+                        "workspace_path '{}' is not a directory",
+                        workspace_path
+                    )));
+                }
             }
 
             prompt.push_str(&format!(

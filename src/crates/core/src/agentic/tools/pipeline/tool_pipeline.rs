@@ -787,6 +787,7 @@ impl ToolPipeline {
             image_context_provider: self.image_context_provider.clone(),
             subagent_parent_info: task.context.subagent_parent_info.clone(),
             cancellation_token: Some(cancellation_token),
+            workspace_services: task.context.workspace_services.clone(),
         };
 
         let execution_future = tool.call(&task.tool_call.arguments, &tool_context);

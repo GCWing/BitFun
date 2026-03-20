@@ -8,7 +8,6 @@ use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
 
-/// File write tool
 pub struct FileWriteTool;
 
 impl FileWriteTool {
@@ -101,12 +100,7 @@ Usage:
             };
         }
 
-        ValidationResult {
-            result: true,
-            message: None,
-            error_code: None,
-            meta: None,
-        }
+        ValidationResult::default()
     }
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
@@ -143,16 +137,21 @@ Usage:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
 
-        // Create directory if it doesn't exist
-        if let Some(parent) = Path::new(&resolved_path).parent() {
-            fs::create_dir_all(parent)
+        if let Some(ws_fs) = context.ws_fs() {
+            ws_fs
+                .write_file(&resolved_path, content.as_bytes())
                 .await
-                .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
+                .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
+        } else {
+            if let Some(parent) = Path::new(&resolved_path).parent() {
+                fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
+            }
+            fs::write(&resolved_path, content).await.map_err(|e| {
+                BitFunError::tool(format!("Failed to write file {}: {}", resolved_path, e))
+            })?;
         }
-
-        fs::write(&resolved_path, content).await.map_err(|e| {
-            BitFunError::tool(format!("Failed to write file {}: {}", resolved_path, e))
-        })?;
 
         let result = ToolResult::Result {
             data: json!({

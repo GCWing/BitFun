@@ -62,10 +62,35 @@ impl SessionManager {
         config.workspace_path.as_ref().map(PathBuf::from)
     }
 
+    /// Resolve the effective storage path for a session's workspace.
+    /// For remote workspaces, maps the remote path to a local session storage path
+    /// using `WorkspaceBinding.session_storage_path()`.
+    async fn effective_workspace_path_from_config(config: &SessionConfig) -> Option<PathBuf> {
+        let workspace_path = config.workspace_path.as_ref()?;
+        let path_buf = PathBuf::from(workspace_path);
+
+        // Check if this path belongs to any registered remote workspace
+        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection(workspace_path).await {
+            if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
+                return Some(manager.get_local_session_path(&entry.connection_id));
+            }
+        }
+
+        Some(path_buf)
+    }
+
+    #[allow(dead_code)]
     fn session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
         self.sessions
             .get(session_id)
             .and_then(|session| Self::session_workspace_from_config(&session.config))
+    }
+
+    /// Resolve the effective storage path for a session by ID.
+    /// For remote workspaces, maps the remote path to a local session storage path.
+    async fn effective_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
+        let config = self.sessions.get(session_id)?.config.clone();
+        Self::effective_workspace_path_from_config(&config).await
     }
 
     async fn rebuild_messages_from_turns(
@@ -203,9 +228,15 @@ impl SessionManager {
         config: SessionConfig,
         created_by: Option<String>,
     ) -> BitFunResult<Session> {
-        let workspace_path = Self::session_workspace_from_config(&config).ok_or_else(|| {
+        let _workspace_path = Self::session_workspace_from_config(&config).ok_or_else(|| {
             BitFunError::Validation("Session workspace_path is required".to_string())
         })?;
+
+        let session_storage_path = Self::effective_workspace_path_from_config(&config)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation("Session workspace_path is required".to_string())
+            })?;
 
         // Check session count limit
         if self.sessions.len() >= self.config.max_active_sessions {
@@ -232,11 +263,11 @@ impl SessionManager {
         // 3. Initialize compression manager
         self.compression_manager.create_session(&session_id);
 
-        // 4. Persist
+        // 4. Persist to local path (handles remote workspaces correctly)
         if self.config.enable_persistence {
             if let Some(session) = self.sessions.get(&session_id) {
                 self.persistence_manager
-                    .save_session(&workspace_path, &session)
+                    .save_session(&session_storage_path, &session)
                     .await?;
             }
         }
@@ -257,6 +288,8 @@ impl SessionManager {
         session_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<()> {
+        let effective_path = self.effective_session_workspace_path(session_id).await;
+
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.state = new_state.clone();
             session.updated_at = SystemTime::now();
@@ -264,9 +297,9 @@ impl SessionManager {
 
             // Persist state changes
             if self.config.enable_persistence {
-                if let Some(workspace_path) = Self::session_workspace_from_config(&session.config) {
+                if let Some(ref workspace_path) = effective_path {
                     self.persistence_manager
-                        .save_session_state(&workspace_path, session_id, &new_state)
+                        .save_session_state(workspace_path, session_id, &new_state)
                         .await?;
                 }
             }
@@ -287,7 +320,7 @@ impl SessionManager {
 
     /// Update session title (in-memory + persistence)
     pub async fn update_session_title(&self, session_id: &str, title: &str) -> BitFunResult<()> {
-        let workspace_path = self.session_workspace_path(session_id);
+        let workspace_path = self.effective_session_workspace_path(session_id).await;
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.session_name = title.to_string();
@@ -331,8 +364,9 @@ impl SessionManager {
         }
 
         if self.config.enable_persistence {
+            let effective_path = self.effective_session_workspace_path(session_id).await;
             if let (Some(workspace_path), Some(session)) = (
-                self.session_workspace_path(session_id),
+                effective_path,
                 self.sessions.get(session_id),
             ) {
                 self.persistence_manager
@@ -367,8 +401,9 @@ impl SessionManager {
         }
 
         if self.config.enable_persistence {
+            let effective_path = self.effective_session_workspace_path(session_id).await;
             if let (Some(workspace_path), Some(session)) = (
-                self.session_workspace_path(session_id),
+                effective_path,
                 self.sessions.get(session_id),
             ) {
                 self.persistence_manager
@@ -455,10 +490,21 @@ impl SessionManager {
         // Check if session is already in memory
         let session_already_in_memory = self.sessions.contains_key(session_id);
 
+        let session_storage_path = {
+            let ws = workspace_path.to_string_lossy().to_string();
+            let tmp_config = SessionConfig {
+                workspace_path: Some(ws),
+                ..Default::default()
+            };
+            Self::effective_workspace_path_from_config(&tmp_config)
+                .await
+                .unwrap_or_else(|| workspace_path.to_path_buf())
+        };
+
         // 1. Load session from storage
         let mut session = self
             .persistence_manager
-            .load_session(workspace_path, session_id)
+            .load_session(&session_storage_path, session_id)
             .await?;
 
         // Reset session state to Idle
@@ -476,7 +522,7 @@ impl SessionManager {
         let mut latest_turn_index: Option<usize> = None;
         let messages = match self
             .persistence_manager
-            .load_latest_turn_context_snapshot(workspace_path, session_id)
+            .load_latest_turn_context_snapshot(&session_storage_path, session_id)
             .await?
         {
             Some((turn_index, msgs)) => {
@@ -484,7 +530,7 @@ impl SessionManager {
                 msgs
             }
             None => {
-                self.rebuild_messages_from_turns(workspace_path, session_id)
+                self.rebuild_messages_from_turns(&session_storage_path, session_id)
                     .await?
             }
         };
@@ -655,7 +701,7 @@ impl SessionManager {
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
         let workspace_path =
-            Self::session_workspace_from_config(&session.config).ok_or_else(|| {
+            Self::effective_workspace_path_from_config(&session.config).await.ok_or_else(|| {
                 BitFunError::Validation(format!(
                     "Session workspace_path is missing: {}",
                     session_id
@@ -744,7 +790,7 @@ impl SessionManager {
         final_response: String,
         stats: TurnStats,
     ) -> BitFunResult<()> {
-        let workspace_path = self.session_workspace_path(session_id).ok_or_else(|| {
+        let workspace_path = self.effective_session_workspace_path(session_id).await.ok_or_else(|| {
             BitFunError::Validation(format!("Session workspace_path is missing: {}", session_id))
         })?;
         let turn_index = self
@@ -854,7 +900,7 @@ impl SessionManager {
         turn_id: &str,
         error: String,
     ) -> BitFunResult<()> {
-        let workspace_path = self.session_workspace_path(session_id).ok_or_else(|| {
+        let workspace_path = self.effective_session_workspace_path(session_id).await.ok_or_else(|| {
             BitFunError::Validation(format!("Session workspace_path is missing: {}", session_id))
         })?;
         let turn_index = self
@@ -1097,14 +1143,16 @@ impl SessionManager {
         session_id: &str,
         compression_state: CompressionState,
     ) -> BitFunResult<()> {
+        let effective_path = self.effective_session_workspace_path(session_id).await;
+
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.compression_state = compression_state;
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
             if self.config.enable_persistence {
-                if let Some(workspace_path) = Self::session_workspace_from_config(&session.config) {
+                if let Some(ref workspace_path) = effective_path {
                     self.persistence_manager
-                        .save_session(&workspace_path, &session)
+                        .save_session(workspace_path, &session)
                         .await?;
                 }
             }

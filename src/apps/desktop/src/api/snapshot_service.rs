@@ -1,6 +1,7 @@
 //! Snapshot Service API
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
+use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::snapshot::{
     ensure_snapshot_manager_for_workspace, get_snapshot_manager_for_workspace,
     initialize_snapshot_manager_for_workspace, OperationType, SnapshotConfig, SnapshotManager,
@@ -172,6 +173,14 @@ pub async fn initialize_snapshot(
     app_handle: AppHandle,
     request: SnapshotInitRequest,
 ) -> Result<serde_json::Value, String> {
+    // Remote workspaces don't support snapshot system
+    if is_remote_path(&request.workspace_path).await {
+        return Ok(serde_json::json!({
+            "success": true,
+            "message": "Snapshot system skipped for remote workspace"
+        }));
+    }
+
     let workspace_dir = PathBuf::from(&request.workspace_path);
 
     if !workspace_dir.exists() {
@@ -199,13 +208,14 @@ pub async fn initialize_snapshot(
     }))
 }
 
-fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> {
+async fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> {
     if workspace_path.trim().is_empty() {
         return Err("workspacePath is required".to_string());
     }
 
     let workspace_dir = PathBuf::from(workspace_path);
-    if !workspace_dir.exists() {
+    // Remote paths don't exist on the local filesystem — skip the existence check
+    if !is_remote_path(workspace_path).await && !workspace_dir.exists() {
         return Err(format!(
             "Workspace directory does not exist: {}",
             workspace_path
@@ -218,7 +228,15 @@ fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> {
 async fn ensure_snapshot_manager_ready(
     workspace_path: &str,
 ) -> Result<Arc<SnapshotManager>, String> {
-    let workspace_dir = resolve_workspace_dir(workspace_path)?;
+    // Remote workspaces don't support the snapshot system
+    if is_remote_path(workspace_path).await {
+        return Err(format!(
+            "Snapshot system not supported for remote workspace: {}",
+            workspace_path
+        ));
+    }
+
+    let workspace_dir = resolve_workspace_dir(workspace_path).await?;
 
     if let Some(manager) = get_snapshot_manager_for_workspace(&workspace_dir) {
         return Ok(manager);
@@ -292,6 +310,11 @@ pub async fn rollback_session(
     app_handle: AppHandle,
     request: RollbackSessionRequest,
 ) -> Result<Vec<String>, String> {
+    // Remote workspaces have no local snapshots — nothing to roll back
+    if is_remote_path(&request.workspace_path).await {
+        return Ok(vec![]);
+    }
+
     let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
 
     let restored_files = manager
@@ -321,6 +344,11 @@ pub async fn rollback_to_turn(
     app_handle: AppHandle,
     request: RollbackTurnRequest,
 ) -> Result<Vec<String>, String> {
+    // Remote workspaces have no local snapshots — nothing to roll back
+    if is_remote_path(&request.workspace_path).await {
+        return Ok(vec![]);
+    }
+
     {
         use bitfun_core::agentic::coordination::get_global_coordinator;
 

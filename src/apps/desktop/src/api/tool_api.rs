@@ -101,6 +101,7 @@ fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         image_context_provider: Some(Arc::new(create_image_context_provider())),
         subagent_parent_info: None,
         cancellation_token: None,
+        workspace_services: None,
     }
 }
 

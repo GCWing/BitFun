@@ -2,7 +2,6 @@
 
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -14,6 +13,7 @@ use bitfun_core::agentic::coordination::{
 use bitfun_core::agentic::core::*;
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
+use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -435,8 +435,9 @@ pub async fn delete_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: DeleteSessionRequest,
 ) -> Result<(), String> {
+    let effective_path = get_effective_session_path(&request.workspace_path).await;
     coordinator
-        .delete_session(&PathBuf::from(request.workspace_path), &request.session_id)
+        .delete_session(&effective_path, &request.session_id)
         .await
         .map_err(|e| format!("Failed to delete session: {}", e))
 }
@@ -446,8 +447,9 @@ pub async fn restore_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: RestoreSessionRequest,
 ) -> Result<SessionResponse, String> {
+    let effective_path = get_effective_session_path(&request.workspace_path).await;
     let session = coordinator
-        .restore_session(&PathBuf::from(request.workspace_path), &request.session_id)
+        .restore_session(&effective_path, &request.session_id)
         .await
         .map_err(|e| format!("Failed to restore session: {}", e))?;
 
@@ -459,8 +461,10 @@ pub async fn list_sessions(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: ListSessionsRequest,
 ) -> Result<Vec<SessionResponse>, String> {
+    // Map remote workspace path to local session storage path
+    let effective_path = get_effective_session_path(&request.workspace_path).await;
     let summaries = coordinator
-        .list_sessions(&PathBuf::from(request.workspace_path))
+        .list_sessions(&effective_path)
         .await
         .map_err(|e| format!("Failed to list sessions: {}", e))?;
 

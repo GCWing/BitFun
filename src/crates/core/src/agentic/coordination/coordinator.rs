@@ -108,15 +108,78 @@ pub struct ConversationCoordinator {
 }
 
 impl ConversationCoordinator {
-    fn session_workspace_binding(session: &Session) -> Option<WorkspaceBinding> {
-        Self::config_workspace_binding(&session.config)
+    /// Build a workspace binding that is remote-aware.
+    /// If the global remote workspace is active and matches the session path,
+    /// returns a `WorkspaceBinding` with remote metadata and correct local
+    /// session storage path.
+    async fn build_workspace_binding(config: &SessionConfig) -> Option<WorkspaceBinding> {
+        let workspace_path = config.workspace_path.as_ref()?;
+        let path_buf = PathBuf::from(workspace_path);
+
+        // Check if this path belongs to any registered remote workspace
+        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection(workspace_path).await {
+            if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
+                let local_session_path = manager.get_local_session_path(&entry.connection_id);
+                return Some(WorkspaceBinding::new_remote(
+                    None,
+                    path_buf,
+                    entry.connection_id,
+                    entry.connection_name,
+                    local_session_path,
+                ));
+            }
+        }
+
+        Some(WorkspaceBinding::new(None, path_buf))
     }
 
-    fn config_workspace_binding(config: &SessionConfig) -> Option<WorkspaceBinding> {
-        config
-            .workspace_path
-            .as_ref()
-            .map(|workspace_path| WorkspaceBinding::new(None, PathBuf::from(workspace_path)))
+    /// Build `WorkspaceServices` from a resolved `WorkspaceBinding`.
+    /// For remote bindings, wires up SSH-backed FS/shell; for local ones,
+    /// returns local implementations.
+    async fn build_workspace_services(
+        binding: &Option<WorkspaceBinding>,
+    ) -> Option<crate::agentic::workspace::WorkspaceServices> {
+        let binding = binding.as_ref()?;
+
+        if binding.is_remote() {
+            let manager = match crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
+                Some(m) => m,
+                None => {
+                    log::warn!("build_workspace_services: RemoteWorkspaceStateManager not initialized");
+                    return None;
+                }
+            };
+            let ssh_manager = match manager.get_ssh_manager().await {
+                Some(m) => m,
+                None => {
+                    log::warn!("build_workspace_services: SSH manager not available in state manager");
+                    return None;
+                }
+            };
+            let file_service = match manager.get_file_service().await {
+                Some(f) => f,
+                None => {
+                    log::warn!("build_workspace_services: File service not available in state manager");
+                    return None;
+                }
+            };
+            let connection_id = match binding.connection_id() {
+                Some(id) => id.to_string(),
+                None => {
+                    log::warn!("build_workspace_services: No connection_id in workspace binding");
+                    return None;
+                }
+            };
+            log::info!("build_workspace_services: Built remote services for connection_id={}", connection_id);
+            Some(crate::agentic::workspace::remote_workspace_services(
+                connection_id,
+                file_service,
+                ssh_manager,
+                binding.root_path_string(),
+            ))
+        } else {
+            Some(crate::agentic::workspace::local_workspace_services())
+        }
     }
 
     fn normalize_agent_type(agent_type: &str) -> String {
@@ -333,7 +396,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         };
 
-        let workspace_path_buf = std::path::PathBuf::from(&workspace_path);
+        let binding = Self::build_workspace_binding(&session.config).await;
+        let workspace_path_buf = binding
+            .as_ref()
+            .map(|b| b.session_storage_path().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(&workspace_path));
+
         let persistence_manager = match PersistenceManager::new(path_manager) {
             Ok(manager) => manager,
             Err(e) => {
@@ -440,7 +508,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Err(_) => return,
         };
 
-        let workspace_path_buf = std::path::PathBuf::from(workspace_path);
+        let workspace_path_buf = {
+            let binding = Self::build_workspace_binding(&SessionConfig {
+                workspace_path: Some(workspace_path.to_string()),
+                ..Default::default()
+            }).await;
+            binding
+                .as_ref()
+                .map(|b| b.session_storage_path().to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from(workspace_path))
+        };
         let persistence_manager = match PersistenceManager::new(path_manager) {
             Ok(manager) => manager,
             Err(_) => return,
@@ -938,7 +1015,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_message_metadata = Some(metadata);
         }
 
-        let session_workspace = Self::session_workspace_binding(&session);
+        let session_workspace = Self::build_workspace_binding(&session.config).await;
+
+        // Build WorkspaceServices based on the workspace type
+        let workspace_services = Self::build_workspace_services(&session_workspace).await;
+
+        info!(
+            "Dialog turn workspace context: session_id={}, workspace_path={:?}, is_remote={}, workspace_services={}",
+            session_id,
+            session.config.workspace_path,
+            session_workspace.as_ref().map(|ws| ws.is_remote()).unwrap_or(false),
+            if workspace_services.is_some() { "available" } else { "NONE" }
+        );
 
         let wrapped_user_input = self
             .wrap_user_input(
@@ -1037,6 +1125,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             context: context_vars,
             subagent_parent_info: None,
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
+            workspace_services,
         };
 
         // Auto-generate session title on first message
@@ -1558,15 +1647,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             None
         };
 
+        let subagent_workspace = Self::build_workspace_binding(&session.config).await;
+        let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
         let execution_context = ExecutionContext {
             session_id: session.session_id.clone(),
             dialog_turn_id: dialog_turn_id.clone(),
             turn_index: 0,
             agent_type: agent_type.clone(),
-            workspace: Self::session_workspace_binding(&session),
+            workspace: subagent_workspace,
             context: context.unwrap_or_default(),
             subagent_parent_info: Some(subagent_parent_info),
             skip_tool_confirmation: false,
+            workspace_services: subagent_services,
         };
 
         let initial_messages = vec![Message::user(task_description)];

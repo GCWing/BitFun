@@ -1,6 +1,6 @@
  
 
-import { WorkspaceInfo, globalStateAPI } from '../../../shared/types';
+import { WorkspaceInfo, WorkspaceKind, globalStateAPI } from '../../../shared/types';
 import { createLogger } from '@/shared/utils/logger';
 import { listen } from '@tauri-apps/api/event';
 
@@ -233,6 +233,7 @@ class WorkspaceManager {
     event?: WorkspaceEvent
   ): void {
     const openedWorkspaceMap = this.buildOpenedWorkspaceMap(openedWorkspaces);
+
     const resolvedCurrentWorkspace = currentWorkspace
       ? openedWorkspaceMap.get(currentWorkspace.id) ?? currentWorkspace
       : null;
@@ -401,6 +402,88 @@ class WorkspaceManager {
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
       throw error;
     }
+  }
+
+  public async openRemoteWorkspace(remoteWorkspace: {
+    connectionId: string;
+    connectionName: string;
+    remotePath: string;
+  }): Promise<WorkspaceInfo> {
+    try {
+      this.setLoading(true);
+      this.setError(null);
+
+      log.info('Opening remote workspace', remoteWorkspace);
+
+      const workspace = await globalStateAPI.openRemoteWorkspace(
+        remoteWorkspace.remotePath,
+        remoteWorkspace.connectionId,
+        remoteWorkspace.connectionName,
+      );
+
+      const [recentWorkspaces, openedWorkspaces] = await Promise.all([
+        globalStateAPI.getRecentWorkspaces(),
+        globalStateAPI.getOpenedWorkspaces(),
+      ]);
+
+      this.updateWorkspaceState(
+        workspace,
+        recentWorkspaces,
+        openedWorkspaces,
+        false,
+        null,
+        { type: 'workspace:opened', workspace }
+      );
+
+      return workspace;
+    } catch (error) {
+      log.error('Failed to open remote workspace', { remoteWorkspace, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
+      throw error;
+    }
+  }
+
+  public async removeRemoteWorkspace(connectionId: string): Promise<void> {
+    try {
+      const workspace = this.findRemoteWorkspaceByConnectionId(connectionId);
+      if (!workspace) {
+        return;
+      }
+
+      await globalStateAPI.closeWorkspace(workspace.id);
+
+      const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
+        globalStateAPI.getCurrentWorkspace(),
+        globalStateAPI.getRecentWorkspaces(),
+        globalStateAPI.getOpenedWorkspaces(),
+      ]);
+
+      this.updateWorkspaceState(
+        currentWorkspace,
+        recentWorkspaces,
+        openedWorkspaces,
+        false,
+        null,
+        { type: 'workspace:closed', workspaceId: workspace.id }
+      );
+
+      this.emit({ type: 'workspace:active-changed', workspace: currentWorkspace });
+    } catch (error) {
+      log.error('Failed to remove remote workspace', { connectionId, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
+      throw error;
+    }
+  }
+
+  private findRemoteWorkspaceByConnectionId(connectionId: string): WorkspaceInfo | undefined {
+    for (const [, ws] of this.state.openedWorkspaces) {
+      if (ws.connectionId === connectionId && ws.workspaceKind === WorkspaceKind.Remote) {
+        return ws;
+      }
+    }
+    return undefined;
   }
 
   public async createAssistantWorkspace(): Promise<WorkspaceInfo> {

@@ -170,6 +170,11 @@ impl FileTreeService {
     }
 
     pub async fn build_tree(&self, root_path: &str) -> Result<Vec<FileTreeNode>, String> {
+        // For remote workspaces, delegate to get_directory_contents which handles SSH
+        if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
+            return self.get_directory_contents(root_path).await;
+        }
+
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
@@ -189,6 +194,23 @@ impl FileTreeService {
         &self,
         root_path: &str,
     ) -> BitFunResult<(Vec<FileTreeNode>, FileTreeStatistics)> {
+        // For remote workspaces, return simple directory listing with empty stats
+        if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
+            let nodes = self.get_directory_contents(root_path).await
+                .map_err(|e| BitFunError::service(e))?;
+            let stats = FileTreeStatistics {
+                total_files: nodes.iter().filter(|n| !n.is_directory).count(),
+                total_directories: nodes.iter().filter(|n| n.is_directory).count(),
+                total_size_bytes: 0,
+                max_depth_reached: 0,
+                file_type_counts: HashMap::new(),
+                large_files: Vec::new(),
+                symlinks_count: 0,
+                hidden_files_count: 0,
+            };
+            return Ok((nodes, stats));
+        }
+
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
@@ -607,6 +629,35 @@ impl FileTreeService {
     }
 
     pub async fn get_directory_contents(&self, path: &str) -> Result<Vec<FileTreeNode>, String> {
+        // Check if this path belongs to any registered remote workspace
+        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection(path).await {
+            if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
+                if let Some(file_service) = manager.get_file_service().await {
+                    match file_service.read_dir(&entry.connection_id, path).await {
+                        Ok(entries) => {
+                            let nodes: Vec<FileTreeNode> = entries
+                                .into_iter()
+                                .filter(|e| e.name != "." && e.name != "..")
+                                .map(|e| {
+                                    FileTreeNode::new(
+                                        e.path.clone(),
+                                        e.name.clone(),
+                                        e.path.clone(),
+                                        e.is_dir,
+                                    )
+                                })
+                                .collect();
+                            return Ok(nodes);
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to read remote directory: {}", e));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fall back to local filesystem
         let path_buf = PathBuf::from(path);
 
         if !path_buf.exists() {

@@ -38,6 +38,7 @@ pub enum WorkspaceKind {
     #[default]
     Normal,
     Assistant,
+    Remote,
 }
 
 pub(crate) const IDENTITY_FILE_NAME: &str = "IDENTITY.md";
@@ -275,6 +276,8 @@ impl WorkspaceInfo {
         let now = chrono::Utc::now();
         let id = uuid::Uuid::new_v4().to_string();
 
+        let is_remote = workspace_kind == WorkspaceKind::Remote;
+
         let mut workspace = Self {
             id,
             name: options.display_name.clone().unwrap_or(default_name),
@@ -293,11 +296,13 @@ impl WorkspaceInfo {
             metadata: HashMap::new(),
         };
 
-        workspace.detect_workspace_type().await;
-        workspace.load_identity().await;
+        if !is_remote {
+            workspace.detect_workspace_type().await;
+            workspace.load_identity().await;
 
-        if options.scan_options.calculate_statistics {
-            workspace.scan_workspace(options.scan_options).await?;
+            if options.scan_options.calculate_statistics {
+                workspace.scan_workspace(options.scan_options).await?;
+            }
         }
 
         workspace.status = if options.auto_set_current {
@@ -558,6 +563,9 @@ impl WorkspaceInfo {
 
     /// Checks whether the workspace is still valid.
     pub async fn is_valid(&self) -> bool {
+        if self.workspace_kind == WorkspaceKind::Remote {
+            return true;
+        }
         self.root_path.exists() && self.root_path.is_dir()
     }
 
@@ -654,18 +662,22 @@ impl WorkspaceManager {
         path: PathBuf,
         options: WorkspaceOpenOptions,
     ) -> BitFunResult<WorkspaceInfo> {
-        if !path.exists() {
-            return Err(BitFunError::service(format!(
-                "Workspace path does not exist: {:?}",
-                path
-            )));
-        }
+        let is_remote = options.workspace_kind == WorkspaceKind::Remote;
 
-        if !path.is_dir() {
-            return Err(BitFunError::service(format!(
-                "Workspace path is not a directory: {:?}",
-                path
-            )));
+        if !is_remote {
+            if !path.exists() {
+                return Err(BitFunError::service(format!(
+                    "Workspace path does not exist: {:?}",
+                    path
+                )));
+            }
+
+            if !path.is_dir() {
+                return Err(BitFunError::service(format!(
+                    "Workspace path is not a directory: {:?}",
+                    path
+                )));
+            }
         }
 
         let existing_workspace_id = self

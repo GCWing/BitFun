@@ -118,7 +118,9 @@ function isSessionRunning(session: SessionResponse): boolean {
 }
 
 export function useShellEntries(): UseShellEntriesReturn {
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspacePath, workspace } = useCurrentWorkspace();
+  const isRemote = workspace?.workspaceKind === 'remote';
+  const currentConnectionId = workspace?.connectionId ?? null;
 
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [hubConfig, setHubConfig] = useState<HubConfig>({ terminals: [], worktrees: {} });
@@ -154,11 +156,22 @@ export function useShellEntries(): UseShellEntriesReturn {
     }
 
     try {
-      setSessions(await service.listSessions());
+      const allSessions = await service.listSessions();
+      // Filter sessions based on current workspace type:
+      // - Remote workspace: only show terminals belonging to this connection
+      // - Local workspace: only show local (non-remote) terminals
+      const filtered = allSessions.filter(session => {
+        const isRemoteSession = session.shellType === 'Remote';
+        if (isRemote) {
+          return isRemoteSession && session.connectionId === currentConnectionId;
+        }
+        return !isRemoteSession;
+      });
+      setSessions(filtered);
     } catch (error) {
       log.error('Failed to list sessions', error);
     }
-  }, []);
+  }, [isRemote, currentConnectionId]);
 
   useEffect(() => {
     if (!workspacePath) {

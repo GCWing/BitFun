@@ -107,6 +107,13 @@ qrcode = { workspace = true }
 # WebSocket client
 tokio-tungstenite = { workspace = true }
 
+# SSH - Remote SSH support (optional feature)
+russh = { version = "0.45", optional = true }
+russh-sftp = { version = "2.1", optional = true }
+russh-keys = { version = "0.45", features = ["openssl"], optional = true }
+shellexpand = { version = "3", optional = true }
+ssh_config = { version = "0.1", optional = true }
+
 # Relay server shared library (embedded relay reuses standalone relay logic)
 bitfun-relay-server = { path = "../../apps/relay-server" }
 
@@ -119,10 +126,7 @@ bitfun-transport = { path = "../transport" }
 # Tauri dependency (optional, enabled only when needed)
 tauri = { workspace = true, optional = true }
 
-# Windows-specific dependencies
-[target.'cfg(windows)'.dependencies]
-win32job = { workspace = true }
-
 [features]
-default = []
+default = ["ssh-remote"]
 tauri-support = ["tauri"]  # Optional tauri support
+ssh-remote = ["russh", "russh-sftp", "russh-keys", "shellexpand", "ssh_config"]  # Optional SSH remote support

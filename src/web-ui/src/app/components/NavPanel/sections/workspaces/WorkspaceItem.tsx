@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, GitBranch, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw } from 'lucide-react';
 import { ConfirmDialog, Tooltip } from '@/component-library';
@@ -12,7 +12,8 @@ import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { BranchSelectModal, type BranchSelectResult } from '../../../panels/BranchSelectModal';
 import SessionsSection from '../sessions/SessionsSection';
-import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
+import { WorkspaceKind, isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
+import { SSHContext } from '@/features/ssh-remote/SSHRemoteProvider';
 
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
@@ -59,6 +60,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspace.workspaceKind === WorkspaceKind.Assistant
       ? workspace.identity?.name?.trim() || workspace.name
       : workspace.name;
+
+  // Remote connection status — optional: safe if not inside SSHRemoteProvider
+  const sshContext = useContext(SSHContext);
+  const remoteConnStatus = workspace.connectionId && sshContext
+    ? (sshContext.workspaceStatuses[workspace.connectionId] ?? 'connecting')
+    : undefined;
 
   const updateMenuPosition = useCallback(() => {
     const anchor = menuAnchorRef.current;
@@ -433,10 +440,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           className="bitfun-nav-panel__workspace-item-name-btn"
           onClick={() => { void handleCardNameClick(); }}
         >
-          <span className="bitfun-nav-panel__workspace-item-title">
+          <span className={`bitfun-nav-panel__workspace-item-title${isRemoteWorkspace(workspace) ? ' is-remote' : ''}`}>
             <span className="bitfun-nav-panel__workspace-item-label">{workspaceDisplayName}</span>
+            {isRemoteWorkspace(workspace) && (
+              <span className="bitfun-nav-panel__workspace-item-subtitle">
+                <span
+                  className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteConnStatus ?? 'connecting'}`}
+                  aria-label={remoteConnStatus ?? 'connecting'}
+                />
+                <span>{workspace.connectionName}</span>
+              </span>
+            )}
           </span>
-          {currentBranch ? (
+          {!isRemoteWorkspace(workspace) && currentBranch ? (
             <span className="bitfun-nav-panel__workspace-item-branch">
               <GitBranch size={11} />
               <span>{currentBranch}</span>

@@ -1,0 +1,41 @@
+/**
+ * Confirm Dialog Styles
+ */
+
+.confirm-dialog {
+  padding: 8px 0;
+
+  &__warning {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 14px;
+    background: var(--color-error-bg);
+    border: 1px solid var(--color-error-border);
+    border-radius: 8px;
+    color: var(--color-error);
+
+    svg {
+      flex-shrink: 0;
+    }
+
+    span {
+      font-weight: 500;
+      font-size: 14px;
+    }
+  }
+
+  &__message {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+}

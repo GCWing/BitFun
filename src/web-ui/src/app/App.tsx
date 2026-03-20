@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { ChatProvider, useAIInitialization } from '../infrastructure';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeContext';
+import { SSHRemoteProvider } from '../features/ssh-remote';
 import AppLayout from './layout/AppLayout';
 import { useCurrentModelConfig } from '../hooks/useModelConfigs';
 import { ContextMenuRenderer } from '../shared/context-menu-system/components/ContextMenuRenderer';
@@ -217,32 +218,34 @@ function App() {
   return (
     <ChatProvider>
       <ViewModeProvider defaultMode="coder">
-        <ToolbarModeProvider>
-          {/* Onboarding overlay (first launch) */}
-          {ENABLE_MAIN_ONBOARDING && isOnboardingActive && (
-            <OnboardingWizard 
-              onComplete={handleOnboardingComplete}
-            />
-          )}
-          
-          {/* Unified app layout with startup/workspace modes */}
-          <AppLayout />
-          
-          {/* Context menu renderer */}
-          <ContextMenuRenderer />
-          
-          {/* Notification system */}
-          <NotificationContainer />
-          <NotificationCenter />
-          
-          {/* Confirm dialog */}
-          <ConfirmDialogRenderer />
+        <SSHRemoteProvider>
+          <ToolbarModeProvider>
+            {/* Onboarding overlay (first launch) */}
+            {ENABLE_MAIN_ONBOARDING && isOnboardingActive && (
+              <OnboardingWizard
+                onComplete={handleOnboardingComplete}
+              />
+            )}
 
-          {/* Startup splash — sits above everything, exits once workspace is ready */}
-          {splashVisible && (
-            <SplashScreen isExiting={splashExiting} onExited={handleSplashExited} />
-          )}
-        </ToolbarModeProvider>
+            {/* Unified app layout with startup/workspace modes */}
+            <AppLayout />
+
+            {/* Context menu renderer */}
+            <ContextMenuRenderer />
+
+            {/* Notification system */}
+            <NotificationContainer />
+            <NotificationCenter />
+
+            {/* Confirm dialog */}
+            <ConfirmDialogRenderer />
+
+            {/* Startup splash — sits above everything, exits once workspace is ready */}
+            {splashVisible && (
+              <SplashScreen isExiting={splashExiting} onExited={handleSplashExited} />
+            )}
+          </ToolbarModeProvider>
+        </SSHRemoteProvider>
       </ViewModeProvider>
     </ChatProvider>
   );

@@ -108,9 +108,8 @@ Important notes:
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        // Validate path parameter
         let path_str = match input.get("path").and_then(|v| v.as_str()) {
             Some(p) => p,
             None => {
@@ -134,7 +133,6 @@ Important notes:
 
         let path = Path::new(path_str);
 
-        // Validate if path is absolute
         if !path.is_absolute() {
             return ValidationResult {
                 result: false,
@@ -144,40 +142,40 @@ Important notes:
             };
         }
 
-        // Validate if path exists
-        if !path.exists() {
-            return ValidationResult {
-                result: false,
-                message: Some(format!("Path does not exist: {}", path_str)),
-                error_code: Some(404),
-                meta: None,
-            };
-        }
-
-        // If directory, check if recursive deletion is needed
-        if path.is_dir() {
-            let recursive = input
-                .get("recursive")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-
-            // Check if directory is empty
-            let is_empty = match fs::read_dir(path).await {
-                Ok(mut entries) => entries.next_entry().await.ok().flatten().is_none(),
-                Err(_) => false,
-            };
-
-            if !is_empty && !recursive {
+        let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
+        if !is_remote {
+            if !path.exists() {
                 return ValidationResult {
                     result: false,
-                    message: Some(format!("Directory is not empty: {}. Set recursive=true to delete non-empty directories", path_str)),
-                    error_code: Some(400),
-                    meta: Some(json!({
-                        "is_directory": true,
-                        "is_empty": false,
-                        "requires_recursive": true
-                    })),
+                    message: Some(format!("Path does not exist: {}", path_str)),
+                    error_code: Some(404),
+                    meta: None,
                 };
+            }
+
+            if path.is_dir() {
+                let recursive = input
+                    .get("recursive")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                let is_empty = match fs::read_dir(path).await {
+                    Ok(mut entries) => entries.next_entry().await.ok().flatten().is_none(),
+                    Err(_) => false,
+                };
+
+                if !is_empty && !recursive {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(format!("Directory is not empty: {}. Set recursive=true to delete non-empty directories", path_str)),
+                        error_code: Some(400),
+                        meta: Some(json!({
+                            "is_directory": true,
+                            "is_empty": false,
+                            "requires_recursive": true
+                        })),
+                    };
+                }
             }
         }
 
@@ -224,7 +222,7 @@ Important notes:
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let path_str = input
             .get("path")
@@ -236,6 +234,41 @@ Important notes:
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        // Remote workspace: delete via shell command
+        if context.is_remote() {
+            let ws_shell = context.ws_shell().ok_or_else(|| {
+                BitFunError::tool("Workspace shell not available for remote Delete".to_string())
+            })?;
+
+            let rm_cmd = if recursive {
+                format!("rm -rf '{}'", path_str.replace('\'', "'\\''"))
+            } else {
+                format!("rm -f '{}'", path_str.replace('\'', "'\\''"))
+            };
+
+            let (_stdout, stderr, exit_code) = ws_shell
+                .exec(&rm_cmd, Some(15_000))
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to delete on remote: {}", e)))?;
+
+            if exit_code != 0 && !stderr.is_empty() {
+                return Err(BitFunError::tool(format!("Remote delete failed: {}", stderr)));
+            }
+
+            let result_data = json!({
+                "success": true,
+                "path": path_str,
+                "is_directory": recursive,
+                "recursive": recursive,
+                "is_remote": true
+            });
+            let result_text = self.render_result_for_assistant(&result_data);
+            return Ok(vec![ToolResult::Result {
+                data: result_data,
+                result_for_assistant: Some(result_text),
+            }]);
+        }
+
         let path = Path::new(path_str);
         let is_directory = path.is_dir();
 
@@ -245,7 +278,6 @@ Important notes:
             path_str
         );
 
-        // Execute deletion operation
         if is_directory {
             if recursive {
                 fs::remove_dir_all(path)
@@ -262,7 +294,6 @@ Important notes:
                 .map_err(|e| BitFunError::tool(format!("Failed to delete file: {}", e)))?;
         }
 
-        // Build result
         let result_data = json!({
             "success": true,
             "path": path_str,

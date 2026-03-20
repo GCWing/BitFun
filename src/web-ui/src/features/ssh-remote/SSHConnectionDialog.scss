@@ -1,0 +1,220 @@
+/**
+ * SSH Connection Dialog Styles
+ */
+
+.ssh-connection-dialog {
+  padding: 16px 0 8px;
+
+  &__error {
+    margin-bottom: 16px;
+    padding: 0 16px;
+  }
+
+  &__section {
+    margin-bottom: 16px;
+    padding: 0 16px;
+  }
+
+  &__section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__saved-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--card-bg-default);
+    transition: all var(--motion-fast) var(--easing-standard);
+    cursor: pointer;
+    position: relative;
+
+    &:hover {
+      border-color: var(--border-accent);
+      background: var(--card-bg-hover);
+    }
+
+    &:active {
+      transform: scale(0.99);
+    }
+
+    &--config {
+      .ssh-connection-dialog__saved-icon {
+        background: var(--color-success-100);
+        color: var(--color-success-500);
+      }
+    }
+  }
+
+  &__saved-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--color-accent-100);
+    border-radius: 8px;
+    color: var(--color-accent-500);
+    flex-shrink: 0;
+  }
+
+  &__saved-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__saved-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__saved-detail {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    font-family: var(--font-family-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__saved-meta {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  &__saved-auth {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  &__saved-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity var(--motion-fast) var(--easing-standard);
+
+    .ssh-connection-dialog__saved-item:hover & {
+      opacity: 1;
+    }
+  }
+
+  &__delete-btn {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+
+    &:hover {
+      color: var(--color-error);
+      opacity: 1;
+    }
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 16px 16px;
+    padding-top: 8px;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-subtle);
+    }
+
+    span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 0 16px;
+  }
+
+  &__row {
+    display: flex;
+    gap: 12px;
+  }
+
+  &__field {
+    &--flex {
+      flex: 1;
+    }
+
+    &--port {
+      width: 100px;
+      flex-shrink: 0;
+    }
+  }
+
+  &__label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+    padding: 16px 16px 8px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &__spinner {
+    animation: spin 1s linear infinite;
+    margin-right: 6px;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

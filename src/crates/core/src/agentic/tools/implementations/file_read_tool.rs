@@ -10,11 +10,8 @@ use serde_json::{json, Value};
 use std::path::Path;
 use tool_runtime::fs::read_file::read_file;
 
-/// File read tool
 pub struct FileReadTool {
-    /// Maximum number of lines to read
     default_max_lines_to_read: usize,
-    /// Maximum line length
     max_line_chars: usize,
 }
 
@@ -26,11 +23,52 @@ impl FileReadTool {
         }
     }
 
-    /// Create FileReadTool with custom configuration
     pub fn with_config(default_max_lines_to_read: usize, max_line_chars: usize) -> Self {
         Self {
             default_max_lines_to_read,
             max_line_chars,
+        }
+    }
+
+    fn format_lines(&self, content: &str, start_line: usize, limit: usize) -> tool_runtime::fs::read_file::ReadFileResult {
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+
+        if total_lines == 0 {
+            return tool_runtime::fs::read_file::ReadFileResult {
+                start_line: 0,
+                end_line: 0,
+                total_lines: 0,
+                content: String::new(),
+            };
+        }
+
+        let start_index = (start_line - 1).min(total_lines - 1);
+        let end_index = (start_index + limit).min(total_lines);
+        let selected_lines = &lines[start_index..end_index];
+
+        let truncated_lines: Vec<String> = selected_lines
+            .iter()
+            .enumerate()
+            .map(|(idx, line)| {
+                let line_number = start_index + idx + 1;
+                let line_content = if line.chars().count() > self.max_line_chars {
+                    format!(
+                        "{} [truncated]",
+                        tool_runtime::util::string::truncate_string_by_chars(line, self.max_line_chars)
+                    )
+                } else {
+                    line.to_string()
+                };
+                format!("{:>6}\t{}", line_number, line_content)
+            })
+            .collect();
+
+        tool_runtime::fs::read_file::ReadFileResult {
+            start_line: start_index + 1,
+            end_line: end_index,
+            total_lines,
+            content: truncated_lines.join("\n"),
         }
     }
 }
@@ -98,31 +136,45 @@ Usage:
         input: &Value,
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
-            if file_path.is_empty() {
+        let file_path = match input.get("file_path").and_then(|v| v.as_str()) {
+            Some(p) if !p.is_empty() => p,
+            Some(_) => {
                 return ValidationResult {
                     result: false,
                     message: Some("file_path cannot be empty".to_string()),
                     error_code: Some(400),
                     meta: None,
-                };
-            }
-
-            let resolved_path = match resolve_path_with_workspace(
-                file_path,
-                context.and_then(|ctx| ctx.workspace_root()),
-            ) {
-                Ok(path) => path,
-                Err(err) => {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(err.to_string()),
-                        error_code: Some(400),
-                        meta: None,
-                    };
                 }
-            };
+            }
+            None => {
+                return ValidationResult {
+                    result: false,
+                    message: Some("file_path is required".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                }
+            }
+        };
 
+        let resolved_path = match resolve_path_with_workspace(
+            file_path,
+            context.and_then(|ctx| ctx.workspace_root()),
+        ) {
+            Ok(path) => path,
+            Err(err) => {
+                return ValidationResult {
+                    result: false,
+                    message: Some(err.to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                }
+            }
+        };
+
+        // For remote workspaces, skip local filesystem checks — the actual
+        // read goes through WorkspaceFileSystem in call_impl.
+        let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
+        if !is_remote {
             let path = Path::new(&resolved_path);
             if !path.exists() {
                 return ValidationResult {
@@ -132,7 +184,6 @@ Usage:
                     meta: None,
                 };
             }
-
             if !path.is_file() {
                 return ValidationResult {
                     result: false,
@@ -141,21 +192,9 @@ Usage:
                     meta: None,
                 };
             }
-        } else {
-            return ValidationResult {
-                result: false,
-                message: Some("file_path is required".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
         }
 
-        ValidationResult {
-            result: true,
-            message: None,
-            error_code: None,
-            meta: None,
-        }
+        ValidationResult::default()
     }
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
@@ -192,10 +231,18 @@ Usage:
 
         let resolved_path = resolve_path_with_workspace(file_path, context.workspace_root())?;
 
-        let read_file_result = read_file(&resolved_path, start_line, limit, self.max_line_chars)
-            .map_err(|e| BitFunError::tool(e))?;
+        // Use the workspace file system from context — works for both local and remote.
+        let read_file_result = if let Some(ws_fs) = context.ws_fs() {
+            let content = ws_fs
+                .read_file_text(&resolved_path)
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
+            self.format_lines(&content, start_line, limit)
+        } else {
+            read_file(&resolved_path, start_line, limit, self.max_line_chars)
+                .map_err(|e| BitFunError::tool(e))?
+        };
 
-        // Get matching file-specific rules
         let file_rules = match get_global_ai_rules_service().await {
             Ok(rules_service) => {
                 rules_service
@@ -211,7 +258,6 @@ Usage:
             }
         };
 
-        // Build result string
         let mut result_for_assistant = format!(
             "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",
             read_file_result.start_line,
@@ -221,7 +267,6 @@ Usage:
             read_file_result.content
         );
 
-        // If there are matching rules, append to result
         if let Some(rules_content) = &file_rules.formatted_content {
             result_for_assistant.push_str("\n\n");
             result_for_assistant.push_str(rules_content);

@@ -1269,6 +1269,10 @@ impl WorkspaceService {
         path: &Path,
         mut options: WorkspaceCreateOptions,
     ) -> WorkspaceCreateOptions {
+        if options.workspace_kind == WorkspaceKind::Remote {
+            return options;
+        }
+
         if options.workspace_kind == WorkspaceKind::Assistant {
             if options.display_name.is_none() {
                 options.display_name = Some(Self::assistant_display_name(

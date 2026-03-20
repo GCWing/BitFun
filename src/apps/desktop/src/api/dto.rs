@@ -17,6 +17,7 @@ pub enum WorkspaceTypeDto {
 pub enum WorkspaceKindDto {
     Normal,
     Assistant,
+    Remote,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,12 +56,27 @@ pub struct WorkspaceInfoDto {
     pub tags: Vec<String>,
     pub statistics: Option<ProjectStatisticsDto>,
     pub identity: Option<WorkspaceIdentityDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_name: Option<String>,
 }
 
 impl WorkspaceInfoDto {
     pub fn from_workspace_info(
         info: &bitfun_core::service::workspace::manager::WorkspaceInfo,
     ) -> Self {
+        let connection_id = info
+            .metadata
+            .get("connectionId")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let connection_name = info
+            .metadata
+            .get("connectionName")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
         Self {
             id: info.id.clone(),
             name: info.name.clone(),
@@ -81,6 +97,8 @@ impl WorkspaceInfoDto {
                 .identity
                 .as_ref()
                 .map(WorkspaceIdentityDto::from_workspace_identity),
+            connection_id,
+            connection_name,
         }
     }
 }
@@ -124,6 +142,7 @@ impl WorkspaceKindDto {
         match workspace_kind {
             WorkspaceKind::Normal => WorkspaceKindDto::Normal,
             WorkspaceKind::Assistant => WorkspaceKindDto::Assistant,
+            WorkspaceKind::Remote => WorkspaceKindDto::Remote,
         }
     }
 }

@@ -856,6 +856,7 @@ impl ExecutionEngine {
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
                 cancellation_token: CancellationToken::new(),
+                workspace_services: context.workspace_services.clone(),
             };
 
             // Execute single model round
@@ -1106,6 +1107,7 @@ impl ExecutionEngine {
             image_context_provider: None,
             subagent_parent_info: None,
             cancellation_token: None,
+            workspace_services: None,
         };
         for tool in &all_tools {
             if !tool.is_enabled().await {
