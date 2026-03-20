@@ -7,7 +7,7 @@ use crate::service::remote_ssh::types::{
     SSHConfigEntry, SSHConfigLookupResult,
 };
 use anyhow::{anyhow, Context};
-use russh::client::{Handle, Handler, Msg};
+use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh_keys::key::PublicKey;
 use russh_keys::PublicKeyBase64;
 use russh_sftp::client::fs::ReadDir;
@@ -50,6 +50,11 @@ struct SSHHandler {
     /// Host info for known hosts lookup
     host: Option<String>,
     port: Option<u16>,
+    /// Stores the real disconnect reason so callers get a useful error message.
+    /// russh's run() absorbs errors internally; we capture them here and
+    /// surface them after connect_stream() returns.
+    /// Uses std::sync::Mutex so it can be read from sync map_err closures.
+    disconnect_reason: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl SSHHandler {
@@ -61,6 +66,7 @@ impl SSHHandler {
             known_hosts: None,
             host: None,
             port: None,
+            disconnect_reason: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -72,6 +78,7 @@ impl SSHHandler {
             known_hosts: None,
             host: None,
             port: None,
+            disconnect_reason: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -86,6 +93,7 @@ impl SSHHandler {
             known_hosts: None,
             host: None,
             port: None,
+            disconnect_reason: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -93,37 +101,40 @@ impl SSHHandler {
         host: String,
         port: u16,
         known_hosts: Arc<tokio::sync::RwLock<HashMap<String, KnownHostEntry>>>,
-    ) -> Self {
-        Self {
+    ) -> (Self, Arc<std::sync::Mutex<Option<String>>>) {
+        let disconnect_reason = Arc::new(std::sync::Mutex::new(None));
+        let handler = Self {
             expected_key: None,
             verify_callback: None,
             known_hosts: Some(known_hosts),
             host: Some(host),
             port: Some(port),
-        }
+            disconnect_reason: disconnect_reason.clone(),
+        };
+        (handler, disconnect_reason)
     }
 }
 
 #[derive(Debug)]
-struct HandlerError;
+struct HandlerError(String);
 
 impl std::fmt::Display for HandlerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "HandlerError")
+        write!(f, "{}", self.0)
     }
 }
 
 impl std::error::Error for HandlerError {}
 
 impl From<russh::Error> for HandlerError {
-    fn from(_: russh::Error) -> Self {
-        HandlerError
+    fn from(e: russh::Error) -> Self {
+        HandlerError(format!("{:?}", e))
     }
 }
 
 impl From<String> for HandlerError {
-    fn from(_s: String) -> Self {
-        HandlerError
+    fn from(s: String) -> Self {
+        HandlerError(s)
     }
 }
 
@@ -145,7 +156,10 @@ impl Handler for SSHHandler {
             }
             log::warn!("Server key mismatch for {}:{}. Expected fingerprint: {}, got: {}",
                 host, port, expected.fingerprint(), server_fingerprint);
-            return Err(HandlerError);
+            return Err(HandlerError(format!(
+                "Host key mismatch for {}:{}: expected {}, got {}",
+                host, port, expected.fingerprint(), server_fingerprint
+            )));
         }
 
         // 2. Check known_hosts for this host
@@ -154,7 +168,6 @@ impl Handler for SSHHandler {
                 let key = format!("{}:{}", host, port);
                 let known_guard = known_hosts.read().await;
                 if let Some(known) = known_guard.get(&key) {
-                    // Clone the fingerprint to avoid borrow issues
                     let stored_fingerprint = known.fingerprint.clone();
                     drop(known_guard);
 
@@ -162,12 +175,15 @@ impl Handler for SSHHandler {
                         log::debug!("Server key verified from known_hosts for {}:{}", host, port);
                         return Ok(true);
                     } else {
-                        // Key changed - potential security issue!
                         log::warn!(
                             "Host key changed for {}:{}. Expected: {}, got: {}",
                             host, port, stored_fingerprint, server_fingerprint
                         );
-                        return Err(HandlerError);
+                        return Err(HandlerError(format!(
+                            "Host key changed for {}:{} — stored fingerprint {} does not match server fingerprint {}. \
+                             If the server key was legitimately updated, clear the known host entry and reconnect.",
+                            host, port, stored_fingerprint, server_fingerprint
+                        )));
                     }
                 }
             }
@@ -181,7 +197,7 @@ impl Handler for SSHHandler {
                 log::debug!("Server key verified via callback for {}:{}", host, port);
                 return Ok(true);
             }
-            return Err(HandlerError);
+            return Err(HandlerError("Host key rejected by verify callback".to_string()));
         }
 
         // 4. First time connection - accept the key (like standard SSH client's StrictHostKeyChecking=accept-new)
@@ -193,6 +209,32 @@ impl Handler for SSHHandler {
             server_fingerprint
         );
         Ok(true)
+    }
+
+    async fn disconnected(
+        &mut self,
+        reason: DisconnectReason<Self::Error>,
+    ) -> Result<(), Self::Error> {
+        let msg = match &reason {
+            DisconnectReason::ReceivedDisconnect(info) => {
+                format!(
+                    "Server sent disconnect: {:?} — {}",
+                    info.reason_code, info.message
+                )
+            }
+            DisconnectReason::Error(e) => {
+                format!("Connection closed with error: {}", e)
+            }
+        };
+        log::warn!("SSH disconnected ({}:{}): {}", self.host.as_deref().unwrap_or("?"), self.port.unwrap_or(22), msg);
+        if let Ok(mut guard) = self.disconnect_reason.lock() {
+            *guard = Some(msg);
+        }
+        // Propagate errors so russh surfaces them; swallow clean server disconnect.
+        match reason {
+            DisconnectReason::ReceivedDisconnect(_) => Ok(()),
+            DisconnectReason::Error(e) => Err(e),
+        }
     }
 }
 
@@ -686,11 +728,36 @@ impl SSHConnectionManager {
             inactivity_timeout: Some(std::time::Duration::from_secs(60)),
             keepalive_interval: Some(std::time::Duration::from_secs(30)),
             keepalive_max: 3,
+            // Broad algorithm list for compatibility with both modern and legacy SSH servers.
+            // Modern algorithms first (preferred), legacy ones appended as fallback.
+            preferred: russh::Preferred {
+                // KEX: modern curve25519 first, then older DH groups for legacy servers
+                kex: std::borrow::Cow::Owned(vec![
+                    russh::kex::CURVE25519,
+                    russh::kex::CURVE25519_PRE_RFC_8731,
+                    russh::kex::DH_G16_SHA512,
+                    russh::kex::DH_G14_SHA256,
+                    russh::kex::DH_G14_SHA1,  // legacy servers
+                    russh::kex::DH_G1_SHA1,   // very old servers
+                    russh::kex::EXTENSION_SUPPORT_AS_CLIENT,
+                    russh::kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+                ]),
+                // Host key algorithms: include ssh-rsa for older servers
+                key: std::borrow::Cow::Owned(vec![
+                    russh_keys::key::ED25519,
+                    russh_keys::key::ECDSA_SHA2_NISTP256,
+                    russh_keys::key::ECDSA_SHA2_NISTP521,
+                    russh_keys::key::RSA_SHA2_256,
+                    russh_keys::key::RSA_SHA2_512,
+                    russh_keys::key::SSH_RSA,  // legacy servers that only advertise ssh-rsa
+                ]),
+                ..russh::Preferred::DEFAULT
+            },
             ..Default::default()
         });
 
         // Create handler with known_hosts for verification
-        let handler = SSHHandler::with_known_hosts(
+        let (handler, disconnect_reason) = SSHHandler::with_known_hosts(
             config.host.clone(),
             config.port,
             self.known_hosts.clone(),
@@ -698,13 +765,39 @@ impl SSHConnectionManager {
 
         // SSH handshake with timeout
         log::info!("Starting SSH handshake to {}", addr);
-        let mut handle = tokio::time::timeout(
+        let connect_result = tokio::time::timeout(
             std::time::Duration::from_secs(timeout_secs),
             russh::client::connect_stream(ssh_config, stream, handler),
         )
         .await
-        .map_err(|_| anyhow!("SSH handshake timeout after {} seconds", timeout_secs))?
-        .map_err(|e| anyhow!("Failed to establish SSH connection: {:?}", e))?;
+        .map_err(|_| anyhow!("SSH handshake timeout after {} seconds", timeout_secs))?;
+
+        let mut handle = connect_result.map_err(|e| {
+            // Try to surface the real disconnect reason captured in the handler.
+            // russh's run() absorbs errors; our disconnected() callback stores them.
+            let real_reason = disconnect_reason
+                .lock()
+                .ok()
+                .and_then(|g| g.clone());
+            if let Some(reason) = real_reason {
+                anyhow!("SSH handshake failed: {}", reason)
+            } else {
+                // HandlerError("Disconnect") with no stored reason means the server
+                // closed the TCP connection before sending any SSH banner.
+                // This typically means: sshd is not running, max connections reached,
+                // or a firewall/IP ban is in effect.
+                let e_dbg = format!("{:?}", e);
+                if e_dbg.contains("Disconnect") {
+                    anyhow!(
+                        "SSH connection refused: server {}:{} closed the connection without sending an SSH banner. \
+                         Check that sshd is running and accepting connections.",
+                        config.host, config.port
+                    )
+                } else {
+                    anyhow!("Failed to establish SSH connection: {:?}", e)
+                }
+            }
+        })?;
         log::info!("SSH handshake completed successfully");
 
         // Authenticate based on auth method

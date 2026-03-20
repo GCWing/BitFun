@@ -127,6 +127,9 @@ bitfun-transport = { path = "../transport" }
 # Tauri dependency (optional, enabled only when needed)
 tauri = { workspace = true, optional = true }
 
+[target.'cfg(windows)'.dependencies]
+win32job = { workspace = true }
+
 [features]
 default = ["ssh-remote"]
 tauri-support = ["tauri"]  # Optional tauri support

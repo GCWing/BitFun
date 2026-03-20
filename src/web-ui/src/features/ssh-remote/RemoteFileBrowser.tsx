@@ -502,7 +502,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           </div>
           <div className="remote-file-browser__footer-actions">
             <Button variant="secondary" onClick={onCancel}>
-              {t('common.cancel')}
+              {t('actions.cancel')}
             </Button>
             <Button
               variant="primary"

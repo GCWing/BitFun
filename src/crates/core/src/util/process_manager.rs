@@ -74,7 +74,7 @@ impl ProcessManager {
                 Ok(guard) => guard,
                 Err(poisoned) => {
                     warn!("Process manager job mutex was poisoned during cleanup, recovering lock");
-                    poisoned.into_inner()
+                    poisoned.into_inner() as std::sync::MutexGuard<'_, Option<Job>>
                 }
             };
             job_guard.take();
