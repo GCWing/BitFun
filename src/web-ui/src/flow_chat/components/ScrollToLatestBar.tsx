@@ -14,6 +14,8 @@ interface ScrollToLatestBarProps {
   isInputExpanded?: boolean;
   /** Whether ChatInput is active. */
   isInputActive?: boolean;
+  /** Measured height of the ChatInput container in pixels (0 if unknown). */
+  inputHeight?: number;
   className?: string;
 }
 
@@ -22,6 +24,7 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
   onClick,
   isInputExpanded = false,
   isInputActive = true,
+  inputHeight = 0,
   className = ''
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -35,9 +38,17 @@ export const ScrollToLatestBar: React.FC<ScrollToLatestBarProps> = ({
       ? 'scroll-to-latest-bar--input-expanded' 
       : '';
 
+  // Dynamically offset the bar height based on measured ChatInput height.
+  // bottom: 16px (drop-zone offset) + inputHeight + 28px (content margin above input)
+  const dynamicStyle: React.CSSProperties =
+    isInputActive && !isInputExpanded && inputHeight > 0
+      ? { height: `${inputHeight + 16 + 28}px` }
+      : {};
+
   return (
     <div 
       className={`scroll-to-latest-bar ${inputStateClass} ${className}`}
+      style={dynamicStyle}
       onClick={onClick}
       role="button"
       tabIndex={0}

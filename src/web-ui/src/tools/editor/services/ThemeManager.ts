@@ -143,7 +143,8 @@ class ThemeManager {
           : (currentTheme.type === 'dark' ? this.getDefaultThemeId() : 'vs');
         
         this.currentThemeId = themeId;
-        monaco.editor.setTheme(themeId);
+        const { monacoThemeSync } = await import('@/infrastructure/theme/integrations/MonacoThemeSync');
+        monacoThemeSync.syncTheme(currentTheme);
       }
       
       themeService.on('theme:after-change', (event) => {

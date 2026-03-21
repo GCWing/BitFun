@@ -9,13 +9,6 @@
   
   &.clickable {
     cursor: pointer;
-    
-    &:hover {
-      .mermaid-view-icon {
-        color: var(--color-accent-500);
-        transform: scale(1.1);
-      }
-    }
   }
 }
 
@@ -33,20 +26,6 @@
   .icon-completed {
     color: var(--color-success);
     filter: drop-shadow(0 0 4px var(--color-success-border));
-  }
-}
-
-.mermaid-view-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  transition: all 0.2s ease;
-  
-  svg {
-    width: 14px;
-    height: 14px;
   }
 }
 

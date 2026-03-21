@@ -16,6 +16,20 @@
   }
 }
 
+/* Entire header row shows pointer (card toggles expand); children must not force default cursor. */
+.base-tool-card-wrapper.terminal-tool-card .base-tool-card-header {
+  cursor: pointer;
+}
+
+/* Footer bar: full width + background to bottom inner edge of card (matches .base-tool-card-expanded padding). */
+.base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {
+  margin-left: -10px;
+  margin-right: -10px;
+  margin-bottom: -10px;
+  padding: 6px 10px;
+  border-radius: 0 0 7px 7px;
+}
+
 /* ========== Fix scrollbar visibility on card hover ========== */
 .base-tool-card-wrapper.terminal-tool-card:hover {
   .terminal-execution-output,
@@ -45,7 +59,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: default;
+  cursor: inherit;
   transition: none;
   display: inline-block;
   background: none !important;
@@ -84,6 +98,7 @@
 .terminal-command-input {
   flex: 1;
   min-width: 0;
+  cursor: text;
   background: transparent;
   padding: 0;
   font-family: var(--tool-card-font-mono);
@@ -120,11 +135,6 @@
   font-weight: 600;
   flex-shrink: 0;
   margin-right: 4px;
-
-  &.status-completed {
-    background: var(--color-success-bg);
-    color: var(--color-success);
-  }
 
   &.status-cancelled {
     background: var(--color-warning-bg);
@@ -242,21 +252,12 @@
 }
 
 .external-btn {
-  color: rgba(59, 130, 246, 0.9);
-
-  &:hover {
-    background: rgba(59, 130, 246, 0.15);
-    color: rgba(59, 130, 246, 1);
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.toggle-btn {
   color: var(--color-text-muted);
 
-  &:hover {
-    background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
-    color: var(--color-text-primary);
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-secondary);
+    box-shadow: none;
   }
 }
 
@@ -299,42 +300,52 @@
 /* ========== Static result container (after command completion) ========== */
 .terminal-result-container {
   padding: 0;
+  display: flex;
+  flex-direction: column;
   
   &.cancelled {
     .terminal-cancelled-text {
       color: var(--color-warning);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 500;
+      line-height: 1.2;
     }
   }
 }
 
-.terminal-result-header {
+.terminal-result-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-subtle);
+  align-content: center;
+  gap: 6px;
   flex-wrap: wrap;
+  line-height: 1.2;
+  background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+  box-sizing: border-box;
+}
+
+.terminal-result-output + .terminal-result-footer {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .terminal-result-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
 }
 
 .terminal-result-value {
   font-family: var(--tool-card-font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 .terminal-result-output {
@@ -349,28 +360,28 @@
 .terminal-exit-code {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
+  padding: 0;
+  font-size: 9px;
   font-weight: 600;
   font-family: var(--tool-card-font-mono);
+  line-height: 1.2;
   margin-left: auto;
+  background: transparent;
 
   &.success {
-    background: var(--color-success-bg);
-    color: var(--color-success);
+    color: var(--color-text-muted);
   }
 
   &.error {
-    background: var(--color-error-bg);
     color: var(--color-error);
   }
 }
 
 .terminal-execution-time {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--color-text-muted);
   font-family: var(--tool-card-font-mono);
+  line-height: 1.2;
 }
 
 /* ========== xterm output renderer styles ========== */

@@ -184,6 +184,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
+  const setChatInputHeight = useChatInputState(state => state.setInputHeight);
 
   useEffect(() => {
     const unsubscribe = FlowChatStore.getInstance().subscribe(setFlowChatState);
@@ -1328,10 +1329,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      // Do not collapse when clicking the scroll-to-latest bar.
+      if ((target as Element)?.closest?.('.scroll-to-latest-bar')) return;
       if (
         inputState.isActive &&
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !containerRef.current.contains(target)
       ) {
         if (inputState.value.trim() === '') {
           dispatchInput({ type: 'DEACTIVATE' });
@@ -1344,6 +1348,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [inputState.isActive, inputState.value]);
+
+  useEffect(() => {
+    const dropZone = containerRef.current?.closest('.bitfun-chat-input-drop-zone') as HTMLElement | null;
+    const el = dropZone ?? containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      setChatInputHeight(el.offsetHeight);
+    });
+    observer.observe(el);
+    setChatInputHeight(el.offsetHeight);
+    return () => observer.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const renderActionButton = () => {
     if (!derivedState) return <IconButton className="bitfun-chat-input__send-button" disabled size="small"><ArrowUp size={11} /></IconButton>;

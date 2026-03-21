@@ -210,7 +210,7 @@
 
 
 .markdown-renderer .inline-code {
-  padding: 0.2em 0.4em;
+  padding: 0.1em 0.4em;
   margin: 0 0.05em;
   font-size: 0.9em;
   background: rgba(255, 255, 255, 0.05);
@@ -224,6 +224,8 @@
   color: #a8b4c8;
   font-weight: 500;
   transition: all 0.15s ease;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 

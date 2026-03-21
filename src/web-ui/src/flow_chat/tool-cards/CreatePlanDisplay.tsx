@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileText, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardList, Circle, Loader2, CheckCircle, CheckCircle2, PlayCircle, XCircle, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { ideControl } from '@/shared/services/ide-control/api';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
@@ -207,11 +207,6 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     };
   }, [effectiveCacheKey, planFilePath, initialName, initialOverview, initialTodos]);
 
-  const remainingTodos = useMemo(() => {
-    if (!planData?.todos) return 0;
-    return planData.todos.filter(t => t.status !== 'completed').length;
-  }, [planData]);
-
   // Build button status transitions: build -> building -> built.
   const buildStatus = useMemo((): 'build' | 'building' | 'built' => {
     if (planData?.todos?.length) {
@@ -331,7 +326,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
         >
           <div className="header-left">
             <div className="file-icon-wrapper">
-              <FileText size={14} />
+              <ClipboardList size={14} />
             </div>
             <span className="file-name">{planFileName}</span>
           </div>
@@ -342,45 +337,45 @@ ${JSON.stringify(simpleTodos, null, 2)}
       </Tooltip>
 
       <div className="create-plan-content">
-        <h3 className="plan-title">{planData.name}</h3>
-        <p className="plan-overview">{planData.overview}</p>
-      </div>
-
-      {planData.todos && planData.todos.length > 0 && (
-        <div className={`create-plan-todos ${isTodosExpanded ? 'create-plan-todos--expanded' : ''}`}>
-          <div 
-            className="todos-header"
+        <div className="plan-content-left">
+          <h3 className="plan-title">{planData.name}</h3>
+          <p className="plan-overview">{planData.overview}</p>
+        </div>
+        {planData.todos && planData.todos.length > 0 && (
+          <button
+            className="todos-toggle-btn"
+            type="button"
             onClick={handleToggleTodos}
           >
-            <span className="todos-count">{t('toolCards.plan.remainingTodos', { count: remainingTodos })}</span>
-            <button className="todos-toggle-btn" type="button">
-              {isTodosExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
+            {isTodosExpanded ? <ChevronsDownUp size={22} /> : <ChevronsUpDown size={22} />}
+          </button>
+        )}
+      </div>
+
+      {planData.todos && planData.todos.length > 0 && isTodosExpanded && (
+        <div className="create-plan-todos create-plan-todos--expanded">
+          <div className="todos-list">
+            {planData.todos.map((todo, index) => (
+              <div
+                key={todo.id || index}
+                className={`todo-item status-${todo.status || 'pending'}`}
+              >
+                {todo.status === 'completed' && (
+                  <CheckCircle2 size={12} className="todo-icon todo-icon--completed" />
+                )}
+                {todo.status === 'in_progress' && (
+                  <PlayCircle size={12} className="todo-icon todo-icon--in-progress" />
+                )}
+                {(!todo.status || todo.status === 'pending') && (
+                  <Circle size={12} className="todo-icon todo-icon--pending" />
+                )}
+                {todo.status === 'cancelled' && (
+                  <XCircle size={12} className="todo-icon todo-icon--cancelled" />
+                )}
+                <span className="todo-content">{todo.content}</span>
+              </div>
+            ))}
           </div>
-          {isTodosExpanded && (
-            <div className="todos-list">
-              {planData.todos.map((todo, index) => (
-                <div 
-                  key={todo.id || index} 
-                  className={`todo-item status-${todo.status || 'pending'}`}
-                >
-                  {todo.status === 'completed' && (
-                    <CheckCircle2 size={12} className="todo-icon todo-icon--completed" />
-                  )}
-                  {todo.status === 'in_progress' && (
-                    <PlayCircle size={12} className="todo-icon todo-icon--in-progress" />
-                  )}
-                  {(!todo.status || todo.status === 'pending') && (
-                    <Circle size={12} className="todo-icon todo-icon--pending" />
-                  )}
-                  {todo.status === 'cancelled' && (
-                    <XCircle size={12} className="todo-icon todo-icon--cancelled" />
-                  )}
-                  <span className="todo-content">{todo.content}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 

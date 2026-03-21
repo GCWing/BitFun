@@ -14,10 +14,6 @@
   position: relative;
   
   &:hover {
-    background: var(--element-bg-strong);
-    border-color: var(--border-prominent);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-    
     .user-message-item__copy-btn {
       opacity: 1;
     }
@@ -72,9 +68,6 @@
   user-select: text;
   transition: all 0.2s ease;
   
-  &:hover {
-    opacity: 0.8;
-  }
 }
 
 // Expanded state.

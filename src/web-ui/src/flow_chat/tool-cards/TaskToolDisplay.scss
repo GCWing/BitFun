@@ -115,7 +115,7 @@
   .task-header-extra {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 6px;
     margin-left: auto;
     flex-shrink: 0;
   }
@@ -150,7 +150,7 @@
     color: var(--color-text-secondary, #9ca3af);
     line-height: 1.4;
     border-radius: 4px;
-    cursor: default;
+    cursor: pointer;
     transition: background 0.15s ease;
     
     .task-prompt-content {
@@ -158,6 +158,8 @@
       min-width: 0;
       word-break: break-word;
       white-space: pre-wrap;
+      max-height: calc(1.4em * 3);
+      overflow-y: auto;
     }
     
     &.task-prompt-row--clickable {
@@ -340,11 +342,54 @@
 }
 
 
-/* Square bottom corners when followed by subagent items. */
-/* FlowToolCard wraps in .flow-tool-card-wrapper, so select from parent. */
-.flow-tool-card-wrapper:has(+ .subagent-items-wrapper) {
-  .base-tool-card-wrapper.task-tool-display {
-    border-radius: 8px 8px 0 0 !important;
+/**
+ * Make the entire header area show pointer cursor.
+ * BaseToolCard already sets cursor:pointer on .base-tool-card,
+ * but the header content area clips it — force it here.
+ */
+.task-tool-display {
+  .base-tool-card {
+    cursor: pointer;
+  }
+}
+
+/**
+ * Unified task + subagent card wrapper.
+ * Wraps the task tool header card and the subagent items container so they
+ * behave as a single card with a shared hover/shadow effect.
+ */
+.task-with-subagent-wrapper {
+  position: relative;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  // Expanded state: subtle default elevation.
+  &:has(.subagent-items-wrapper--expanded) {
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.15),
+      0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  // Hover over expanded card: stronger elevation.
+  &:has(.subagent-items-wrapper--expanded):hover {
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.25),
+      0 2px 8px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  // Square the bottom corners of the task header card when expanded.
+  &:has(.subagent-items-wrapper--expanded) {
+    .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+      border-radius: 8px 8px 0 0;
+      // Remove bottom margin so the subagent container connects flush.
+      margin-bottom: 0;
+      // Suppress the base card's own hover shadow; the wrapper handles it.
+      &:hover {
+        box-shadow: none;
+      }
+    }
   }
 }
 

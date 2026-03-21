@@ -17,6 +17,11 @@
 
   &:hover {
     border-color: var(--border-medium);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      0 2px 8px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transform: translateY(-1px);
   }
 
   &--loading {
@@ -35,7 +40,12 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.02);
+    background: linear-gradient(
+      90deg,
+      rgba(245, 158, 11, 0.07) 0%,
+      rgba(245, 158, 11, 0.04) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
     border-bottom: 1px solid var(--border-base);
     
     &--clickable {
@@ -43,7 +53,12 @@
       transition: background 0.15s ease;
       
       &:hover {
-        background: rgba(255, 255, 255, 0.06);
+        background: linear-gradient(
+          90deg,
+          rgba(245, 158, 11, 0.13) 0%,
+          rgba(245, 158, 11, 0.08) 50%,
+          rgba(255, 255, 255, 0.05) 100%
+        );
         
         .file-name {
           color: var(--tool-card-text-primary);
@@ -61,15 +76,15 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
-      background: rgba(255, 255, 255, 0.06);
+      width: 28px;
+      height: 28px;
+      background: transparent;
       border-radius: 4px;
-      color: var(--tool-card-text-muted);
+      color: #f59e0b;
 
       svg {
-        width: 14px;
-        height: 14px;
+        width: 18px;
+        height: 18px;
       }
     }
 
@@ -85,7 +100,15 @@
   }
 
   .create-plan-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     padding: 14px 16px;
+
+    .plan-content-left {
+      flex: 1;
+      min-width: 0;
+    }
 
     .plan-title {
       margin: 0 0 6px 0;
@@ -101,55 +124,39 @@
       color: var(--tool-card-text-secondary);
       line-height: 1.5;
     }
+
+    .todos-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      align-self: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--tool-card-text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      &:hover {
+        border-color: rgba(245, 158, 11, 0.35);
+        background: rgba(245, 158, 11, 0.07);
+        color: #f59e0b;
+      }
+    }
   }
 
   .create-plan-todos {
     border-top: 1px solid var(--border-base);
     padding: 10px 16px;
-
-    .todos-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      padding: 4px 0;
-      margin: -4px 0;
-      border-radius: 4px;
-      transition: background 0.15s ease;
-      
-      &:hover {
-        background: rgba(255, 255, 255, 0.04);
-      }
-
-      .todos-count {
-        font-size: 12px;
-        color: var(--tool-card-text-muted);
-      }
-      
-      .todos-toggle-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        padding: 0;
-        border: none;
-        background: transparent;
-        color: var(--tool-card-text-muted);
-        cursor: pointer;
-        border-radius: 4px;
-        transition: all 0.15s ease;
-        
-        &:hover {
-          color: var(--tool-card-text-primary);
-          background: rgba(255, 255, 255, 0.08);
-        }
-      }
-    }
-    
-    &--expanded .todos-header {
-      margin-bottom: 8px;
-    }
 
     .todos-list {
       display: flex;

@@ -12,8 +12,8 @@
   cursor: pointer;
   pointer-events: none;
   
-  // Default height: ChatInput active (box ~80px + bottom gap 16px = 96px, add 24px margin)
-  height: 120px;
+  // Default height: ChatInput active (box ~80px + bottom gap 16px = 96px, add 49px margin for content visibility)
+  height: 145px;
   
   transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   
@@ -138,7 +138,7 @@
 // ========== Responsive tweaks ==========
 @media (max-width: 768px) {
   .scroll-to-latest-bar {
-    height: 110px;
+    height: 135px;
     
     &--input-collapsed {
       height: 70px;

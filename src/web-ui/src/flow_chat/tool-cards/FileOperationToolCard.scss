@@ -26,8 +26,9 @@
         font-weight: 500;
       }
 
-      .delete-label {
-        color: var(--color-text-primary);
+      .delete-file-name {
+        text-decoration: line-through;
+        color: var(--color-text-muted);
       }
     }
 
@@ -89,24 +90,16 @@
   }
 }
 
-.delete-label {
-  font-size: 10px;
-  font-weight: 500;
+.delete-file-name {
+  text-decoration: line-through;
   color: var(--color-text-muted);
-  flex-shrink: 0;
 }
 
 .diff-preview-group {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 2px 6px;
-  border: none;
-  border-radius: 20px;
-  background: transparent;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
   font-family: var(--tool-card-font-mono);
   font-size: 10px;
   font-weight: 600;
@@ -119,23 +112,6 @@
 
   .deletions {
     color: var(--color-error);
-  }
-
-  svg {
-    flex-shrink: 0;
-    opacity: 0.6;
-  }
-
-  &:hover {
-    background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
-
-    svg {
-      opacity: 1;
-    }
-  }
-
-  &:active {
-    background: color-mix(in srgb, var(--color-text-primary) 16%, transparent);
   }
 }
 

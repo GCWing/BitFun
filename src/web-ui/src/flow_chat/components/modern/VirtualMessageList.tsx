@@ -264,6 +264,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
   const isInputActive = useChatInputState(state => state.isActive);
   const isInputExpanded = useChatInputState(state => state.isExpanded);
+  const inputHeight = useChatInputState(state => state.inputHeight);
 
   const activeSessionState = useActiveSessionState();
   const isProcessing = activeSessionState.isProcessing;
@@ -1918,6 +1919,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         onClick={scrollToLatestEndPosition}
         isInputActive={isInputActive}
         isInputExpanded={isInputExpanded}
+        inputHeight={inputHeight}
       />
     </div>
   );

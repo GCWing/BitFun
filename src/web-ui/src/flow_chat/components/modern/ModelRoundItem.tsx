@@ -285,7 +285,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 />
               ));
             
-            case 'critical':
+            case 'critical': {
+              // If next group is the matching subagent, skip here — rendered by subagent case.
+              const nextGroup = groupedItems[groupIndex + 1];
+              const isTaskForSubagent = group.item.type === 'tool' &&
+                nextGroup?.type === 'subagent' &&
+                nextGroup.parentTaskToolId === group.item.id;
+              if (isTaskForSubagent) return null;
               return (
                 <FlowItemRenderer 
                   key={group.item.id}
@@ -295,9 +301,16 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   isLastItem={isLast}
                 />
               );
+            }
             
-            case 'subagent':
-              return (
+            case 'subagent': {
+              // If previous group is the matching task tool, wrap both in a unified card.
+              const prevGroup = groupedItems[groupIndex - 1];
+              const hasPairedTask = prevGroup?.type === 'critical' &&
+                prevGroup.item.type === 'tool' &&
+                group.parentTaskToolId === prevGroup.item.id;
+              
+              const subagentContainer = (
                 <SubagentItemsContainer 
                   key={`subagent-group-${group.parentTaskToolId}-${groupIndex}`}
                   parentTaskToolId={group.parentTaskToolId}
@@ -306,6 +319,22 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   roundId={round.id}
                 />
               );
+              
+              if (hasPairedTask) {
+                return (
+                  <div key={`task-with-subagent-${prevGroup.item.id}`} className="task-with-subagent-wrapper">
+                    <FlowItemRenderer
+                      item={prevGroup.item}
+                      turnId={turnId}
+                      roundId={round.id}
+                      isLastItem={false}
+                    />
+                    {subagentContainer}
+                  </div>
+                );
+              }
+              return subagentContainer;
+            }
             
             default:
               return null;

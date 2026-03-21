@@ -187,19 +187,12 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    flex-shrink: 0;
 
     &--completed  { background: var(--color-success); }
     &--in_progress { background: var(--color-info); }
     &--pending    { background: var(--tool-card-text-muted); opacity: 0.35; }
     &--cancelled  { background: var(--color-error); opacity: 0.5; }
-
-    &:hover,
-    &--hovered {
-      transform: scale(1.6);
-      opacity: 1;
-    }
   }
 
   .track-stats {

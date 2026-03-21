@@ -15,7 +15,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { Terminal, Play, X, ExternalLink, Square, ChevronDown, ChevronUp } from 'lucide-react';
+import { Terminal, Play, X, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { CubeLoading, IconButton } from '../../component-library';
@@ -279,11 +279,6 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     applyExpandedState(newExpanded, true, 'manual');
   }, [applyExpandedState, isExpanded]);
   
-  const handleToggleExpand = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleExpand();
-  }, [toggleExpand]);
-
   const handleOpenInPanel = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (!terminalSessionId) {
@@ -356,7 +351,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     
     switch (status) {
       case 'completed':
-        return <span className="terminal-status-text status-completed">{t('toolCards.terminal.completed')}</span>;
+        return null;
       case 'cancelled':
         return <span className="terminal-status-text status-cancelled">{t('toolCards.terminal.cancelled')}</span>;
       case 'error':
@@ -432,16 +427,6 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
                 <ExternalLink size={12} />
               </IconButton>
             )}
-
-            <IconButton 
-              className="terminal-action-btn toggle-btn"
-              variant="ghost"
-              size="xs"
-              onClick={handleToggleExpand}
-              tooltip={isExpanded ? t('toolCards.terminal.collapseOutput') : t('toolCards.terminal.expandOutput')}
-            >
-              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </IconButton>
           </>
         }
         statusIcon={renderStatusIcon()}
@@ -470,7 +455,16 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
         {status === 'completed' && (
           <div className="terminal-result-container">
-            <div className="terminal-result-header">
+            {output && (
+              <div className="terminal-result-output">
+                <TerminalOutputRenderer 
+                  content={output}
+                  className="terminal-xterm-output"
+                  maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
+                />
+              </div>
+            )}
+            <div className="terminal-result-footer">
               {workingDir && (
                 <>
                   <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -486,30 +480,20 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
                 </span>
               )}
             </div>
-            
-            {output && (
-              <div className="terminal-result-output">
-                <TerminalOutputRenderer 
-                  content={output}
-                  className="terminal-xterm-output"
-                  maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
-                />
-              </div>
-            )}
           </div>
         )}
         
         {status === 'cancelled' && accumulatedOutput && (
           <div className="terminal-result-container cancelled">
-            <div className="terminal-result-header">
-              <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
-            </div>
             <div className="terminal-result-output">
               <TerminalOutputRenderer 
                 content={accumulatedOutput}
                 className="terminal-xterm-output"
                 maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
               />
+            </div>
+            <div className="terminal-result-footer">
+              <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
             </div>
           </div>
         )}

@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { Eye, Network } from 'lucide-react';
+import { Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CubeLoading } from '../../component-library';
 import type { ToolCardProps, FlowToolItem } from '../types/flow-chat';
@@ -172,19 +172,12 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
         <span className="mermaid-title-content">{title}</span>
       }
       extra={
-        <>
-          {status === 'completed' && (
-            <div className="mermaid-view-icon">
-              <Eye size={14} />
-            </div>
-          )}
-          {isLoading && (
-            <span className="mermaid-status-text">
-              {(status === 'running' || status === 'streaming') && t('toolCards.diagram.creating')}
-              {status === 'pending' && t('toolCards.diagram.preparing')}
-            </span>
-          )}
-        </>
+        isLoading ? (
+          <span className="mermaid-status-text">
+            {(status === 'running' || status === 'streaming') && t('toolCards.diagram.creating')}
+            {status === 'pending' && t('toolCards.diagram.preparing')}
+          </span>
+        ) : null
       }
       statusIcon={renderStatusIcon()}
     />

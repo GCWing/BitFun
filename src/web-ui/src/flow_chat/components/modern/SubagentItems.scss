@@ -1,52 +1,11 @@
 /**
  * Subagent items styles.
- * Controls visibility for subagent text and tool cards.
- * Blends with the TaskTool card design.
+ * When expanded, the subagent container merges with the task tool card header
+ * to form a single unified card with squared top corners.
  */
 
-// Subagent outer wrapper with relative positioning context.
 .subagent-items-wrapper {
   position: relative;
-  margin-top: -6px; // Counter the base-tool-card margin.
-  
-  // Top fade mask.
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 1px;
-    right: 1px;
-    height: 24px;
-    pointer-events: none;
-    z-index: 3;
-    background: linear-gradient(
-      to bottom,
-      var(--color-bg-flowchat, #121214) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat, #121214) 80%, transparent) 40%,
-      color-mix(in srgb, var(--color-bg-flowchat, #121214) 40%, transparent) 70%,
-      transparent 100%
-    );
-  }
-  
-  // Bottom fade mask (inside the border).
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 1px;  // Avoid the bottom border.
-    left: 1px;
-    right: 1px;
-    height: 24px;
-    pointer-events: none;
-    z-index: 3;
-    border-radius: 0 0 7px 7px;
-    background: linear-gradient(
-      to top,
-      var(--color-bg-flowchat, #121214) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat, #121214) 80%, transparent) 40%,
-      color-mix(in srgb, var(--color-bg-flowchat, #121214) 40%, transparent) 70%,
-      transparent 100%
-    );
-  }
 }
 
 .subagent-items-wrapper--collapsed {
@@ -59,23 +18,17 @@
 
 // Subagent container for items under the same parent task.
 .subagent-items-container {
-  // Blend with the TaskTool card.
-  margin-left: 0;
-  margin-right: 0;
   padding: 12px 14px;
-  
-  // Match BaseToolCard expanded area styling.
+
+  // Continue the task card border on left/right/bottom; top border is hidden.
   background: var(--color-bg-flowchat);
   border: 1px solid var(--border-base);
+  border-top: none;
+  // Top corners are square to merge with the header card above.
   border-radius: 0 0 8px 8px;
   backdrop-filter: blur(8px);
-  
-  // Top divider.
-  border-top: none;
-  box-shadow: inset 0 1px 0 0 var(--border-base, rgba(107, 114, 128, 0.25));
-  
-  // Fixed height to avoid growth during streaming output.
-  // Keep height even when content is short; overflow scrolls.
+
+  // Fixed height; overflow scrolls.
   height: 400px;
   overflow-y: auto;
 }
@@ -84,18 +37,15 @@
   overflow: hidden;
 }
 
-// TaskTool card bottom radius is controlled by TaskToolDisplay.scss.
-
 // Keep the legacy subagent-item class for compatibility.
 .subagent-item {
   display: block;
-  
+
   &.subagent-item--collapsed {
     display: none;
   }
-  
+
   &.subagent-item--expanded {
     display: block;
   }
 }
-
