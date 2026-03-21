@@ -1,12 +1,41 @@
 //! macOS Native Menubar
 
 #[cfg(target_os = "macos")]
-use tauri::menu::{MenuBuilder, SubmenuBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenubarMode {
     Startup,
     Workspace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditMenuMode {
+    System,
+    Renderer,
+}
+
+pub const MENU_ID_EDIT_UNDO: &str = "bitfun.edit.undo";
+pub const MENU_ID_EDIT_REDO: &str = "bitfun.edit.redo";
+pub const MENU_ID_EDIT_CUT: &str = "bitfun.edit.cut";
+pub const MENU_ID_EDIT_COPY: &str = "bitfun.edit.copy";
+pub const MENU_ID_EDIT_PASTE: &str = "bitfun.edit.paste";
+pub const MENU_ID_EDIT_SELECT_ALL: &str = "bitfun.edit.select_all";
+
+pub fn menu_event_name_for_id(id: &str) -> Option<&'static str> {
+    match id {
+        "bitfun.open_project" => Some("bitfun_menu_open_project"),
+        "bitfun.new_project" => Some("bitfun_menu_new_project"),
+        "bitfun.about" => Some("bitfun_menu_about"),
+        MENU_ID_EDIT_UNDO => Some("bitfun_menu_edit_undo"),
+        MENU_ID_EDIT_REDO => Some("bitfun_menu_edit_redo"),
+        MENU_ID_EDIT_CUT => Some("bitfun_menu_edit_cut"),
+        MENU_ID_EDIT_COPY => Some("bitfun_menu_edit_copy"),
+        MENU_ID_EDIT_PASTE => Some("bitfun_menu_edit_paste"),
+        MENU_ID_EDIT_SELECT_ALL => Some("bitfun_menu_edit_select_all"),
+        _ => None,
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -17,6 +46,12 @@ struct MenubarLabels {
     open_project: &'static str,
     new_project: &'static str,
     about_bitfun: &'static str,
+    undo: &'static str,
+    redo: &'static str,
+    cut: &'static str,
+    copy: &'static str,
+    paste: &'static str,
+    select_all: &'static str,
 }
 
 #[cfg(target_os = "macos")]
@@ -28,6 +63,12 @@ fn labels_for_language(language: &str) -> MenubarLabels {
             open_project: "Open Project…",
             new_project: "New Project…",
             about_bitfun: "About BitFun",
+            undo: "Undo",
+            redo: "Redo",
+            cut: "Cut",
+            copy: "Copy",
+            paste: "Paste",
+            select_all: "Select All",
         },
         _ => MenubarLabels {
             project_menu: "工程",
@@ -35,6 +76,12 @@ fn labels_for_language(language: &str) -> MenubarLabels {
             open_project: "打开工程…",
             new_project: "新建工程…",
             about_bitfun: "关于 BitFun",
+            undo: "撤销",
+            redo: "重做",
+            cut: "剪切",
+            copy: "复制",
+            paste: "粘贴",
+            select_all: "全选",
         },
     }
 }
@@ -44,67 +91,69 @@ pub fn set_macos_menubar_with_mode(
     app: &tauri::AppHandle,
     language: &str,
     mode: MenubarMode,
+    edit_mode: EditMenuMode,
 ) -> tauri::Result<()> {
     let labels = labels_for_language(language);
+    let _ = mode;
 
-    let menu = match mode {
-        MenubarMode::Startup => {
-            let app_menu = SubmenuBuilder::new(app, "BitFun")
-                .text("bitfun.about", labels.about_bitfun)
+    let app_menu = SubmenuBuilder::new(app, "BitFun")
+        .text("bitfun.about", labels.about_bitfun)
+        .separator()
+        .quit()
+        .build()?;
+
+    let edit_menu = match edit_mode {
+        EditMenuMode::System => SubmenuBuilder::new(app, labels.edit_menu)
+            .undo()
+            .redo()
+            .separator()
+            .cut()
+            .copy()
+            .paste()
+            .select_all()
+            .build()?,
+        EditMenuMode::Renderer => {
+            let undo = MenuItemBuilder::with_id(MENU_ID_EDIT_UNDO, labels.undo)
+                .accelerator("Cmd+Z")
+                .build(app)?;
+            let redo = MenuItemBuilder::with_id(MENU_ID_EDIT_REDO, labels.redo)
+                .accelerator("Cmd+Shift+Z")
+                .build(app)?;
+            let cut = MenuItemBuilder::with_id(MENU_ID_EDIT_CUT, labels.cut)
+                .accelerator("Cmd+X")
+                .build(app)?;
+            let copy = MenuItemBuilder::with_id(MENU_ID_EDIT_COPY, labels.copy)
+                .accelerator("Cmd+C")
+                .build(app)?;
+            let paste = MenuItemBuilder::with_id(MENU_ID_EDIT_PASTE, labels.paste)
+                .accelerator("Cmd+V")
+                .build(app)?;
+            let select_all = MenuItemBuilder::with_id(MENU_ID_EDIT_SELECT_ALL, labels.select_all)
+                .accelerator("Cmd+A")
+                .build(app)?;
+
+            SubmenuBuilder::new(app, labels.edit_menu)
+                .item(&undo)
+                .item(&redo)
                 .separator()
-                .quit()
-                .build()?;
-
-            let edit_menu = SubmenuBuilder::new(app, labels.edit_menu)
-                .undo()
-                .redo()
-                .separator()
-                .cut()
-                .copy()
-                .paste()
-                .select_all()
-                .build()?;
-
-            let project_menu = SubmenuBuilder::new(app, labels.project_menu)
-                .text("bitfun.open_project", labels.open_project)
-                .text("bitfun.new_project", labels.new_project)
-                .build()?;
-
-            MenuBuilder::new(app)
-                .item(&app_menu)
-                .item(&edit_menu)
-                .item(&project_menu)
-                .build()?
-        }
-        MenubarMode::Workspace => {
-            let app_menu = SubmenuBuilder::new(app, "BitFun")
-                .text("bitfun.about", labels.about_bitfun)
-                .separator()
-                .quit()
-                .build()?;
-
-            let edit_menu = SubmenuBuilder::new(app, labels.edit_menu)
-                .undo()
-                .redo()
-                .separator()
-                .cut()
-                .copy()
-                .paste()
-                .select_all()
-                .build()?;
-
-            let project_menu = SubmenuBuilder::new(app, labels.project_menu)
-                .text("bitfun.open_project", labels.open_project)
-                .text("bitfun.new_project", labels.new_project)
-                .build()?;
-
-            MenuBuilder::new(app)
-                .item(&app_menu)
-                .item(&edit_menu)
-                .item(&project_menu)
+                .item(&cut)
+                .item(&copy)
+                .item(&paste)
+                .item(&select_all)
                 .build()?
         }
     };
+
+    let project_menu = SubmenuBuilder::new(app, labels.project_menu)
+        .text("bitfun.open_project", labels.open_project)
+        .text("bitfun.new_project", labels.new_project)
+        .build()?;
+
+    let menu = MenuBuilder::new(app)
+        .item(&app_menu)
+        .item(&edit_menu)
+        .item(&project_menu)
+        .build()?;
 
     app.set_menu(menu)?;
     Ok(())
@@ -115,6 +164,7 @@ pub fn set_macos_menubar_with_mode(
     _app: &tauri::AppHandle,
     _language: &str,
     _mode: MenubarMode,
+    _edit_mode: EditMenuMode,
 ) -> tauri::Result<()> {
     Ok(())
 }

@@ -284,6 +284,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         placeholder={t('editor.markdownEditor.placeholder')}
         readonly={readOnly}
         toolbar={false}
+        filePath={filePath}
         basePath={basePath}
       />
     </div>
@@ -291,4 +292,3 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 };
 
 export default MarkdownEditor;
-

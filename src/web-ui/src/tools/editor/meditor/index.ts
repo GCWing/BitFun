@@ -3,8 +3,8 @@ export type { MEditorProps } from './components/MEditor'
 
 export { EditArea } from './components/EditArea'
 export { Preview } from './components/Preview'
-export { IREditor } from './components/IREditor'
-export type { IREditorHandle } from './components/IREditor'
+export { TiptapEditor } from './components/TiptapEditor'
+export type { TiptapEditorHandle } from './components/TiptapEditor'
 
 // Hooks
 export { useEditor } from './hooks/useEditor'
@@ -14,6 +14,7 @@ export type { UseEditorHistoryOptions, UseEditorHistoryReturn } from './hooks/us
 
 export { MarkdownParser } from './utils/markdown'
 export * from './utils/keyboardShortcuts'
+export * from './utils/tiptapMarkdown'
 
 export type {
   EditorMode,
@@ -26,4 +27,3 @@ export type {
   UploadConfig,
   RenderOptions
 } from './types'
-

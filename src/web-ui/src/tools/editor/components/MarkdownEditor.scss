@@ -82,6 +82,11 @@
 
 // Markdown content styles
 .markdown-body {
+  --m-editor-list-indent: 1.75rem;
+  --m-editor-list-marker-width: 1.25rem;
+  --m-editor-list-gap: 0.25rem;
+  --m-editor-task-checkbox-size: 1rem;
+
   color: var(--color-text-secondary);
   font-family: $font-family-sans;
   font-size: $font-size-sm;
@@ -102,7 +107,8 @@
 
   h1 {
     font-size: $font-size-3xl;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #111111;
+    border-bottom: 1px solid rgba(17, 17, 17, 0.12);
     padding-bottom: $size-gap-3;
     text-align: center;
     letter-spacing: 0.5px;
@@ -184,17 +190,66 @@
     }
   }
 
-  ul, ol {
-    padding-left: 2em;
+  > ul:not(.contains-task-list),
+  > ol {
+    padding-left: 0;
     margin-top: 0;
     margin-bottom: $size-gap-4;
+  }
+
+  > ul:not(.contains-task-list) > li,
+  > ol > li {
+    list-style: none;
+    position: relative;
+    margin-bottom: $size-gap-1;
+    padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+  }
+
+  > ul:not(.contains-task-list) > li::before,
+  > ol > li::before {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--m-editor-list-marker-width);
+    color: var(--color-text-primary);
+    font-weight: $font-weight-medium;
+  }
+
+  > ul:not(.contains-task-list) > li::before {
+    content: '•';
+    text-align: center;
+  }
+
+  > ol {
+    counter-reset: m-editor-ordered-list;
+  }
+
+  > ol > li {
+    counter-increment: m-editor-ordered-list;
+  }
+
+  > ol > li::before {
+    content: counter(m-editor-ordered-list) '.';
+    text-align: left;
+  }
+
+  li > ul:not(.contains-task-list),
+  li > ol {
+    margin-top: $size-gap-1;
+    margin-bottom: 0;
+    padding-left: var(--m-editor-list-indent);
   }
 
   li {
     margin-bottom: $size-gap-1;
 
     > p {
-      margin-top: $size-gap-4;
+      margin: 0;
+      display: block;
+    }
+
+    > p + p {
+      margin-top: $size-gap-2;
     }
   }
 
@@ -259,9 +314,34 @@
   }
 
   // Task list
-  input[type="checkbox"] {
-    margin: 0 0.2em 0.25em -1.6em;
-    vertical-align: middle;
+  > ul.contains-task-list {
+    margin-top: 0;
+    margin-bottom: $size-gap-4;
+    padding-left: 0;
+    list-style: none;
+  }
+
+  > ul.contains-task-list > .task-list-item {
+    list-style: none;
+    position: relative;
+    padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+    margin-bottom: $size-gap-1;
+  }
+
+  > ul.contains-task-list > .task-list-item > input[type="checkbox"] {
+    position: absolute;
+    left: calc((var(--m-editor-list-marker-width) - var(--m-editor-task-checkbox-size)) / 2);
+    top: 0.15rem;
+    margin: 0;
+    width: var(--m-editor-task-checkbox-size);
+    height: var(--m-editor-task-checkbox-size);
+  }
+
+  .task-list-item > ul,
+  .task-list-item > ol {
+    margin-top: $size-gap-1;
+    margin-bottom: 0;
+    padding-left: var(--m-editor-list-indent);
   }
 
   // KaTeX math formula styles
@@ -308,4 +388,3 @@
     text-align: center;
   }
 }
-

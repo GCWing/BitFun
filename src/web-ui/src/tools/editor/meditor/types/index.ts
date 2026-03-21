@@ -80,6 +80,11 @@ export interface EditorOptions {
   className?: string
   style?: CSSProperties
   /**
+   * Absolute path of the Markdown document.
+   * Used by AI prompt builders and path-aware features.
+   */
+  filePath?: string
+  /**
    * Directory path of the Markdown file.
    * Used to resolve relative image paths.
    */
@@ -133,4 +138,3 @@ export interface RenderOptions {
    */
   basePath?: string
 }
-

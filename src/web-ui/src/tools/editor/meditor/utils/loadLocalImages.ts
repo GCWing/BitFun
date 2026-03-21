@@ -8,6 +8,53 @@ import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('loadLocalImages');
+const localImageDataUrlCache = new Map<string, string>();
+const localImageRequestCache = new Map<string, Promise<string>>();
+
+function markLocalImageLoaded(img: HTMLImageElement, dataUrl: string): void {
+  if (img.src !== dataUrl) {
+    img.src = dataUrl;
+  }
+
+  img.classList.remove('local-image-loading', 'local-image-error');
+  img.classList.add('local-image-loaded');
+  img.removeAttribute('data-local-image');
+  img.removeAttribute('data-local-path');
+}
+
+async function getLocalImageDataUrl(localPath: string): Promise<string> {
+  const cachedDataUrl = localImageDataUrlCache.get(localPath);
+  if (cachedDataUrl) {
+    return cachedDataUrl;
+  }
+
+  const pendingRequest = localImageRequestCache.get(localPath);
+  if (pendingRequest) {
+    return pendingRequest;
+  }
+
+  const request = (async () => {
+    const { workspaceAPI } = await import('@/infrastructure/api');
+    const base64Content = await workspaceAPI.readFileContent(localPath);
+    const mimeType = getMimeType(localPath);
+    const dataUrl = `data:${mimeType};base64,${base64Content}`;
+
+    localImageDataUrlCache.set(localPath, dataUrl);
+    localImageRequestCache.delete(localPath);
+
+    return dataUrl;
+  })().catch((error) => {
+    localImageRequestCache.delete(localPath);
+    throw error;
+  });
+
+  localImageRequestCache.set(localPath, request);
+  return request;
+}
+
+export function getCachedLocalImageDataUrl(localPath: string): string | undefined {
+  return localImageDataUrlCache.get(localPath);
+}
 
 /**
  * Load all images marked as local images inside the container.
@@ -29,21 +76,8 @@ export async function loadLocalImages(container: HTMLElement): Promise<void> {
     }
     
     try {
-      const { workspaceAPI } = await import('@/infrastructure/api');
-      
-      const base64Content = await workspaceAPI.readFileContent(localPath);
-      
-      const mimeType = getMimeType(localPath);
-      
-      const dataUrl = `data:${mimeType};base64,${base64Content}`;
-      
-      img.src = dataUrl;
-      
-      img.classList.remove('local-image-loading');
-      img.classList.add('local-image-loaded');
-      
-      img.removeAttribute('data-local-image');
-      img.removeAttribute('data-local-path');
+      const dataUrl = await getLocalImageDataUrl(localPath);
+      markLocalImageLoaded(img, dataUrl);
     } catch (error) {
       log.error('Failed to load local image', { path: localPath, error });
       
@@ -58,4 +92,3 @@ export async function loadLocalImages(container: HTMLElement): Promise<void> {
   
   await Promise.allSettled(loadPromises);
 }
-

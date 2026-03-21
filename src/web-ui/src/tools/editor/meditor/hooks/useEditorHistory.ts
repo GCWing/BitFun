@@ -5,8 +5,22 @@ import { useState, useCallback, useRef, useEffect } from 'react'
  */
 interface HistoryEntry {
   content: string
+  selectionStart: number | null
+  selectionEnd: number | null
+  transactionType: 'typing' | 'format' | 'structure' | 'external'
   timestamp: number
   versionId: number
+}
+
+export interface HistorySelection {
+  start: number
+  end: number
+}
+
+export interface PushChangeOptions {
+  selectionStart?: number | null
+  selectionEnd?: number | null
+  transactionType?: HistoryEntry['transactionType']
 }
 
 /**
@@ -31,6 +45,8 @@ export interface UseEditorHistoryOptions {
 export interface UseEditorHistoryReturn {
   /** Current content */
   content: string
+  /** Current selection for the active editing surface */
+  selection: HistorySelection | null
   
   /** Current version id (similar to Monaco alternativeVersionId) */
   currentVersionId: number
@@ -40,7 +56,7 @@ export interface UseEditorHistoryReturn {
   isDirty: boolean
   
   /** Push a new content change */
-  pushChange: (newContent: string) => void
+  pushChange: (newContent: string, options?: PushChangeOptions) => void
   /** Undo */
   undo: () => boolean
   /** Redo */
@@ -81,6 +97,9 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
   
   const [historyStack, setHistoryStack] = useState<HistoryEntry[]>(() => [{
     content: initialContent,
+    selectionStart: null,
+    selectionEnd: null,
+    transactionType: 'external',
     timestamp: Date.now(),
     versionId: 1
   }])
@@ -95,6 +114,9 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
 
   const currentEntry = historyStack[currentIndex]
   const content = currentEntry?.content ?? initialContent
+  const selection = currentEntry && currentEntry.selectionStart !== null && currentEntry.selectionEnd !== null
+    ? { start: currentEntry.selectionStart, end: currentEntry.selectionEnd }
+    : null
   const currentVersionId = currentEntry?.versionId ?? 1
   const isDirty = currentVersionId !== savedVersionId
   
@@ -109,7 +131,7 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
   }, [isDirty, onDirtyChange])
 
   /** Push a new content change */
-  const pushChange = useCallback((newContent: string) => {
+  const pushChange = useCallback((newContent: string, options?: PushChangeOptions) => {
     if (newContent === content) {
       return
     }
@@ -120,10 +142,15 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
 
     const now = Date.now()
     const lastEntry = historyStack[currentIndex]
+    const selectionStart = options?.selectionStart ?? null
+    const selectionEnd = options?.selectionEnd ?? null
+    const transactionType = options?.transactionType ?? 'typing'
     
     const shouldMerge = lastEntry && 
       (now - lastEntry.timestamp) < debounceMs &&
-      currentIndex === historyStack.length - 1
+      currentIndex === historyStack.length - 1 &&
+      transactionType === 'typing' &&
+      lastEntry.transactionType === 'typing'
 
     if (shouldMerge) {
       setHistoryStack(prev => {
@@ -131,6 +158,8 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
         newStack[currentIndex] = {
           ...newStack[currentIndex],
           content: newContent,
+          selectionStart,
+          selectionEnd,
           timestamp: now
         }
         return newStack
@@ -141,6 +170,9 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
       
       const newEntry: HistoryEntry = {
         content: newContent,
+        selectionStart,
+        selectionEnd,
+        transactionType,
         timestamp: now,
         versionId: newVersionId
       }
@@ -211,6 +243,9 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
     
     const newEntry: HistoryEntry = {
       content: newContent,
+      selectionStart: null,
+      selectionEnd: null,
+      transactionType: 'external',
       timestamp: Date.now(),
       versionId: 1
     }
@@ -229,6 +264,9 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
     
     const newEntry: HistoryEntry = {
       content: newContent,
+      selectionStart: null,
+      selectionEnd: null,
+      transactionType: 'external',
       timestamp: Date.now(),
       versionId: newVersionId
     }
@@ -242,6 +280,7 @@ export function useEditorHistory(options: UseEditorHistoryOptions): UseEditorHis
 
   return {
     content,
+    selection,
     currentVersionId,
     savedVersionId,
     isDirty,

@@ -204,10 +204,12 @@ async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHa
             .get_config::<String>(Some("app.language"))
             .await
             .unwrap_or_else(|_| "zh-CN".to_string());
+        let edit_mode = *state.macos_edit_menu_mode.read().await;
         let _ = crate::macos_menubar::set_macos_menubar_with_mode(
             app,
             &language,
             crate::macos_menubar::MenubarMode::Startup,
+            edit_mode,
         );
     }
 }
@@ -261,10 +263,12 @@ async fn apply_active_workspace_context(
             .get_config::<String>(Some("app.language"))
             .await
             .unwrap_or_else(|_| "zh-CN".to_string());
+        let edit_mode = *state.macos_edit_menu_mode.read().await;
         let _ = crate::macos_menubar::set_macos_menubar_with_mode(
             app,
             &language,
             crate::macos_menubar::MenubarMode::Workspace,
+            edit_mode,
         );
     }
 }

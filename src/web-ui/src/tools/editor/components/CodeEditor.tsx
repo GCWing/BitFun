@@ -10,6 +10,7 @@ import { AlertCircle } from 'lucide-react';
 import * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
 import { monacoModelManager } from '../services/MonacoModelManager';
+import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import { 
   forceRegisterTheme,
   BitFunDarkTheme,
@@ -90,6 +91,15 @@ function hasVeryLongLine(content: string, maxLineLength: number): boolean {
     }
   }
   return false;
+}
+
+function isMacOSDesktop(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const isTauri = '__TAURI__' in window;
+  return isTauri && typeof navigator.platform === 'string' && navigator.platform.toUpperCase().includes('MAC');
 }
 
 const CodeEditor: React.FC<CodeEditorProps> = ({
@@ -202,6 +212,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const userIndentRef = useRef<{ tab_size: number; insert_spaces: boolean } | null>(null);
   const largeFileModeRef = useRef(false);
   const largeFileExpansionBlockedLogRef = useRef(false);
+  const pendingModelContentRef = useRef<string | null>(null);
+  const macosEditorBindingCleanupRef = useRef<(() => void) | null>(null);
 
   const detectLargeFileMode = useCallback((nextContent: string, fileSizeBytes?: number): boolean => {
     const size = typeof fileSizeBytes === 'number' && fileSizeBytes >= 0
@@ -225,6 +237,29 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       });
     }
   }, [detectLargeFileMode, filePath]);
+
+  const applyExternalContentToModel = useCallback((nextContent: string) => {
+    const model = modelRef.current;
+    if (!model) {
+      pendingModelContentRef.current = nextContent;
+      return;
+    }
+
+    pendingModelContentRef.current = null;
+    if (model.getValue() === nextContent) {
+      return;
+    }
+
+    const previousLoadingState = isLoadingContentRef.current;
+    isLoadingContentRef.current = true;
+    model.setValue(nextContent);
+
+    queueMicrotask(() => {
+      if (!isUnmountedRef.current) {
+        isLoadingContentRef.current = previousLoadingState;
+      }
+    });
+  }, []);
 
   const shouldBlockLargeFileExpansionClick = useCallback((target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) {
@@ -250,6 +285,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   useEffect(() => {
     filePathRef.current = filePath;
+    pendingModelContentRef.current = null;
   }, [filePath]);
 
   useEffect(() => {
@@ -580,6 +616,25 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         editor = monaco.editor.create(containerRef.current, editorOptions);
         editorRef.current = editor;
         setEditorInstance(editor);
+        const editTarget = createMonacoEditTarget(editor);
+        const unbindEditTarget = activeEditTargetService.bindTarget(editTarget);
+        const focusDisposable = editor.onDidFocusEditorText(() => {
+          activeEditTargetService.setActiveTarget(editTarget.id);
+        });
+        const blurDisposable = editor.onDidBlurEditorText(() => {
+          window.setTimeout(() => {
+            if (editor?.hasTextFocus()) {
+              return;
+            }
+
+            activeEditTargetService.clearActiveTarget(editTarget.id);
+          }, 0);
+        });
+        macosEditorBindingCleanupRef.current = () => {
+          focusDisposable.dispose();
+          blurDisposable.dispose();
+          unbindEditTarget();
+        };
         // #endregion
         
         (containerRef.current as any).__monacoEditor = editor;
@@ -794,6 +849,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     return () => {
       isUnmountedRef.current = true;
+      if (macosEditorBindingCleanupRef.current) {
+        macosEditorBindingCleanupRef.current();
+        macosEditorBindingCleanupRef.current = null;
+      }
       if (delayedFontApplyTimerRef.current) {
         clearTimeout(delayedFontApplyTimerRef.current);
         delayedFontApplyTimerRef.current = null;
@@ -836,26 +895,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [filePath, detectedLanguage, detectLargeFileMode]);
 
   useEffect(() => {
-    if (modelRef.current && monacoReady && !loading) {
-      const currentValue = modelRef.current.getValue();
-      if (content !== currentValue) {
-        isLoadingContentRef.current = true;
-        
-        monacoModelManager.updateModelContent(filePath, content, !hasChanges);
-        
-        queueMicrotask(() => {
-          isLoadingContentRef.current = false;
-          if (modelRef.current && !isUnmountedRef.current && !hasChanges) {
-            savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          }
-        });
-        
-        if (content && !lspReady) {
-          setLspReady(true);
-        }
-      }
+    if (monacoReady && pendingModelContentRef.current !== null) {
+      applyExternalContentToModel(pendingModelContentRef.current);
     }
-  }, [content, monacoReady, loading, lspReady, hasChanges, filePath]);
+  }, [monacoReady, applyExternalContentToModel]);
+
+  useEffect(() => {
+    if (content && !lspReady) {
+      setLspReady(true);
+    }
+  }, [content, lspReady]);
 
   useEffect(() => {
     if (modelRef.current && monacoReady) {
@@ -1029,13 +1078,19 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       updateLargeFileMode(content);
       setContent(content);
       originalContentRef.current = content;
-      if (modelRef.current) {
-        modelRef.current.setValue(content);
-      }
+      setHasChanges(false);
+      hasChangesRef.current = false;
+      applyExternalContentToModel(content);
+      queueMicrotask(() => {
+        if (modelRef.current && !isUnmountedRef.current) {
+          savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
+          monacoModelManager.markAsSaved(filePath);
+        }
+      });
     } catch (err) {
       log.warn('Failed to reload file with new encoding', err);
     }
-  }, [filePath, updateLargeFileMode]);
+  }, [applyExternalContentToModel, filePath, updateLargeFileMode]);
 
   const handleLanguageConfirm = useCallback((languageId: string) => {
     userLanguageOverrideRef.current = true;
@@ -1087,6 +1142,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       originalContentRef.current = fileContent;
       setHasChanges(false);
       hasChangesRef.current = false;
+      applyExternalContentToModel(fileContent);
       
       // NOTE: Do NOT call onContentChange here during initial load.
       // Calling it triggers parent re-render which unmounts this component,
@@ -1120,7 +1176,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         isLoadingContentRef.current = false;
       });
     }
-  }, [filePath, detectedLanguage, t, updateLargeFileMode]);
+  }, [applyExternalContentToModel, filePath, detectedLanguage, t, updateLargeFileMode]);
 
   // Save file content
   const saveFileContent = useCallback(async () => {
@@ -1185,19 +1241,43 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   // Container-level keyboard event handler, solves global conflict issues with multiple editor instances
   const handleContainerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-      // Check if editor has focus
-      const hasFocus = editorRef.current?.hasTextFocus() ?? false;
-      
-      if (hasFocus) {
-        event.preventDefault();
-        event.stopPropagation();
-        
-        saveFileContentRef.current?.();
-      }
-      // If no focus, don't prevent event propagation, let other editors or parent components handle it
+    const hasFocus = editorRef.current?.hasTextFocus() ?? false;
+    if (!hasFocus) {
+      return;
     }
-  }, [filePath]);
+
+    const isModKey = event.ctrlKey || event.metaKey;
+    const lowerKey = event.key.toLowerCase();
+
+    if (isModKey && lowerKey === 's') {
+      event.preventDefault();
+      event.stopPropagation();
+      saveFileContentRef.current?.();
+      return;
+    }
+
+    if (isModKey && lowerKey === 'z') {
+      if (isMacOSDesktop()) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.shiftKey) {
+        activeEditTargetService.executeAction('redo');
+      } else {
+        activeEditTargetService.executeAction('undo');
+      }
+      return;
+    }
+
+    if (!event.metaKey && event.ctrlKey && lowerKey === 'y') {
+      event.preventDefault();
+      event.stopPropagation();
+      activeEditTargetService.executeAction('redo');
+    }
+  }, []);
 
   // Check file modifications
   const checkFileModification = useCallback(async () => {
@@ -1237,6 +1317,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           setHasChanges(false);
           hasChangesRef.current = false;
           lastModifiedTimeRef.current = currentModifiedTime;
+          applyExternalContentToModel(fileContent);
           
           onContentChange?.(fileContent, false);
           
@@ -1256,7 +1337,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     } finally {
       isCheckingFileRef.current = false;
     }
-  }, [filePath, hasChanges, monacoReady, updateLargeFileMode]);
+  }, [applyExternalContentToModel, filePath, hasChanges, monacoReady, onContentChange, t, updateLargeFileMode]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
@@ -1466,13 +1547,22 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           
           const currentPosition = editor?.getPosition();
           
-          if (editor) {
-            editor.setValue(content);
-            
-            if (currentPosition) {
-              editor.setPosition(currentPosition);
-            }
+          setContent(content);
+          originalContentRef.current = content;
+          setHasChanges(false);
+          hasChangesRef.current = false;
+          applyExternalContentToModel(content);
+
+          if (editor && currentPosition) {
+            editor.setPosition(currentPosition);
           }
+
+          queueMicrotask(() => {
+            if (modelRef.current && !isUnmountedRef.current) {
+              savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
+              monacoModelManager.markAsSaved(filePath);
+            }
+          });
         } catch (error) {
           log.error('Failed to reload file', error);
         }
@@ -1494,7 +1584,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [monacoReady, filePath, updateLargeFileMode]);
+  }, [applyExternalContentToModel, monacoReady, filePath, updateLargeFileMode]);
 
   useEffect(() => {
     userLanguageOverrideRef.current = false;

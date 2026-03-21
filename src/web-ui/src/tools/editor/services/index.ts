@@ -53,3 +53,12 @@ export {
   type DiffStats,
   type DiffComputeResult,
 } from './DiffService';
+
+export {
+  activeEditTargetService,
+  createMonacoEditTarget,
+  type EditTarget,
+  type EditMenuAction,
+  type EditTargetKind,
+  type MacosEditMenuMode,
+} from './ActiveEditTargetService';

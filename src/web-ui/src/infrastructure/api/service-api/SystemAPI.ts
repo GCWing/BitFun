@@ -113,6 +113,16 @@ export class SystemAPI {
       throw createTauriCommandError('check_commands_exist', error, { commands });
     }
   }
+
+  async setMacosEditMenuMode(mode: 'system' | 'renderer'): Promise<void> {
+    try {
+      await api.invoke('set_macos_edit_menu_mode', {
+        request: { mode }
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_macos_edit_menu_mode', error, { mode });
+    }
+  }
 }
 
 

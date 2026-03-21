@@ -145,15 +145,8 @@ pub async fn run() {
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
-                    let event_name = if event.id() == "bitfun.open_project" {
-                        Some("bitfun_menu_open_project")
-                    } else if event.id() == "bitfun.new_project" {
-                        Some("bitfun_menu_new_project")
-                    } else if event.id() == "bitfun.about" {
-                        Some("bitfun_menu_about")
-                    } else {
-                        None
-                    };
+                    let event_name =
+                        crate::macos_menubar::menu_event_name_for_id(event.id().as_ref());
 
                     if let Some(event_name) = event_name {
                         let _ = app.emit(event_name, ());
@@ -214,6 +207,7 @@ pub async fn run() {
                 let app_state: tauri::State<'_, api::app_state::AppState> = app.state();
                 let config_service = app_state.config_service.clone();
                 let workspace_path = app_state.workspace_path.clone();
+                let macos_edit_menu_mode = app_state.macos_edit_menu_mode.clone();
 
                 tokio::spawn(async move {
                     let language = config_service
@@ -227,11 +221,13 @@ pub async fn run() {
                     } else {
                         crate::macos_menubar::MenubarMode::Startup
                     };
+                    let edit_mode = *macos_edit_menu_mode.read().await;
 
                     let _ = crate::macos_menubar::set_macos_menubar_with_mode(
                         &app_handle_for_menu,
                         &language,
                         mode,
+                        edit_mode,
                     );
                 });
             }
@@ -307,6 +303,8 @@ pub async fn run() {
             api::btw_api::btw_ask,
             api::btw_api::btw_ask_stream,
             api::btw_api::btw_cancel,
+            api::editor_ai_api::editor_ai_stream,
+            api::editor_ai_api::editor_ai_cancel,
             api::context_upload_api::upload_image_contexts,
             get_all_tools_info,
             get_readonly_tools_info,
@@ -581,6 +579,7 @@ pub async fn run() {
             check_command_exists,
             check_commands_exist,
             run_system_command,
+            set_macos_edit_menu_mode,
             i18n_get_current_language,
             i18n_set_language,
             i18n_get_supported_languages,

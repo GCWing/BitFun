@@ -43,6 +43,7 @@ ignore = { workspace = true }
 urlencoding = { workspace = true }
 reqwest = { workspace = true }
 thiserror = "1.0"
+futures = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

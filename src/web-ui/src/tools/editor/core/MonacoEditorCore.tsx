@@ -15,6 +15,7 @@ import { monacoModelManager } from '../services/MonacoModelManager';
 import { themeManager } from '../services/ThemeManager';
 import { editorExtensionManager } from '../services/EditorExtensionManager';
 import { buildEditorOptions } from '../services/EditorOptionsBuilder';
+import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import type { MonacoEditorCoreProps } from './types';
 import type { EditorExtensionContext } from '../services/EditorExtensionManager';
 import type { EditorOptionsOverrides } from '../services/EditorOptionsBuilder';
@@ -66,6 +67,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     const editorIdRef = useRef<string>('');
     const isUnmountedRef = useRef(false);
     const disposablesRef = useRef<monaco.IDisposable[]>([]);
+    const macosEditorBindingCleanupRef = useRef<(() => void) | null>(null);
     const hasJumpedRef = useRef(false);
     
     const [isReady, setIsReady] = useState(false);
@@ -146,6 +148,25 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
             model,
           });
           editorRef.current = editor;
+          const editTarget = createMonacoEditTarget(editor);
+          const unbindEditTarget = activeEditTargetService.bindTarget(editTarget);
+          const focusDisposable = editor.onDidFocusEditorText(() => {
+            activeEditTargetService.setActiveTarget(editTarget.id);
+          });
+          const blurDisposable = editor.onDidBlurEditorText(() => {
+            window.setTimeout(() => {
+              if (editor.hasTextFocus()) {
+                return;
+              }
+
+              activeEditTargetService.clearActiveTarget(editTarget.id);
+            }, 0);
+          });
+          macosEditorBindingCleanupRef.current = () => {
+            focusDisposable.dispose();
+            blurDisposable.dispose();
+            unbindEditTarget();
+          };
           
           registerEventListeners(editor, model);
           
@@ -191,6 +212,11 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
         
         disposablesRef.current.forEach(d => d.dispose());
         disposablesRef.current = [];
+
+        if (macosEditorBindingCleanupRef.current) {
+          macosEditorBindingCleanupRef.current();
+          macosEditorBindingCleanupRef.current = null;
+        }
         
         if (editorRef.current) {
           editorRef.current.dispose();

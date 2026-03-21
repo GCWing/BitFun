@@ -1,7 +1,9 @@
 //! System API
 
+use crate::api::app_state::AppState;
 use bitfun_core::service::system;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +55,12 @@ pub struct CommandOutputResponse {
     pub stdout: String,
     pub stderr: String,
     pub success: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMacosEditMenuModeRequest {
+    pub mode: crate::macos_menubar::EditMenuMode,
 }
 
 #[tauri::command]
@@ -111,4 +119,50 @@ pub async fn run_system_command(
         stderr: result.stderr,
         success: result.success,
     })
+}
+
+#[tauri::command]
+pub async fn set_macos_edit_menu_mode(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: SetMacosEditMenuModeRequest,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let current_mode = *state.macos_edit_menu_mode.read().await;
+        if current_mode == request.mode {
+            return Ok(());
+        }
+
+        {
+            let mut edit_mode = state.macos_edit_menu_mode.write().await;
+            *edit_mode = request.mode;
+        }
+
+        let language = state
+            .config_service
+            .get_config::<String>(Some("app.language"))
+            .await
+            .unwrap_or_else(|_| "zh-CN".to_string());
+        let menubar_mode = if state.workspace_path.read().await.is_some() {
+            crate::macos_menubar::MenubarMode::Workspace
+        } else {
+            crate::macos_menubar::MenubarMode::Startup
+        };
+
+        crate::macos_menubar::set_macos_menubar_with_mode(
+            &app,
+            &language,
+            menubar_mode,
+            request.mode,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (&state, &app, &request);
+    }
+
+    Ok(())
 }

@@ -813,6 +813,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             placeholder={t('editor.planViewer.contentPlaceholder')}
             readonly={false}
             toolbar={false}
+            filePath={filePath}
             basePath={basePath}
           />
         </div>
