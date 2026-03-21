@@ -6,6 +6,8 @@ import { MenuContext, ContextType, FileNodeContext } from '../types/context.type
 import { commandExecutor } from '../commands/CommandExecutor';
 import { globalEventBus } from '../../../infrastructure/event-bus';
 import { i18nService } from '../../../infrastructure/i18n';
+import { workspaceManager } from '../../../infrastructure/services/business/workspaceManager';
+import { isRemoteWorkspace } from '../../../shared/types';
 
 export class FileExplorerMenuProvider implements IMenuProvider {
   readonly id = 'file-explorer';
@@ -30,8 +32,8 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
   async getMenuItems(context: MenuContext): Promise<MenuItem[]> {
     const items: MenuItem[] = [];
-    
-    
+    const revealInExplorerDisabled = isRemoteWorkspace(workspaceManager.getState().currentWorkspace);
+
     if (context.type === ContextType.EMPTY_SPACE) {
       const emptyContext = context as any;
       
@@ -219,6 +221,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
       label: i18nService.t('common:file.reveal'),
       icon: 'FolderOpen',
       command: 'file.reveal-in-explorer',
+      disabled: revealInExplorerDisabled,
       onClick: async (ctx) => {
         await commandExecutor.execute('file.reveal-in-explorer', ctx);
       }

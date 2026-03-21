@@ -227,7 +227,8 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   };
 
   const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return '-';
+    if (bytes === undefined || bytes === null) return '-';
+    if (bytes === 0) return '0 B';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -236,7 +237,11 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
 
   const formatDate = (timestamp?: number): string => {
     if (!timestamp) return '-';
-    return new Date(timestamp).toLocaleDateString();
+    const d = new Date(timestamp);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}/${m}/${day}`;
   };
 
   const getEntryIcon = (entry: RemoteFileEntry) => {
@@ -386,8 +391,10 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                     className={`remote-file-browser__row ${selectedPath === entry.path ? 'remote-file-browser__row--selected' : ''}`}
                   >
                     <td className="remote-file-browser__td remote-file-browser__td--name">
-                      {getEntryIcon(entry)}
-                      <span className="remote-file-browser__name">{entry.name}</span>
+                      <div className="remote-file-browser__name-cell">
+                        {getEntryIcon(entry)}
+                        <span className="remote-file-browser__name">{entry.name}</span>
+                      </div>
                     </td>
                     <td className="remote-file-browser__td remote-file-browser__td--size">
                       {entry.isDir ? '-' : formatFileSize(entry.size)}

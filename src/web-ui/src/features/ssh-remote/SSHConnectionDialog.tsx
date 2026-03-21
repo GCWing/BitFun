@@ -332,6 +332,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     { label: t('ssh.remote.sshAgent') || 'SSH Agent', value: 'agent', icon: <Terminal size={14} /> },
   ];
 
+  const dismissError = () => {
+    setLocalError(null);
+    clearError();
+  };
+
   if (!open) return null;
 
   return (
@@ -342,19 +347,22 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         title={t('ssh.remote.title') || 'SSH Remote'}
         size="medium"
         showCloseButton
+        contentClassName="modal__content--fill-flex"
       >
         <div className="ssh-connection-dialog">
-          {/* Error display */}
           {error && (
-            <div className="ssh-connection-dialog__error">
+            <div className="ssh-connection-dialog__error-banner">
               <Alert
                 type="error"
                 message={error}
-                onClose={() => setLocalError(null)}
+                closable
+                onClose={dismissError}
+                className="ssh-connection-dialog__error-alert"
               />
             </div>
           )}
 
+          <div className="ssh-connection-dialog__scroll">
           {/* Saved connections section */}
           {savedConnections.length > 0 && (
             <div className="ssh-connection-dialog__section">
@@ -372,7 +380,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     onKeyDown={(e) => e.key === 'Enter' && !isConnecting && handleQuickConnect(conn)}
                   >
                     <div className="ssh-connection-dialog__saved-icon">
-                      <Server size={18} />
+                      <Server size={16} />
                     </div>
                     <div className="ssh-connection-dialog__saved-info">
                       <span className="ssh-connection-dialog__saved-name">{conn.name}</span>
@@ -445,13 +453,27 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     onKeyDown={(e) => e.key === 'Enter' && !isConnecting && handleSSHConfigConnect(configHost)}
                   >
                     <div className="ssh-connection-dialog__saved-icon">
-                      <Server size={18} />
+                      <Server size={16} />
                     </div>
                     <div className="ssh-connection-dialog__saved-info">
                       <span className="ssh-connection-dialog__saved-name">{configHost.host}</span>
                       <span className="ssh-connection-dialog__saved-detail">
                         {configHost.user || ''}@{configHost.hostname || configHost.host}:{configHost.port || 22}
                       </span>
+                    </div>
+                    <div className="ssh-connection-dialog__saved-actions">
+                      <Button
+                        size="small"
+                        variant="primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleSSHConfigConnect(configHost);
+                        }}
+                        disabled={isConnecting || status === 'connecting'}
+                        title={t('ssh.remote.connect')}
+                      >
+                        <Play size={12} />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -567,6 +589,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 </div>
               </>
             )}
+          </div>
           </div>
 
           {/* Actions */}

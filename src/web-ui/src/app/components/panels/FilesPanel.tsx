@@ -19,6 +19,8 @@ import { InputDialog, CubeLoading } from '@/component-library';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { isRemoteWorkspace } from '@/shared/types';
 import '@/tools/file-system/styles/FileExplorer.scss';
 import './FilesPanel.scss';
 
@@ -259,6 +261,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [workspacePath, loadFileTree, notification, t]);
 
   const handleReveal = useCallback(async (data: { path: string }) => {
+    if (isRemoteWorkspace(workspaceManager.getState().currentWorkspace)) {
+      return;
+    }
     try {
       await workspaceAPI.revealInExplorer(data.path);
     } catch (error) {

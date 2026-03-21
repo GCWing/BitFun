@@ -12,6 +12,14 @@
   backdrop-filter: blur(4px);
   z-index: 260;
   animation: fadeIn 0.2s ease;
+
+  // Beat `.bitfun-app-layout *:focus-visible` (same specificity as a single-class :focus-visible; load order can win).
+  .remote-file-browser__path-input:focus,
+  .remote-file-browser__path-input:focus-visible {
+    outline: none !important;
+    outline-offset: 0 !important;
+    box-shadow: none !important;
+  }
 }
 
 @keyframes fadeIn {
@@ -76,8 +84,18 @@
     padding: 10px 20px;
     background: var(--color-bg-tertiary);
     border-bottom: 1px solid var(--border-subtle);
-    overflow-x: auto;
     flex-shrink: 0;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
   }
 
   &__breadcrumb-path {
@@ -86,6 +104,7 @@
     gap: 4px;
     flex: 1;
     min-width: 0;
+    flex-wrap: nowrap;
     cursor: text;
     border-radius: 6px;
     padding: 2px 4px;
@@ -108,6 +127,15 @@
     font-family: var(--font-family-mono);
     color: var(--color-text-primary);
     outline: none;
+    box-shadow: none;
+    overflow: hidden;
+
+    &:focus,
+    &:focus-visible {
+      outline: none !important;
+      outline-offset: 0 !important;
+      box-shadow: none !important;
+    }
   }
 
   &__breadcrumb-btn {
@@ -229,6 +257,16 @@
   &__table {
     width: 100%;
     border-collapse: collapse;
+
+    th,
+    td {
+      border-left: none;
+      border-right: none;
+    }
+
+    tbody td {
+      border-bottom: none;
+    }
   }
 
   &__thead {
@@ -243,6 +281,7 @@
       font-weight: 600;
       color: var(--color-text-muted);
       text-align: left;
+      background: var(--color-bg-secondary);
       border-bottom: 1px solid var(--border-subtle);
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -250,15 +289,28 @@
     }
   }
 
+  &__thead th#{&}__th--size,
+  &__thead th#{&}__th--date {
+    text-align: right;
+  }
+
+  &__tbody td#{&}__td--size,
+  &__tbody td#{&}__td--date {
+    text-align: right;
+  }
+
   &__th {
     &--name {
       width: auto;
     }
     &--size {
-      width: 100px;
+      width: 152px;
+      min-width: 152px;
+      box-sizing: border-box;
     }
     &--date {
       width: 120px;
+      min-width: 120px;
     }
   }
 
@@ -288,20 +340,30 @@
     }
   }
 
+  &__name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
   &__td {
     &--name {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      vertical-align: middle;
     }
     &--size {
       color: var(--color-text-muted);
       font-family: var(--font-family-mono);
       font-size: 12px;
+      white-space: nowrap;
+      min-width: 152px;
+      box-sizing: border-box;
+      text-align: right;
     }
     &--date {
       color: var(--color-text-muted);
       font-size: 12px;
+      text-align: right;
     }
   }
 

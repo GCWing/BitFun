@@ -268,6 +268,7 @@
       "dropBefore": "Release to insert before",
       "dropAfter": "Release to insert after",
       "revealFailed": "Failed to reveal workspace folder",
+      "copyPathFailed": "Failed to copy path",
       "createSessionFailed": "Failed to create session",
       "worktreeCreated": "Worktree created",
       "worktreeCreateFailed": "Failed to create worktree: {{error}}",
@@ -286,6 +287,7 @@
         "deleteAssistant": "Delete personal assistant",
         "resetWorkspace": "Reset workspace",
         "newWorktree": "New worktree",
+        "copyPath": "Copy path",
         "reveal": "Reveal in explorer",
         "close": "Close workspace"
       },

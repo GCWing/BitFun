@@ -88,8 +88,10 @@ impl RemoteFileService {
             let is_file = entry.file_type().is_file();
 
             // FileAttributes mtime is Unix timestamp in seconds; convert to milliseconds
-            // for JavaScript Date compatibility
-            let size = if is_file { metadata.size } else { None };
+            // for JavaScript Date compatibility.
+            // Use size for any non-directory (regular files, symlinks, etc.). SFTP `is_file()`
+            // is false for symlinks and some file types, which previously hid size incorrectly.
+            let size = if is_dir { None } else { metadata.size };
             let modified = metadata.mtime.map(|t| (t as u64) * 1000);
 
             // Get permissions string
@@ -274,7 +276,7 @@ impl RemoteFileService {
                 let is_symlink = attrs.is_symlink();
                 // File is neither dir nor symlink
                 let is_file = !is_dir && !is_symlink;
-                let size = if is_file { attrs.size } else { None };
+                let size = if is_dir { None } else { attrs.size };
                 let modified = attrs.mtime.map(|t| (t as u64) * 1000);
                 let permissions = Some(format_permissions(attrs.permissions));
 

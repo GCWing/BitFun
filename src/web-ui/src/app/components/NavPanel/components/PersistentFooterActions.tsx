@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Settings, Info, MoreVertical, PictureInPicture2, SquareTerminal, Wifi, Globe } from 'lucide-react';
+import { Settings, Info, MoreVertical, PictureInPicture2, SquareTerminal, Smartphone, Globe } from 'lucide-react';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '../../../hooks/useSceneManager';
@@ -162,7 +162,7 @@ const PersistentFooterActions: React.FC = () => {
                       aria-disabled={!hasWorkspace}
                       onClick={handleRemoteConnect}
                     >
-                      <Wifi size={14} />
+                      <Smartphone size={14} />
                       <span>{t('header.remoteConnect')}</span>
                     </button>
                   </Tooltip>

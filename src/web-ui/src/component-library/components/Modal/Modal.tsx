@@ -15,6 +15,8 @@ export interface ModalProps {
   children: React.ReactNode;
   size?: 'small' | 'medium' | 'large' | 'xlarge';
   contentInset?: boolean;
+  /** Extra class on `.modal__content` (e.g. flex layout for scroll regions inside children) */
+  contentClassName?: string;
   showCloseButton?: boolean;
   draggable?: boolean;
   resizable?: boolean;
@@ -29,6 +31,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   size = 'medium',
   contentInset = false,
+  contentClassName,
   showCloseButton = true,
   draggable = false,
   resizable = false,
@@ -278,7 +281,15 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
         )}
         
-        <div className={`modal__content ${contentInset ? 'modal__content--inset' : ''}`}>
+        <div
+          className={[
+            'modal__content',
+            contentInset ? 'modal__content--inset' : '',
+            contentClassName ?? '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
           {children}
         </div>
         

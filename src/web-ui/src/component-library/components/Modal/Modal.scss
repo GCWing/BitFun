@@ -196,6 +196,13 @@
     &--inset {
       padding-inline: 28px;
     }
+
+    /** Child owns internal scroll (e.g. fixed banner + scroll body + footer) */
+    &--fill-flex {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
   }
 }
 
