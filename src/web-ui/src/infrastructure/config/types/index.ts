@@ -71,7 +71,8 @@ export type ModelCapability =
   | 'function_calling';
 
 export type ModelCategory = 
-  | 'general_chat';
+  | 'general_chat'
+  | 'multimodal';
 
 export interface ModelMetadata {
   category: ModelCategory;
@@ -82,12 +83,14 @@ export interface ModelMetadata {
 
 
 export const CATEGORY_LABELS: Record<ModelCategory, string> = {
-  general_chat: t('settings/ai-model:category.general_chat')
+  general_chat: t('settings/ai-model:category.general_chat'),
+  multimodal: t('settings/ai-model:category.multimodal')
 };
 
 
 export const CATEGORY_ICONS: Record<ModelCategory, string> = {
-  general_chat: t('settings/ai-model:categoryIcons.general_chat')
+  general_chat: t('settings/ai-model:categoryIcons.general_chat'),
+  multimodal: t('settings/ai-model:categoryIcons.multimodal')
 };
 
 

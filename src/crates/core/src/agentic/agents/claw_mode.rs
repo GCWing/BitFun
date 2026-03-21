@@ -21,7 +21,6 @@ impl ClawMode {
                 "WebSearch".to_string(),
                 "IdeControl".to_string(),
                 "MermaidInteractive".to_string(),
-                "view_image".to_string(),
                 "Skill".to_string(),
                 "Git".to_string(),
                 "TerminalControl".to_string(),

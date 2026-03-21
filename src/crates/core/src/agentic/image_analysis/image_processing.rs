@@ -273,6 +273,26 @@ pub fn build_multimodal_message(
             tool_call_id: None,
             name: None,
         }
+    } else if provider_lower.contains("gemini") || provider_lower.contains("google") {
+        Message {
+            role: "user".to_string(),
+            content: Some(serde_json::to_string(&json!([
+                {
+                    "inline_data": {
+                        "mime_type": mime_type,
+                        "data": base64_data
+                    }
+                },
+                {
+                    "text": prompt
+                }
+            ]))?),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        }
     } else {
         // Default to OpenAI-compatible payload shape for OpenAI and most OpenAI-compatible providers.
         Message {
@@ -370,6 +390,19 @@ pub fn build_multimodal_message_with_images(
             "text": prompt
         }));
         json!(blocks)
+    } else if provider_lower.contains("gemini") || provider_lower.contains("google") {
+        let mut parts = Vec::with_capacity(images.len() + 1);
+        for img in images {
+            let base64_data = BASE64.encode(&img.data);
+            parts.push(json!({
+                "inline_data": {
+                    "mime_type": img.mime_type,
+                    "data": base64_data
+                }
+            }));
+        }
+        parts.push(json!({ "text": prompt }));
+        json!(parts)
     } else {
         let mut blocks = Vec::with_capacity(images.len() + 1);
         for img in images {

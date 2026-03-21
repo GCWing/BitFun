@@ -70,6 +70,7 @@ function uniqModelNames(modelNames: string[]): string[] {
 function getCapabilitiesByCategory(category: ModelCategory): ModelCapability[] {
   switch (category) {
     case 'general_chat':
+    case 'multimodal':
     default:
       return ['text_chat', 'function_calling'];
   }
@@ -193,6 +194,7 @@ const AIModelConfig: React.FC = () => {
   const categoryOptions = useMemo<SelectOption[]>(
     () => [
       { label: t('category.general_chat'), value: 'general_chat' },
+      { label: t('category.multimodal'), value: 'multimodal' },
     ],
     [t]
   );
@@ -200,6 +202,7 @@ const AIModelConfig: React.FC = () => {
   const categoryCompactLabels = useMemo<Record<ModelCategory, string>>(
     () => ({
       general_chat: t('categoryIcons.general_chat'),
+      multimodal: t('categoryIcons.multimodal'),
     }),
     [t]
   );

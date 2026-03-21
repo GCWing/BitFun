@@ -23,7 +23,6 @@ impl AgenticMode {
                 "IdeControl".to_string(),
                 "MermaidInteractive".to_string(),
                 "ReadLints".to_string(),
-                "view_image".to_string(),
                 "Skill".to_string(),
                 "AskUserQuestion".to_string(),
                 "Git".to_string(),

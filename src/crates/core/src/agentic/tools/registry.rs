@@ -128,8 +128,8 @@ impl ToolRegistry {
         // Linter tool (LSP diagnosis)
         self.register_tool(Arc::new(ReadLintsTool::new()));
 
-        // Image analysis / viewing tool
-        self.register_tool(Arc::new(ViewImageTool::new()));
+        // Image analysis / viewing tool (deprecated - use native multimodal support)
+        // self.register_tool(Arc::new(ViewImageTool::new()));
 
         // Git version control tool
         self.register_tool(Arc::new(GitTool::new()));
