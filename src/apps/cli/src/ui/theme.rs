@@ -13,6 +13,12 @@ pub struct Theme {
     pub border: Color,
 }
 
+impl Default for Theme {
+    fn default() -> Self {
+        Self::dark()
+    }
+}
+
 impl Theme {
     pub fn dark() -> Self {
         Self {

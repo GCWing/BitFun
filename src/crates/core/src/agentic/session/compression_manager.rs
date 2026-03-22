@@ -283,7 +283,9 @@ impl CompressionManager {
         self.compressed_histories
             .insert(session_id.to_string(), compressed_messages.clone());
 
-        // Persist compression history (similar to MessageHistoryManager pattern)
+        // Persist compression history (similar to MessageHistoryManager pattern).
+        // Persistence is intentionally off until the storage contract is finalized.
+        #[allow(clippy::overly_complex_bool_expr)]
         if false && self.config.enable_persistence {
             if let Err(e) = self
                 .persistence
