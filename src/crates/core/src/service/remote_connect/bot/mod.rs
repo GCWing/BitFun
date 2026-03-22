@@ -1,12 +1,13 @@
 //! Bot integration for Remote Connect.
 //!
-//! Supports Feishu and Telegram bots as relay channels.
+//! Supports Feishu, Telegram, and Weixin (iLink) bots as relay channels.
 //! Shared command logic lives in `command_router`; platform-specific
-//! I/O is handled by `telegram` and `feishu`.
+//! I/O is handled by `telegram`, `feishu`, and `weixin`.
 
 pub mod command_router;
 pub mod feishu;
 pub mod telegram;
+pub mod weixin;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +19,11 @@ pub use command_router::{BotChatState, ForwardRequest, ForwardedTurnResult, Hand
 pub enum BotConfig {
     Feishu { app_id: String, app_secret: String },
     Telegram { bot_token: String },
+    Weixin {
+        ilink_token: String,
+        base_url: String,
+        bot_account_id: String,
+    },
 }
 
 /// Pairing state for bot-based connections.
@@ -46,6 +52,13 @@ pub struct RemoteConnectFormState {
     pub telegram_bot_token: String,
     pub feishu_app_id: String,
     pub feishu_app_secret: String,
+    /// Weixin iLink credentials after QR login (optional until user links WeChat).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub weixin_ilink_token: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub weixin_base_url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub weixin_bot_account_id: String,
 }
 
 /// All persisted bot connections (one per bot type at most).

@@ -32,7 +32,7 @@ impl Agent for ExploreAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. \"src/components/**/*.tsx\"), search code for keywords (eg. \"API endpoints\"), or answer questions about the codebase (eg. \"how do API endpoints work?\"). When calling this agent, specify the desired thoroughness level: \"quick\" for basic searches, \"medium\" for moderate exploration, or \"very thorough\" for comprehensive analysis across multiple locations and naming conventions."#
+        r#"Subagent for **wide** codebase exploration only. Use when the main agent would need many sequential search/read rounds across multiple areas, or the user asks for an architectural survey. Do **not** use for narrow tasks: a known path, a single class/symbol lookup, one obvious Grep pattern, or reading a handful of files — the main agent should use Grep, Glob, and Read for those. When calling, set thoroughness in the prompt: \"quick\", \"medium\", or \"very thorough\"."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {

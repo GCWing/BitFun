@@ -53,6 +53,7 @@ When NOT to use the Task tool:
 - If you want to read a specific file path, use the Read or Glob tool instead of the Task tool, to find the match more quickly
 - If you are searching for a specific class definition like "class Foo", use the Glob tool instead, to find the match more quickly
 - If you are searching for code within a specific file or set of 2-3 files, use the Read tool instead of the Task tool, to find the match more quickly
+- For subagent_type=Explore: do not use it for simple lookups above; reserve it for broad or multi-area exploration where many tool rounds would be needed
 - Other tasks that are not related to the agent descriptions above
 
 

@@ -57,6 +57,10 @@ pub struct BotChatState {
     /// Not persisted — cleared on bot restart.
     #[serde(skip)]
     pub pending_files: std::collections::HashMap<String, String>,
+    /// Commands for the last bot message that had quick actions (1 → `actions[0].command`).
+    /// Not persisted — used so numeric replies work like OpenClaw menu numbers.
+    #[serde(skip, default)]
+    pub last_menu_commands: Vec<String>,
 }
 
 impl BotChatState {
@@ -70,6 +74,7 @@ impl BotChatState {
             display_mode: BotDisplayMode::Assistant,
             pending_action: None,
             pending_files: std::collections::HashMap::new(),
+            last_menu_commands: Vec::new(),
         }
     }
 }
@@ -218,8 +223,32 @@ impl BotAction {
 
 // ── Command parsing ─────────────────────────────────────────────────
 
+fn normalize_im_command_text(text: &str) -> String {
+    text.trim()
+        .chars()
+        .map(|c| match c {
+            '\u{FF10}'..='\u{FF19}' => {
+                char::from_u32(c as u32 - 0xFF10 + u32::from(b'0')).unwrap_or(c)
+            }
+            c => c,
+        })
+        .collect()
+}
+
+/// Strip trailing list punctuation so "1." / "1、" / "1）" still parse as menu numbers.
+fn strip_numeric_reply_suffix(s: &str) -> &str {
+    s.trim_end_matches(|c: char| {
+        matches!(
+            c,
+            '.' | '。' | '、' | ',' | '，' | ':' | '：' | ';' | '；' | ')' | '）' | ']' | '】'
+        )
+    })
+    .trim()
+}
+
 pub fn parse_command(text: &str) -> BotCommand {
-    let trimmed = text.trim();
+    let normalized = normalize_im_command_text(text);
+    let trimmed = normalized.trim();
     if let Some(rest) = trimmed.strip_prefix("/cancel_task") {
         let arg = rest.trim();
         return if arg.is_empty() {
@@ -243,14 +272,17 @@ pub fn parse_command(text: &str) -> BotCommand {
         _ => {
             if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
                 BotCommand::PairingCode(trimmed.to_string())
-            } else if let Ok(n) = trimmed.parse::<usize>() {
-                if (1..=99).contains(&n) {
-                    BotCommand::NumberSelection(n)
+            } else {
+                let num_token = strip_numeric_reply_suffix(trimmed);
+                if let Ok(n) = num_token.parse::<usize>() {
+                    if (1..=99).contains(&n) {
+                        BotCommand::NumberSelection(n)
+                    } else {
+                        BotCommand::ChatMessage(trimmed.to_string())
+                    }
                 } else {
                     BotCommand::ChatMessage(trimmed.to_string())
                 }
-            } else {
-                BotCommand::ChatMessage(trimmed.to_string())
             }
         }
     }
@@ -265,14 +297,14 @@ pub fn welcome_message(language: BotLanguage) -> &'static str {
 
 要连接你的 BitFun 桌面端，请发送 BitFun Remote Connect 面板里显示的 6 位配对码。
 
-如果你还没有配对码，请打开 BitFun Desktop -> Remote Connect -> Telegram/飞书机器人，复制 6 位配对码并发送到这里。"
+如果你还没有配对码，请打开 BitFun Desktop -> Remote Connect -> Telegram/飞书/微信机器人，复制 6 位配对码并发送到这里。"
     } else {
         "\
 Welcome to BitFun!
 
 To connect your BitFun desktop app, please enter the 6-digit pairing code shown in your BitFun Remote Connect panel.
 
-Need a pairing code? Open BitFun Desktop -> Remote Connect -> Telegram/Feishu Bot -> copy the 6-digit code and send it here."
+Need a pairing code? Open BitFun Desktop -> Remote Connect -> Telegram/Feishu/WeChat bot -> copy the 6-digit code and send it here."
     }
 }
 
@@ -316,6 +348,167 @@ pub fn paired_success_message(language: BotLanguage) -> String {
             "Pairing successful! BitFun is now connected.\n\n{}",
             help_message(language)
         )
+    }
+}
+
+/// After IM pairing: assistant mode, default assistant workspace, resume latest Claw (else any) session or create Claw.
+/// Mutates `state` (`display_mode`, `current_assistant`, `current_session_id`). Does not set `paired`.
+pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String {
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::infrastructure::PathManager;
+    use crate::service::workspace::get_global_workspace_service;
+    use std::path::PathBuf;
+
+    state.display_mode = BotDisplayMode::Assistant;
+    let language = current_bot_language().await;
+
+    let ws_service = match get_global_workspace_service() {
+        Some(s) => s,
+        None => {
+            return if language.is_chinese() {
+                "自动准备未能完成：工作区服务不可用。请稍后在 BitFun 桌面端打开工作区后再试。".to_string()
+            } else {
+                "Auto-setup incomplete: workspace service unavailable. Open a workspace in BitFun Desktop and try again."
+                    .to_string()
+            };
+        }
+    };
+
+    let mut assistants = ws_service.get_assistant_workspaces().await;
+    if assistants.is_empty() {
+        match ws_service.create_assistant_workspace(None).await {
+            Ok(w) => assistants.push(w),
+            Err(e) => {
+                return if language.is_chinese() {
+                    format!("自动准备未能完成：无法创建助理工作区（{e}）。请使用 /switch_assistant。")
+                } else {
+                    format!(
+                        "Auto-setup incomplete: could not create assistant workspace ({e}). Use /switch_assistant."
+                    )
+                };
+            }
+        }
+    }
+
+    let picked = assistants
+        .iter()
+        .find(|w| w.assistant_id.is_none())
+        .cloned()
+        .or_else(|| assistants.first().cloned());
+
+    let Some(ws_info) = picked else {
+        return if language.is_chinese() {
+            "自动准备未能完成：没有可用助理。请使用 /switch_assistant。".to_string()
+        } else {
+            "Auto-setup incomplete: no assistant found. Use /switch_assistant.".to_string()
+        };
+    };
+
+    let path_str = ws_info.root_path.to_string_lossy().to_string();
+    let path_buf = ws_info.root_path.clone();
+    if let Err(e) = ws_service.open_workspace(path_buf.clone()).await {
+        return if language.is_chinese() {
+            format!("自动准备未能完成：无法打开助理工作区（{e}）。")
+        } else {
+            format!("Auto-setup incomplete: failed to open assistant workspace ({e}).")
+        };
+    }
+    if let Err(e) =
+        crate::service::snapshot::initialize_snapshot_manager_for_workspace(path_buf, None).await
+    {
+        error!("IM bot bootstrap: snapshot init after pairing: {e}");
+    }
+
+    state.current_assistant = Some(path_str.clone());
+    state.current_session_id = None;
+
+    let pm = match PathManager::new() {
+        Ok(pm) => std::sync::Arc::new(pm),
+        Err(e) => {
+            return if language.is_chinese() {
+                format!("自动准备部分完成：无法访问会话索引（{e}）。可直接尝试发消息。")
+            } else {
+                format!("Partial auto-setup: cannot access session index ({e}). You can try sending a message.")
+            };
+        }
+    };
+    let store = match PersistenceManager::new(pm) {
+        Ok(s) => s,
+        Err(e) => {
+            return if language.is_chinese() {
+                format!("自动准备部分完成：无法访问会话索引（{e}）。可直接尝试发消息。")
+            } else {
+                format!("Partial auto-setup: cannot access session index ({e}). You can try sending a message.")
+            };
+        }
+    };
+
+    let mut metas = match store.list_session_metadata(&PathBuf::from(&path_str)).await {
+        Ok(m) => m,
+        Err(e) => {
+            return if language.is_chinese() {
+                format!("自动准备部分完成：列出会话失败（{e}）。可直接尝试发消息。")
+            } else {
+                format!("Partial auto-setup: failed to list sessions ({e}). You can try sending a message.")
+            };
+        }
+    };
+    metas.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+
+    let latest = metas
+        .iter()
+        .find(|m| m.agent_type == "Claw")
+        .or_else(|| metas.first());
+
+    if let Some(m) = latest {
+        state.current_session_id = Some(m.session_id.clone());
+        let name = m.session_name.as_str();
+        return if language.is_chinese() {
+            format!(
+                "已为你进入助理模式，并恢复最近会话「{name}」。直接发送消息即可继续对话。"
+            )
+        } else {
+            format!(
+                "Assistant mode is on; resumed your latest session \"{name}\". Send a message to continue."
+            )
+        };
+    }
+
+    let create_res = handle_new_session(state, "Claw").await;
+    if state.current_session_id.is_none() {
+        return if language.is_chinese() {
+            format!(
+                "已进入助理模式，但未能自动创建会话：{}",
+                create_res.reply.lines().next().unwrap_or("未知错误")
+            )
+        } else {
+            format!(
+                "Assistant mode is on, but session creation failed: {}",
+                create_res.reply.lines().next().unwrap_or("unknown error")
+            )
+        };
+    }
+
+    if language.is_chinese() {
+        "已进入助理模式；尚无历史会话，已为你新建助理会话。直接发送消息即可开始。".to_string()
+    } else {
+        "Assistant mode is on; no prior sessions were found, so a new assistant session was created. Send a message to start."
+            .to_string()
+    }
+}
+
+/// Mark chat paired, run assistant/session bootstrap, return first user-visible message + main menu actions.
+pub async fn complete_im_bot_pairing(state: &mut BotChatState) -> HandleResult {
+    state.paired = true;
+    let language = current_bot_language().await;
+    let note = bootstrap_im_chat_after_pairing(state).await;
+    let reply = format!("{}\n\n{}", paired_success_message(language), note);
+    let actions = main_menu_actions(language, state.display_mode);
+    state.last_menu_commands = actions.iter().map(|a| a.command.clone()).collect();
+    HandleResult {
+        reply,
+        actions,
+        forward_to_session: None,
     }
 }
 
@@ -524,19 +717,24 @@ fn cancel_task_actions(language: BotLanguage, command: impl Into<String>) -> Vec
 
 // ── Main dispatch ───────────────────────────────────────────────────
 
-pub async fn handle_command(
+async fn dispatch_im_bot_command(
     state: &mut BotChatState,
     cmd: BotCommand,
-    images: Vec<super::super::remote_server::ImageAttachment>,
+    image_contexts: Vec<crate::agentic::image_analysis::ImageContextData>,
+) -> HandleResult {
+    let r = dispatch_im_bot_command_inner(state, cmd, image_contexts).await;
+    if !r.actions.is_empty() {
+        state.last_menu_commands = r.actions.iter().map(|a| a.command.clone()).collect();
+    }
+    r
+}
+
+async fn dispatch_im_bot_command_inner(
+    state: &mut BotChatState,
+    cmd: BotCommand,
+    image_contexts: Vec<crate::agentic::image_analysis::ImageContextData>,
 ) -> HandleResult {
     let language = current_bot_language().await;
-    let image_contexts: Vec<crate::agentic::image_analysis::ImageContextData> =
-        super::super::remote_server::images_to_contexts(if images.is_empty() {
-            None
-        } else {
-            Some(&images)
-        });
-
     match cmd {
         BotCommand::Start | BotCommand::Help => {
             if state.paired {
@@ -555,39 +753,48 @@ pub async fn handle_command(
         }
         BotCommand::SwitchMode(new_mode) => {
             if !state.paired {
-                return not_paired(language);
-            }
-            state.display_mode = new_mode;
-            let mode_name = if new_mode == BotDisplayMode::Pro {
-                if language.is_chinese() { "专业模式" } else { "Expert Mode" }
+                not_paired(language)
             } else {
-                if language.is_chinese() { "助理模式" } else { "Assistant Mode" }
-            };
-            let desc = if new_mode == BotDisplayMode::Pro {
-                if language.is_chinese() {
-                    "适合目标明确、一次完成的即时任务。"
+                state.display_mode = new_mode;
+                let mode_name = if new_mode == BotDisplayMode::Pro {
+                    if language.is_chinese() {
+                        "专业模式"
+                    } else {
+                        "Expert Mode"
+                    }
                 } else {
-                    "Best for focused, one-shot tasks with a clear goal."
+                    if language.is_chinese() {
+                        "助理模式"
+                    } else {
+                        "Assistant Mode"
+                    }
+                };
+                let desc = if new_mode == BotDisplayMode::Pro {
+                    if language.is_chinese() {
+                        "适合目标明确、一次完成的即时任务。"
+                    } else {
+                        "Best for focused, one-shot tasks with a clear goal."
+                    }
+                } else {
+                    if language.is_chinese() {
+                        "适合持续推进、需要延续上下文和个人偏好的任务。"
+                    } else {
+                        "Best for ongoing work with context and personal preferences."
+                    }
+                };
+                HandleResult {
+                    reply: if language.is_chinese() {
+                        format!("已切换到 {}\n\n{}\n\n你现在可以：", mode_name, desc)
+                    } else {
+                        format!("Switched to {}\n\n{}\n\nYou can now:", mode_name, desc)
+                    },
+                    actions: if new_mode == BotDisplayMode::Pro {
+                        pro_mode_actions(language)
+                    } else {
+                        assistant_mode_actions(language)
+                    },
+                    forward_to_session: None,
                 }
-            } else {
-                if language.is_chinese() {
-                    "适合持续推进、需要延续上下文和个人偏好的任务。"
-                } else {
-                    "Best for ongoing work with context and personal preferences."
-                }
-            };
-            HandleResult {
-                reply: if language.is_chinese() {
-                    format!("已切换到 {}\n\n{}\n\n你现在可以：", mode_name, desc)
-                } else {
-                    format!("Switched to {}\n\n{}\n\nYou can now:", mode_name, desc)
-                },
-                actions: if new_mode == BotDisplayMode::Pro {
-                    pro_mode_actions(language)
-                } else {
-                    assistant_mode_actions(language)
-                },
-                forward_to_session: None,
             }
         }
         BotCommand::PairingCode(_) => HandleResult {
@@ -690,6 +897,20 @@ pub async fn handle_command(
             handle_chat_message(state, &msg, image_contexts).await
         }
     }
+}
+
+pub async fn handle_command(
+    state: &mut BotChatState,
+    cmd: BotCommand,
+    images: Vec<super::super::remote_server::ImageAttachment>,
+) -> HandleResult {
+    let image_contexts: Vec<crate::agentic::image_analysis::ImageContextData> =
+        super::super::remote_server::images_to_contexts(if images.is_empty() {
+            None
+        } else {
+            Some(&images)
+        });
+    dispatch_im_bot_command(state, cmd, image_contexts).await
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -1496,7 +1717,15 @@ async fn handle_number_selection(state: &mut BotChatState, n: usize) -> HandleRe
             )
             .await
         }
-        None => handle_chat_message(state, &n.to_string(), vec![]).await,
+        None => {
+            if n >= 1 && n <= state.last_menu_commands.len() {
+                let cmd_str = state.last_menu_commands[n - 1].clone();
+                let next_cmd = parse_command(&cmd_str);
+                Box::pin(dispatch_im_bot_command(state, next_cmd, vec![])).await
+            } else {
+                handle_chat_message(state, &n.to_string(), vec![]).await
+            }
+        }
     }
 }
 
@@ -2571,5 +2800,21 @@ fn format_tool_params_slim(params: &serde_json::Value) -> Option<String> {
         }
         serde_json::Value::String(s) => Some(truncate_at_char_boundary(s, MAX_VAL_LEN)),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod parse_command_tests {
+    use super::{parse_command, BotCommand};
+
+    #[test]
+    fn numeric_menu_with_trailing_dot() {
+        assert!(matches!(parse_command("1."), BotCommand::NumberSelection(1)));
+        assert!(matches!(parse_command("2。"), BotCommand::NumberSelection(2)));
+    }
+
+    #[test]
+    fn fullwidth_digit_one() {
+        assert!(matches!(parse_command("１"), BotCommand::NumberSelection(1)));
     }
 }

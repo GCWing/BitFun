@@ -125,6 +125,7 @@ $_section-header-height: 24px;
 
   &__mode-switch {
     width: 100%;
+    min-width: 0;
     min-height: 56px;
     padding: 10px 12px;
     border: 1px solid color-mix(in srgb, var(--color-primary) 16%, transparent);
@@ -234,17 +235,23 @@ $_section-header-height: 24px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+    max-width: 100%;
     font-size: 11px;
     font-weight: 600;
     line-height: 1.15;
     color: var(--color-text-primary);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__mode-switch-sub {
     display: grid;
     grid-template-areas: 'sub';
     align-items: start;
+    min-width: 0;
+    max-width: 100%;
   }
 
   &__mode-switch-desc {
@@ -252,6 +259,8 @@ $_section-header-height: 24px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    max-width: 100%;
     opacity: 1;
     transition: opacity $motion-fast $easing-standard;
 
@@ -261,22 +270,29 @@ $_section-header-height: 24px;
   }
 
   &__mode-switch-desc-main {
+    min-width: 0;
+    max-width: 100%;
     font-size: 10px;
     line-height: 1.35;
     color: var(--color-text-muted);
     opacity: 0.78;
+    overflow-wrap: break-word;
   }
 
   &__mode-switch-hint {
     grid-area: sub;
     align-self: center;
     justify-self: start;
+    min-width: 0;
+    max-width: 100%;
     font-size: 10px;
     line-height: 1.2;
     color: var(--color-text-muted);
     opacity: 0;
     font-weight: 400;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     transition: opacity $motion-fast $easing-standard;
 
     .bitfun-nav-panel__mode-switch:hover & {

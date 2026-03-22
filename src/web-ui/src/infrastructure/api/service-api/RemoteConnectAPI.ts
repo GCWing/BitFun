@@ -50,6 +50,31 @@ export interface RemoteConnectFormState {
   telegram_bot_token: string;
   feishu_app_id: string;
   feishu_app_secret: string;
+  weixin_ilink_token?: string;
+  weixin_base_url?: string;
+  weixin_bot_account_id?: string;
+}
+
+export interface WeixinQrStartResponse {
+  session_key: string;
+  qr_image_url: string;
+  message: string;
+}
+
+export type WeixinQrPollStatus =
+  | 'wait'
+  | 'scanned'
+  | 'confirmed'
+  | 'expired'
+  | 'error';
+
+export interface WeixinQrPollResponse {
+  status: WeixinQrPollStatus;
+  message: string;
+  qr_image_url: string | null;
+  ilink_token: string | null;
+  bot_account_id: string | null;
+  base_url: string | null;
 }
 
 class RemoteConnectAPIService {
@@ -161,6 +186,9 @@ class RemoteConnectAPIService {
     appId?: string;
     appSecret?: string;
     botToken?: string;
+    weixinIlinkToken?: string;
+    weixinBaseUrl?: string;
+    weixinBotAccountId?: string;
   }): Promise<void> {
     try {
       await this.adapter.request<void>('remote_connect_configure_bot', {
@@ -169,12 +197,27 @@ class RemoteConnectAPIService {
           app_id: params.appId ?? null,
           app_secret: params.appSecret ?? null,
           bot_token: params.botToken ?? null,
+          weixin_ilink_token: params.weixinIlinkToken ?? null,
+          weixin_base_url: params.weixinBaseUrl ?? null,
+          weixin_bot_account_id: params.weixinBotAccountId ?? null,
         },
       });
     } catch (e) {
       log.error('configureBot failed', e);
       throw e;
     }
+  }
+
+  async weixinQrStart(baseUrl?: string | null): Promise<WeixinQrStartResponse> {
+    return await this.adapter.request<WeixinQrStartResponse>('remote_connect_weixin_qr_start', {
+      request: { base_url: baseUrl ?? null },
+    });
+  }
+
+  async weixinQrPoll(sessionKey: string, baseUrl?: string | null): Promise<WeixinQrPollResponse> {
+    return await this.adapter.request<WeixinQrPollResponse>('remote_connect_weixin_qr_poll', {
+      request: { session_key: sessionKey, base_url: baseUrl ?? null },
+    });
   }
 
   async getBotVerboseMode(): Promise<boolean> {

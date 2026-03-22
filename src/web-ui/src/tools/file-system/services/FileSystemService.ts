@@ -88,7 +88,10 @@ class FileSystemService implements IFileSystemService {
 
           events.forEach((fileEvent) => {
             const normalizedEventPath = normalizeForCompare(fileEvent.path);
-            if (!normalizedEventPath.startsWith(normalizedRoot)) {
+            const underRoot =
+              normalizedEventPath === normalizedRoot ||
+              normalizedEventPath.startsWith(`${normalizedRoot}/`);
+            if (!underRoot) {
               return;
             }
 

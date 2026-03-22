@@ -12,9 +12,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::command_router::{
-    current_bot_language, execute_forwarded_turn, handle_command, paired_success_message,
-    parse_command, welcome_message, BotAction, BotChatState, BotInteractionHandler,
-    BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
+    complete_im_bot_pairing, current_bot_language, execute_forwarded_turn, handle_command,
+    parse_command, welcome_message, BotAction, BotChatState,
+    BotInteractionHandler, BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 use crate::service::remote_connect::remote_server::ImageAttachment;
@@ -554,17 +554,15 @@ impl TelegramBot {
                         if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
                             if self.verify_pairing_code(trimmed).await {
                                 info!("Telegram pairing successful, chat_id={chat_id}");
-                                let success_msg = paired_success_message(language);
-                                self.send_message(chat_id, &success_msg).await.ok();
-                                self.set_bot_commands().await.ok();
-
                                 let mut state = BotChatState::new(chat_id.to_string());
-                                state.paired = true;
+                                let result = complete_im_bot_pairing(&mut state).await;
                                 self.chat_states
                                     .write()
                                     .await
                                     .insert(chat_id, state.clone());
                                 self.persist_chat_state(chat_id, &state).await;
+                                self.send_handle_result(chat_id, &result).await;
+                                self.set_bot_commands().await.ok();
 
                                 return Ok(chat_id);
                             } else {
@@ -651,11 +649,10 @@ impl TelegramBot {
             }
             if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
                 if self.verify_pairing_code(trimmed).await {
-                    state.paired = true;
-                    let msg = paired_success_message(language);
-                    self.send_message(chat_id, &msg).await.ok();
-                    self.set_bot_commands().await.ok();
+                    let result = complete_im_bot_pairing(state).await;
                     self.persist_chat_state(chat_id, state).await;
+                    self.send_handle_result(chat_id, &result).await;
+                    self.set_bot_commands().await.ok();
                     return;
                 } else {
                     self.send_message(chat_id, Self::invalid_pairing_code_message(language))

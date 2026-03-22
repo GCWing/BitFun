@@ -24,6 +24,7 @@ import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types'
 import { CubeLoading } from '@/component-library';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
+import { isSamePath } from '@/shared/utils/pathUtils';
 import { useI18n } from '@/infrastructure/i18n';
 import { EditorBreadcrumb } from './EditorBreadcrumb';
 import { EditorStatusBar } from './EditorStatusBar';
@@ -286,6 +287,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   useEffect(() => {
     filePathRef.current = filePath;
     pendingModelContentRef.current = null;
+    lastJumpPositionRef.current = null;
   }, [filePath]);
 
   useEffect(() => {
@@ -921,66 +923,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
   }, [readOnly]);
 
-  // Handle initial jump (after content load)
-  useEffect(() => {
-    const editor = editorRef.current;
-    const model = modelRef.current;
-    
-    const finalRange = jumpToRange || (jumpToLine ? { start: jumpToLine, end: jumpToColumn ? jumpToLine : undefined } : undefined);
-    
-    if (!finalRange) {
-      return;
-    }
-
-    // Avoid repeated jumps during editing
-    const targetColumn = 1;
-    const lastJump = lastJumpPositionRef.current;
-    if (lastJump && 
-        lastJump.filePath === filePath && 
-        lastJump.line === finalRange.start && 
-        lastJump.endLine === finalRange.end) {
-      return;
-    }
-    
-    if (!editor || !model || !monacoReady) {
-      return;
-    }
-
-    if (loading) {
-      return;
-    }
-
-    const lineCount = model.getLineCount();
-    
-    if (lineCount < 1) {
-      const timer = setTimeout(() => {
-        const currentLineCount = model.getLineCount();
-        if (currentLineCount >= 1) {
-          lastJumpPositionRef.current = { 
-            filePath, 
-            line: finalRange.start, 
-            column: targetColumn,
-            endLine: finalRange.end
-          };
-          performJump(editor, model, finalRange.start, targetColumn, finalRange.end);
-        }
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-
-    // Record jump position to prevent repeated jumps during subsequent editing
-    lastJumpPositionRef.current = { 
-      filePath, 
-      line: finalRange.start, 
-      column: targetColumn,
-      endLine: finalRange.end
-    };
-
-    performJump(editor, model, finalRange.start, targetColumn, finalRange.end);
-    
-  }, [jumpToRange, jumpToLine, jumpToColumn, monacoReady, loading, content, filePath]);
-  
-  const performJump = (editor: any, model: any, line: number, column: number, endLine?: number) => {
+  const performJump = useCallback((editor: any, model: any, line: number, column: number, endLine?: number) => {
     const lineCount = model.getLineCount();
     const targetLine = Math.min(line, Math.max(1, lineCount));
     const targetEndLine = endLine ? Math.min(endLine, Math.max(1, lineCount)) : undefined;
@@ -1025,7 +968,102 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         }
       });
     });
-  };
+  }, []);
+
+  // Handle initial jump (after content load). If the model has fewer lines than requested,
+  // wait for content to sync into the model; otherwise we clamp to line 1, set lastJump,
+  // and dedupe blocks a correct jump after the real text arrives.
+  useEffect(() => {
+    const editor = editorRef.current;
+    const model = modelRef.current;
+
+    const finalRange =
+      jumpToRange ||
+      (jumpToLine ? { start: jumpToLine, end: jumpToColumn ? jumpToLine : undefined } : undefined);
+
+    if (!finalRange) {
+      return;
+    }
+
+    const targetColumn = 1;
+    const lastJump = lastJumpPositionRef.current;
+    if (
+      lastJump &&
+      lastJump.filePath === filePath &&
+      lastJump.line === finalRange.start &&
+      lastJump.endLine === finalRange.end
+    ) {
+      return;
+    }
+
+    if (!editor || !model || !monacoReady) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    const maxLineNeeded = Math.max(finalRange.start, finalRange.end ?? finalRange.start);
+    const lineCount = model.getLineCount();
+
+    const applyJumpForCurrentModel = () => {
+      const ed = editorRef.current;
+      const md = modelRef.current;
+      if (!ed || !md) {
+        return;
+      }
+      lastJumpPositionRef.current = {
+        filePath,
+        line: finalRange.start,
+        column: targetColumn,
+        endLine: finalRange.end,
+      };
+      performJump(ed, md, finalRange.start, targetColumn, finalRange.end);
+    };
+
+    if (lineCount >= maxLineNeeded) {
+      applyJumpForCurrentModel();
+      return;
+    }
+
+    let finished = false;
+    let timeoutId: number | null = null;
+    let contentDisposable: { dispose: () => void } | null = null;
+
+    const finishOnce = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      contentDisposable?.dispose();
+      contentDisposable = null;
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      applyJumpForCurrentModel();
+    };
+
+    contentDisposable = model.onDidChangeContent(() => {
+      const md = modelRef.current;
+      if (md && md.getLineCount() >= maxLineNeeded) {
+        finishOnce();
+      }
+    });
+
+    timeoutId = window.setTimeout(finishOnce, 600);
+
+    return () => {
+      finished = true;
+      contentDisposable?.dispose();
+      contentDisposable = null;
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+  }, [jumpToRange, jumpToLine, jumpToColumn, monacoReady, loading, content, filePath, performJump]);
 
   // Status bar popover: open and confirm
   const openStatusBarPopover = useCallback((type: 'position' | 'indent' | 'encoding' | 'language', e: React.MouseEvent) => {
@@ -1050,7 +1088,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const editor = editorRef.current;
     const model = modelRef.current;
     if (editor && model) performJump(editor, model, line, column);
-  }, []);
+  }, [performJump]);
 
   const handleIndentConfirm = useCallback((tabSize: number, insertSpaces: boolean) => {
     const merged = { tab_size: tabSize, insert_spaces: insertSpaces };
@@ -1110,6 +1148,19 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     // If Model already has content, skip file loading to avoid overwriting unsaved changes (e.g. switching back to open tab)
     if (modelRef.current && modelRef.current.getValue()) {
       setLoading(false);
+      void (async () => {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const fileInfo: any = await invoke('get_file_metadata', {
+            request: { path: filePath }
+          });
+          if (typeof fileInfo?.modified === 'number') {
+            lastModifiedTimeRef.current = fileInfo.modified;
+          }
+        } catch (err) {
+          log.warn('Failed to sync file metadata when skipping load', err);
+        }
+      })();
       return;
     }
 
@@ -1281,7 +1332,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   // Check file modifications
   const checkFileModification = useCallback(async () => {
-    if (!filePath || isCheckingFileRef.current || !monacoReady) return;
+    if (!filePath || isCheckingFileRef.current) return;
 
     isCheckingFileRef.current = true;
 
@@ -1337,7 +1388,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     } finally {
       isCheckingFileRef.current = false;
     }
-  }, [applyExternalContentToModel, filePath, hasChanges, monacoReady, onContentChange, t, updateLargeFileMode]);
+  }, [applyExternalContentToModel, filePath, hasChanges, onContentChange, t, updateLargeFileMode]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
@@ -1373,10 +1424,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const unsubscribers: Array<() => void> = [];
 
     const unsubGotoDef = globalEventBus.on('editor:goto-definition', async (data: any) => {
-      const normalizePath = (path: string) => path.replace(/\\/g, '/').toLowerCase();
-      const eventPath = normalizePath(data.filePath || '');
-      const currentPath = normalizePath(filePath || '');
-      const isMatch = eventPath === currentPath;
+      const isMatch = isSamePath(data.filePath || '', filePath || '');
       
       if (isMatch) {
         try {
@@ -1535,47 +1583,77 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     unsubscribers.push(unsubDocHighlight);
 
     const unsubFileChanged = globalEventBus.on('editor:file-changed', async (data: { filePath: string }) => {
-      const normalizePath = (path: string) => path.replace(/\\/g, '/').toLowerCase();
-      const eventPath = normalizePath(data.filePath || '');
-      const currentPath = normalizePath(filePath || '');
-      
-      if (eventPath === currentPath) {
-        try {
-          const { workspaceAPI } = await import('@/infrastructure/api');
-          const content = await workspaceAPI.readFile(filePath);
-          updateLargeFileMode(content);
-          
-          const currentPosition = editor?.getPosition();
-          
-          setContent(content);
-          originalContentRef.current = content;
-          setHasChanges(false);
-          hasChangesRef.current = false;
-          applyExternalContentToModel(content);
+      if (!isSamePath(data.filePath || '', filePath || '')) {
+        return;
+      }
 
-          if (editor && currentPosition) {
-            editor.setPosition(currentPosition);
-          }
-
-          queueMicrotask(() => {
-            if (modelRef.current && !isUnmountedRef.current) {
-              savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-              monacoModelManager.markAsSaved(filePath);
+      try {
+        if (hasChangesRef.current) {
+          const shouldReload = window.confirm(
+            t('editor.codeEditor.externalModifiedConfirm')
+          );
+          if (!shouldReload) {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const fileInfo: any = await invoke('get_file_metadata', {
+                request: { path: filePath }
+              });
+              if (typeof fileInfo?.modified === 'number') {
+                lastModifiedTimeRef.current = fileInfo.modified;
+              }
+            } catch (err) {
+              log.warn('Failed to sync mtime after declining external reload', err);
             }
-          });
-        } catch (error) {
-          log.error('Failed to reload file', error);
+            return;
+          }
         }
+
+        const { workspaceAPI } = await import('@/infrastructure/api');
+        const { invoke } = await import('@tauri-apps/api/core');
+        const fileContent = await workspaceAPI.readFileContent(filePath);
+        updateLargeFileMode(fileContent);
+
+        const currentPosition = editor?.getPosition();
+
+        isLoadingContentRef.current = true;
+        setContent(fileContent);
+        originalContentRef.current = fileContent;
+        setHasChanges(false);
+        hasChangesRef.current = false;
+        applyExternalContentToModel(fileContent);
+
+        try {
+          const fileInfo: any = await invoke('get_file_metadata', {
+            request: { path: filePath }
+          });
+          if (typeof fileInfo?.modified === 'number') {
+            lastModifiedTimeRef.current = fileInfo.modified;
+          }
+        } catch (err) {
+          log.warn('Failed to update file modification time after external reload', err);
+        }
+
+        if (editor && currentPosition) {
+          editor.setPosition(currentPosition);
+        }
+
+        onContentChange?.(fileContent, false);
+
+        queueMicrotask(() => {
+          isLoadingContentRef.current = false;
+          if (modelRef.current && !isUnmountedRef.current) {
+            savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
+            monacoModelManager.markAsSaved(filePath);
+          }
+        });
+      } catch (error) {
+        log.error('Failed to reload file', error);
       }
     });
     unsubscribers.push(unsubFileChanged);
 
     const unsubSaveFile = globalEventBus.on('editor:save-file', (data: { filePath: string }) => {
-      const normalizePath = (path: string) => path.replace(/\\/g, '/').toLowerCase();
-      const eventPath = normalizePath(data.filePath || '');
-      const currentPath = normalizePath(filePath || '');
-      
-      if (eventPath === currentPath) {
+      if (isSamePath(data.filePath || '', filePath || '')) {
         saveFileContentRef.current?.();
       }
     });
@@ -1584,7 +1662,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [applyExternalContentToModel, monacoReady, filePath, updateLargeFileMode]);
+  }, [applyExternalContentToModel, monacoReady, filePath, updateLargeFileMode, onContentChange, t]);
 
   useEffect(() => {
     userLanguageOverrideRef.current = false;

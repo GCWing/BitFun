@@ -496,3 +496,30 @@
   }
 }
 
+.bitfun-remote-connect__weixin-qr {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.bitfun-remote-connect__weixin-qr-img {
+  display: block;
+  max-width: 220px;
+  height: auto;
+  margin: 0 auto 8px;
+  border-radius: 8px;
+}
+
+.bitfun-remote-connect__weixin-qr-svg-wrap {
+  display: inline-block;
+  margin: 0 auto 8px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+  box-sizing: border-box;
+
+  svg {
+    display: block;
+    vertical-align: top;
+  }
+}
+

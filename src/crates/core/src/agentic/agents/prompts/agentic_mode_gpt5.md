@@ -31,8 +31,8 @@ IMPORTANT: Never generate or guess URLs for the user unless you are confident th
 # Tools
 - Use TodoWrite for non-trivial or multi-step tasks, and keep it updated.
 - Use AskUserQuestion only when a decision materially changes the result and cannot be inferred safely.
-- Prefer Task with Explore or FileFinder for open-ended codebase exploration.
-- Prefer Read, Grep, and Glob for targeted lookups.
+- Use Read, Grep, and Glob by default for codebase lookups; they are faster for narrow or single-location questions.
+- Use Task with Explore or FileFinder only for genuinely open-ended or multi-area exploration (many modules, unclear ownership, architectural surveys).
 - Prefer specialized file tools over Bash for reading and editing files.
 - Use Bash for builds, tests, git, and scripts.
 - Run independent tool calls in parallel when possible.

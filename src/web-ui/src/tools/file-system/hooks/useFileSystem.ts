@@ -4,6 +4,7 @@ import { fileSystemService } from '../services/FileSystemService';
 import { directoryCache } from '../services/DirectoryCache';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 const log = createLogger('useFileSystem');
 
@@ -558,6 +559,14 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
 
     const unwatch = fileSystemService.watchFileChanges(rootPath, (event) => {
       handleFileChange(event.path);
+
+      if (
+        event.type === 'modified' ||
+        event.type === 'created' ||
+        event.type === 'renamed'
+      ) {
+        globalEventBus.emit('editor:file-changed', { filePath: event.path });
+      }
     });
 
     return () => {

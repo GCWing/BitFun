@@ -1,7 +1,7 @@
 /**
  * Remote Connect dialog with two independent groups:
  *   - Network (LAN / Ngrok / BitFun Server / Custom Server) – mutually exclusive
- *   - IM Bot (Telegram / Feishu) – mutually exclusive
+ *   - IM Bot (Telegram / Feishu / WeChat) – mutually exclusive
  * Both groups can be active simultaneously.
  */
 
@@ -26,7 +26,24 @@ import './RemoteConnectDialog.scss';
 
 type ActiveGroup = 'network' | 'bot';
 type NetworkTab = 'lan' | 'ngrok' | 'bitfun_server' | 'custom_server';
-type BotTab = 'telegram' | 'feishu';
+type BotTab = 'telegram' | 'feishu' | 'weixin';
+
+/**
+ * iLink `qrcode_img_content` is the string to encode in a QR (OpenClaw passes it to
+ * `qrcode-terminal.generate`), not necessarily an `<img src>` raster URL. Only treat
+ * as raster when it is clearly a data-URL or direct image link.
+ */
+function isWeixinRasterQrSrc(raw: string): boolean {
+  const t = raw.trim();
+  if (/^data:image\//i.test(t)) return true;
+  if (
+    /^https?:\/\//i.test(t)
+    && /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
 
 const NETWORK_TABS: { id: NetworkTab; labelKey: string }[] = [
   { id: 'lan', labelKey: 'remoteConnect.tabLan' },
@@ -38,6 +55,7 @@ const NETWORK_TABS: { id: NetworkTab; labelKey: string }[] = [
 const BOT_TABS: { id: BotTab; label: string }[] = [
   { id: 'telegram', label: 'Telegram' },
   { id: 'feishu', label: '' }, // filled from i18n
+  { id: 'weixin', label: '' },
 ];
 
 const NGROK_SETUP_URL = 'https://dashboard.ngrok.com/get-started/setup';
@@ -60,6 +78,7 @@ const botInfoToBotTab = (info: string | null | undefined): BotTab | null => {
   if (!info) return null;
   if (info.startsWith('Telegram')) return 'telegram';
   if (info.startsWith('Feishu')) return 'feishu';
+  if (info.startsWith('Weixin')) return 'weixin';
   return null;
 };
 
@@ -94,6 +113,19 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [tgToken, setTgToken] = useState('');
   const [feishuAppId, setFeishuAppId] = useState('');
   const [feishuAppSecret, setFeishuAppSecret] = useState('');
+  const [weixinIlinkToken, setWeixinIlinkToken] = useState('');
+  const [weixinBaseUrl, setWeixinBaseUrl] = useState('');
+  const [weixinBotAccountId, setWeixinBotAccountId] = useState('');
+  const [weixinQrSessionKey, setWeixinQrSessionKey] = useState<string | null>(null);
+  const [weixinQrImageUrl, setWeixinQrImageUrl] = useState<string | null>(null);
+  const [weixinAwaitingPhoneConfirm, setWeixinAwaitingPhoneConfirm] = useState(false);
+
+  const formSnapshotRef = useRef({
+    customUrl: '',
+    tgToken: '',
+    feishuAppId: '',
+    feishuAppSecret: '',
+  });
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTargetRef = useRef<'relay' | 'bot'>('relay');
@@ -204,6 +236,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         setTgToken(formState.telegram_bot_token ?? '');
         setFeishuAppId(formState.feishu_app_id ?? '');
         setFeishuAppSecret(formState.feishu_app_secret ?? '');
+        setWeixinIlinkToken(formState.weixin_ilink_token ?? '');
+        setWeixinBaseUrl(formState.weixin_base_url ?? '');
+        setWeixinBotAccountId(formState.weixin_bot_account_id ?? '');
       } catch {
         // Ignore form-state restore failures and keep in-memory defaults.
       }
@@ -213,6 +248,116 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       cancelled = true;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    formSnapshotRef.current = {
+      customUrl,
+      tgToken,
+      feishuAppId,
+      feishuAppSecret,
+    };
+  }, [customUrl, tgToken, feishuAppId, feishuAppSecret]);
+
+  const prepareAndStartWeixinBotFromQr = useCallback(async (
+    ilinkToken: string,
+    baseUrl: string,
+    botAccountId: string,
+  ): Promise<ConnectionResult> => {
+    const fs = formSnapshotRef.current;
+    await remoteConnectAPI.setFormState({
+      custom_server_url: fs.customUrl,
+      telegram_bot_token: fs.tgToken,
+      feishu_app_id: fs.feishuAppId,
+      feishu_app_secret: fs.feishuAppSecret,
+      weixin_ilink_token: ilinkToken,
+      weixin_base_url: baseUrl || undefined,
+      weixin_bot_account_id: botAccountId,
+    });
+    await remoteConnectAPI.configureBot({
+      botType: 'weixin',
+      weixinIlinkToken: ilinkToken,
+      weixinBaseUrl: baseUrl || undefined,
+      weixinBotAccountId: botAccountId,
+    });
+    return await remoteConnectAPI.startConnection('bot_weixin');
+  }, []);
+
+  // WeChat QR login: poll iLink until confirmed or error (session key cleared on completion).
+  useEffect(() => {
+    const key = weixinQrSessionKey;
+    if (!key) return;
+    let cancelled = false;
+    void (async () => {
+      while (!cancelled) {
+        try {
+          const p = await remoteConnectAPI.weixinQrPoll(key);
+          if (cancelled) return;
+          if (p.status === 'scanned') {
+            setWeixinQrImageUrl(null);
+            setWeixinAwaitingPhoneConfirm(true);
+            continue;
+          }
+          if (p.status === 'confirmed' && p.ilink_token && p.bot_account_id) {
+            const token = p.ilink_token;
+            const base = p.base_url ?? '';
+            const bid = p.bot_account_id;
+            setWeixinAwaitingPhoneConfirm(false);
+            setWeixinIlinkToken(token);
+            setWeixinBaseUrl(base);
+            setWeixinBotAccountId(bid);
+            // Hide QR immediately, but keep `weixinQrSessionKey` until the pipeline finishes.
+            // Clearing the session key first re-runs this effect's cleanup and sets `cancelled`,
+            // so after `await` we would skip `setConnectionResult` and never `setLoading(false)`.
+            setWeixinQrImageUrl(null);
+            setConnectionResult(null);
+            setError(null);
+            setLoading(true);
+            try {
+              const result = await prepareAndStartWeixinBotFromQr(token, base, bid);
+              if (!cancelled) {
+                setConnectionResult(result);
+                startPolling('bot');
+              }
+            } catch (e: unknown) {
+              if (!cancelled) {
+                setError(e instanceof Error ? e.message : String(e));
+              }
+            } finally {
+              if (!cancelled) {
+                setLoading(false);
+              }
+            }
+            if (!cancelled) {
+              setWeixinQrSessionKey(null);
+            }
+            return;
+          }
+          if (p.status === 'error') {
+            setError(p.message);
+            setWeixinQrSessionKey(null);
+            setWeixinQrImageUrl(null);
+            setWeixinAwaitingPhoneConfirm(false);
+            return;
+          }
+          if (p.status === 'expired' && p.qr_image_url) {
+            setWeixinQrImageUrl(p.qr_image_url);
+            setWeixinAwaitingPhoneConfirm(false);
+          }
+        } catch (e: unknown) {
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : String(e));
+          }
+          setWeixinQrSessionKey(null);
+          setWeixinQrImageUrl(null);
+          setWeixinAwaitingPhoneConfirm(false);
+          return;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [weixinQrSessionKey, prepareAndStartWeixinBotFromQr, startPolling]);
 
   // ── Connection handlers ──────────────────────────────────────────
 
@@ -227,18 +372,34 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         telegram_bot_token: tgToken,
         feishu_app_id: feishuAppId,
         feishu_app_secret: feishuAppSecret,
+        weixin_ilink_token: weixinIlinkToken,
+        weixin_base_url: weixinBaseUrl,
+        weixin_bot_account_id: weixinBotAccountId,
       });
 
       let method: string;
       let serverUrl: string | undefined;
 
       if (activeGroup === 'bot') {
-        method = botTab === 'telegram' ? 'bot_telegram' : 'bot_feishu';
+        if (botTab === 'telegram') {
+          method = 'bot_telegram';
+        } else if (botTab === 'feishu') {
+          method = 'bot_feishu';
+        } else {
+          method = 'bot_weixin';
+        }
         if (botTab === 'telegram' && tgToken) {
           await remoteConnectAPI.configureBot({ botType: 'telegram', botToken: tgToken });
         } else if (botTab === 'feishu' && feishuAppId) {
           await remoteConnectAPI.configureBot({
             botType: 'feishu', appId: feishuAppId, appSecret: feishuAppSecret,
+          });
+        } else if (botTab === 'weixin' && weixinIlinkToken && weixinBotAccountId) {
+          await remoteConnectAPI.configureBot({
+            botType: 'weixin',
+            weixinIlinkToken: weixinIlinkToken,
+            weixinBaseUrl: weixinBaseUrl || undefined,
+            weixinBotAccountId: weixinBotAccountId,
           });
         }
       } else {
@@ -253,7 +414,28 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [activeGroup, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, startPolling]);
+  }, [activeGroup, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, startPolling]);
+
+  const handleStartWeixinQr = useCallback(async () => {
+    setError(null);
+    setWeixinAwaitingPhoneConfirm(false);
+    setLoading(true);
+    try {
+      const r = await remoteConnectAPI.weixinQrStart(null);
+      setWeixinQrSessionKey(r.session_key);
+      setWeixinQrImageUrl(r.qr_image_url);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleCancelWeixinQr = useCallback(() => {
+    setWeixinQrSessionKey(null);
+    setWeixinQrImageUrl(null);
+    setWeixinAwaitingPhoneConfirm(false);
+  }, []);
 
   const handleDisconnectRelay = useCallback(async () => {
     try {
@@ -569,7 +751,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               onChange={(e) => setTgToken(e.target.value)}
             />
           </div>
-        ) : (
+        ) : botTab === 'feishu' ? (
           <div className="bitfun-remote-connect__bot-guide">
             {renderInfoCard(
               <>
@@ -622,13 +804,85 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               onChange={(e) => setFeishuAppSecret(e.target.value)}
             />
           </div>
+        ) : (
+          <div className="bitfun-remote-connect__bot-guide">
+            {renderInfoCard(
+              <div className="bitfun-remote-connect__steps">
+                <p className="bitfun-remote-connect__info-text">{t('remoteConnect.botWeixinIntro')}</p>
+                <p className="bitfun-remote-connect__step">1. {t('remoteConnect.botWeixinStep1')}</p>
+                <p className="bitfun-remote-connect__step">2. {t('remoteConnect.botWeixinStep2')}</p>
+              </div>,
+            )}
+            {weixinQrImageUrl && (
+              <div className="bitfun-remote-connect__weixin-qr">
+                {isWeixinRasterQrSrc(weixinQrImageUrl) ? (
+                  <img
+                    src={weixinQrImageUrl}
+                    alt="WeChat QR"
+                    className="bitfun-remote-connect__weixin-qr-img"
+                  />
+                ) : (
+                  <div
+                    className="bitfun-remote-connect__weixin-qr-svg-wrap"
+                    role="img"
+                    aria-label="WeChat login QR"
+                  >
+                    <QRCodeSVG
+                      value={weixinQrImageUrl}
+                      size={200}
+                      level="M"
+                      includeMargin
+                    />
+                  </div>
+                )}
+                <p className="bitfun-remote-connect__hint">{t('remoteConnect.botWeixinPolling')}</p>
+                <button
+                  type="button"
+                  className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+                  onClick={handleCancelWeixinQr}
+                >
+                  {t('remoteConnect.botWeixinQrCancel')}
+                </button>
+              </div>
+            )}
+            {weixinQrSessionKey && !weixinQrImageUrl && weixinAwaitingPhoneConfirm && (
+              <div className="bitfun-remote-connect__weixin-qr bitfun-remote-connect__weixin-qr--await">
+                <p className="bitfun-remote-connect__hint">{t('remoteConnect.botWeixinAwaitingPhoneConfirm')}</p>
+                <button
+                  type="button"
+                  className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+                  onClick={handleCancelWeixinQr}
+                >
+                  {t('remoteConnect.botWeixinQrCancel')}
+                </button>
+              </div>
+            )}
+            {!weixinQrSessionKey && !weixinQrImageUrl && (
+              <button
+                type="button"
+                className="bitfun-remote-connect__btn bitfun-remote-connect__btn--cancel"
+                onClick={handleStartWeixinQr}
+                disabled={loading}
+              >
+                {t('remoteConnect.botWeixinQrButton')}
+              </button>
+            )}
+            {weixinIlinkToken && weixinBotAccountId && !weixinQrSessionKey && (
+              <p className="bitfun-remote-connect__hint">{t('remoteConnect.botWeixinLinked')}</p>
+            )}
+          </div>
         )}
         {renderErrorBlock()}
         <button
           type="button"
           className="bitfun-remote-connect__btn bitfun-remote-connect__btn--connect"
           onClick={handleConnect}
-          disabled={loading || (botTab === 'telegram' ? !tgToken : !feishuAppId)}
+          disabled={
+            loading
+            || (botTab === 'telegram' ? !tgToken
+              : botTab === 'feishu' ? !feishuAppId
+                : !weixinIlinkToken || !weixinBotAccountId)
+          }
         >
           {loading ? t('remoteConnect.connecting') : t('remoteConnect.connect')}
         </button>
@@ -721,7 +975,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     onClick={() => { setBotTab(tab.id); setConnectionResult(null); setError(null); }}
                     disabled={isBotSubDisabled(tab.id) || isBotConnecting}
                   >
-                    {tab.id === 'feishu' ? t('remoteConnect.feishu') : tab.label}
+                    {tab.id === 'feishu' ? t('remoteConnect.feishu') : tab.id === 'weixin' ? t('remoteConnect.weixin') : tab.label}
                     {isBotConnected && connectedBotTab === tab.id && botTab !== tab.id && (
                       <span className="bitfun-remote-connect__dot-sm" />
                     )}
