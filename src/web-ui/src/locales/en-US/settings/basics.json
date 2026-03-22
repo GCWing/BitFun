@@ -1,6 +1,6 @@
 {
   "title": "Basics",
-  "subtitle": "Interface language, theme, logging, and terminal",
+  "subtitle": "Interface language, theme, logging, terminal, and login startup",
   "appearance": {
     "title": "Appearance",
     "hint": "Interface language and visual theme",
@@ -46,6 +46,19 @@
         "name": "Slate",
         "description": "Slate gray geometric theme - Deep immersion, high contrast grayscale aesthetics"
       }
+    }
+  },
+  "launchAtLogin": {
+    "sections": {
+      "title": "Login",
+      "hint": "Start BitFun when you sign in to this account"
+    },
+    "toggleLabel": "Launch at login",
+    "toggleDescription": "Automatically start BitFun after you log in. Exact behavior depends on your operating system.",
+    "messages": {
+      "loading": "Loading...",
+      "loadFailed": "Failed to read launch-at-login setting",
+      "saveFailed": "Failed to update launch-at-login setting"
     }
   },
   "logging": {

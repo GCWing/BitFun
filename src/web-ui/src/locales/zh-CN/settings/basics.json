@@ -1,6 +1,6 @@
 {
   "title": "基础",
-  "subtitle": "界面语言、主题、日志与终端",
+  "subtitle": "界面语言、主题、日志、终端与登录启动",
   "appearance": {
     "title": "外观",
     "hint": "界面语言与视觉主题",
@@ -46,6 +46,19 @@
         "name": "石板灰",
         "description": "石板灰几何主题 - 极深沉浸，高对比度灰度美学"
       }
+    }
+  },
+  "launchAtLogin": {
+    "sections": {
+      "title": "登录时启动",
+      "hint": "登录本用户后是否自动运行 BitFun"
+    },
+    "toggleLabel": "开机自动启动",
+    "toggleDescription": "登录系统后自动启动 BitFun；具体表现因操作系统而异。",
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取开机启动设置",
+      "saveFailed": "无法更新开机启动设置"
     }
   },
   "logging": {

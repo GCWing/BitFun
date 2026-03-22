@@ -7,7 +7,7 @@
     "searchNoResults": "没有匹配的配置",
     "searchClear": "清除搜索",
     "tabDescriptions": {
-      "basics": "语言、主题、日志与终端 Shell。",
+      "basics": "语言、主题、日志、终端 Shell 与开机启动。",
       "models": "AI 模型、API 密钥、供应商与代理。",
       "sessionConfig": "会话行为、工具与超时。",
       "aiContext": "规则与记忆等 AI 上下文。",

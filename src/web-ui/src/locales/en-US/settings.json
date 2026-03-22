@@ -7,7 +7,7 @@
     "searchNoResults": "No matching settings",
     "searchClear": "Clear search",
     "tabDescriptions": {
-      "basics": "Language, theme, logging, and terminal shell.",
+      "basics": "Language, theme, logging, terminal shell, and launch at login.",
       "models": "AI models, API keys, providers, and proxy.",
       "sessionConfig": "Session behavior, tools, and timeouts.",
       "aiContext": "Rules and memory for AI context.",

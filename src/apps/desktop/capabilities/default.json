@@ -5,6 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "log:default",
+    "autostart:default",
     "core:default",
     "core:path:default",
     "core:event:default",

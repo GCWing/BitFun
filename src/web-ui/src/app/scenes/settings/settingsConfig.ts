@@ -50,6 +50,10 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'shell',
           'pwsh',
           'powershell',
+          'autostart',
+          'login',
+          'boot',
+          'launch',
         ],
       },
       {
