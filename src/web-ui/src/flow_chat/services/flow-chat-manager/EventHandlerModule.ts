@@ -524,6 +524,16 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       backendTurnIndex: turnIndex,
     }));
   }
+
+  // User may have pre-added this turn from the composer while the previous turn was still running;
+  // START was skipped then. When the backend dispatches this turn, move the state machine to PROCESSING.
+  const machine = stateMachineManager.get(sessionId);
+  if (machine && machine.getCurrentState() === SessionExecutionState.IDLE) {
+    void stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
+      taskId: sessionId,
+      dialogTurnId: turnId,
+    });
+  }
 }
 
 /**

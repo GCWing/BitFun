@@ -19,7 +19,6 @@ import { CodeReviewToolCard } from './CodeReviewToolCard';
 import { FileOperationToolCard } from './FileOperationToolCard';
 import { DefaultToolCard } from './DefaultToolCard';
 import { WebSearchCard } from './WebSearchCard'; // Temporary until WebSearchDisplay exists.
-import { ImageAnalysisCard } from './ImageAnalysisCard';
 import { ContextCompressionDisplay } from './ContextCompressionDisplay';
 import { MCPToolDisplay } from './MCPToolDisplay';
 import { SkillDisplay } from './SkillDisplay';
@@ -172,16 +171,6 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     description: 'Submit code review results',
     displayMode: 'compact',
     primaryColor: '#8b5cf6'
-  },
-  'view_image': {
-    toolName: 'view_image',
-    displayName: 'Image Analysis',
-    icon: 'IMG',
-    requiresConfirmation: false,
-    resultDisplayType: 'detailed',
-    description: 'Analyze images and extract details',
-    displayMode: 'compact',
-    primaryColor: '#ec4899'
   },
   'ContextCompression': {
     toolName: 'ContextCompression',
@@ -350,9 +339,6 @@ export const TOOL_CARD_COMPONENTS = {
   'MermaidInteractive': MermaidInteractiveDisplay,
   
   'submit_code_review': CodeReviewToolCard,
-  
-  // Image analysis tools
-  'view_image': ImageAnalysisCard,
   
   // Context compression
   'ContextCompression': ContextCompressionDisplay,

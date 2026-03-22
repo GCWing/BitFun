@@ -2,7 +2,7 @@
 //
 // Note: This is intentionally small and does not include the legacy image analysis APIs
 // (`analyze_images`, `send_enhanced_message`). Image handling is done by the backend
-// coordinator + tools (e.g. `view_image`).
+// coordinator / execution pipeline.
 
 export interface ImageContextData {
   id: string;

@@ -119,7 +119,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   // Get input history for current session (after currentSessionId is defined)
   const inputHistory = effectiveTargetSessionId ? getSessionHistory(effectiveTargetSessionId) : [];
-  const derivedState = useSessionDerivedState(effectiveTargetSessionId);
+  const derivedState = useSessionDerivedState(
+    effectiveTargetSessionId,
+    inputState.value.trim()
+  );
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
   const stateMachine = useSessionStateMachine(effectiveTargetSessionId);
 
@@ -499,18 +502,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   React.useEffect(() => {
     const queuedInput = stateMachine?.context?.queuedInput;
-    if (queuedInput && effectiveTargetSessionId) {
+    if (!queuedInput?.trim() || !effectiveTargetSessionId) {
+      return;
+    }
+    // Sync machine queue into the input (e.g. failed turn restored by EventHandlerModule).
+    // `queuedInput` is cleared on successful send via `setQueuedInput(null)` so we do not fight CLEAR_VALUE.
+    if (inputState.value !== queuedInput) {
       log.debug('Detected queuedInput, restoring message to input', { queuedInput });
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: queuedInput });
-      
-      setQueuedInput(null);
-      
       if (richTextInputRef.current) {
         richTextInputRef.current.focus();
       }
     }
-  }, [stateMachine?.context?.queuedInput, effectiveTargetSessionId, setQueuedInput, stateMachine?.context]);
+  }, [
+    stateMachine?.context?.queuedInput,
+    effectiveTargetSessionId,
+    inputState.value,
+    stateMachine?.context,
+  ]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -782,8 +792,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!derivedState) return;
     
     const { sendButtonMode } = derivedState;
-    
-    if (sendButtonMode === 'cancel') {
+    const draftTrimmed = inputState.value.trim();
+
+    // While generating, an empty control in `cancel` mode means stop. If the user has typed a follow-up,
+    // never treat this path as cancel — that would call cancel_dialog_turn and abort the current round early.
+    if (sendButtonMode === 'cancel' && !draftTrimmed) {
       await transition(SessionExecutionEvent.USER_CANCEL);
       return;
     }
@@ -792,9 +805,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       await transition(SessionExecutionEvent.RESET);
     }
     
-    if (!inputState.value.trim()) return;
+    if (!draftTrimmed) return;
     
-    const message = inputState.value.trim();
+    const message = draftTrimmed;
 
     if (message.toLowerCase().startsWith('/btw')) {
       // When idle, /btw can be sent via the normal send button.
@@ -810,7 +823,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSavedDraft('');
     
     dispatchInput({ type: 'CLEAR_VALUE' });
-    
+    // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
+    setQueuedInput(null);
+
     try {
       await sendMessage(message);
       dispatchInput({ type: 'CLEAR_VALUE' });
@@ -819,8 +834,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.error('Failed to send message', { error });
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
+      if (derivedState?.isProcessing) {
+        setQueuedInput(message);
+      }
     }
-  }, [inputState.value, derivedState, transition, sendMessage, addToHistory, effectiveTargetSessionId, setQueuedInput, submitBtwFromInput]);
+  }, [
+    inputState.value,
+    derivedState,
+    transition,
+    sendMessage,
+    addToHistory,
+    effectiveTargetSessionId,
+    setQueuedInput,
+    submitBtwFromInput,
+  ]);
   
   const getFilteredIncrementalModes = useCallback(() => {
     if (!canSwitchModes) return [];
@@ -1160,6 +1187,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       if (derivedState?.isProcessing) {
+        if (!inputState.value.trim()) return;
+        void handleSendOrCancel();
         return;
       }
 
@@ -1394,6 +1423,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </IconButton>
       );
     }
+
+    if (sendButtonMode === 'split') {
+      return (
+        <div className="bitfun-chat-input__split-actions">
+          <Tooltip content={t('input.stopGeneration')}>
+            <div
+              className="bitfun-chat-input__send-button bitfun-chat-input__send-button--breathing"
+              onClick={() => {
+                void transition(SessionExecutionEvent.USER_CANCEL);
+              }}
+              data-testid="chat-input-cancel-btn"
+            >
+              <div className="bitfun-chat-input__breathing-circle" />
+            </div>
+          </Tooltip>
+          <IconButton
+            className="bitfun-chat-input__send-button"
+            onClick={handleSendOrCancel}
+            disabled={!inputState.value.trim()}
+            data-testid="chat-input-send-btn"
+            tooltip={t('input.sendShortcut')}
+            size="small"
+          >
+            <ArrowUp size={11} />
+          </IconButton>
+        </div>
+      );
+    }
     
     return (
       <IconButton
@@ -1618,23 +1675,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 );
               })()}
-              
-            {derivedState?.hasQueuedInput && (
-              <div className="bitfun-chat-input__queued-indicator">
-                <span>{t('input.willSendAfterStop')}</span>
-                <IconButton
-                  className="bitfun-chat-input__queued-clear"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    dispatchInput({ type: 'CLEAR_VALUE' });
-                    setQueuedInput(null);
-                  }}
-                >
-                  {t('input.clear')}
-                </IconButton>
-              </div>
-            )}
             </div>
             
             <IconButton

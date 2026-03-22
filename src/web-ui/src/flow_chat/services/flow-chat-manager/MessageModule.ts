@@ -135,8 +135,8 @@ export async function sendMessage(
         images: options?.imageDisplayData,
       },
       modelRounds: [],
-      // Images are handled by the agent/tooling (e.g. `view_image`) or sent directly to multimodal
-      // primary models. We don't run a separate frontend "image pre-analysis" phase here.
+      // Images are attached for multimodal primary models or reduced to text placeholders for text-only models.
+      // We don't run a separate frontend "image pre-analysis" phase here.
       status: 'pending',
       startTime: Date.now()
     };

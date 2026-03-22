@@ -1,15 +1,17 @@
 //! Execution Engine Type Definitions
 
 use crate::agentic::core::Message;
+use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// Execution context
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExecutionContext {
     pub session_id: String,
     pub dialog_turn_id: String,
@@ -21,6 +23,8 @@ pub struct ExecutionContext {
     pub skip_tool_confirmation: bool,
     /// Workspace I/O services (filesystem + shell) injected into tools
     pub workspace_services: Option<WorkspaceServices>,
+    /// When set, engine may end the turn after a full model round if a user message was queued.
+    pub round_preempt: Option<Arc<dyn DialogRoundPreemptSource>>,
 }
 
 /// Round context

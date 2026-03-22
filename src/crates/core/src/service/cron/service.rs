@@ -499,6 +499,7 @@ impl CronService {
                 Some(enqueue_input.workspace_path),
                 scheduled_job_policy(),
                 None,
+                None,
             )
             .await;
 
@@ -508,7 +509,7 @@ impl CronService {
         };
 
         match submit_result {
-            Ok(()) => {
+            Ok(_) => {
                 job.state.active_turn_id = Some(enqueue_input.turn_id);
                 job.state.pending_trigger_at_ms = None;
                 job.state.retry_at_ms = None;

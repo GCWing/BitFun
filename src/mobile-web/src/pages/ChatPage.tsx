@@ -1984,6 +1984,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
+  const [infoToast, setInfoToast] = useState<string | null>(null);
 
   const isStreaming = activeTurn != null && activeTurn.status === 'active';
 
@@ -2090,6 +2091,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     const t = setTimeout(() => setError(null), 5000);
     return () => clearTimeout(t);
   }, [error, setError]);
+
+  useEffect(() => {
+    if (!infoToast) return;
+    const timer = setTimeout(() => setInfoToast(null), 3200);
+    return () => clearTimeout(timer);
+  }, [infoToast]);
 
   const loadMessages = useCallback(async (beforeId?: string) => {
     if (isLoadingMoreRef.current || (!hasMoreRef.current && beforeId)) return;
@@ -2243,10 +2250,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const handleSend = useCallback(async () => {
     const text = input.trim();
     const imgs = pendingImages;
-    if ((!text && imgs.length === 0) || isStreaming || imageAnalyzing) return;
+    if ((!text && imgs.length === 0) || imageAnalyzing) return;
+    const wasStreaming = isStreaming;
     setInput('');
     setPendingImages([]);
-    setInputExpanded(false);
+    if (!wasStreaming) {
+      setInputExpanded(false);
+    }
 
     const hasImages = imgs.length > 0;
     const imageContexts = hasImages
@@ -2278,6 +2288,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         imageContexts,
       );
       pollerRef.current?.nudge();
+      if (wasStreaming) {
+        setInfoToast(t('chat.messageQueued'));
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -2659,7 +2672,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       >
         <div
           className="chat-page__input-box"
-          onClick={!inputExpanded && !isStreaming ? expandInput : undefined}
+          onClick={!inputExpanded ? expandInput : undefined}
         >
           {/* Input area */}
           <div className="chat-page__input-area">
@@ -2674,14 +2687,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                 onCompositionStart={handleCompositionStart}
                 onCompositionEnd={handleCompositionEnd}
                 rows={1}
-                disabled={isStreaming || imageAnalyzing}
+                disabled={imageAnalyzing}
               />
             ) : (
               <span className="chat-page__input-placeholder">
                 {imageAnalyzing
                   ? t('chat.imageAnalyzingPlaceholder')
                   : isStreaming
-                    ? t('chat.workingPlaceholder')
+                    ? t('chat.streamingTapToQueue')
                     : t('chat.inputPlaceholder')}
               </span>
             )}
@@ -2694,7 +2707,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                   <ModelSelectorPill
                     catalog={modelCatalog}
                     selectedModelId={selectedModelId}
-                    disabled={isStreaming || imageAnalyzing || modelUpdating}
+                    disabled={imageAnalyzing || modelUpdating}
                     onSelect={handleSelectModel}
                   />
                 )}
@@ -2719,14 +2732,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                       const idx = modes.indexOf(agentMode);
                       setAgentMode(modes[(idx + 1) % modes.length]);
                     }}
-                    disabled={isStreaming}
+                    disabled={imageAnalyzing}
                   >
                     {modeOptions.find(m => m.id === agentMode)?.label}
                   </button>
                   <button
                     className="chat-page__action-btn"
                     onClick={handleImageSelect}
-                    disabled={isStreaming || pendingImages.length >= 5}
+                    disabled={imageAnalyzing || pendingImages.length >= 5}
                     aria-label={t('common.attachImage')}
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2737,18 +2750,36 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                   </button>
                 </>
               )}
-              {isStreaming || imageAnalyzing ? (
-                <button className="chat-page__send-btn is-stop" onClick={imageAnalyzing ? undefined : handleCancel} aria-label={t('common.stop')} disabled={imageAnalyzing}>
-                  {imageAnalyzing ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'analyzeSpin 2s linear infinite' }}>
-                      <circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/>
-                    </svg>
-                  ) : (
+              {imageAnalyzing ? (
+                <button className="chat-page__send-btn is-stop" aria-label={t('common.stop')} disabled>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'analyzeSpin 2s linear infinite' }}>
+                    <circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/>
+                  </svg>
+                </button>
+              ) : isStreaming ? (
+                <div className="chat-page__stream-actions">
+                  <button
+                    type="button"
+                    className="chat-page__send-btn is-stop"
+                    onClick={handleCancel}
+                    aria-label={t('common.stop')}
+                  >
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
                       <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/>
                     </svg>
-                  )}
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-page__send-btn"
+                    onClick={inputExpanded ? handleSend : expandInput}
+                    disabled={!input.trim() && pendingImages.length === 0}
+                    aria-label={t('common.submit')}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+                      <path d="M10 3L10 17M10 3L5 8M10 3L15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
               ) : (
                 <button
                   className="chat-page__send-btn"
@@ -2768,6 +2799,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       {error && (
         <div className="chat-page__toast" onClick={() => setError(null)}>
           {error}
+        </div>
+      )}
+      {infoToast && (
+        <div className="chat-page__toast chat-page__toast--info" onClick={() => setInfoToast(null)}>
+          {infoToast}
         </div>
       )}
     </div>

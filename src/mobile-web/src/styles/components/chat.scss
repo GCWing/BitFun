@@ -283,6 +283,10 @@
   white-space: pre-line;
   animation: toastSlideIn 0.25s ease-out;
   backdrop-filter: blur(8px);
+
+  &--info {
+    background: rgba(22, 110, 75, 0.94);
+  }
 }
 
 @keyframes toastSlideIn {

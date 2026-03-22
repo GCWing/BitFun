@@ -376,6 +376,7 @@ When overriding an existing session's agent_type, only switching between "agenti
                     source_session_id,
                     source_workspace_path: source_workspace,
                 }),
+                None,
             )
             .await
             .map_err(BitFunError::tool)?;

@@ -705,7 +705,9 @@ impl TelegramBot {
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
                 let result = execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
-                bot.send_message(chat_id, &result.display_text).await.ok();
+                if !result.display_text.is_empty() {
+                    bot.send_message(chat_id, &result.display_text).await.ok();
+                }
                 bot.notify_files_ready(chat_id, &result.full_text).await;
             });
         }

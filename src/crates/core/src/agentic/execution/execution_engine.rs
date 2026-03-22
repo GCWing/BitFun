@@ -657,9 +657,7 @@ impl ExecutionEngine {
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
         // Detect whether the primary model supports multimodal image inputs.
-        // This is used by tools like `view_image` to decide between:
-        // - attaching image content for the primary model to analyze directly, or
-        // - using a dedicated vision model to pre-analyze into text.
+        // When false, multimodal user messages are converted to text placeholders before the provider call.
         let (resolved_primary_model_id, primary_supports_image_understanding) = {
             let config_service = get_global_config_service().await.ok();
             if let Some(service) = config_service {
@@ -921,6 +919,8 @@ impl ExecutionEngine {
                 round_result.tool_result_messages.len()
             );
 
+            total_tools += round_result.tool_calls.len();
+
             // If no more rounds, dialog turn ends
             if !round_result.has_more_rounds {
                 debug!(
@@ -930,8 +930,21 @@ impl ExecutionEngine {
                 break;
             }
 
-            // Count tools
-            total_tools += round_result.tool_calls.len();
+            // Queued user message while this turn was running: stop after a full model round
+            // (AI response + tool execution for this round are already persisted).
+            // No special deferral for tool-confirmation phases: we do not require the user to
+            // finish confirming before this boundary check runs; the check applies as soon as
+            // this `execute_round` completes (same as any other round).
+            if let Some(preempt) = context.round_preempt.as_ref() {
+                if preempt.should_yield_after_round(&context.session_id) {
+                    preempt.clear_yield_after_round(&context.session_id);
+                    info!(
+                        "Yielding dialog turn after model round (queued user message): session_id={}, dialog_turn_id={}, round_index={}",
+                        context.session_id, context.dialog_turn_id, round_index
+                    );
+                    break;
+                }
+            }
 
             // Check if cancelled after each round
             let dialog_turn_cancelled =

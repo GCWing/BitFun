@@ -12,6 +12,7 @@ use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, EventRouter, EventSubscriber,
 };
 use crate::agentic::execution::{ExecutionContext, ExecutionEngine};
+use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::SessionManager;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
@@ -105,6 +106,8 @@ pub struct ConversationCoordinator {
     event_router: Arc<EventRouter>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
     scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
+    /// Round-boundary yield (same source as scheduler's yield flags); injected after construction
+    round_preempt_source: OnceLock<Arc<dyn DialogRoundPreemptSource>>,
 }
 
 impl ConversationCoordinator {
@@ -247,6 +250,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             event_queue,
             event_router,
             scheduler_notify_tx: OnceLock::new(),
+            round_preempt_source: OnceLock::new(),
         }
     }
 
@@ -254,6 +258,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Called once during app initialization after the scheduler is created.
     pub fn set_scheduler_notifier(&self, tx: mpsc::Sender<(String, TurnOutcome)>) {
         let _ = self.scheduler_notify_tx.set(tx);
+    }
+
+    /// Wire round-boundary preempt (typically the scheduler's [`SessionRoundYieldFlags`](crate::agentic::round_preempt::SessionRoundYieldFlags)).
+    pub fn set_round_preempt_source(&self, source: Arc<dyn DialogRoundPreemptSource>) {
+        let _ = self.round_preempt_source.set(source);
     }
 
     /// Create a new session
@@ -1126,6 +1135,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_parent_info: None,
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
             workspace_services,
+            round_preempt: self.round_preempt_source.get().cloned(),
         };
 
         // Auto-generate session title on first message
@@ -1659,6 +1669,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_parent_info: Some(subagent_parent_info),
             skip_tool_confirmation: false,
             workspace_services: subagent_services,
+            round_preempt: self.round_preempt_source.get().cloned(),
         };
 
         let initial_messages = vec![Message::user(task_description)];

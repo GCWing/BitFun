@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowToolItem } from '../types/flow-chat';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowTextItem } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES } from '../tool-cards';
 
 /**
@@ -25,10 +25,14 @@ export interface ExploreGroupStats {
 export interface ExploreGroupData {
   groupId: string;
   rounds: ModelRound[];
-  allItems: import('../types/flow-chat').FlowItem[];
+  allItems: FlowItem[];
   stats: ExploreGroupStats;
   isGroupStreaming: boolean;
   isLastGroupInTurn: boolean;
+  /**
+   * When true, ExploreGroupRenderer auto-collapses after a critical follow-up round (e.g. Mermaid).
+   * Set false if the group contains assistant `text` items so narrative stays visible.
+   */
   isFollowedByCritical: boolean;
 }
 
@@ -131,6 +135,18 @@ function computeRoundStats(round: ModelRound): { readCount: number; searchCount:
   return { readCount, searchCount, thinkingCount };
 }
 
+/**
+ * True when the merged explore group includes assistant markdown/text with real content.
+ * Auto-collapse on "followed by critical tool" must not hide this narrative.
+ */
+function exploreGroupHasNarrativeText(items: FlowItem[]): boolean {
+  return items.some(
+    (item) =>
+      item.type === 'text' &&
+      String((item as FlowTextItem).content || '').trim().length > 0
+  );
+}
+
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
 let cachedVirtualItems: VirtualItem[] = [];
@@ -185,7 +201,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     
     interface TempExploreGroup {
       rounds: ModelRound[];
-      allItems: import('../types/flow-chat').FlowItem[];
+      allItems: FlowItem[];
       readCount: number;
       searchCount: number;
       thinkingCount: number;
@@ -251,6 +267,10 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           } else {
             isFollowedByCritical = !isExploreOnlyRound(nextRound);
           }
+        }
+
+        if (exploreGroupHasNarrativeText(group.allItems)) {
+          isFollowedByCritical = false;
         }
         
         const isGroupStreaming = group.rounds.some(r => r.isStreaming);

@@ -1715,7 +1715,9 @@ impl WeixinBot {
                 let verbose_mode = load_bot_persistence().verbose_mode;
                 let turn_result =
                     execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
-                let _ = bot.send_text(&peer, &turn_result.display_text).await;
+                if !turn_result.display_text.is_empty() {
+                    let _ = bot.send_text(&peer, &turn_result.display_text).await;
+                }
                 bot.notify_files_ready(&peer, &turn_result.full_text).await;
             });
         }

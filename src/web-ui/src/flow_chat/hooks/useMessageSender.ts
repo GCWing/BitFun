@@ -155,7 +155,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
               return `[Code Snippet: ${ctx.filePath}:${ctx.startLine}-${ctx.endLine}]`;
             case 'image':
               // Images are sent out-of-band via `imageContexts` so the backend can attach them
-              // (multimodal) or let the model call `view_image` (text-only). Avoid embedding
+              // for multimodal models or convert to text placeholders for text-only models. Avoid embedding
               // "Image ID" references into the user prompt, which can cause redundant tool calls.
               return '';
             case 'terminal-command':

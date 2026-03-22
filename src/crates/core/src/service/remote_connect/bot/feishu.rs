@@ -1563,8 +1563,10 @@ impl FeishuBot {
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
                 let result = execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
-                if let Err(err) = bot.send_message(&cid, &result.display_text).await {
-                    warn!("Failed to send Feishu final message to {cid}: {err}");
+                if !result.display_text.is_empty() {
+                    if let Err(err) = bot.send_message(&cid, &result.display_text).await {
+                        warn!("Failed to send Feishu final message to {cid}: {err}");
+                    }
                 }
                 bot.notify_files_ready(&cid, &result.full_text).await;
             });

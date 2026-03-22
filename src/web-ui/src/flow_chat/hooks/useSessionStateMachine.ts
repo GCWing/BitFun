@@ -41,14 +41,22 @@ export function useSessionStateMachine(sessionId: string | null) {
 
 /**
  * Derived session state.
+ * @param processingInputDraftTrimmed - trimmed chat input while generating; keeps send UI in `split` when user has typed a follow-up (see derivedState).
  */
-export function useSessionDerivedState(sessionId: string | null): SessionDerivedState | null {
+export function useSessionDerivedState(
+  sessionId: string | null,
+  processingInputDraftTrimmed?: string
+): SessionDerivedState | null {
   const snapshot = useSessionStateMachine(sessionId);
 
   const derivedState = useMemo(() => {
     if (!snapshot) return null;
-    return deriveSessionState(snapshot);
-  }, [snapshot]);
+    const opts =
+      processingInputDraftTrimmed !== undefined
+        ? { processingInputDraftTrimmed }
+        : undefined;
+    return deriveSessionState(snapshot, opts);
+  }, [snapshot, processingInputDraftTrimmed]);
 
   return derivedState;
 }

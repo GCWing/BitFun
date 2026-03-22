@@ -13,6 +13,8 @@
 use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
 use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus};
 use crate::agentic::core::{PromptEnvelope, SessionState};
+use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::round_preempt::{DialogRoundPreemptSource, SessionRoundYieldFlags};
 use crate::agentic::session::SessionManager;
 use dashmap::DashMap;
 use log::{debug, info, warn};
@@ -21,8 +23,23 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::SystemTime;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 const MAX_QUEUE_DEPTH: usize = 20;
+
+/// Result of [`DialogScheduler::submit`]: whether this message began executing immediately
+/// or was placed in the per-session queue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogSubmitOutcome {
+    Started {
+        session_id: String,
+        turn_id: String,
+    },
+    Queued {
+        session_id: String,
+        turn_id: String,
+    },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DialogQueuePriority {
@@ -114,6 +131,7 @@ pub struct QueuedTurn {
     pub workspace_path: Option<String>,
     pub policy: DialogSubmissionPolicy,
     pub reply_route: Option<AgentSessionReplyRoute>,
+    pub image_contexts: Option<Vec<ImageContextData>>,
     #[allow(dead_code)]
     pub enqueued_at: SystemTime,
 }
@@ -132,6 +150,8 @@ pub struct DialogScheduler {
     active_turns: Arc<DashMap<String, ActiveTurn>>,
     /// Cloneable sender given to ConversationCoordinator for turn outcome notifications
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
+    /// When a user submits while `Processing`, engine yields after the current model round.
+    round_yield_flags: Arc<SessionRoundYieldFlags>,
 }
 
 impl DialogScheduler {
@@ -152,6 +172,7 @@ impl DialogScheduler {
             queues: Arc::new(DashMap::new()),
             active_turns: Arc::new(DashMap::new()),
             outcome_tx,
+            round_yield_flags: Arc::new(SessionRoundYieldFlags::default()),
         });
 
         let scheduler_for_handler = Arc::clone(&scheduler);
@@ -167,11 +188,29 @@ impl DialogScheduler {
         self.outcome_tx.clone()
     }
 
+    /// Pass to [`ConversationCoordinator::set_round_preempt_source`](super::coordinator::ConversationCoordinator::set_round_preempt_source).
+    pub fn preempt_monitor(&self) -> Arc<dyn DialogRoundPreemptSource> {
+        self.round_yield_flags.clone()
+    }
+
+    fn user_message_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
+        matches!(
+            policy.trigger_source,
+            DialogTriggerSource::DesktopUi
+                | DialogTriggerSource::DesktopApi
+                | DialogTriggerSource::Cli
+                | DialogTriggerSource::RemoteRelay
+                | DialogTriggerSource::Bot
+        )
+    }
+
     /// Submit a user message for a session.
     ///
     /// - Session idle, queue empty → dispatched immediately.
     /// - Session idle, queue non-empty → enqueued then highest-priority queued message dispatched.
-    /// - Session processing → queued (up to MAX_QUEUE_DEPTH).
+    /// - Session processing → queued (up to MAX_QUEUE_DEPTH). For interactive sources
+    ///   (desktop, CLI, bot, …), also requests a yield after the current model round so
+    ///   the queued message can start sooner than a full multi-round turn.
     /// - Session error → queue cleared, dispatched immediately.
     ///
     /// Returns `Err(String)` if the queue is full or the coordinator returns an error.
@@ -185,15 +224,18 @@ impl DialogScheduler {
         workspace_path: Option<String>,
         policy: DialogSubmissionPolicy,
         reply_route: Option<AgentSessionReplyRoute>,
-    ) -> Result<(), String> {
+        image_contexts: Option<Vec<ImageContextData>>,
+    ) -> Result<DialogSubmitOutcome, String> {
+        let resolved_turn_id = turn_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let queued_turn = QueuedTurn {
             user_input,
             original_user_input,
-            turn_id,
+            turn_id: Some(resolved_turn_id.clone()),
             agent_type,
             workspace_path,
             policy,
             reply_route,
+            image_contexts,
             enqueued_at: SystemTime::now(),
         };
         let state = self
@@ -202,11 +244,21 @@ impl DialogScheduler {
             .map(|s| s.state.clone());
 
         match state {
-            None => self.start_turn(&session_id, &queued_turn).await,
+            None => {
+                let tid = self.start_turn(&session_id, &queued_turn).await?;
+                Ok(DialogSubmitOutcome::Started {
+                    session_id,
+                    turn_id: tid,
+                })
+            }
 
             Some(SessionState::Error { .. }) => {
                 self.clear_queue(&session_id);
-                self.start_turn(&session_id, &queued_turn).await
+                let tid = self.start_turn(&session_id, &queued_turn).await?;
+                Ok(DialogSubmitOutcome::Started {
+                    session_id,
+                    turn_id: tid,
+                })
             }
 
             Some(SessionState::Idle) => {
@@ -217,16 +269,38 @@ impl DialogScheduler {
                     .unwrap_or(false);
 
                 if queue_non_empty {
-                    self.enqueue(&session_id, queued_turn)?;
-                    self.dispatch_next_if_idle(&session_id).await
+                    self.enqueue(&session_id, queued_turn.clone())?;
+                    let started_tid = self.try_start_next_queued(&session_id).await?;
+                    let outcome = match started_tid {
+                        Some(tid) if tid == resolved_turn_id => DialogSubmitOutcome::Started {
+                            session_id: session_id.clone(),
+                            turn_id: tid,
+                        },
+                        _ => DialogSubmitOutcome::Queued {
+                            session_id: session_id.clone(),
+                            turn_id: resolved_turn_id,
+                        },
+                    };
+                    Ok(outcome)
                 } else {
-                    self.start_turn(&session_id, &queued_turn).await
+                    let tid = self.start_turn(&session_id, &queued_turn).await?;
+                    Ok(DialogSubmitOutcome::Started {
+                        session_id,
+                        turn_id: tid,
+                    })
                 }
             }
 
             Some(SessionState::Processing { .. }) => {
+                let may_preempt = Self::user_message_may_preempt(&queued_turn.policy);
                 self.enqueue(&session_id, queued_turn)?;
-                Ok(())
+                if may_preempt {
+                    self.round_yield_flags.request_yield(&session_id);
+                }
+                Ok(DialogSubmitOutcome::Queued {
+                    session_id,
+                    turn_id: resolved_turn_id,
+                })
             }
         }
     }
@@ -303,25 +377,93 @@ impl DialogScheduler {
             .push_front(turn);
     }
 
-    async fn start_turn(&self, session_id: &str, queued_turn: &QueuedTurn) -> Result<(), String> {
-        self.coordinator
-            .start_dialog_turn(
-                session_id.to_string(),
-                queued_turn.user_input.clone(),
-                queued_turn.original_user_input.clone(),
-                queued_turn.turn_id.clone(),
-                queued_turn.agent_type.clone(),
-                queued_turn.workspace_path.clone(),
-                queued_turn.policy,
-            )
-            .await
-            .map_err(|e| e.to_string())?;
+    async fn try_start_next_queued(&self, session_id: &str) -> Result<Option<String>, String> {
+        let state = self
+            .session_manager
+            .get_session(session_id)
+            .map(|s| s.state.clone());
+        if matches!(state, Some(SessionState::Processing { .. })) {
+            return Ok(None);
+        }
+
+        let Some(next_turn) = self.dequeue_next(session_id) else {
+            return Ok(None);
+        };
+
+        let remaining = self.queues.get(session_id).map(|q| q.len()).unwrap_or(0);
+        info!(
+            "Dispatching queued message: session_id={}, priority={:?}, remaining_queue_depth={}",
+            session_id, next_turn.policy.queue_priority, remaining
+        );
+
+        match self.start_turn(session_id, &next_turn).await {
+            Ok(tid) => Ok(Some(tid)),
+            Err(err) => {
+                self.requeue_front(session_id, next_turn);
+                Err(err)
+            }
+        }
+    }
+
+    async fn start_turn(&self, session_id: &str, queued_turn: &QueuedTurn) -> Result<String, String> {
+        let res = match queued_turn
+            .image_contexts
+            .as_ref()
+            .filter(|imgs| !imgs.is_empty())
+        {
+            Some(imgs) => {
+                self.coordinator
+                    .start_dialog_turn_with_image_contexts(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        imgs.clone(),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                    )
+                    .await
+            }
+            None => {
+                self.coordinator
+                    .start_dialog_turn(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                    )
+                    .await
+            }
+        };
+
+        res.map_err(|e| e.to_string())?;
 
         self.active_turns.insert(
             session_id.to_string(),
             ActiveTurn::from_queued_turn(queued_turn),
         );
-        Ok(())
+
+        let resolved = self
+            .session_manager
+            .get_session(session_id)
+            .and_then(|s| match &s.state {
+                SessionState::Processing {
+                    current_turn_id, ..
+                } => Some(current_turn_id.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                format!(
+                    "Failed to resolve turn_id after starting dialog: session_id={}",
+                    session_id
+                )
+            })?;
+
+        Ok(resolved)
     }
 
     async fn forward_agent_session_reply(
@@ -356,6 +498,7 @@ impl DialogScheduler {
                 Some(reply_route.source_workspace_path.clone()),
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
                 None,
+                None,
             )
             .await
         {
@@ -385,35 +528,15 @@ Status: {status}"
     }
 
     async fn dispatch_next_if_idle(&self, session_id: &str) -> Result<(), String> {
-        let state = self
-            .session_manager
-            .get_session(session_id)
-            .map(|s| s.state.clone());
-        if matches!(state, Some(SessionState::Processing { .. })) {
-            return Ok(());
-        }
-
-        let Some(next_turn) = self.dequeue_next(session_id) else {
-            return Ok(());
-        };
-
-        let remaining = self.queues.get(session_id).map(|q| q.len()).unwrap_or(0);
-        info!(
-            "Dispatching queued message: session_id={}, priority={:?}, remaining_queue_depth={}",
-            session_id, next_turn.policy.queue_priority, remaining
-        );
-
-        if let Err(err) = self.start_turn(session_id, &next_turn).await {
-            self.requeue_front(session_id, next_turn);
-            return Err(err);
-        }
-
+        let _ = self.try_start_next_queued(session_id).await?;
         Ok(())
     }
 
     /// Background loop that receives turn outcome notifications from the coordinator.
     async fn run_outcome_handler(&self, mut outcome_rx: mpsc::Receiver<(String, TurnOutcome)>) {
         while let Some((session_id, outcome)) = outcome_rx.recv().await {
+            self.round_yield_flags.clear(&session_id);
+
             let active_turn = self.active_turns.remove(&session_id).map(|(_, turn)| turn);
             if let Some(active_turn) = active_turn.as_ref() {
                 self.forward_agent_session_reply(&session_id, active_turn, &outcome)

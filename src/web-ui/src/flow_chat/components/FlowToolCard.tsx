@@ -10,20 +10,6 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('FlowToolCard');
 
-/**
- * When the primary model is multimodal, `view_image` returns `{ mode: "attached_to_primary_model" }`
- * instead of a textual analysis. In that case the tool card is pure noise and should be hidden.
- */
-function isViewImageAttachedMode(toolItem: FlowToolItem): boolean {
-  if (toolItem.toolName !== 'view_image') return false;
-  const raw = toolItem.toolResult?.result as Record<string, unknown> | undefined;
-  const mode =
-    raw?.mode ??
-    (raw?.result as Record<string, unknown> | undefined)?.mode ??
-    (raw?.data as Record<string, unknown> | undefined)?.mode;
-  return mode === 'attached_to_primary_model';
-}
-
 interface FlowToolCardProps {
   toolItem: FlowToolItem;
   onConfirm?: (toolId: string, updatedInput?: any) => void;
@@ -45,10 +31,6 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   sessionId,
   className = ''
 }) => {
-  if (isViewImageAttachedMode(toolItem)) {
-    return null;
-  }
-
   const config = getToolCardConfig(toolItem.toolName);
   const CardComponent = getToolCardComponent(toolItem.toolName);
 

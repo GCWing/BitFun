@@ -236,7 +236,7 @@ pub async fn update_session_model(
 #[tauri::command]
 pub async fn start_dialog_turn(
     _app: AppHandle,
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    _coordinator: State<'_, Arc<ConversationCoordinator>>,
     scheduler: State<'_, Arc<DialogScheduler>>,
     request: StartDialogTurnRequest,
 ) -> Result<StartDialogTurnResponse, String> {
@@ -250,40 +250,31 @@ pub async fn start_dialog_turn(
         image_contexts,
     } = request;
 
-    if let Some(image_contexts) = image_contexts
+    let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi);
+    let resolved_images = if let Some(image_contexts) = image_contexts
         .as_ref()
         .filter(|images| !images.is_empty())
         .cloned()
     {
-        let resolved_image_contexts = resolve_missing_image_payloads(image_contexts)?;
-        coordinator
-            .start_dialog_turn_with_image_contexts(
-                session_id,
-                user_input,
-                original_user_input,
-                resolved_image_contexts,
-                turn_id,
-                agent_type,
-                workspace_path,
-                DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
-            )
-            .await
-            .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
+        Some(resolve_missing_image_payloads(image_contexts)?)
     } else {
-        scheduler
-            .submit(
-                session_id,
-                user_input,
-                original_user_input,
-                turn_id,
-                agent_type,
-                workspace_path,
-                DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
-                None,
-            )
-            .await
-            .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
-    }
+        None
+    };
+
+    scheduler
+        .submit(
+            session_id,
+            user_input,
+            original_user_input,
+            turn_id,
+            agent_type,
+            workspace_path,
+            policy,
+            None,
+            resolved_images,
+        )
+        .await
+        .map_err(|e| format!("Failed to start dialog turn: {}", e))?;
 
     Ok(StartDialogTurnResponse {
         success: true,

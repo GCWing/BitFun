@@ -2507,6 +2507,34 @@ async fn handle_chat_message(
 
     let session_id = state.current_session_id.clone().unwrap();
     let turn_id = format!("turn_{}", uuid::Uuid::new_v4());
+
+    let session_busy = {
+        use crate::agentic::coordination::get_global_coordinator;
+        use crate::agentic::core::SessionState;
+        get_global_coordinator()
+            .and_then(|c| c.get_session_manager().get_session(&session_id))
+            .is_some_and(|s| matches!(s.state, SessionState::Processing { .. }))
+    };
+
+    if session_busy {
+        return HandleResult {
+            reply: if language.is_chinese() {
+                "消息已加入队列，将在当前助手步骤结束后自动处理。".to_string()
+            } else {
+                "Your message was queued and will run after the current assistant step finishes."
+                    .to_string()
+            },
+            actions: vec![],
+            forward_to_session: Some(ForwardRequest {
+                session_id,
+                content: message.to_string(),
+                agent_type: "agentic".to_string(),
+                turn_id,
+                image_contexts,
+            }),
+        };
+    }
+
     let cancel_command = format!("/cancel_task {}", turn_id);
     HandleResult {
         reply: format!(
@@ -2520,7 +2548,7 @@ async fn handle_chat_message(
                 format!("如需停止本次请求，请发送 `{}`。", cancel_command)
             } else {
                 format!("If needed, send `{}` to stop this request.", cancel_command)
-            }
+            },
         ),
         actions: cancel_task_actions(language, cancel_command),
         forward_to_session: Some(ForwardRequest {
@@ -2559,6 +2587,8 @@ pub async fn execute_forwarded_turn(
     let tracker = dispatcher.ensure_tracker(&forward.session_id);
     let mut event_rx = tracker.subscribe();
 
+    let target_turn_id = forward.turn_id.clone();
+
     if let Err(e) = dispatcher
         .send_message(
             &forward.session_id,
@@ -2566,7 +2596,7 @@ pub async fn execute_forwarded_turn(
             Some(&forward.agent_type),
             forward.image_contexts,
             DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot),
-            Some(forward.turn_id),
+            Some(forward.turn_id.clone()),
         )
         .await
     {
@@ -2588,13 +2618,26 @@ pub async fn execute_forwarded_turn(
         let mut tool_params_cache: std::collections::HashMap<String, Option<serde_json::Value>> =
             std::collections::HashMap::new();
 
+        let streams_our_turn = || {
+            tracker
+                .snapshot_active_turn()
+                .map(|s| s.turn_id == target_turn_id)
+                .unwrap_or(false)
+        };
+
         loop {
             match event_rx.recv().await {
                 Ok(event) => match event {
                     TrackerEvent::ThinkingChunk(chunk) => {
+                        if !streams_our_turn() {
+                            continue;
+                        }
                         thinking_buf.push_str(&chunk);
                     }
                     TrackerEvent::ThinkingEnd => {
+                        if !streams_our_turn() {
+                            continue;
+                        }
                         if verbose_mode && !thinking_buf.trim().is_empty() {
                             if let Some(sender) = message_sender.as_ref() {
                                 let content = truncate_at_char_boundary(&thinking_buf, 500);
@@ -2609,6 +2652,9 @@ pub async fn execute_forwarded_turn(
                         thinking_buf.clear();
                     }
                     TrackerEvent::TextChunk(t) => {
+                        if !streams_our_turn() {
+                            continue;
+                        }
                         response.push_str(&t);
                     }
                     TrackerEvent::ToolStarted {
@@ -2616,6 +2662,9 @@ pub async fn execute_forwarded_turn(
                         tool_name,
                         params,
                     } => {
+                        if !streams_our_turn() {
+                            continue;
+                        }
                         if tool_name == "AskUserQuestion" {
                             if let Some(questions_value) =
                                 params.and_then(|p| p.get("questions").cloned())
@@ -2647,6 +2696,9 @@ pub async fn execute_forwarded_turn(
                         duration_ms,
                         success,
                     } => {
+                        if !streams_our_turn() {
+                            continue;
+                        }
                         if verbose_mode {
                             if let Some(sender) = message_sender.as_ref() {
                                 let params_str = tool_params_cache
@@ -2675,28 +2727,36 @@ pub async fn execute_forwarded_turn(
                             }
                         }
                     }
-                    TrackerEvent::TurnCompleted => break,
-                    TrackerEvent::TurnFailed(e) => {
-                        let msg = if language.is_chinese() {
-                            format!("错误: {e}")
-                        } else {
-                            format!("Error: {e}")
-                        };
-                        return ForwardedTurnResult {
-                            display_text: msg.clone(),
-                            full_text: msg,
-                        };
+                    TrackerEvent::TurnCompleted { turn_id } => {
+                        if turn_id == target_turn_id {
+                            break;
+                        }
                     }
-                    TrackerEvent::TurnCancelled => {
-                        let msg = if language.is_chinese() {
-                            "任务已取消。".to_string()
-                        } else {
-                            "Task was cancelled.".to_string()
-                        };
-                        return ForwardedTurnResult {
-                            display_text: msg.clone(),
-                            full_text: msg,
-                        };
+                    TrackerEvent::TurnFailed { turn_id, error } => {
+                        if turn_id == target_turn_id {
+                            let msg = if language.is_chinese() {
+                                format!("错误: {error}")
+                            } else {
+                                format!("Error: {error}")
+                            };
+                            return ForwardedTurnResult {
+                                display_text: msg.clone(),
+                                full_text: msg,
+                            };
+                        }
+                    }
+                    TrackerEvent::TurnCancelled { turn_id } => {
+                        if turn_id == target_turn_id {
+                            let msg = if language.is_chinese() {
+                                "任务已取消。".to_string()
+                            } else {
+                                "Task was cancelled.".to_string()
+                            };
+                            return ForwardedTurnResult {
+                                display_text: msg.clone(),
+                                full_text: msg,
+                            };
+                        }
                     }
                 },
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

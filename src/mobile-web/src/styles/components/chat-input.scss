@@ -474,6 +474,13 @@
   }
 }
 
+.chat-page__stream-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 // ── Image previews ───────────────────────────────────────────────────────────
 
 .chat-page__image-preview-row {

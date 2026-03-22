@@ -26,7 +26,6 @@ pub mod task_tool;
 pub mod terminal_control_tool;
 pub mod todo_write_tool;
 pub mod util;
-pub mod view_image_tool;
 pub mod web_tools;
 
 pub use ask_user_question_tool::AskUserQuestionTool;
@@ -53,5 +52,4 @@ pub use skill_tool::SkillTool;
 pub use task_tool::TaskTool;
 pub use terminal_control_tool::TerminalControlTool;
 pub use todo_write_tool::TodoWriteTool;
-pub use view_image_tool::ViewImageTool;
 pub use web_tools::{WebFetchTool, WebSearchTool};

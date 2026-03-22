@@ -112,7 +112,6 @@
     .bitfun-chat-input__target-switcher,
     .bitfun-chat-input__actions-left,
     .bitfun-chat-input__agent-boost,
-    .bitfun-chat-input__queued-indicator,
     .bitfun-chat-input__actions-right {
       display: none !important;
     }
@@ -1266,6 +1265,13 @@
     gap: $size-gap-1;
     height: 100%;
     animation: bitfun-stacked-reveal 0.24s cubic-bezier(0.4, 0, 0.2, 1) 0.22s both;
+  }
+
+  &__split-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
   }
   
   &__send-button {

@@ -205,6 +205,7 @@ pub async fn dispatch(
                     workspace_path,
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
                     None,
+                    None,
                 )
                 .await
                 .map_err(|e| anyhow!("{}", e))?;

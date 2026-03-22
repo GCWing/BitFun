@@ -122,9 +122,6 @@ impl ToolRegistry {
         // Log tool
         self.register_tool(Arc::new(LogTool::new()));
 
-        // Image analysis / viewing tool
-        self.register_tool(Arc::new(ViewImageTool::new()));
-
         // Git version control tool
         self.register_tool(Arc::new(GitTool::new()));
 

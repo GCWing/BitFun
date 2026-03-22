@@ -953,9 +953,9 @@ pub enum TrackerEvent {
         duration_ms: Option<u64>,
         success: bool,
     },
-    TurnCompleted,
-    TurnFailed(String),
-    TurnCancelled,
+    TurnCompleted { turn_id: String },
+    TurnFailed { turn_id: String, error: String },
+    TurnCancelled { turn_id: String },
 }
 
 /// Tracks the real-time state of a session for polling by the mobile client.
@@ -1480,32 +1480,39 @@ impl RemoteSessionStateTracker {
                 drop(s);
                 self.bump_version();
             }
-            AE::DialogTurnCompleted { .. } if is_direct => {
+            AE::DialogTurnCompleted { turn_id, .. } if is_direct => {
                 let mut s = self.state.write().unwrap();
                 s.turn_status = "completed".to_string();
                 s.session_state = "idle".to_string();
                 s.persistence_dirty = true;
                 drop(s);
                 self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TurnCompleted);
+                let _ = self.event_tx.send(TrackerEvent::TurnCompleted {
+                    turn_id: turn_id.clone(),
+                });
             }
-            AE::DialogTurnFailed { error, .. } if is_direct => {
+            AE::DialogTurnFailed { turn_id, error, .. } if is_direct => {
                 let mut s = self.state.write().unwrap();
                 s.turn_status = "failed".to_string();
                 s.session_state = "idle".to_string();
                 s.persistence_dirty = true;
                 drop(s);
                 self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TurnFailed(error.clone()));
+                let _ = self.event_tx.send(TrackerEvent::TurnFailed {
+                    turn_id: turn_id.clone(),
+                    error: error.clone(),
+                });
             }
-            AE::DialogTurnCancelled { .. } if is_direct => {
+            AE::DialogTurnCancelled { turn_id, .. } if is_direct => {
                 let mut s = self.state.write().unwrap();
                 s.turn_status = "cancelled".to_string();
                 s.session_state = "idle".to_string();
                 s.persistence_dirty = true;
                 drop(s);
                 self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TurnCancelled);
+                let _ = self.event_tx.send(TrackerEvent::TurnCancelled {
+                    turn_id: turn_id.clone(),
+                });
             }
             AE::ModelRoundStarted { round_index, .. } if is_direct => {
                 let mut s = self.state.write().unwrap();
@@ -1620,9 +1627,12 @@ impl RemoteExecutionDispatcher {
         }
     }
 
-    /// Dispatch a SendMessage command: ensure tracker, restore session, start dialog turn.
-    /// Returns `(session_id, turn_id)` on success.
-    /// If `turn_id` is `None`, one is auto-generated.
+    /// Dispatch a SendMessage command: ensure tracker, restore session, submit via
+    /// [`DialogScheduler`](crate::agentic::coordination::DialogScheduler) (same as desktop).
+    /// When the session is already processing, the message is queued and the current turn
+    /// may yield after the current model round (for interactive `submission_policy` sources).
+    /// Returns whether this message started immediately or was only queued, plus ids.
+    /// If `turn_id` is `None`, one is auto-generated before queueing.
     ///
     /// All platforms (desktop, mobile, bot) use the same `ImageContextData` format.
     pub async fn send_message(
@@ -1633,11 +1643,14 @@ impl RemoteExecutionDispatcher {
         image_contexts: Vec<crate::agentic::image_analysis::ImageContextData>,
         submission_policy: crate::agentic::coordination::DialogSubmissionPolicy,
         turn_id: Option<String>,
-    ) -> std::result::Result<(String, String), String> {
-        use crate::agentic::coordination::get_global_coordinator;
+    ) -> std::result::Result<crate::agentic::coordination::DialogSubmitOutcome, String> {
+        use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
 
         let coordinator = get_global_coordinator()
             .ok_or_else(|| "Desktop session system not ready".to_string())?;
+
+        let scheduler = get_global_scheduler()
+            .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
 
         self.ensure_tracker(session_id);
 
@@ -1707,36 +1720,25 @@ impl RemoteExecutionDispatcher {
         let turn_id =
             turn_id.unwrap_or_else(|| format!("turn_{}", chrono::Utc::now().timestamp_millis()));
 
-        if image_contexts.is_empty() {
-            coordinator
-                .start_dialog_turn(
-                    session_id.to_string(),
-                    content.clone(),
-                    None,
-                    Some(turn_id.clone()),
-                    resolved_agent_type,
-                    binding_workspace.clone(),
-                    submission_policy,
-                )
-                .await
-                .map_err(|e| e.to_string())?;
+        let image_payload = if image_contexts.is_empty() {
+            None
         } else {
-            coordinator
-                .start_dialog_turn_with_image_contexts(
-                    session_id.to_string(),
-                    content.clone(),
-                    None,
-                    image_contexts,
-                    Some(turn_id.clone()),
-                    resolved_agent_type,
-                    binding_workspace,
-                    submission_policy,
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-        }
+            Some(image_contexts)
+        };
 
-        Ok((session_id.to_string(), turn_id))
+        scheduler
+            .submit(
+                session_id.to_string(),
+                content,
+                None,
+                Some(turn_id.clone()),
+                resolved_agent_type,
+                binding_workspace,
+                submission_policy,
+                None,
+                image_payload,
+            )
+            .await
     }
 
     /// Cancel a running dialog turn.
@@ -2741,10 +2743,22 @@ impl RemoteServer {
                     )
                     .await
                 {
-                    Ok((sid, turn_id)) => RemoteResponse::MessageSent {
-                        session_id: sid,
-                        turn_id,
-                    },
+                    Ok(outcome) => {
+                        let (sid, turn_id) = match outcome {
+                            crate::agentic::coordination::DialogSubmitOutcome::Started {
+                                session_id,
+                                turn_id,
+                            }
+                            | crate::agentic::coordination::DialogSubmitOutcome::Queued {
+                                session_id,
+                                turn_id,
+                            } => (session_id, turn_id),
+                        };
+                        RemoteResponse::MessageSent {
+                            session_id: sid,
+                            turn_id,
+                        }
+                    }
                     Err(e) => RemoteResponse::Error { message: e },
                 }
             }

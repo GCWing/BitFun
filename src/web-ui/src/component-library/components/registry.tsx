@@ -32,7 +32,6 @@ import { LSDisplay } from '@/flow_chat/tool-cards/LSDisplay';
 import { MCPToolDisplay } from '@/flow_chat/tool-cards/MCPToolDisplay';
 import { MermaidInteractiveDisplay } from '@/flow_chat/tool-cards/MermaidInteractiveDisplay';
 import { ContextCompressionDisplay } from '@/flow_chat/tool-cards/ContextCompressionDisplay';
-import { ImageAnalysisCard } from '@/flow_chat/tool-cards/ImageAnalysisCard';
 import { SkillDisplay } from '@/flow_chat/tool-cards/SkillDisplay';
 import { AskUserQuestionCard } from '@/flow_chat/tool-cards/AskUserQuestionCard';
 import { GitToolDisplay } from '@/flow_chat/tool-cards/GitToolDisplay';
@@ -1579,34 +1578,6 @@ console.log(user.greet());`);
                 undefined,
                 'running'
               )}
-            />
-          </div>
-        ),
-      },
-      {
-        id: 'image-analysis-card',
-        name: 'view_image - 图片分析',
-        description: '图片查看分析工具',
-        category: 'flowchat-cards',
-        component: () => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>图片分析 - 成功</h3>
-            <ImageAnalysisCard
-              toolItem={createMockToolItem('view_image',
-                {
-                  image_path: '/path/to/screenshot.png',
-                  analysis_prompt: '分析界面中的 UI 组件',
-                  focus_areas: ['界面元素', '布局结构', '配色方案']
-                },
-                {
-                  analysis: '截图展示了一个基于 TypeScript 与 React 构建的应用界面，整体包含顶部区域、侧边栏和主内容区。',
-                  model_used: 'gpt-4-vision',
-                  image_path: '/path/to/screenshot.png'
-                },
-                'completed'
-              )}
-              config={TOOL_CARD_CONFIGS['view_image']}
-              sessionId="preview-session"
             />
           </div>
         ),

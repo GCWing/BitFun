@@ -14,9 +14,22 @@ import {
   SessionDerivedState,
 } from './types';
 
-export function deriveSessionState(machine: SessionStateMachine): SessionDerivedState {
+/** Optional live chat input draft while PROCESSING (mirrors input box); used so send mode stays `split` when user has typed a follow-up. */
+export type DeriveSessionOptions = {
+  processingInputDraftTrimmed?: string;
+};
+
+export function deriveSessionState(
+  machine: SessionStateMachine,
+  options?: DeriveSessionOptions
+): SessionDerivedState {
   const { currentState, context } = machine;
   const { processingPhase } = context;
+  const draftTrimmed =
+    currentState === SessionExecutionState.PROCESSING ||
+    currentState === SessionExecutionState.ERROR
+      ? options?.processingInputDraftTrimmed?.trim() ?? ''
+      : '';
 
   const plannerStats = context.planner?.todos
     ?       {
@@ -40,7 +53,13 @@ export function deriveSessionState(machine: SessionStateMachine): SessionDerived
     showSendButton: !isProcessing,
     showCancelButton: isProcessing,
     
-    sendButtonMode: getSendButtonMode(currentState, processingPhase, context.queuedInput, context.pendingToolConfirmations.size > 0),
+    sendButtonMode: getSendButtonMode(
+      currentState,
+      processingPhase,
+      context.queuedInput,
+      context.pendingToolConfirmations.size > 0,
+      draftTrimmed
+    ),
     
     inputPlaceholder: 'How can I help you...',
     
@@ -66,7 +85,11 @@ export function deriveSessionState(machine: SessionStateMachine): SessionDerived
     canCancel: isProcessing,
     canSendNewMessage: isIdle || isError,
     
-    hasQueuedInput: context.queuedInput !== null && context.queuedInput.trim() !== '',
+    hasQueuedInput:
+      (context.queuedInput?.trim()?.length ?? 0) > 0 ||
+      ((currentState === SessionExecutionState.PROCESSING ||
+        currentState === SessionExecutionState.ERROR) &&
+        draftTrimmed.length > 0),
     
     hasError: isError,
     errorType: context.errorMessage ? detectErrorType(context.errorMessage) : null,
@@ -78,17 +101,21 @@ function getSendButtonMode(
   state: SessionExecutionState,
   phase: ProcessingPhase | null,
   queuedInput: string | null,
-  hasPendingConfirmations: boolean
+  hasPendingConfirmations: boolean,
+  processingDraftTrimmed: string
 ): SessionDerivedState['sendButtonMode'] {
   if (state === SessionExecutionState.ERROR) {
-    return queuedInput ? 'split' : 'retry';
+    const hasQueued = (queuedInput?.trim()?.length ?? 0) > 0 || processingDraftTrimmed.length > 0;
+    return hasQueued ? 'split' : 'retry';
   }
 
   if (state === SessionExecutionState.PROCESSING) {
     if (phase === ProcessingPhase.TOOL_CONFIRMING || hasPendingConfirmations) {
       return 'confirm';
     }
-    return queuedInput ? 'split' : 'cancel';
+    const hasFollowUpDraft =
+      (queuedInput?.trim()?.length ?? 0) > 0 || processingDraftTrimmed.length > 0;
+    return hasFollowUpDraft ? 'split' : 'cancel';
   }
 
   return 'send';
