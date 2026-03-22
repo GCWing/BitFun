@@ -1,7 +1,7 @@
 /**
  * Remote Connect dialog with two independent groups:
  *   - Network (LAN / Ngrok / BitFun Server / Custom Server) – mutually exclusive
- *   - SMS Bot (Telegram / Feishu) – mutually exclusive
+ *   - IM Bot (Telegram / Feishu) – mutually exclusive
  * Both groups can be active simultaneously.
  */
 

@@ -34,7 +34,7 @@ Credentials & Basic Info - Copy App ID and App Secret
 
 ### Step6
 
-Open BitFun - Remote Connect - SMS Bot - Feishu Bot - Fill in App ID and App Secret - Connect
+Open BitFun - Remote Connect - IM Bot - Feishu Bot - Fill in App ID and App Secret - Connect
 
 ### Step7
 
