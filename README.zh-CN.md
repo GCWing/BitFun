@@ -114,15 +114,7 @@ Mini Apps 从对话中涌现，Skills 在社区里更新，Agent 在协作中进
 - [Rust 工具链](https://rustup.rs/)
 - [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)（桌面端开发需要）
 
-**Windows 特别说明**：桌面端包含 SSH 远程功能，依赖 OpenSSL。构建前请下载 [FireDaemon OpenSSL 3.5.5 LTS ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后在 PowerShell 中执行：
-
-```powershell
-[System.Environment]::SetEnvironmentVariable("OPENSSL_DIR", "C:\解压路径\openssl\x64", "User")
-[System.Environment]::SetEnvironmentVariable("OPENSSL_NO_VENDOR", "1", "User")
-[System.Environment]::SetEnvironmentVariable("OPENSSL_STATIC", "1", "User")
-```
-
-执行后重启终端再运行构建命令。
+**Windows 特别说明**：桌面使用**预编译 OpenSSL**（不编译 OpenSSL 源码）。`desktop:dev` 与全部 `desktop:build*` 会通过 `ensure-openssl-windows.mjs`（构建走 `desktop-tauri-build.mjs`）自动准备：首次需要时下载 [FireDaemon OpenSSL 3.5.5](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip) 到 `.bitfun/cache/`，之后复用缓存。可自行设置 `OPENSSL_DIR` 为 ZIP 内 **`x64`** 目录，或 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_*`。
 
 ```bash
 # 安装依赖

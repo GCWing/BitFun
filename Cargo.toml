@@ -78,10 +78,10 @@ flate2 = "1.0"
 toml = "0.8"
 
 # Git
-git2 = { version = "0.18", default-features = false, features = ["https", "vendored-libgit2", "vendored-openssl"] }
+git2 = { version = "0.18", default-features = false, features = ["https", "vendored-libgit2"] }
 
-# OpenSSL — vendored so no system OpenSSL is needed (required by russh-keys on Windows)
-openssl = { version = "0.10", features = ["vendored"] }
+# OpenSSL — Linux/macOS: `bitfun-core` adds `vendored` via target cfg. Windows: link prebuilt (OPENSSL_DIR); see README.
+openssl = { version = "0.10" }
 
 # Terminal
 portable-pty = "0.8"

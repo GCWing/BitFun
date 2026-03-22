@@ -19,21 +19,12 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 
 #### Windows: OpenSSL Setup
 
-The desktop app includes SSH remote support, which requires OpenSSL. On Windows, you need to provide pre-built OpenSSL binaries and set environment variables before building.
+The desktop app includes SSH remote support, which pulls in OpenSSL. On Windows the workspace **does not use vendored OpenSSL**; link against **pre-built** binaries (no Perl/NASM/OpenSSL source build).
 
-1. Download the [FireDaemon OpenSSL 3.5.5 LTS ZIP (x86+x64+ARM64)](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)
-2. Extract to a directory, e.g. `C:\Users\<you>\openssl`
-3. Set the following **user environment variables** (persist across terminal sessions):
-
-```powershell
-[System.Environment]::SetEnvironmentVariable("OPENSSL_DIR", "C:\Users\<you>\openssl\x64", "User")
-[System.Environment]::SetEnvironmentVariable("OPENSSL_NO_VENDOR", "1", "User")
-[System.Environment]::SetEnvironmentVariable("OPENSSL_STATIC", "1", "User")
-```
-
-4. Restart your terminal (or IDE) for the variables to take effect.
-
-> **Alternative**: Install [Strawberry Perl](https://strawberryperl.com/) to let Cargo build OpenSSL from source automatically — no environment variables needed.
+- **Default**: `pnpm run desktop:dev` calls `ensure-openssl-windows.mjs` on Windows. Every `desktop:build*` script runs via `scripts/desktop-tauri-build.mjs`, which does the same before `tauri build` (first run downloads FireDaemon OpenSSL 3.5.5 into `.bitfun/cache/`; later runs reuse the cache). Extra args: `pnpm run desktop:build -- <tauri-build-args>`.
+- **Manual / CI**: Download the [FireDaemon OpenSSL 3.5.5 LTS ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip), extract, set `OPENSSL_DIR` to the `x64` folder, `OPENSSL_STATIC=1`, or run `scripts/ci/setup-openssl-windows.ps1`.
+- **Opt out of auto-download**: `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and configure `OPENSSL_DIR` yourself.
+- **`desktop:dev:raw`** skips the dev script (no OpenSSL bootstrap); set `OPENSSL_DIR` yourself, run `scripts/ci/setup-openssl-windows.ps1`, or `node scripts/ensure-openssl-windows.mjs` (warms `.bitfun/cache/` and prints PowerShell `OPENSSL_*` lines to paste).
 
 ### Install dependencies
 

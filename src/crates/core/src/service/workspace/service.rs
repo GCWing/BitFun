@@ -1379,9 +1379,21 @@ impl WorkspaceService {
     async fn ensure_assistant_workspaces(&self) -> BitFunResult<()> {
         let descriptors = self.discover_assistant_workspaces().await?;
         let mut has_current_workspace = self.get_current_workspace().await.is_some();
+        let has_opened_remote = {
+            let manager = self.manager.read().await;
+            manager
+                .get_opened_workspace_infos()
+                .iter()
+                .any(|w| w.workspace_kind == WorkspaceKind::Remote)
+        };
 
         for descriptor in descriptors {
-            let should_activate = !has_current_workspace && descriptor.assistant_id.is_none();
+            // If a remote workspace tab exists but nothing is current yet (e.g. pending SSH
+            // reconnect), do not auto-activate the default assistant workspace — that would look
+            // like a spurious new local workspace.
+            let should_activate = !has_current_workspace
+                && !has_opened_remote
+                && descriptor.assistant_id.is_none();
             let options = WorkspaceCreateOptions {
                 auto_set_current: should_activate,
                 add_to_recent: false,

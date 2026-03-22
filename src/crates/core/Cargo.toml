@@ -127,6 +127,11 @@ bitfun-transport = { path = "../transport" }
 # Tauri dependency (optional, enabled only when needed)
 tauri = { workspace = true, optional = true }
 
+# Non-Windows: vendored OpenSSL (no system install). Windows: prebuilt OpenSSL via OPENSSL_DIR (see README).
+[target.'cfg(not(windows))'.dependencies]
+git2 = { workspace = true, features = ["vendored-openssl"] }
+openssl = { workspace = true, optional = true, features = ["vendored"] }
+
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
 

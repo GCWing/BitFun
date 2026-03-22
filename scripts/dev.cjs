@@ -7,6 +7,7 @@
 
 const { execSync, spawn } = require('child_process');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const {
   printHeader,
   printSuccess,
@@ -177,7 +178,20 @@ async function main() {
   
   try {
     if (mode === 'desktop') {
-      await runCommand('npx tauri dev', path.join(ROOT_DIR, 'src/apps/desktop'));
+      if (process.platform === 'win32') {
+        printInfo('Windows: ensuring prebuilt OpenSSL (cached under .bitfun/cache/)');
+        try {
+          const { ensureOpenSslWindows } = await import(
+            pathToFileURL(path.join(__dirname, 'ensure-openssl-windows.mjs')).href
+          );
+          await ensureOpenSslWindows();
+        } catch (error) {
+          printError('OpenSSL bootstrap failed');
+          printError(error.message || String(error));
+          process.exit(1);
+        }
+      }
+      await runCommand('pnpm exec tauri dev', path.join(ROOT_DIR, 'src/apps/desktop'));
     } else {
       await runCommand('pnpm exec vite', path.join(ROOT_DIR, 'src/web-ui'));
     }

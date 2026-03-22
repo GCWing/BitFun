@@ -88,6 +88,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup OpenSSL (Windows, prebuilt)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/ci/setup-openssl-windows.ps1
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 

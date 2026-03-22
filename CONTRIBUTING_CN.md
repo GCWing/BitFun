@@ -19,21 +19,12 @@
 
 #### Windows：OpenSSL 配置
 
-桌面端包含 SSH 远程功能，该功能依赖 OpenSSL。在 Windows 上需要提供预编译的 OpenSSL 并设置环境变量，才能正常编译。
+桌面端包含 SSH 远程功能，会链接 OpenSSL。Windows 上**不使用 OpenSSL 源码编译（vendored）**，需使用**预编译**库。
 
-1. 下载 [FireDaemon OpenSSL 3.5.5 LTS ZIP（x86+x64+ARM64）](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)
-2. 解压到任意目录，例如 `C:\Users\<用户名>\openssl`
-3. 在 PowerShell 中执行以下命令，将环境变量**永久写入用户环境**：
-
-```powershell
-[System.Environment]::SetEnvironmentVariable("OPENSSL_DIR", "C:\Users\<用户名>\openssl\x64", "User")
-[System.Environment]::SetEnvironmentVariable("OPENSSL_NO_VENDOR", "1", "User")
-[System.Environment]::SetEnvironmentVariable("OPENSSL_STATIC", "1", "User")
-```
-
-4. 重启终端（或 IDE）使环境变量生效。
-
-> **备选方案**：安装 [Strawberry Perl](https://strawberryperl.com/)，Cargo 会自动从源码编译 OpenSSL，无需配置环境变量。
+- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。额外参数：`pnpm run desktop:build -- <tauri build 参数>`。
+- **手动 / CI**：下载 [FireDaemon ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后将 `OPENSSL_DIR` 指向 `x64`，并设 `OPENSSL_STATIC=1`，或运行 `scripts/ci/setup-openssl-windows.ps1`。
+- **关闭自动下载**：设置 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_DIR`。
+- **`desktop:dev:raw`** 不经过 `dev.cjs`（无 OpenSSL 引导）；请自行设置 `OPENSSL_DIR`、运行 `scripts/ci/setup-openssl-windows.ps1`，或执行 `node scripts/ensure-openssl-windows.mjs`（会预热 `.bitfun/cache/` 并打印可在 PowerShell 中粘贴的 `OPENSSL_*` 命令）。
 
 ### 安装依赖
 

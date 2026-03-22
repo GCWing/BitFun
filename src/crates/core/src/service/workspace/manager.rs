@@ -978,7 +978,8 @@ impl WorkspaceManager {
     }
 
     fn find_next_workspace_id_after_close(&self, preferred_kind: &WorkspaceKind) -> Option<String> {
-        self.opened_workspace_ids
+        let same_kind = self
+            .opened_workspace_ids
             .iter()
             .find(|id| {
                 self.workspaces
@@ -986,8 +987,20 @@ impl WorkspaceManager {
                     .map(|workspace| &workspace.workspace_kind == preferred_kind)
                     .unwrap_or(false)
             })
-            .cloned()
-            .or_else(|| self.opened_workspace_ids.first().cloned())
+            .cloned();
+
+        if same_kind.is_some() {
+            return same_kind;
+        }
+
+        // Closing the last remote workspace (e.g. SSH password session could not auto-reconnect)
+        // must not activate an unrelated local project; leave current unset until the user picks
+        // a workspace or reconnects.
+        if *preferred_kind == WorkspaceKind::Remote {
+            return None;
+        }
+
+        self.opened_workspace_ids.first().cloned()
     }
 
     /// Ensures a workspace stays in the opened list.
