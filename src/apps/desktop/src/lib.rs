@@ -124,6 +124,8 @@ pub async fn run() {
                 .level_for("globset", log::LevelFilter::Off)
                 .level_for("hyper_util", log::LevelFilter::Info)
                 .level_for("h2", log::LevelFilter::Info)
+                .level_for("portable_pty", log::LevelFilter::Info)
+                .level_for("russh", log::LevelFilter::Info)
                 .targets(log_targets)
                 .rotation_strategy(RotationStrategy::KeepSome(30))
                 .max_file_size(10 * 1024 * 1024)

@@ -15,17 +15,24 @@ import { initializeAllTools } from "./tools";
 import { initContextMenuSystem } from "./shared/context-menu-system";
 import { loader } from '@monaco-editor/react';
 import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from './tools/editor/utils/monacoPathHelper';
-import { createLogger } from './shared/utils/logger';
+import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger';
+import {
+  buildReactCrashLogPayload,
+  isMinifiedReactErrorMessage,
+} from './shared/utils/reactProductionError';
+
+// Install console forwarding before app startup so early console output is persisted too.
+bootstrapLogger();
 
 const log = createLogger('App');
 
-// Crash log deduplication flag
-const CRASH_LOGGED_FLAG = '__bitfun_frontend_crash_logged__';
-function hasLoggedCrash(): boolean {
-  return Boolean((window as any)[CRASH_LOGGED_FLAG]);
+/** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
+const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';
+function hasLoggedWhiteScreenCrash(): boolean {
+  return Boolean((window as any)[WHITE_SCREEN_LOGGED_FLAG]);
 }
-function markCrashLogged(): void {
-  (window as any)[CRASH_LOGGED_FLAG] = true;
+function markWhiteScreenCrashLogged(): void {
+  (window as any)[WHITE_SCREEN_LOGGED_FLAG] = true;
 }
 
 function serializeError(err: unknown): Record<string, unknown> {
@@ -60,8 +67,8 @@ function registerGlobalErrorHandlers() {
     queueMicrotask(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (isRootEmpty() && !hasLoggedCrash()) {
-            markCrashLogged();
+          if (isRootEmpty() && !hasLoggedWhiteScreenCrash()) {
+            markWhiteScreenCrashLogged();
             log.error('[CRASH] Application crashed', {
               location: payload.location,
               message: payload.message,
@@ -77,9 +84,23 @@ function registerGlobalErrorHandlers() {
     'error',
     (event: Event) => {
       if (event instanceof ErrorEvent) {
+        const msg = event.message || '';
+        // Minified React errors often reach window.error even when #root is not empty;
+        // always persist so production builds get react.dev/errors/{code} in webview.log.
+        if (isMinifiedReactErrorMessage(msg)) {
+          const err =
+            event.error instanceof Error ? event.error : new Error(msg);
+          log.error('[CRASH] window:error (minified React)', {
+            location: 'window:error',
+            ...buildReactCrashLogPayload(err),
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno,
+          });
+        }
         scheduleCrashLog({
           location: 'window:error',
-          message: event.message || 'window error',
+          message: msg || 'window error',
           data: {
             filename: event.filename,
             lineno: event.lineno,
@@ -106,6 +127,20 @@ function registerGlobalErrorHandlers() {
   );
 
   window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+    const reason = event.reason;
+    const msg =
+      reason instanceof Error
+        ? reason.message
+        : typeof reason === 'string'
+          ? reason
+          : '';
+    if (isMinifiedReactErrorMessage(msg)) {
+      const err = reason instanceof Error ? reason : new Error(msg);
+      log.error('[CRASH] unhandledrejection (minified React)', {
+        location: 'window:unhandledrejection',
+        ...buildReactCrashLogPayload(err),
+      });
+    }
     scheduleCrashLog({
       location: 'window:unhandledrejection',
       message: 'unhandled rejection',
@@ -181,8 +216,7 @@ const DEFAULT_WORKER = 'base/worker/workerMain.js';
 // Initialize app.
 async function initializeApp() {
   try {
-    // Initialize logger first (attaches console in dev mode)
-    const { initLogger } = await import('./shared/utils/logger');
+    // Initialize logger state before startup logs.
     await initLogger();
 
     // Sync frontend logger with app.logging.level before startup logs.

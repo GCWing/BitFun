@@ -10,7 +10,6 @@ import {
   info as tauriInfo,
   warn as tauriWarn,
   error as tauriError,
-  attachConsole,
 } from '@tauri-apps/plugin-log';
 
 export enum LogLevel {
@@ -34,26 +33,131 @@ export interface LogEntry {
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV === 'development';
 
+const CONSOLE_FORWARD_INSTALLED = '__bitfun_console_forward_installed__';
+
+function formatConsoleArg(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (typeof value === 'symbol') return value.toString();
+  if (value instanceof Error) return value.stack || `${value.name}: ${value.message}`;
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      try {
+        return Object.prototype.toString.call(value);
+      } catch {
+        return '[Object]';
+      }
+    }
+  }
+  return String(value);
+}
+
+function formatConsoleArgs(args: unknown[]): string {
+  return args.map(formatConsoleArg).join(' ');
+}
+
+/**
+ * Patch `console.*` so messages also go through `tauri_plugin_log` (webview target → webview.log).
+ */
+function installWebviewConsoleForward(): void {
+  if (!isTauri || typeof window === 'undefined') return;
+  const w = window as unknown as Record<string, boolean | undefined>;
+  if (w[CONSOLE_FORWARD_INSTALLED]) return;
+
+  const c = window.console;
+  const orig = {
+    log: c.log.bind(c),
+    debug: c.debug.bind(c),
+    info: c.info.bind(c),
+    warn: c.warn.bind(c),
+    error: c.error.bind(c),
+    trace: c.trace.bind(c),
+  };
+
+  const forward = (
+    kind: 'log' | 'debug' | 'info' | 'warn' | 'error' | 'trace',
+    args: unknown[]
+  ) => {
+    const msg = `[console] ${formatConsoleArgs(args)}`;
+    switch (kind) {
+      case 'log':
+      case 'info':
+        void tauriInfo(msg).catch(() => {});
+        break;
+      case 'debug':
+        void tauriDebug(msg).catch(() => {});
+        break;
+      case 'trace':
+        void tauriTrace(msg).catch(() => {});
+        break;
+      case 'warn':
+        void tauriWarn(msg).catch(() => {});
+        break;
+      case 'error':
+        void tauriError(msg).catch(() => {});
+        break;
+    }
+  };
+
+  c.log = (...args: unknown[]) => {
+    forward('log', args);
+    orig.log(...args);
+  };
+  c.info = (...args: unknown[]) => {
+    forward('info', args);
+    orig.info(...args);
+  };
+  c.debug = (...args: unknown[]) => {
+    forward('debug', args);
+    orig.debug(...args);
+  };
+  c.trace = (...args: unknown[]) => {
+    forward('trace', args);
+    orig.trace(...args);
+  };
+  c.warn = (...args: unknown[]) => {
+    forward('warn', args);
+    orig.warn(...args);
+  };
+  c.error = (...args: unknown[]) => {
+    forward('error', args);
+    orig.error(...args);
+  };
+
+  (window as unknown as Record<string, boolean | undefined>)[CONSOLE_FORWARD_INSTALLED] = true;
+}
+
+/**
+ * Install console forwarding as early as possible so startup logs are persisted too.
+ */
+export function bootstrapLogger(): void {
+  if (!isTauri) return;
+  try {
+    installWebviewConsoleForward();
+  } catch (e) {
+    console.warn('[Logger] Failed to install console forwarding:', e);
+  }
+}
+
 // Logger initialization state
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
 /**
- * Initialize logger - attaches console listener in dev mode
- * Call this once at app startup
+ * Initialize logger state and ensure console forwarding is installed.
  */
 export async function initLogger(): Promise<void> {
   if (initialized) return;
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    if (isTauri && isDev) {
-      try {
-        await attachConsole();
-      } catch (e) {
-        console.warn('[Logger] Failed to attach console:', e);
-      }
-    }
+    bootstrapLogger();
     initialized = true;
   })();
 

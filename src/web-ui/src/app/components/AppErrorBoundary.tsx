@@ -1,17 +1,9 @@
 import { Component, ReactNode } from 'react';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
+import { buildReactCrashLogPayload } from '@/shared/utils/reactProductionError';
 
 const log = createLogger('AppErrorBoundary');
-
-// Crash log deduplication flag (shared with main.tsx)
-const CRASH_LOGGED_FLAG = '__bitfun_frontend_crash_logged__';
-function hasLoggedCrash(): boolean {
-  return Boolean((window as any)[CRASH_LOGGED_FLAG]);
-}
-function markCrashLogged(): void {
-  (window as any)[CRASH_LOGGED_FLAG] = true;
-}
 
 interface Props {
   children: ReactNode;
@@ -21,17 +13,6 @@ interface State {
   hasError: boolean;
   error?: Error;
   errorInfo?: any;
-}
-
-function serializeError(err: unknown): Record<string, unknown> {
-  if (err instanceof Error) {
-    return {
-      name: err.name,
-      message: err.message,
-      stack: err.stack,
-    };
-  }
-  return { value: String(err) };
 }
 
 export class AppErrorBoundary extends Component<Props, State> {
@@ -46,13 +27,12 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: any) {
     this.setState({ error, errorInfo });
-    if (!hasLoggedCrash()) {
-      markCrashLogged();
-      log.error('[CRASH] React error boundary caught exception', {
-        error: serializeError(error),
-        errorInfo,
-      });
-    }
+    // Log every boundary capture (do not share a session-wide flag with main.tsx:
+    // a second distinct error would otherwise be suppressed).
+    log.error(
+      '[CRASH] React error boundary caught exception',
+      buildReactCrashLogPayload(error, errorInfo)
+    );
   }
 
   handleReload = () => {
