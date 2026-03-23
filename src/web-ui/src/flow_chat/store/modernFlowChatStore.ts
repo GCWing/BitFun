@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowTextItem } from '../types/flow-chat';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES } from '../tool-cards';
 
 /**
@@ -29,11 +29,6 @@ export interface ExploreGroupData {
   stats: ExploreGroupStats;
   isGroupStreaming: boolean;
   isLastGroupInTurn: boolean;
-  /**
-   * When true, ExploreGroupRenderer auto-collapses after a critical follow-up round (e.g. Mermaid).
-   * Set false if the group contains assistant `text` items so narrative stays visible.
-   */
-  isFollowedByCritical: boolean;
 }
 
 /**
@@ -133,18 +128,6 @@ function computeRoundStats(round: ModelRound): { readCount: number; searchCount:
   }
   
   return { readCount, searchCount, thinkingCount };
-}
-
-/**
- * True when the merged explore group includes assistant markdown/text with real content.
- * Auto-collapse on "followed by critical tool" must not hide this narrative.
- */
-function exploreGroupHasNarrativeText(items: FlowItem[]): boolean {
-  return items.some(
-    (item) =>
-      item.type === 'text' &&
-      String((item as FlowTextItem).content || '').trim().length > 0
-  );
 }
 
 let cachedSession: Session | null = null;
@@ -254,25 +237,6 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       
       if (group && group.startIndex === roundIndex) {
         const isLastGroup = groupIndex === tempGroups.length - 1;
-        
-        let isFollowedByCritical = false;
-        const nextRoundIndex = group.endIndex + 1;
-        if (nextRoundIndex < nonEmptyRounds.length) {
-          const nextRound = nonEmptyRounds[nextRoundIndex];
-          
-          const hasAnyTool = nextRound.items.some(item => item.type === 'tool');
-          
-          if (nextRound.isStreaming && !hasAnyTool) {
-            isFollowedByCritical = false;
-          } else {
-            isFollowedByCritical = !isExploreOnlyRound(nextRound);
-          }
-        }
-
-        if (exploreGroupHasNarrativeText(group.allItems)) {
-          isFollowedByCritical = false;
-        }
-        
         const isGroupStreaming = group.rounds.some(r => r.isStreaming);
         
         items.push({
@@ -285,7 +249,6 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             stats: { readCount: group.readCount, searchCount: group.searchCount, thinkingCount: group.thinkingCount },
             isGroupStreaming,
             isLastGroupInTurn: isLastGroup,
-            isFollowedByCritical,
           }
         });
         

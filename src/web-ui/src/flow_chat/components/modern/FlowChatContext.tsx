@@ -27,8 +27,8 @@ export interface FlowChatContextValue {
 
   // ========== Explore group collapse state ==========
   /**
-   * User expansion state for explore groups.
-   * key: groupId, value: true means user expanded manually.
+   * Expanded/collapsed state for explore groups.
+   * key: groupId, value: true means expanded.
    */
   exploreGroupStates?: Map<string, boolean>;
 
