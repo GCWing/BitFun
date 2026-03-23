@@ -1680,6 +1680,7 @@ impl RemoteExecutionDispatcher {
         // exists and the 30-second readiness wait is skipped entirely.
         {
             use terminal_core::{TerminalApi, TerminalBindingOptions};
+            use terminal_core::session::SessionSource;
             let sid = session_id.to_string();
             let binding_workspace_for_terminal = binding_workspace.clone();
             tokio::spawn(async move {
@@ -1702,6 +1703,7 @@ impl RemoteExecutionDispatcher {
                             env: Some(
                                 crate::agentic::tools::implementations::bash_tool::BashTool::noninteractive_env(),
                             ),
+                            source: Some(SessionSource::Agent),
                             ..Default::default()
                         },
                     )

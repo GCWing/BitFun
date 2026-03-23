@@ -74,6 +74,13 @@ export interface WorkspaceIdentity {
   modelFast?: string;
 }
 
+export interface WorkspaceWorktreeInfo {
+  path: string;
+  branch?: string | null;
+  mainRepoPath: string;
+  isMain: boolean;
+}
+
 
 export interface WorkspaceInfo {
   id: string;
@@ -89,12 +96,21 @@ export interface WorkspaceInfo {
   tags: string[];
   statistics?: ProjectStatistics;
   identity?: WorkspaceIdentity | null;
+  worktree?: WorkspaceWorktreeInfo | null;
   connectionId?: string;
   connectionName?: string;
 }
 
 export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
   return workspace?.workspaceKind === WorkspaceKind.Remote;
+}
+
+export function isWorktreeWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
+  return Boolean(workspace?.worktree);
+}
+
+export function isLinkedWorktreeWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
+  return Boolean(workspace?.worktree && !workspace.worktree.isMain);
 }
 
 
@@ -234,6 +250,21 @@ function mapWorkspaceIdentity(
   };
 }
 
+function mapWorkspaceWorktree(
+  worktree: APIWorkspaceInfo['worktree']
+): WorkspaceWorktreeInfo | null | undefined {
+  if (!worktree) {
+    return worktree;
+  }
+
+  return {
+    path: worktree.path,
+    branch: worktree.branch ?? undefined,
+    mainRepoPath: worktree.mainRepoPath,
+    isMain: worktree.isMain,
+  };
+}
+
 function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
   return {
     id: workspace.id,
@@ -258,6 +289,7 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
         }
       : undefined,
     identity: mapWorkspaceIdentity(workspace.identity),
+    worktree: mapWorkspaceWorktree(workspace.worktree),
     connectionId: workspace.connectionId,
     connectionName: workspace.connectionName,
   };

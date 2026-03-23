@@ -21,7 +21,7 @@ export const STORAGE_KEYS = {
   MODEL_CONFIGS: 'bitfun-model-configs',
   CHAT_HISTORY: 'bitfun-chat-history',
   DIFF_CLOSE_WARNING_DISABLED: 'bitfun-diff-close-warning-disabled',
-  TERMINAL_HUB_CONFIG: 'bitfun-terminal-hub-config'
+  MANUAL_TERMINAL_PROFILES: 'bitfun-manual-terminal-profiles'
 } as const;
 
 

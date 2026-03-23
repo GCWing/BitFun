@@ -116,33 +116,30 @@
     "shell": {
       "title": "Shell",
       "views": {
-        "all": "All",
-        "hub": "Hub"
+        "manual": "Mine",
+        "agent": "Agent"
       },
       "actions": {
         "newTerminal": "New Terminal",
-        "newHubTerminal": "New Hub Terminal",
-        "addWorktree": "Add Worktree",
         "refresh": "Refresh"
       },
       "context": {
         "start": "Start",
         "stop": "Stop",
-        "edit": "Edit",
         "editConfig": "Edit Config",
+        "saveConfig": "Save Config",
+        "deleteSavedTerminal": "Delete Saved Terminal",
         "delete": "Delete",
-        "close": "Close",
-        "rename": "Rename",
-        "promoteToHub": "Save to Hub",
-        "newWorktreeTerminal": "New Terminal",
-        "removeWorktree": "Remove Worktree"
+        "close": "Close"
       },
       "badges": {
-        "startupCommand": "cmd"
+        "startupCommand": "cmd",
+        "saved": "saved",
+        "default": "Default"
       },
       "empty": {
-        "all": "Create a terminal from the menu to get started",
-        "hub": "No Hub terminals yet"
+        "manual": "No user terminals yet",
+        "agent": "No agent terminals yet"
       }
     },
     "sessions": {
@@ -268,7 +265,11 @@
       "copyPathFailed": "Failed to copy path",
       "createSessionFailed": "Failed to create session",
       "worktreeCreated": "Worktree created",
+      "worktreeCreatedAndOpened": "Worktree created and opened",
       "worktreeCreateFailed": "Failed to create worktree: {{error}}",
+      "worktreeCreateOrOpenFailed": "Worktree was created, but opening it as a workspace failed: {{error}}",
+      "worktreeDeleted": "Worktree deleted",
+      "deleteWorktreeFailed": "Failed to delete worktree",
       "expandSessions": "Expand sessions",
       "collapseSessions": "Collapse sessions",
       "groups": {
@@ -284,6 +285,7 @@
         "deleteAssistant": "Delete personal assistant",
         "resetWorkspace": "Reset workspace",
         "newWorktree": "New worktree",
+        "deleteWorktree": "Delete worktree",
         "copyPath": "Copy path",
         "reveal": "Reveal in explorer",
         "close": "Close workspace"
@@ -297,6 +299,11 @@
         "title": "Reset {{name}}?",
         "message": "This will clear everything inside the workspace directory and restore the default persona files without deleting the workspace directory itself.",
         "pathLabel": "Workspace path"
+      },
+      "deleteWorktreeDialog": {
+        "title": "Delete {{name}}?",
+        "message": "This will close the workspace and remove the worktree directory.",
+        "pathLabel": "Worktree path"
       }
     },
     "agents": {

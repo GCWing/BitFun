@@ -47,7 +47,8 @@ pub use pty::{
 };
 pub use session::{
     CommandCompletionReason, CommandExecuteResult, CommandStream, CommandStreamEvent,
-    ExecuteOptions, SessionManager, SessionStatus, TerminalBindingOptions, TerminalSession,
+    ExecuteOptions, SessionManager, SessionSource, SessionStatus, TerminalBindingOptions,
+    TerminalSession,
     TerminalSessionBinding,
 };
 pub use shell::{

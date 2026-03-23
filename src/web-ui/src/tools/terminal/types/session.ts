@@ -4,6 +4,8 @@
 
 export type SessionStatus = 'Running' | 'Stopped' | 'Exited' | 'Error';
 
+export type TerminalSessionSource = 'manual' | 'agent';
+
 export type ShellType = 
   | 'PowerShell' 
   | 'Cmd' 
@@ -20,6 +22,7 @@ export interface CreateSessionRequest {
   env?: Record<string, string>;
   cols?: number;
   rows?: number;
+  source?: TerminalSessionSource;
 }
 
 export interface SessionResponse {
@@ -32,6 +35,7 @@ export interface SessionResponse {
   cols: number;
   rows: number;
   connectionId?: string;
+  source: TerminalSessionSource;
 }
 
 export interface ShellInfo {

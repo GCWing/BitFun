@@ -1,2 +1,4 @@
+export * from './useManualTerminalProfiles';
 export * from './useShellEntries';
-export * from './useWorktrees';
+export * from './useTerminalSessions';
+export type { SaveShellEntryInput, ShellEntry, ShellEntryKind } from './shellEntryTypes';

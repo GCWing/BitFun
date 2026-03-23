@@ -1,61 +1,19 @@
 {
   "title": "终端",
   "emptyState": "从 Shell 导航中打开终端",
-  "actions": {
-    "refresh": "刷新终端列表",
-    "newTerminal": "新建终端",
-    "newWorktree": "新建 Worktree",
-    "edit": "编辑",
-    "stopTerminal": "停止终端",
-    "deleteTerminal": "删除终端",
-    "closeTerminal": "关闭终端",
-    "deleteWorktree": "删除 Worktree"
-  },
-  "sections": {
-    "terminalHub": "终端工坊",
-    "terminals": "终端会话"
-  },
-  "status": {
-    "running": "运行中",
-    "idle": "空闲"
-  },
-  "worktree": {
-    "count": "{{count}}",
-    "terminalsCount": "{{count}} 个终端"
-  },
   "dialog": {
-    "deleteWorktree": {
-      "title": "确认删除",
-      "message": "确定要删除 Worktree 吗？",
-      "hint": "此操作将关闭该 Worktree 下的所有终端并删除工作目录。",
-      "cancel": "取消",
-      "confirm": "删除"
-    },
     "editTerminal": {
       "title": "编辑终端",
       "nameLabel": "名称",
       "namePlaceholder": "终端名称",
+      "workingDirectoryLabel": "启动路径",
+      "workingDirectoryPlaceholder": "终端启动时打开的路径",
+      "workingDirectoryHint": "重新打开已保存的终端时会使用这个路径",
       "startupCommandLabel": "启动命令（可选）",
       "startupCommandPlaceholder": "终端启动后自动执行的命令",
       "startupCommandHint": "终端启动后将自动执行此命令",
       "cancel": "取消",
       "save": "保存"
     }
-  },
-  "notifications": {
-    "loadSessionsFailed": "加载会话列表失败",
-    "connectFailed": "连接终端服务失败",
-    "createFailed": "创建终端失败",
-    "startFailed": "启动终端失败",
-    "stopFailed": "停止终端失败",
-    "deleteWorktreeFailed": "删除 worktree 失败: 目录可能仍被占用，请手动关闭相关程序后重试",
-    "addWorktreeFailed": "创建 worktree 失败: {{error}}",
-    "notGitRepo": "当前目录不是 Git 仓库"
-  },
-  "branch": {
-    "selectBranch": "选择分支",
-    "createNew": "创建新分支",
-    "existingBranches": "已有分支",
-    "branchName": "分支名称"
   }
 }

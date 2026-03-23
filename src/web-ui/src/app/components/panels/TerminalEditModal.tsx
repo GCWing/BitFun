@@ -11,9 +11,11 @@ import './TerminalEditModal.scss';
 export interface TerminalEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (name: string, startupCommand?: string) => void;
+  onSave: (input: { name: string; workingDirectory?: string; startupCommand?: string }) => void;
   initialName: string;
+  initialWorkingDirectory?: string;
   initialStartupCommand?: string;
+  showWorkingDirectory?: boolean;
   showStartupCommand?: boolean;
 }
 
@@ -22,24 +24,28 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
   onClose,
   onSave,
   initialName,
+  initialWorkingDirectory = '',
   initialStartupCommand = '',
+  showWorkingDirectory = true,
   showStartupCommand = true,
 }) => {
   const { t } = useI18n('panels/terminal');
   const [name, setName] = useState(initialName);
+  const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory);
   const [startupCommand, setStartupCommand] = useState(initialStartupCommand);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setName(initialName);
+      setWorkingDirectory(initialWorkingDirectory);
       setStartupCommand(initialStartupCommand);
       setTimeout(() => {
         nameInputRef.current?.focus();
         nameInputRef.current?.select();
       }, 100);
     }
-  }, [isOpen, initialName, initialStartupCommand]);
+  }, [initialName, initialStartupCommand, initialWorkingDirectory, isOpen]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -55,10 +61,15 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
     const trimmedName = name.trim();
     if (!trimmedName) return;
 
+    const trimmedWorkingDirectory = workingDirectory.trim();
     const trimmedCommand = startupCommand.trim();
-    onSave(trimmedName, trimmedCommand || undefined);
+    onSave({
+      name: trimmedName,
+      workingDirectory: trimmedWorkingDirectory || undefined,
+      startupCommand: trimmedCommand || undefined,
+    });
     onClose();
-  }, [name, startupCommand, onSave, onClose]);
+  }, [name, onClose, onSave, startupCommand, workingDirectory]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -80,6 +91,17 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={t('dialog.editTerminal.namePlaceholder')}
         />
+
+        {showWorkingDirectory ? (
+          <Input
+            label={t('dialog.editTerminal.workingDirectoryLabel')}
+            value={workingDirectory}
+            onChange={(e) => setWorkingDirectory(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('dialog.editTerminal.workingDirectoryPlaceholder')}
+            hint={t('dialog.editTerminal.workingDirectoryHint')}
+          />
+        ) : null}
 
         {showStartupCommand ? (
           <Input

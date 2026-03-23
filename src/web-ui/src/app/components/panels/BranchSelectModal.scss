@@ -270,10 +270,17 @@
 .branch-select-dialog__footer {
   flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 12px 16px 16px;
   border-top: 1px solid var(--border-subtle);
+}
+
+.branch-select-dialog__options {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .branch-select-dialog__btn {

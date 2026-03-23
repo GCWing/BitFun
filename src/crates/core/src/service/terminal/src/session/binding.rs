@@ -17,6 +17,7 @@ use dashmap::DashMap;
 use log::warn;
 
 use crate::session::get_session_manager;
+use crate::session::SessionSource;
 use crate::shell::ShellType;
 use crate::{TerminalError, TerminalResult};
 
@@ -37,6 +38,8 @@ pub struct TerminalBindingOptions {
     pub cols: Option<u16>,
     /// Terminal rows (default: 30)
     pub rows: Option<u16>,
+    /// Source of the terminal session
+    pub source: Option<SessionSource>,
 }
 
 /// Terminal Session Binding Manager
@@ -114,6 +117,7 @@ impl TerminalSessionBinding {
                 options.env,
                 options.cols,
                 options.rows,
+                options.source,
             )
             .await?;
 
@@ -191,6 +195,7 @@ impl TerminalSessionBinding {
                 options.env,
                 options.cols,
                 options.rows,
+                options.source,
             )
             .await?;
 

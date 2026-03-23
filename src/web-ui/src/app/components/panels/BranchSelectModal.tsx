@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { GitBranch, Plus, X } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
-import { IconButton, Button, Input } from '@/component-library';
+import { IconButton, Button, Input, Checkbox } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitAPI, type GitBranch as GitBranchType } from '../../../infrastructure/api/service-api/GitAPI';
 import './BranchSelectModal.scss';
@@ -22,6 +22,7 @@ type SelectableBranch = GitBranchType & {
 export interface BranchSelectResult {
   branch: string;
   isNew: boolean;
+  openAfterCreate: boolean;
 }
 
 export interface BranchSelectModalProps {
@@ -32,6 +33,8 @@ export interface BranchSelectModalProps {
   title?: string;
   currentBranch?: string;
   existingWorktreeBranches?: string[];
+  showOpenAfterCreate?: boolean;
+  defaultOpenAfterCreate?: boolean;
 }
 
 export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
@@ -41,7 +44,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
   repositoryPath,
   title,
   currentBranch,
-  existingWorktreeBranches = []
+  existingWorktreeBranches = [],
+  showOpenAfterCreate = false,
+  defaultOpenAfterCreate = false,
 }) => {
   const { t } = useI18n('panels/git');
   const { t: tCommon } = useI18n('common');
@@ -49,6 +54,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isNewBranch, setIsNewBranch] = useState(false);
+  const [openAfterCreate, setOpenAfterCreate] = useState(defaultOpenAfterCreate);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,13 +72,14 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
       setSearchTerm('');
       setSelectedBranch(null);
       setIsNewBranch(false);
+      setOpenAfterCreate(defaultOpenAfterCreate);
       setError(null);
     } else {
       setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
     }
-  }, [isOpen]);
+  }, [defaultOpenAfterCreate, isOpen]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -143,19 +150,21 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     if (selectedBranch) {
       onSelect({
         branch: selectedBranch,
-        isNew: isNewBranch
+        isNew: isNewBranch,
+        openAfterCreate,
       });
       onClose();
     }
-  }, [selectedBranch, isNewBranch, onSelect, onClose]);
+  }, [selectedBranch, isNewBranch, onClose, onSelect, openAfterCreate]);
 
   const handleDoubleClick = useCallback((branchName: string, isNew: boolean) => {
     onSelect({
       branch: branchName,
-      isNew: isNew
+      isNew: isNew,
+      openAfterCreate,
     });
     onClose();
-  }, [onSelect, onClose]);
+  }, [onClose, onSelect, openAfterCreate]);
 
   if (!isOpen) return null;
 
@@ -261,6 +270,16 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
         </div>
 
         <div className="branch-select-dialog__footer">
+          {showOpenAfterCreate ? (
+            <div className="branch-select-dialog__options">
+              <Checkbox
+                checked={openAfterCreate}
+                onChange={(event) => setOpenAfterCreate(event.target.checked)}
+                label={t('branchSelect.openAfterCreate.label')}
+                description={t('branchSelect.openAfterCreate.description')}
+              />
+            </div>
+          ) : null}
           <Button
             className="branch-select-dialog__btn branch-select-dialog__btn--cancel"
             variant="ghost"

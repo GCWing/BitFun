@@ -4,15 +4,24 @@ import { Folder, FolderOpen, MoreHorizontal, GitBranch, FolderSearch, Plus, Chev
 import { ConfirmDialog, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import {
+  createWorktreeWorkspace,
+  deleteWorktreeWorkspace,
+} from '@/infrastructure/services/business/worktreeWorkspaceService';
 import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
-import { workspaceAPI, gitAPI } from '@/infrastructure/api';
+import { workspaceAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { BranchSelectModal, type BranchSelectResult } from '../../../panels/BranchSelectModal';
 import SessionsSection from '../sessions/SessionsSection';
-import { WorkspaceKind, isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
+import {
+  WorkspaceKind,
+  isLinkedWorktreeWorkspace,
+  isRemoteWorkspace,
+  type WorkspaceInfo,
+} from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteProvider';
 
 interface WorkspaceItemProps {
@@ -35,15 +44,23 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   onDragEnd,
 }) => {
   const { t } = useI18n('common');
-  const { setActiveWorkspace, closeWorkspaceById, deleteAssistantWorkspace, resetAssistantWorkspace } = useWorkspaceContext();
+  const {
+    openWorkspace,
+    setActiveWorkspace,
+    closeWorkspaceById,
+    deleteAssistantWorkspace,
+    resetAssistantWorkspace,
+  } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
   const openNavScene = useNavSceneStore(s => s.openNavScene);
   const { isRepository, currentBranch } = useGitBasicInfo(workspace.rootPath);
   const [menuOpen, setMenuOpen] = useState(false);
   const [worktreeModalOpen, setWorktreeModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteWorktreeDialogOpen, setDeleteWorktreeDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
+  const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -60,6 +77,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspace.workspaceKind === WorkspaceKind.Assistant
       ? workspace.identity?.name?.trim() || workspace.name
       : workspace.name;
+  const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
 
   // Remote connection status — optional: safe if not inside SSHRemoteProvider
   const sshContext = useContext(SSHContext);
@@ -249,17 +267,60 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
   const handleCreateWorktree = useCallback(async (result: BranchSelectResult) => {
     try {
-      await gitAPI.addWorktree(workspace.rootPath, result.branch, result.isNew);
-      notificationService.success(t('nav.workspaces.worktreeCreated'), { duration: 2500 });
+      const created = await createWorktreeWorkspace({
+        repositoryPath: workspace.rootPath,
+        branch: result.branch,
+        isNew: result.isNew,
+        openAfterCreate: result.openAfterCreate,
+        openWorkspace,
+      });
+      notificationService.success(
+        created.openedWorkspace
+          ? t('nav.workspaces.worktreeCreatedAndOpened')
+          : t('nav.workspaces.worktreeCreated'),
+        { duration: 2500 },
+      );
     } catch (error) {
       notificationService.error(
-        t('nav.workspaces.worktreeCreateFailed', {
+        t(
+          result.openAfterCreate
+            ? 'nav.workspaces.worktreeCreateOrOpenFailed'
+            : 'nav.workspaces.worktreeCreateFailed',
+          {
           error: error instanceof Error ? error.message : String(error),
-        }),
+          },
+        ),
         { duration: 4000 }
       );
     }
-  }, [t, workspace.rootPath]);
+  }, [openWorkspace, t, workspace.rootPath]);
+
+  const handleRequestDeleteWorktree = useCallback(() => {
+    setMenuOpen(false);
+    setDeleteWorktreeDialogOpen(true);
+  }, []);
+
+  const handleConfirmDeleteWorktree = useCallback(async () => {
+    if (!isLinkedWorktree || isDeletingWorktree) {
+      return;
+    }
+
+    setIsDeletingWorktree(true);
+    try {
+      await deleteWorktreeWorkspace({
+        workspace,
+        closeWorkspaceById,
+      });
+      notificationService.success(t('nav.workspaces.worktreeDeleted'), { duration: 2500 });
+    } catch (error) {
+      notificationService.error(
+        error instanceof Error ? error.message : t('nav.workspaces.deleteWorktreeFailed'),
+        { duration: 4000 },
+      );
+    } finally {
+      setIsDeletingWorktree(false);
+    }
+  }, [closeWorkspaceById, isDeletingWorktree, isLinkedWorktree, t, workspace]);
 
   const handleOpenFiles = useCallback(async () => {
     try {
@@ -525,18 +586,30 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <Plus size={13} />
                 <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newCoworkSession')}</span>
               </button>
-              <button
-                type="button"
-                className="bitfun-nav-panel__workspace-item-menu-item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setWorktreeModalOpen(true);
-                }}
-                disabled={!isRepository}
-              >
-                <GitBranch size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
-              </button>
+              {isLinkedWorktree ? (
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                  onClick={handleRequestDeleteWorktree}
+                  disabled={isDeletingWorktree}
+                >
+                  <Trash2 size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorktree')}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setWorktreeModalOpen(true);
+                  }}
+                  disabled={!isRepository}
+                >
+                  <GitBranch size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="bitfun-nav-panel__workspace-item-menu-item"
@@ -579,6 +652,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         onSelect={(result) => { void handleCreateWorktree(result); }}
         repositoryPath={workspace.rootPath}
         title={t('nav.workspaces.actions.newWorktree')}
+        showOpenAfterCreate
+        defaultOpenAfterCreate
+      />
+      <ConfirmDialog
+        isOpen={deleteWorktreeDialogOpen}
+        onClose={() => setDeleteWorktreeDialogOpen(false)}
+        onConfirm={() => { void handleConfirmDeleteWorktree(); }}
+        title={t('nav.workspaces.deleteWorktreeDialog.title', { name: workspaceDisplayName })}
+        message={t('nav.workspaces.deleteWorktreeDialog.message')}
+        confirmText={t('nav.workspaces.actions.deleteWorktree')}
+        cancelText={t('actions.cancel')}
+        confirmDanger
+        preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
       />
     </div>
   );

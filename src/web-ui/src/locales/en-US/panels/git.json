@@ -207,6 +207,10 @@
     "inputPlaceholder": "Enter new branch name...",
     "loading": "Loading...",
     "createNewLabel": "Create new branch:",
+    "openAfterCreate": {
+      "label": "Open after create",
+      "description": "Open the new worktree as a workspace immediately after it is created."
+    },
     "badges": {
       "inUse": "In Use"
     },

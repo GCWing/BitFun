@@ -93,6 +93,10 @@ pub struct TerminalSession {
     /// Session metadata
     pub metadata: SessionMetadata,
 
+    /// Session creation source
+    #[serde(default)]
+    pub source: SessionSource,
+
     /// Whether the session should persist
     pub should_persist: bool,
 
@@ -121,6 +125,7 @@ impl TerminalSession {
         cwd: String,
         cols: u16,
         rows: u16,
+        source: SessionSource,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -138,6 +143,7 @@ impl TerminalSession {
             last_activity: now,
             env: HashMap::new(),
             metadata: SessionMetadata::default(),
+            source,
             should_persist: true,
             exit_code: None,
             output_history: Vec::new(),
@@ -237,6 +243,15 @@ impl TerminalSession {
         self.rows = rows;
         self.touch();
     }
+}
+
+/// Source that created the terminal session.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionSource {
+    #[default]
+    Manual,
+    Agent,
 }
 
 /// Session metadata

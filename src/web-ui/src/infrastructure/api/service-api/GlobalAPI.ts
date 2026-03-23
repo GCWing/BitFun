@@ -32,6 +32,13 @@ export interface WorkspaceIdentity {
   emoji?: string | null;
 }
 
+export interface WorkspaceWorktreeInfo {
+  path: string;
+  branch?: string | null;
+  mainRepoPath: string;
+  isMain: boolean;
+}
+
 export interface WorkspaceInfo {
   id: string;
   name: string;
@@ -46,6 +53,7 @@ export interface WorkspaceInfo {
   tags: string[];
   statistics?: ProjectStatistics | null;
   identity?: WorkspaceIdentity | null;
+  worktree?: WorkspaceWorktreeInfo | null;
   connectionId?: string;
   connectionName?: string;
 }

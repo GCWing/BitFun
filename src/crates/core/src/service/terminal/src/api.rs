@@ -14,7 +14,8 @@ use crate::config::TerminalConfig;
 use crate::events::TerminalEvent;
 use crate::session::{
     get_session_manager, init_session_manager, is_session_manager_initialized,
-    CommandCompletionReason, CommandExecuteResult, ExecuteOptions, SessionManager, TerminalSession,
+    CommandCompletionReason, CommandExecuteResult, ExecuteOptions, SessionManager, SessionSource,
+    TerminalSession,
 };
 use crate::shell::{ShellDetector, ShellType};
 use crate::{TerminalError, TerminalResult};
@@ -48,6 +49,9 @@ pub struct CreateSessionRequest {
     /// Optional remote connection ID (for remote workspace sessions)
     #[serde(rename = "remoteConnectionId", skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
+    /// Optional session creation source
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<SessionSource>,
 }
 
 /// Response for session creation
@@ -69,6 +73,8 @@ pub struct SessionResponse {
     /// Terminal dimensions
     pub cols: u16,
     pub rows: u16,
+    /// Session creation source
+    pub source: SessionSource,
 }
 
 impl From<TerminalSession> for SessionResponse {
@@ -82,6 +88,7 @@ impl From<TerminalSession> for SessionResponse {
             status: format!("{:?}", session.status),
             cols: session.cols,
             rows: session.rows,
+            source: session.source,
         }
     }
 }
@@ -314,6 +321,7 @@ impl TerminalApi {
                 request.env,
                 request.cols,
                 request.rows,
+                request.source,
             )
             .await?;
 

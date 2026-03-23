@@ -1,5 +1,6 @@
 //! Workspace manager.
 
+use crate::service::git::GitService;
 use crate::util::{errors::*, FrontMatterMarkdown};
 use log::warn;
 
@@ -55,6 +56,17 @@ pub struct WorkspaceIdentity {
     pub vibe: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emoji: Option<String>,
+}
+
+/// Git worktree metadata attached to a workspace.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceWorktreeInfo {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    pub main_repo_path: String,
+    pub is_main: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -181,6 +193,8 @@ pub struct WorkspaceInfo {
     pub statistics: Option<WorkspaceStatistics>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity: Option<WorkspaceIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<WorkspaceWorktreeInfo>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
@@ -293,12 +307,14 @@ impl WorkspaceInfo {
             tags: Vec::new(),
             statistics: None,
             identity: None,
+            worktree: None,
             metadata: HashMap::new(),
         };
 
         if !is_remote {
             workspace.detect_workspace_type().await;
             workspace.load_identity().await;
+            workspace.load_worktree().await;
 
             if options.scan_options.calculate_statistics {
                 workspace.scan_workspace(options.scan_options).await?;
@@ -337,6 +353,33 @@ impl WorkspaceInfo {
         }
 
         self.identity = identity;
+    }
+
+    async fn load_worktree(&mut self) {
+        self.worktree = Self::resolve_worktree_info(&self.root_path).await;
+    }
+
+    async fn resolve_worktree_info(workspace_root: &Path) -> Option<WorkspaceWorktreeInfo> {
+        let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
+        let worktrees = match GitService::list_worktrees(workspace_root).await {
+            Ok(worktrees) => worktrees,
+            Err(_) => return None,
+        };
+
+        let main_repo_path = worktrees
+            .iter()
+            .find(|worktree| worktree.is_main)
+            .map(|worktree| worktree.path.clone())?;
+
+        worktrees
+            .into_iter()
+            .find(|worktree| worktree.path == normalized_workspace_path)
+            .map(|worktree| WorkspaceWorktreeInfo {
+                path: worktree.path,
+                branch: worktree.branch,
+                main_repo_path: main_repo_path.clone(),
+                is_main: worktree.is_main,
+            })
     }
 
     /// Detects the workspace type.
@@ -698,6 +741,7 @@ impl WorkspaceManager {
                     workspace.name = display_name.clone();
                 }
                 workspace.load_identity().await;
+                workspace.load_worktree().await;
             }
             self.ensure_workspace_open(&workspace_id);
             if options.auto_set_current {

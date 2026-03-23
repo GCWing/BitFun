@@ -207,6 +207,10 @@
     "inputPlaceholder": "输入新分支名...",
     "loading": "加载中...",
     "createNewLabel": "创建新分支:",
+    "openAfterCreate": {
+      "label": "创建后打开",
+      "description": "创建完成后，立即将新的 worktree 作为工作区打开。"
+    },
     "badges": {
       "inUse": "已使用"
     },

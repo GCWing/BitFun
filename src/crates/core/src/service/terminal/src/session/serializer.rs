@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::shell::ShellType;
 use crate::{TerminalError, TerminalResult};
 
-use super::{SessionMetadata, SessionStatus, TerminalSession};
+use super::{SessionMetadata, SessionSource, SessionStatus, TerminalSession};
 
 /// Version of the serialization format
 const SERIALIZATION_VERSION: u32 = 1;
@@ -52,6 +52,10 @@ pub struct SerializedSession {
     /// Session metadata
     pub metadata: SessionMetadata,
 
+    /// Session creation source
+    #[serde(default)]
+    pub source: SessionSource,
+
     /// Replay events for restoring terminal content
     pub replay_events: Vec<ReplayEvent>,
 
@@ -89,6 +93,7 @@ impl SessionSerializer {
                 rows: s.rows,
                 env: s.env.clone(),
                 metadata: s.metadata.clone(),
+                source: s.source.clone(),
                 replay_events: Vec::new(), // TODO: Capture replay events
                 created_at: s.created_at.timestamp(),
             })
@@ -127,6 +132,7 @@ impl SessionSerializer {
             serialized.cwd.clone(),
             serialized.cols,
             serialized.rows,
+            serialized.source.clone(),
         );
 
         session.initial_cwd = serialized.initial_cwd.clone();
@@ -159,6 +165,7 @@ impl SessionSerializer {
             rows: session.rows,
             env: session.env.clone(),
             metadata: session.metadata.clone(),
+            source: session.source.clone(),
             replay_events: vec![replay_event],
             created_at: session.created_at.timestamp(),
         };
@@ -180,6 +187,7 @@ mod tests {
             "/home/user".to_string(),
             80,
             24,
+            SessionSource::Manual,
         );
 
         let serialized = SessionSerializer::serialize(&[session.clone()])

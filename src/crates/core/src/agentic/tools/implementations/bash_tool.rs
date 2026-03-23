@@ -11,6 +11,7 @@ use futures::StreamExt;
 use log::{debug, error, info};
 use serde_json::{json, Value};
 use std::time::{Duration, Instant};
+use terminal_core::session::SessionSource;
 use terminal_core::shell::{ShellDetector, ShellType};
 use terminal_core::{
     CommandCompletionReason, CommandStreamEvent, ExecuteCommandRequest, SendCommandRequest,
@@ -509,6 +510,7 @@ Usage notes:
                     )),
                     shell_type: shell_type.clone(),
                     env: Some(Self::noninteractive_env()),
+                    source: Some(SessionSource::Agent),
                     ..Default::default()
                 },
             )
@@ -723,6 +725,7 @@ impl BashTool {
                     session_name: None,
                     shell_type,
                     env: Some(Self::noninteractive_env()),
+                    source: Some(SessionSource::Agent),
                     ..Default::default()
                 },
             )

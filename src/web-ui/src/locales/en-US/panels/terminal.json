@@ -1,61 +1,19 @@
 {
   "title": "Terminal",
   "emptyState": "Open a terminal from the Shell navigation",
-  "actions": {
-    "refresh": "Refresh Terminal List",
-    "newTerminal": "New Terminal",
-    "newWorktree": "New Worktree",
-    "edit": "Edit",
-    "stopTerminal": "Stop Terminal",
-    "deleteTerminal": "Delete Terminal",
-    "closeTerminal": "Close Terminal",
-    "deleteWorktree": "Delete Worktree"
-  },
-  "sections": {
-    "terminalHub": "Terminal Workshop",
-    "terminals": "Terminal Sessions"
-  },
-  "status": {
-    "running": "Running",
-    "idle": "Idle"
-  },
-  "worktree": {
-    "count": "{{count}}",
-    "terminalsCount": "{{count}} terminals"
-  },
   "dialog": {
-    "deleteWorktree": {
-      "title": "Confirm Delete",
-      "message": "Are you sure you want to delete this Worktree?",
-      "hint": "This will close all terminals in this Worktree and delete the working directory.",
-      "cancel": "Cancel",
-      "confirm": "Delete"
-    },
     "editTerminal": {
       "title": "Edit Terminal",
       "nameLabel": "Name",
       "namePlaceholder": "Terminal name",
+      "workingDirectoryLabel": "Startup Path",
+      "workingDirectoryPlaceholder": "Path to open when the terminal starts",
+      "workingDirectoryHint": "Used when reopening a saved terminal",
       "startupCommandLabel": "Startup Command (Optional)",
       "startupCommandPlaceholder": "Command to run after the terminal starts",
       "startupCommandHint": "This command runs automatically after the terminal starts",
       "cancel": "Cancel",
       "save": "Save"
     }
-  },
-  "notifications": {
-    "loadSessionsFailed": "Failed to load session list",
-    "connectFailed": "Failed to connect to terminal service",
-    "createFailed": "Failed to create terminal",
-    "startFailed": "Failed to start terminal",
-    "stopFailed": "Failed to stop terminal",
-    "deleteWorktreeFailed": "Failed to delete worktree: Directory may still be in use, please close related programs and try again",
-    "addWorktreeFailed": "Failed to create worktree: {{error}}",
-    "notGitRepo": "Current directory is not a Git repository"
-  },
-  "branch": {
-    "selectBranch": "Select Branch",
-    "createNew": "Create New Branch",
-    "existingBranches": "Existing Branches",
-    "branchName": "Branch Name"
   }
 }

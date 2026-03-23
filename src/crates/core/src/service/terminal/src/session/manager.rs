@@ -20,7 +20,7 @@ use crate::shell::{
 };
 use crate::{TerminalError, TerminalResult};
 
-use super::{SessionStatus, TerminalSession};
+use super::{SessionSource, SessionStatus, TerminalSession};
 
 const COMMAND_TIMEOUT_INTERRUPT_GRACE_MS: Duration = Duration::from_millis(500);
 
@@ -387,9 +387,20 @@ impl SessionManager {
         env: Option<HashMap<String, String>>,
         cols: Option<u16>,
         rows: Option<u16>,
+        source: Option<SessionSource>,
     ) -> TerminalResult<TerminalSession> {
-        self.create_session_with_options(session_id, name, shell_type, cwd, env, cols, rows, true)
-            .await
+        self.create_session_with_options(
+            session_id,
+            name,
+            shell_type,
+            cwd,
+            env,
+            cols,
+            rows,
+            true,
+            source,
+        )
+        .await
     }
 
     /// Create a new terminal session with optional shell integration
@@ -403,6 +414,7 @@ impl SessionManager {
         cols: Option<u16>,
         rows: Option<u16>,
         enable_integration: bool,
+        source: Option<SessionSource>,
     ) -> TerminalResult<TerminalSession> {
         // Use provided session ID or generate a new one
         let session_id = session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -506,6 +518,7 @@ impl SessionManager {
             cwd,
             cols,
             rows,
+            source.unwrap_or_default(),
         );
 
         // Store the session

@@ -7,6 +7,7 @@
 //! - This eliminates Mutex deadlock between read and write operations
 
 use crate::service::remote_ssh::manager::SSHConnectionManager;
+use crate::service::terminal::session::SessionSource;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,6 +32,7 @@ pub struct RemoteTerminalSession {
     pub status: SessionStatus,
     pub cols: u16,
     pub rows: u16,
+    pub source: SessionSource,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +89,7 @@ impl RemoteTerminalManager {
         cols: u16,
         rows: u16,
         initial_cwd: Option<&str>,
+        source: Option<SessionSource>,
     ) -> anyhow::Result<CreateSessionResult> {
         let ssh_guard = self.ssh_manager.read().await;
         let manager = ssh_guard.as_ref().context("SSH manager not initialized")?;
@@ -123,6 +126,7 @@ impl RemoteTerminalManager {
             status: SessionStatus::Active,
             cols,
             rows,
+            source: source.unwrap_or_default(),
         };
 
         {

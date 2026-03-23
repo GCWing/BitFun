@@ -1,6 +1,6 @@
 /**
  * TerminalScene — renders a ConnectedTerminal for the session selected
- * via terminalSceneStore (set from NavPanel Shell list or Shell Hub).
+ * via terminalSceneStore (set from the Shell navigation).
  *
  * When no session is active, shows a minimal empty state prompting the
  * user to open a terminal from the navigation panel.
@@ -16,11 +16,6 @@ import './TerminalScene.scss';
 const TerminalScene: React.FC = () => {
   const { activeSessionId, setActiveSession } = useTerminalSceneStore();
   const { t } = useTranslation('panels/terminal');
-  // #region agent log
-  React.useEffect(() => {
-    console.error('[DBG-366fda][H-D] TerminalScene activeSessionId changed', {activeSessionId});
-  }, [activeSessionId]);
-  // #endregion
 
   const handleExit = useCallback(() => {
     setActiveSession(null);

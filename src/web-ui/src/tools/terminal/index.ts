@@ -10,7 +10,21 @@ export type {
   ConnectedTerminalProps,
 } from './components';
 
-export { TerminalService, getTerminalService } from './services';
+export {
+  TerminalService,
+  getTerminalService,
+  deleteManualTerminalProfile,
+  generateManualTerminalProfileId,
+  getManualTerminalProfileById,
+  getManualTerminalProfileBySessionId,
+  listManualTerminalProfiles,
+  loadManualTerminalProfiles,
+  saveManualTerminalProfiles,
+  upsertManualTerminalProfile,
+  type ManualTerminalProfile,
+  type ManualTerminalProfileInput,
+  type ManualTerminalProfilesState,
+} from './services';
 
 export { useTerminal } from './hooks';
 export type { UseTerminalOptions, UseTerminalReturn } from './hooks';
