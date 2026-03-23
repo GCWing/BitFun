@@ -2536,20 +2536,27 @@ async fn handle_chat_message(
     }
 
     let cancel_command = format!("/cancel_task {}", turn_id);
-    HandleResult {
-        reply: format!(
+    let verbose_mode = super::load_bot_persistence().verbose_mode;
+    let processing_line = if language.is_chinese() {
+        "正在处理你的消息..."
+    } else {
+        "Processing your message..."
+    };
+    let reply = if verbose_mode {
+        format!(
             "{}\n\n{}",
-            if language.is_chinese() {
-                "正在处理你的消息..."
-            } else {
-                "Processing your message..."
-            },
+            processing_line,
             if language.is_chinese() {
                 format!("如需停止本次请求，请发送 `{}`。", cancel_command)
             } else {
                 format!("If needed, send `{}` to stop this request.", cancel_command)
             },
-        ),
+        )
+    } else {
+        processing_line.to_string()
+    };
+    HandleResult {
+        reply,
         actions: cancel_task_actions(language, cancel_command),
         forward_to_session: Some(ForwardRequest {
             session_id,

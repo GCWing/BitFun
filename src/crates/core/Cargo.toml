@@ -112,8 +112,7 @@ tokio-tungstenite = { workspace = true }
 # SSH - Remote SSH support (optional feature)
 russh = { version = "0.45", optional = true }
 russh-sftp = { version = "2.1", optional = true }
-russh-keys = { version = "0.45", features = ["openssl"], optional = true }
-openssl = { workspace = true, optional = true }
+russh-keys = { version = "0.45", optional = true }
 shellexpand = { version = "3", optional = true }
 ssh_config = { version = "0.1", optional = true }
 
@@ -129,10 +128,9 @@ bitfun-transport = { path = "../transport" }
 # Tauri dependency (optional, enabled only when needed)
 tauri = { workspace = true, optional = true }
 
-# Non-Windows: vendored OpenSSL (no system install). Windows: prebuilt OpenSSL via OPENSSL_DIR (see README).
+# Non-Windows: vendored OpenSSL for libgit2 (no system install).
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"] }
-openssl = { workspace = true, optional = true, features = ["vendored"] }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
@@ -140,4 +138,4 @@ win32job = { workspace = true }
 [features]
 default = ["ssh-remote"]
 tauri-support = ["tauri"]  # Optional tauri support
-ssh-remote = ["russh", "russh-sftp", "russh-keys", "openssl", "shellexpand", "ssh_config"]  # Optional SSH remote support
+ssh-remote = ["russh", "russh-sftp", "russh-keys", "shellexpand", "ssh_config"]  # russh-keys pure-Rust crypto backend (no openssl)
