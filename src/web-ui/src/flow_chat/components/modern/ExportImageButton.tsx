@@ -13,6 +13,7 @@ import { FlowToolCard } from '../FlowToolCard';
 import { Tooltip } from '@/component-library';
 import type { DialogTurn, FlowTextItem, FlowToolItem } from '../../types/flow-chat';
 import { i18nService } from '@/infrastructure/i18n';
+import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -256,7 +257,38 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       const arrayBuffer = await blob.arrayBuffer();
       await writeFile(filePath, new Uint8Array(arrayBuffer));
 
-      notificationService.success(i18nService.t('flow-chat:exportImage.exportSuccess', { filePath }));
+      const plainSuccessMessage = i18nService.t('flow-chat:exportImage.exportSuccess', { filePath });
+      const successPrefix = i18nService.t('flow-chat:exportImage.exportSuccessPrefix');
+
+      const revealExportedFile = async () => {
+        if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+          return;
+        }
+        try {
+          await workspaceAPI.revealInExplorer(filePath);
+        } catch (error) {
+          log.error('Failed to reveal export path in file manager', { filePath, error });
+        }
+      };
+
+      notificationService.success(plainSuccessMessage, {
+        messageNode: (
+          <>
+            {successPrefix}
+            <button
+              type="button"
+              className="notification-item__path-link"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void revealExportedFile();
+              }}
+            >
+              {filePath}
+            </button>
+          </>
+        ),
+      });
     } catch (error) {
       log.error('Export failed', error);
       notificationService.error(i18nService.t('flow-chat:exportImage.exportFailed'));

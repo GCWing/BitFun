@@ -3,6 +3,8 @@
  *
  * Shared by the notification store, service, and UI components.
  */
+import type { ReactNode } from 'react';
+
 export type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
 
@@ -43,6 +45,9 @@ export interface Notification {
   title: string;
    
   message: string;
+
+  /** When set, toast/history render this instead of plain `message` (keep `message` for search/plain fallback). */
+  messageNode?: ReactNode;
    
   timestamp: number;
   
@@ -103,6 +108,8 @@ export interface ToastOptions {
   closable?: boolean;
    
   actions?: NotificationAction[];
+
+  messageNode?: ReactNode;
    
   metadata?: Record<string, any>;
 }

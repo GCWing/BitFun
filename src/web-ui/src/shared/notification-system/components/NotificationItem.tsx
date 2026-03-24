@@ -12,7 +12,7 @@ export interface NotificationItemProps {
 }
 
 export const NotificationItem: React.FC<NotificationItemProps> = ({ notification }) => {
-  const { id, type, title, message, closable, actions } = notification;
+  const { id, type, title, message, messageNode, closable, actions } = notification;
   const { t } = useI18n('common');
 
   
@@ -54,7 +54,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ notification
       
       <div className="notification-item__content">
         <div className="notification-item__title">{title}</div>
-        <div className="notification-item__message">{message}</div>
+        <div className="notification-item__message">{messageNode ?? message}</div>
 
         
         {actions && actions.length > 0 && (

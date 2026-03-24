@@ -339,6 +339,7 @@
     "generateFailed": "生成图片失败",
     "fileNamePrefix": "BitFun对话",
     "exportSuccess": "图片已导出：{{filePath}}",
+    "exportSuccessPrefix": "图片已导出：",
     "exportFailed": "导出图片失败，请重试",
     "exporting": "正在导出...",
     "exportToImage": "导出为图片"

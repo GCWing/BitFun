@@ -51,7 +51,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
       onClose={onClose}
       title={t('header.about')}
       showCloseButton={true}
-      size="small"
+      size="medium"
     >
       <div className="bitfun-about-dialog__content">
         {/* Hero section - product info */}

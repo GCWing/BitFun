@@ -758,11 +758,7 @@
     max-height: 280px;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(
-      135deg,
-      var(--color-bg-elevated) 0%,
-      var(--color-bg-tertiary) 100%
-    );
+    background: var(--color-bg-elevated);
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     box-shadow:

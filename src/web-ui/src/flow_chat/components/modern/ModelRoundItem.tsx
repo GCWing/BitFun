@@ -8,7 +8,7 @@
 
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Check, ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import type { ModelRound, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
@@ -17,7 +17,6 @@ import { isCollapsibleTool } from '../../tool-cards';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
-import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import { ExportImageButton } from './ExportImageButton';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
@@ -61,12 +60,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }, [copied]);
-    
-    const handleFeedback = useCallback((_type: 'like' | 'dislike' | 'report') => {
-      notificationService.info(t('modelRound.feedbackThanks'), {
-        title: t('modelRound.feedbackDevVersion')
-      });
-    }, [t]);
     
     // Keep insertion order; do not sort by timestamp.
     // Subagent ordering is controlled by insertModelRoundItemAfterTool.
@@ -354,35 +347,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             </Tooltip>
             
             <ExportImageButton turnId={turnId} />
-            
-            <div className="model-round-item__feedback-group">
-              <Tooltip content={t('modelRound.like')}>
-                <button
-                  className="model-round-item__action-btn model-round-item__feedback-btn"
-                  onClick={() => handleFeedback('like')}
-                >
-                  <ThumbsUp size={14} />
-                </button>
-              </Tooltip>
-              
-              <Tooltip content={t('modelRound.dislike')}>
-                <button
-                  className="model-round-item__action-btn model-round-item__feedback-btn"
-                  onClick={() => handleFeedback('dislike')}
-                >
-                  <ThumbsDown size={14} />
-                </button>
-              </Tooltip>
-              
-              <Tooltip content={t('modelRound.report')}>
-                <button
-                  className="model-round-item__action-btn model-round-item__feedback-btn"
-                  onClick={() => handleFeedback('report')}
-                >
-                  <AlertTriangle size={14} />
-                </button>
-              </Tooltip>
-            </div>
           </div>
         )}
       </div>

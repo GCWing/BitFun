@@ -44,14 +44,6 @@
   margin-top: 0.5rem;
 }
 
-.model-round-item__feedback-group {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding-left: 0.5rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-}
-
 .model-round-item__action-btn {
   display: flex;
   align-items: center;
@@ -111,22 +103,6 @@
     transform: rotate(360deg);
   }
 }
-
-// Feedback buttons
-.model-round-item__feedback-btn {
-  &:hover:has(svg[data-lucide="thumbs-up"]) {
-    color: #22c55e;
-  }
-
-  &:hover:has(svg[data-lucide="thumbs-down"]) {
-    color: #ef4444;
-  }
-
-  &:hover:has(svg[data-lucide="alert-triangle"]) {
-    color: #f59e0b;
-  }
-}
-
 
 @keyframes fadeIn {
   from {

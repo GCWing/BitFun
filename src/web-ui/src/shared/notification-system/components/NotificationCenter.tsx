@@ -201,7 +201,7 @@ export const NotificationCenter: React.FC = () => {
             )}
           </div>
           <div className="notification-center__active-task-message">
-            {isProgress && notification.progressText ? notification.progressText : notification.message}
+            {isProgress && notification.progressText ? notification.progressText : (notification.messageNode ?? notification.message)}
           </div>
           
           {isProgress && (() => {
@@ -280,7 +280,7 @@ export const NotificationCenter: React.FC = () => {
             })()}
           </div>
           <div className="notification-center__item-message">
-            {(isProgress && notification.progressText) ? notification.progressText : notification.message}
+            {(isProgress && notification.progressText) ? notification.progressText : (notification.messageNode ?? notification.message)}
           </div>
           
           {isProgress && (() => {

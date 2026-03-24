@@ -347,11 +347,11 @@
 
   &__item-badge {
     flex-shrink: 0;
-    width: 6px;
-    height: 6px;
-    background: var(--color-error); 
+    width: 10px;
+    height: 10px;
+    background: var(--color-error);
     border-radius: 50%;
-    border: 1px solid $color-bg-primary;
+    border: none;
     margin-left: auto;
     margin-right: $size-gap-1;
     align-self: center;

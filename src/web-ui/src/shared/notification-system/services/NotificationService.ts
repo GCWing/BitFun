@@ -58,6 +58,7 @@ class NotificationService {
       variant: 'toast',
       title: options?.title || this.getDefaultTitle(type),
       message,
+      messageNode: options?.messageNode,
       timestamp: Date.now(),
       duration: options?.duration ?? state.config.defaultDuration,
       closable: options?.closable ?? true,

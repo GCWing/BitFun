@@ -339,6 +339,7 @@
     "generateFailed": "Failed to generate image",
     "fileNamePrefix": "BitFun-Chat",
     "exportSuccess": "Image exported: {{filePath}}",
+    "exportSuccessPrefix": "Image exported: ",
     "exportFailed": "Export failed, please try again",
     "exporting": "Exporting...",
     "exportToImage": "Export as Image"
