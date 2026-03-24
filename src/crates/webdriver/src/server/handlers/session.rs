@@ -32,11 +32,14 @@ pub async fn create(
         "sessionId": session.id,
         "capabilities": {
             "browserName": "bitfun",
+            "browserVersion": "unknown",
             "platformName": std::env::consts::OS,
             "acceptInsecureCerts": true,
+            "pageLoadStrategy": "normal",
             "setWindowRect": true,
             "takesScreenshot": true,
             "printPage": cfg!(any(target_os = "macos", target_os = "windows", target_os = "linux")),
+            "timeouts": session.timeouts,
             "bitfun:embedded": true,
             "bitfun:webviewLabel": initial_window,
             "alwaysMatch": request.capabilities.unwrap_or(Value::Null)

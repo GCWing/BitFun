@@ -10,6 +10,7 @@ use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
+use serde::Deserialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -57,6 +58,18 @@ pub struct SchedulerState {
     pub scheduler: Arc<bitfun_core::agentic::coordination::DialogScheduler>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebdriverBridgeResultRequest {
+    payload: serde_json::Value,
+}
+
+#[tauri::command]
+async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
+    log::debug!("webdriver_bridge_result command invoked");
+    bitfun_webdriver::handle_bridge_result(request.payload)
+}
+
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
@@ -66,40 +79,60 @@ pub async fn run() {
     let session_log_dir = log_config.session_log_dir.clone();
 
     eprintln!("=== BitFun Desktop Starting ===");
+    trace_startup("entered run()");
 
+    trace_startup("initializing global config");
     if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
+        trace_startup(&format!("initialize_global_config failed: {e}"));
         log::error!("Failed to initialize global config service: {}", e);
         return;
     }
+    trace_startup("global config initialized");
 
     let startup_log_level = resolve_runtime_log_level(log_config.level).await;
+    trace_startup(&format!(
+        "resolved startup log level: {}",
+        logging::level_to_str(startup_log_level)
+    ));
 
+    trace_startup("initializing AI client factory");
     if let Err(e) = AIClientFactory::initialize_global().await {
+        trace_startup(&format!("AIClientFactory::initialize_global failed: {e}"));
         log::error!("Failed to initialize global AIClientFactory: {}", e);
         return;
     }
+    trace_startup("AI client factory initialized");
 
+    trace_startup("initializing agentic system");
     let (coordinator, scheduler, event_queue, event_router, ai_client_factory, token_usage_service) =
         match init_agentic_system().await {
             Ok(state) => state,
             Err(e) => {
+                trace_startup(&format!("init_agentic_system failed: {e}"));
                 log::error!("Failed to initialize agentic system: {}", e);
                 return;
             }
         };
+    trace_startup("agentic system initialized");
 
+    trace_startup("initializing function agents");
     if let Err(e) = init_function_agents(ai_client_factory.clone()).await {
+        trace_startup(&format!("init_function_agents failed: {e}"));
         log::error!("Failed to initialize function agents: {}", e);
         return;
     }
+    trace_startup("function agents initialized");
 
+    trace_startup("initializing AppState");
     let app_state = match AppState::new_async(token_usage_service).await {
         Ok(state) => state,
         Err(e) => {
+            trace_startup(&format!("AppState::new_async failed: {e}"));
             log::error!("Failed to initialize AppState: {}", e);
             return;
         }
     };
+    trace_startup("AppState initialized");
 
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
@@ -149,6 +182,7 @@ pub async fn run() {
         .manage(scheduler)
         .manage(terminal_state)
         .setup(move |app| {
+            trace_startup("entering tauri setup");
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
@@ -207,7 +241,9 @@ pub async fn run() {
 
             let app_handle = app.handle().clone();
             theme::create_main_window(&app_handle);
+            trace_startup("main window created");
             bitfun_webdriver::maybe_start(app_handle.clone());
+            trace_startup("embedded webdriver startup requested");
 
             #[cfg(target_os = "macos")]
             {
@@ -268,6 +304,7 @@ pub async fn run() {
             logging::spawn_log_cleanup_task();
 
             log::info!("BitFun Desktop started successfully");
+            trace_startup("tauri setup completed");
             Ok(())
         })
         .on_window_event({
@@ -302,6 +339,7 @@ pub async fn run() {
             api::agentic_api::cancel_dialog_turn,
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
+            webdriver_bridge_result,
             api::agentic_api::list_sessions,
             api::agentic_api::get_session_messages,
             api::agentic_api::confirm_tool_execution,
@@ -677,8 +715,18 @@ pub async fn run() {
             api::ssh_api::remote_get_workspace_info,
         ])
         .run(tauri::generate_context!());
+    trace_startup("tauri run() returned");
     if let Err(e) = run_result {
+        trace_startup(&format!("tauri run() failed: {e}"));
         log::error!("Error while running tauri application: {}", e);
+    }
+}
+
+fn trace_startup(message: &str) {
+    if std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some()
+        || std::env::var_os("BITFUN_E2E_TRACE_STARTUP").is_some()
+    {
+        eprintln!("[startup] {message}");
     }
 }
 
@@ -844,9 +892,7 @@ fn setup_panic_hook() {
         // continue instead of killing the process.
         // See: https://github.com/tauri-apps/wry/pull/1554
         if location.contains("wry") && location.contains("wkwebview") {
-            log::warn!(
-                "Suppressed non-fatal wry/wkwebview panic, application continues"
-            );
+            log::warn!("Suppressed non-fatal wry/wkwebview panic, application continues");
             return;
         }
 

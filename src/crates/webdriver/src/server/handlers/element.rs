@@ -142,7 +142,7 @@ pub async fn get_attribute(
         state,
         &session_id,
         &element_id,
-        "(id, name) => { const el = window.__bitfunWd.getElement(id); return el ? el.getAttribute(name) : null; }",
+        "(id, name) => { const el = window.__bitfunWd.getElement(id); if (!el) { return null; } const attrName = String(name || '').toLowerCase(); const tagName = String(el.tagName || '').toLowerCase(); if (attrName === 'value' && (tagName === 'input' || tagName === 'textarea')) { return el.value; } if (attrName === 'checked' && tagName === 'input' && (el.type === 'checkbox' || el.type === 'radio')) { return el.checked ? 'true' : null; } if (attrName === 'selected' && tagName === 'option') { return el.selected ? 'true' : null; } return el.getAttribute(name); }",
         vec![Value::String(name)],
     )
     .await
@@ -240,7 +240,7 @@ pub async fn get_rect(
         state,
         &session_id,
         &element_id,
-        "(id) => { const el = window.__bitfunWd.getElement(id); if (!el) { return null; } const rect = el.getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom }; }",
+        "(id) => { const el = window.__bitfunWd.getElement(id); if (!el) { return null; } const rect = el.getBoundingClientRect(); return { x: rect.x + window.scrollX, y: rect.y + window.scrollY, width: rect.width, height: rect.height, top: rect.top + window.scrollY, left: rect.left + window.scrollX, right: rect.right + window.scrollX, bottom: rect.bottom + window.scrollY }; }",
         Vec::new(),
     )
     .await
@@ -301,7 +301,7 @@ pub async fn send_keys(
         state,
         &session_id,
         &element_id,
-        "(id, text) => { const el = window.__bitfunWd.getElement(id); if (!el) { throw new Error('Element not found'); } window.__bitfunWd.setElementText(el, text); return null; }",
+        "(id, text) => { const el = window.__bitfunWd.getElement(id); if (!el) { throw new Error('Element not found'); } window.__bitfunWd.insertText(el, text); return null; }",
         vec![Value::String(text)],
     )
     .await

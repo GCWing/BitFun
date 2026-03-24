@@ -147,6 +147,91 @@ describe('L0 Embedded WebDriver Protocol', () => {
     expect(byClass.value[ELEMENT_KEY]).toBeDefined();
   });
 
+  it('uses the native cookie store endpoints', async () => {
+    const sessionId = browser.sessionId;
+    const cookieName = `wd-cookie-${Date.now()}`;
+
+    await driverRequest<null>(`/session/${sessionId}/cookie`, {
+      method: 'POST',
+      body: JSON.stringify({
+        cookie: {
+          name: cookieName,
+          value: 'cookie-value',
+          path: '/',
+          sameSite: 'Lax',
+        },
+      }),
+    });
+
+    const cookie = await driverRequest<{
+      name: string;
+      value: string;
+      path?: string;
+      sameSite?: string;
+    }>(`/session/${sessionId}/cookie/${cookieName}`);
+    expect(cookie.value.name).toBe(cookieName);
+    expect(cookie.value.value).toBe('cookie-value');
+    expect(cookie.value.path).toBe('/');
+    expect(cookie.value.sameSite).toBe('Lax');
+
+    const cookies = await driverRequest<Array<{ name: string }>>(`/session/${sessionId}/cookie`);
+    expect(cookies.value.some((item) => item.name === cookieName)).toBe(true);
+
+    await driverRequest<null>(`/session/${sessionId}/cookie/${cookieName}`, {
+      method: 'DELETE',
+    });
+
+    const deleted = await fetch(`http://${DRIVER_HOST}:${DRIVER_PORT}/session/${sessionId}/cookie/${cookieName}`);
+    expect(deleted.status).toBe(404);
+  });
+
+  it('appends text when using the element value endpoint', async () => {
+    await browser.execute(() => {
+      let input = document.getElementById('wd-send-keys-input') as HTMLInputElement | null;
+      if (!input) {
+        input = document.createElement('input');
+        input.id = 'wd-send-keys-input';
+        input.style.position = 'fixed';
+        input.style.left = '24px';
+        input.style.top = '144px';
+        document.body.appendChild(input);
+      }
+      input.value = 'foo';
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+
+    const sessionId = browser.sessionId;
+    const input = await driverRequest<Record<string, string>>(`/session/${sessionId}/element`, {
+      method: 'POST',
+      body: JSON.stringify({
+        using: 'id',
+        value: 'wd-send-keys-input',
+      }),
+    });
+    const inputId = input.value[ELEMENT_KEY];
+
+    await driverRequest<null>(`/session/${sessionId}/element/${inputId}/value`, {
+      method: 'POST',
+      body: JSON.stringify({
+        text: 'bar',
+      }),
+    });
+
+    await driverRequest<null>(`/session/${sessionId}/element/${inputId}/value`, {
+      method: 'POST',
+      body: JSON.stringify({
+        value: ['!'],
+      }),
+    });
+
+    const finalValue = await browser.execute(() => {
+      const input = document.getElementById('wd-send-keys-input') as HTMLInputElement | null;
+      return input?.value ?? '';
+    });
+    expect(finalValue).toBe('foobar!');
+  });
+
   it('returns cropped element screenshots', async () => {
     const cssWidth = 96;
     const cssHeight = 48;
@@ -204,5 +289,99 @@ describe('L0 Embedded WebDriver Protocol', () => {
 
     const buffer = Buffer.from(pdf.value, 'base64');
     expect(buffer.subarray(0, 4).toString('ascii')).toBe('%PDF');
+  });
+
+  it('supports wheel actions for viewport scrolling', async () => {
+    await browser.execute(() => {
+      window.scrollTo(0, 0);
+      document.body.style.minHeight = '4000px';
+      let marker = document.getElementById('wd-wheel-marker');
+      if (!marker) {
+        marker = document.createElement('div');
+        marker.id = 'wd-wheel-marker';
+        marker.style.position = 'absolute';
+        marker.style.top = '3200px';
+        marker.style.left = '24px';
+        marker.textContent = 'wheel-marker';
+        document.body.appendChild(marker);
+      }
+    });
+
+    const sessionId = browser.sessionId;
+    await driverRequest<null>(`/session/${sessionId}/actions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actions: [
+          {
+            type: 'wheel',
+            id: 'wheel',
+            actions: [
+              { type: 'scroll', x: 120, y: 120, deltaX: 0, deltaY: 600 },
+            ],
+          },
+        ],
+      }),
+    });
+
+    await browser.pause(100);
+    const scrollY = await browser.execute(() => window.scrollY);
+    expect(scrollY).toBeGreaterThan(0);
+  });
+
+  it('releases pressed keys when DELETE /actions is called', async () => {
+    await browser.execute(() => {
+      type ActionEventLog = Array<{ type: string; key: string }>;
+      const wdWindow = window as typeof window & { __wdActionEvents: ActionEventLog };
+      wdWindow.__wdActionEvents = [];
+      let input = document.getElementById('wd-release-input') as HTMLInputElement | null;
+      if (!input) {
+        input = document.createElement('input');
+        input.id = 'wd-release-input';
+        input.style.position = 'fixed';
+        input.style.left = '24px';
+        input.style.top = '96px';
+        document.body.appendChild(input);
+      }
+      input.value = '';
+      input.focus();
+
+      input.onkeydown = (event) => {
+        wdWindow.__wdActionEvents.push({ type: 'keydown', key: event.key });
+      };
+      input.onkeyup = (event) => {
+        wdWindow.__wdActionEvents.push({ type: 'keyup', key: event.key });
+      };
+    });
+
+    const sessionId = browser.sessionId;
+    await driverRequest<null>(`/session/${sessionId}/actions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actions: [
+          {
+            type: 'key',
+            id: 'keyboard',
+            actions: [
+              { type: 'keyDown', value: '\uE008' },
+            ],
+          },
+        ],
+      }),
+    });
+
+    await driverRequest<null>(`/session/${sessionId}/actions`, {
+      method: 'DELETE',
+      body: '{}',
+    });
+
+    const events = await browser.execute(() => {
+      const wdWindow = window as typeof window & {
+        __wdActionEvents: Array<{ type: string; key: string }>;
+      };
+      return wdWindow.__wdActionEvents;
+    });
+
+    expect(events.some((event) => event.type === 'keydown' && event.key === 'Shift')).toBe(true);
+    expect(events.some((event) => event.type === 'keyup' && event.key === 'Shift')).toBe(true);
   });
 });

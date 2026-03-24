@@ -34,6 +34,26 @@ pub struct LogConfig {
     pub session_log_dir: PathBuf,
 }
 
+fn is_embedded_webdriver_mode() -> bool {
+    std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some()
+}
+
+fn resolve_logs_root() -> PathBuf {
+    if let Some(path) = std::env::var_os("BITFUN_LOG_DIR").map(PathBuf::from) {
+        return path;
+    }
+
+    if let Some(path) = std::env::var_os("BITFUN_E2E_LOG_DIR").map(PathBuf::from) {
+        return path;
+    }
+
+    if is_embedded_webdriver_mode() {
+        return std::env::temp_dir().join("bitfun-e2e-logs");
+    }
+
+    get_path_manager_arc().logs_dir()
+}
+
 impl LogConfig {
     pub fn new(is_debug: bool) -> Self {
         let level = resolve_default_level(is_debug);
@@ -140,7 +160,7 @@ pub struct RuntimeLoggingInfo {
 }
 
 pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
-    let fallback_dir = get_path_manager_arc().logs_dir();
+    let fallback_dir = resolve_logs_root();
     let session_dir = session_log_dir().unwrap_or(fallback_dir);
 
     RuntimeLoggingInfo {
@@ -156,11 +176,15 @@ pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
 }
 
 pub fn create_session_log_dir() -> PathBuf {
-    let pm = get_path_manager_arc();
-    let logs_root = pm.logs_dir();
+    let logs_root = resolve_logs_root();
 
     let timestamp = Local::now().format("%Y%m%dT%H%M%S").to_string();
     let session_dir = logs_root.join(&timestamp);
+
+    if let Err(e) = std::fs::create_dir_all(&logs_root) {
+        eprintln!("Warning: Failed to create logs root directory: {}", e);
+        return logs_root;
+    }
 
     if let Err(e) = std::fs::create_dir_all(&session_dir) {
         eprintln!("Warning: Failed to create log session directory: {}", e);
@@ -173,8 +197,9 @@ pub fn create_session_log_dir() -> PathBuf {
 pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
     let mut targets = Vec::new();
     let session_dir = config.session_log_dir.clone();
+    let use_stdout_only = is_embedded_webdriver_mode();
 
-    if config.is_debug {
+    if config.is_debug || use_stdout_only {
         targets.push(
             Target::new(TargetKind::Stdout)
                 .filter(|metadata| {
@@ -211,38 +236,40 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
         );
     }
 
-    let app_log_dir = session_dir.clone();
-    targets.push(
-        Target::new(TargetKind::Folder {
-            path: app_log_dir,
-            file_name: Some("app".into()),
-        })
-        .filter(|metadata| {
-            let target = metadata.target();
-            !target.starts_with("ai") && !target.starts_with("webview")
-        })
-        .format(format_log_plain),
-    );
+    if !use_stdout_only {
+        let app_log_dir = session_dir.clone();
+        targets.push(
+            Target::new(TargetKind::Folder {
+                path: app_log_dir,
+                file_name: Some("app".into()),
+            })
+            .filter(|metadata| {
+                let target = metadata.target();
+                !target.starts_with("ai") && !target.starts_with("webview")
+            })
+            .format(format_log_plain),
+        );
 
-    let ai_log_dir = session_dir.clone();
-    targets.push(
-        Target::new(TargetKind::Folder {
-            path: ai_log_dir,
-            file_name: Some("ai".into()),
-        })
-        .filter(|metadata| metadata.target().starts_with("ai"))
-        .format(format_log_plain),
-    );
+        let ai_log_dir = session_dir.clone();
+        targets.push(
+            Target::new(TargetKind::Folder {
+                path: ai_log_dir,
+                file_name: Some("ai".into()),
+            })
+            .filter(|metadata| metadata.target().starts_with("ai"))
+            .format(format_log_plain),
+        );
 
-    let webview_log_dir = session_dir;
-    targets.push(
-        Target::new(TargetKind::Folder {
-            path: webview_log_dir,
-            file_name: Some("webview".into()),
-        })
-        .filter(|metadata| metadata.target().starts_with("webview"))
-        .format(format_log_plain),
-    );
+        let webview_log_dir = session_dir;
+        targets.push(
+            Target::new(TargetKind::Folder {
+                path: webview_log_dir,
+                file_name: Some("webview".into()),
+            })
+            .filter(|metadata| metadata.target().starts_with("webview"))
+            .format(format_log_plain),
+        );
+    }
 
     targets
 }
@@ -272,8 +299,7 @@ fn format_log_plain(
 pub async fn cleanup_old_log_sessions() {
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
-    let pm = get_path_manager_arc();
-    let logs_root = pm.logs_dir();
+    let logs_root = resolve_logs_root();
 
     if let Err(e) = do_cleanup_log_sessions(&logs_root, MAX_LOG_SESSIONS).await {
         log::warn!("Failed to cleanup old log sessions: {}", e);

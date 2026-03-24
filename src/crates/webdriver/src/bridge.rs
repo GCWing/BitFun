@@ -1,6 +1,19 @@
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 
+#[cfg(target_os = "macos")]
+use block2::RcBlock;
+#[cfg(target_os = "macos")]
+use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
+use objc2::runtime::AnyObject;
+#[cfg(target_os = "macos")]
+use objc2::MainThreadMarker;
+#[cfg(target_os = "macos")]
+use objc2_foundation::{NSDictionary, NSError, NSString};
+#[cfg(target_os = "macos")]
+use objc2_web_kit::{WKContentWorld, WKWebView};
 use serde::Deserialize;
 use serde_json::Value;
 use tauri::AppHandle;
@@ -13,6 +26,7 @@ use crate::server::AppState;
 use crate::webdriver::FrameId;
 
 const BRIDGE_EVENT: &str = "bitfun_webdriver_result";
+static BRIDGE_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 pub struct BridgeResponse {
@@ -30,21 +44,45 @@ struct BridgeError {
 }
 
 pub fn register_listener(app: AppHandle, state: Arc<AppState>) {
+    let _ = BRIDGE_STATE.set(state.clone());
     app.listen_any(BRIDGE_EVENT, move |event| {
         let Ok(payload) = serde_json::from_str::<BridgeResponse>(event.payload()) else {
             return;
         };
-
-        let maybe_sender = state
-            .pending_requests
-            .lock()
-            .ok()
-            .and_then(|mut pending| pending.remove(&payload.request_id));
-
-        if let Some(sender) = maybe_sender {
-            let _ = sender.send(payload);
-        }
+        log::debug!(
+            "Embedded WebDriver bridge received event payload: request_id={}, ok={}",
+            payload.request_id,
+            payload.ok
+        );
+        dispatch_bridge_response(&state, payload);
     });
+}
+
+pub fn handle_invoke_payload(payload: Value) -> Result<(), String> {
+    let state = BRIDGE_STATE
+        .get()
+        .ok_or_else(|| "Embedded WebDriver bridge state is not initialized".to_string())?;
+    let payload = serde_json::from_value::<BridgeResponse>(payload)
+        .map_err(|error| format!("Invalid bridge payload: {error}"))?;
+    log::debug!(
+        "Embedded WebDriver bridge received invoke payload: request_id={}, ok={}",
+        payload.request_id,
+        payload.ok
+    );
+    dispatch_bridge_response(state, payload);
+    Ok(())
+}
+
+fn dispatch_bridge_response(state: &Arc<AppState>, payload: BridgeResponse) {
+    let maybe_sender = state
+        .pending_requests
+        .lock()
+        .ok()
+        .and_then(|mut pending| pending.remove(&payload.request_id));
+
+    if let Some(sender) = maybe_sender {
+        let _ = sender.send(payload);
+    }
 }
 
 pub async fn run_script(
@@ -55,16 +93,7 @@ pub async fn run_script(
     async_mode: bool,
 ) -> Result<Value, WebDriverErrorResponse> {
     let session = state.sessions.read().await.get_cloned(session_id)?;
-    let request_id = state.next_request_id();
     let timeout_ms = session.timeouts.script.max(5_000);
-    let (sender, receiver) = oneshot::channel();
-
-    state
-        .pending_requests
-        .lock()
-        .map_err(|_| WebDriverErrorResponse::unknown_error("Failed to lock pending request map"))?
-        .insert(request_id.clone(), sender);
-
     let webview = state
         .app
         .get_webview(&session.current_window)
@@ -76,19 +105,135 @@ pub async fn run_script(
         })?;
 
     let frame_context = serialize_frame_context(&session.frame_context);
+
+    #[cfg(target_os = "macos")]
+    {
+        return run_script_native_macos(webview, timeout_ms, script, &args, async_mode, &frame_context)
+            .await;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let request_id = state.next_request_id();
+    #[cfg(not(target_os = "macos"))]
+    let (sender, receiver) = oneshot::channel();
+
+    #[cfg(not(target_os = "macos"))]
+    state
+        .pending_requests
+        .lock()
+        .map_err(|_| WebDriverErrorResponse::unknown_error("Failed to lock pending request map"))?
+        .insert(request_id.clone(), sender);
+
+    #[cfg(not(target_os = "macos"))]
     let injected = build_bridge_eval_script(&request_id, script, &args, async_mode, &frame_context);
+    #[cfg(not(target_os = "macos"))]
     webview.eval(&injected).map_err(|error| {
         remove_pending_request(&state, &request_id);
-        WebDriverErrorResponse::javascript_error(format!("Failed to evaluate script: {error}"), None)
+        WebDriverErrorResponse::javascript_error(
+            format!("Failed to evaluate script: {error}"),
+            None,
+        )
     })?;
 
+    #[cfg(not(target_os = "macos"))]
     let response = tokio::time::timeout(Duration::from_millis(timeout_ms), receiver)
         .await
         .map_err(|_| {
             remove_pending_request(&state, &request_id);
             WebDriverErrorResponse::timeout(format!("Script timed out after {timeout_ms}ms"))
         })?
-        .map_err(|_| WebDriverErrorResponse::unknown_error("Bridge response channel closed unexpectedly"))?;
+        .map_err(|_| {
+            WebDriverErrorResponse::unknown_error("Bridge response channel closed unexpectedly")
+        })?;
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if response.ok {
+            return Ok(response.value.unwrap_or(Value::Null));
+        }
+
+        let error = response.error.unwrap_or(BridgeError {
+            message: Some("Unknown JavaScript error".into()),
+            stack: None,
+        });
+        return Err(WebDriverErrorResponse::javascript_error(
+            error
+                .message
+                .unwrap_or_else(|| "Unknown JavaScript error".into()),
+            error.stack,
+        ));
+    }
+
+    #[allow(unreachable_code)]
+    Err(WebDriverErrorResponse::unknown_error(
+        "Script execution is unavailable on this platform",
+    ))
+}
+
+#[cfg(target_os = "macos")]
+async fn run_script_native_macos<R: tauri::Runtime>(
+    webview: tauri::Webview<R>,
+    timeout_ms: u64,
+    script: &str,
+    args: &[Value],
+    async_mode: bool,
+    frame_context: &Value,
+) -> Result<Value, WebDriverErrorResponse> {
+    let wrapped = build_native_eval_script(script, args, async_mode, frame_context);
+    let (sender, receiver) = oneshot::channel::<Result<String, String>>();
+
+    let result = webview.with_webview(move |platform_webview| unsafe {
+        let wk_webview: &WKWebView = &*platform_webview.inner().cast();
+        let ns_script = NSString::from_str(&wrapped);
+        let mtm = MainThreadMarker::new_unchecked();
+        let empty_dict: Retained<NSDictionary<NSString, AnyObject>> = NSDictionary::new();
+        let content_world = WKContentWorld::pageWorld(mtm);
+
+        let sender = Arc::new(std::sync::Mutex::new(Some(sender)));
+        let block = RcBlock::new(move |result: *mut AnyObject, error: *mut NSError| {
+            let response = if !error.is_null() {
+                Err((&*error).localizedDescription().to_string())
+            } else if result.is_null() {
+                Ok("null".to_string())
+            } else {
+                ns_object_to_string(&*result)
+                    .ok_or_else(|| "Script returned a non-string payload".to_string())
+            };
+
+            if let Ok(mut guard) = sender.lock() {
+                if let Some(sender) = guard.take() {
+                    let _ = sender.send(response);
+                }
+            }
+        });
+
+        wk_webview.callAsyncJavaScript_arguments_inFrame_inContentWorld_completionHandler(
+            &ns_script,
+            Some(&empty_dict),
+            None,
+            &content_world,
+            Some(&block),
+        );
+    });
+
+    if let Err(error) = result {
+        return Err(WebDriverErrorResponse::javascript_error(
+            format!("Failed to evaluate script: {error}"),
+            None,
+        ));
+    }
+
+    let response_payload = tokio::time::timeout(Duration::from_millis(timeout_ms), receiver)
+        .await
+        .map_err(|_| WebDriverErrorResponse::timeout(format!("Script timed out after {timeout_ms}ms")))?
+        .map_err(|_| {
+            WebDriverErrorResponse::unknown_error("Script response channel closed unexpectedly")
+        })?
+        .map_err(|error| WebDriverErrorResponse::javascript_error(error, None))?;
+
+    let response: BridgeResponse = serde_json::from_str(&response_payload).map_err(|error| {
+        WebDriverErrorResponse::unknown_error(format!("Invalid native script response: {error}"))
+    })?;
 
     if response.ok {
         return Ok(response.value.unwrap_or(Value::Null));
@@ -106,6 +251,18 @@ pub async fn run_script(
     ))
 }
 
+#[cfg(target_os = "macos")]
+unsafe fn ns_object_to_string(obj: &AnyObject) -> Option<String> {
+    let class_name = obj.class().name().to_str().unwrap_or("");
+    if !class_name.contains("String") {
+        return None;
+    }
+
+    let ns_string: &NSString = &*std::ptr::from_ref::<AnyObject>(obj).cast::<NSString>();
+    Some(ns_string.to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
 fn remove_pending_request(state: &AppState, request_id: &str) {
     if let Ok(mut pending) = state.pending_requests.lock() {
         pending.remove(request_id);
@@ -130,6 +287,7 @@ fn serialize_frame_context(frame_context: &[FrameId]) -> Value {
     )
 }
 
+#[cfg(not(target_os = "macos"))]
 fn build_bridge_eval_script(
     request_id: &str,
     script: &str,
@@ -142,8 +300,7 @@ fn build_bridge_eval_script(
     let script_json = serde_json::to_string(script).unwrap_or_else(|_| "\"\"".into());
     let args_json = serde_json::to_string(args).unwrap_or_else(|_| "[]".into());
     let async_json = if async_mode { "true" } else { "false" };
-    let frame_context_json =
-        serde_json::to_string(frame_context).unwrap_or_else(|_| "[]".into());
+    let frame_context_json = serde_json::to_string(frame_context).unwrap_or_else(|_| "[]".into());
 
     format!(
         r#"
@@ -154,6 +311,39 @@ fn build_bridge_eval_script(
 "#,
         helper = bridge_helper_script(),
         request_id = request_id_json,
+        script = script_json,
+        args = args_json,
+        async_mode = async_json,
+        frame_context = frame_context_json
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn build_native_eval_script(
+    script: &str,
+    args: &[Value],
+    async_mode: bool,
+    frame_context: &Value,
+) -> String {
+    let script_json = serde_json::to_string(script).unwrap_or_else(|_| "\"\"".into());
+    let args_json = serde_json::to_string(args).unwrap_or_else(|_| "[]".into());
+    let async_json = if async_mode { "true" } else { "false" };
+    let frame_context_json = serde_json::to_string(frame_context).unwrap_or_else(|_| "[]".into());
+
+    format!(
+        r#"
+return (async () => {{
+  {helper}
+  const response = await window.__bitfunWd.execute({script}, {args}, {async_mode}, {frame_context});
+  return JSON.stringify({{
+    requestId: "__native__",
+    ok: response.ok,
+    value: response.value,
+    error: response.error ?? null
+  }});
+}})();
+"#,
+        helper = bridge_helper_script(),
         script = script_json,
         args = args_json,
         async_mode = async_json,
@@ -210,6 +400,77 @@ if (!window.__bitfunWd) {
     };
 
     const getFrameContext = () => currentFrameContext;
+
+    const W3C_KEY_MAP = {
+      "\uE000": "Unidentified",
+      "\uE001": "Cancel",
+      "\uE002": "Help",
+      "\uE003": "Backspace",
+      "\uE004": "Tab",
+      "\uE005": "Clear",
+      "\uE006": "Enter",
+      "\uE007": "Enter",
+      "\uE008": "Shift",
+      "\uE009": "Control",
+      "\uE00A": "Alt",
+      "\uE00B": "Pause",
+      "\uE00C": "Escape",
+      "\uE00D": " ",
+      "\uE00E": "PageUp",
+      "\uE00F": "PageDown",
+      "\uE010": "End",
+      "\uE011": "Home",
+      "\uE012": "ArrowLeft",
+      "\uE013": "ArrowUp",
+      "\uE014": "ArrowRight",
+      "\uE015": "ArrowDown",
+      "\uE016": "Insert",
+      "\uE017": "Delete",
+      "\uE031": "F1",
+      "\uE032": "F2",
+      "\uE033": "F3",
+      "\uE034": "F4",
+      "\uE035": "F5",
+      "\uE036": "F6",
+      "\uE037": "F7",
+      "\uE038": "F8",
+      "\uE039": "F9",
+      "\uE03A": "F10",
+      "\uE03B": "F11",
+      "\uE03C": "F12",
+      "\uE03D": "Meta"
+    };
+
+    const POINTER_BUTTON_MASK = {
+      0: 1,
+      1: 4,
+      2: 2,
+      3: 8,
+      4: 16
+    };
+
+    const ensureRuntimeState = () => {
+      if (!window.__bitfunWdRuntimeState) {
+        window.__bitfunWdRuntimeState = {
+          pointer: {
+            x: 0,
+            y: 0,
+            target: null,
+            buttons: 0,
+            lastClickAt: 0,
+            lastClickTargetId: null,
+            lastClickButton: null
+          },
+          modifiers: {
+            ctrl: false,
+            shift: false,
+            alt: false,
+            meta: false
+          }
+        };
+      }
+      return window.__bitfunWdRuntimeState;
+    };
 
     const patchConsole = () => {
       if (window[consolePatchedKey]) {
@@ -281,10 +542,19 @@ if (!window.__bitfunWd) {
     };
 
     const emitResult = async (payload) => {
-      if (!window.__TAURI__ || !window.__TAURI__.event || typeof window.__TAURI__.event.emit !== "function") {
-        throw new Error("Tauri event bridge unavailable");
+      if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function") {
+        await window.__TAURI__.core.invoke("webdriver_bridge_result", {
+          request: { payload }
+        });
+        return;
       }
-      await window.__TAURI__.event.emit(EVENT_NAME, payload);
+
+      if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === "function") {
+        await window.__TAURI__.event.emit(EVENT_NAME, payload);
+        return;
+      }
+
+      throw new Error("Tauri bridge unavailable");
     };
 
     const nextElementId = () => {
@@ -540,8 +810,9 @@ if (!window.__bitfunWd) {
     };
 
     const emitInputEvents = (element) => {
-      element.dispatchEvent(new Event("input", { bubbles: true }));
-      element.dispatchEvent(new Event("change", { bubbles: true }));
+      const ownerWindow = element?.ownerDocument?.defaultView || window;
+      element.dispatchEvent(new ownerWindow.Event("input", { bubbles: true }));
+      element.dispatchEvent(new ownerWindow.Event("change", { bubbles: true }));
     };
 
     const clearElement = (element) => {
@@ -577,14 +848,15 @@ if (!window.__bitfunWd) {
         return;
       }
       if (element.isContentEditable) {
-        const selection = window.getSelection();
+        const ownerWindow = element.ownerDocument?.defaultView || window;
+        const selection = ownerWindow.getSelection();
         element.focus();
         if (selection && selection.rangeCount > 0) {
           selection.deleteFromDocument();
-          selection.getRangeAt(0).insertNode(document.createTextNode(text));
+          selection.getRangeAt(0).insertNode(element.ownerDocument.createTextNode(text));
           selection.collapseToEnd();
         } else {
-          element.appendChild(document.createTextNode(text));
+          element.appendChild(element.ownerDocument.createTextNode(text));
         }
         emitInputEvents(element);
       }
@@ -595,14 +867,137 @@ if (!window.__bitfunWd) {
       insertText(element, text);
     };
 
-    const dispatchKeyboardEvent = (target, type, key, modifiers) => {
+    const sleep = (duration) =>
+      new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(duration) || 0)));
+
+    const normalizeKeyValue = (value) => W3C_KEY_MAP[String(value)] || String(value || "");
+
+    const isModifierKey = (key) =>
+      key === "Control" || key === "Shift" || key === "Alt" || key === "Meta";
+
+    const updateModifierState = (modifiers, key, isDown) => {
+      if (key === "Control") modifiers.ctrl = isDown;
+      if (key === "Shift") modifiers.shift = isDown;
+      if (key === "Alt") modifiers.alt = isDown;
+      if (key === "Meta") modifiers.meta = isDown;
+    };
+
+    const eventCodeForKey = (key) => {
+      const specialCodes = {
+        " ": "Space",
+        Backspace: "Backspace",
+        Tab: "Tab",
+        Enter: "Enter",
+        Escape: "Escape",
+        Delete: "Delete",
+        Insert: "Insert",
+        Home: "Home",
+        End: "End",
+        PageUp: "PageUp",
+        PageDown: "PageDown",
+        ArrowLeft: "ArrowLeft",
+        ArrowRight: "ArrowRight",
+        ArrowUp: "ArrowUp",
+        ArrowDown: "ArrowDown",
+        Shift: "ShiftLeft",
+        Control: "ControlLeft",
+        Alt: "AltLeft",
+        Meta: "MetaLeft"
+      };
+      if (specialCodes[key]) {
+        return specialCodes[key];
+      }
+      if (/^F\d{1,2}$/.test(key)) {
+        return key;
+      }
+      if (key.length === 1) {
+        if (/^[a-z]$/i.test(key)) {
+          return `Key${key.toUpperCase()}`;
+        }
+        if (/^\d$/.test(key)) {
+          return `Digit${key}`;
+        }
+      }
+      return key || "Unidentified";
+    };
+
+    const getPrintableKey = (key, modifiers) => {
+      if (key === " ") {
+        return " ";
+      }
+      if (key.length !== 1) {
+        return key;
+      }
+      if (modifiers.shift && /^[a-z]$/.test(key)) {
+        return key.toUpperCase();
+      }
+      return key;
+    };
+
+    const getActiveTarget = (frameContext = currentFrameContext) => {
+      const doc = getCurrentDocument(frameContext);
+      return doc.activeElement || doc.body || doc.documentElement;
+    };
+
+    const moveFocusByTab = (target, backwards, frameContext = currentFrameContext) => {
+      const doc = getCurrentDocument(frameContext);
+      const selector = [
+        "a[href]",
+        "button",
+        "input",
+        "select",
+        "textarea",
+        "[tabindex]:not([tabindex='-1'])"
+      ].join(", ");
+      const focusable = Array.from(doc.querySelectorAll(selector)).filter((element) => {
+        if (!isElementLike(element) || element.disabled) {
+          return false;
+        }
+        const style = window.getComputedStyle(element);
+        return style.display !== "none" && style.visibility !== "hidden";
+      });
+      if (!focusable.length) {
+        return;
+      }
+      const index = Math.max(0, focusable.indexOf(target));
+      const nextIndex = backwards
+        ? (index - 1 + focusable.length) % focusable.length
+        : (index + 1) % focusable.length;
+      focusable[nextIndex].focus();
+    };
+
+    const moveCaret = (target, direction) => {
+      if (!target || !("value" in target)) {
+        return;
+      }
+      const value = String(target.value || "");
+      const start = typeof target.selectionStart === "number" ? target.selectionStart : value.length;
+      const end = typeof target.selectionEnd === "number" ? target.selectionEnd : value.length;
+      if (direction === "start") {
+        setSelectionRange(target, 0, 0);
+        return;
+      }
+      if (direction === "end") {
+        setSelectionRange(target, value.length, value.length);
+        return;
+      }
+      const base = direction === "left" ? Math.min(start, end) : Math.max(start, end);
+      const next = direction === "left" ? Math.max(0, base - 1) : Math.min(value.length, base + 1);
+      setSelectionRange(target, next, next);
+    };
+
+    const getOwnerWindow = (target, frameContext = currentFrameContext) =>
+      target?.ownerDocument?.defaultView || getCurrentWindow(frameContext);
+
+    const dispatchKeyboardEvent = (target, type, key, modifiers, frameContext = currentFrameContext) => {
       if (!target) {
         return true;
       }
+      const ownerWindow = getOwnerWindow(target, frameContext);
       return target.dispatchEvent(
-        new KeyboardEvent(type, {
+        new ownerWindow.KeyboardEvent(type, {
           key,
-          code: key,
+          code: eventCodeForKey(key),
           bubbles: true,
           cancelable: true,
           ctrlKey: modifiers.ctrl,
@@ -613,7 +1008,7 @@ if (!window.__bitfunWd) {
       );
     };
 
-    const applySpecialKey = (target, key, modifiers) => {
+    const applySpecialKey = (target, key, modifiers, frameContext = currentFrameContext) => {
       if (!target) {
         return;
       }
@@ -622,6 +1017,11 @@ if (!window.__bitfunWd) {
       if ((modifiers.ctrl || modifiers.meta) && key.toLowerCase() === "a" && isInputLike) {
         const value = String(target.value || "");
         setSelectionRange(target, 0, value.length);
+        return;
+      }
+
+      if (key === "Tab") {
+        moveFocusByTab(target, modifiers.shift, frameContext);
         return;
       }
 
@@ -640,108 +1040,352 @@ if (!window.__bitfunWd) {
         return;
       }
 
+      if (key === "Delete" && isInputLike) {
+        const value = String(target.value || "");
+        const start = typeof target.selectionStart === "number" ? target.selectionStart : value.length;
+        const end = typeof target.selectionEnd === "number" ? target.selectionEnd : value.length;
+        if (start !== end) {
+          target.value = value.slice(0, start) + value.slice(end);
+        } else {
+          target.value = value.slice(0, start) + value.slice(start + 1);
+        }
+        setSelectionRange(target, start, start);
+        emitInputEvents(target);
+        return;
+      }
+
+      if (key === "ArrowLeft" && isInputLike) {
+        moveCaret(target, "left");
+        return;
+      }
+
+      if (key === "ArrowRight" && isInputLike) {
+        moveCaret(target, "right");
+        return;
+      }
+
+      if (key === "Home" && isInputLike) {
+        moveCaret(target, "start");
+        return;
+      }
+
+      if (key === "End" && isInputLike) {
+        moveCaret(target, "end");
+        return;
+      }
+
       if (key === "Enter") {
-        if (isInputLike && target.tagName === "TEXTAREA" && !modifiers.ctrl && !modifiers.meta) {
+        if (isInputLike && String(target.tagName || "").toUpperCase() === "TEXTAREA" && !modifiers.ctrl && !modifiers.meta) {
           insertText(target, "\n");
         }
         return;
       }
 
       if (key.length === 1 && !modifiers.ctrl && !modifiers.meta && !modifiers.alt) {
-        insertText(target, key);
+        insertText(target, getPrintableKey(key, modifiers));
       }
+    };
+
+    const pointerButtonMask = (button) => POINTER_BUTTON_MASK[Number(button)] || 0;
+
+    const getElementFromPoint = (frameContext, x, y) => {
+      const doc = getCurrentDocument(frameContext);
+      return doc.elementFromPoint(Number(x) || 0, Number(y) || 0);
+    };
+
+    const updatePointerTarget = (frameContext, x, y, fallbackTarget = null) => {
+      const runtime = ensureRuntimeState();
+      runtime.pointer.x = Number(x) || 0;
+      runtime.pointer.y = Number(y) || 0;
+      runtime.pointer.target =
+        getElementFromPoint(frameContext, runtime.pointer.x, runtime.pointer.y) ||
+        fallbackTarget ||
+        runtime.pointer.target ||
+        getActiveTarget(frameContext);
+      return runtime.pointer.target;
+    };
+
+    const resolveActionOrigin = (origin, action, frameContext = currentFrameContext) => {
+      const runtime = ensureRuntimeState();
+      if (origin === "pointer") {
+        return {
+          x: runtime.pointer.x + (Number(action?.x) || 0),
+          y: runtime.pointer.y + (Number(action?.y) || 0),
+          target: null
+        };
+      }
+
+      if (origin && typeof origin === "object" && typeof origin[ELEMENT_KEY] === "string") {
+        const element = getElement(origin[ELEMENT_KEY]);
+        if (!element) {
+          throw new Error("Element not found");
+        }
+        const rect = element.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2 + (Number(action?.x) || 0),
+          y: rect.top + rect.height / 2 + (Number(action?.y) || 0),
+          target: element
+        };
+      }
+
+      return {
+        x: Number(action?.x) || 0,
+        y: Number(action?.y) || 0,
+        target: null
+      };
+    };
+
+    const dispatchMouseEvent = (target, type, x, y, button, buttons, frameContext = currentFrameContext) => {
+      if (!target) {
+        return false;
+      }
+      const ownerWindow = getOwnerWindow(target, frameContext);
+      return target.dispatchEvent(
+        new ownerWindow.MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          button,
+          buttons
+        })
+      );
+    };
+
+    const maybeDispatchClick = (target, x, y, button, frameContext = currentFrameContext) => {
+      if (!target) {
+        return;
+      }
+      if (button === 2) {
+        dispatchMouseEvent(target, "contextmenu", x, y, button, 0, frameContext);
+        return;
+      }
+      dispatchMouseEvent(target, "click", x, y, button, 0, frameContext);
+      const runtime = ensureRuntimeState();
+      const clickTargetId = storeElement(target)?.[ELEMENT_KEY] || null;
+      const now = Date.now();
+      if (
+        button === 0 &&
+        runtime.pointer.lastClickButton === button &&
+        runtime.pointer.lastClickTargetId === clickTargetId &&
+        now - runtime.pointer.lastClickAt < 500
+      ) {
+        dispatchMouseEvent(target, "dblclick", x, y, button, 0, frameContext);
+      }
+      runtime.pointer.lastClickAt = now;
+      runtime.pointer.lastClickButton = button;
+      runtime.pointer.lastClickTargetId = clickTargetId;
     };
 
     const dispatchPointerClick = (element, button, doubleClick) => {
       if (!element) {
         throw new Error("Element not found");
       }
-      const rect = element.getBoundingClientRect();
-      const options = {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2,
-        button,
-        buttons: button === 2 ? 2 : 1
-      };
       element.scrollIntoView({ block: "center", inline: "center" });
       if (typeof element.focus === "function") {
         element.focus();
       }
-      element.dispatchEvent(new MouseEvent("mouseover", options));
-      element.dispatchEvent(new MouseEvent("mousemove", options));
-      element.dispatchEvent(new MouseEvent("mousedown", options));
-      element.dispatchEvent(new MouseEvent("mouseup", options));
-      if (button === 2) {
-        element.dispatchEvent(new MouseEvent("contextmenu", options));
-        return;
-      }
-      element.dispatchEvent(new MouseEvent("click", options));
-      if (doubleClick) {
-        element.dispatchEvent(new MouseEvent("dblclick", options));
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      updatePointerTarget(getFrameContext(), x, y, element);
+      const runtime = ensureRuntimeState();
+      const buttonMask = pointerButtonMask(button);
+      dispatchMouseEvent(element, "mouseover", x, y, button, runtime.pointer.buttons, getFrameContext());
+      dispatchMouseEvent(element, "mousemove", x, y, button, runtime.pointer.buttons, getFrameContext());
+      runtime.pointer.buttons |= buttonMask;
+      dispatchMouseEvent(element, "mousedown", x, y, button, runtime.pointer.buttons, getFrameContext());
+      runtime.pointer.buttons &= ~buttonMask;
+      dispatchMouseEvent(element, "mouseup", x, y, button, runtime.pointer.buttons, getFrameContext());
+      maybeDispatchClick(element, x, y, button, getFrameContext());
+      if (doubleClick && button === 0) {
+        dispatchMouseEvent(element, "dblclick", x, y, button, runtime.pointer.buttons, getFrameContext());
       }
     };
 
-    const performActions = (sources) => {
-      let pointerTarget = null;
-      const keyState = { ctrl: false, shift: false, alt: false, meta: false };
-      sources.forEach((source) => {
+    const findScrollableTarget = (target, doc) => {
+      let current = target;
+      while (current && current !== doc.body && current !== doc.documentElement) {
+        if (
+          (current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth) &&
+          current instanceof Element
+        ) {
+          return current;
+        }
+        current = current.parentElement;
+      }
+      return doc.scrollingElement || doc.documentElement || doc.body;
+    };
+
+    const applyWheelScroll = (target, deltaX, deltaY, frameContext = currentFrameContext) => {
+      const doc = getCurrentDocument(frameContext);
+      const scrollTarget = findScrollableTarget(target, doc);
+      if (!scrollTarget) {
+        return;
+      }
+      if (scrollTarget === doc.body || scrollTarget === doc.documentElement || scrollTarget === doc.scrollingElement) {
+        const ownerWindow = doc.defaultView || window;
+        ownerWindow.scrollBy(deltaX, deltaY);
+        return;
+      }
+      scrollTarget.scrollLeft += deltaX;
+      scrollTarget.scrollTop += deltaY;
+    };
+
+    const performActions = async (sources, frameContext = currentFrameContext) => {
+      const runtime = ensureRuntimeState();
+      const keyState = {
+        ctrl: !!runtime.modifiers.ctrl,
+        shift: !!runtime.modifiers.shift,
+        alt: !!runtime.modifiers.alt,
+        meta: !!runtime.modifiers.meta
+      };
+
+      for (const source of sources || []) {
         if (!source || !Array.isArray(source.actions)) {
-          return;
+          continue;
         }
 
         if (source.type === "pointer") {
-          let sawClick = false;
-          let button = 0;
-          source.actions.forEach((action) => {
-            if (action.type === "pointerMove" && action.origin && typeof action.origin[ELEMENT_KEY] === "string") {
-              pointerTarget = getElement(action.origin[ELEMENT_KEY]);
-            } else if (action.type === "pointerDown") {
-              button = Number(action.button || 0);
-            } else if (action.type === "pointerUp") {
-              if (pointerTarget) {
-                dispatchPointerClick(pointerTarget, button, sawClick && button === 0);
+          for (const action of source.actions) {
+            if (action.type === "pause") {
+              if (action.duration) {
+                await sleep(action.duration);
               }
-              sawClick = true;
+              continue;
             }
-          });
-          return;
+
+            if (action.type === "pointerMove") {
+              if (action.duration) {
+                await sleep(action.duration);
+              }
+              const origin = Object.prototype.hasOwnProperty.call(action, "origin") ? action.origin : "viewport";
+              const resolved = resolveActionOrigin(origin, action, frameContext);
+              const target = updatePointerTarget(frameContext, resolved.x, resolved.y, resolved.target);
+              if (target) {
+                dispatchMouseEvent(target, "mousemove", runtime.pointer.x, runtime.pointer.y, 0, runtime.pointer.buttons, frameContext);
+              }
+              continue;
+            }
+
+            const target =
+              runtime.pointer.target ||
+              updatePointerTarget(frameContext, runtime.pointer.x, runtime.pointer.y, getActiveTarget(frameContext));
+            const button = Number(action.button || 0);
+            const buttonMask = pointerButtonMask(button);
+            if (!target) {
+              throw new Error("Pointer target not found");
+            }
+
+            if (action.type === "pointerDown") {
+              if (action.duration) {
+                await sleep(action.duration);
+              }
+              if (typeof target.focus === "function") {
+                target.focus();
+              }
+              runtime.pointer.buttons |= buttonMask;
+              dispatchMouseEvent(target, "mousedown", runtime.pointer.x, runtime.pointer.y, button, runtime.pointer.buttons, frameContext);
+              continue;
+            }
+
+            if (action.type === "pointerUp") {
+              if (action.duration) {
+                await sleep(action.duration);
+              }
+              runtime.pointer.buttons &= ~buttonMask;
+              dispatchMouseEvent(target, "mouseup", runtime.pointer.x, runtime.pointer.y, button, runtime.pointer.buttons, frameContext);
+              maybeDispatchClick(target, runtime.pointer.x, runtime.pointer.y, button, frameContext);
+            }
+          }
+          continue;
+        }
+
+        if (source.type === "wheel") {
+          for (const action of source.actions) {
+            if (action.type === "pause") {
+              if (action.duration) {
+                await sleep(action.duration);
+              }
+              continue;
+            }
+            if (action.duration) {
+              await sleep(action.duration);
+            }
+            const origin = Object.prototype.hasOwnProperty.call(action, "origin") ? action.origin : "viewport";
+            const resolved = resolveActionOrigin(origin, action, frameContext);
+            const target = updatePointerTarget(frameContext, resolved.x, resolved.y, resolved.target);
+            if (target) {
+              const ownerWindow = getOwnerWindow(target, frameContext);
+              target.dispatchEvent(
+                new ownerWindow.WheelEvent("wheel", {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: runtime.pointer.x,
+                  clientY: runtime.pointer.y,
+                  deltaX: Number(action.deltaX) || 0,
+                  deltaY: Number(action.deltaY) || 0
+                })
+              );
+            }
+            applyWheelScroll(target, Number(action.deltaX) || 0, Number(action.deltaY) || 0, frameContext);
+          }
+          continue;
         }
 
         if (source.type === "key") {
-          source.actions.forEach((action) => {
+          for (const action of source.actions) {
             if (action.type === "pause") {
-              return;
-            }
-            const target = document.activeElement || document.body;
-            const key = String(action.value || "");
-            if (action.type === "keyDown") {
-              if (key === "Control") keyState.ctrl = true;
-              if (key === "Shift") keyState.shift = true;
-              if (key === "Alt") keyState.alt = true;
-              if (key === "Meta") keyState.meta = true;
-              dispatchKeyboardEvent(target, "keydown", key, keyState);
-              applySpecialKey(target, key, keyState);
-              if (key.length === 1) {
-                dispatchKeyboardEvent(target, "keypress", key, keyState);
+              if (action.duration) {
+                await sleep(action.duration);
               }
-              return;
+              continue;
             }
-            dispatchKeyboardEvent(target, "keyup", key, keyState);
-            if (key === "Control") keyState.ctrl = false;
-            if (key === "Shift") keyState.shift = false;
-            if (key === "Alt") keyState.alt = false;
-            if (key === "Meta") keyState.meta = false;
-          });
+
+            const target = getActiveTarget(frameContext);
+            const key = normalizeKeyValue(action.value);
+            if (action.type === "keyDown") {
+              updateModifierState(keyState, key, true);
+              dispatchKeyboardEvent(target, "keydown", key, keyState, frameContext);
+              if (key.length === 1) {
+                dispatchKeyboardEvent(target, "keypress", getPrintableKey(key, keyState), keyState, frameContext);
+              }
+              if (!isModifierKey(key)) {
+                applySpecialKey(target, key, keyState, frameContext);
+              }
+              continue;
+            }
+
+            dispatchKeyboardEvent(target, "keyup", key, keyState, frameContext);
+            updateModifierState(keyState, key, false);
+          }
         }
-      });
+      }
+
+      runtime.modifiers = keyState;
     };
 
-    const takeLogs = () => {
-      const logs = ensureLogs().slice();
-      ensureLogs().length = 0;
-      return logs;
+    const releaseActions = async (pressedKeys, pressedButtons, frameContext = currentFrameContext) => {
+      const runtime = ensureRuntimeState();
+      for (const rawKey of pressedKeys || []) {
+        const target = getActiveTarget(frameContext);
+        const key = normalizeKeyValue(rawKey);
+        dispatchKeyboardEvent(target, "keyup", key, runtime.modifiers, frameContext);
+        updateModifierState(runtime.modifiers, key, false);
+      }
+
+      for (const item of pressedButtons || []) {
+        const button = Number(item?.button || 0);
+        const buttonMask = pointerButtonMask(button);
+        const target =
+          runtime.pointer.target ||
+          updatePointerTarget(frameContext, runtime.pointer.x, runtime.pointer.y, getActiveTarget(frameContext));
+        if (!target) {
+          continue;
+        }
+        runtime.pointer.buttons &= ~buttonMask;
+        dispatchMouseEvent(target, "mouseup", runtime.pointer.x, runtime.pointer.y, button, runtime.pointer.buttons, frameContext);
+      }
     };
 
     const parseDocumentCookies = (doc) => {
@@ -862,7 +1506,7 @@ if (!window.__bitfunWd) {
       }
     };
 
-    const run = async (requestId, script, args, asyncMode, frameContext) => {
+    const execute = async (script, args, asyncMode, frameContext) => {
       patchConsole();
       try {
         setFrameContext(frameContext);
@@ -883,22 +1527,36 @@ if (!window.__bitfunWd) {
         } else {
           value = await fn.apply(targetWindow, resolvedArgs);
         }
-        await emitResult({
-          requestId,
+        return {
           ok: true,
           value: serialize(value)
-        });
+        };
       } catch (error) {
-        await emitResult({
-          requestId,
+        return {
           ok: false,
           error: {
             name: error && error.name ? error.name : "Error",
             message: error && error.message ? error.message : String(error),
             stack: error && error.stack ? error.stack : null
           }
-        });
+        };
       }
+    };
+
+    const run = async (requestId, script, args, asyncMode, frameContext) => {
+      const response = await execute(script, args, asyncMode, frameContext);
+      await emitResult({
+        requestId,
+        ok: response.ok,
+        value: response.value,
+        error: response.error
+      });
+    };
+
+    const takeLogs = () => {
+      const logs = ensureLogs().slice();
+      ensureLogs().length = 0;
+      return logs;
     };
 
     patchConsole();
@@ -914,9 +1572,11 @@ if (!window.__bitfunWd) {
       getShadowRoot,
       isDisplayed,
       clearElement,
+      insertText,
       setElementText,
       dispatchPointerClick,
       performActions,
+      releaseActions,
       getAllCookies,
       getCookie,
       addCookie,
@@ -926,6 +1586,7 @@ if (!window.__bitfunWd) {
       sendAlertText,
       closeAlert,
       takeLogs,
+      execute,
       run
     };
   })();

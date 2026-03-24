@@ -7,6 +7,7 @@ pub mod webdriver;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use serde_json::Value;
 use tauri::AppHandle;
 
 use server::AppState;
@@ -33,4 +34,8 @@ pub fn maybe_start(app: AppHandle) {
 
     bridge::register_listener(app, state.clone());
     server::start(state);
+}
+
+pub fn handle_bridge_result(payload: Value) -> Result<(), String> {
+    bridge::handle_invoke_payload(payload)
 }
