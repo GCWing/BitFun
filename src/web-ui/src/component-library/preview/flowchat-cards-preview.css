@@ -16,7 +16,7 @@
   --tool-card-text-secondary: #a0a0a0;
   --tool-card-text-muted: #6b7280;
   
-  --tool-card-font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  --tool-card-font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
 }
 
 .column-item-preview {

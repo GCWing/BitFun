@@ -1,6 +1,7 @@
 import { ModelConfig } from '../types';
 import { aiApi } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import type { ConnectionTestMessageCode } from './aiConnectionTestMessages';
 
 const log = createLogger('ConfigConverter');
 
@@ -93,6 +94,7 @@ export interface ConnectionTestResult {
   success: boolean;
   response_time_ms: number;
   model_response?: string;
+  message_code?: ConnectionTestMessageCode;
   error_details?: string;
 }
 

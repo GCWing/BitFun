@@ -111,7 +111,7 @@ Make sure you have the following prerequisites installed:
 - Rust toolchain (install via [rustup](https://rustup.rs/))
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop development
 
-**Windows only**: The desktop build links against a **prebuilt** OpenSSL (no OpenSSL source compile). `desktop:dev` and all `desktop:build*` scripts use `ensure-openssl-windows.mjs` (via `desktop-tauri-build.mjs` for builds): the first time OpenSSL is needed, it downloads [FireDaemon OpenSSL 3.5.5](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip) into `.bitfun/cache/`; later runs reuse that cache. Override with `OPENSSL_DIR` pointing at the **`x64`** folder from the ZIP, or `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and your own `OPENSSL_*`.
+**Windows only**: The desktop build links against a **prebuilt** OpenSSL (no OpenSSL source compile). You do **not** need to download the ZIP by hand: the first time OpenSSL is required, tooling fetches [FireDaemon OpenSSL 3.5.5](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip) into **`.bitfun/cache/`** and later runs reuse that cache. **`pnpm run desktop:dev`** and all **`pnpm run desktop:build*`** scripts run `ensure-openssl-windows.mjs` (builds use `desktop-tauri-build.mjs`). **If you compile with plain `cargo`** (without those pnpm entrypoints), run **`node scripts/ensure-openssl-windows.mjs`** once from the repo root first — it performs the same download and prints **`OPENSSL_*`** lines for PowerShell. Override with `OPENSSL_DIR` pointing at the **`x64`** folder from the ZIP, or `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and your own `OPENSSL_*`.
 
 ```bash
 # Install dependencies

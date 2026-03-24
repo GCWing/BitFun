@@ -22,6 +22,8 @@ pub struct CreateSessionRequest {
     pub session_name: String,
     pub agent_type: String,
     pub workspace_path: String,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -36,6 +38,8 @@ pub struct SessionConfigDTO {
     pub enable_context_compression: Option<bool>,
     pub compression_threshold: Option<f32>,
     pub model_name: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -71,6 +75,15 @@ pub struct StartDialogTurnRequest {
 pub struct StartDialogTurnResponse {
     pub success: bool,
     pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnsureCoordinatorSessionRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,6 +155,8 @@ pub struct CancelToolRequest {
 pub struct DeleteSessionRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,12 +164,16 @@ pub struct DeleteSessionRequest {
 pub struct RestoreSessionRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListSessionsRequest {
     pub workspace_path: String,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,6 +205,16 @@ pub async fn create_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
+    fn norm_conn(s: Option<String>) -> Option<String> {
+        s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
+    }
+    let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
+        request
+            .config
+            .as_ref()
+            .and_then(|c| norm_conn(c.remote_connection_id.clone()))
+    });
+
     let config = request
         .config
         .map(|c| SessionConfig {
@@ -197,10 +226,12 @@ pub async fn create_session(
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: Some(request.workspace_path.clone()),
+            remote_connection_id: remote_conn.clone(),
             model_id: c.model_name,
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
+            remote_connection_id: remote_conn.clone(),
             ..Default::default()
         });
 
@@ -231,6 +262,38 @@ pub async fn update_session_model(
         .update_session_model(&request.session_id, &request.model_name)
         .await
         .map_err(|e| format!("Failed to update session model: {}", e))
+}
+
+/// Load the session into the coordinator process when it exists on disk but is not in memory.
+/// Uses the same remote→local session path mapping as `restore_session`.
+#[tauri::command]
+pub async fn ensure_coordinator_session(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    request: EnsureCoordinatorSessionRequest,
+) -> Result<(), String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let wp = request.workspace_path.trim();
+    if wp.is_empty() {
+        return Err("workspace_path is required when the session is not loaded".to_string());
+    }
+
+    let effective = get_effective_session_path(wp, request.remote_connection_id.as_deref()).await;
+    coordinator
+        .restore_session(&effective, session_id)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -426,7 +489,8 @@ pub async fn delete_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: DeleteSessionRequest,
 ) -> Result<(), String> {
-    let effective_path = get_effective_session_path(&request.workspace_path).await;
+    let effective_path =
+        get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     coordinator
         .delete_session(&effective_path, &request.session_id)
         .await
@@ -438,7 +502,8 @@ pub async fn restore_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: RestoreSessionRequest,
 ) -> Result<SessionResponse, String> {
-    let effective_path = get_effective_session_path(&request.workspace_path).await;
+    let effective_path =
+        get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let session = coordinator
         .restore_session(&effective_path, &request.session_id)
         .await
@@ -453,7 +518,8 @@ pub async fn list_sessions(
     request: ListSessionsRequest,
 ) -> Result<Vec<SessionResponse>, String> {
     // Map remote workspace path to local session storage path
-    let effective_path = get_effective_session_path(&request.workspace_path).await;
+    let effective_path =
+        get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let summaries = coordinator
         .list_sessions(&effective_path)
         .await

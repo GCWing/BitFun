@@ -371,6 +371,9 @@ impl AppState {
             workspace.connection_id.clone(),
             workspace.connection_name.clone(),
         ).await;
+        state_manager
+            .set_active_connection_hint(Some(workspace.connection_id.clone()))
+            .await;
         log::info!("Remote workspace registered: {} on {}",
             workspace.remote_path, workspace.connection_name);
         Ok(())
@@ -381,32 +384,48 @@ impl AppState {
         self.remote_workspace.read().await.clone()
     }
 
-    /// Clear current remote workspace
-    pub async fn clear_remote_workspace(&self) {
-        // Get the remote_path before clearing so we can unregister the specific workspace
-        let remote_path = {
-            let guard = self.remote_workspace.read().await;
-            guard.as_ref().map(|w| w.remote_path.clone())
-        };
-
-        // Clear local state
-        *self.remote_workspace.write().await = None;
-
-        // Remove this specific workspace from persistence (not all of them)
-        if let Some(path) = &remote_path {
-            if let Ok(manager) = self.get_ssh_manager_async().await {
-                if let Err(e) = manager.remove_remote_workspace(path).await {
-                    log::warn!("Failed to remove persisted remote workspace: {}", e);
-                }
-            }
-
-            // Unregister from the global registry
-            if let Some(state_manager) = bitfun_core::service::remote_ssh::get_remote_workspace_manager() {
-                state_manager.unregister_remote_workspace(path).await;
+    /// Remove one remote workspace from persistence + registry (`connection_id` + `remote_path`).
+    pub async fn unregister_remote_workspace_entry(&self, connection_id: &str, remote_path: &str) {
+        let rp = bitfun_core::service::remote_ssh::normalize_remote_workspace_path(remote_path);
+        if let Ok(manager) = self.get_ssh_manager_async().await {
+            if let Err(e) = manager.remove_remote_workspace(connection_id, &rp).await {
+                log::warn!("Failed to remove persisted remote workspace: {}", e);
             }
         }
+        if let Some(state_manager) = bitfun_core::service::remote_ssh::get_remote_workspace_manager() {
+            state_manager
+                .unregister_remote_workspace(connection_id, &rp)
+                .await;
+        }
+        let mut slot = self.remote_workspace.write().await;
+        let clear_slot = slot
+            .as_ref()
+            .map(|w| {
+                w.connection_id == connection_id
+                    && bitfun_core::service::remote_ssh::normalize_remote_workspace_path(&w.remote_path)
+                        == rp
+            })
+            .unwrap_or(false);
+        if clear_slot {
+            *slot = None;
+            if let Some(m) = bitfun_core::service::remote_ssh::get_remote_workspace_manager() {
+                m.set_active_connection_hint(None).await;
+            }
+        }
+        log::info!(
+            "Remote workspace entry removed: connection_id={}, remote_path={}",
+            connection_id,
+            rp
+        );
+    }
 
-        log::info!("Remote workspace unregistered: {:?}", remote_path);
+    /// Clear current remote pointer and remove its persisted/registry entry (legacy SSH "close").
+    pub async fn clear_remote_workspace(&self) {
+        let snap = { self.remote_workspace.read().await.clone() };
+        if let Some(w) = snap {
+            self.unregister_remote_workspace_entry(&w.connection_id, &w.remote_path)
+                .await;
+        }
     }
 
     /// Check if currently in a remote workspace

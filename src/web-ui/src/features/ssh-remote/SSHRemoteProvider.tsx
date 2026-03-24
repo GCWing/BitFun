@@ -211,13 +211,14 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
         // Ignore
       }
 
-      // Build a deduplicated list keyed by remotePath
+      // Key by connection + path so two servers at the same remote path stay distinct.
+      const remoteWorkspaceDedupKey = (cid: string, rp: string) => `${cid}\n${rp}`;
       const toReconnect = new Map<string, RemoteWorkspace>();
 
       for (const ws of openedRemote) {
         if (!ws.connectionId) continue;
         const rp = normalizeRemoteWorkspacePath(ws.rootPath);
-        toReconnect.set(rp, {
+        toReconnect.set(remoteWorkspaceDedupKey(ws.connectionId, rp), {
           connectionId: ws.connectionId,
           connectionName: ws.connectionName || 'Remote',
           remotePath: rp,
@@ -225,10 +226,11 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       }
 
       // Add legacy workspace if it isn't already covered
-      if (legacyWorkspace) {
+      if (legacyWorkspace?.connectionId) {
         const leg = normalizeRemoteWorkspacePath(legacyWorkspace.remotePath);
-        if (!toReconnect.has(leg)) {
-          toReconnect.set(leg, { ...legacyWorkspace, remotePath: leg });
+        const k = remoteWorkspaceDedupKey(legacyWorkspace.connectionId, leg);
+        if (!toReconnect.has(k)) {
+          toReconnect.set(k, { ...legacyWorkspace, remotePath: leg });
         }
       }
 

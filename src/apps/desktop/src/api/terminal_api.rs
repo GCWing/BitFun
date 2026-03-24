@@ -310,7 +310,7 @@ pub async fn terminal_get_shells(
 async fn lookup_remote_for_terminal(working_directory: Option<&str>) -> Option<(String, String)> {
     let wd = working_directory?;
     let manager = get_remote_workspace_manager()?;
-    let entry = manager.lookup_connection(wd).await?;
+    let entry = manager.lookup_connection(wd, None).await?;
     Some((entry.connection_id, wd.to_string()))
 }
 

@@ -50,6 +50,8 @@ const getTitle = (session: Session): string =>
 interface SessionsSectionProps {
   workspaceId?: string;
   workspacePath?: string;
+  /** Remote SSH: same `workspacePath` on different hosts must filter by this (see Session.remoteConnectionId). */
+  remoteConnectionId?: string | null;
   isActiveWorkspace?: boolean;
   showCreateActions?: boolean;
 }
@@ -57,6 +59,7 @@ interface SessionsSectionProps {
 const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspaceId,
   workspacePath,
+  remoteConnectionId = null,
   isActiveWorkspace = true,
 }) => {
   const { t } = useI18n('common');
@@ -112,7 +115,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   useEffect(() => {
     setExpandLevel(0);
-  }, [workspaceId, workspacePath]);
+  }, [workspaceId, workspacePath, remoteConnectionId]);
 
   useEffect(() => {
     if (!openMenuSessionId) return;
@@ -131,12 +134,18 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       Array.from(flowChatState.sessions.values())
         .filter((s: Session) => {
           if (workspacePath) {
-            return s.workspacePath === workspacePath;
+            if (s.workspacePath !== workspacePath) return false;
+            const wsConn = remoteConnectionId?.trim() ?? '';
+            const sessConn = s.remoteConnectionId?.trim() ?? '';
+            if (wsConn.length > 0 || sessConn.length > 0) {
+              return sessConn === wsConn;
+            }
+            return true;
           }
           return !s.workspacePath;
         })
         .sort(compareSessionsForDisplay),
-    [flowChatState.sessions, workspacePath]
+    [flowChatState.sessions, workspacePath, remoteConnectionId]
   );
 
   const { topLevelSessions, childrenByParent } = useMemo(() => {

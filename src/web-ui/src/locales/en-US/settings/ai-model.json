@@ -243,6 +243,10 @@
     "testSuccess": "Test successful",
     "testFailed": "Test failed",
     "errorDetails": "Error details",
+    "connectionTestMessages": {
+      "toolCallsNotDetected": "This test did not detect any tool calls, so tool calling could not be verified this time.",
+      "imageInputCheckFailed": "The connection succeeded, but the image input check failed."
+    },
     "autoSetPrimary": "Automatically set as primary model",
     "defaultDescription": "{{name}} model configuration",
     "cloneName": "{{name}} - Copy",

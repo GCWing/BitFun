@@ -16,6 +16,7 @@ import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSectio
 import DefaultModelConfig from './DefaultModelConfig';
 import TokenStatsModal from './TokenStatsModal';
 import { createLogger } from '@/shared/utils/logger';
+import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
@@ -752,9 +753,16 @@ const AIModelConfig: React.FC = () => {
             const result = await aiApi.testAIConfigConnection(config);
             const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
             let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
+            const localizedMessage = translateConnectionTestMessage(result.message_code, t);
 
-            if (!result.success && result.error_details) {
-              message += `\n${t('messages.errorDetails')}: ${result.error_details}`;
+            if (localizedMessage) {
+              message += `\n${localizedMessage}`;
+            }
+
+            if (result.error_details) {
+              message += result.success
+                ? `\n${result.error_details}`
+                : `\n${t('messages.errorDetails')}: ${result.error_details}`;
             }
 
             setTestResults(prev => ({
@@ -818,8 +826,13 @@ const AIModelConfig: React.FC = () => {
       
       const baseMessage = result.success ? t('messages.testSuccess') : t('messages.testFailed');
       let message = baseMessage + (result.response_time_ms ? ` (${result.response_time_ms}ms)` : '');
+      const localizedMessage = translateConnectionTestMessage(result.message_code, t);
       
-      if (!result.success && result.error_details) {
+      if (localizedMessage) {
+        message += `\n${localizedMessage}`;
+      }
+
+      if (result.error_details) {
         message += `\n${t('messages.errorDetails')}: ${result.error_details}`;
       }
       

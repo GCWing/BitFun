@@ -70,7 +70,12 @@ impl SessionManager {
         let path_buf = PathBuf::from(workspace_path);
 
         // Check if this path belongs to any registered remote workspace
-        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection(workspace_path).await {
+        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
+            workspace_path,
+            config.remote_connection_id.as_deref(),
+        )
+        .await
+        {
             if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
                 return Some(manager.get_local_session_path(&entry.connection_id));
             }
@@ -258,7 +263,9 @@ impl SessionManager {
         self.sessions.insert(session_id.clone(), session.clone());
 
         // 2. Initialize message history
-        self.history_manager.create_session(&session_id).await?;
+        self.history_manager
+            .create_session(&session_id)
+            .await?;
 
         // 3. Initialize compression manager
         self.compression_manager.create_session(&session_id);

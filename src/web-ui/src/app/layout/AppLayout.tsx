@@ -8,7 +8,7 @@
  * TitleBar removed; window controls moved to NavBar, dialogs managed here.
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
@@ -28,6 +28,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
+import { SSHContext } from '@/features/ssh-remote/SSHRemoteProvider';
 import { shortcutManager } from '@/infrastructure/services/ShortcutManager';
 import './AppLayout.scss';
 
@@ -40,6 +41,12 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
   const { currentWorkspace, hasWorkspace, openWorkspace, recentWorkspaces, loading } = useWorkspaceContext();
+  const sshContext = useContext(SSHContext);
+  /** When SSH finishes connecting, re-run FlowChat init (first run may have skipped while disconnected). */
+  const remoteSshFlowChatKey =
+    currentWorkspace?.workspaceKind === WorkspaceKind.Remote && currentWorkspace?.connectionId
+      ? sshContext?.workspaceStatuses[currentWorkspace.connectionId] ?? 'unknown'
+      : 'local';
 
   const { isToolbarMode } = useToolbarModeContext();
   const { ensureForWorkspace: ensureAssistantBootstrapForWorkspace } = useAssistantBootstrap();
@@ -178,7 +185,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         const flowChatManager = FlowChatManager.getInstance();
         const hasHistoricalSessions = await flowChatManager.initialize(
           currentWorkspace.rootPath,
-          initializationPreferredMode
+          initializationPreferredMode,
+          currentWorkspace.workspaceKind === WorkspaceKind.Remote
+            ? currentWorkspace.connectionId
+            : undefined
         );
 
         let sessionId: string | undefined;
@@ -249,6 +259,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     currentWorkspace?.id,
     currentWorkspace?.rootPath,
     currentWorkspace?.workspaceKind,
+    currentWorkspace?.connectionId,
+    remoteSshFlowChatKey,
     ensureAssistantBootstrapForWorkspace,
     t,
   ]);

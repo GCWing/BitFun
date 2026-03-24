@@ -128,6 +128,9 @@ pub struct SessionConfig {
     /// without changing the desktop's foreground workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// SSH workspace: disambiguates the same `workspace_path` on different hosts (e.g. two `/` roots).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
     /// Model config ID used by this session (for token usage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
@@ -144,6 +147,7 @@ impl Default for SessionConfig {
             enable_context_compression: true,
             compression_threshold: 0.8, // 80%
             workspace_path: None,
+            remote_connection_id: None,
             model_id: None,
         }
     }

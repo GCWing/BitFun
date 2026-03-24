@@ -174,7 +174,8 @@ export class FlowChatStore {
     title?: string,
     maxContextTokens?: number,
     mode?: string,
-    workspacePath?: string
+    workspacePath?: string,
+    remoteConnectionId?: string
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -196,6 +197,7 @@ export class FlowChatStore {
         maxContextTokens: maxContextTokens || 128128,
         mode: mode || 'agentic',
         workspacePath,
+        remoteConnectionId,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
         btwThreads: [],
@@ -222,7 +224,8 @@ export class FlowChatStore {
     title: string,
     mode: string,
     workspacePath?: string,
-    meta?: { parentSessionId?: string; sessionKind?: SessionKind; btwOrigin?: Session['btwOrigin'] }
+    meta?: { parentSessionId?: string; sessionKind?: SessionKind; btwOrigin?: Session['btwOrigin'] },
+    remoteConnectionId?: string
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -249,6 +252,7 @@ export class FlowChatStore {
         mode: mode || 'agentic',
         isHistorical: false,
         workspacePath,
+        remoteConnectionId,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
         btwThreads: [],
@@ -631,9 +635,17 @@ export class FlowChatStore {
     });
   }
 
-  public removeSessionsByWorkspace(workspacePath: string): string[] {
+  public removeSessionsByWorkspace(workspacePath: string, remoteConnectionId?: string | null): string[] {
+    const wsConn = remoteConnectionId?.trim() ?? '';
     const removedSessionIds = Array.from(this.state.sessions.values())
-      .filter(session => session.workspacePath === workspacePath)
+      .filter(session => {
+        if (session.workspacePath !== workspacePath) return false;
+        const sc = session.remoteConnectionId?.trim() ?? '';
+        if (wsConn.length > 0 || sc.length > 0) {
+          return sc === wsConn;
+        }
+        return true;
+      })
       .map(session => session.sessionId);
 
     if (removedSessionIds.length === 0) {
@@ -1238,10 +1250,18 @@ export class FlowChatStore {
           return;
         }
 
-        const metadata = await sessionAPI.loadSessionMetadata(sessionId, workspacePath);
+        const metadata = await sessionAPI.loadSessionMetadata(
+          sessionId,
+          workspacePath,
+          session.remoteConnectionId
+        );
         const nextMetadata = buildSessionMetadata(session, metadata);
 
-        await sessionAPI.saveSessionMetadata(nextMetadata, workspacePath);
+        await sessionAPI.saveSessionMetadata(
+          nextMetadata,
+          workspacePath,
+          session.remoteConnectionId
+        );
       } catch (error) {
         log.error('Failed to sync session title', { sessionId, error });
       }
@@ -1431,7 +1451,7 @@ export class FlowChatStore {
         status: 'cancelled' as const
       };
 
-      await sessionAPI.saveSessionTurn(turnData, workspacePath);
+      await sessionAPI.saveSessionTurn(turnData, workspacePath, session.remoteConnectionId);
     } catch (error) {
       log.error('Failed to save cancelled dialog turn', { sessionId, turnId, error });
     }
@@ -1442,10 +1462,10 @@ export class FlowChatStore {
    * Initialize by loading persisted session metadata from disk
    * Clears sessions from other workspaces, then loads sessions for the target workspace.
    */
-  public async initializeFromDisk(workspacePath: string): Promise<void> {
+  public async initializeFromDisk(workspacePath: string, remoteConnectionId?: string): Promise<void> {
     try {
       const { sessionAPI } = await import('@/infrastructure/api');
-      const sessions = await sessionAPI.listSessions(workspacePath);
+      const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId);
       
       const { stateMachineManager } = await import('../state-machine');
       sessions.forEach(metadata => {
@@ -1520,6 +1540,8 @@ export class FlowChatStore {
             maxContextTokens,
             mode: validatedAgentType,
             workspacePath: (metadata as any).workspacePath || workspacePath,
+            remoteConnectionId:
+              (metadata as any).remoteConnectionId || remoteConnectionId,
             parentSessionId: relationship.parentSessionId,
             sessionKind: relationship.sessionKind,
             btwThreads: [],
@@ -1548,7 +1570,8 @@ export class FlowChatStore {
   public async loadSessionHistory(
     sessionId: string,
     workspacePath: string,
-    limit?: number
+    limit?: number,
+    remoteConnectionId?: string
   ): Promise<void> {
     try {
       const { stateMachineManager } = await import('../state-machine');
@@ -1556,7 +1579,7 @@ export class FlowChatStore {
       
       try {
         const { agentAPI } = await import('@/infrastructure/api');
-        await agentAPI.restoreSession(sessionId, workspacePath);
+        await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId);
       } catch (error) {
         log.warn('Backend session restore failed (may be new session)', { sessionId, error });
       }
@@ -1565,7 +1588,8 @@ export class FlowChatStore {
       const turns = await sessionAPI.loadSessionTurns(
         sessionId,
         workspacePath,
-        limit
+        limit,
+        remoteConnectionId
       );
       
       const dialogTurns = this.convertToDialogTurns(turns);

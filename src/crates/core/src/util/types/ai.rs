@@ -34,6 +34,14 @@ pub struct GeminiUsage {
     pub cached_content_token_count: Option<u32>,
 }
 
+/// Structured message codes for localized connection test messaging.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectionTestMessageCode {
+    ToolCallsNotDetected,
+    ImageInputCheckFailed,
+}
+
 /// AI connection test result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionTestResult {
@@ -44,7 +52,10 @@ pub struct ConnectionTestResult {
     /// Model response content (if successful)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_response: Option<String>,
-    /// Error details (if failed)
+    /// Structured message code for localized frontend messaging
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_code: Option<ConnectionTestMessageCode>,
+    /// Raw error or diagnostic details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_details: Option<String>,
 }

@@ -3,6 +3,7 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SendMessageRequest } from './tauri-commands';
+import type { ConnectionTestMessageCode } from '@/shared/utils/aiConnectionTestMessages';
 
 export interface CreateAISessionRequest {
   session_id?: string;
@@ -19,6 +20,7 @@ export interface ConnectionTestResult {
   success: boolean;
   response_time_ms: number;
   model_response?: string;
+  message_code?: ConnectionTestMessageCode;
   error_details?: string;
 }
 

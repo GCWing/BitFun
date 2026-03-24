@@ -57,5 +57,9 @@
 
 /* CSS variables */
 :root {
-  --tool-card-font-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  /* Prefer explicit Windows/Linux fonts before generic `monospace` — on zh-CN Windows,
+   * bare `monospace` often resolves to NSimSun (Songti-like) for CJK. */
+  --tool-card-font-mono:
+    'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono',
+    'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
 }

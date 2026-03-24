@@ -214,6 +214,39 @@ impl PathManager {
         self.user_root.join("data")
     }
 
+    /// Root directory for **local** persistence of SSH remote workspace sessions (chat history,
+    /// session metadata, etc.). This is always on the client machine — never the remote POSIX path.
+    ///
+    /// **Canonical (all platforms):** [`Self::user_data_dir`]`/remote-workspaces/` — same tree as
+    /// other BitFun app data (`PathManager::user_root` / `config_dir`/`bitfun` on each OS).
+    ///
+    /// **Legacy:** Older builds used `{data_local_dir}/BitFun/remote-workspaces/`. If that folder
+    /// exists and the canonical path does not, this returns the legacy path so existing installs
+    /// keep working. On Windows this avoided splitting data between `AppData\Local\BitFun` and
+    /// `AppData\Roaming\bitfun`; new installs use the canonical Roaming `bitfun\data` tree only.
+    pub fn remote_ssh_sessions_root() -> PathBuf {
+        let legacy = dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("BitFun")
+            .join("remote-workspaces");
+
+        let canonical = match Self::new() {
+            Ok(pm) => pm.user_data_dir().join("remote-workspaces"),
+            Err(_) => legacy.clone(),
+        };
+
+        let canonical_exists = canonical.exists();
+        let legacy_exists = legacy.exists();
+        let chosen = if canonical_exists {
+            canonical.clone()
+        } else if legacy_exists {
+            legacy.clone()
+        } else {
+            canonical.clone()
+        };
+        chosen
+    }
+
     /// Get scheduled jobs directory: ~/.config/bitfun/data/cron/
     pub fn user_cron_dir(&self) -> PathBuf {
         self.user_data_dir().join("cron")

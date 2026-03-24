@@ -8,6 +8,7 @@ import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { FlowChatContext, SessionConfig } from './types';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
@@ -41,7 +42,20 @@ const resolveSessionWorkspacePath = (
   if (explicitWorkspacePath) {
     return explicitWorkspacePath;
   }
-  return context.currentWorkspacePath || null;
+  const fromFlowChat = context.currentWorkspacePath?.trim();
+  if (fromFlowChat) {
+    return fromFlowChat;
+  }
+  // Remote restore: AppLayout may skip FlowChat.initialize until SSH connects, so
+  // currentWorkspacePath stays null while global workspace already has rootPath.
+  const current = workspaceManager.getState().currentWorkspace;
+  const root = current?.rootPath?.trim();
+  if (!root) {
+    return null;
+  }
+  return current?.workspaceKind === WorkspaceKind.Remote
+    ? normalizeRemoteWorkspacePath(root)
+    : root;
 };
 
 const resolveSessionWorkspace = (
@@ -52,10 +66,25 @@ const resolveSessionWorkspace = (
   if (!workspacePath) return null;
 
   const state = workspaceManager.getState();
-  const matchedWorkspace = Array.from(state.openedWorkspaces.values()).find(
+  const pathMatches = Array.from(state.openedWorkspaces.values()).filter(
     workspace => workspace.rootPath === workspacePath
   );
-  return matchedWorkspace || state.currentWorkspace;
+  if (pathMatches.length === 0) {
+    return state.currentWorkspace;
+  }
+  if (pathMatches.length === 1) {
+    return pathMatches[0];
+  }
+  const configCid = config?.remoteConnectionId?.trim();
+  if (configCid) {
+    const byConn = pathMatches.find(w => w.connectionId === configCid);
+    if (byConn) return byConn;
+  }
+  const cur = state.currentWorkspace;
+  if (cur && pathMatches.some(w => w.id === cur.id)) {
+    return cur;
+  }
+  return pathMatches[0];
 };
 
 const resolveAgentType = (
@@ -126,9 +155,14 @@ export async function createChatSession(
     if (!workspacePath) {
       throw new Error('Workspace path is required to create a session');
     }
+    const remoteConnectionId =
+      workspace?.workspaceKind === WorkspaceKind.Remote ? workspace.connectionId : undefined;
     const agentType = resolveAgentType(mode, workspace);
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
-    const creationKey = workspacePath;
+    const creationKey =
+      remoteConnectionId != null && remoteConnectionId !== ''
+        ? `${remoteConnectionId}\n${workspacePath}`
+        : workspacePath;
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -153,6 +187,7 @@ export async function createChatSession(
         sessionName,
         agentType,
         workspacePath,
+        remoteConnectionId,
         config: {
           modelName: config.modelName || 'auto',
           enableTools: true,
@@ -170,7 +205,8 @@ export async function createChatSession(
         sessionName,
         maxContextTokens,
         agentType,
-        workspacePath
+        workspacePath,
+        remoteConnectionId
       );
 
       return response.sessionId;
@@ -208,10 +244,15 @@ export async function switchChatSession(
       try {
         const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
         
-        await context.flowChatStore.loadSessionHistory(sessionId, workspacePath);
+        await context.flowChatStore.loadSessionHistory(
+          sessionId,
+          workspacePath,
+          undefined,
+          session.remoteConnectionId
+        );
         
         try {
-          await agentAPI.restoreSession(sessionId, workspacePath);
+          await agentAPI.restoreSession(sessionId, workspacePath, session.remoteConnectionId);
           
           context.flowChatStore.setState(prev => {
             const newSessions = new Map(prev.sessions);
@@ -230,6 +271,7 @@ export async function switchChatSession(
               sessionName: currentSession.title || `Session ${sessionId.slice(0, 8)}`,
               agentType: currentSession.mode || 'agentic',
               workspacePath,
+              remoteConnectionId: currentSession.remoteConnectionId,
               config: {
                 modelName: currentSession.config.modelName || 'auto',
                 enableTools: true,
@@ -257,7 +299,11 @@ export async function switchChatSession(
     
     context.flowChatStore.switchSession(sessionId);
 
-    touchSessionActivity(sessionId, session?.workspacePath).catch(error => {
+    touchSessionActivity(
+      sessionId,
+      session?.workspacePath,
+      session?.remoteConnectionId
+    ).catch(error => {
       log.debug('Failed to touch session activity', { sessionId, error });
     });
   } catch (error) {
@@ -303,41 +349,59 @@ export async function ensureBackendSession(
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
-  
+
+  const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+
   const isHistoricalSession = session.isHistorical === true;
   const isFirstTurn = session.dialogTurns.length <= 1;
   const needsBackendSetup = isHistoricalSession || isFirstTurn;
-  
-  if (needsBackendSetup) {
-    const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+  /** Avoid createSession when historical data is already loaded but backend files are missing (e.g. new SSH connection id). */
+  const allowRecreateOnCoordinatorFailure =
+    needsBackendSetup && !(isHistoricalSession && session.dialogTurns.length > 1);
 
-    try {
-      await agentAPI.restoreSession(sessionId, workspacePath);
-      
-      if (isHistoricalSession) {
-        context.flowChatStore.setState(prev => {
-          const newSessions = new Map(prev.sessions);
-          const sess = newSessions.get(sessionId);
-          if (sess) {
-            newSessions.set(sessionId, { ...sess, isHistorical: false });
-          }
-          return { ...prev, sessions: newSessions };
-        });
+  const clearHistoricalFlag = () => {
+    if (!isHistoricalSession) return;
+    context.flowChatStore.setState(prev => {
+      const newSessions = new Map(prev.sessions);
+      const sess = newSessions.get(sessionId);
+      if (sess) {
+        newSessions.set(sessionId, { ...sess, isHistorical: false });
       }
-    } catch (restoreError: any) {
-      log.debug('Session restore failed, creating new session', { sessionId, error: restoreError });
-      await agentAPI.createSession({
-        sessionId: sessionId,
-        sessionName: session.title || `Session ${sessionId.slice(0, 8)}`,
-        agentType: session.mode || 'agentic',
-        workspacePath,
-        config: {
-          modelName: session.config.modelName || 'auto',
-          enableTools: true,
-          safeMode: true
-        }
-      });
+      return { ...prev, sessions: newSessions };
+    });
+  };
+
+  try {
+    await agentAPI.ensureCoordinatorSession({
+      sessionId,
+      workspacePath,
+      remoteConnectionId: session.remoteConnectionId,
+    });
+    clearHistoricalFlag();
+  } catch (e: any) {
+    if (!allowRecreateOnCoordinatorFailure) {
+      const raw = typeof e?.message === 'string' ? e.message : String(e);
+      const hint =
+        raw.includes('Session metadata not found') || raw.includes('Not found')
+          ? '在后端找不到该会话数据。若刚重新连接过 SSH 远程工作区，请关闭并重新打开该远程项目，或新建会话后再试。'
+          : raw;
+      throw new Error(hint);
     }
+
+    log.debug('Coordinator session missing, creating backend session', { sessionId, error: e });
+    await agentAPI.createSession({
+      sessionId: sessionId,
+      sessionName: session.title || `Session ${sessionId.slice(0, 8)}`,
+      agentType: session.mode || 'agentic',
+      workspacePath,
+      remoteConnectionId: session.remoteConnectionId,
+      config: {
+        modelName: session.config.modelName || 'auto',
+        enableTools: true,
+        safeMode: true
+      }
+    });
+    clearHistoricalFlag();
   }
 }
 
@@ -360,6 +424,7 @@ export async function retryCreateBackendSession(
     sessionName: session.title || `Session ${sessionId.slice(0, 8)}`,
     agentType: session.mode || 'agentic',
     workspacePath,
+    remoteConnectionId: session.remoteConnectionId,
     config: {
       modelName: session.config.modelName || 'auto',
       enableTools: true,

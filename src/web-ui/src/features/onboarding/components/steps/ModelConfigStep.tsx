@@ -11,6 +11,7 @@ import { systemAPI } from '@/infrastructure/api';
 import { Select, Checkbox, Button, IconButton } from '@/component-library';
 import { PROVIDER_TEMPLATES } from '@/infrastructure/config/services/modelConfigs';
 import { createLogger } from '@/shared/utils/logger';
+import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
 
 const log = createLogger('ModelConfigStep');
 
@@ -39,6 +40,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
   );
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
   const [testError, setTestError] = useState<string>('');
+  const [testNotice, setTestNotice] = useState<string>('');
   const [remoteModelOptions, setRemoteModelOptions] = useState<RemoteModelOption[]>([]);
   const [isFetchingRemoteModels, setIsFetchingRemoteModels] = useState(false);
   const [remoteModelsError, setRemoteModelsError] = useState<string>('');
@@ -250,6 +252,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
     setSelectedProviderId(newProviderId);
     setTestStatus('idle');
     setTestError('');
+    setTestNotice('');
 
     if (newProviderId === 'custom') {
       setBaseUrl('');
@@ -274,6 +277,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
     setModelName(value);
     setTestStatus('idle');
     setTestError('');
+    setTestNotice('');
   }, []);
 
   // Open help URL
@@ -309,6 +313,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
 
     setTestStatus('testing');
     setTestError('');
+    setTestNotice('');
 
     try {
       const effectiveBaseUrl = baseUrl || (currentTemplate?.baseUrl || '');
@@ -321,23 +326,31 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
         model_name: effectiveModelName,
         provider: format
       });
+      const localizedMessage = translateConnectionTestMessage(result.message_code, tAiModel);
 
       if (result.success) {
         setTestStatus('success');
+        setTestNotice(localizedMessage || result.error_details || '');
         log.info('Connection test passed', { 
           provider: selectedProviderId, 
           modelName: effectiveModelName
         });
       } else {
         setTestStatus('error');
-        const errorMsg = result.error_details
-          ? `${t('model.testFailed')}\n${result.error_details}`
+        setTestNotice('');
+        const detailLines = [
+          localizedMessage,
+          result.error_details ? `${tAiModel('messages.errorDetails')}: ${result.error_details}` : undefined
+        ].filter((line): line is string => Boolean(line));
+        const errorMsg = detailLines.length > 0
+          ? `${t('model.testFailed')}\n${detailLines.join('\n')}`
           : t('model.testFailed');
         setTestError(errorMsg);
       }
     } catch (error) {
       log.error('Connection test failed', error);
       setTestStatus('error');
+      setTestNotice('');
       const rawMsg = error instanceof Error ? error.message : String(error);
       // Tauri command errors often have "Connection test failed: " prefix, extract the actual cause
       const cleanMsg = rawMsg.replace(/^Connection test failed:\s*/i, '');
@@ -511,6 +524,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                   setApiKey(e.target.value);
                   setTestStatus('idle');
                   setTestError('');
+                  setTestNotice('');
                 }}
               />
               {currentTemplate.helpUrl && (
@@ -542,6 +556,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                     }
                     setTestStatus('idle');
                     setTestError('');
+                    setTestNotice('');
                   }}
                   placeholder={t('model.baseUrl.placeholder')}
                   options={currentTemplate.baseUrlOptions.map(opt => ({
@@ -561,6 +576,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                     setBaseUrl(e.target.value);
                     setTestStatus('idle');
                     setTestError('');
+                    setTestNotice('');
                   }}
                   onFocus={(e) => e.target.select()}
                 />
@@ -587,6 +603,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                   setBaseUrl(e.target.value);
                   setTestStatus('idle');
                   setTestError('');
+                  setTestNotice('');
                 }}
               />
             </div>
@@ -602,6 +619,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                   setModelName(value as string);
                   setTestStatus('idle');
                   setTestError('');
+                  setTestNotice('');
                 }}
                 placeholder={t('model.modelName.placeholder')}
                 options={availableModelOptions}
@@ -644,6 +662,7 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
                   setApiKey(e.target.value);
                   setTestStatus('idle');
                   setTestError('');
+                  setTestNotice('');
                 }}
               />
             </div>
@@ -828,6 +847,13 @@ export const ModelConfigStep: React.FC<ModelConfigStepProps> = ({ onSkipForNow }
             {testStatus === 'error' && testError && (
               <div className="bitfun-onboarding-model__error">
                 {testError}
+              </div>
+            )}
+
+            {testStatus === 'success' && testNotice && (
+              <div className="bitfun-onboarding-model__warning">
+                <AlertTriangle size={14} />
+                <span>{testNotice}</span>
               </div>
             )}
           </>

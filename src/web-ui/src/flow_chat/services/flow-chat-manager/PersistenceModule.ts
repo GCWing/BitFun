@@ -233,7 +233,7 @@ async function performSaveDialogTurnToDisk(
 
     const turnIndex = dialogTurn.backendTurnIndex ?? session.dialogTurns.indexOf(dialogTurn);
     const turnData = convertDialogTurnToBackendFormat(dialogTurn, turnIndex);
-    await sessionAPI.saveSessionTurn(turnData, workspacePath);
+    await sessionAPI.saveSessionTurn(turnData, workspacePath, session.remoteConnectionId);
     
     await updateSessionMetadata(context, sessionId);
     
@@ -404,14 +404,18 @@ export async function updateSessionMetadata(
 
     let existingMetadata: any = null;
     try {
-      existingMetadata = await sessionAPI.loadSessionMetadata(sessionId, workspacePath);
+      existingMetadata = await sessionAPI.loadSessionMetadata(
+        sessionId,
+        workspacePath,
+        session.remoteConnectionId
+      );
     } catch {
       // ignore
     }
 
     const metadata = buildSessionMetadata(session, existingMetadata);
 
-    await sessionAPI.saveSessionMetadata(metadata, workspacePath);
+    await sessionAPI.saveSessionMetadata(metadata, workspacePath, session.remoteConnectionId);
   } catch (error) {
     log.warn('Failed to update session metadata', { sessionId, error });
   }
@@ -420,10 +424,18 @@ export async function updateSessionMetadata(
 /**
  * Update session activity time (used for session switching)
  */
-export async function touchSessionActivity(sessionId: string, workspacePath?: string): Promise<void> {
+export async function touchSessionActivity(
+  sessionId: string,
+  workspacePath?: string,
+  remoteConnectionId?: string
+): Promise<void> {
   try {
     const { sessionAPI } = await import('@/infrastructure/api');
-    await sessionAPI.touchSessionActivity(sessionId, requireWorkspacePath(sessionId, workspacePath));
+    await sessionAPI.touchSessionActivity(
+      sessionId,
+      requireWorkspacePath(sessionId, workspacePath),
+      remoteConnectionId
+    );
   } catch (error) {
     log.debug('Failed to touch session activity', { sessionId, error });
   }

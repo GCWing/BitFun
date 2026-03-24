@@ -114,7 +114,7 @@ Mini Apps 从对话中涌现，Skills 在社区里更新，Agent 在协作中进
 - [Rust 工具链](https://rustup.rs/)
 - [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)（桌面端开发需要）
 
-**Windows 特别说明**：桌面使用**预编译 OpenSSL**（不编译 OpenSSL 源码）。`desktop:dev` 与全部 `desktop:build*` 会通过 `ensure-openssl-windows.mjs`（构建走 `desktop-tauri-build.mjs`）自动准备：首次需要时下载 [FireDaemon OpenSSL 3.5.5](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip) 到 `.bitfun/cache/`，之后复用缓存。可自行设置 `OPENSSL_DIR` 为 ZIP 内 **`x64`** 目录，或 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_*`。
+**Windows 特别说明**：桌面使用**预编译 OpenSSL**（不编译 OpenSSL 源码）。**无需手动下载 ZIP**：首次需要时会自动拉取 [FireDaemon OpenSSL 3.5.5](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip) 到 **`.bitfun/cache/`**，之后复用缓存。`pnpm run desktop:dev` 与全部 `desktop:build*` 会调用 `ensure-openssl-windows.mjs`（构建经 `desktop-tauri-build.mjs`）。**若只用 `cargo` 手动编译**（不经过上述 pnpm 入口），请先在仓库根目录执行一次 **`node scripts/ensure-openssl-windows.mjs`**，脚本会完成相同下载并打印可在 PowerShell 中粘贴的 **`OPENSSL_*`** 环境变量。也可自行将 `OPENSSL_DIR` 设为 ZIP 内 **`x64`** 目录，或设 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_*`。
 
 ```bash
 # 安装依赖

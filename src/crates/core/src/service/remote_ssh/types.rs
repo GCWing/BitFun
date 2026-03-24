@@ -201,15 +201,16 @@ pub struct RemoteWorkspaceRequest {
     pub remote_path: String,
 }
 
-/// Remote workspace info
+/// Remote workspace info (persisted in `remote_workspace.json`).
+/// `#[serde(default)]` keeps older files loadable if a field was absent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteWorkspace {
-    #[serde(rename = "connectionId")]
+    #[serde(default)]
     pub connection_id: String,
-    #[serde(rename = "remotePath")]
+    #[serde(default)]
     pub remote_path: String,
-    #[serde(rename = "connectionName")]
+    #[serde(default)]
     pub connection_name: String,
 }
 

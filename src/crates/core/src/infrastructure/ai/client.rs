@@ -156,33 +156,6 @@ impl AIClient {
         )
     }
 
-    fn build_test_connection_extra_body(&self) -> Option<serde_json::Value> {
-        let provider = self.config.format.to_ascii_lowercase();
-        if !matches!(
-            provider.as_str(),
-            "openai" | "response" | "responses" | "nvidia" | "openrouter"
-        ) {
-            return self.config.custom_request_body.clone();
-        }
-
-        let mut extra_body = self
-            .config
-            .custom_request_body
-            .clone()
-            .unwrap_or_else(|| serde_json::json!({}));
-
-        if let Some(extra_obj) = extra_body.as_object_mut() {
-            extra_obj
-                .entry("temperature".to_string())
-                .or_insert_with(|| serde_json::json!(0));
-            extra_obj
-                .entry("tool_choice".to_string())
-                .or_insert_with(|| serde_json::json!("required"));
-        }
-
-        Some(extra_body)
-    }
-
     fn is_gemini_api_format(api_format: &str) -> bool {
         matches!(
             api_format.to_ascii_lowercase().as_str(),
@@ -1942,8 +1915,8 @@ impl AIClient {
     pub async fn test_connection(&self) -> Result<ConnectionTestResult> {
         let start_time = std::time::Instant::now();
 
-        // Force a tool call to avoid false negatives: some models may answer directly when
-        // `tool_choice=auto`, even if they support tool calls.
+        // Reuse the normal chat request path so the test matches real conversations, even when
+        // a provider rejects stricter tool_choice settings such as "required".
         let test_messages = vec![Message::user(
             "Call the get_weather tool for city=Beijing. Do not answer with plain text."
                 .to_string(),
@@ -1961,14 +1934,7 @@ impl AIClient {
             }),
         }]);
 
-        let extra_body = self.build_test_connection_extra_body();
-
-        let result = if extra_body.is_some() {
-            self.send_message_with_extra_body(test_messages, tools, extra_body)
-                .await
-        } else {
-            self.send_message(test_messages, tools).await
-        };
+        let result = self.send_message(test_messages, tools).await;
 
         match result {
             Ok(response) => {
@@ -1978,16 +1944,16 @@ impl AIClient {
                         success: true,
                         response_time_ms,
                         model_response: Some(response.text),
+                        message_code: None,
                         error_details: None,
                     })
                 } else {
                     Ok(ConnectionTestResult {
-                        success: false,
+                        success: true,
                         response_time_ms,
                         model_response: Some(response.text),
-                        error_details: Some(
-                            "Model did not return tool calls (tool_choice=required).".to_string(),
-                        ),
+                        message_code: Some(ConnectionTestMessageCode::ToolCallsNotDetected),
+                        error_details: None,
                     })
                 }
             }
@@ -1999,6 +1965,7 @@ impl AIClient {
                     success: false,
                     response_time_ms,
                     model_response: None,
+                    message_code: None,
                     error_details: Some(error_msg),
                 })
             }
@@ -2059,6 +2026,7 @@ impl AIClient {
                         success: true,
                         response_time_ms: start_time.elapsed().as_millis() as u64,
                         model_response: Some(response.text),
+                        message_code: None,
                         error_details: None,
                     })
                 } else {
@@ -2071,6 +2039,7 @@ impl AIClient {
                         success: false,
                         response_time_ms: start_time.elapsed().as_millis() as u64,
                         model_response: Some(response.text),
+                        message_code: Some(ConnectionTestMessageCode::ImageInputCheckFailed),
                         error_details: Some(detail),
                     })
                 }
@@ -2082,6 +2051,7 @@ impl AIClient {
                     success: false,
                     response_time_ms: start_time.elapsed().as_millis() as u64,
                     model_response: None,
+                    message_code: None,
                     error_details: Some(error_msg),
                 })
             }
@@ -2128,44 +2098,6 @@ mod tests {
             reasoning_effort: None,
             custom_request_body,
         })
-    }
-
-    #[test]
-    fn build_test_connection_extra_body_merges_custom_body_defaults() {
-        let client = make_test_client(
-            "responses",
-            Some(json!({
-                "metadata": {
-                    "source": "test"
-                }
-            })),
-        );
-
-        let extra_body = client
-            .build_test_connection_extra_body()
-            .expect("extra body");
-
-        assert_eq!(extra_body["metadata"]["source"], "test");
-        assert_eq!(extra_body["temperature"], 0);
-        assert_eq!(extra_body["tool_choice"], "required");
-    }
-
-    #[test]
-    fn build_test_connection_extra_body_preserves_existing_tool_choice() {
-        let client = make_test_client(
-            "response",
-            Some(json!({
-                "tool_choice": "auto",
-                "temperature": 0.3
-            })),
-        );
-
-        let extra_body = client
-            .build_test_connection_extra_body()
-            .expect("extra body");
-
-        assert_eq!(extra_body["tool_choice"], "auto");
-        assert_eq!(extra_body["temperature"], 0.3);
     }
 
     #[test]

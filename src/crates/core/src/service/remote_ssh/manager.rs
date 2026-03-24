@@ -381,7 +381,7 @@ impl SSHConnectionManager {
 
         let content = tokio::fs::read_to_string(&self.remote_workspace_path).await?;
         // Try array format first, fall back to single-object for backward compat
-        let workspaces: Vec<crate::service::remote_ssh::types::RemoteWorkspace> =
+        let mut workspaces: Vec<crate::service::remote_ssh::types::RemoteWorkspace> =
             serde_json::from_str(&content)
                 .or_else(|_| {
                     // Legacy: single workspace object
@@ -389,6 +389,15 @@ impl SSHConnectionManager {
                         .map(|ws| vec![ws])
                 })
                 .context("Failed to parse remote workspace(s)")?;
+
+        let before = workspaces.len();
+        workspaces.retain(|w| !w.connection_id.is_empty() && !w.remote_path.is_empty());
+        if workspaces.len() < before {
+            log::warn!(
+                "Dropped {} persisted remote workspace(s) with empty connectionId or remotePath",
+                before - workspaces.len()
+            );
+        }
 
         let mut guard = self.remote_workspaces.write().await;
         *guard = workspaces;
@@ -409,7 +418,7 @@ impl SSHConnectionManager {
         Ok(())
     }
 
-    /// Add/update a persisted remote workspace
+    /// Add/update a persisted remote workspace (key = `connection_id` + `remote_path`).
     pub async fn set_remote_workspace(&self, mut workspace: crate::service::remote_ssh::types::RemoteWorkspace) -> anyhow::Result<()> {
         workspace.remote_path =
             crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
@@ -418,10 +427,12 @@ impl SSHConnectionManager {
         {
             let mut guard = self.remote_workspaces.write().await;
             let rp = workspace.remote_path.clone();
+            let cid = workspace.connection_id.clone();
             guard.retain(|w| {
-                crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
-                    &w.remote_path,
-                ) != rp
+                !(w.connection_id == cid
+                    && crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+                        &w.remote_path,
+                    ) == rp)
             });
             guard.push(workspace);
         }
@@ -438,15 +449,16 @@ impl SSHConnectionManager {
         self.remote_workspaces.read().await.first().cloned()
     }
 
-    /// Remove a specific remote workspace by path
-    pub async fn remove_remote_workspace(&self, remote_path: &str) -> anyhow::Result<()> {
+    /// Remove a specific remote workspace by **connection** + **remote path** (not path alone).
+    pub async fn remove_remote_workspace(&self, connection_id: &str, remote_path: &str) -> anyhow::Result<()> {
         let rp = crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(remote_path);
         {
             let mut guard = self.remote_workspaces.write().await;
             guard.retain(|w| {
-                crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
-                    &w.remote_path,
-                ) != rp
+                !(w.connection_id == connection_id
+                    && crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+                        &w.remote_path,
+                    ) == rp)
             });
         }
         self.save_remote_workspaces().await
