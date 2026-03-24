@@ -915,6 +915,8 @@
       "privateKey": "私钥",
       "sshAgent": "SSH Agent",
       "privateKeyPath": "私钥路径",
+      "browsePrivateKey": "选择私钥文件",
+      "pickPrivateKeyDialogTitle": "选择 SSH 私钥",
       "passphrase": "密码短语",
       "passphraseOptional": "留空表示无密码短语",
       "selectWorkspace": "选择工作区目录",

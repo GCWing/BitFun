@@ -249,7 +249,17 @@ export const Modal: React.FC<ModalProps> = ({
     <div className={`modal-overlay ${placement !== 'center' ? `modal-overlay--${placement}` : ''}`} onClick={onClose}>
       <div
         ref={modalRef}
-        className={`modal modal--${size} ${draggable ? 'modal--draggable' : ''} ${isDragging ? 'modal--dragging' : ''} ${resizable ? 'modal--resizable' : ''} ${isResizing ? 'modal--resizing' : ''}`}
+        className={[
+          'modal',
+          `modal--${size}`,
+          draggable ? 'modal--draggable' : '',
+          isDragging ? 'modal--dragging' : '',
+          resizable ? 'modal--resizable' : '',
+          isResizing ? 'modal--resizing' : '',
+          contentInset ? 'modal--content-inset' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}
         style={appliedStyle}

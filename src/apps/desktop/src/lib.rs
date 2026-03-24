@@ -339,6 +339,7 @@ pub async fn run() {
             reset_workspace_persona_files,
             check_path_exists,
             get_file_metadata,
+            get_file_editor_sync_hash,
             rename_file,
             export_local_file_to_path,
             reveal_in_explorer,

@@ -26,8 +26,10 @@ import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { isSamePath } from '@/shared/utils/pathUtils';
 import {
+  diskContentMatchesEditorForExternalSync,
   diskVersionFromMetadata,
   diskVersionsDiffer,
+  editorSyncContentSha256Hex,
   type DiskFileVersion,
 } from '../utils/diskFileVersion';
 import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
@@ -1514,10 +1516,50 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         return;
       }
 
+      const bufferBeforeRead = modelRef.current?.getValue();
+      try {
+        const hashRes: any = await invoke('get_file_editor_sync_hash', {
+          request: { path: filePath },
+        });
+        const diskHash =
+          typeof hashRes?.hash === 'string' ? hashRes.hash.toLowerCase() : '';
+        const editorMid = modelRef.current?.getValue();
+        if (
+          bufferBeforeRead !== undefined &&
+          editorMid !== undefined &&
+          bufferBeforeRead !== editorMid
+        ) {
+          return;
+        }
+        if (diskHash && editorMid !== undefined) {
+          const editorHash = await editorSyncContentSha256Hex(editorMid);
+          if (editorHash === diskHash) {
+            diskVersionRef.current = currentVersion;
+            return;
+          }
+        }
+      } catch (hashErr) {
+        log.warn('get_file_editor_sync_hash failed, falling back to full read', {
+          filePath,
+          error: hashErr,
+        });
+      }
+
       const { workspaceAPI } = await import('@/infrastructure/api');
-      const fileContent = await workspaceAPI.readFileContent(filePath);
       const editorBuffer = modelRef.current?.getValue();
-      if (editorBuffer !== undefined && fileContent === editorBuffer) {
+      if (
+        bufferBeforeRead !== undefined &&
+        editorBuffer !== undefined &&
+        bufferBeforeRead !== editorBuffer
+      ) {
+        return;
+      }
+      if (editorBuffer === undefined) {
+        return;
+      }
+
+      const fileContent = await workspaceAPI.readFileContent(filePath);
+      if (diskContentMatchesEditorForExternalSync(fileContent, editorBuffer)) {
         diskVersionRef.current = currentVersion;
         return;
       }
@@ -1758,12 +1800,61 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       try {
         const { workspaceAPI } = await import('@/infrastructure/api');
         const { invoke } = await import('@tauri-apps/api/core');
+        const bufferBeforeRead = modelRef.current?.getValue();
+        try {
+          const hashRes: any = await invoke('get_file_editor_sync_hash', {
+            request: { path: filePath },
+          });
+          const diskHash =
+            typeof hashRes?.hash === 'string' ? hashRes.hash.toLowerCase() : '';
+          const editorMid = modelRef.current?.getValue();
+          if (
+            bufferBeforeRead !== undefined &&
+            editorMid !== undefined &&
+            bufferBeforeRead !== editorMid
+          ) {
+            return;
+          }
+          if (diskHash && editorMid !== undefined) {
+            const editorHash = await editorSyncContentSha256Hex(editorMid);
+            if (editorHash === diskHash) {
+              try {
+                const fileInfo: any = await invoke('get_file_metadata', {
+                  request: { path: filePath },
+                });
+                const v = diskVersionFromMetadata(fileInfo);
+                if (v) {
+                  diskVersionRef.current = v;
+                }
+              } catch (err) {
+                log.warn('Failed to sync disk version after noop file-changed', err);
+              }
+              return;
+            }
+          }
+        } catch (hashErr) {
+          log.warn('get_file_editor_sync_hash failed in file-changed handler', {
+            filePath,
+            error: hashErr,
+          });
+        }
+
         const diskContent = await workspaceAPI.readFileContent(filePath);
         const editorBuffer = modelRef.current?.getValue();
-        if (editorBuffer !== undefined && diskContent === editorBuffer) {
+        if (
+          bufferBeforeRead !== undefined &&
+          editorBuffer !== undefined &&
+          bufferBeforeRead !== editorBuffer
+        ) {
+          return;
+        }
+        if (
+          editorBuffer !== undefined &&
+          diskContentMatchesEditorForExternalSync(diskContent, editorBuffer)
+        ) {
           try {
             const fileInfo: any = await invoke('get_file_metadata', {
-              request: { path: filePath }
+              request: { path: filePath },
             });
             const v = diskVersionFromMetadata(fileInfo);
             if (v) {

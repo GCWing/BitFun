@@ -108,6 +108,10 @@
     border-bottom: 1px solid var(--border-subtle);
     background: transparent;
 
+    .modal--content-inset & {
+      padding-inline: 28px;
+    }
+
     &--draggable {
       cursor: move;
       user-select: none;
@@ -301,6 +305,10 @@
 
     &__header {
       padding: 12px 14px;
+    }
+
+    &.modal--content-inset .modal__header {
+      padding-inline: 14px;
     }
 
     &__title {

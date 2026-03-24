@@ -4,8 +4,19 @@
 
 use crate::util::errors::*;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tokio::fs;
+
+/// Same rules as web `normalizeTextForDiskSyncComparison` (BOM strip, CRLF/CR → LF).
+pub fn normalize_text_for_editor_disk_sync(text: &str) -> String {
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    hex::encode(Sha256::digest(data))
+}
 
 pub struct FileOperationService {
     max_file_size_mb: u64,
@@ -161,6 +172,58 @@ impl FileOperationService {
                 }
             }
         }
+    }
+
+    /// SHA-256 (hex, lowercase) of `bytes` using the same normalization as the web editor sync check,
+    /// or raw-byte hash when content is treated as binary (matches `read_file` heuristics).
+    pub fn editor_sync_sha256_hex_from_raw_bytes(&self, bytes: &[u8]) -> String {
+        if self.is_binary_content(bytes) {
+            sha256_hex(bytes)
+        } else {
+            let content = String::from_utf8_lossy(bytes);
+            let normalized = normalize_text_for_editor_disk_sync(content.as_ref());
+            sha256_hex(normalized.as_bytes())
+        }
+    }
+
+    /// Reads the file from disk and returns the editor-sync hash (see `editor_sync_sha256_hex_from_raw_bytes`).
+    pub async fn editor_sync_content_sha256_hex(&self, file_path: &str) -> BitFunResult<String> {
+        let path = Path::new(file_path);
+
+        self.validate_file_access(path, false).await?;
+
+        if !path.exists() {
+            return Err(BitFunError::service(format!(
+                "File does not exist: {}",
+                file_path
+            )));
+        }
+
+        if path.is_dir() {
+            return Err(BitFunError::service(format!(
+                "Path is a directory: {}",
+                file_path
+            )));
+        }
+
+        let metadata = fs::metadata(path)
+            .await
+            .map_err(|e| BitFunError::service(format!("Failed to read file metadata: {}", e)))?;
+
+        let file_size = metadata.len();
+        if file_size > self.max_file_size_mb * 1024 * 1024 {
+            return Err(BitFunError::service(format!(
+                "File too large: {}MB (max: {}MB)",
+                file_size / (1024 * 1024),
+                self.max_file_size_mb
+            )));
+        }
+
+        let bytes = fs::read(path)
+            .await
+            .map_err(|e| BitFunError::service(format!("Failed to read file: {}", e)))?;
+
+        Ok(self.editor_sync_sha256_hex_from_raw_bytes(&bytes))
     }
 
     pub async fn write_file(
@@ -584,5 +647,26 @@ impl FileOperationService {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod editor_sync_hash_tests {
+    use super::*;
+
+    #[test]
+    fn normalize_matches_web_contract() {
+        assert_eq!(normalize_text_for_editor_disk_sync("\u{FEFF}a\r\nb"), "a\nb");
+        assert_eq!(normalize_text_for_editor_disk_sync("x\ry"), "x\ny");
+    }
+
+    #[test]
+    fn hello_utf8_hash_matches_known_sha256() {
+        let svc = FileOperationService::default();
+        let h = svc.editor_sync_sha256_hex_from_raw_bytes(b"hello");
+        assert_eq!(
+            h,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
     }
 }

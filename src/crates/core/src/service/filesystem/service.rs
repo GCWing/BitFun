@@ -271,4 +271,16 @@ impl FileSystemService {
             symlinks_count: stats.symlinks_count,
         })
     }
+
+    /// SHA-256 hex of on-disk content after editor-sync normalization (see `FileOperationService`).
+    pub async fn editor_sync_content_sha256_hex(&self, file_path: &str) -> BitFunResult<String> {
+        self.file_operation_service
+            .editor_sync_content_sha256_hex(file_path)
+            .await
+    }
+
+    pub fn editor_sync_sha256_hex_from_raw_bytes(&self, bytes: &[u8]) -> String {
+        self.file_operation_service
+            .editor_sync_sha256_hex_from_raw_bytes(bytes)
+    }
 }

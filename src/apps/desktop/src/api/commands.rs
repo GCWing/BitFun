@@ -1627,6 +1627,44 @@ pub async fn get_file_metadata(
     }
 }
 
+/// Returns SHA-256 hex (lowercase) of file bytes after the same normalization as the web editor
+/// external-sync check, so the UI can compare with a local hash without transferring file contents.
+#[tauri::command]
+pub async fn get_file_editor_sync_hash(
+    state: State<'_, AppState>,
+    request: GetFileMetadataRequest,
+) -> Result<serde_json::Value, String> {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        let bytes = remote_fs
+            .read_file(&entry.connection_id, &request.path)
+            .await
+            .map_err(|e| format!("Failed to read remote file: {}", e))?;
+        let hash = state
+            .filesystem_service
+            .editor_sync_sha256_hex_from_raw_bytes(&bytes);
+        return Ok(serde_json::json!({
+            "path": request.path,
+            "hash": hash,
+            "is_remote": true
+        }));
+    }
+
+    let hash = state
+        .filesystem_service
+        .editor_sync_content_sha256_hex(&request.path)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "path": request.path,
+        "hash": hash
+    }))
+}
+
 #[tauri::command]
 pub async fn rename_file(
     state: State<'_, AppState>,

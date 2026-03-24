@@ -8,7 +8,8 @@ pub mod file_watcher;
 pub mod path_manager;
 
 pub use file_operations::{
-    FileInfo, FileOperationOptions, FileOperationService, FileReadResult, FileWriteResult,
+    normalize_text_for_editor_disk_sync, FileInfo, FileOperationOptions, FileOperationService,
+    FileReadResult, FileWriteResult,
 };
 pub use file_tree::{
     FileSearchResult, FileTreeNode, FileTreeOptions, FileTreeService, FileTreeStatistics,

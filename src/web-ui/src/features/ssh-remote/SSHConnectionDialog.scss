@@ -212,6 +212,11 @@
     }
   }
 
+  &__browse-key {
+    flex-shrink: 0;
+    margin-right: -6px;
+  }
+
   &__label {
     display: block;
     font-size: 12px;

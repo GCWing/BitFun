@@ -915,6 +915,8 @@
       "privateKey": "Private Key",
       "sshAgent": "SSH Agent",
       "privateKeyPath": "Private Key Path",
+      "browsePrivateKey": "Choose private key file",
+      "pickPrivateKeyDialogTitle": "Select SSH private key",
       "passphrase": "Passphrase",
       "passphraseOptional": "Leave empty if none",
       "selectWorkspace": "Select Workspace Directory",

@@ -2,14 +2,16 @@
  * Unified SSH authentication prompt: password, private key, or SSH agent.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal } from '@/component-library';
 import { Button } from '@/component-library';
 import { Input } from '@/component-library';
 import { Select } from '@/component-library';
-import { Key, Loader2, Lock, Server, Terminal, User } from 'lucide-react';
+import { IconButton } from '@/component-library';
+import { FolderOpen, Key, Loader2, Lock, Server, Terminal, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
+import { pickSshPrivateKeyPath } from './pickSshPrivateKeyPath';
 import './SSHAuthPromptDialog.scss';
 
 export interface SSHAuthPromptSubmitPayload {
@@ -108,6 +110,14 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
     }
   };
 
+  const handleBrowsePrivateKey = useCallback(async () => {
+    if (isConnecting) return;
+    const path = await pickSshPrivateKeyPath({
+      title: t('ssh.remote.pickPrivateKeyDialogTitle'),
+    });
+    if (path) setKeyPath(path);
+  }, [isConnecting, t]);
+
   return (
     <Modal
       isOpen={open}
@@ -115,6 +125,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
       title={t('ssh.remote.authPromptTitle') || 'SSH authentication'}
       size="small"
       showCloseButton
+      contentInset
     >
       <div className="ssh-auth-prompt-dialog" onKeyDown={handleKeyDown}>
         <div className="ssh-auth-prompt-dialog__description">
@@ -173,6 +184,20 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
                 onChange={(e) => setKeyPath(e.target.value)}
                 placeholder="~/.ssh/id_rsa"
                 prefix={<Key size={16} />}
+                suffix={
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    className="ssh-auth-prompt-dialog__browse-key"
+                    tooltip={t('ssh.remote.browsePrivateKey')}
+                    aria-label={t('ssh.remote.browsePrivateKey')}
+                    disabled={isConnecting}
+                    onClick={() => void handleBrowsePrivateKey()}
+                  >
+                    <FolderOpen size={16} />
+                  </IconButton>
+                }
                 size="medium"
                 disabled={isConnecting}
               />

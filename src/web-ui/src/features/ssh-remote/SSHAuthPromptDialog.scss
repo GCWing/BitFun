@@ -3,7 +3,7 @@
  */
 
 .ssh-auth-prompt-dialog {
-  padding: 8px 0;
+  padding: 8px 0 16px;
 
   &__description {
     display: flex;
@@ -45,6 +45,11 @@
 
   &__field {
     margin-bottom: 14px;
+  }
+
+  &__browse-key {
+    flex-shrink: 0;
+    margin-right: -6px;
   }
 
   &__hint {

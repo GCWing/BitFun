@@ -290,7 +290,11 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         return;
       }
 
+      const localBefore = contentRef.current;
       const raw = await workspaceAPI.readFileContent(filePath);
+      if (localBefore !== contentRef.current) {
+        return;
+      }
       const { nextEditability, nextContent } = toNormalizedMarkdown(raw);
       if (nextContent === contentRef.current) {
         diskVersionRef.current = currentVersion;

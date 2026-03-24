@@ -3,7 +3,7 @@
  * Professional SSH connection dialog following BitFun design patterns
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSSHRemoteContext } from './SSHRemoteProvider';
 import { SSHAuthPromptDialog, type SSHAuthPromptSubmitPayload } from './SSHAuthPromptDialog';
@@ -12,7 +12,8 @@ import { Button } from '@/component-library';
 import { Input } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
-import { Loader2, Server, User, Key, Lock, Terminal, Trash2, Plus, Pencil, Play } from 'lucide-react';
+import { IconButton } from '@/component-library';
+import { FolderOpen, Loader2, Server, User, Key, Lock, Terminal, Trash2, Plus, Pencil, Play } from 'lucide-react';
 import type {
   SSHConnectionConfig,
   SSHAuthMethod,
@@ -20,6 +21,7 @@ import type {
   SSHConfigEntry,
 } from './types';
 import { sshApi } from './sshApi';
+import { pickSshPrivateKeyPath } from './pickSshPrivateKeyPath';
 import './SSHConnectionDialog.scss';
 
 type CredentialsPromptState =
@@ -124,6 +126,14 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  const handleBrowsePrivateKey = useCallback(async () => {
+    if (isConnecting || status === 'connecting') return;
+    const path = await pickSshPrivateKeyPath({
+      title: t('ssh.remote.pickPrivateKeyDialogTitle'),
+    });
+    if (path) setFormData((prev) => ({ ...prev, keyPath: path }));
+  }, [isConnecting, status, t]);
 
   const generateConnectionId = (host: string, port: number, username: string) => {
     return `ssh-${username}@${host}:${port}`;
@@ -610,6 +620,20 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     onChange={(e) => handleInputChange('keyPath', e.target.value)}
                     placeholder="~/.ssh/id_rsa"
                     prefix={<Key size={16} />}
+                    suffix={
+                      <IconButton
+                        type="button"
+                        variant="ghost"
+                        size="small"
+                        className="ssh-connection-dialog__browse-key"
+                        tooltip={t('ssh.remote.browsePrivateKey')}
+                        aria-label={t('ssh.remote.browsePrivateKey')}
+                        disabled={isConnecting || status === 'connecting'}
+                        onClick={() => void handleBrowsePrivateKey()}
+                      >
+                        <FolderOpen size={16} />
+                      </IconButton>
+                    }
                     size="medium"
                   />
                 </div>
