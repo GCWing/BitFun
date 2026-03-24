@@ -336,6 +336,7 @@
     "pin": "Pin Tab",
     "unpin": "Unpin Tab",
     "unsaved": "Unsaved",
+    "fileDeleted": "Deleted",
     "missionControl": "Mission Control",
     "hiddenTabsCount": "{{count}} hidden tabs",
     "confirmCloseWithDirty": "File \"{{title}}\" has unsaved changes.\n\nDiscard changes and close?",

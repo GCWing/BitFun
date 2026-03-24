@@ -11,7 +11,7 @@ const log = createLogger('useFileSystem');
 const EMPTY_FILE_TREE: FileSystemNode[] = [];
 
 /** Polling keeps remote workspaces and lazy-loaded trees in sync when OS/file watch is unreliable. */
-const FILE_TREE_POLL_INTERVAL_MS = 5000;
+const FILE_TREE_POLL_INTERVAL_MS = 1000;
 
 function findNodeByPath(nodes: FileSystemNode[], targetPath: string): FileSystemNode | undefined {
   for (const node of nodes) {

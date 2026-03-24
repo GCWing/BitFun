@@ -63,9 +63,11 @@ export const Tab: React.FC<TabProps> = ({
 
   // Build tooltip text
   const unsavedSuffix = tab.isDirty ? ` (${t('tabs.unsaved')})` : '';
+  const deletedSuffix = tab.fileDeletedFromDisk ? ` - ${t('tabs.fileDeleted')}` : '';
+  const titleDisplay = `${tab.title}${deletedSuffix}`;
   const tooltipText = tab.content.data?.filePath
-    ? `${tab.content.data.filePath}${unsavedSuffix}`
-    : `${tab.title}${unsavedSuffix}`;
+    ? `${tab.content.data.filePath}${deletedSuffix}${unsavedSuffix}`
+    : `${titleDisplay}${unsavedSuffix}`;
 
   // Handle single click - respond immediately
   const handleClick = useCallback((e: React.MouseEvent) => {
@@ -113,6 +115,7 @@ export const Tab: React.FC<TabProps> = ({
     'canvas-tab',
     isActive && 'is-active',
     tab.isDirty && 'is-dirty',
+    tab.fileDeletedFromDisk && 'is-file-deleted',
     isDragging && 'is-dragging',
     getStateClassName(tab.state),
     isTaskDetail && 'is-task-detail',
@@ -153,7 +156,7 @@ export const Tab: React.FC<TabProps> = ({
 
         {/* Title */}
         <span className="canvas-tab__title">
-          {tab.title}
+          {titleDisplay}
         </span>
 
         {/* Dirty state indicator */}

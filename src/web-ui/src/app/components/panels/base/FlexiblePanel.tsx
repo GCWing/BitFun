@@ -90,6 +90,8 @@ interface ExtendedFlexiblePanelProps extends FlexiblePanelProps {
   onDirtyStateChange?: (isDirty: boolean) => void;
   /** Whether this panel is the active/visible tab in its EditorGroup */
   isActive?: boolean;
+  /** File no longer exists on disk (from editor); drives tab "deleted" label */
+  onFileMissingFromDiskChange?: (missing: boolean) => void;
 }
 
 const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
@@ -101,6 +103,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
   onBeforeClose,
   onDirtyStateChange,
   isActive = true,
+  onFileMissingFromDiskChange,
 }) => {
   const { t } = useI18n('components');
 
@@ -273,6 +276,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 readOnly={markdownEditorData.readOnly || false}
                 jumpToLine={markdownJumpToLine}
                 jumpToColumn={markdownJumpToColumn}
+                isActiveTab={isActive}
+                onFileMissingFromDiskChange={onFileMissingFromDiskChange}
                 onContentChange={(_newContent, hasChanges) => {
                   if (onDirtyStateChange) {
                     onDirtyStateChange(hasChanges);
@@ -407,6 +412,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               showMinimap={true}
               theme="vs-dark"
               className={fileViewerClass}
+              isActiveTab={isActive}
+              onFileMissingFromDiskChange={onFileMissingFromDiskChange}
             />
           </div>
         );
@@ -442,6 +449,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 showMinimap={true}
                 theme="vs-dark"
                 onContentChange={codeData.onContentChange}
+                isActiveTab={isActive}
+                onFileMissingFromDiskChange={onFileMissingFromDiskChange}
               />
             </div>
           </div>
@@ -467,6 +476,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             jumpToLine={editorData.jumpToLine}
             jumpToColumn={editorData.jumpToColumn}
             jumpToRange={editorData.jumpToRange}
+            isActiveTab={isActive}
+            onFileMissingFromDiskChange={onFileMissingFromDiskChange}
             onContentChange={(newContent, hasChanges) => {
                 if (onContentChange) {
                   onContentChange({

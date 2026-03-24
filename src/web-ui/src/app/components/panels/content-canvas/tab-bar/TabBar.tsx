@@ -76,6 +76,9 @@ const estimateTabWidth = (title: string): number => {
   return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, estimated));
 };
 
+const tabTitleForWidthEstimate = (tab: CanvasTab, deletedLabel: string): string =>
+  tab.fileDeletedFromDisk ? `${tab.title} - ${deletedLabel}` : tab.title;
+
 export const TabBar: React.FC<TabBarProps> = ({
   tabs,
   groupId,
@@ -108,7 +111,10 @@ export const TabBar: React.FC<TabBarProps> = ({
   const visibleTabs = useMemo(() => tabs.filter(t => !t.isHidden), [tabs]);
   
   // Build cache key (id + title because title changes affect width)
-  const getTabCacheKey = useCallback((tab: CanvasTab) => `${tab.id}:${tab.title}`, []);
+  const getTabCacheKey = useCallback(
+    (tab: CanvasTab) => `${tab.id}:${tab.title}:${tab.fileDeletedFromDisk ? '1' : '0'}`,
+    []
+  );
 
   // Get tab width: use cache if available, otherwise estimate
   const getTabWidth = useCallback((tab: CanvasTab): number => {
@@ -118,8 +124,8 @@ export const TabBar: React.FC<TabBarProps> = ({
       return cached;
     }
     // Estimated width
-    return estimateTabWidth(tab.title);
-  }, [getTabCacheKey]);
+    return estimateTabWidth(tabTitleForWidthEstimate(tab, t('tabs.fileDeleted')));
+  }, [getTabCacheKey, t]);
 
   // Compute visible tab count based on DOM measurements
   const calculateVisibleTabs = useCallback(() => {
