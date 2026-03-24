@@ -46,7 +46,15 @@
       "loadingFile": "正在加载文件...",
       "saving": "正在保存...",
       "initFailedWithMessage": "编辑器初始化失败: {{message}}",
-      "externalModifiedConfirm": "该文件已被外部程序修改。\n\n您当前有未保存的修改，是否要放弃修改并重新加载文件？"
+      "externalModifiedConfirm": "该文件已被外部程序修改。\n\n您当前有未保存的修改，是否要放弃修改并重新加载文件？",
+      "externalModifiedTitle": "磁盘上的文件已变更",
+      "externalModifiedDetail": "检测到该文件在磁盘上的版本（修改时间/大小）与当前编辑器所依据的版本不一致。您有未保存的本地修改。若重新加载，本地未保存内容将丢失。",
+      "discardAndReload": "放弃修改并重新加载",
+      "keepLocalEdits": "保留本地编辑",
+      "saveConflictTitle": "保存冲突",
+      "saveConflictDetail": "保存前检测到磁盘上的文件已被其他程序修改。您可以选择用当前编辑覆盖磁盘，或放弃本地修改并从磁盘重新加载。",
+      "overwriteSave": "覆盖保存",
+      "reloadFromDisk": "从磁盘重新加载"
     },
     "diffEditor": {
       "loading": "正在加载差异编辑器...",

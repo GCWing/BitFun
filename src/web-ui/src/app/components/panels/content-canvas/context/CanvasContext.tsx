@@ -34,6 +34,9 @@ export interface TabOperations {
   updateTabContent: (tabId: string, groupId: EditorGroupId, content: PanelContent) => void;
   /** Set tab dirty state */
   setTabDirty: (tabId: string, groupId: EditorGroupId, isDirty: boolean) => void;
+
+  /** File missing on disk (for tab chrome) */
+  setTabFileDeletedFromDisk: (tabId: string, groupId: EditorGroupId, deleted: boolean) => void;
   /** Promote tab state (preview -> active) */
   promoteTab: (tabId: string, groupId: EditorGroupId) => void;
   /** Pin/unpin tab */

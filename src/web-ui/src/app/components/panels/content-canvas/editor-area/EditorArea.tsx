@@ -49,6 +49,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
     setActiveGroup,
     updateTabContent,
     setTabDirty,
+    setTabFileDeletedFromDisk,
   } = useCanvasStore();
 
   const handleTabClick = useCallback((groupId: EditorGroupId) => (tabId: string) => {
@@ -110,6 +111,13 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
     setTabDirty(tabId, groupId, isDirty);
   }, [setTabDirty]);
 
+  const handleTabFileDeletedFromDiskChange = useCallback(
+    (groupId: EditorGroupId) => (tabId: string, missing: boolean) => {
+      setTabFileDeletedFromDisk(tabId, groupId, missing);
+    },
+    [setTabFileDeletedFromDisk]
+  );
+
   const renderEditorGroup = (groupId: EditorGroupId, group: typeof primaryGroup) => (
     <EditorGroup
       groupId={groupId}
@@ -130,6 +138,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
       onGroupFocus={handleGroupFocus(groupId)}
       onContentChange={handleContentChange(groupId)}
       onDirtyStateChange={handleDirtyStateChange(groupId)}
+      onTabFileDeletedFromDiskChange={handleTabFileDeletedFromDiskChange(groupId)}
       onOpenMissionControl={groupId === 'primary' ? onOpenMissionControl : undefined}
       onCloseAllTabs={handleCloseAllTabs(groupId)}
       onInteraction={onInteraction}

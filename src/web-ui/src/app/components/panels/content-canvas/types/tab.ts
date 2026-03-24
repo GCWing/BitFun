@@ -23,6 +23,8 @@ export interface CanvasTab {
   state: TabState;
   /** Whether there are unsaved changes */
   isDirty: boolean;
+  /** File path no longer exists on disk (or is not a file); tab title shows a deleted label */
+  fileDeletedFromDisk?: boolean;
   /** Whether hidden (for persistent sessions like terminal) */
   isHidden?: boolean;
   /** Created timestamp */

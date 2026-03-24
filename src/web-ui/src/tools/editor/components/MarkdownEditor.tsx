@@ -16,11 +16,24 @@ import { CubeLoading, Button } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import CodeEditor from './CodeEditor';
+import {
+  diskVersionFromMetadata,
+  diskVersionsDiffer,
+  type DiskFileVersion,
+} from '../utils/diskFileVersion';
+import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
+import {
+  isFileMissingFromMetadata,
+  isLikelyFileNotFoundError,
+} from '@/shared/utils/fsErrorUtils';
 import './MarkdownEditor.scss';
 
-const log = createLogger('MarkdownEditor');
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
+
+const log = createLogger('MarkdownEditor');
+
+const FILE_SYNC_POLL_INTERVAL_MS = 1000;
 
 export interface MarkdownEditorProps {
   /** File path - loads from file if provided, otherwise uses initialContent */
@@ -43,6 +56,10 @@ export interface MarkdownEditorProps {
   jumpToLine?: number;
   /** Jump to column (auto-jump after file opens) */
   jumpToColumn?: number;
+  /** When false, disk sync polling is paused (background tab). */
+  isActiveTab?: boolean;
+  /** File missing on disk (tab chrome); skipped when embedded CodeEditor handles the same path */
+  onFileMissingFromDiskChange?: (missing: boolean) => void;
 }
 
 const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
@@ -56,6 +73,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   onSave,
   jumpToLine,
   jumpToColumn,
+  isActiveTab = true,
+  onFileMissingFromDiskChange,
 }) => {
   const { t } = useI18n('tools');
   const { isLight } = useTheme();
@@ -67,13 +86,52 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const [editability, setEditability] = useState<MarkdownEditabilityAnalysis>(() => analyzeMarkdownEditability(initialContent));
   const editorRef = useRef<EditorInstance>(null);
   const isUnmountedRef = useRef(false);
-  const lastModifiedTimeRef = useRef<number>(0);
+  const diskVersionRef = useRef<DiskFileVersion | null>(null);
+  const isCheckingDiskRef = useRef(false);
+  const hasChangesRef = useRef(false);
   const lastJumpPositionRef = useRef<{ filePath: string; line: number } | null>(null);
   const onContentChangeRef = useRef(onContentChange);
   const contentRef = useRef(content);
   const lastReportedDirtyRef = useRef<boolean | null>(null);
+  const unsafeViewModeRef = useRef(unsafeViewMode);
+  unsafeViewModeRef.current = unsafeViewMode;
+  const lastReportedMissingRef = useRef<boolean | undefined>(undefined);
+
+  const reportFileMissingFromDisk = useCallback(
+    (missing: boolean) => {
+      if (!onFileMissingFromDiskChange) {
+        return;
+      }
+      const isUnsafeSplit =
+        !!filePath &&
+        (editability.mode === 'unsafe' ||
+          editability.containsRenderOnlyBlocks ||
+          editability.containsRawHtmlInlines);
+      if (isUnsafeSplit && unsafeViewModeRef.current === 'source') {
+        return;
+      }
+      if (lastReportedMissingRef.current === missing) {
+        return;
+      }
+      lastReportedMissingRef.current = missing;
+      onFileMissingFromDiskChange(missing);
+    },
+    [editability.containsRawHtmlInlines, editability.containsRenderOnlyBlocks, editability.mode, filePath, onFileMissingFromDiskChange]
+  );
+
   onContentChangeRef.current = onContentChange;
   contentRef.current = content;
+
+  useEffect(() => {
+    hasChangesRef.current = hasChanges;
+  }, [hasChanges]);
+
+  const toNormalizedMarkdown = useCallback((raw: string) => {
+    const nextEditability = analyzeMarkdownEditability(raw);
+    const nextContent =
+      nextEditability.mode === 'unsafe' ? raw : nextEditability.canonicalMarkdown;
+    return { nextEditability, nextContent };
+  }, []);
 
   const basePath = React.useMemo(() => {
     if (!filePath) return undefined;
@@ -106,23 +164,32 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     try {
       const { workspaceAPI } = await import('@/infrastructure/api');
       const { invoke } = await import('@tauri-apps/api/core');
-      
+
       const fileContent = await workspaceAPI.readFileContent(filePath);
+      reportFileMissingFromDisk(false);
 
       try {
-        const fileInfo: any = await invoke('get_file_metadata', { 
-          request: { path: filePath } 
+        const fileInfo: any = await invoke('get_file_metadata', {
+          request: { path: filePath },
         });
-        lastModifiedTimeRef.current = fileInfo.modified;
+        if (isFileMissingFromMetadata(fileInfo)) {
+          reportFileMissingFromDisk(true);
+        } else {
+          reportFileMissingFromDisk(false);
+          const v = diskVersionFromMetadata(fileInfo);
+          if (v) {
+            diskVersionRef.current = v;
+          }
+        }
       } catch (err) {
+        if (isLikelyFileNotFoundError(err)) {
+          reportFileMissingFromDisk(true);
+        }
         log.warn('Failed to get file metadata', err);
       }
-        
+
       if (!isUnmountedRef.current) {
-        const nextEditability = analyzeMarkdownEditability(fileContent);
-        const nextContent = nextEditability.mode === 'unsafe'
-          ? fileContent
-          : nextEditability.canonicalMarkdown;
+        const { nextEditability, nextContent } = toNormalizedMarkdown(fileContent);
 
         setEditability(nextEditability);
         setContent(nextContent);
@@ -146,19 +213,23 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           displayError = t('editor.common.permissionDenied');
         }
         setError(displayError);
+        if (errStr.includes('does not exist') || errStr.includes('No such file')) {
+          reportFileMissingFromDisk(true);
+        }
       }
     } finally {
       if (!isUnmountedRef.current) {
         setLoading(false);
       }
     }
-  }, [filePath, t]);
+  }, [filePath, reportFileMissingFromDisk, t, toNormalizedMarkdown]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
   useEffect(() => {
-    // Reset the flag when filePath changes
     loadFileContentCalledRef.current = false;
+    diskVersionRef.current = null;
+    lastReportedMissingRef.current = undefined;
   }, [filePath]);
   
   useEffect(() => {
@@ -186,6 +257,116 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }
   }, [filePath, initialContent, loadFileContent]);
 
+  const checkMarkdownDisk = useCallback(async () => {
+    if (!filePath || !isActiveTab || isUnmountedRef.current || isCheckingDiskRef.current) {
+      return;
+    }
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
+
+    isCheckingDiskRef.current = true;
+    try {
+      const { workspaceAPI } = await import('@/infrastructure/api');
+      const { invoke } = await import('@tauri-apps/api/core');
+      const fileInfo: any = await invoke('get_file_metadata', {
+        request: { path: filePath },
+      });
+      if (isFileMissingFromMetadata(fileInfo)) {
+        reportFileMissingFromDisk(true);
+        return;
+      }
+      reportFileMissingFromDisk(false);
+      const currentVersion = diskVersionFromMetadata(fileInfo);
+      if (!currentVersion) {
+        return;
+      }
+      const baseline = diskVersionRef.current;
+      if (!baseline) {
+        diskVersionRef.current = currentVersion;
+        return;
+      }
+      if (!diskVersionsDiffer(currentVersion, baseline)) {
+        return;
+      }
+
+      const raw = await workspaceAPI.readFileContent(filePath);
+      const { nextEditability, nextContent } = toNormalizedMarkdown(raw);
+      if (nextContent === contentRef.current) {
+        diskVersionRef.current = currentVersion;
+        return;
+      }
+
+      if (hasChangesRef.current) {
+        const shouldReload = await confirmDialog({
+          title: t('editor.codeEditor.externalModifiedTitle'),
+          message: t('editor.codeEditor.externalModifiedDetail'),
+          type: 'warning',
+          confirmText: t('editor.codeEditor.discardAndReload'),
+          cancelText: t('editor.codeEditor.keepLocalEdits'),
+          confirmDanger: true,
+        });
+        if (!shouldReload) {
+          diskVersionRef.current = currentVersion;
+          return;
+        }
+      }
+
+      if (!isUnmountedRef.current) {
+        setEditability(nextEditability);
+        setContent(nextContent);
+        contentRef.current = nextContent;
+        setHasChanges(false);
+        lastReportedDirtyRef.current = false;
+        onContentChangeRef.current?.(nextContent, false);
+        setTimeout(() => {
+          editorRef.current?.setInitialContent?.(nextContent);
+        }, 0);
+        editorRef.current?.markSaved?.();
+        reportFileMissingFromDisk(false);
+      }
+
+      const fileInfoAfter: any = await invoke('get_file_metadata', {
+        request: { path: filePath },
+      });
+      if (!isFileMissingFromMetadata(fileInfoAfter)) {
+        const vAfter = diskVersionFromMetadata(fileInfoAfter);
+        if (vAfter) {
+          diskVersionRef.current = vAfter;
+        }
+      }
+    } catch (e) {
+      if (isLikelyFileNotFoundError(e)) {
+        reportFileMissingFromDisk(true);
+      }
+      log.error('Markdown disk sync check failed', e);
+    } finally {
+      isCheckingDiskRef.current = false;
+    }
+  }, [filePath, isActiveTab, reportFileMissingFromDisk, t, toNormalizedMarkdown]);
+
+  const isUnsafeSplitUi =
+    !!filePath &&
+    (editability.mode === 'unsafe' ||
+      editability.containsRenderOnlyBlocks ||
+      editability.containsRawHtmlInlines);
+  const pollMarkdownDisk = !isUnsafeSplitUi || unsafeViewMode !== 'source';
+
+  useEffect(() => {
+    if (!filePath || !isActiveTab || !pollMarkdownDisk) {
+      return;
+    }
+    const tick = () => {
+      void checkMarkdownDisk();
+    };
+    const intervalId = window.setInterval(tick, FILE_SYNC_POLL_INTERVAL_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [checkMarkdownDisk, filePath, isActiveTab, pollMarkdownDisk]);
+
   const saveFileContent = useCallback(async () => {
     if (!hasChanges || isUnmountedRef.current) return;
 
@@ -196,13 +377,72 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         const { workspaceAPI } = await import('@/infrastructure/api');
         const { invoke } = await import('@tauri-apps/api/core');
 
-        await workspaceAPI.writeFileContent(workspacePath, filePath, content);
-        
-        try {
-          const fileInfo: any = await invoke('get_file_metadata', { 
-            request: { path: filePath } 
+        const fileInfoPre: any = await invoke('get_file_metadata', {
+          request: { path: filePath },
+        });
+        if (isFileMissingFromMetadata(fileInfoPre)) {
+          reportFileMissingFromDisk(true);
+        } else {
+          reportFileMissingFromDisk(false);
+        }
+        const diskNow = diskVersionFromMetadata(fileInfoPre);
+        const baseline = diskVersionRef.current;
+
+        if (diskNow && baseline && diskVersionsDiffer(diskNow, baseline)) {
+          const overwrite = await confirmDialog({
+            title: t('editor.codeEditor.saveConflictTitle'),
+            message: t('editor.codeEditor.saveConflictDetail'),
+            type: 'warning',
+            confirmText: t('editor.codeEditor.overwriteSave'),
+            cancelText: t('editor.codeEditor.reloadFromDisk'),
+            confirmDanger: true,
           });
-          lastModifiedTimeRef.current = fileInfo.modified;
+          if (!overwrite) {
+            const raw = await workspaceAPI.readFileContent(filePath);
+            const { nextEditability, nextContent } = toNormalizedMarkdown(raw);
+            if (!isUnmountedRef.current) {
+              setEditability(nextEditability);
+              setContent(nextContent);
+              contentRef.current = nextContent;
+              setHasChanges(false);
+              lastReportedDirtyRef.current = false;
+              editorRef.current?.markSaved?.();
+              onContentChangeRef.current?.(nextContent, false);
+              setTimeout(() => {
+                editorRef.current?.setInitialContent?.(nextContent);
+              }, 0);
+              reportFileMissingFromDisk(false);
+            }
+            try {
+              const fileInfoAfter: any = await invoke('get_file_metadata', {
+                request: { path: filePath },
+              });
+              if (!isFileMissingFromMetadata(fileInfoAfter)) {
+                const v = diskVersionFromMetadata(fileInfoAfter);
+                if (v) {
+                  diskVersionRef.current = v;
+                }
+              }
+            } catch (err) {
+              log.warn('Failed to sync disk version after save conflict reload', err);
+            }
+            return;
+          }
+        }
+
+        await workspaceAPI.writeFileContent(workspacePath, filePath, content);
+
+        try {
+          const fileInfo: any = await invoke('get_file_metadata', {
+            request: { path: filePath },
+          });
+          if (!isFileMissingFromMetadata(fileInfo)) {
+            reportFileMissingFromDisk(false);
+            const v = diskVersionFromMetadata(fileInfo);
+            if (v) {
+              diskVersionRef.current = v;
+            }
+          }
         } catch (err) {
           log.warn('Failed to get file metadata', err);
         }
@@ -229,7 +469,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         setError(t('editor.common.saveFailedWithMessage', { message: errorMessage }));
       }
     }
-  }, [content, filePath, workspacePath, hasChanges, onSave, t]);
+  }, [content, filePath, workspacePath, hasChanges, onSave, reportFileMissingFromDisk, t, toNormalizedMarkdown]);
 
   const handleContentChange = useCallback((newContent: string) => {
     contentRef.current = newContent;
@@ -375,6 +615,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               showMinimap={true}
               jumpToLine={jumpToLine}
               jumpToColumn={jumpToColumn}
+              isActiveTab={isActiveTab}
+              onFileMissingFromDiskChange={onFileMissingFromDiskChange}
               onContentChange={(newContent, dirty) => {
                 contentRef.current = newContent;
                 setContent(newContent);

@@ -336,6 +336,7 @@
     "pin": "固定标签",
     "unpin": "取消固定",
     "unsaved": "未保存",
+    "fileDeleted": "已删除",
     "missionControl": "全景模式",
     "hiddenTabsCount": "{{count}} 个隐藏标签",
     "confirmCloseWithDirty": "文件 \"{{title}}\" 有未保存的更改。\n\n是否放弃更改并关闭？",

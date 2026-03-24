@@ -37,6 +37,7 @@ export interface EditorGroupProps {
   onGroupFocus: () => void;
   onContentChange: (tabId: string, content: PanelContent) => void;
   onDirtyStateChange: (tabId: string, isDirty: boolean) => void;
+  onTabFileDeletedFromDiskChange?: (tabId: string, missing: boolean) => void;
   onOpenMissionControl?: () => void;
   onCloseAllTabs?: () => Promise<void> | void;
   onInteraction?: (itemId: string, userInput: string) => Promise<void>;
@@ -61,6 +62,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   onGroupFocus,
   onContentChange,
   onDirtyStateChange,
+  onTabFileDeletedFromDiskChange,
   onOpenMissionControl,
   onCloseAllTabs,
   onInteraction,
@@ -163,6 +165,11 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
                   isActive={group.activeTabId === tab.id}
                   onContentChange={group.activeTabId === tab.id ? handleContentChange : undefined}
                   onDirtyStateChange={group.activeTabId === tab.id ? handleDirtyStateChange : undefined}
+                  onFileMissingFromDiskChange={
+                    onTabFileDeletedFromDiskChange
+                      ? (missing) => onTabFileDeletedFromDiskChange(tab.id, missing)
+                      : undefined
+                  }
                   onInteraction={onInteraction}
                   workspacePath={workspacePath}
                 />

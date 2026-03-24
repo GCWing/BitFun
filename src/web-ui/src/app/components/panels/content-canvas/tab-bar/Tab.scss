@@ -62,6 +62,12 @@
     }
   }
 
+  &.is-file-deleted {
+    .canvas-tab__title {
+      color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
+    }
+  }
+
   // Dragging
   &.is-dragging {
     opacity: 0.5;

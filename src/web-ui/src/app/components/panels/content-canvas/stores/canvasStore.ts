@@ -68,6 +68,9 @@ interface CanvasStoreActions {
   
   /** Set tab dirty state */
   setTabDirty: (tabId: string, groupId: EditorGroupId, isDirty: boolean) => void;
+
+  /** Mark whether the tab's file is missing on disk (editor-detected) */
+  setTabFileDeletedFromDisk: (tabId: string, groupId: EditorGroupId, deleted: boolean) => void;
   
   /** Promote tab state (preview -> active) */
   promoteTab: (tabId: string, groupId: EditorGroupId) => void;
@@ -638,6 +641,16 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
           
           if (tab) {
             tab.isDirty = isDirty;
+          }
+        });
+      },
+
+      setTabFileDeletedFromDisk: (tabId, groupId, deleted) => {
+        set((draft) => {
+          const group = getGroup(draft, groupId);
+          const tab = group.tabs.find(t => t.id === tabId);
+          if (tab) {
+            tab.fileDeletedFromDisk = deleted;
           }
         });
       },

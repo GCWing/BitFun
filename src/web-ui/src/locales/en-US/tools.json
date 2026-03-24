@@ -46,7 +46,15 @@
       "loadingFile": "Loading file...",
       "saving": "Saving...",
       "initFailedWithMessage": "Failed to initialize editor: {{message}}",
-      "externalModifiedConfirm": "This file was modified by another program.\n\nYou have unsaved changes. Discard them and reload the file?"
+      "externalModifiedConfirm": "This file was modified by another program.\n\nYou have unsaved changes. Discard them and reload the file?",
+      "externalModifiedTitle": "File changed on disk",
+      "externalModifiedDetail": "The file's metadata on disk (modified time / size) no longer matches the version this editor is based on. You have unsaved local changes. Reloading will discard them.",
+      "discardAndReload": "Discard and reload",
+      "keepLocalEdits": "Keep my edits",
+      "saveConflictTitle": "Save conflict",
+      "saveConflictDetail": "The file on disk was modified by another program before save. Overwrite the file with your editor content, or discard local changes and reload from disk.",
+      "overwriteSave": "Overwrite",
+      "reloadFromDisk": "Reload from disk"
     },
     "diffEditor": {
       "loading": "Loading diff editor...",

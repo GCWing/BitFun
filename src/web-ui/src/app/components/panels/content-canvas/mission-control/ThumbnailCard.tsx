@@ -103,6 +103,11 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
     return t('canvas.groupTertiary');
   }, [groupId, t]);
 
+  const titleWithDeleted = useMemo(() => {
+    const suffix = tab.fileDeletedFromDisk ? ` - ${t('tabs.fileDeleted')}` : '';
+    return `${tab.title}${suffix}`;
+  }, [tab.fileDeletedFromDisk, tab.title, t]);
+
   // Handle close
   const handleClose = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,7 +140,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
 
   return (
     <div
-      className={`canvas-thumbnail-card ${isActive ? 'is-active' : ''} ${stateClass} ${tab.isDirty ? 'is-dirty' : ''}`}
+      className={`canvas-thumbnail-card ${isActive ? 'is-active' : ''} ${stateClass} ${tab.isDirty ? 'is-dirty' : ''} ${tab.fileDeletedFromDisk ? 'is-file-deleted' : ''}`}
       onClick={onClick}
       onContextMenu={handleContextMenu}
       draggable
@@ -150,7 +155,7 @@ export const ThumbnailCard: React.FC<ThumbnailCardProps> = ({
         <div className="canvas-thumbnail-card__title">
           {tab.state === 'pinned' && <Pin size={10} className="canvas-thumbnail-card__pin-icon" />}
           <span className={tab.state === 'preview' ? 'is-preview' : ''}>
-            {tab.title}
+            {titleWithDeleted}
           </span>
           {tab.isDirty && <span className="canvas-thumbnail-card__dirty">●</span>}
         </div>

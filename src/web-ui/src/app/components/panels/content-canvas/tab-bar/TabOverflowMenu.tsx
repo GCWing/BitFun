@@ -189,17 +189,20 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
 
           {/* Overflow tab list */}
           <div className="canvas-tab-overflow-menu__list">
-            {overflowTabs.map((tab) => (
+            {overflowTabs.map((tab) => {
+              const deletedSuffix = tab.fileDeletedFromDisk ? ` - ${t('tabs.fileDeleted')}` : '';
+              const titleWithDeleted = `${tab.title}${deletedSuffix}`;
+              return (
               <div
                 key={tab.id}
                 className={`canvas-tab-overflow-menu__item ${
                   activeTabId === tab.id ? 'is-active' : ''
-                } ${tab.isDirty ? 'is-dirty' : ''}`}
+                } ${tab.isDirty ? 'is-dirty' : ''} ${tab.fileDeletedFromDisk ? 'is-file-deleted' : ''}`}
                 onClick={() => handleTabClick(tab.id)}
               >
                 <span className="canvas-tab-overflow-menu__item-title">
-                  {tab.state === 'preview' && <em>{tab.title}</em>}
-                  {tab.state !== 'preview' && tab.title}
+                  {tab.state === 'preview' && <em>{titleWithDeleted}</em>}
+                  {tab.state !== 'preview' && titleWithDeleted}
                 </span>
                 
                 {tab.isDirty && (
@@ -213,7 +216,8 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                   <X size={12} />
                 </button>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>,
         document.body
