@@ -36,6 +36,10 @@
     "title": "选择主题风格",
     "description": "选择您喜欢的界面主题，打造舒适的编程环境",
     "themes": {
+      "system": {
+        "name": "跟随系统",
+        "description": "随系统浅色/深色模式自动切换，系统切换时 BitFun 同步更新"
+      },
       "bitfun-dark": {
         "name": "暗色",
         "description": "默认暗色主题"

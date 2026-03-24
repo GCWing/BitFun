@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
     <title>BitFun - AI Code Assistant</title>
+    <script>
+      (function () {
+        var dark = '#121214';
+        var light = '#e8ecf2';
+        var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        document.documentElement.style.backgroundColor = m && m.matches ? dark : light;
+      })();
+    </script>
     <style>
       * {
         margin: 0;
@@ -19,7 +27,7 @@
         overflow: hidden;
       }
       
-      /* Default background color (will be overridden by Tauri injected styles) */
+      /* Default background: inline script sets from prefers-color-scheme; theme overrides later */
       html {
         background-color: #121214;
       }

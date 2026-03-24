@@ -1,7 +1,7 @@
  
 
 import { create } from 'zustand';
-import { ThemeConfig, ThemeId, ThemeMetadata } from '../types';
+import { ThemeConfig, ThemeId, ThemeMetadata, ThemeSelectionId } from '../types';
 import { themeService } from '../core/ThemeService';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -11,14 +11,14 @@ const log = createLogger('ThemeStore');
 interface ThemeState {
   
   currentTheme: ThemeConfig | null;
-  currentThemeId: ThemeId | null;
+  currentThemeId: ThemeSelectionId | null;
   themes: ThemeMetadata[];
   loading: boolean;
   error: string | null;
   
   
   initialize: () => Promise<void>;
-  setTheme: (themeId: ThemeId) => Promise<void>;
+  setTheme: (themeId: ThemeSelectionId) => Promise<void>;
   refreshThemes: () => void;
   addTheme: (theme: ThemeConfig) => Promise<void>;
   removeTheme: (themeId: ThemeId) => Promise<void>;
@@ -41,10 +41,10 @@ export const useThemeStore = create<ThemeState>((set) => ({
     
     try {
       
-      themeService.on('theme:after-change', (event) => {
+      themeService.on('theme:after-change', () => {
         set({
-          currentTheme: event.theme || null,
-          currentThemeId: event.themeId,
+          currentTheme: themeService.getCurrentTheme(),
+          currentThemeId: themeService.getCurrentThemeId(),
         });
       });
       
@@ -67,6 +67,8 @@ export const useThemeStore = create<ThemeState>((set) => ({
       set({
         themes,
         loading: false,
+        currentTheme: themeService.getCurrentTheme(),
+        currentThemeId: themeService.getCurrentThemeId(),
       });
     } catch (error) {
       log.error('Failed to initialize', error);
@@ -78,7 +80,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
   },
   
   
-  setTheme: async (themeId: ThemeId) => {
+  setTheme: async (themeId: ThemeSelectionId) => {
     set({ loading: true, error: null });
     
     try {

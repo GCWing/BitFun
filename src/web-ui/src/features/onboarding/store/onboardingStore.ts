@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LocaleId } from '@/infrastructure/i18n/types';
-import type { ThemeId } from '@/infrastructure/theme/types';
+import { SYSTEM_THEME_ID, type ThemeSelectionId } from '@/infrastructure/theme/types';
 
 /**
  * Onboarding step enum.
@@ -58,7 +58,7 @@ interface OnboardingState {
   
   // Configuration data
   selectedLanguage: LocaleId;
-  selectedTheme: ThemeId;
+  selectedTheme: ThemeSelectionId;
   modelConfig: OnboardingModelConfig | null;
   
   // Actions
@@ -72,7 +72,7 @@ interface OnboardingState {
   
   // Configuration updates
   setLanguage: (language: LocaleId) => void;
-  setTheme: (theme: ThemeId) => void;
+  setTheme: (theme: ThemeSelectionId) => void;
   setModelConfig: (config: OnboardingModelConfig | null) => void;
   markStepCompleted: (step: OnboardingStep) => void;
   
@@ -94,7 +94,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       skipped: false,
       
       selectedLanguage: 'zh-CN',
-      selectedTheme: 'bitfun-light',
+      selectedTheme: SYSTEM_THEME_ID,
       modelConfig: null,
       
       // Start onboarding
@@ -170,7 +170,8 @@ export const useOnboardingStore = create<OnboardingState>()(
           currentStep: 'language',
           completedSteps: [],
           skipped: false,
-          modelConfig: null
+          modelConfig: null,
+          selectedTheme: SYSTEM_THEME_ID,
         });
       },
       
@@ -180,7 +181,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       },
       
       // Set theme
-      setTheme: (theme: ThemeId) => {
+      setTheme: (theme: ThemeSelectionId) => {
         set({ selectedTheme: theme });
       },
       

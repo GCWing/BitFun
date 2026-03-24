@@ -11,6 +11,10 @@ export type ColorValue = string; // hex, rgb, rgba, hsl, hsla
  
 export type ThemeId = string;
 
+/** Reserved config value: follow OS light/dark (maps to bitfun-light / bitfun-dark). */
+export const SYSTEM_THEME_ID = 'system' as const;
+export type ThemeSelectionId = ThemeId | typeof SYSTEM_THEME_ID;
+
 
 
  

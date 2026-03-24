@@ -5,7 +5,7 @@
 
 import { useOnboardingStore, isModelConfigComplete, type OnboardingModelConfig } from '../store/onboardingStore';
 import type { LocaleId } from '@/infrastructure/i18n/types';
-import type { ThemeId } from '@/infrastructure/theme/types';
+import type { ThemeSelectionId } from '@/infrastructure/theme/types';
 import { configAPI } from '@/infrastructure/api';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { modelConfigManager } from '@/infrastructure/config/services/modelConfigs';
@@ -159,7 +159,7 @@ class OnboardingServiceClass {
    */
   async applyConfiguration(config: {
     language?: LocaleId;
-    theme?: ThemeId;
+    theme?: ThemeSelectionId;
     modelConfig?: OnboardingModelConfig | null;
   }): Promise<void> {
     try {

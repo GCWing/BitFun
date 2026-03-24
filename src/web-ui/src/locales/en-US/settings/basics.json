@@ -17,6 +17,8 @@
     "importFailed": "Failed to import theme. Please check the file format.",
     "languageRowHint": "Choose one language pack as the active UI language.",
     "themeRowHint": "Pick an installed theme or manage custom themes.",
+    "systemTheme": "Match system",
+    "systemThemeDescription": "Use light or dark theme based on your OS appearance. Updates when the system switches.",
     "presets": {
       "bitfun-dark": {
         "name": "Dark",

@@ -20,6 +20,7 @@ import {
   useThemeManagement,
   ThemeMetadata,
   ThemeConfig as ThemeConfigType,
+  SYSTEM_THEME_ID,
 } from '@/infrastructure/theme';
 import { themeService } from '@/infrastructure/theme/core/ThemeService';
 import { useLanguageSelector } from '@/infrastructure/i18n';
@@ -87,6 +88,22 @@ function BasicsAppearanceSection() {
       : theme.description || '';
   };
 
+  const themeSelectOptions = useMemo(
+    () => [
+      {
+        value: SYSTEM_THEME_ID,
+        label: t('appearance.systemTheme'),
+        description: t('appearance.systemThemeDescription'),
+      },
+      ...themes.map((theme) => ({
+        value: theme.id,
+        label: getThemeDisplayName(theme),
+        description: getThemeDisplayDescription(theme),
+      })),
+    ],
+    [themes, t]
+  );
+
   return (
     <div className="theme-config">
       <div className="theme-config__content">
@@ -150,14 +167,16 @@ function BasicsAppearanceSection() {
                   value={themeId ?? ''}
                   onChange={(value) => handleThemeChange(value as string)}
                   disabled={loading}
-                  options={themes.map((theme) => ({
-                    value: theme.id,
-                    label: getThemeDisplayName(theme),
-                    description: getThemeDisplayDescription(theme),
-                  }))}
+                  options={themeSelectOptions}
                   renderOption={(option) => {
-                    const theme = themes.find((item) => item.id === String(option.value));
-                    const fullTheme = theme ? themeService.getTheme(theme.id) : null;
+                    const v = String(option.value);
+                    const fullTheme =
+                      v === SYSTEM_THEME_ID
+                        ? themeService.getTheme(themeService.getResolvedThemeId())
+                        : (() => {
+                            const meta = themes.find((item) => item.id === v);
+                            return meta ? themeService.getTheme(meta.id) : null;
+                          })();
                     const optionContent = (
                       <div className="theme-config__theme-option">
                         <span className="theme-config__theme-option-name">{option.label}</span>

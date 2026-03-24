@@ -36,6 +36,10 @@
     "title": "Choose Your Theme",
     "description": "Select a theme that suits your preference for a comfortable coding experience",
     "themes": {
+      "system": {
+        "name": "Match system",
+        "description": "Follow OS light/dark mode; BitFun updates automatically when your system changes"
+      },
       "bitfun-dark": {
         "name": "Dark",
         "description": "Default dark theme"

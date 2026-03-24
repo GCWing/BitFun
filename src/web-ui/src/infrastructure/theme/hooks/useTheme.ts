@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo } from 'react';
 import { useThemeStore } from '../store/themeStore';
-import { ThemeType } from '../types';
+import { themeService } from '../core/ThemeService';
+import { ThemeType, SYSTEM_THEME_ID } from '../types';
 export function useTheme() {
   const {
     currentTheme,
@@ -95,6 +96,9 @@ export function useThemeManagement() {
  
 export function useThemeToggle() {
   const { themeId, themes, setTheme, isDark, isLight } = useTheme();
+
+  const anchorThemeId =
+    themeId === SYSTEM_THEME_ID ? themeService.getResolvedThemeId() : (themeId ?? '');
   
   
   const toggleTheme = () => {
@@ -108,7 +112,7 @@ export function useThemeToggle() {
   
   
   const nextTheme = () => {
-    const currentIndex = themes.findIndex(t => t.id === themeId);
+    const currentIndex = Math.max(0, themes.findIndex(t => t.id === anchorThemeId));
     const nextIndex = (currentIndex + 1) % themes.length;
     const nextTheme = themes[nextIndex];
     
@@ -119,7 +123,7 @@ export function useThemeToggle() {
   
   
   const prevTheme = () => {
-    const currentIndex = themes.findIndex(t => t.id === themeId);
+    const currentIndex = Math.max(0, themes.findIndex(t => t.id === anchorThemeId));
     const prevIndex = (currentIndex - 1 + themes.length) % themes.length;
     const prevTheme = themes[prevIndex];
     

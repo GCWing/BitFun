@@ -11,8 +11,10 @@ import {
   ThemeEventListener,
   ThemeHooks,
   ThemeAdapter,
+  SYSTEM_THEME_ID,
+  ThemeSelectionId,
 } from '../types';
-import { builtinThemes, DEFAULT_THEME_ID } from '../presets';
+import { builtinThemes, getSystemPreferredDefaultThemeId } from '../presets';
 import { configAPI } from '@/infrastructure/api';
 import { monacoThemeSync } from '../integrations/MonacoThemeSync';
 import { createLogger } from '@/shared/utils/logger';
@@ -22,7 +24,11 @@ const log = createLogger('ThemeService');
  
 export class ThemeService {
   private themes: Map<ThemeId, ThemeConfig> = new Map();
-  private currentThemeId: ThemeId = DEFAULT_THEME_ID;
+  /** User choice from settings (including follow-system). */
+  private themeSelection: ThemeSelectionId = SYSTEM_THEME_ID;
+  /** Currently applied built-in or custom theme (never `system`). */
+  private resolvedThemeId: ThemeId = getSystemPreferredDefaultThemeId();
+  private systemThemeCleanup: (() => void) | null = null;
   private listeners: Map<ThemeEventType, Set<ThemeEventListener>> = new Map();
   private hooks: ThemeHooks = {};
   private adapters: ThemeAdapter[] = [];
@@ -47,24 +53,17 @@ export class ThemeService {
       
       const preInjectedThemeId = document.documentElement.getAttribute('data-theme');
       
-      let themeIdToApply: ThemeId | null = null;
-      
       if (preInjectedThemeId && this.themes.has(preInjectedThemeId as ThemeId)) {
-        
-        themeIdToApply = preInjectedThemeId as ThemeId;
+        await this.applyTheme(preInjectedThemeId as ThemeId);
       } else {
-        
-        const savedThemeId = await this.loadCurrentThemeId();
-        if (savedThemeId && this.themes.has(savedThemeId)) {
-          themeIdToApply = savedThemeId;
+        const saved = await this.loadThemeSelection();
+        if (saved === SYSTEM_THEME_ID) {
+          await this.applyTheme(SYSTEM_THEME_ID);
+        } else if (saved && this.themes.has(saved)) {
+          await this.applyTheme(saved);
+        } else {
+          await this.applyTheme(SYSTEM_THEME_ID);
         }
-      }
-      
-      
-      if (themeIdToApply) {
-        await this.applyTheme(themeIdToApply);
-      } else {
-        await this.applyTheme(DEFAULT_THEME_ID);
       }
       
       
@@ -74,7 +73,7 @@ export class ThemeService {
     } catch (error) {
       log.error('Theme system initialization failed', error);
       
-      await this.applyTheme(DEFAULT_THEME_ID);
+      await this.applyTheme(SYSTEM_THEME_ID);
     }
   }
   
@@ -100,14 +99,17 @@ export class ThemeService {
   }
   
    
-  private async loadCurrentThemeId(): Promise<ThemeId | null> {
+  private async loadThemeSelection(): Promise<ThemeSelectionId | null> {
     try {
       
-      const themeId = await configAPI.getConfig('themes.current', {
+      const raw = await configAPI.getConfig('themes.current', {
         skipRetryOnNotFound: true
-      }) as ThemeId | undefined;
+      }) as string | undefined;
       
-      return themeId || null;
+      if (raw === SYSTEM_THEME_ID) {
+        return SYSTEM_THEME_ID;
+      }
+      return raw || null;
     } catch (error) {
       return null;
     }
@@ -117,6 +119,10 @@ export class ThemeService {
   
    
   registerTheme(theme: ThemeConfig): void {
+    if (theme.id === SYSTEM_THEME_ID) {
+      log.error('Reserved theme id', { id: theme.id });
+      throw new Error(`Theme id "${SYSTEM_THEME_ID}" is reserved`);
+    }
     if (this.themes.has(theme.id)) {
       log.warn('Theme already exists, will override', { id: theme.id });
     }
@@ -142,8 +148,8 @@ export class ThemeService {
     }
     
     
-    if (this.currentThemeId === themeId) {
-      this.applyTheme(DEFAULT_THEME_ID);
+    if (this.themeSelection === themeId) {
+      void this.applyTheme(SYSTEM_THEME_ID);
     }
     
     this.themes.delete(themeId);
@@ -163,12 +169,18 @@ export class ThemeService {
   
    
   getCurrentTheme(): ThemeConfig {
-    return this.themes.get(this.currentThemeId) || builtinThemes[0];
+    return this.themes.get(this.resolvedThemeId) || builtinThemes[0];
   }
   
    
-  getCurrentThemeId(): ThemeId {
-    return this.currentThemeId;
+  /** User selection for UI (may be `system`). */
+  getCurrentThemeId(): ThemeSelectionId {
+    return this.themeSelection;
+  }
+
+  /** Actually applied theme id (never `system`). */
+  getResolvedThemeId(): ThemeId {
+    return this.resolvedThemeId;
   }
   
    
@@ -187,49 +199,90 @@ export class ThemeService {
   
   
    
-  async applyTheme(themeId: ThemeId): Promise<void> {
-    const theme = this.themes.get(themeId);
-    if (!theme) {
-      log.error('Theme not found', { id: themeId });
-      throw new Error(`Theme ${themeId} not found`);
+  private detachSystemThemeListener(): void {
+    if (this.systemThemeCleanup) {
+      this.systemThemeCleanup();
+      this.systemThemeCleanup = null;
     }
-    
+  }
+
+  private attachSystemThemeListener(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    if (this.systemThemeCleanup) {
+      return;
+    }
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => {
+      if (this.themeSelection !== SYSTEM_THEME_ID) {
+        return;
+      }
+      const next = getSystemPreferredDefaultThemeId();
+      if (next === this.resolvedThemeId) {
+        return;
+      }
+      void this.applyResolvedTheme(next);
+    };
+    mq.addEventListener('change', handler);
+    this.systemThemeCleanup = () => mq.removeEventListener('change', handler);
+  }
+
+  private async applyResolvedTheme(resolvedId: ThemeId): Promise<void> {
+    const theme = this.themes.get(resolvedId);
+    if (!theme) {
+      log.error('Theme not found', { id: resolvedId });
+      throw new Error(`Theme ${resolvedId} not found`);
+    }
+
     const oldTheme = this.getCurrentTheme();
-    
+
     try {
-      
       if (this.hooks.beforeChange) {
         await this.hooks.beforeChange(theme, oldTheme);
       }
-      this.emitEvent('theme:before-change', themeId, theme, oldTheme);
-      
-      
-      this.currentThemeId = themeId;
-      
-      
+      this.emitEvent('theme:before-change', resolvedId, theme, oldTheme);
+
+      this.resolvedThemeId = resolvedId;
+
       this.injectCSSVariables(theme);
-      
-      
+
       try {
         monacoThemeSync.syncTheme(theme);
       } catch (error) {
         log.warn('Monaco Editor theme sync failed', error);
       }
-      
-      
-      
-      await this.saveCurrentThemeId(themeId);
-      
-      
+
       if (this.hooks.afterChange) {
         await this.hooks.afterChange(theme, oldTheme);
       }
-      this.emitEvent('theme:after-change', themeId, theme, oldTheme);
-      
-      log.info('Theme applied', { id: themeId, name: theme.name });
+      this.emitEvent('theme:after-change', resolvedId, theme, oldTheme);
+
+      log.info('Theme applied', { id: resolvedId, name: theme.name, selection: this.themeSelection });
     } catch (error) {
       log.error('Failed to apply theme', error);
       throw error;
+    }
+  }
+
+  async applyTheme(themeId: ThemeId | typeof SYSTEM_THEME_ID): Promise<void> {
+    if (themeId !== SYSTEM_THEME_ID && !this.themes.has(themeId)) {
+      log.error('Theme not found', { id: themeId });
+      throw new Error(`Theme ${themeId} not found`);
+    }
+
+    this.detachSystemThemeListener();
+
+    if (themeId === SYSTEM_THEME_ID) {
+      this.themeSelection = SYSTEM_THEME_ID;
+      await this.saveThemeSelection(SYSTEM_THEME_ID);
+      this.attachSystemThemeListener();
+      const resolved = getSystemPreferredDefaultThemeId();
+      await this.applyResolvedTheme(resolved);
+    } else {
+      this.themeSelection = themeId;
+      await this.saveThemeSelection(themeId);
+      await this.applyResolvedTheme(themeId);
     }
   }
   
@@ -634,9 +687,9 @@ export class ThemeService {
   }
   
    
-  private async saveCurrentThemeId(themeId: ThemeId): Promise<void> {
+  private async saveThemeSelection(selection: ThemeSelectionId): Promise<void> {
     try {
-      await configAPI.setConfig('themes.current', themeId);
+      await configAPI.setConfig('themes.current', selection);
     } catch (error) {
       log.warn('Failed to save current theme ID', error);
     }

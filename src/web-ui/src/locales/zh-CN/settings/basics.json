@@ -17,6 +17,8 @@
     "importFailed": "主题导入失败，请检查文件格式。",
     "languageRowHint": "选择一个语言包作为当前界面语言。",
     "themeRowHint": "选择已安装的主题或管理自定义主题。",
+    "systemTheme": "跟随系统",
+    "systemThemeDescription": "根据系统浅色/深色外观自动在亮暗主题间切换，并随系统切换而更新。",
     "presets": {
       "bitfun-dark": {
         "name": "暗色",

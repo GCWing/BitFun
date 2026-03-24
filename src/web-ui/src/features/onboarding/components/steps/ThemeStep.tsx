@@ -6,8 +6,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Palette } from 'lucide-react';
-import { themeService } from '@/infrastructure/theme';
+import { themeService, SYSTEM_THEME_ID } from '@/infrastructure/theme';
 import type { ThemeConfig } from '@/infrastructure/theme';
+import { getSystemPreferredDefaultThemeId } from '@/infrastructure/theme/presets';
 
 interface ThemeStepProps {
   selectedTheme: string;
@@ -15,6 +16,11 @@ interface ThemeStepProps {
 }
 
 const THEME_OPTIONS = [
+  {
+    id: SYSTEM_THEME_ID,
+    nameKey: 'theme.themes.system.name',
+    descKey: 'theme.themes.system.description',
+  },
   { 
     id: 'bitfun-light', 
     nameKey: 'theme.themes.bitfun-light.name',
@@ -258,7 +264,10 @@ export const ThemeStep: React.FC<ThemeStepProps> = ({
       {/* Theme grid */}
       <div className="bitfun-onboarding-theme__grid">
         {THEME_OPTIONS.map((themeOption) => {
-          const fullTheme = themeService.getTheme(themeOption.id as any);
+          const fullTheme =
+            themeOption.id === SYSTEM_THEME_ID
+              ? themeService.getTheme(getSystemPreferredDefaultThemeId())
+              : themeService.getTheme(themeOption.id as any);
           
           return (
             <div
