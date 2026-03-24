@@ -32,6 +32,8 @@
     "inputModelName": "输入自定义模型名称...",
     "useCustomModel": "按 Enter 使用",
     "addCustomModel": "添加自定义模型",
+    "modelAlreadyInList": "该模型已在列表中",
+    "reusedExistingModel": "已使用当前服务商下已有同名模型配置（未新增重复项）",
     "noModelsSelected": "请先选择模型",
     "removeModel": "移除模型",
     "urlHint": "已预填官方 API 地址，如使用代理或私有部署可修改",
@@ -237,6 +239,7 @@
   "messages": {
     "fillRequired": "请填写必要字段",
     "fillModelName": "请填写模型名称",
+    "duplicateModelNameUnderProvider": "该服务商下已有同名模型，请改用其他名称或编辑已有条目",
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
     "loadFailed": "加载AI配置失败",

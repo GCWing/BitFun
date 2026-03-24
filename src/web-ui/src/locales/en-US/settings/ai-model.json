@@ -32,6 +32,8 @@
     "inputModelName": "Enter model name...",
     "useCustomModel": "Press Enter to use",
     "addCustomModel": "Add Custom Model",
+    "modelAlreadyInList": "This model is already in the list",
+    "reusedExistingModel": "Using the existing model entry for this provider (no duplicate was added)",
     "noModelsSelected": "Select a model first",
     "removeModel": "Remove model",
     "urlHint": "Official API URL pre-filled, modify if using proxy or private deployment",
@@ -237,6 +239,7 @@
   "messages": {
     "fillRequired": "Please fill in required fields",
     "fillModelName": "Please fill in model name",
+    "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "loadFailed": "Failed to load AI configuration",

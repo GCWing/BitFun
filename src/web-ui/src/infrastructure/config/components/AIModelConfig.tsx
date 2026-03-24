@@ -68,6 +68,74 @@ function uniqModelNames(modelNames: string[]): string[] {
   return Array.from(new Set(modelNames.map(name => name.trim()).filter(Boolean)));
 }
 
+function modelNameLookupKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** Map lowercased model_name -> config (first wins if duplicates exist in storage). */
+function buildConfiguredModelsByLowerName(models: AIModelConfigType[]): Map<string, AIModelConfigType> {
+  const map = new Map<string, AIModelConfigType>();
+  for (const model of models) {
+    const key = modelNameLookupKey(model.model_name);
+    if (!map.has(key)) {
+      map.set(key, model);
+    }
+  }
+  return map;
+}
+
+function resolveModelNameWithExisting(
+  rawName: string,
+  configuredByLower: Map<string, AIModelConfigType>
+): string {
+  const trimmed = rawName.trim();
+  if (!trimmed) return trimmed;
+  const configured = configuredByLower.get(modelNameLookupKey(trimmed));
+  return configured?.model_name.trim() ?? trimmed;
+}
+
+/**
+ * Trim, optionally collapse to single selection, resolve each name against existing provider models
+ * (case-insensitive), then dedupe so one provider cannot list the same logical model twice.
+ */
+function normalizeProviderModelNameList(
+  modelNames: string[],
+  configuredByLower: Map<string, AIModelConfigType>,
+  singleSelection: boolean
+): string[] {
+  let list = uniqModelNames(modelNames);
+  if (singleSelection) {
+    list = list.slice(0, 1);
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of list) {
+    const resolved = resolveModelNameWithExisting(raw, configuredByLower);
+    if (!resolved) continue;
+    const key = modelNameLookupKey(resolved);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(resolved);
+  }
+  return out;
+}
+
+/** Last line of defense: same logical model name once per save; prefer draft tied to an existing config id. */
+function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): SelectedModelDraft[] {
+  const out: SelectedModelDraft[] = [];
+  for (const draft of drafts) {
+    const k = modelNameLookupKey(draft.modelName);
+    const i = out.findIndex(d => modelNameLookupKey(d.modelName) === k);
+    if (i < 0) {
+      out.push(draft);
+      continue;
+    }
+    const prev = out[i];
+    out[i] = !prev.configId && draft.configId ? draft : prev;
+  }
+  return out;
+}
+
 function getCapabilitiesByCategory(category: ModelCategory): ModelCapability[] {
   switch (category) {
     case 'general_chat':
@@ -294,30 +362,44 @@ const AIModelConfig: React.FC = () => {
     baseConfig?: Partial<AIModelConfigType>,
     singleSelection = false
   ) => {
-    const nextModelNames = singleSelection
-      ? uniqModelNames(modelNames).slice(0, 1)
-      : uniqModelNames(modelNames);
-
     const providerName = (
       baseConfig?.name ||
       editingConfig?.name ||
       currentTemplate?.name ||
       ''
     ).trim();
-    const configuredModelsByName = new Map(
-      getConfiguredModelsForProvider(providerName).map(model => [model.model_name, model])
+    const configuredByLower = buildConfiguredModelsByLowerName(
+      getConfiguredModelsForProvider(providerName)
     );
+    const nextModelNames = normalizeProviderModelNameList(
+      modelNames,
+      configuredByLower,
+      singleSelection
+    );
+
+    const pinnedRowId =
+      singleSelection && baseConfig?.id ? String(baseConfig.id) : undefined;
 
     setSelectedModelDrafts(prevDrafts =>
       nextModelNames.map(modelName => {
-        const existingDraft = prevDrafts.find(draft => draft.modelName === modelName);
+        const lookupKey = modelNameLookupKey(modelName);
+        const existingDraft = prevDrafts.find(
+          draft => modelNameLookupKey(draft.modelName) === lookupKey
+        );
+        const configuredModel = configuredByLower.get(lookupKey);
+
         if (existingDraft) {
-          return existingDraft;
+          const configId = pinnedRowId ?? configuredModel?.id ?? existingDraft.configId;
+          return {
+            ...existingDraft,
+            modelName,
+            configId,
+            key: configId ?? modelName,
+          };
         }
 
-        const configuredModel = configuredModelsByName.get(modelName);
         return createModelDraft(modelName, configuredModel || baseConfig, {
-          configId: configuredModel?.id,
+          configId: pinnedRowId ?? configuredModel?.id,
         });
       })
     );
@@ -361,15 +443,38 @@ const AIModelConfig: React.FC = () => {
     const trimmedModelName = manualModelInput.trim();
     if (!trimmedModelName) return;
 
+    const providerName = (
+      editingConfig?.name ||
+      currentTemplate?.name ||
+      ''
+    ).trim();
+    const configuredByLower = buildConfiguredModelsByLowerName(
+      getConfiguredModelsForProvider(providerName)
+    );
+    const resolvedName = resolveModelNameWithExisting(trimmedModelName, configuredByLower);
+    const matchesExistingSaved = configuredByLower.has(modelNameLookupKey(trimmedModelName));
+    const alreadyInDrafts = selectedModelDrafts.some(
+      draft => modelNameLookupKey(draft.modelName) === modelNameLookupKey(trimmedModelName)
+    );
+
+    if (alreadyInDrafts) {
+      notification.info(t('providerSelection.modelAlreadyInList'));
+      setManualModelInput('');
+      return;
+    }
+
     const nextModelNames = editingConfig?.id
-      ? [trimmedModelName]
+      ? [resolvedName]
       : uniqModelNames([
           ...selectedModelDrafts.map(draft => draft.modelName),
-          trimmedModelName,
+          resolvedName,
         ]);
 
     syncSelectedModelDrafts(nextModelNames, editingConfig || undefined, !!editingConfig?.id);
     setManualModelInput('');
+    if (matchesExistingSaved) {
+      notification.info(t('providerSelection.reusedExistingModel'));
+    }
   };
 
   const buildModelDiscoveryConfig = (config: Partial<AIModelConfigType>): AIModelConfigType | null => {
@@ -657,7 +762,8 @@ const AIModelConfig: React.FC = () => {
           .map(model => model.id)
           .filter((id): id is string => !!id)
       );
-      const configsToSave: AIModelConfigType[] = selectedModelDrafts.map((draft, index) => {
+      const draftsToSave = dedupeSelectedModelDraftsByModelName(selectedModelDrafts);
+      const configsToSave: AIModelConfigType[] = draftsToSave.map((draft, index) => {
         return {
           id: editingConfig.id || draft.configId || `model_${Date.now()}_${index}`,
           name: providerName,
@@ -687,6 +793,20 @@ const AIModelConfig: React.FC = () => {
           custom_request_body: editingConfig.custom_request_body
         };
       });
+
+      if (editingConfig.id && configsToSave[0]) {
+        const dupKey = modelNameLookupKey(configsToSave[0].model_name);
+        const nameConflict = aiModels.some(
+          m =>
+            m.id !== editingConfig.id &&
+            getProviderDisplayName(m) === providerName &&
+            modelNameLookupKey(m.model_name) === dupKey
+        );
+        if (nameConflict) {
+          notification.warning(t('messages.duplicateModelNameUnderProvider'));
+          return;
+        }
+      }
 
       let updatedModels: AIModelConfigType[];
       if (editingConfig.id) {
