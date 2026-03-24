@@ -4,6 +4,7 @@ import { MarkdownRenderer, IconButton } from '@/component-library';
 import { CodeEditor, MarkdownEditor, ImageViewer, DiffEditor } from '@/tools/editor';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 const log = createLogger('FlexiblePanel');
 
@@ -560,6 +561,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
 
                 const { workspaceAPI } = await import('@/infrastructure/api');
                 await workspaceAPI.writeFileContent(targetWorkspacePath, diffFilePath, content);
+
+                globalEventBus.emit('file-tree:refresh');
 
                 if (onDirtyStateChange) {
                   onDirtyStateChange(false);

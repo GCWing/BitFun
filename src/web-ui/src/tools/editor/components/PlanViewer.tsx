@@ -13,6 +13,7 @@ import { workspaceAPI } from '@/infrastructure/api/service-api/WorkspaceAPI';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import './PlanViewer.scss';
 
 const log = createLogger('PlanViewer');
@@ -282,6 +283,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
       setOriginalContent(planContent);
       setOriginalYamlContent(yamlContent);
+      globalEventBus.emit('file-tree:refresh');
       
       // Re-parse yaml to update planData
       if (yamlContent) {
@@ -413,6 +415,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       setYamlContent(nextYamlContent);
       setOriginalYamlContent(nextYamlContent);
       setOriginalContent(planContent);
+      globalEventBus.emit('file-tree:refresh');
     } catch (err) {
       log.error('Failed to save todo edit', err);
     }

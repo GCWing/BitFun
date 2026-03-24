@@ -1276,6 +1276,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       } catch (err) {
         log.warn('Failed to update file modification time', err);
       }
+
+      globalEventBus.emit('file-tree:refresh');
       
     } catch (err) {
       const errorMsg = t('editor.common.saveFailedWithMessage', { message: String(err) });

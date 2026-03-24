@@ -933,6 +933,8 @@
       "enterPassword": "请输入密码",
       "enterKeyPath": "请输入私钥路径",
       "keyPathDescription": "输入私钥文件路径",
+      "authPromptTitle": "SSH 认证",
+      "authPromptAgentHint": "将使用本机 SSH Agent 中已加载的密钥进行认证。",
       "disconnectConfirm": "确定要断开连接吗？",
       "disconnectWorkspaceConfirm": "确定要关闭远程工作区吗？这将断开与远程服务器的连接。",
       "newFile": "新建文件",

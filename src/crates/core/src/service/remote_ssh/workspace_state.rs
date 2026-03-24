@@ -10,6 +10,30 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Normalize a remote (POSIX) workspace path for registry lookup on any client OS.
+/// Converts backslashes to slashes, collapses duplicate slashes, and trims trailing slashes
+/// except for the filesystem root `/`.
+pub fn normalize_remote_workspace_path(path: &str) -> String {
+    let mut s = path.replace('\\', "/");
+    while s.contains("//") {
+        s = s.replace("//", "/");
+    }
+    if s == "/" {
+        return s;
+    }
+    s.trim_end_matches('/').to_string()
+}
+
+fn remote_path_is_under_root(path: &str, root: &str) -> bool {
+    if path == root {
+        return true;
+    }
+    if root == "/" {
+        return path.starts_with('/') && path != "/";
+    }
+    path.starts_with(&format!("{}/", root))
+}
+
 /// A single registered remote workspace entry.
 #[derive(Debug, Clone)]
 pub struct RemoteWorkspaceEntry {
@@ -85,6 +109,7 @@ impl RemoteWorkspaceStateManager {
         connection_id: String,
         connection_name: String,
     ) {
+        let remote_path = normalize_remote_workspace_path(&remote_path);
         let mut guard = self.workspaces.write().await;
         guard.insert(
             remote_path,
@@ -97,8 +122,9 @@ impl RemoteWorkspaceStateManager {
 
     /// Unregister a remote workspace by its path.
     pub async fn unregister_remote_workspace(&self, remote_path: &str) {
+        let key = normalize_remote_workspace_path(remote_path);
         let mut guard = self.workspaces.write().await;
-        guard.remove(remote_path);
+        guard.remove(&key);
     }
 
     /// Look up the connection info for a given path.
@@ -107,18 +133,26 @@ impl RemoteWorkspaceStateManager {
     /// is a sub-path of one (e.g. `/root/project/src/main.rs` matches
     /// `/root/project`).
     pub async fn lookup_connection(&self, path: &str) -> Option<RemoteWorkspaceEntry> {
+        let path = normalize_remote_workspace_path(path);
         let guard = self.workspaces.read().await;
         // Exact match first (most common).
-        if let Some(entry) = guard.get(path) {
+        if let Some(entry) = guard.get(&path) {
             return Some(entry.clone());
         }
-        // Sub-path match.
+        // Longest root prefix wins when multiple remote workspaces are registered.
+        let mut best: Option<(usize, RemoteWorkspaceEntry)> = None;
         for (root, entry) in guard.iter() {
-            if path.starts_with(&format!("{}/", root)) {
-                return Some(entry.clone());
+            if remote_path_is_under_root(&path, root) {
+                let pick = match best {
+                    None => true,
+                    Some((best_len, _)) => root.len() > best_len,
+                };
+                if pick {
+                    best = Some((root.len(), entry.clone()));
+                }
             }
         }
-        None
+        best.map(|(_, e)| e)
     }
 
     /// Quick boolean check: is `path` inside any registered remote workspace?
@@ -261,5 +295,32 @@ pub async fn is_remote_workspace_active() -> bool {
         manager.has_any().await
     } else {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_remote_workspace_path;
+
+    #[test]
+    fn normalize_remote_collapses_slashes_and_backslashes() {
+        assert_eq!(
+            normalize_remote_workspace_path(r"\\home\\user\\repo//src"),
+            "/home/user/repo/src"
+        );
+    }
+
+    #[test]
+    fn normalize_remote_root_unchanged() {
+        assert_eq!(normalize_remote_workspace_path("/"), "/");
+        assert_eq!(normalize_remote_workspace_path("///"), "/");
+    }
+
+    #[test]
+    fn normalize_remote_trims_trailing_slash() {
+        assert_eq!(
+            normalize_remote_workspace_path("/home/user/repo/"),
+            "/home/user/repo"
+        );
     }
 }

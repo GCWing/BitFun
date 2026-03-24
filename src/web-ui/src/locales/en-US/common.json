@@ -933,6 +933,8 @@
       "enterPassword": "Enter Password",
       "enterKeyPath": "Enter Private Key Path",
       "keyPathDescription": "Enter the private key file path",
+      "authPromptTitle": "SSH authentication",
+      "authPromptAgentHint": "Uses keys already loaded in your SSH agent.",
       "disconnectConfirm": "Are you sure you want to disconnect?",
       "disconnectWorkspaceConfirm": "Are you sure you want to close the remote workspace? This will disconnect from the remote server.",
       "newFile": "New File",

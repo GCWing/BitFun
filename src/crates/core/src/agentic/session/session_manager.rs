@@ -1280,8 +1280,9 @@ impl SessionManager {
 
                 for entry in sessions.iter() {
                     let session = entry.value();
-                    let workspace_path = session.config.workspace_path.clone().map(PathBuf::from);
-                    if let Some(workspace_path) = workspace_path {
+                    if let Some(workspace_path) =
+                        Self::effective_workspace_path_from_config(&session.config).await
+                    {
                         if let Err(e) = persistence.save_session(&workspace_path, session).await {
                             error!(
                                 "Failed to auto-save session: session_id={}, error={}",
@@ -1328,7 +1329,7 @@ impl SessionManager {
                     if enable_persistence {
                         if let Some(session) = sessions.get(&session_id) {
                             if let Some(workspace_path) =
-                                session.config.workspace_path.clone().map(PathBuf::from)
+                                Self::effective_workspace_path_from_config(&session.config).await
                             {
                                 let _ = persistence.save_session(&workspace_path, &session).await;
                             }

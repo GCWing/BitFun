@@ -677,14 +677,16 @@ pub async fn open_remote_workspace(
     app: tauri::AppHandle,
     request: OpenRemoteWorkspaceRequest,
 ) -> Result<WorkspaceInfoDto, String> {
+    use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
     use bitfun_core::service::workspace::WorkspaceCreateOptions;
 
-    let display_name = request
-        .remote_path
+    let remote_path = normalize_remote_workspace_path(&request.remote_path);
+
+    let display_name = remote_path
         .split('/')
         .filter(|s| !s.is_empty())
         .last()
-        .unwrap_or(&request.remote_path)
+        .unwrap_or(remote_path.as_str())
         .to_string();
 
     let options = WorkspaceCreateOptions {
@@ -703,7 +705,7 @@ pub async fn open_remote_workspace(
 
     match state
         .workspace_service
-        .open_workspace_with_options(request.remote_path.clone().into(), options)
+        .open_workspace_with_options(remote_path.clone().into(), options)
         .await
     {
         Ok(mut workspace_info) => {
@@ -733,7 +735,7 @@ pub async fn open_remote_workspace(
             let remote_workspace = crate::api::RemoteWorkspace {
                 connection_id: request.connection_id.clone(),
                 connection_name: request.connection_name.clone(),
-                remote_path: request.remote_path.clone(),
+                remote_path: remote_path.clone(),
             };
             if let Err(e) = state.set_remote_workspace(remote_workspace).await {
                 warn!("Failed to set remote workspace state: {}", e);

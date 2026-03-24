@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { DiffEditor } from '@/tools/editor';
 import { X } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import './GitDiffEditor.scss';
 
 const log = createLogger('GitDiffEditor');
@@ -93,6 +94,7 @@ export const GitDiffEditor: React.FC<GitDiffEditorProps> = ({
 
       await workspaceAPI.writeFileContent(repositoryPath, filePath, contentToSave);
 
+      globalEventBus.emit('file-tree:refresh');
 
       setLastSavedContent(contentToSave);
       lastSavedContentRef.current = contentToSave;

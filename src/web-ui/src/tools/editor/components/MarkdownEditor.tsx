@@ -11,6 +11,7 @@ import type { EditorInstance } from '../meditor';
 import { analyzeMarkdownEditability, type MarkdownEditabilityAnalysis } from '../meditor/utils/tiptapMarkdown';
 import { AlertCircle } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import { CubeLoading, Button } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
@@ -214,6 +215,8 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             onContentChangeRef.current(content, false);
           }
         }
+
+        globalEventBus.emit('file-tree:refresh');
       }
 
       if (onSave) {

@@ -7,7 +7,7 @@ const log = createLogger('FileSystemService');
 
 interface FileWatchEvent {
   path: string;
-  kind: 'create' | 'modify' | 'remove' | 'rename';
+  kind: string;
   timestamp: number;
   from?: string;
   to?: string;
@@ -86,12 +86,20 @@ class FileSystemService implements IFileSystemService {
 
           const events = event.payload;
 
+          const isUnderRoot = (absPath: string) =>
+            absPath === normalizedRoot || absPath.startsWith(`${normalizedRoot}/`);
+
           events.forEach((fileEvent) => {
             const normalizedEventPath = normalizeForCompare(fileEvent.path);
-            const underRoot =
-              normalizedEventPath === normalizedRoot ||
-              normalizedEventPath.startsWith(`${normalizedRoot}/`);
-            if (!underRoot) {
+            const normalizedFrom = fileEvent.from
+              ? normalizeForCompare(fileEvent.from)
+              : '';
+
+            const relevant =
+              isUnderRoot(normalizedEventPath) ||
+              (fileEvent.kind === 'rename' && normalizedFrom !== '' && isUnderRoot(normalizedFrom));
+
+            if (!relevant) {
               return;
             }
 

@@ -1,8 +1,8 @@
 /**
- * Password Input Dialog Styles
+ * Unified SSH auth prompt dialog
  */
 
-.password-input-dialog {
+.ssh-auth-prompt-dialog {
   padding: 8px 0;
 
   &__description {
@@ -35,23 +35,39 @@
     }
   }
 
-  &__input {
-    margin-bottom: 16px;
+  &__label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+
+  &__field {
+    margin-bottom: 14px;
+  }
+
+  &__hint {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin: 0 0 16px;
+    line-height: 1.45;
   }
 
   &__actions {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
+    margin-top: 8px;
   }
 
   &__spinner {
-    animation: spin 1s linear infinite;
+    animation: ssh-auth-spin 1s linear infinite;
     margin-right: 6px;
   }
 }
 
-@keyframes spin {
+@keyframes ssh-auth-spin {
   from {
     transform: rotate(0deg);
   }
