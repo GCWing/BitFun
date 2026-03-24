@@ -557,7 +557,10 @@ export class ThemeService {
     root.style.setProperty('--input-border-focus', colors.accent[400]);
     root.style.setProperty('--input-border-error', colors.semantic.error);
     root.style.setProperty('--input-text', colors.text.primary);
-    root.style.setProperty('--input-placeholder', colors.text.muted);
+    root.style.setProperty(
+      '--input-placeholder',
+      'color-mix(in srgb, var(--color-text-muted) 40%, var(--color-bg-primary))'
+    );
     
     
     root.style.setProperty('--card-bg', colors.element.base);

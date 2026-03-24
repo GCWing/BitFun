@@ -1276,6 +1276,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       } catch (err) {
         log.warn('Failed to update file modification time', err);
       }
+
+      globalEventBus.emit('file-tree:refresh');
       
     } catch (err) {
       const errorMsg = t('editor.common.saveFailedWithMessage', { message: String(err) });
@@ -1345,9 +1347,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       const currentModifiedTime = fileInfo.modified;
 
       if (lastModifiedTimeRef.current !== 0 && currentModifiedTime > lastModifiedTimeRef.current) {
+        const { workspaceAPI } = await import('@/infrastructure/api');
+        const fileContent = await workspaceAPI.readFileContent(filePath);
+        const editorBuffer = modelRef.current?.getValue();
+        if (editorBuffer !== undefined && fileContent === editorBuffer) {
+          lastModifiedTimeRef.current = currentModifiedTime;
+          return;
+        }
+
         log.info('File modified externally', { filePath });
 
-        if (hasChanges) {
+        if (hasChangesRef.current) {
           const shouldReload = window.confirm(
             t('editor.codeEditor.externalModifiedConfirm')
           );
@@ -1356,9 +1366,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             return;
           }
         }
-
-        const { workspaceAPI } = await import('@/infrastructure/api');
-        const fileContent = await workspaceAPI.readFileContent(filePath);
         updateLargeFileMode(fileContent);
 
         if (!isUnmountedRef.current) {
@@ -1388,7 +1395,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     } finally {
       isCheckingFileRef.current = false;
     }
-  }, [applyExternalContentToModel, filePath, hasChanges, onContentChange, t, updateLargeFileMode]);
+  }, [applyExternalContentToModel, filePath, onContentChange, t, updateLargeFileMode]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
@@ -1588,13 +1595,30 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
 
       try {
+        const { workspaceAPI } = await import('@/infrastructure/api');
+        const { invoke } = await import('@tauri-apps/api/core');
+        const diskContent = await workspaceAPI.readFileContent(filePath);
+        const editorBuffer = modelRef.current?.getValue();
+        if (editorBuffer !== undefined && diskContent === editorBuffer) {
+          try {
+            const fileInfo: any = await invoke('get_file_metadata', {
+              request: { path: filePath }
+            });
+            if (typeof fileInfo?.modified === 'number') {
+              lastModifiedTimeRef.current = fileInfo.modified;
+            }
+          } catch (err) {
+            log.warn('Failed to sync mtime after noop file-changed', err);
+          }
+          return;
+        }
+
         if (hasChangesRef.current) {
           const shouldReload = window.confirm(
             t('editor.codeEditor.externalModifiedConfirm')
           );
           if (!shouldReload) {
             try {
-              const { invoke } = await import('@tauri-apps/api/core');
               const fileInfo: any = await invoke('get_file_metadata', {
                 request: { path: filePath }
               });
@@ -1608,9 +1632,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         }
 
-        const { workspaceAPI } = await import('@/infrastructure/api');
-        const { invoke } = await import('@tauri-apps/api/core');
-        const fileContent = await workspaceAPI.readFileContent(filePath);
+        const fileContent = diskContent;
         updateLargeFileMode(fileContent);
 
         const currentPosition = editor?.getPosition();

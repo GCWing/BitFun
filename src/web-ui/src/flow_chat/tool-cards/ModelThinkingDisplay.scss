@@ -86,7 +86,9 @@
 .thinking-content {
   font-size: 12px;
   line-height: 1.4;
-  font-family: var(--tool-card-font-mono);
+  /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
+  font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
+    sans-serif);
   word-break: break-word;
   color: var(--tool-card-text-muted);
   padding: 10px 12px;
@@ -180,11 +182,14 @@
   }
 }
 
-/* Markdown body: keep muted monospace look (overrides default .markdown-renderer) */
+/* Markdown body: same sans as rest of chat; code stays mono via --markdown-font-mono */
 .thinking-content .markdown-renderer.thinking-markdown {
   --markdown-font-mono: var(--tool-card-font-mono);
+  --markdown-font-heading: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'Microsoft YaHei', sans-serif);
 
-  font-family: var(--tool-card-font-mono);
+  font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
+    sans-serif);
   font-size: 12px;
   line-height: 1.45;
   color: var(--tool-card-text-muted);
@@ -196,7 +201,8 @@
   h4,
   h5,
   h6 {
-    font-family: var(--tool-card-font-mono);
+    font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
+      sans-serif);
     font-weight: 600;
     color: var(--tool-card-text-secondary);
     margin-top: 0.65rem;

@@ -23,6 +23,7 @@ export interface SessionConfig {
   maxTurns?: number;
   enableContextCompression?: boolean;
   compressionThreshold?: number;
+  remoteConnectionId?: string;
 }
 
  
@@ -31,6 +32,7 @@ export interface CreateSessionRequest {
   sessionName: string;
   agentType: string;
   workspacePath: string;
+  remoteConnectionId?: string;
   config?: SessionConfig;
 }
 
@@ -210,10 +212,10 @@ export class AgentAPI {
   }
 
    
-  async deleteSession(sessionId: string, workspacePath: string): Promise<void> {
+  async deleteSession(sessionId: string, workspacePath: string, remoteConnectionId?: string): Promise<void> {
     try {
       await api.invoke<void>('delete_session', { 
-        request: { sessionId, workspacePath } 
+        request: { sessionId, workspacePath, remoteConnectionId } 
       });
     } catch (error) {
       throw createTauriCommandError('delete_session', error, { sessionId, workspacePath });
@@ -221,11 +223,29 @@ export class AgentAPI {
   }
 
    
-  async restoreSession(sessionId: string, workspacePath: string): Promise<SessionInfo> {
+  async restoreSession(sessionId: string, workspacePath: string, remoteConnectionId?: string): Promise<SessionInfo> {
     try {
-      return await api.invoke<SessionInfo>('restore_session', { request: { sessionId, workspacePath } });
+      return await api.invoke<SessionInfo>('restore_session', {
+        request: { sessionId, workspacePath, remoteConnectionId },
+      });
     } catch (error) {
       throw createTauriCommandError('restore_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  /**
+   * No-op if the session is already in the coordinator; otherwise loads it from disk
+   * using the same workspace path resolution as restore_session (required for SSH remote workspaces).
+   */
+  async ensureCoordinatorSession(request: {
+    sessionId: string;
+    workspacePath: string;
+    remoteConnectionId?: string;
+  }): Promise<void> {
+    try {
+      await api.invoke<void>('ensure_coordinator_session', { request });
+    } catch (error) {
+      throw createTauriCommandError('ensure_coordinator_session', error, request);
     }
   }
 
@@ -239,9 +259,11 @@ export class AgentAPI {
 
 
    
-  async listSessions(workspacePath: string): Promise<SessionInfo[]> {
+  async listSessions(workspacePath: string, remoteConnectionId?: string): Promise<SessionInfo[]> {
     try {
-      return await api.invoke<SessionInfo[]>('list_sessions', { request: { workspacePath } });
+      return await api.invoke<SessionInfo[]>('list_sessions', {
+        request: { workspacePath, remoteConnectionId },
+      });
     } catch (error) {
       throw createTauriCommandError('list_sessions', error, { workspacePath });
     }

@@ -1,6 +1,7 @@
  
 
 import { WorkspaceInfo, WorkspaceKind, globalStateAPI } from '../../../shared/types';
+import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { createLogger } from '@/shared/utils/logger';
 import { listen } from '@tauri-apps/api/event';
 
@@ -415,8 +416,10 @@ class WorkspaceManager {
 
       log.info('Opening remote workspace', remoteWorkspace);
 
+      const remotePath = normalizeRemoteWorkspacePath(remoteWorkspace.remotePath);
+
       const workspace = await globalStateAPI.openRemoteWorkspace(
-        remoteWorkspace.remotePath,
+        remotePath,
         remoteWorkspace.connectionId,
         remoteWorkspace.connectionName,
       );

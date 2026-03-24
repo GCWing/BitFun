@@ -9,6 +9,7 @@ import { WorkspaceKind } from '@/shared/types/global-state';
 import type { SSHConnectionConfig, RemoteWorkspace } from './types';
 import { sshApi } from './sshApi';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 
 const log = createLogger('SSHRemoteProvider');
 
@@ -210,21 +211,27 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
         // Ignore
       }
 
-      // Build a deduplicated list keyed by remotePath
+      // Key by connection + path so two servers at the same remote path stay distinct.
+      const remoteWorkspaceDedupKey = (cid: string, rp: string) => `${cid}\n${rp}`;
       const toReconnect = new Map<string, RemoteWorkspace>();
 
       for (const ws of openedRemote) {
         if (!ws.connectionId) continue;
-        toReconnect.set(ws.rootPath, {
+        const rp = normalizeRemoteWorkspacePath(ws.rootPath);
+        toReconnect.set(remoteWorkspaceDedupKey(ws.connectionId, rp), {
           connectionId: ws.connectionId,
           connectionName: ws.connectionName || 'Remote',
-          remotePath: ws.rootPath,
+          remotePath: rp,
         });
       }
 
       // Add legacy workspace if it isn't already covered
-      if (legacyWorkspace && !toReconnect.has(legacyWorkspace.remotePath)) {
-        toReconnect.set(legacyWorkspace.remotePath, legacyWorkspace);
+      if (legacyWorkspace?.connectionId) {
+        const leg = normalizeRemoteWorkspacePath(legacyWorkspace.remotePath);
+        const k = remoteWorkspaceDedupKey(legacyWorkspace.connectionId, leg);
+        if (!toReconnect.has(k)) {
+          toReconnect.set(k, { ...legacyWorkspace, remotePath: leg });
+        }
       }
 
       if (toReconnect.size === 0) {
@@ -243,7 +250,11 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
       // ── Process each workspace ──────────────────────────────────────────
       for (const [, workspace] of toReconnect) {
-        const isAlreadyOpened = openedRemote.some(ws => ws.rootPath === workspace.remotePath);
+        const isAlreadyOpened = openedRemote.some(
+          ws =>
+            normalizeRemoteWorkspacePath(ws.rootPath) ===
+            normalizeRemoteWorkspacePath(workspace.remotePath)
+        );
 
         // Check if SSH is already live
         const alreadyConnected = await sshApi.isConnected(workspace.connectionId).catch(() => false);
@@ -417,11 +428,12 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       throw new Error('Not connected');
     }
     const connName = connectionConfig?.name || 'Remote';
-    await sshApi.openWorkspace(connectionId, pingPath);
+    const remotePath = normalizeRemoteWorkspacePath(pingPath);
+    await sshApi.openWorkspace(connectionId, remotePath);
     const remoteWs = {
       connectionId,
       connectionName: connName,
-      remotePath: pingPath,
+      remotePath,
     };
     setRemoteWorkspace(remoteWs);
     setShowFileBrowser(false);

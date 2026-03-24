@@ -1,6 +1,20 @@
  
 
  
+/**
+ * Normalize a remote SSH/SFTP path (always POSIX). Safe on Windows clients where
+ * UI or path APIs may introduce backslashes or duplicate slashes.
+ */
+export function normalizeRemoteWorkspacePath(path: string): string {
+  if (typeof path !== 'string') return path;
+  let s = path.replace(/\\/g, '/');
+  while (s.includes('//')) {
+    s = s.replace('//', '/');
+  }
+  if (s === '/') return s;
+  return s.replace(/\/+$/, '');
+}
+
 export function normalizePath(path: string): string {
   if (typeof path !== 'string') return path;
   

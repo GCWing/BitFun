@@ -187,6 +187,9 @@ export interface Session {
   // Sessions are always kept in store for event processing; only display is filtered.
   workspacePath?: string;
 
+  /** SSH remote: same `workspacePath` on different hosts must not share coordinator/persistence. */
+  remoteConnectionId?: string;
+
   /**
    * Optional parent session id for hierarchical sessions.
    * Used by /btw "side threads" and potentially other derived sessions.
@@ -229,6 +232,8 @@ export interface SessionConfig {
   agentType?: string;
   context?: Record<string, string>;
   workspacePath?: string;
+  /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
+  remoteConnectionId?: string;
 }
 
 export interface QueuedMessage {

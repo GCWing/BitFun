@@ -10,6 +10,9 @@ const log = createLogger('useFileSystem');
 
 const EMPTY_FILE_TREE: FileSystemNode[] = [];
 
+/** Polling keeps remote workspaces and lazy-loaded trees in sync when OS/file watch is unreliable. */
+const FILE_TREE_POLL_INTERVAL_MS = 5000;
+
 function findNodeByPath(nodes: FileSystemNode[], targetPath: string): FileSystemNode | undefined {
   for (const node of nodes) {
     if (node.path === targetPath) return node;
@@ -85,10 +88,15 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
   const rootPathRef = useRef<string | undefined>(rootPath);
   const isLoadingRef = useRef(false);
   const optionsRef = useRef(state.options);
+  const expandedFoldersRef = useRef(state.expandedFolders);
   
   useEffect(() => {
     optionsRef.current = state.options;
   }, [state.options]);
+
+  useEffect(() => {
+    expandedFoldersRef.current = state.expandedFolders;
+  }, [state.expandedFolders]);
 
   const loadFileTreeLazy = useCallback(async (path?: string, silent = false) => {
     const targetPath = path || rootPath;
@@ -507,6 +515,41 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
   }, [state.options.showHiddenFiles, state.options.excludePatterns]);
 
   useEffect(() => {
+    if (!rootPath) {
+      return;
+    }
+
+    let pollInFlight = false;
+
+    const runPeriodicRefresh = async () => {
+      const currentRoot = rootPathRef.current;
+      if (!currentRoot || pollInFlight) {
+        return;
+      }
+      pollInFlight = true;
+      try {
+        if (enableLazyLoad) {
+          await refreshDirectoryInTree(currentRoot);
+          const expanded = Array.from(expandedFoldersRef.current);
+          await Promise.all(expanded.map((p) => refreshDirectoryInTree(p)));
+        } else {
+          await loadFileTree(currentRoot, true);
+        }
+      } catch (e) {
+        log.debug('Periodic file tree refresh tick failed', { error: e });
+      } finally {
+        pollInFlight = false;
+      }
+    };
+
+    const pollId = window.setInterval(() => {
+      void runPeriodicRefresh();
+    }, FILE_TREE_POLL_INTERVAL_MS);
+
+    return () => clearInterval(pollId);
+  }, [rootPath, enableLazyLoad, loadFileTree, refreshDirectoryInTree]);
+
+  useEffect(() => {
     if (!enableAutoWatch || !rootPath) {
       return;
     }
@@ -558,6 +601,9 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     };
 
     const unwatch = fileSystemService.watchFileChanges(rootPath, (event) => {
+      if (event.type === 'renamed' && event.oldPath) {
+        handleFileChange(event.oldPath);
+      }
       handleFileChange(event.path);
 
       if (

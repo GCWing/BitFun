@@ -70,20 +70,33 @@ export class FlowChatManager {
     return FlowChatManager.instance;
   }
 
-  async initialize(workspacePath: string, preferredMode?: string): Promise<boolean> {
+  async initialize(
+    workspacePath: string,
+    preferredMode?: string,
+    remoteConnectionId?: string
+  ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
-      await this.context.flowChatStore.initializeFromDisk(workspacePath);
+      await this.context.flowChatStore.initializeFromDisk(workspacePath, remoteConnectionId);
+
+      const wsConn = remoteConnectionId?.trim() ?? '';
+      const sessionMatchesWorkspace = (session: { workspacePath?: string; remoteConnectionId?: string }) => {
+        if ((session.workspacePath || workspacePath) !== workspacePath) return false;
+        const sc = session.remoteConnectionId?.trim() ?? '';
+        if (wsConn.length > 0 || sc.length > 0) {
+          return sc === wsConn;
+        }
+        return true;
+      };
 
       const state = this.context.flowChatStore.getState();
-      const workspaceSessions = Array.from(state.sessions.values())
-        .filter(session => (session.workspacePath || workspacePath) === workspacePath);
+      const workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
       const hasHistoricalSessions = workspaceSessions.length > 0;
       const activeSession = state.activeSessionId
         ? state.sessions.get(state.activeSessionId) ?? null
         : null;
-      const activeSessionBelongsToWorkspace = !!activeSession &&
-        (activeSession.workspacePath || workspacePath) === workspacePath;
+      const activeSessionBelongsToWorkspace =
+        !!activeSession && sessionMatchesWorkspace(activeSession);
 
       if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
         const sortedWorkspaceSessions = [...workspaceSessions].sort(compareSessionsForDisplay);
@@ -103,7 +116,12 @@ export class FlowChatManager {
         }
 
         if (latestSession.isHistorical) {
-          await this.context.flowChatStore.loadSessionHistory(latestSession.sessionId, workspacePath);
+          await this.context.flowChatStore.loadSessionHistory(
+            latestSession.sessionId,
+            workspacePath,
+            undefined,
+            latestSession.remoteConnectionId
+          );
         }
 
         this.context.flowChatStore.switchSession(latestSession.sessionId);
@@ -158,9 +176,15 @@ export class FlowChatManager {
       preferredMode?: string;
       /** After reinit, ask core to run assistant bootstrap if BOOTSTRAP.md is present (e.g. workspace reset). */
       ensureAssistantBootstrap?: boolean;
+      /** When set, only removes/reinits sessions for this SSH connection (same path, different hosts). */
+      remoteConnectionId?: string | null;
     }
   ): Promise<void> {
-    const removedSessionIds = this.context.flowChatStore.removeSessionsByWorkspace(workspacePath);
+    const remoteConnectionId = options?.remoteConnectionId;
+    const removedSessionIds = this.context.flowChatStore.removeSessionsByWorkspace(
+      workspacePath,
+      remoteConnectionId
+    );
 
     removedSessionIds.forEach(sessionId => {
       stateMachineManager.delete(sessionId);
@@ -173,17 +197,35 @@ export class FlowChatManager {
       return;
     }
 
-    const hasHistoricalSessions = await this.initialize(workspacePath, options.preferredMode);
+    const hasHistoricalSessions = await this.initialize(
+      workspacePath,
+      options.preferredMode,
+      remoteConnectionId ?? undefined
+    );
     const state = this.context.flowChatStore.getState();
     const activeSession = state.activeSessionId
       ? state.sessions.get(state.activeSessionId) ?? null
       : null;
+    const wsConn = remoteConnectionId?.trim() ?? '';
     const hasActiveWorkspaceSession =
       !!activeSession &&
-      (activeSession.workspacePath || workspacePath) === workspacePath;
+      (activeSession.workspacePath || workspacePath) === workspacePath &&
+      (() => {
+        const sc = activeSession.remoteConnectionId?.trim() ?? '';
+        if (wsConn.length > 0 || sc.length > 0) {
+          return sc === wsConn;
+        }
+        return true;
+      })();
 
     if (!hasHistoricalSessions || !hasActiveWorkspaceSession) {
-      await this.createChatSession({}, options.preferredMode);
+      await this.createChatSession(
+        {
+          workspacePath,
+          ...(remoteConnectionId ? { remoteConnectionId } : {}),
+        },
+        options.preferredMode
+      );
     }
 
     if (options?.ensureAssistantBootstrap) {

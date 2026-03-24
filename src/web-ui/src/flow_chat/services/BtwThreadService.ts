@@ -36,14 +36,15 @@ function buildChildSessionName(question: string): string {
 async function loadSessionMetadataWithRetry(
   sessionId: string,
   workspacePath: string,
-  opts?: { retries?: number; delayMs?: number }
+  opts?: { retries?: number; delayMs?: number },
+  remoteConnectionId?: string
 ): Promise<import('@/shared/types/session-history').SessionMetadata | null> {
   const retries = opts?.retries ?? 10;
   const delayMs = opts?.delayMs ?? 60;
 
   for (let i = 0; i < retries; i++) {
     try {
-      const meta = await sessionAPI.loadSessionMetadata(sessionId, workspacePath);
+      const meta = await sessionAPI.loadSessionMetadata(sessionId, workspacePath, remoteConnectionId);
       if (meta) return meta;
     } catch (e) {
       // Ignore and retry; persistence write can lag behind create_session event.
@@ -93,11 +94,13 @@ export async function startBtwThread(params: {
   const agentType = parentSession?.mode || 'agentic';
   const modelName = parentSession?.config?.modelName || 'default';
   const childSessionName = buildChildSessionName(question);
+  const remoteConnectionId = parentSession?.remoteConnectionId;
 
   const created = await agentAPI.createSession({
     sessionName: childSessionName,
     agentType,
     workspacePath,
+    remoteConnectionId,
     config: {
       modelName,
       enableTools: false,
@@ -109,16 +112,23 @@ export async function startBtwThread(params: {
 
   const childSessionId = created.sessionId;
   // Ensure the child session exists in the store even if the backend SessionCreated event is delayed.
-  flowChatStore.addExternalSession(childSessionId, childSessionName, agentType, workspacePath, {
-    parentSessionId,
-    sessionKind: 'btw',
-    btwOrigin: {
-      requestId,
+  flowChatStore.addExternalSession(
+    childSessionId,
+    childSessionName,
+    agentType,
+    workspacePath,
+    {
       parentSessionId,
-      parentDialogTurnId,
-      parentTurnIndex,
+      sessionKind: 'btw',
+      btwOrigin: {
+        requestId,
+        parentSessionId,
+        parentDialogTurnId,
+        parentTurnIndex,
+      },
     },
-  });
+    remoteConnectionId
+  );
   flowChatStore.updateSessionRelationship(childSessionId, { parentSessionId, sessionKind: 'btw' });
   flowChatStore.updateSessionBtwOrigin(childSessionId, {
     requestId,
@@ -195,14 +205,15 @@ export async function startBtwThread(params: {
   flowChatStore.addDialogTurn(childSessionId, childTurn);
 
   // Persist child session metadata (parent linkage) to disk.
-  const meta = await loadSessionMetadataWithRetry(childSessionId, workspacePath);
+  const meta = await loadSessionMetadataWithRetry(childSessionId, workspacePath, undefined, remoteConnectionId);
   if (meta) {
     const childSession = flowChatStore.getState().sessions.get(childSessionId);
 
     if (childSession) {
       await sessionAPI.saveSessionMetadata(
         buildSessionMetadata(childSession, meta),
-        workspacePath
+        workspacePath,
+        remoteConnectionId
       );
     }
   }

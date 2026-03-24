@@ -247,6 +247,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       await flowChatManager.createChatSession(
         {
           workspacePath: workspace.rootPath,
+          ...(isRemoteWorkspace(workspace) && workspace.connectionId
+            ? { remoteConnectionId: workspace.connectionId }
+            : {}),
         },
         mode ?? (workspace.workspaceKind === WorkspaceKind.Assistant ? 'Claw' : undefined)
       );
@@ -257,7 +260,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         { duration: 4000 }
       );
     }
-  }, [setActiveWorkspace, t, workspace.id, workspace.rootPath, workspace.workspaceKind]);
+  }, [
+    setActiveWorkspace,
+    t,
+    workspace.id,
+    workspace.rootPath,
+    workspace.workspaceKind,
+    workspace.connectionId,
+  ]);
 
   const handleCreateCodeSession = useCallback(() => {
     void handleCreateSession('agentic');
@@ -467,6 +477,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           <SessionsSection
             workspaceId={workspace.id}
             workspacePath={workspace.rootPath}
+            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
             isActiveWorkspace={isActive}
           />
         </div>
@@ -644,6 +655,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         <SessionsSection
           workspaceId={workspace.id}
           workspacePath={workspace.rootPath}
+          remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
           isActiveWorkspace={isActive}
         />
       </div>

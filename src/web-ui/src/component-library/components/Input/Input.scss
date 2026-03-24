@@ -136,8 +136,14 @@
   position: relative;
   z-index: 1;
 
+  // Blend muted text toward page background so placeholders read as hints, not as user input
+  // (same token pair is set for light/dark in ThemeService).
   &::placeholder {
-    color: var(--color-text-muted, #a0a0a0);
+    color: color-mix(
+      in srgb,
+      var(--color-text-muted, #a0a0a0) 40%,
+      var(--color-bg-primary, #121214)
+    );
   }
 
   &::selection {
