@@ -3,6 +3,8 @@
 use crate::api::app_state::AppState;
 use crate::api::dto::WorkspaceInfoDto;
 use bitfun_core::infrastructure::{file_watcher, FileOperationOptions, SearchMatchType};
+use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
 use bitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };
@@ -10,6 +12,39 @@ use log::{debug, error, info, warn};
 use serde::Deserialize;
 use std::path::Path;
 use tauri::{AppHandle, State};
+
+fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::RemoteWorkspace> {
+    if info.workspace_kind != WorkspaceKind::Remote {
+        return None;
+    }
+    let cid = info.metadata.get("connectionId")?.as_str()?.to_string();
+    let name = info
+        .metadata
+        .get("connectionName")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&cid)
+        .to_string();
+    let rp = bitfun_core::service::remote_ssh::normalize_remote_workspace_path(
+        &info.root_path.to_string_lossy(),
+    );
+    Some(crate::api::RemoteWorkspace {
+        connection_id: cid,
+        remote_path: rp,
+        connection_name: name,
+    })
+}
+
+async fn lookup_remote_entry_for_path(
+    state: &State<'_, AppState>,
+    path: &str,
+) -> Option<RemoteWorkspaceEntry> {
+    let hint = state
+        .get_remote_workspace_async()
+        .await
+        .map(|w| w.connection_id);
+    let manager = get_remote_workspace_manager()?;
+    manager.lookup_connection(path, hint.as_deref()).await
+}
 
 #[derive(Debug, Deserialize)]
 pub struct OpenWorkspaceRequest {
@@ -233,16 +268,29 @@ async fn apply_active_workspace_context(
 
     *state.workspace_path.write().await = Some(workspace_info.root_path.clone());
 
-    if let Err(e) = bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
-        workspace_info.root_path.clone(),
-        None,
-    )
-    .await
-    {
-        warn!(
-            "Failed to initialize snapshot system: path={}, error={}",
-            workspace_info.root_path.display(),
-            e
+    // Remote workspace roots are POSIX paths on the SSH host — not writable local directories on
+    // Windows. Snapshot hooks already skip file tracking for registered remote paths; avoid
+    // creating `/.bitfun` (or drive root) here which fails with access denied.
+    let root_str = workspace_info.root_path.to_string_lossy().to_string();
+    let skip_local_snapshot = workspace_info.workspace_kind == WorkspaceKind::Remote
+        || is_remote_path(root_str.trim()).await;
+    if !skip_local_snapshot {
+        if let Err(e) = bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
+            workspace_info.root_path.clone(),
+            None,
+        )
+        .await
+        {
+            warn!(
+                "Failed to initialize snapshot system: path={}, error={}",
+                workspace_info.root_path.display(),
+                e
+            );
+        }
+    } else {
+        debug!(
+            "Skipping local snapshot manager init for remote/non-local workspace root_path={}",
+            workspace_info.root_path.display()
         );
     }
 
@@ -277,6 +325,21 @@ async fn apply_active_workspace_context(
             crate::macos_menubar::MenubarMode::Workspace,
             edit_mode,
         );
+    }
+
+    // Keep global SSH registry + active connection hint aligned with the **foreground** workspace
+    // so two servers opened at the same remote path (e.g. `/`) stay distinct.
+    if workspace_info.workspace_kind == WorkspaceKind::Remote {
+        if let Some(rw) = remote_workspace_from_info(workspace_info) {
+            if let Err(e) = state.set_remote_workspace(rw).await {
+                warn!("Failed to sync remote workspace registry for active workspace: {}", e);
+            }
+        }
+    } else {
+        *state.remote_workspace.write().await = None;
+        if let Some(m) = get_remote_workspace_manager() {
+            m.set_active_connection_hint(None).await;
+        }
     }
 }
 
@@ -673,14 +736,16 @@ pub async fn open_remote_workspace(
     app: tauri::AppHandle,
     request: OpenRemoteWorkspaceRequest,
 ) -> Result<WorkspaceInfoDto, String> {
+    use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
     use bitfun_core::service::workspace::WorkspaceCreateOptions;
 
-    let display_name = request
-        .remote_path
+    let remote_path = normalize_remote_workspace_path(&request.remote_path);
+
+    let display_name = remote_path
         .split('/')
         .filter(|s| !s.is_empty())
         .last()
-        .unwrap_or(&request.remote_path)
+        .unwrap_or(remote_path.as_str())
         .to_string();
 
     let options = WorkspaceCreateOptions {
@@ -695,11 +760,12 @@ pub async fn open_remote_workspace(
         display_name: Some(display_name),
         description: None,
         tags: Vec::new(),
+        remote_connection_id: Some(request.connection_id.clone()),
     };
 
     match state
         .workspace_service
-        .open_workspace_with_options(request.remote_path.clone().into(), options)
+        .open_workspace_with_options(remote_path.clone().into(), options)
         .await
     {
         Ok(mut workspace_info) => {
@@ -723,17 +789,18 @@ pub async fn open_remote_workspace(
                 warn!("Failed to save workspace data after opening remote workspace: {}", e);
             }
 
-            apply_active_workspace_context(&state, &app, &workspace_info).await;
-
-            // Also update the RemoteWorkspaceStateManager so tools can use this connection
+            // Register the remote mapping before applying workspace context so session storage path
+            // resolution (`get_effective_session_path`) and related setup see this connection.
             let remote_workspace = crate::api::RemoteWorkspace {
                 connection_id: request.connection_id.clone(),
                 connection_name: request.connection_name.clone(),
-                remote_path: request.remote_path.clone(),
+                remote_path: remote_path.clone(),
             };
             if let Err(e) = state.set_remote_workspace(remote_workspace).await {
                 warn!("Failed to set remote workspace state: {}", e);
             }
+
+            apply_active_workspace_context(&state, &app, &workspace_info).await;
 
             info!(
                 "Remote workspace opened: name={}, remote_path={}, connection_id={}",
@@ -1001,13 +1068,10 @@ pub async fn close_workspace(
     app: tauri::AppHandle,
     request: CloseWorkspaceRequest,
 ) -> Result<(), String> {
-    // Check if the workspace being closed is a remote workspace before closing it
-    let is_remote = state
+    let closing = state
         .workspace_service
         .get_workspace(&request.workspace_id)
-        .await
-        .map(|w| w.workspace_kind == WorkspaceKind::Remote)
-        .unwrap_or(false);
+        .await;
 
     match state
         .workspace_service
@@ -1015,10 +1079,14 @@ pub async fn close_workspace(
         .await
     {
         Ok(_) => {
-            // If it was a remote workspace, also clear the persisted remote workspace data
-            // so it doesn't get re-opened on next restart
-            if is_remote {
-                state.clear_remote_workspace().await;
+            if let Some(ref ws) = closing {
+                if ws.workspace_kind == WorkspaceKind::Remote {
+                    if let Some(rw) = remote_workspace_from_info(ws) {
+                        state
+                            .unregister_remote_workspace_entry(&rw.connection_id, &rw.remote_path)
+                            .await;
+                    }
+                }
             }
 
             if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
@@ -1199,6 +1267,7 @@ pub async fn scan_workspace_info(
             workspace_kind: WorkspaceKind::Normal,
             assistant_id: None,
             display_name: None,
+            remote_connection_id: None,
         },
     )
     .await
@@ -1386,9 +1455,7 @@ pub async fn read_file_content(
     state: State<'_, AppState>,
     request: ReadFileContentRequest,
 ) -> Result<String, String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.file_path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.file_path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         let bytes = remote_fs.read_file(&entry.connection_id, &request.file_path).await
@@ -1414,9 +1481,7 @@ pub async fn write_file_content(
     state: State<'_, AppState>,
     request: WriteFileContentRequest,
 ) -> Result<(), String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.file_path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.file_path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.write_file(&entry.connection_id, &request.file_path, request.content.as_bytes()).await
@@ -1481,9 +1546,7 @@ pub async fn check_path_exists(
     state: State<'_, AppState>,
     request: CheckPathExistsRequest,
 ) -> Result<bool, String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         return remote_fs.exists(&entry.connection_id, &request.path).await
@@ -1500,26 +1563,32 @@ pub async fn get_file_metadata(
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
     use std::time::SystemTime;
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
 
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
 
-        let is_file = remote_fs.is_file(&entry.connection_id, &request.path).await
-            .unwrap_or(false);
-        let is_dir = remote_fs.is_dir(&entry.connection_id, &request.path).await
-            .unwrap_or(false);
+        // Use SFTP stat for stable mtime/size. Returning `SystemTime::now()` as `modified` caused
+        // the editor's 5s poll to always see a "newer" file and spam the external-change dialog.
+        let stat_entry = remote_fs
+            .stat(&entry.connection_id, &request.path)
+            .await
+            .map_err(|e| format!("Failed to stat remote file: {}", e))?;
 
-        let now_ms = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let (is_file, is_dir, size, modified) = match stat_entry {
+            Some(e) => (
+                e.is_file,
+                e.is_dir,
+                e.size.unwrap_or(0),
+                e.modified.unwrap_or(0),
+            ),
+            None => (false, false, 0, 0),
+        };
 
         return Ok(serde_json::json!({
             "path": request.path,
-            "modified": now_ms,
-            "size": 0,
+            "modified": modified,
+            "size": size,
             "is_file": is_file,
             "is_dir": is_dir,
             "is_remote": true
@@ -1563,9 +1632,7 @@ pub async fn rename_file(
     state: State<'_, AppState>,
     request: RenameFileRequest,
 ) -> Result<(), String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.old_path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.old_path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.rename(&entry.connection_id, &request.old_path, &request.new_path).await
@@ -1606,9 +1673,7 @@ pub async fn delete_file(
     state: State<'_, AppState>,
     request: DeleteFileRequest,
 ) -> Result<(), String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.remove_file(&entry.connection_id, &request.path).await
@@ -1630,11 +1695,9 @@ pub async fn delete_directory(
     state: State<'_, AppState>,
     request: DeleteDirectoryRequest,
 ) -> Result<(), String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
     let recursive = request.recursive.unwrap_or(false);
 
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         if recursive {
@@ -1661,9 +1724,7 @@ pub async fn create_file(
     state: State<'_, AppState>,
     request: CreateFileRequest,
 ) -> Result<(), String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.write_file(&entry.connection_id, &request.path, b"").await
@@ -1686,9 +1747,7 @@ pub async fn create_directory(
     state: State<'_, AppState>,
     request: CreateDirectoryRequest,
 ) -> Result<(), String> {
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
-
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.create_dir_all(&entry.connection_id, &request.path).await
@@ -1717,9 +1776,8 @@ pub async fn list_directory_files(
     request: ListDirectoryFilesRequest,
 ) -> Result<Vec<String>, String> {
     use std::path::Path;
-    use bitfun_core::service::remote_ssh::workspace_state::lookup_remote_connection;
 
-    if let Some(entry) = lookup_remote_connection(&request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         let entries = remote_fs.read_dir(&entry.connection_id, &request.path).await

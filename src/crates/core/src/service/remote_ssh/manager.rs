@@ -19,6 +19,26 @@ use async_trait::async_trait;
 #[cfg(feature = "ssh_config")]
 use ssh_config::SSHConfig;
 
+/// OpenSSH keyword matching is case-insensitive, but `ssh_config` stores keys as written in the file
+/// (e.g. `HostName` vs `Hostname`). Resolve by ASCII case-insensitive compare.
+#[cfg(feature = "ssh_config")]
+fn ssh_cfg_get<'a>(
+    settings: &std::collections::HashMap<&'a str, &'a str>,
+    canonical_key: &str,
+) -> Option<&'a str> {
+    settings
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(canonical_key))
+        .map(|(_, v)| *v)
+}
+
+#[cfg(feature = "ssh_config")]
+fn ssh_cfg_has(settings: &std::collections::HashMap<&str, &str>, canonical_key: &str) -> bool {
+    settings
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case(canonical_key))
+}
+
 /// Known hosts entry
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KnownHostEntry {
@@ -361,7 +381,7 @@ impl SSHConnectionManager {
 
         let content = tokio::fs::read_to_string(&self.remote_workspace_path).await?;
         // Try array format first, fall back to single-object for backward compat
-        let workspaces: Vec<crate::service::remote_ssh::types::RemoteWorkspace> =
+        let mut workspaces: Vec<crate::service::remote_ssh::types::RemoteWorkspace> =
             serde_json::from_str(&content)
                 .or_else(|_| {
                     // Legacy: single workspace object
@@ -369,6 +389,15 @@ impl SSHConnectionManager {
                         .map(|ws| vec![ws])
                 })
                 .context("Failed to parse remote workspace(s)")?;
+
+        let before = workspaces.len();
+        workspaces.retain(|w| !w.connection_id.is_empty() && !w.remote_path.is_empty());
+        if workspaces.len() < before {
+            log::warn!(
+                "Dropped {} persisted remote workspace(s) with empty connectionId or remotePath",
+                before - workspaces.len()
+            );
+        }
 
         let mut guard = self.remote_workspaces.write().await;
         *guard = workspaces;
@@ -389,12 +418,22 @@ impl SSHConnectionManager {
         Ok(())
     }
 
-    /// Add/update a persisted remote workspace
-    pub async fn set_remote_workspace(&self, workspace: crate::service::remote_ssh::types::RemoteWorkspace) -> anyhow::Result<()> {
+    /// Add/update a persisted remote workspace (key = `connection_id` + `remote_path`).
+    pub async fn set_remote_workspace(&self, mut workspace: crate::service::remote_ssh::types::RemoteWorkspace) -> anyhow::Result<()> {
+        workspace.remote_path =
+            crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+                &workspace.remote_path,
+            );
         {
             let mut guard = self.remote_workspaces.write().await;
-            // Replace existing entry with same remote_path, or append
-            guard.retain(|w| w.remote_path != workspace.remote_path);
+            let rp = workspace.remote_path.clone();
+            let cid = workspace.connection_id.clone();
+            guard.retain(|w| {
+                !(w.connection_id == cid
+                    && crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+                        &w.remote_path,
+                    ) == rp)
+            });
             guard.push(workspace);
         }
         self.save_remote_workspaces().await
@@ -410,11 +449,17 @@ impl SSHConnectionManager {
         self.remote_workspaces.read().await.first().cloned()
     }
 
-    /// Remove a specific remote workspace by path
-    pub async fn remove_remote_workspace(&self, remote_path: &str) -> anyhow::Result<()> {
+    /// Remove a specific remote workspace by **connection** + **remote path** (not path alone).
+    pub async fn remove_remote_workspace(&self, connection_id: &str, remote_path: &str) -> anyhow::Result<()> {
+        let rp = crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(remote_path);
         {
             let mut guard = self.remote_workspaces.write().await;
-            guard.retain(|w| w.remote_path != remote_path);
+            guard.retain(|w| {
+                !(w.connection_id == connection_id
+                    && crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+                        &w.remote_path,
+                    ) == rp)
+            });
         }
         self.save_remote_workspaces().await
     }
@@ -472,16 +517,15 @@ impl SSHConnectionManager {
 
         log::debug!("Found SSH config for host: {} with {} settings", host, host_settings.len());
 
-        // Extract fields from the HashMap - keys are case-insensitive
-        let hostname = host_settings.get("Hostname").map(|s| s.to_string());
-        let user = host_settings.get("User").map(|s| s.to_string());
-        let port = host_settings.get("Port")
+        // Canonical OpenSSH names; lookup is case-insensitive (see ssh_cfg_get).
+        let hostname = ssh_cfg_get(&host_settings, "HostName").map(|s| s.to_string());
+        let user = ssh_cfg_get(&host_settings, "User").map(|s| s.to_string());
+        let port = ssh_cfg_get(&host_settings, "Port")
             .and_then(|s| s.parse::<u16>().ok());
-        let identity_file = host_settings.get("IdentityFile")
+        let identity_file = ssh_cfg_get(&host_settings, "IdentityFile")
             .map(|f| shellexpand::tilde(f).to_string());
 
-        // Check if proxy command is set (agent forwarding vs proxy command)
-        let has_proxy_command = host_settings.contains_key("ProxyCommand");
+        let has_proxy_command = ssh_cfg_has(&host_settings, "ProxyCommand");
 
         return SSHConfigLookupResult {
             found: true,
@@ -552,12 +596,12 @@ impl SSHConnectionManager {
                 // Query config for this host to get details
                 let settings = config.query(alias);
 
-                let identity_file = settings.get("IdentityFile")
+                let identity_file = ssh_cfg_get(&settings, "IdentityFile")
                     .map(|f| shellexpand::tilde(f).to_string());
 
-                let hostname = settings.get("Hostname").map(|s| s.to_string());
-                let user = settings.get("User").map(|s| s.to_string());
-                let port = settings.get("Port")
+                let hostname = ssh_cfg_get(&settings, "HostName").map(|s| s.to_string());
+                let user = ssh_cfg_get(&settings, "User").map(|s| s.to_string());
+                let port = ssh_cfg_get(&settings, "Port")
                     .and_then(|s| s.parse::<u16>().ok());
 
                 hosts.push(SSHConfigEntry {

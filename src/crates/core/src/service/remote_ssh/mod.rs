@@ -19,6 +19,7 @@ pub use remote_terminal::{RemoteTerminalManager, RemoteTerminalSession, SessionS
 pub use types::*;
 pub use workspace_state::{
     get_remote_workspace_manager, init_remote_workspace_manager, is_remote_workspace_active,
-    is_remote_path, lookup_remote_connection,
-    RemoteWorkspaceEntry, RemoteWorkspaceState, RemoteWorkspaceStateManager,
+    is_remote_path, lookup_remote_connection, lookup_remote_connection_with_hint,
+    normalize_remote_workspace_path, RemoteWorkspaceEntry, RemoteWorkspaceState,
+    RemoteWorkspaceStateManager,
 };

@@ -257,6 +257,9 @@ pub struct WorkspaceOpenOptions {
     pub workspace_kind: WorkspaceKind,
     pub assistant_id: Option<String>,
     pub display_name: Option<String>,
+    /// For [`WorkspaceKind::Remote`], must match persisted `metadata["connectionId"]` so two
+    /// servers opened at the same path (e.g. `/`) are separate workspace tabs.
+    pub remote_connection_id: Option<String>,
 }
 
 impl Default for WorkspaceOpenOptions {
@@ -268,11 +271,20 @@ impl Default for WorkspaceOpenOptions {
             workspace_kind: WorkspaceKind::Normal,
             assistant_id: None,
             display_name: None,
+            remote_connection_id: None,
         }
     }
 }
 
 impl WorkspaceInfo {
+    /// SSH connection id persisted in [`WorkspaceInfo::metadata`] for remote workspaces.
+    pub fn remote_ssh_connection_id(&self) -> Option<&str> {
+        self.metadata
+            .get("connectionId")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+    }
+
     /// Creates a new workspace record.
     pub async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> BitFunResult<Self> {
         let default_name = root_path
@@ -723,11 +735,33 @@ impl WorkspaceManager {
             }
         }
 
-        let existing_workspace_id = self
-            .workspaces
-            .values()
-            .find(|w| w.root_path == path)
-            .map(|w| w.id.clone());
+        let existing_workspace_id = if is_remote {
+            let desired = options
+                .remote_connection_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            self.workspaces
+                .values()
+                .find(|w| {
+                    if w.workspace_kind != WorkspaceKind::Remote || w.root_path != path {
+                        return false;
+                    }
+                    let existing = w.remote_ssh_connection_id();
+                    match desired {
+                        Some(d) => existing == Some(d),
+                        None => existing.is_none(),
+                    }
+                })
+                .map(|w| w.id.clone())
+        } else {
+            self.workspaces
+                .values()
+                .find(|w| {
+                    w.root_path == path && w.workspace_kind != WorkspaceKind::Remote
+                })
+                .map(|w| w.id.clone())
+        };
 
         if let Some(workspace_id) = existing_workspace_id {
             if let Some(workspace) = self.workspaces.get_mut(&workspace_id) {

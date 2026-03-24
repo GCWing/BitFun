@@ -13,12 +13,16 @@ use tauri::State;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPersistedSessionsRequest {
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadSessionTurnsRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
 }
@@ -27,18 +31,24 @@ pub struct LoadSessionTurnsRequest {
 pub struct SaveSessionTurnRequest {
     pub turn_data: DialogTurnData,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SaveSessionMetadataRequest {
     pub metadata: SessionMetadata,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportSessionTranscriptRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
     #[serde(default = "default_tools")]
     pub tools: bool,
     #[serde(default)]
@@ -57,18 +67,24 @@ fn default_tools() -> bool {
 pub struct DeletePersistedSessionRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TouchSessionActivityRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadPersistedSessionMetadataRequest {
     pub session_id: String,
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[tauri::command]
@@ -76,7 +92,7 @@ pub async fn list_persisted_sessions(
     request: ListPersistedSessionsRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<Vec<SessionMetadata>, String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -91,7 +107,7 @@ pub async fn load_session_turns(
     request: LoadSessionTurnsRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<Vec<DialogTurnData>, String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -113,7 +129,7 @@ pub async fn save_session_turn(
     request: SaveSessionTurnRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<(), String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -128,7 +144,7 @@ pub async fn save_session_metadata(
     request: SaveSessionMetadataRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<(), String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -143,7 +159,7 @@ pub async fn export_session_transcript(
     request: ExportSessionTranscriptRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<SessionTranscriptExport, String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -167,7 +183,7 @@ pub async fn delete_persisted_session(
     request: DeletePersistedSessionRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<(), String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -182,7 +198,7 @@ pub async fn touch_session_activity(
     request: TouchSessionActivityRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<(), String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
@@ -197,7 +213,7 @@ pub async fn load_persisted_session_metadata(
     request: LoadPersistedSessionMetadataRequest,
     path_manager: State<'_, Arc<PathManager>>,
 ) -> Result<Option<SessionMetadata>, String> {
-    let workspace_path = get_effective_session_path(&request.workspace_path).await;
+    let workspace_path = get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 

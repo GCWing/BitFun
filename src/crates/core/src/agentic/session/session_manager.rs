@@ -70,7 +70,12 @@ impl SessionManager {
         let path_buf = PathBuf::from(workspace_path);
 
         // Check if this path belongs to any registered remote workspace
-        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection(workspace_path).await {
+        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
+            workspace_path,
+            config.remote_connection_id.as_deref(),
+        )
+        .await
+        {
             if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
                 return Some(manager.get_local_session_path(&entry.connection_id));
             }
@@ -258,7 +263,9 @@ impl SessionManager {
         self.sessions.insert(session_id.clone(), session.clone());
 
         // 2. Initialize message history
-        self.history_manager.create_session(&session_id).await?;
+        self.history_manager
+            .create_session(&session_id)
+            .await?;
 
         // 3. Initialize compression manager
         self.compression_manager.create_session(&session_id);
@@ -1280,8 +1287,9 @@ impl SessionManager {
 
                 for entry in sessions.iter() {
                     let session = entry.value();
-                    let workspace_path = session.config.workspace_path.clone().map(PathBuf::from);
-                    if let Some(workspace_path) = workspace_path {
+                    if let Some(workspace_path) =
+                        Self::effective_workspace_path_from_config(&session.config).await
+                    {
                         if let Err(e) = persistence.save_session(&workspace_path, session).await {
                             error!(
                                 "Failed to auto-save session: session_id={}, error={}",
@@ -1328,7 +1336,7 @@ impl SessionManager {
                     if enable_persistence {
                         if let Some(session) = sessions.get(&session_id) {
                             if let Some(workspace_path) =
-                                session.config.workspace_path.clone().map(PathBuf::from)
+                                Self::effective_workspace_path_from_config(&session.config).await
                             {
                                 let _ = persistence.save_session(&workspace_path, &session).await;
                             }

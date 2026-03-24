@@ -1468,9 +1468,6 @@ impl PersistenceManager {
 
     /// Save session
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
-        if !workspace_path.exists() {
-            return Ok(());
-        }
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
 
