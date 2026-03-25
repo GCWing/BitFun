@@ -486,6 +486,7 @@
       "notAnswered": "未回答",
       "timeout": "等待超时（10分钟）",
       "parseError": "无法解析问题数据",
+      "loadingQuestions": "正在接收问题…",
       "other": "其他",
       "customInputHint": "提供自定义文本",
       "pleaseSpecify": "请输入..."

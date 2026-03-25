@@ -494,6 +494,7 @@
       "notAnswered": "Not answered",
       "timeout": "Timeout (10 minutes)",
       "parseError": "Unable to parse question data",
+      "loadingQuestions": "Receiving questions…",
       "other": "Other",
       "customInputHint": "Provide custom text input",
       "pleaseSpecify": "Please specify..."

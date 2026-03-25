@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useMemo, useLayoutEffect, useRef } from 'react';
 import { Loader2, AlertCircle, Send, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { ToolCardProps } from '../types/flow-chat';
+import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { Button } from '@/component-library';
@@ -27,29 +27,53 @@ interface QuestionData {
   multiSelect: boolean;
 }
 
+function normalizeQuestionsFromParams(input: unknown): QuestionData[] {
+  if (!input || typeof input !== 'object') return [];
+  const raw = input as Record<string, unknown>;
+  const qs = raw.questions;
+  if (!Array.isArray(qs)) return [];
+  return qs.map((q: any) => ({
+    question: q.question || '',
+    header: q.header || '',
+    options: Array.isArray(q.options) ? q.options : [],
+    multiSelect: Boolean(q.multiSelect),
+  }));
+}
+
+/** Same source as FileOperationToolCard: partial JSON while streaming, then final toolCall.input. */
+function isAwaitingQuestionPayload(
+  questionsLength: number,
+  isParamsStreaming: boolean | undefined,
+  status: FlowToolItem['status']
+): boolean {
+  if (questionsLength > 0) return false;
+  if (isParamsStreaming) return true;
+  const s = status as string;
+  return (
+    status === 'preparing' ||
+    status === 'streaming' ||
+    status === 'pending' ||
+    s === 'receiving'
+  );
+}
+
 export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
   toolItem
 }) => {
   const { t } = useTranslation('flow-chat');
-  const { status, toolCall, toolResult } = toolItem;
-  
-  const getQuestions = (): QuestionData[] => {
-    if (!toolCall?.input) return [];
-    const input = toolCall.input;
-    
-    if (input.questions && Array.isArray(input.questions)) {
-      return input.questions.map((q: any) => ({
-        question: q.question || '',
-        header: q.header || '',
-        options: q.options || [],
-        multiSelect: q.multiSelect || false
-      }));
-    }
-    
-    return [];
-  };
+  const { status, toolCall, toolResult, isParamsStreaming, partialParams } = toolItem;
 
-  const questions = useMemo(() => getQuestions(), [toolCall?.input]);
+  const paramsSource = partialParams || toolCall?.input;
+  const questions = useMemo(
+    () => normalizeQuestionsFromParams(paramsSource),
+    [partialParams, toolCall?.input]
+  );
+
+  const awaitingPayload = isAwaitingQuestionPayload(
+    questions.length,
+    isParamsStreaming,
+    status
+  );
   
   const [answers, setAnswers] = useState<Record<number, string | string[]>>({});
   const [otherInputs, setOtherInputs] = useState<Record<number, string>>({});
@@ -199,7 +223,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                     value={option.label}
                     checked={Array.isArray(answer) && answer.includes(option.label)}
                     onChange={(e) => handleMultiChange(questionIndex, option.label, e.target.checked)}
-                    disabled={isSubmitted || status === 'completed'}
+                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                   />
                   <span className="custom-checkbox" />
                 </>
@@ -211,7 +235,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                     value={option.label}
                     checked={answer === option.label}
                     onChange={(e) => handleSingleChange(questionIndex, e.target.value)}
-                    disabled={isSubmitted || status === 'completed'}
+                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                   />
                   <span className="custom-radio" />
                 </>
@@ -237,7 +261,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                         handleMultiChange(questionIndex, 'Other', true);
                       }
                     }}
-                    disabled={isSubmitted || status === 'completed'}
+                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                   />
                   <span className="custom-checkbox" />
                 </>
@@ -249,7 +273,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                     value="Other"
                     checked={false}
                     onChange={() => handleSingleChange(questionIndex, 'Other')}
-                    disabled={isSubmitted || status === 'completed'}
+                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                   />
                   <span className="custom-radio" />
                 </>
@@ -273,7 +297,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                         handleMultiChange(questionIndex, 'Other', false);
                       }
                     }}
-                    disabled={isSubmitted || status === 'completed'}
+                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                   />
                   <span className="custom-checkbox" />
                 </>
@@ -285,7 +309,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                     value="Other"
                     checked={true}
                     onChange={() => {}}
-                    disabled={isSubmitted || status === 'completed'}
+                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                   />
                   <span className="custom-radio" />
                 </>
@@ -296,7 +320,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                 placeholder={t('toolCards.askUser.pleaseSpecify')}
                 value={otherInput}
                 onChange={(e) => handleOtherInputChange(questionIndex, e.target.value)}
-                disabled={isSubmitted || status === 'completed'}
+                disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
                 autoFocus
               />
             </div>
@@ -356,6 +380,21 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     return null;
   };
 
+  if (awaitingPayload) {
+    return (
+      <div
+        ref={cardRootRef}
+        data-tool-card-id={toolId ?? ''}
+        className={`ask-user-question-card params-loading status-${status}`}
+      >
+        <div className="params-loading-row">
+          <Loader2 size={16} className="status-icon-loading animate-spin" />
+          <span className="params-loading-text">{t('toolCards.askUser.loadingQuestions')}</span>
+        </div>
+      </div>
+    );
+  }
+
   if (questions.length === 0) {
     return (
       <div className="ask-user-question-card status-error">
@@ -382,7 +421,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                 size="small"
                 className="submit-button"
                 onClick={handleSubmit}
-                disabled={!isAllAnswered() || isSubmitting}
+                disabled={!isAllAnswered() || isSubmitting || Boolean(isParamsStreaming)}
                 isLoading={isSubmitting}
                 title={!isAllAnswered() ? t('toolCards.askUser.answerAllBeforeSubmit') : ""}
               >

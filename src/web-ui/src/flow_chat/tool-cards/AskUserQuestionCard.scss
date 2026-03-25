@@ -101,6 +101,19 @@
   color: var(--color-warning);
 }
 
+.params-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.params-loading-text {
+  font-weight: 500;
+}
+
 /* ========== Question container ========== */
 .questions-container {
   display: flex;
