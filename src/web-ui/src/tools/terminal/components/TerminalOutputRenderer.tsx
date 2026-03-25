@@ -102,9 +102,8 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
       minimumContrastRatio: DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
       scrollback: 5000,
       convertEol: true,
-      allowTransparency: true,
+      allowTransparency: false,
       theme: buildXtermTheme(currentTheme, {
-        background: 'transparent',
         cursor: 'transparent',    // Hide cursor in read-only mode.
         cursorAccent: 'transparent',
       }),
@@ -167,7 +166,6 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
       const fontWeights = getXtermFontWeights(theme.type);
 
       terminal.options.theme = buildXtermTheme(theme, {
-        background: 'transparent',
         cursor: 'transparent',
         cursorAccent: 'transparent',
       });

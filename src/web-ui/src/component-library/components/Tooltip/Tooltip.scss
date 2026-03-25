@@ -20,6 +20,10 @@
     transform: scale(1);
   }
 
+  &--interactive.bitfun-tooltip--visible {
+    pointer-events: auto;
+  }
+
   &__content {
     padding: 6px 10px;
 
@@ -41,6 +45,7 @@
 
     max-width: 280px;
     word-wrap: break-word;
+    user-select: text;
   }
 
   &--top.bitfun-tooltip--visible {

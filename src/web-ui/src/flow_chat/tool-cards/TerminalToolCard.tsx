@@ -18,7 +18,7 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, Play, X, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
-import { CubeLoading, IconButton } from '../../component-library';
+import { CubeLoading, IconButton, Tooltip } from '../../component-library';
 import { TerminalOutputRenderer } from '@/tools/terminal/components';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -113,8 +113,10 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   const [isExpanded, setIsExpanded] = useState(() => getInitialExpandedState(toolId, status));
   const [isExecuting, setIsExecuting] = useState(false);
   const [isEditingCommand, setIsEditingCommand] = useState(false);
+  const [isCommandTruncated, setIsCommandTruncated] = useState(false);
   const [editedCommand, setEditedCommand] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const commandRef = useRef<HTMLElement | null>(null);
   const hasInitializedExpand = useRef(false);
   const previousStatusRef = useRef<string>(status);
   const {
@@ -190,6 +192,50 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       setAccumulatedOutput('');
     }
   }, [status]);
+
+  const updateCommandTruncation = useCallback(() => {
+    const element = commandRef.current;
+    if (!element) {
+      setIsCommandTruncated(false);
+      return;
+    }
+
+    const nextValue = element.scrollWidth - element.clientWidth > 1;
+    setIsCommandTruncated((prev) => (prev === nextValue ? prev : nextValue));
+  }, []);
+
+  useEffect(() => {
+    if (isEditingCommand) {
+      setIsCommandTruncated(false);
+      return;
+    }
+
+    const element = commandRef.current;
+    if (!element) {
+      setIsCommandTruncated(false);
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(updateCommandTruncation);
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          updateCommandTruncation();
+        })
+      : null;
+
+    resizeObserver?.observe(element);
+    if (element.parentElement) {
+      resizeObserver?.observe(element.parentElement);
+    }
+
+    window.addEventListener('resize', updateCommandTruncation);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateCommandTruncation);
+    };
+  }, [command, isEditingCommand, updateCommandTruncation]);
 
   const handleStartEdit = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -390,16 +436,32 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
         />
       );
     }
-    
-    return (
+
+    const commandNode = (
       <code 
+        ref={commandRef}
         className={`terminal-command ${canEditCommand ? 'editable' : ''}`}
         onClick={canEditCommand ? handleStartEdit : undefined}
-        title={canEditCommand ? t('toolCards.terminal.clickToEditCommand') : undefined}
+        title={canEditCommand && !isCommandTruncated ? t('toolCards.terminal.clickToEditCommand') : undefined}
       >
         {command || (canEditCommand ? <span className="command-empty">{t('toolCards.terminal.commandEmpty')}</span> : <span className="command-empty">{t('toolCards.terminal.noCommand')}</span>)}
       </code>
     );
+
+    if (command && isCommandTruncated) {
+      return (
+        <Tooltip
+          content={<div className="terminal-command-tooltip-content">{command}</div>}
+          placement="bottom"
+          className="terminal-command-tooltip"
+          interactive
+        >
+          {commandNode}
+        </Tooltip>
+      );
+    }
+
+    return commandNode;
   };
 
   const renderStatusText = () => {

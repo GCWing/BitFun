@@ -16,6 +16,7 @@ export interface TooltipProps {
   delay?: number;
   disabled?: boolean;
   className?: string;
+  interactive?: boolean;
 }
 
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null): void => {
@@ -150,6 +151,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   delay = DEFAULT_TOOLTIP_DELAY,
   disabled = false,
   className = '',
+  interactive = false,
 }) => {
   const [visible, setVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -159,6 +161,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   const triggerRef = useRef<HTMLElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMousePositionRef = useRef<{ x: number; y: number } | null>(null);
 
   const gap = 8;
@@ -205,6 +208,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
     if (followCursor && e) {
       latestMousePositionRef.current = { x: e.clientX, y: e.clientY };
     }
@@ -223,6 +230,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
     setVisible(false);
     setPositionReady(false);
     if (followCursor) {
@@ -230,6 +241,22 @@ export const Tooltip: React.FC<TooltipProps> = ({
       setMousePosition(null);
     }
   };
+
+  const scheduleHideTooltip = useCallback(() => {
+    if (!interactive) {
+      hideTooltip();
+      return;
+    }
+
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+    }
+
+    hideTimeoutRef.current = setTimeout(() => {
+      hideTimeoutRef.current = null;
+      hideTooltip();
+    }, 150);
+  }, [interactive]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -271,6 +298,9 @@ export const Tooltip: React.FC<TooltipProps> = ({
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -290,7 +320,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   };
 
   const handleMouseLeave = (e: React.MouseEvent) => {
-    if (trigger === 'hover') hideTooltip();
+    if (trigger === 'hover') scheduleHideTooltip();
     if (typeof childProps.onMouseLeave === 'function') {
       (childProps.onMouseLeave as (e: React.MouseEvent) => void)(e);
     }
@@ -334,6 +364,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     'bitfun-tooltip',
     `bitfun-tooltip--${actualPlacement}`,
     visible && positionReady && 'bitfun-tooltip--visible',
+    interactive && 'bitfun-tooltip--interactive',
     className
   ].filter(Boolean).join(' ');
 
@@ -344,6 +375,13 @@ export const Tooltip: React.FC<TooltipProps> = ({
         <div
           ref={tooltipRef}
           className={tooltipClass}
+          onMouseEnter={interactive ? () => {
+            if (hideTimeoutRef.current) {
+              clearTimeout(hideTimeoutRef.current);
+              hideTimeoutRef.current = null;
+            }
+          } : undefined}
+          onMouseLeave={interactive ? scheduleHideTooltip : undefined}
           style={{
             position: 'fixed',
             top: `${position.top}px`,

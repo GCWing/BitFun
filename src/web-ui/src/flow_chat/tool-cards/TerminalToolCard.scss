@@ -95,6 +95,12 @@
   }
 }
 
+:root[data-theme="light"] .terminal-command,
+:root[data-theme-type="light"] .terminal-command,
+.light .terminal-command {
+  color: var(--color-text-secondary);
+}
+
 .terminal-command-input {
   flex: 1;
   min-width: 0;
@@ -123,6 +129,12 @@
     color: var(--color-text-muted);
     font-style: italic;
   }
+}
+
+:root[data-theme="light"] .terminal-command-input,
+:root[data-theme-type="light"] .terminal-command-input,
+.light .terminal-command-input {
+  color: var(--color-text-secondary);
 }
 
 /* ========== Status text styles ========== */
@@ -262,18 +274,21 @@
 }
 
 /* ========== Execution output container (streaming) ========== */
-.terminal-execution-output {
-  background: var(--color-bg-primary);
-  padding: 8px 12px;
+.terminal-execution-output,
+.terminal-result-output {
+  margin-bottom: 0;
+  background: transparent;
+  border: none;
+  overflow: hidden;
   max-height: 300px;
   overflow-y: auto;
-  
+
   &.terminal-waiting {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 60px;
-    
+
     .waiting-text {
       color: var(--color-text-muted);
       font-size: 12px;
@@ -348,15 +363,6 @@
   line-height: 1.2;
 }
 
-.terminal-result-output {
-  margin-bottom: 0;
-  background: transparent;
-  border: none;
-  overflow: hidden;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
 .terminal-exit-code {
   display: inline-flex;
   align-items: center;
@@ -390,24 +396,45 @@
   
   .xterm {
     padding: 0;
-    
+
     .xterm-viewport {
       overflow-y: auto !important;
-      
     }
-    
+
+    &:not(.allow-transparency) {
+      .xterm-viewport {
+        background-color: var(--color-bg-scene);
+      }
+    }
+
     .xterm-screen {
+      width: 100%;
+      height: 100%;
     }
   }
 }
 .terminal-output-renderer {
-  background: transparent;
+  background: var(--color-bg-scene);
   border-radius: 4px;
   overflow: hidden;
   
   .xterm {
     height: 100%;
   }
+}
+
+.terminal-command-tooltip {
+  .bitfun-tooltip__content {
+    max-width: min(640px, calc(100vw - 32px));
+    cursor: text;
+  }
+}
+
+.terminal-command-tooltip-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  user-select: text;
 }
 
 
