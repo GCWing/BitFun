@@ -271,12 +271,12 @@ $content-max: 1480px;
   font-weight: $font-weight-medium;
 
   &--primary {
-    color: var(--color-accent-500);
+    color: var(--color-text-primary);
     background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-soft));
 
     &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--color-accent-500) 16%, var(--element-bg-medium));
-      color: var(--color-accent-400);
+      color: var(--color-text-primary);
     }
   }
 }

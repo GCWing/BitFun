@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, Users, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2 } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -380,9 +380,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
           const SessionIcon =
             sessionModeKey === 'cowork'
-              ? Users
+              ? ClipboardList
               : sessionModeKey === 'claw'
-                ? Bot
+                ? showAssistantInTooltip
+                  ? Panda
+                  : Bot
                 : Code2;
           const isRunning = runningSessionIds.has(session.sessionId);
           const isRowActive = activeBtwSessionData?.childSessionId
@@ -401,10 +403,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 .join(' ')}
               onClick={() => handleSwitch(session.sessionId)}
             >
-              {showSessionModeIcon ? (
+              {showSessionModeIcon && !isBtwChild ? (
                 isRunning ? (
                   <Loader2
-                    size={12}
+                    size={14}
                     className={[
                       'bitfun-nav-panel__inline-item-icon',
                       'is-running',
@@ -412,7 +414,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   />
                 ) : (
                   <SessionIcon
-                    size={12}
+                    size={14}
                     className={[
                       'bitfun-nav-panel__inline-item-icon',
                       sessionModeKey === 'cowork'

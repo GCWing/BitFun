@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, Bot, MessageSquare } from 'lucide-react';
+import { FolderOpen, User, MessageSquare } from 'lucide-react';
 import { Search } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -239,7 +239,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
           ) : (
             <>
               {renderGroup(t('nav.search.groupWorkspaces'), workspaceItems, () => <FolderOpen size={14} />)}
-              {renderGroup(t('nav.search.groupAssistants'), assistantItems, () => <Bot size={14} />)}
+              {renderGroup(t('nav.search.groupAssistants'), assistantItems, () => <User size={14} />)}
               {renderGroup(t('nav.search.groupSessions'), sessionItems, () => <MessageSquare size={14} />)}
             </>
           )}

@@ -71,8 +71,16 @@
     }
   }
 
-  .search__input {
+  &.search .search__input {
     font-size: $font-size-sm;
+
+    &::placeholder {
+      color: var(--color-text-disabled);
+    }
+
+    &:focus::placeholder {
+      color: color-mix(in srgb, var(--color-text-disabled) 72%, transparent);
+    }
   }
 }
 
@@ -223,6 +231,11 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  color: var(--color-text-disabled);
+
+  .bitfun-nav-panel__search-trigger:hover & {
+    color: var(--color-text-secondary);
+  }
 }
 
 .bitfun-nav-panel__search-trigger__kbd {

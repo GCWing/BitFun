@@ -96,13 +96,13 @@
     &.is-child {
       min-height: 24px;
       font-size: 12px;
-      padding-left: calc(#{$size-gap-1} + 8px);
+      padding-left: calc(#{$size-gap-1} + 14px);
       position: relative;
 
       &::before {
         content: '';
         position: absolute;
-        left: 6px;
+        left: 8px;
         top: 0;
         width: 1px;
         height: 50%;
@@ -113,9 +113,9 @@
       &::after {
         content: '';
         position: absolute;
-        left: 6px;
+        left: 8px;
         top: 50%;
-        width: 6px;
+        width: 10px;
         height: 1px;
         background: color-mix(in srgb, var(--border-subtle) 92%, transparent);
         opacity: 0.95;

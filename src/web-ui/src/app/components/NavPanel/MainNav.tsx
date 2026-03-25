@@ -13,7 +13,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, FolderOpen, FolderPlus, History, Check, BotMessageSquare, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
+import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
 import { useSceneManager } from '../../hooks/useSceneManager';
@@ -438,7 +438,7 @@ const MainNav: React.FC<MainNavProps> = ({
             aria-label={assistantTooltip}
           >
             <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-              <BotMessageSquare size={15} />
+              <User size={15} />
             </span>
             <span>{t('nav.items.persona')}</span>
           </button>

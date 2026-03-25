@@ -8,19 +8,21 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('SkillsScene:useSkillMarket');
 
-const PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 10;
 const MAX_TOTAL_SKILLS = 500;
 
 interface UseSkillMarketOptions {
   searchQuery: string;
   installedSkillNames: Set<string>;
   onInstalledChanged?: () => Promise<void> | void;
+  pageSize?: number;
 }
 
 export function useSkillMarket({
   searchQuery,
   installedSkillNames,
   onInstalledChanged,
+  pageSize = DEFAULT_PAGE_SIZE,
 }: UseSkillMarketOptions) {
   const { t } = useTranslation('scenes/skills');
   const notification = useNotification();
@@ -46,9 +48,9 @@ export function useSkillMarket({
     setMarketError(null);
     setCurrentPage(0);
     try {
-      const skillList = await fetchSkills(query, PAGE_SIZE);
+      const skillList = await fetchSkills(query, pageSize);
       setMarketSkills(skillList);
-      setHasMore(skillList.length >= PAGE_SIZE);
+      setHasMore(skillList.length >= pageSize);
     } catch (err) {
       log.error('Failed to load skill market', err);
       setMarketError(err instanceof Error ? err.message : String(err));
@@ -86,13 +88,13 @@ export function useSkillMarket({
     return entries.map((entry) => entry.skill);
   }, [installedSkillNames, marketSkills]);
 
-  const loadedPages = Math.ceil(displayMarketSkills.length / PAGE_SIZE);
+  const loadedPages = Math.ceil(displayMarketSkills.length / pageSize);
   const totalPages = hasMore ? loadedPages + 1 : Math.max(1, loadedPages);
 
   const paginatedSkills = useMemo(() => displayMarketSkills.slice(
-    currentPage * PAGE_SIZE,
-    (currentPage + 1) * PAGE_SIZE,
-  ), [currentPage, displayMarketSkills]);
+    currentPage * pageSize,
+    (currentPage + 1) * pageSize,
+  ), [currentPage, displayMarketSkills, pageSize]);
 
   const goToPrevPage = useCallback(() => {
     setCurrentPage((page) => Math.max(0, page - 1));
@@ -100,7 +102,7 @@ export function useSkillMarket({
 
   const goToNextPage = useCallback(async () => {
     const nextPage = currentPage + 1;
-    const neededCount = Math.min((nextPage + 1) * PAGE_SIZE, MAX_TOTAL_SKILLS);
+    const neededCount = Math.min((nextPage + 1) * pageSize, MAX_TOTAL_SKILLS);
 
     if (displayMarketSkills.length >= neededCount) {
       setCurrentPage(nextPage);

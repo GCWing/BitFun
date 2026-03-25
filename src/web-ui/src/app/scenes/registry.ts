@@ -19,7 +19,7 @@ import {
   Boxes,
   Globe,
   Network,
-  BotMessageSquare,
+  User,
   BarChart3,
 } from 'lucide-react';
 import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
@@ -135,7 +135,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'assistant' as SceneTabId,
     label: 'Assistant',
     labelKey: 'scenes.assistant',
-    Icon: BotMessageSquare,
+    Icon: User,
     pinned: false,
     singleton: true,
     defaultOpen: false,

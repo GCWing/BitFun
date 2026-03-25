@@ -69,21 +69,23 @@ const SkillCard: React.FC<SkillCardProps> = ({
         {badges && <div className="skill-card__badges">{badges}</div>}
       </div>
 
-      {/* Body: name + description + meta */}
+      {/* Body: name + trend (meta) on one row, then description */}
       <div className="skill-card__body">
-        <span className="skill-card__name">{name}</span>
+        <div className="skill-card__title-row">
+          <span className="skill-card__name">{name}</span>
+          {meta ? (
+            <div
+              className="skill-card__meta"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {meta}
+            </div>
+          ) : null}
+        </div>
         {description?.trim() && (
           <p className="skill-card__desc">{description.trim()}</p>
         )}
-        {meta ? (
-          <div
-            className="skill-card__meta"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            {meta}
-          </div>
-        ) : null}
       </div>
 
       {/* Footer: action buttons */}
