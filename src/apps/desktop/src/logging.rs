@@ -12,7 +12,7 @@ use std::thread;
 use tauri_plugin_log::{fern, Target, TargetKind};
 
 const SESSION_DIR_PATTERN: &str = r"^\d{8}T\d{6}$";
-const MAX_LOG_SESSIONS: usize = 50;
+const MAX_LOG_SESSIONS: usize = 10;
 static SESSION_LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
 // Default to Debug in early development for easier diagnostics
 static CURRENT_LOG_LEVEL: AtomicU8 = AtomicU8::new(level_filter_to_u8(log::LevelFilter::Debug));

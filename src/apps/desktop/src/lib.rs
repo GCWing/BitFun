@@ -144,7 +144,7 @@ pub async fn run() {
                 .level_for("portable_pty", log::LevelFilter::Info)
                 .level_for("russh", log::LevelFilter::Info)
                 .targets(log_targets)
-                .rotation_strategy(RotationStrategy::KeepSome(30))
+                .rotation_strategy(RotationStrategy::KeepSome(3))
                 .max_file_size(10 * 1024 * 1024)
                 .timezone_strategy(TimezoneStrategy::UseLocal)
                 .clear_format()
