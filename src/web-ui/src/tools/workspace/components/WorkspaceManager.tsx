@@ -5,6 +5,7 @@ import { WorkspaceInfo, WorkspaceKind, WorkspaceType } from '../../../shared/typ
 import { Modal } from '@/component-library';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
+import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import './WorkspaceManager.css';
 
 const log = createLogger('WorkspaceManager');
@@ -224,7 +225,19 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                       {getWorkspaceIcon(workspace)}
                     </div>
                     <div className="workspace-info">
-                      <div className="workspace-name">{getWorkspaceDisplayName(workspace)}</div>
+                      <div className="workspace-name">
+                        {(() => {
+                          const { hostPrefix } = getRecentWorkspaceLineParts(workspace);
+                          return (
+                            <>
+                              {hostPrefix ? (
+                                <span className="workspace-name__ssh-host">{hostPrefix} · </span>
+                              ) : null}
+                              {getWorkspaceDisplayName(workspace)}
+                            </>
+                          );
+                        })()}
+                      </div>
                       <div className="workspace-path">{workspace.rootPath}</div>
                       <div className="workspace-meta">
                         <span className="workspace-type">{workspace.workspaceType}</span>

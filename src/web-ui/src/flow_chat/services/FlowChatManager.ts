@@ -13,7 +13,10 @@ import { AgentService } from '../../shared/services/agent-service';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
-import { compareSessionsForDisplay } from '../utils/sessionOrdering';
+import {
+  compareSessionsForDisplay,
+  sessionBelongsToWorkspaceNavRow,
+} from '../utils/sessionOrdering';
 
 import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
 import type { FlowToolItem, FlowTextItem, ModelRound } from '../types/flow-chat';
@@ -73,20 +76,34 @@ export class FlowChatManager {
   async initialize(
     workspacePath: string,
     preferredMode?: string,
-    remoteConnectionId?: string
+    remoteConnectionId?: string,
+    remoteSshHost?: string
   ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
-      await this.context.flowChatStore.initializeFromDisk(workspacePath, remoteConnectionId);
+      await this.context.flowChatStore.initializeFromDisk(
+        workspacePath,
+        remoteConnectionId,
+        remoteSshHost
+      );
 
-      const wsConn = remoteConnectionId?.trim() ?? '';
-      const sessionMatchesWorkspace = (session: { workspacePath?: string; remoteConnectionId?: string }) => {
-        if ((session.workspacePath || workspacePath) !== workspacePath) return false;
-        const sc = session.remoteConnectionId?.trim() ?? '';
-        if (wsConn.length > 0 || sc.length > 0) {
-          return sc === wsConn;
-        }
-        return true;
+      const sessionMatchesWorkspace = (session: {
+        workspacePath?: string;
+        remoteConnectionId?: string;
+        remoteSshHost?: string;
+      }) => {
+        const sp = session.workspacePath || workspacePath;
+        if (sp !== workspacePath) return false;
+        return sessionBelongsToWorkspaceNavRow(
+          {
+            workspacePath: sp,
+            remoteConnectionId: session.remoteConnectionId,
+            remoteSshHost: session.remoteSshHost,
+          },
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost
+        );
       };
 
       const state = this.context.flowChatStore.getState();
@@ -120,7 +137,8 @@ export class FlowChatManager {
             latestSession.sessionId,
             workspacePath,
             undefined,
-            latestSession.remoteConnectionId
+            latestSession.remoteConnectionId,
+            latestSession.remoteSshHost
           );
         }
 
@@ -178,12 +196,16 @@ export class FlowChatManager {
       ensureAssistantBootstrap?: boolean;
       /** When set, only removes/reinits sessions for this SSH connection (same path, different hosts). */
       remoteConnectionId?: string | null;
+      /** Disambiguates remote workspaces that share the same `workspacePath` (e.g. `/` on different hosts). */
+      remoteSshHost?: string | null;
     }
   ): Promise<void> {
     const remoteConnectionId = options?.remoteConnectionId;
+    const remoteSshHost = options?.remoteSshHost;
     const removedSessionIds = this.context.flowChatStore.removeSessionsByWorkspace(
       workspacePath,
-      remoteConnectionId
+      remoteConnectionId,
+      remoteSshHost
     );
 
     removedSessionIds.forEach(sessionId => {
@@ -200,29 +222,32 @@ export class FlowChatManager {
     const hasHistoricalSessions = await this.initialize(
       workspacePath,
       options.preferredMode,
-      remoteConnectionId ?? undefined
+      remoteConnectionId ?? undefined,
+      remoteSshHost ?? undefined
     );
     const state = this.context.flowChatStore.getState();
     const activeSession = state.activeSessionId
       ? state.sessions.get(state.activeSessionId) ?? null
       : null;
-    const wsConn = remoteConnectionId?.trim() ?? '';
     const hasActiveWorkspaceSession =
       !!activeSession &&
-      (activeSession.workspacePath || workspacePath) === workspacePath &&
-      (() => {
-        const sc = activeSession.remoteConnectionId?.trim() ?? '';
-        if (wsConn.length > 0 || sc.length > 0) {
-          return sc === wsConn;
-        }
-        return true;
-      })();
+      sessionBelongsToWorkspaceNavRow(
+        {
+          workspacePath: activeSession.workspacePath || workspacePath,
+          remoteConnectionId: activeSession.remoteConnectionId,
+          remoteSshHost: activeSession.remoteSshHost,
+        },
+        workspacePath,
+        remoteConnectionId,
+        remoteSshHost
+      );
 
     if (!hasHistoricalSessions || !hasActiveWorkspaceSession) {
       await this.createChatSession(
         {
           workspacePath,
           ...(remoteConnectionId ? { remoteConnectionId } : {}),
+          ...(remoteSshHost ? { remoteSshHost } : {}),
         },
         options.preferredMode
       );

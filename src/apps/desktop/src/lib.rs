@@ -2,10 +2,13 @@
 //! BitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
 
 pub mod api;
+pub mod computer_use;
 pub mod logging;
 pub mod macos_menubar;
 pub mod theme;
 
+use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
+use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
 use bitfun_core::service::workspace::get_global_workspace_service;
@@ -25,6 +28,7 @@ pub use api::*;
 use api::ai_rules_api::*;
 use api::clipboard_file_api::*;
 use api::commands::*;
+use api::computer_use_api::*;
 use api::config_api::*;
 use api::cron_api::*;
 use api::diff_api::*;
@@ -361,6 +365,9 @@ pub async fn run() {
             get_clipboard_files,
             paste_files,
             get_config,
+            computer_use_get_status,
+            computer_use_request_permissions,
+            computer_use_open_system_settings,
             set_config,
             reset_config,
             export_config,
@@ -728,10 +735,15 @@ async fn init_agentic_system() -> anyhow::Result<(
     let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));
     let image_context_provider = Arc::new(api::context_upload_api::create_image_context_provider());
 
+    let computer_use_host: ComputerUseHostRef =
+        Arc::new(computer_use::DesktopComputerUseHost::new());
+    set_computer_use_desktop_available(true);
+
     let tool_pipeline = Arc::new(tools::pipeline::ToolPipeline::new(
         tool_registry,
         tool_state_manager,
         Some(image_context_provider),
+        Some(computer_use_host),
     ));
 
     let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));

@@ -99,6 +99,11 @@ export interface WorkspaceInfo {
   worktree?: WorkspaceWorktreeInfo | null;
   connectionId?: string;
   connectionName?: string;
+  /**
+   * Logical workspace host for stable scoping: `{sshHost}:{rootPath}`.
+   * Local / assistant workspaces use `localhost` (from backend); remote uses SSH config host.
+   */
+  sshHost?: string;
 }
 
 export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
@@ -164,7 +169,12 @@ export interface GlobalStateAPI {
 
   
   openWorkspace(path: string): Promise<WorkspaceInfo>;
-  openRemoteWorkspace(remotePath: string, connectionId: string, connectionName: string): Promise<WorkspaceInfo>;
+  openRemoteWorkspace(
+    remotePath: string,
+    connectionId: string,
+    connectionName: string,
+    sshHost?: string
+  ): Promise<WorkspaceInfo>;
   createAssistantWorkspace(): Promise<WorkspaceInfo>;
   deleteAssistantWorkspace(workspaceId: string): Promise<void>;
   resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
@@ -292,6 +302,9 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
     worktree: mapWorkspaceWorktree(workspace.worktree),
     connectionId: workspace.connectionId,
     connectionName: workspace.connectionName,
+    sshHost:
+      workspace.sshHost ??
+      (workspace.workspaceKind?.toLowerCase() !== 'remote' ? 'localhost' : undefined),
   };
 }
 
@@ -340,8 +353,15 @@ export function createGlobalStateAPI(): GlobalStateAPI {
       return mapWorkspaceInfo(await globalAPI.openWorkspace(path));
     },
 
-    async openRemoteWorkspace(remotePath: string, connectionId: string, connectionName: string): Promise<WorkspaceInfo> {
-      return mapWorkspaceInfo(await globalAPI.openRemoteWorkspace(remotePath, connectionId, connectionName));
+    async openRemoteWorkspace(
+      remotePath: string,
+      connectionId: string,
+      connectionName: string,
+      sshHost?: string
+    ): Promise<WorkspaceInfo> {
+      return mapWorkspaceInfo(
+        await globalAPI.openRemoteWorkspace(remotePath, connectionId, connectionName, sshHost)
+      );
     },
 
     async createAssistantWorkspace(): Promise<WorkspaceInfo> {

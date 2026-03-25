@@ -1,4 +1,5 @@
 //! Tool framework - Tool interface definition and execution context
+use crate::util::types::ToolImageAttachment;
 use super::image_context::ImageContextProviderRef;
 use super::pipeline::SubagentParentInfo;
 use crate::agentic::workspace::WorkspaceServices;
@@ -27,6 +28,8 @@ pub struct ToolUseContext {
     pub response_state: Option<ResponseState>,
     /// Image context provider (dependency injection)
     pub image_context_provider: Option<ImageContextProviderRef>,
+    /// Desktop automation (Computer use); only set in BitFun desktop.
+    pub computer_use_host: Option<crate::agentic::tools::computer_use_host::ComputerUseHostRef>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
     // Cancel tool execution more timely, especially for tools like TaskTool that need to run for a long time
     pub cancellation_token: Option<CancellationToken>,
@@ -108,7 +111,10 @@ pub enum ToolResult {
     #[serde(rename = "result")]
     Result {
         data: Value,
+        #[serde(default)]
         result_for_assistant: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image_attachments: Option<Vec<ToolImageAttachment>>,
     },
     #[serde(rename = "progress")]
     Progress {
@@ -131,6 +137,28 @@ impl ToolResult {
             ToolResult::Result { data, .. } => data.clone(),
             ToolResult::Progress { content, .. } => content.clone(),
             ToolResult::StreamChunk { data, .. } => data.clone(),
+        }
+    }
+
+    /// Standard tool success without images.
+    pub fn ok(data: Value, result_for_assistant: Option<String>) -> Self {
+        Self::Result {
+            data,
+            result_for_assistant,
+            image_attachments: None,
+        }
+    }
+
+    /// Tool success with optional images for multimodal tool results (Anthropic).
+    pub fn ok_with_images(
+        data: Value,
+        result_for_assistant: Option<String>,
+        image_attachments: Vec<ToolImageAttachment>,
+    ) -> Self {
+        Self::Result {
+            data,
+            result_for_assistant,
+            image_attachments: Some(image_attachments),
         }
     }
 }

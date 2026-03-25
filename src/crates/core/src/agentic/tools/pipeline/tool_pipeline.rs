@@ -10,6 +10,7 @@ use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::framework::{
     ToolOptions, ToolResult as FrameworkToolResult, ToolUseContext,
 };
+use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::image_context::ImageContextProviderRef;
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -35,6 +36,7 @@ fn convert_tool_result(
         FrameworkToolResult::Result {
             data,
             result_for_assistant,
+            image_attachments,
         } => {
             // If the tool does not provide result_for_assistant, generate default friendly description
             let assistant_text = result_for_assistant.or_else(|| {
@@ -49,6 +51,7 @@ fn convert_tool_result(
                 result_for_assistant: assistant_text,
                 is_error: false,
                 duration_ms: None,
+                image_attachments,
             }
         }
         FrameworkToolResult::Progress { content, .. } => {
@@ -62,6 +65,7 @@ fn convert_tool_result(
                 result_for_assistant: assistant_text,
                 is_error: false,
                 duration_ms: None,
+                image_attachments: None,
             }
         }
         FrameworkToolResult::StreamChunk { data, .. } => {
@@ -75,6 +79,7 @@ fn convert_tool_result(
                 result_for_assistant: assistant_text,
                 is_error: false,
                 duration_ms: None,
+                image_attachments: None,
             }
         }
     }
@@ -184,6 +189,7 @@ fn convert_to_framework_result(model_result: &ModelToolResult) -> FrameworkToolR
     FrameworkToolResult::Result {
         data: model_result.result.clone(),
         result_for_assistant: model_result.result_for_assistant.clone(),
+        image_attachments: model_result.image_attachments.clone(),
     }
 }
 
@@ -204,6 +210,7 @@ pub struct ToolPipeline {
     cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
     /// Image context provider (dependency injection)
     image_context_provider: Option<ImageContextProviderRef>,
+    computer_use_host: Option<ComputerUseHostRef>,
 }
 
 impl ToolPipeline {
@@ -211,6 +218,7 @@ impl ToolPipeline {
         tool_registry: Arc<TokioRwLock<ToolRegistry>>,
         state_manager: Arc<ToolStateManager>,
         image_context_provider: Option<ImageContextProviderRef>,
+        computer_use_host: Option<ComputerUseHostRef>,
     ) -> Self {
         Self {
             tool_registry,
@@ -218,7 +226,12 @@ impl ToolPipeline {
             confirmation_channels: Arc::new(DashMap::new()),
             cancellation_tokens: Arc::new(DashMap::new()),
             image_context_provider,
+            computer_use_host,
         }
+    }
+
+    pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
+        self.computer_use_host.clone()
     }
 
     /// Execute multiple tool calls
@@ -310,6 +323,7 @@ impl ToolPipeline {
                                 result_for_assistant: Some(format!("Tool execution failed: {}", e)),
                                 is_error: true,
                                 duration_ms: None,
+                                image_attachments: None,
                             },
                             execution_time_ms: 0,
                         };
@@ -351,6 +365,7 @@ impl ToolPipeline {
                                 result_for_assistant: Some(format!("Tool execution failed: {}", e)),
                                 is_error: true,
                                 duration_ms: None,
+                                image_attachments: None,
                             },
                             execution_time_ms: 0,
                         };
@@ -785,6 +800,7 @@ impl ToolPipeline {
             }),
             response_state: None,
             image_context_provider: self.image_context_provider.clone(),
+            computer_use_host: self.computer_use_host.clone(),
             subagent_parent_info: task.context.subagent_parent_info.clone(),
             cancellation_token: Some(cancellation_token),
             workspace_services: task.context.workspace_services.clone(),

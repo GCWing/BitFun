@@ -392,6 +392,7 @@ When overriding an existing session's agent_type, only switching between "agenti
                 "Message accepted for session '{}' in workspace '{}' using agent type '{}'.",
                 target_session_id, workspace, target_agent_type
             )),
+            image_attachments: None,
         }])
     }
 }

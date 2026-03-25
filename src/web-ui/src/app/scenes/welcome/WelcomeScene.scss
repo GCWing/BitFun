@@ -155,10 +155,29 @@
 
   &__recent-name {
     flex: 1;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+  }
+
+  &__recent-host {
+    flex-shrink: 0;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-muted);
+    font-size: $font-size-sm;
+  }
+
+  &__recent-host-sep {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    font-size: $font-size-sm;
   }
 
   &__recent-time {

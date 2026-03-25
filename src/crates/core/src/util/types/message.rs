@@ -1,4 +1,5 @@
 use super::tool::ToolCall;
+use super::tool_image_attachment::ToolImageAttachment;
 use serde::{Deserialize, Serialize};
 
 /// Internal message representation
@@ -18,6 +19,9 @@ pub struct Message {
     pub tool_call_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Images attached to a tool result (Anthropic multimodal tool_result).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_image_attachments: Option<Vec<ToolImageAttachment>>,
 }
 
 impl Message {
@@ -30,6 +34,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            tool_image_attachments: None,
         }
     }
 
@@ -42,6 +47,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            tool_image_attachments: None,
         }
     }
 
@@ -54,6 +60,7 @@ impl Message {
             tool_calls: Some(tool_calls),
             tool_call_id: None,
             name: None,
+            tool_image_attachments: None,
         }
     }
 
@@ -66,6 +73,7 @@ impl Message {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            tool_image_attachments: None,
         }
     }
 }

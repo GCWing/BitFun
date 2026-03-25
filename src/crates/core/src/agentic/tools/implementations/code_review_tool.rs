@@ -218,6 +218,7 @@ impl Tool for CodeReviewTool {
         Ok(vec![ToolResult::Result {
             data: filled_input,
             result_for_assistant: Some("Code review results submitted successfully".to_string()),
+            image_attachments: None,
         }])
     }
 }

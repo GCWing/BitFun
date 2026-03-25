@@ -121,26 +121,69 @@ impl ConversationCoordinator {
         let workspace_path = config.workspace_path.as_ref()?;
         let path_buf = PathBuf::from(workspace_path);
 
-        // Check if this path belongs to any registered remote workspace
-        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
-            workspace_path,
-            config.remote_connection_id.as_deref(),
-        )
-        .await
-        {
-            if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
-                let local_session_path = manager.get_local_session_path(&entry.connection_id);
-                return Some(WorkspaceBinding::new_remote(
-                    None,
-                    path_buf,
-                    entry.connection_id,
-                    entry.connection_name,
-                    local_session_path,
-                ));
-            }
-        }
+        let remote_id = config
+            .remote_connection_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
 
-        Some(WorkspaceBinding::new(None, path_buf))
+        // Remote tool routing must not be inferred from path alone: the same string can be a
+        // client path (e.g. macOS `/Users/...`) or a POSIX path on an SSH host. Only treat the
+        // workspace as remote when the session was created with an explicit SSH connection id.
+        let Some(rid) = remote_id else {
+            return Some(WorkspaceBinding::new(None, path_buf));
+        };
+
+        let path_norm =
+            crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+                workspace_path,
+            );
+        let host_from_config = config
+            .remote_ssh_host
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        let entry =
+            crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
+                workspace_path,
+                Some(rid),
+            )
+            .await;
+
+        let local_session_path =
+            if let Some(ref e) = entry {
+                if !e.ssh_host.trim().is_empty() {
+                    crate::service::remote_ssh::workspace_state::remote_workspace_session_mirror_dir(
+                        &e.ssh_host,
+                        &e.remote_root,
+                    )
+                } else {
+                    crate::service::remote_ssh::workspace_state::unresolved_remote_session_storage_dir(
+                        rid, &path_norm,
+                    )
+                }
+            } else if let Some(h) = host_from_config {
+                crate::service::remote_ssh::workspace_state::remote_workspace_session_mirror_dir(
+                    h, &path_norm,
+                )
+            } else {
+                crate::service::remote_ssh::workspace_state::unresolved_remote_session_storage_dir(
+                    rid, &path_norm,
+                )
+            };
+
+        let connection_name = entry
+            .map(|e| e.connection_name)
+            .unwrap_or_else(|| rid.to_string());
+
+        Some(WorkspaceBinding::new_remote(
+            None,
+            path_buf,
+            rid.to_string(),
+            connection_name,
+            local_session_path,
+        ))
     }
 
     /// Build `WorkspaceServices` from a resolved `WorkspaceBinding`.

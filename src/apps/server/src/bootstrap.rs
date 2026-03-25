@@ -83,6 +83,7 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
         tool_registry.clone(),
         tool_state_manager,
         None, // no image context provider in server mode for now
+        None,
     ));
 
     let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));

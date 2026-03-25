@@ -66,9 +66,15 @@ const resolveSessionWorkspace = (
   if (!workspacePath) return null;
 
   const state = workspaceManager.getState();
-  const pathMatches = Array.from(state.openedWorkspaces.values()).filter(
-    workspace => workspace.rootPath === workspacePath
-  );
+  const pathMatches = Array.from(state.openedWorkspaces.values()).filter(workspace => {
+    if (workspace.rootPath !== workspacePath) return false;
+    if (workspace.workspaceKind !== WorkspaceKind.Remote) return true;
+    const cid = config?.remoteConnectionId?.trim();
+    const host = config?.remoteSshHost?.trim();
+    if (cid && workspace.connectionId !== cid) return false;
+    if (host && (workspace.sshHost?.trim() ?? '') !== host) return false;
+    return true;
+  });
   if (pathMatches.length === 0) {
     return state.currentWorkspace;
   }
@@ -79,6 +85,11 @@ const resolveSessionWorkspace = (
   if (configCid) {
     const byConn = pathMatches.find(w => w.connectionId === configCid);
     if (byConn) return byConn;
+  }
+  const configHost = config?.remoteSshHost?.trim();
+  if (configHost) {
+    const byHost = pathMatches.find(w => (w.sshHost?.trim() ?? '') === configHost);
+    if (byHost) return byHost;
   }
   const cur = state.currentWorkspace;
   if (cur && pathMatches.some(w => w.id === cur.id)) {
@@ -157,6 +168,10 @@ export async function createChatSession(
     }
     const remoteConnectionId =
       workspace?.workspaceKind === WorkspaceKind.Remote ? workspace.connectionId : undefined;
+    const remoteSshHost =
+      workspace?.workspaceKind === WorkspaceKind.Remote
+        ? workspace.sshHost?.trim() || undefined
+        : undefined;
     const agentType = resolveAgentType(mode, workspace);
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
     const creationKey =
@@ -188,6 +203,7 @@ export async function createChatSession(
         agentType,
         workspacePath,
         remoteConnectionId,
+        remoteSshHost,
         config: {
           modelName: config.modelName || 'auto',
           enableTools: true,
@@ -195,6 +211,8 @@ export async function createChatSession(
           autoCompact: true,
           maxContextTokens: maxContextTokens,
           enableContextCompression: true,
+          remoteConnectionId,
+          remoteSshHost,
         }
       });
 
@@ -206,7 +224,8 @@ export async function createChatSession(
         maxContextTokens,
         agentType,
         workspacePath,
-        remoteConnectionId
+        remoteConnectionId,
+        remoteSshHost
       );
 
       return response.sessionId;
@@ -248,11 +267,17 @@ export async function switchChatSession(
           sessionId,
           workspacePath,
           undefined,
-          session.remoteConnectionId
+          session.remoteConnectionId,
+          session.remoteSshHost
         );
         
         try {
-          await agentAPI.restoreSession(sessionId, workspacePath, session.remoteConnectionId);
+          await agentAPI.restoreSession(
+            sessionId,
+            workspacePath,
+            session.remoteConnectionId,
+            session.remoteSshHost
+          );
           
           context.flowChatStore.setState(prev => {
             const newSessions = new Map(prev.sessions);
@@ -272,10 +297,13 @@ export async function switchChatSession(
               agentType: currentSession.mode || 'agentic',
               workspacePath,
               remoteConnectionId: currentSession.remoteConnectionId,
+              remoteSshHost: currentSession.remoteSshHost,
               config: {
                 modelName: currentSession.config.modelName || 'auto',
                 enableTools: true,
-                safeMode: true
+                safeMode: true,
+                remoteConnectionId: currentSession.remoteConnectionId,
+                remoteSshHost: currentSession.remoteSshHost,
               }
             });
             
@@ -302,7 +330,8 @@ export async function switchChatSession(
     touchSessionActivity(
       sessionId,
       session?.workspacePath,
-      session?.remoteConnectionId
+      session?.remoteConnectionId,
+      session?.remoteSshHost
     ).catch(error => {
       log.debug('Failed to touch session activity', { sessionId, error });
     });
@@ -376,6 +405,7 @@ export async function ensureBackendSession(
       sessionId,
       workspacePath,
       remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
     });
     clearHistoricalFlag();
   } catch (e: any) {
@@ -395,10 +425,13 @@ export async function ensureBackendSession(
       agentType: session.mode || 'agentic',
       workspacePath,
       remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
       config: {
         modelName: session.config.modelName || 'auto',
         enableTools: true,
-        safeMode: true
+        safeMode: true,
+        remoteConnectionId: session.remoteConnectionId,
+        remoteSshHost: session.remoteSshHost,
       }
     });
     clearHistoricalFlag();
@@ -425,10 +458,13 @@ export async function retryCreateBackendSession(
     agentType: session.mode || 'agentic',
     workspacePath,
     remoteConnectionId: session.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost,
     config: {
       modelName: session.config.modelName || 'auto',
       enableTools: true,
-      safeMode: true
+      safeMode: true,
+      remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
     }
   });
 }

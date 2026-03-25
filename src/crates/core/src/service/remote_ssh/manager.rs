@@ -666,6 +666,21 @@ impl SSHConnectionManager {
         self.saved_connections.read().await.clone()
     }
 
+    /// SSH `host` field from the saved profile with this `connection_id` (works when not connected).
+    /// Used to resolve session mirror paths when workspace metadata omitted `sshHost`.
+    pub async fn get_saved_host_for_connection_id(&self, connection_id: &str) -> Option<String> {
+        let cid = connection_id.trim();
+        if cid.is_empty() {
+            return None;
+        }
+        let guard = self.saved_connections.read().await;
+        guard
+            .iter()
+            .find(|c| c.id == cid)
+            .map(|c| c.host.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
     /// Save a connection configuration
     pub async fn save_connection(&self, config: &SSHConnectionConfig) -> anyhow::Result<()> {
         let mut guard = self.saved_connections.write().await;

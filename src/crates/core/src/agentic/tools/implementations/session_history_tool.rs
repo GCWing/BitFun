@@ -313,6 +313,7 @@ Examples:
                 transcript.index_range.start_line,
                 transcript.index_range.end_line
             )),
+            image_attachments: None,
         }])
     }
 }

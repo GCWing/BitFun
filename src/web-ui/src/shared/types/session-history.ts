@@ -31,6 +31,8 @@ export interface SessionMetadata {
   customMetadata?: SessionCustomMetadata;
   todos?: any[];
   workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 export type SessionStatus = 'active' | 'archived' | 'completed';

@@ -85,6 +85,7 @@ impl GrepTool {
                 "result": result_text,
             }),
             result_for_assistant: Some(result_text),
+            image_attachments: None,
         }])
     }
 
@@ -292,6 +293,7 @@ Usage:
                 "result": result_text,
             }),
             result_for_assistant: Some(result_text),
+            image_attachments: None,
         }])
     }
 }

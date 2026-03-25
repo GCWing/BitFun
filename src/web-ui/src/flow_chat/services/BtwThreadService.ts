@@ -95,18 +95,22 @@ export async function startBtwThread(params: {
   const modelName = parentSession?.config?.modelName || 'default';
   const childSessionName = buildChildSessionName(question);
   const remoteConnectionId = parentSession?.remoteConnectionId;
+  const remoteSshHost = parentSession?.remoteSshHost;
 
   const created = await agentAPI.createSession({
     sessionName: childSessionName,
     agentType,
     workspacePath,
     remoteConnectionId,
+    remoteSshHost,
     config: {
       modelName,
       enableTools: false,
       safeMode: true,
       autoCompact: true,
       enableContextCompression: true,
+      remoteConnectionId,
+      remoteSshHost,
     },
   });
 
@@ -127,7 +131,8 @@ export async function startBtwThread(params: {
         parentTurnIndex,
       },
     },
-    remoteConnectionId
+    remoteConnectionId,
+    remoteSshHost
   );
   flowChatStore.updateSessionRelationship(childSessionId, { parentSessionId, sessionKind: 'btw' });
   flowChatStore.updateSessionBtwOrigin(childSessionId, {

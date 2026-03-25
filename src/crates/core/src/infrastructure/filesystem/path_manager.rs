@@ -136,6 +136,37 @@ impl PathManager {
         }
     }
 
+    /// True if `path` is this machine's BitFun **assistant** workspace directory.
+    ///
+    /// Used so remote-workspace registry (especially roots like `/`) does not
+    /// mis-classify client paths such as `/Users/.../.bitfun/personal_assistant/workspace-*`
+    /// as SSH remote paths.
+    pub fn is_local_assistant_workspace_path(&self, path: &str) -> bool {
+        let p = Path::new(path);
+        if !p.is_absolute() {
+            return false;
+        }
+        if p.starts_with(self.assistant_workspace_base_dir(None)) {
+            return true;
+        }
+        if p.starts_with(self.default_assistant_workspace_dir(None)) {
+            return true;
+        }
+        if p.starts_with(self.legacy_default_assistant_workspace_dir(None)) {
+            return true;
+        }
+        let legacy_base = self.legacy_assistant_workspace_base_dir(None);
+        if let Ok(rest) = p.strip_prefix(&legacy_base) {
+            if let Some(std::path::Component::Normal(first)) = rest.components().next() {
+                let name = first.to_string_lossy();
+                if name == "workspace" || name.starts_with("workspace-") {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Get user config directory: ~/.config/bitfun/config/
     pub fn user_config_dir(&self) -> PathBuf {
         self.user_root.join("config")
@@ -224,6 +255,8 @@ impl PathManager {
     /// exists and the canonical path does not, this returns the legacy path so existing installs
     /// keep working. On Windows this avoided splitting data between `AppData\Local\BitFun` and
     /// `AppData\Roaming\bitfun`; new installs use the canonical Roaming `bitfun\data` tree only.
+    ///
+    /// New remote session data should use [`Self::remote_ssh_mirror_root`] instead.
     pub fn remote_ssh_sessions_root() -> PathBuf {
         let legacy = dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."))
@@ -245,6 +278,21 @@ impl PathManager {
             canonical.clone()
         };
         chosen
+    }
+
+    /// Root for per-host, per-remote-path workspace mirrors: `~/.bitfun/remote_ssh/`.
+    ///
+    /// Session/chat persistence for SSH workspaces lives under
+    /// `{this}/{sanitized_host}/{remote_path_segments}/sessions/`.
+    pub fn remote_ssh_mirror_root() -> PathBuf {
+        Self::new()
+            .map(|pm| pm.bitfun_home_dir().join("remote_ssh"))
+            .unwrap_or_else(|_| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".bitfun")
+                    .join("remote_ssh")
+            })
     }
 
     /// Get scheduled jobs directory: ~/.config/bitfun/data/cron/
@@ -610,5 +658,17 @@ mod tests {
             path_manager.legacy_assistant_workspace_dir("demo", None),
             legacy_base_dir.join("workspace-demo")
         );
+    }
+
+    #[test]
+    fn is_local_assistant_workspace_path_detects_personal_assistant_and_legacy() {
+        let pm = PathManager::default();
+        let base = pm.assistant_workspace_base_dir(None);
+        let named = pm.assistant_workspace_dir("abc", None);
+        assert!(pm.is_local_assistant_workspace_path(&named.to_string_lossy()));
+        assert!(pm.is_local_assistant_workspace_path(&base.join("workspace").to_string_lossy()));
+        let legacy = pm.legacy_assistant_workspace_dir("xyz", None);
+        assert!(pm.is_local_assistant_workspace_path(&legacy.to_string_lossy()));
+        assert!(!pm.is_local_assistant_workspace_path("/tmp/not-bitfun"));
     }
 }

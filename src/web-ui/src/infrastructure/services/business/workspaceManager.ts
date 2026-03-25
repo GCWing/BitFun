@@ -1,6 +1,11 @@
  
 
-import { WorkspaceInfo, WorkspaceKind, globalStateAPI } from '../../../shared/types';
+import {
+  WorkspaceInfo,
+  WorkspaceKind,
+  globalStateAPI,
+  isRemoteWorkspace,
+} from '../../../shared/types';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { createLogger } from '@/shared/utils/logger';
 import { listen } from '@tauri-apps/api/event';
@@ -409,6 +414,7 @@ class WorkspaceManager {
     connectionId: string;
     connectionName: string;
     remotePath: string;
+    sshHost?: string;
   }): Promise<WorkspaceInfo> {
     try {
       this.setLoading(true);
@@ -422,6 +428,7 @@ class WorkspaceManager {
         remotePath,
         remoteWorkspace.connectionId,
         remoteWorkspace.connectionName,
+        remoteWorkspace.sshHost,
       );
 
       const [recentWorkspaces, openedWorkspaces] = await Promise.all([
@@ -754,6 +761,20 @@ class WorkspaceManager {
 
     if (this.state.openedWorkspaces.has(workspace.id)) {
       return this.setActiveWorkspace(workspace.id);
+    }
+
+    if (isRemoteWorkspace(workspace)) {
+      const connectionId = workspace.connectionId?.trim() ?? '';
+      const connectionName = workspace.connectionName?.trim() || connectionId;
+      if (!connectionId) {
+        throw new Error('Remote workspace is missing connectionId; reconnect via SSH first.');
+      }
+      return this.openRemoteWorkspace({
+        connectionId,
+        connectionName,
+        remotePath: workspace.rootPath,
+        sshHost: workspace.sshHost,
+      });
     }
 
     return this.openWorkspace(workspace.rootPath);

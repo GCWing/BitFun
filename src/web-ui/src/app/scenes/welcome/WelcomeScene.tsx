@@ -17,6 +17,7 @@ import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import type { WorkspaceInfo } from '@/shared/types';
+import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import './WelcomeScene.scss';
 
 const log = createLogger('WelcomeScene');
@@ -133,18 +134,31 @@ const WelcomeScene: React.FC = () => {
 
           {displayRecentWorkspaces.length > 0 ? (
             <div className="welcome-scene__recent-list">
-              {displayRecentWorkspaces.map(ws => (
-                <Tooltip key={ws.id} content={ws.rootPath} placement="right" followCursor>
+              {displayRecentWorkspaces.map(ws => {
+                const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(ws);
+                return (
+                <Tooltip key={ws.id} content={tooltip} placement="right" followCursor>
                   <button
                     className="welcome-scene__recent-item"
                     onClick={() => { void handleSwitchWorkspace(ws); }}
                   >
                     <FolderOpen size={13} />
-                    <span className="welcome-scene__recent-name">{ws.name}</span>
+                    <span className="welcome-scene__recent-name">
+                      {hostPrefix ? (
+                        <>
+                          <span className="welcome-scene__recent-host">{hostPrefix}</span>
+                          <span className="welcome-scene__recent-host-sep" aria-hidden>
+                            {' · '}
+                          </span>
+                        </>
+                      ) : null}
+                      {folderLabel}
+                    </span>
                     <span className="welcome-scene__recent-time">{formatDate(ws.lastAccessed)}</span>
                   </button>
                 </Tooltip>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="welcome-scene__no-recent">{t('welcomeScene.noRecentWorkspaces')}</p>

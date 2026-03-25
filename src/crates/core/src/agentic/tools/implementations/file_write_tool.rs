@@ -160,6 +160,7 @@ Usage:
                 "success": true
             }),
             result_for_assistant: Some(format!("Successfully wrote to {}", resolved_path)),
+            image_attachments: None,
         };
 
         Ok(vec![result])

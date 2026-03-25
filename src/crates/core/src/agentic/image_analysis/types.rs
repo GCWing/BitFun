@@ -101,7 +101,7 @@ pub struct ImageLimits {
     pub max_width: u32,
     /// Maximum height (pixels)
     pub max_height: u32,
-    /// Maximum number of images per request
+    /// Maximum number of images per request (no app-side cap; provider APIs may still reject).
     pub max_images_per_request: usize,
 }
 
@@ -111,7 +111,7 @@ impl Default for ImageLimits {
             max_size: 20 * 1024 * 1024, // 20MB
             max_width: 2048,
             max_height: 2048,
-            max_images_per_request: 10,
+            max_images_per_request: usize::MAX,
         }
     }
 }
@@ -124,19 +124,19 @@ impl ImageLimits {
                 max_size: 20 * 1024 * 1024, // 20MB
                 max_width: 2048,
                 max_height: 2048,
-                max_images_per_request: 10,
+                max_images_per_request: usize::MAX,
             },
             "anthropic" => Self {
                 max_size: 5 * 1024 * 1024, // 5MB
                 max_width: 1568,
                 max_height: 2390,
-                max_images_per_request: 5,
+                max_images_per_request: usize::MAX,
             },
             "google" | "gemini" => Self {
                 max_size: 10 * 1024 * 1024, // 10MB
                 max_width: 4096,
                 max_height: 4096,
-                max_images_per_request: 16,
+                max_images_per_request: usize::MAX,
             },
             _ => Self::default(),
         }

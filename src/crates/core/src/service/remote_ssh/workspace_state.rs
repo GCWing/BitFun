@@ -5,11 +5,18 @@
 //! **`(connection_id, remote_root_path)`** — *not* by remote path alone, so two
 //! different servers opened at the same path (e.g. `/`) do not overwrite each other.
 
-use crate::infrastructure::PathManager;
+use crate::infrastructure::{get_path_manager_arc, PathManager};
 use crate::service::remote_ssh::{RemoteFileService, RemoteTerminalManager, SSHConnectionManager};
-use std::path::PathBuf;
+use dunce::canonicalize;
+use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+/// SSH host label for **local disk** workspaces (`Normal` / `Assistant`).
+/// Remote workspaces use the SSH config host instead. Together with a normalized absolute
+/// root path this forms a globally unique workspace scope: `{host}:{path}`.
+pub const LOCAL_WORKSPACE_SSH_HOST: &str = "localhost";
 
 /// Normalize a remote (POSIX) workspace path for registry lookup on any client OS.
 /// Converts backslashes to slashes, collapses duplicate slashes, and trims trailing slashes
@@ -45,6 +52,139 @@ pub fn sanitize_ssh_connection_id_for_local_dir(connection_id: &str) -> String {
     }
 }
 
+/// Sanitize a single path component for the local mirror tree (host label or one path segment).
+pub fn sanitize_remote_mirror_path_component(component: &str) -> String {
+    let t = component.trim();
+    if t.is_empty() {
+        return "_".to_string();
+    }
+    #[cfg(windows)]
+    {
+        t.chars()
+            .map(|c| match c {
+                '<' | '>' | '"' | ':' | '/' | '\\' | '|' | '?' | '*' => '-',
+                c if c.is_control() => '-',
+                _ => c,
+            })
+            .collect()
+    }
+    #[cfg(not(windows))]
+    {
+        t.chars()
+            .map(|c| if c == '/' || c == '\0' { '-' } else { c })
+            .collect()
+    }
+}
+
+/// SSH host / alias as a single directory name under `remote_ssh/`.
+pub fn sanitize_ssh_hostname_for_mirror(host: &str) -> String {
+    sanitize_remote_mirror_path_component(&host.trim().to_lowercase())
+}
+
+/// Map normalized remote workspace root to path segments under the host directory.
+/// `/home/u/proj` → `home/u/proj`; `/` → `_root`.
+pub fn remote_root_to_mirror_subpath(remote_root_norm: &str) -> PathBuf {
+    let mut pb = PathBuf::new();
+    if remote_root_norm == "/" {
+        pb.push("_root");
+        return pb;
+    }
+    for seg in remote_root_norm.trim_start_matches('/').split('/') {
+        if seg.is_empty() {
+            continue;
+        }
+        pb.push(sanitize_remote_mirror_path_component(seg));
+    }
+    if pb.as_os_str().is_empty() {
+        pb.push("_root");
+    }
+    pb
+}
+
+/// Local directory where persisted sessions for this remote workspace root are stored.
+pub fn remote_workspace_session_mirror_dir(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
+    PathManager::remote_ssh_mirror_root()
+        .join(sanitize_ssh_hostname_for_mirror(ssh_host))
+        .join(remote_root_to_mirror_subpath(remote_root_norm))
+        .join("sessions")
+}
+
+/// Human-readable logical key: `{host}:{normalized_absolute_root}` (for logs / UI; not a directory name).
+pub fn workspace_logical_key(ssh_host: &str, root_norm: &str) -> String {
+    format!("{}:{}", ssh_host.trim(), root_norm)
+}
+
+fn hash_host_and_root(host: &str, root_norm: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(host.trim().to_lowercase().as_bytes());
+    hasher.update(b"\n");
+    hasher.update(root_norm.as_bytes());
+    hex::encode(&hasher.finalize()[..16])
+}
+
+/// Stable storage id for a **local** workspace (`localhost` + canonical absolute root).
+pub fn local_workspace_stable_storage_id(canonical_root_norm: &str) -> String {
+    format!(
+        "local_{}",
+        hash_host_and_root(LOCAL_WORKSPACE_SSH_HOST, canonical_root_norm)
+    )
+}
+
+/// Canonical local root [`PathBuf`] plus normalized string form (single `canonicalize` call).
+pub fn canonicalize_local_workspace_root(path: &Path) -> Result<(PathBuf, String), String> {
+    let pb = canonicalize(path).map_err(|e| {
+        format!(
+            "Failed to canonicalize local workspace path '{}': {}",
+            path.display(),
+            e
+        )
+    })?;
+    let s = path_buf_to_stable_local_root_string(&pb);
+    Ok((pb, s))
+}
+
+/// Canonical absolute local path as a stable UTF-8 string (forward slashes, dunce-simplified).
+pub fn normalize_local_workspace_root_for_stable_id(path: &Path) -> Result<String, String> {
+    Ok(canonicalize_local_workspace_root(path)?.1)
+}
+
+fn path_buf_to_stable_local_root_string(canonical: &Path) -> String {
+    canonical.to_string_lossy().replace('\\', "/")
+}
+
+/// Whether two local paths refer to the same workspace root (canonical comparison when possible).
+pub fn local_workspace_roots_equal(a: &Path, b: &Path) -> bool {
+    match (
+        normalize_local_workspace_root_for_stable_id(a),
+        normalize_local_workspace_root_for_stable_id(b),
+    ) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a == b,
+    }
+}
+
+/// Stable workspace id from SSH host + normalized remote root (for deduplication across reconnects).
+pub fn remote_workspace_stable_id(ssh_host: &str, remote_root_norm: &str) -> String {
+    format!("remote_{}", hash_host_and_root(ssh_host, remote_root_norm))
+}
+
+/// When a remote scope has `connection_id` but no resolvable SSH host, we must not read/write the
+/// legacy per-connection tree (it is not the same layout as `remote_ssh/{host}/.../sessions`).
+/// This returns a dedicated stub under `~/.bitfun/remote_ssh/_unresolved/.../sessions` that is
+/// usually absent, so session listing is empty until host can be resolved.
+pub fn unresolved_remote_session_storage_dir(connection_id: &str, workspace_path_norm: &str) -> PathBuf {
+    let mut hasher = Sha256::new();
+    hasher.update(b"unresolved_remote_session\x01");
+    hasher.update(connection_id.trim().as_bytes());
+    hasher.update(b"\0");
+    hasher.update(workspace_path_norm.as_bytes());
+    let key = hex::encode(&hasher.finalize()[..12]);
+    PathManager::remote_ssh_mirror_root()
+        .join("_unresolved")
+        .join(key)
+        .join("sessions")
+}
+
 fn remote_path_is_under_root(path: &str, root: &str) -> bool {
     if path == root {
         return true;
@@ -64,6 +204,10 @@ fn registration_matches_path(reg: &RegisteredRemoteWorkspace, path_norm: &str) -
 pub struct RemoteWorkspaceEntry {
     pub connection_id: String,
     pub connection_name: String,
+    /// SSH `host` from connection config (or best-effort label for mirror paths).
+    pub ssh_host: String,
+    /// Normalized remote workspace root this registration applies to.
+    pub remote_root: String,
 }
 
 // ── Legacy compat alias (used by a handful of call-sites that still read
@@ -82,6 +226,7 @@ struct RegisteredRemoteWorkspace {
     connection_id: String,
     remote_root: String,
     connection_name: String,
+    ssh_host: String,
 }
 
 /// Global remote workspace state manager.
@@ -99,21 +244,16 @@ pub struct RemoteWorkspaceStateManager {
     file_service: Arc<RwLock<Option<RemoteFileService>>>,
     /// Remote terminal manager (shared).
     terminal_manager: Arc<RwLock<Option<RemoteTerminalManager>>>,
-    /// Local base path for session persistence.
-    local_session_base: PathBuf,
 }
 
 impl RemoteWorkspaceStateManager {
     pub fn new() -> Self {
-        let local_session_base = PathManager::remote_ssh_sessions_root();
-
         Self {
             registrations: Arc::new(RwLock::new(Vec::new())),
             active_connection_hint: Arc::new(RwLock::new(None)),
             ssh_manager: Arc::new(RwLock::new(None)),
             file_service: Arc::new(RwLock::new(None)),
             terminal_manager: Arc::new(RwLock::new(None)),
-            local_session_base,
         }
     }
 
@@ -144,8 +284,10 @@ impl RemoteWorkspaceStateManager {
         remote_path: String,
         connection_id: String,
         connection_name: String,
+        ssh_host: String,
     ) {
         let remote_root = normalize_remote_workspace_path(&remote_path);
+        let ssh_host = ssh_host.trim().to_string();
         let mut guard = self.registrations.write().await;
         guard.retain(|r| {
             !(r.connection_id == connection_id && r.remote_root == remote_root)
@@ -154,6 +296,7 @@ impl RemoteWorkspaceStateManager {
             connection_id,
             remote_root,
             connection_name,
+            ssh_host,
         });
     }
 
@@ -174,6 +317,15 @@ impl RemoteWorkspaceStateManager {
         path: &str,
         preferred_connection_id: Option<&str>,
     ) -> Option<RemoteWorkspaceEntry> {
+        // Assistant sessions use client-local paths under ~/.bitfun/personal_assistant.
+        // A registered remote root of `/` matches every absolute path; without an explicit
+        // `remote_connection_id`, those paths must not be treated as SSH workspaces.
+        if preferred_connection_id.is_none()
+            && get_path_manager_arc().is_local_assistant_workspace_path(path)
+        {
+            return None;
+        }
+
         let path_norm = normalize_remote_workspace_path(path);
         let hint = self.active_connection_hint.read().await.clone();
         let guard = self.registrations.read().await;
@@ -198,6 +350,8 @@ impl RemoteWorkspaceStateManager {
             return Some(RemoteWorkspaceEntry {
                 connection_id: r.connection_id.clone(),
                 connection_name: r.connection_name.clone(),
+                ssh_host: r.ssh_host.clone(),
+                remote_root: r.remote_root.clone(),
             });
         }
 
@@ -206,6 +360,8 @@ impl RemoteWorkspaceStateManager {
                 return Some(RemoteWorkspaceEntry {
                     connection_id: r.connection_id.clone(),
                     connection_name: r.connection_name.clone(),
+                    ssh_host: r.ssh_host.clone(),
+                    remote_root: r.remote_root.clone(),
                 });
             }
         }
@@ -215,6 +371,9 @@ impl RemoteWorkspaceStateManager {
 
     /// True if `path` could belong to **any** registered remote root (before disambiguation).
     pub async fn is_remote_path(&self, path: &str) -> bool {
+        if get_path_manager_arc().is_local_assistant_workspace_path(path) {
+            return false;
+        }
         let path_norm = normalize_remote_workspace_path(path);
         let guard = self.registrations.read().await;
         guard
@@ -237,8 +396,13 @@ impl RemoteWorkspaceStateManager {
         remote_path: String,
         connection_name: String,
     ) {
-        self.register_remote_workspace(remote_path, connection_id, connection_name)
-            .await;
+        self.register_remote_workspace(
+            remote_path,
+            connection_id,
+            connection_name,
+            String::new(),
+        )
+        .await;
     }
 
     /// **Compat** — old code calls `deactivate_remote_workspace`.
@@ -290,25 +454,38 @@ impl RemoteWorkspaceStateManager {
 
     // ── Session storage ────────────────────────────────────────────
 
-    pub fn get_local_session_path(&self, connection_id: &str) -> PathBuf {
-        let dir_name = sanitize_ssh_connection_id_for_local_dir(connection_id);
-        self.local_session_base.join(dir_name).join("sessions")
+    /// Local mirror directory for persisted sessions (`~/.bitfun/remote_ssh/.../sessions`).
+    pub fn get_remote_session_mirror_path(&self, ssh_host: &str, remote_root_norm: &str) -> PathBuf {
+        remote_workspace_session_mirror_dir(ssh_host, remote_root_norm)
     }
 
     /// Map a workspace path to the effective session storage path.
-    /// Remote paths → local session dir.  Local paths → returned as-is.
+    /// When `remote_connection_id` is set, remote roots map to the local session mirror dir;
+    /// otherwise the path is returned as-is (no path-only inference).
     pub async fn get_effective_session_path(
         &self,
         workspace_path: &str,
         remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
     ) -> PathBuf {
+        let remote_id = remote_connection_id.map(str::trim).filter(|s| !s.is_empty());
+        if remote_id.is_none() {
+            return PathBuf::from(workspace_path);
+        }
+        let path_norm = normalize_remote_workspace_path(workspace_path);
+        if let Some(host) = remote_ssh_host.map(str::trim).filter(|s| !s.is_empty()) {
+            return remote_workspace_session_mirror_dir(host, &path_norm);
+        }
         if let Some(entry) = self
-            .lookup_connection(workspace_path, remote_connection_id)
+            .lookup_connection(workspace_path, remote_id)
             .await
         {
-            return self.get_local_session_path(&entry.connection_id);
+            if !entry.ssh_host.trim().is_empty() {
+                return remote_workspace_session_mirror_dir(&entry.ssh_host, &entry.remote_root);
+            }
+            return unresolved_remote_session_storage_dir(remote_id.unwrap(), &path_norm);
         }
-        PathBuf::from(workspace_path)
+        unresolved_remote_session_storage_dir(remote_id.unwrap(), &path_norm)
     }
 }
 
@@ -338,12 +515,23 @@ pub fn get_remote_workspace_manager() -> Option<Arc<RemoteWorkspaceStateManager>
 pub async fn get_effective_session_path(
     workspace_path: &str,
     remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
 ) -> std::path::PathBuf {
     if let Some(manager) = get_remote_workspace_manager() {
         manager
-            .get_effective_session_path(workspace_path, remote_connection_id)
+            .get_effective_session_path(workspace_path, remote_connection_id, remote_ssh_host)
             .await
     } else {
+        let path_norm = normalize_remote_workspace_path(workspace_path);
+        if let (Some(_), Some(host)) = (
+            remote_connection_id.map(str::trim).filter(|s| !s.is_empty()),
+            remote_ssh_host.map(str::trim).filter(|s| !s.is_empty()),
+        ) {
+            return remote_workspace_session_mirror_dir(host, &path_norm);
+        }
+        if let Some(rid) = remote_connection_id.map(str::trim).filter(|s| !s.is_empty()) {
+            return unresolved_remote_session_storage_dir(rid, &path_norm);
+        }
         std::path::PathBuf::from(workspace_path)
     }
 }
@@ -386,6 +574,29 @@ pub async fn is_remote_workspace_active() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{normalize_remote_workspace_path, sanitize_ssh_connection_id_for_local_dir};
+    use crate::infrastructure::PathManager;
+
+    #[tokio::test]
+    async fn local_assistant_path_not_remote_without_connection_id() {
+        let pm = PathManager::default();
+        let assistant_path = pm
+            .assistant_workspace_dir("d3726520", None)
+            .to_string_lossy()
+            .to_string();
+        let m = super::RemoteWorkspaceStateManager::new();
+        m.register_remote_workspace("/".to_string(), "conn".to_string(), "S".to_string(), "h1".to_string())
+            .await;
+        assert!(
+            m.lookup_connection(&assistant_path, None).await.is_none(),
+            "assistant workspace must not bind to SSH when remote_connection_id is omitted"
+        );
+        assert!(
+            m.lookup_connection(&assistant_path, Some("conn"))
+                .await
+                .is_some(),
+            "explicit remote_connection_id should still resolve for edge cases"
+        );
+    }
 
     #[tokio::test]
     async fn two_servers_same_root_both_registered() {
@@ -394,12 +605,14 @@ mod tests {
             "/".to_string(),
             "conn-a".to_string(),
             "Server A".to_string(),
+            "host-a".to_string(),
         )
         .await;
         m.register_remote_workspace(
             "/".to_string(),
             "conn-b".to_string(),
             "Server B".to_string(),
+            "host-b".to_string(),
         )
         .await;
         m.set_active_connection_hint(Some("conn-a".to_string())).await;
@@ -413,9 +626,9 @@ mod tests {
     #[tokio::test]
     async fn preferred_connection_wins_over_hint() {
         let m = super::RemoteWorkspaceStateManager::new();
-        m.register_remote_workspace("/".to_string(), "c1".to_string(), "A".to_string())
+        m.register_remote_workspace("/".to_string(), "c1".to_string(), "A".to_string(), "h1".to_string())
             .await;
-        m.register_remote_workspace("/".to_string(), "c2".to_string(), "B".to_string())
+        m.register_remote_workspace("/".to_string(), "c2".to_string(), "B".to_string(), "h1".to_string())
             .await;
         m.set_active_connection_hint(Some("c1".to_string())).await;
         let x = m.lookup_connection("/x", Some("c2")).await.unwrap();
@@ -456,5 +669,39 @@ mod tests {
             normalize_remote_workspace_path("/home/user/repo/"),
             "/home/user/repo"
         );
+    }
+
+    #[test]
+    fn local_stable_id_is_deterministic_and_prefixed() {
+        let id1 = super::local_workspace_stable_storage_id("/Users/foo/BitFun");
+        let id2 = super::local_workspace_stable_storage_id("/Users/foo/BitFun");
+        assert_eq!(id1, id2);
+        assert!(id1.starts_with("local_"));
+        assert_eq!(id1.len(), 6 + 32);
+    }
+
+    #[test]
+    fn workspace_logical_key_joins_host_and_path() {
+        assert_eq!(
+            super::workspace_logical_key("localhost", "/Users/p/w"),
+            "localhost:/Users/p/w"
+        );
+    }
+
+    #[test]
+    fn remote_stable_id_unchanged_shape() {
+        let id = super::remote_workspace_stable_id("myhost", "/root/proj");
+        assert!(id.starts_with("remote_"));
+        assert_eq!(id.len(), 7 + 32);
+    }
+
+    #[test]
+    fn unresolved_session_dir_is_stable_and_under_remote_ssh_mirror() {
+        let a = super::unresolved_remote_session_storage_dir("conn-1", "/home/u/p");
+        let b = super::unresolved_remote_session_storage_dir("conn-1", "/home/u/p");
+        assert_eq!(a, b);
+        let name = a.file_name().and_then(|n| n.to_str()).unwrap();
+        assert_eq!(name, "sessions");
+        assert!(a.to_string_lossy().contains("_unresolved"));
     }
 }

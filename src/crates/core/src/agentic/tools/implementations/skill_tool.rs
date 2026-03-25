@@ -187,6 +187,7 @@ impl Tool for SkillTool {
                 "success": true
             }),
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         };
 
         Ok(vec![result])

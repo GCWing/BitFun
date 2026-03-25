@@ -289,11 +289,58 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     createTerminalTab(terminalSessionId, terminalName);
   }, [terminalSessionId]);
 
-  const output = toolResult?.result?.output || '';
-  const exitCode = toolResult?.result?.exit_code ?? 0;
-  const workingDir = toolResult?.result?.working_directory || '';
-  const executionTimeMs = toolResult?.result?.execution_time_ms;
-  const wasInterrupted = toolResult?.result?.interrupted || false;
+  const {
+    output,
+    exitCode,
+    workingDir,
+    executionTimeMs,
+    wasInterrupted,
+  } = useMemo(() => {
+    const raw = toolResult?.result;
+    let rec: Record<string, unknown> | null = null;
+    if (raw != null && typeof raw === 'string') {
+      try {
+        rec = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        rec = null;
+      }
+    } else if (raw != null && typeof raw === 'object') {
+      rec = raw as Record<string, unknown>;
+    }
+
+    if (!rec) {
+      return {
+        output: '',
+        exitCode: 0,
+        workingDir: '',
+        executionTimeMs: undefined as number | undefined,
+        wasInterrupted: false,
+      };
+    }
+
+    const stdout = typeof rec.stdout === 'string' ? rec.stdout : '';
+    const stderr = typeof rec.stderr === 'string' ? rec.stderr : '';
+    const combinedOut = [stdout, stderr].filter((s) => s.length > 0).join('\n');
+    const outputField = typeof rec.output === 'string' ? rec.output : '';
+    const output = outputField || combinedOut;
+
+    const exitRaw = rec.exit_code;
+    const exitCode = typeof exitRaw === 'number' ? exitRaw : 0;
+
+    const workingDir =
+      typeof rec.working_directory === 'string' ? rec.working_directory : '';
+
+    const execInResult =
+      typeof rec.execution_time_ms === 'number' ? rec.execution_time_ms : undefined;
+    const durationInResult =
+      typeof rec.duration_ms === 'number' ? rec.duration_ms : undefined;
+    const executionTimeMs =
+      execInResult ?? durationInResult ?? toolResult?.duration_ms;
+
+    const wasInterrupted = Boolean(rec.interrupted);
+
+    return { output, exitCode, workingDir, executionTimeMs, wasInterrupted };
+  }, [toolResult?.result, toolResult?.duration_ms]);
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
   const isFailed = status === 'error';

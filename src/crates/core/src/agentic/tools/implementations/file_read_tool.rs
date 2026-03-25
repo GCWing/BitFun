@@ -285,6 +285,7 @@ Usage:
                 "matched_rules_count": file_rules.matched_count
             }),
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         };
 
         Ok(vec![result])

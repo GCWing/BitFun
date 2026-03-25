@@ -1,6 +1,6 @@
 use super::prompt_markup::is_system_reminder_only;
 use crate::agentic::image_analysis::ImageContextData;
-use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall};
+use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall, ToolImageAttachment};
 use crate::util::TokenCounter;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,8 @@ pub enum MessageContent {
         result: serde_json::Value,
         result_for_assistant: Option<String>,
         is_error: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image_attachments: Option<Vec<ToolImageAttachment>>,
     },
     Mixed {
         /// Reasoning content (for interleaved thinking mode)
@@ -67,6 +69,11 @@ pub struct MessageMetadata {
 pub enum MessageSemanticKind {
     ActualUserInput,
     InternalReminder,
+    /// Shown in chat after Computer use; omitted from model API requests (see `build_ai_messages_for_send`).
+    ComputerUseVerificationScreenshot,
+    /// Full-screen snapshot appended after mutating ComputerUse tool results within the same turn;
+    /// **included** in the next model request so the agent sees the desktop without calling screenshot again.
+    ComputerUsePostActionSnapshot,
 }
 
 impl From<Message> for AIMessage {
@@ -105,6 +112,7 @@ impl From<Message> for AIMessage {
                     tool_calls: None,
                     tool_call_id: None,
                     name: None,
+                    tool_image_attachments: None,
                 }
             }
             MessageContent::Multimodal { text, images } => {
@@ -137,6 +145,7 @@ impl From<Message> for AIMessage {
                     tool_calls: None,
                     tool_call_id: None,
                     name: None,
+                    tool_image_attachments: None,
                 }
             }
             MessageContent::Mixed {
@@ -192,6 +201,7 @@ impl From<Message> for AIMessage {
                     tool_calls: converted_tool_calls,
                     tool_call_id: None,
                     name: None,
+                    tool_image_attachments: None,
                 }
             }
             MessageContent::ToolResult {
@@ -199,6 +209,7 @@ impl From<Message> for AIMessage {
                 tool_name,
                 result,
                 result_for_assistant,
+                image_attachments,
                 ..
             } => {
                 // Tool messages must include tool_call_id
@@ -226,6 +237,7 @@ impl From<Message> for AIMessage {
                     tool_calls: None,
                     tool_call_id: Some(tool_id),
                     name: Some(tool_name),
+                    tool_image_attachments: image_attachments.clone(),
                 }
             }
         }
@@ -323,6 +335,7 @@ impl Message {
                 result: result.result.clone(),
                 result_for_assistant: result.result_for_assistant.clone(),
                 is_error: result.is_error,
+                image_attachments: result.image_attachments.clone(),
             },
             timestamp: SystemTime::now(),
             metadata: MessageMetadata::default(),
@@ -437,6 +450,7 @@ impl Message {
                 tool_name,
                 result,
                 result_for_assistant,
+                image_attachments,
                 ..
             } => {
                 if let Some(text) = result_for_assistant.as_ref().filter(|s| !s.is_empty()) {
@@ -445,6 +459,11 @@ impl Message {
                     total += TokenCounter::estimate_tokens(&json_str);
                 } else {
                     total += TokenCounter::estimate_tokens(tool_name);
+                }
+                if let Some(imgs) = image_attachments {
+                    for _ in imgs {
+                        total += Self::estimate_image_tokens(None);
+                    }
                 }
             }
         }
@@ -468,10 +487,16 @@ impl ToString for MessageContent {
                 result,
                 result_for_assistant,
                 is_error,
+                image_attachments,
             } => {
                 format!(
-                    "ToolResult: tool_id={}, tool_name={}, result={}, result_for_assistant={:?}, is_error={}",
-                    tool_id, tool_name, result, result_for_assistant, is_error
+                    "ToolResult: tool_id={}, tool_name={}, result={}, result_for_assistant={:?}, is_error={}, images={}",
+                    tool_id,
+                    tool_name,
+                    result,
+                    result_for_assistant,
+                    is_error,
+                    image_attachments.as_ref().map(|v| v.len()).unwrap_or(0)
                 )
             }
             MessageContent::Mixed {
@@ -523,6 +548,8 @@ pub struct ToolResult {
     pub result_for_assistant: Option<String>,
     pub is_error: bool,
     pub duration_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_attachments: Option<Vec<ToolImageAttachment>>,
 }
 
 impl From<ToolCall> for AIToolCall {

@@ -496,6 +496,7 @@ fn rebuild_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
                         result_for_assistant: None,
                         is_error: !result_data.success,
                         duration_ms: result_data.duration_ms,
+                        image_attachments: None,
                     });
                     msg.timestamp = round_ts;
                     messages.push(msg);

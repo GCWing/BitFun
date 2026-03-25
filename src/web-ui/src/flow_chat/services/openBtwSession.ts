@@ -86,7 +86,7 @@ export async function openMainSession(
   sessionId: string,
   options?: {
     workspaceId?: string;
-    activateWorkspace?: (workspaceId: string) => Promise<void> | void;
+    activateWorkspace?: (workspaceId: string) => void | Promise<unknown>;
   }
 ): Promise<void> {
   useSceneStore.getState().openScene('session');

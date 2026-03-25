@@ -40,7 +40,14 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
-  const { currentWorkspace, hasWorkspace, openWorkspace, recentWorkspaces, loading } = useWorkspaceContext();
+  const {
+    currentWorkspace,
+    hasWorkspace,
+    openWorkspace,
+    switchWorkspace,
+    recentWorkspaces,
+    loading,
+  } = useWorkspaceContext();
   const sshContext = useContext(SSHContext);
   /** When SSH finishes connecting, re-run FlowChat init (first run may have skipped while disconnected). */
   const remoteSshFlowChatKey =
@@ -68,13 +75,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     if (autoOpenAttemptedRef.current || loading) return;
     if (!hasWorkspace && recentWorkspaces.length > 0) {
       autoOpenAttemptedRef.current = true;
-      openWorkspace(recentWorkspaces[0].rootPath).catch(err => {
+      switchWorkspace(recentWorkspaces[0]).catch(err => {
         log.warn('Auto-open recent workspace failed', err);
       });
     } else {
       autoOpenAttemptedRef.current = true;
     }
-  }, [hasWorkspace, loading, recentWorkspaces, openWorkspace]);
+  }, [hasWorkspace, loading, recentWorkspaces, switchWorkspace]);
 
   // Dialog state (previously in TitleBar)
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
@@ -153,22 +160,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     const initializeFlowChat = async () => {
       if (!currentWorkspace?.rootPath) return;
 
-      // Skip initialization for remote workspaces that are not yet SSH-connected.
-      // On startup, password-auth remote workspaces cannot auto-reconnect and will
-      // be removed from the sidebar shortly by SSHRemoteProvider. Attempting to
-      // initialize FlowChat for them would fail with a misleading error notification.
-      if (currentWorkspace.workspaceKind === WorkspaceKind.Remote && currentWorkspace.connectionId) {
-        const { sshApi } = await import('@/features/ssh-remote/sshApi');
-        const connected = await sshApi.isConnected(currentWorkspace.connectionId).catch(() => false);
-        if (!connected) {
-          log.warn('Skipping FlowChat initialization: remote workspace not connected', {
-            rootPath: currentWorkspace.rootPath,
-            connectionId: currentWorkspace.connectionId,
-          });
-          return;
-        }
-      }
-
+      // Remote session index and turns live under ~/.bitfun/remote_ssh/... (local disk).
+      // Always initialize FlowChat so historical sessions list even when SSH is not connected yet.
       try {
         const explicitPreferredMode =
           sessionStorage.getItem('bitfun:flowchat:preferredMode') ||
@@ -188,6 +181,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           initializationPreferredMode,
           currentWorkspace.workspaceKind === WorkspaceKind.Remote
             ? currentWorkspace.connectionId
+            : undefined,
+          currentWorkspace.workspaceKind === WorkspaceKind.Remote
+            ? currentWorkspace.sshHost
             : undefined
         );
 
@@ -260,6 +256,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     currentWorkspace?.rootPath,
     currentWorkspace?.workspaceKind,
     currentWorkspace?.connectionId,
+    currentWorkspace?.sshHost,
     remoteSshFlowChatKey,
     ensureAssistantBootstrapForWorkspace,
     t,

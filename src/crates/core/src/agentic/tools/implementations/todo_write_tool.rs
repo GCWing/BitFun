@@ -322,6 +322,7 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
         Ok(vec![ToolResult::Result {
             data: result,
             result_for_assistant: Some(summary),
+            image_attachments: None,
         }])
     }
 }

@@ -38,6 +38,7 @@ import {
   flowChatSessionConfigForWorkspace,
   pickWorkspaceForProjectChatSession,
 } from '@/app/utils/projectSessionWorkspace';
+import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser } from '@/features/ssh-remote';
 import { useSessionModeStore } from '../../stores/sessionModeStore';
 import NavSearchDialog from './NavSearchDialog';
@@ -143,7 +144,15 @@ const MainNav: React.FC<MainNavProps> = ({
 
   useEffect(() => {
     openedWorkspacesList.forEach(workspace => {
-      void flowChatStore.initializeFromDisk(workspace.rootPath);
+      if (workspace.workspaceKind === WorkspaceKind.Remote) {
+        void flowChatStore.initializeFromDisk(
+          workspace.rootPath,
+          workspace.connectionId ?? undefined,
+          workspace.sshHost ?? undefined
+        );
+      } else {
+        void flowChatStore.initializeFromDisk(workspace.rootPath);
+      }
     });
   }, [openedWorkspacesList]);
 
@@ -349,20 +358,33 @@ const MainNav: React.FC<MainNavProps> = ({
         </div>
       ) : (
         <div className="bitfun-nav-panel__workspace-menu-workspaces">
-          {recentWorkspaces.map((workspace) => (
+          {recentWorkspaces.map((workspace) => {
+            const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
+            return (
             <button
               key={workspace.id}
               type="button"
               className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
               role="menuitem"
-              title={workspace.rootPath}
+              title={tooltip}
               onClick={() => { void handleSwitchWorkspace(workspace.id); }}
             >
               <FolderOpen size={13} aria-hidden="true" />
-              <span className="bitfun-nav-panel__workspace-menu-item-main">{workspace.name}</span>
+              <span className="bitfun-nav-panel__workspace-menu-item-main">
+                {hostPrefix ? (
+                  <>
+                    <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
+                    <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
+                      ·
+                    </span>
+                  </>
+                ) : null}
+                <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
+              </span>
               {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>,

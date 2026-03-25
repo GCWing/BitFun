@@ -520,8 +520,15 @@ impl PersistenceManager {
                     }
                 }
             }
-            MessageContent::ToolResult { result, .. } => {
+            MessageContent::ToolResult {
+                result,
+                image_attachments,
+                ..
+            } => {
                 Self::redact_data_url_in_json(result);
+                if image_attachments.is_some() {
+                    *image_attachments = None;
+                }
             }
             _ => {}
         }

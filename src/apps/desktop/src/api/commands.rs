@@ -27,10 +27,17 @@ fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::Remote
     let rp = bitfun_core::service::remote_ssh::normalize_remote_workspace_path(
         &info.root_path.to_string_lossy(),
     );
+    let ssh_host = info
+        .metadata
+        .get("sshHost")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     Some(crate::api::RemoteWorkspace {
         connection_id: cid,
         remote_path: rp,
         connection_name: name,
+        ssh_host,
     })
 }
 
@@ -57,6 +64,9 @@ pub struct OpenRemoteWorkspaceRequest {
     pub remote_path: String,
     pub connection_id: String,
     pub connection_name: String,
+    /// SSH config `host` (DNS or alias). When set, used for session mirror paths even if not connected.
+    #[serde(default)]
+    pub ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -737,9 +747,44 @@ pub async fn open_remote_workspace(
     request: OpenRemoteWorkspaceRequest,
 ) -> Result<WorkspaceInfoDto, String> {
     use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
+    use bitfun_core::service::remote_ssh::workspace_state::remote_workspace_stable_id;
     use bitfun_core::service::workspace::WorkspaceCreateOptions;
 
     let remote_path = normalize_remote_workspace_path(&request.remote_path);
+
+    let mut ssh_host = request
+        .ssh_host
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    if ssh_host.is_none() {
+        if let Ok(mgr) = state.get_ssh_manager_async().await {
+            ssh_host = mgr
+                .get_saved_host_for_connection_id(&request.connection_id)
+                .await;
+        }
+    }
+    if ssh_host.is_none() {
+        if let Ok(mgr) = state.get_ssh_manager_async().await {
+            ssh_host = mgr
+                .get_connection_config(&request.connection_id)
+                .await
+                .map(|c| c.host)
+                .map(|h| h.trim().to_string())
+                .filter(|s| !s.is_empty());
+        }
+    }
+    let ssh_host = ssh_host.unwrap_or_else(|| {
+        warn!(
+            "open_remote_workspace: no ssh host from request, saved profile, or active connection; using connection_name (may not match session mirror): connection_id={}",
+            request.connection_id
+        );
+        request.connection_name.clone()
+    });
+
+    let stable_workspace_id = remote_workspace_stable_id(&ssh_host, &remote_path);
 
     let display_name = remote_path
         .split('/')
@@ -761,6 +806,8 @@ pub async fn open_remote_workspace(
         description: None,
         tags: Vec::new(),
         remote_connection_id: Some(request.connection_id.clone()),
+        remote_ssh_host: Some(ssh_host.clone()),
+        stable_workspace_id: Some(stable_workspace_id),
     };
 
     match state
@@ -776,6 +823,10 @@ pub async fn open_remote_workspace(
             workspace_info.metadata.insert(
                 "connectionName".to_string(),
                 serde_json::Value::String(request.connection_name.clone()),
+            );
+            workspace_info.metadata.insert(
+                "sshHost".to_string(),
+                serde_json::Value::String(ssh_host.clone()),
             );
 
             {
@@ -795,6 +846,7 @@ pub async fn open_remote_workspace(
                 connection_id: request.connection_id.clone(),
                 connection_name: request.connection_name.clone(),
                 remote_path: remote_path.clone(),
+                ssh_host: ssh_host.clone(),
             };
             if let Err(e) = state.set_remote_workspace(remote_workspace).await {
                 warn!("Failed to set remote workspace state: {}", e);
@@ -1268,6 +1320,8 @@ pub async fn scan_workspace_info(
             assistant_id: None,
             display_name: None,
             remote_connection_id: None,
+            remote_ssh_host: None,
+            stable_workspace_id: None,
         },
     )
     .await

@@ -24,7 +24,10 @@ import {
   selectActiveBtwSessionTab,
 } from '@/flow_chat/services/openBtwSession';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
-import { compareSessionsForDisplay } from '@/flow_chat/utils/sessionOrdering';
+import {
+  compareSessionsForDisplay,
+  sessionBelongsToWorkspaceNavRow,
+} from '@/flow_chat/utils/sessionOrdering';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import './SessionsSection.scss';
@@ -52,6 +55,8 @@ interface SessionsSectionProps {
   workspacePath?: string;
   /** Remote SSH: same `workspacePath` on different hosts must filter by this (see Session.remoteConnectionId). */
   remoteConnectionId?: string | null;
+  /** Remote SSH: disambiguates same path on different hosts; when set with matching session host, connectionId may differ. */
+  remoteSshHost?: string | null;
   isActiveWorkspace?: boolean;
   showCreateActions?: boolean;
   /** When set (e.g. assistant workspace), session row tooltip includes this assistant name. */
@@ -64,6 +69,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspaceId,
   workspacePath,
   remoteConnectionId = null,
+  remoteSshHost = null,
   isActiveWorkspace = true,
   assistantLabel,
   showSessionModeIcon = true,
@@ -121,7 +127,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   useEffect(() => {
     setExpandLevel(0);
-  }, [workspaceId, workspacePath, remoteConnectionId]);
+  }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
 
   useEffect(() => {
     if (!openMenuSessionId) return;
@@ -140,18 +146,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       Array.from(flowChatState.sessions.values())
         .filter((s: Session) => {
           if (workspacePath) {
-            if (s.workspacePath !== workspacePath) return false;
-            const wsConn = remoteConnectionId?.trim() ?? '';
-            const sessConn = s.remoteConnectionId?.trim() ?? '';
-            if (wsConn.length > 0 || sessConn.length > 0) {
-              return sessConn === wsConn;
-            }
-            return true;
+            return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
           }
           return !s.workspacePath;
         })
         .sort(compareSessionsForDisplay),
-    [flowChatState.sessions, workspacePath, remoteConnectionId]
+    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
   );
 
   const { topLevelSessions, childrenByParent } = useMemo(() => {

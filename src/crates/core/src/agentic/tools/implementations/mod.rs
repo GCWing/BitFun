@@ -3,6 +3,7 @@
 pub mod ask_user_question_tool;
 pub mod bash_tool;
 pub mod code_review_tool;
+pub mod computer_use_tool;
 pub mod cron_tool;
 pub mod create_plan_tool;
 pub mod delete_file_tool;
@@ -31,6 +32,7 @@ pub mod web_tools;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
 pub use code_review_tool::CodeReviewTool;
+pub use computer_use_tool::ComputerUseTool;
 pub use cron_tool::CronTool;
 pub use create_plan_tool::CreatePlanTool;
 pub use delete_file_tool::DeleteFileTool;

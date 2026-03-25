@@ -578,8 +578,9 @@ Mermaid Syntax:
                 result_for_assistant: Some(format!(
                     "Mermaid code validation failed: {}. Please fix syntax errors and regenerate Mermaid code. Only validated code will display the diagram card.",
                     error_message
-                ))
-            }]);
+                )),
+            image_attachments: None,
+        }]);
         }
 
         let title = input
@@ -690,7 +691,8 @@ Mermaid Syntax:
             result_for_assistant: Some(format!(
                 "Interactive Mermaid diagram '{}' created with {} nodes ({} clickable). The diagram is now visible in the right panel. Users can click nodes to navigate to code locations and hover for detailed tooltips.",
                 title, node_count, interactive_nodes
-            ))
+            )),
+            image_attachments: None,
         }])
     }
 }

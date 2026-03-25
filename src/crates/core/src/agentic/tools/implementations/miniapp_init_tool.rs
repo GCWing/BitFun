@@ -202,6 +202,7 @@ Returns app_id and the app root directory. Use the root directory and file names
                 "files": files,
             }),
             result_for_assistant: Some(result_text),
+            image_attachments: None,
         }])
     }
 }

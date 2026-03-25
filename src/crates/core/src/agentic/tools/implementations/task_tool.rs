@@ -371,6 +371,7 @@ impl Tool for TaskTool {
                 "Subagent '{}' completed successfully with result:\n<result>\n{}\n</result>",
                 subagent_type, result.text
             )),
+            image_attachments: None,
         }])
     }
 }
