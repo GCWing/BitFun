@@ -355,7 +355,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       cursorBlink: mergedOptions.cursorBlink,
       scrollback: mergedOptions.scrollback,
       theme: mergedOptions.theme,
-      allowTransparency: true,
+      // Keep the interactive terminal on the opaque WebGL path. Transparent
+      // glyph atlases use a different blending/clearing strategy and are much
+      // more prone to artifacts on colored cell backgrounds.
+      allowTransparency: false,
       // TUI apps usually handle line wrapping.
       convertEol: false,
     });

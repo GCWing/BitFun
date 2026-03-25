@@ -24,6 +24,12 @@
         overflow-y: auto;
       }
 
+      &:not(.allow-transparency) {
+        .xterm-viewport {
+          background-color: var(--color-bg-scene);
+        }
+      }
+
       .xterm-screen {
         width: 100%;
         height: 100%;
