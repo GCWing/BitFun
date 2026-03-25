@@ -131,6 +131,11 @@ impl EventQueue {
         batch
     }
 
+    /// Dequeue a batch using the queue's configured batch size.
+    pub async fn dequeue_configured_batch(&self) -> Vec<EventEnvelope> {
+        self.dequeue_batch(self.config.batch_size).await
+    }
+
     /// Clear all events for a session
     pub async fn clear_session(&self, session_id: &str) -> BitFunResult<()> {
         // Remove all events for this session from the queue

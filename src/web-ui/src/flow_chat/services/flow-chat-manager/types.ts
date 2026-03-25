@@ -14,6 +14,11 @@ export interface FlowChatContext {
   flowChatStore: FlowChatStore;
   processingManager: typeof processingStatusManager;
   eventBatcher: EventBatcher;
+  pendingTurnCompletions: Map<string, {
+    turnId: string;
+    lastActivityAt: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>;
   /** Content buffers: sessionId -> (roundId -> content) */
   contentBuffers: Map<string, Map<string, string>>;
   /** Active text items: sessionId -> (roundId -> textItemId) */

@@ -1,5 +1,5 @@
 /**
- * Derived state computation (three-state design)
+ * Derived state computation
  * Computes derived state for UI components based on state machine state
  * 
  * Design principles:
@@ -27,6 +27,7 @@ export function deriveSessionState(
   const { processingPhase } = context;
   const draftTrimmed =
     currentState === SessionExecutionState.PROCESSING ||
+    currentState === SessionExecutionState.FINISHING ||
     currentState === SessionExecutionState.ERROR
       ? options?.processingInputDraftTrimmed?.trim() ?? ''
       : '';
@@ -43,15 +44,18 @@ export function deriveSessionState(
     ? (plannerStats.completed / context.planner!.todos.length) * 100
     : 0;
 
-  const isProcessing = currentState === SessionExecutionState.PROCESSING;
+  const isProcessing =
+    currentState === SessionExecutionState.PROCESSING ||
+    currentState === SessionExecutionState.FINISHING;
   const isError = currentState === SessionExecutionState.ERROR;
   const isIdle = currentState === SessionExecutionState.IDLE;
+  const canCancel = currentState === SessionExecutionState.PROCESSING;
   
   return {
     isInputDisabled: false,
     
     showSendButton: !isProcessing,
-    showCancelButton: isProcessing,
+    showCancelButton: canCancel,
     
     sendButtonMode: getSendButtonMode(
       currentState,
@@ -82,12 +86,13 @@ export function deriveSessionState(
     progressBarColor: getProgressBarColor(processingPhase),
     
     isProcessing,
-    canCancel: isProcessing,
+    canCancel,
     canSendNewMessage: isIdle || isError,
     
     hasQueuedInput:
       (context.queuedInput?.trim()?.length ?? 0) > 0 ||
       ((currentState === SessionExecutionState.PROCESSING ||
+        currentState === SessionExecutionState.FINISHING ||
         currentState === SessionExecutionState.ERROR) &&
         draftTrimmed.length > 0),
     
@@ -109,9 +114,12 @@ function getSendButtonMode(
     return hasQueued ? 'split' : 'retry';
   }
 
-  if (state === SessionExecutionState.PROCESSING) {
+  if (state === SessionExecutionState.PROCESSING || state === SessionExecutionState.FINISHING) {
     if (phase === ProcessingPhase.TOOL_CONFIRMING || hasPendingConfirmations) {
       return 'confirm';
+    }
+    if (state === SessionExecutionState.FINISHING) {
+      return 'send';
     }
     const hasFollowUpDraft =
       (queuedInput?.trim()?.length ?? 0) > 0 || processingDraftTrimmed.length > 0;
@@ -128,6 +136,9 @@ function getProgressBarMode(phase: ProcessingPhase | null): SessionDerivedState[
     
     case ProcessingPhase.STREAMING:
       return 'determinate';
+
+    case ProcessingPhase.FINALIZING:
+      return 'indeterminate';
     
     default:
       return 'indeterminate';
@@ -177,6 +188,9 @@ function getProgressBarLabel(
         ? ((Date.now() - context.stats.startTime) / 1000).toFixed(1)
         : '0';
       return `Generating response (${chars} chars) · ${duration}s`;
+
+    case ProcessingPhase.FINALIZING:
+      return 'Finalizing response...';
     
     case ProcessingPhase.TOOL_CALLING:
       const toolsExecuted = context.stats.toolsExecuted;

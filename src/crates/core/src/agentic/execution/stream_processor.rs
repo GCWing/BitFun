@@ -491,7 +491,7 @@ impl StreamProcessor {
                                 },
                                 subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                             },
-                            Some(EventPriority::Normal),
+                            None,
                         )
                         .await;
                 } else if ctx.tool_call_buffer.tool_name.is_empty() {
@@ -522,7 +522,7 @@ impl StreamProcessor {
                             },
                             subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                         },
-                        Some(EventPriority::Normal),
+                        None,
                     )
                     .await;
             }
@@ -557,7 +557,7 @@ impl StreamProcessor {
                     text,
                     subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                 },
-                Some(EventPriority::Normal),
+                None,
             )
             .await;
     }
@@ -582,7 +582,7 @@ impl StreamProcessor {
                     is_end: false,
                     subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                 },
-                Some(EventPriority::Normal),
+                None,
             )
             .await;
     }

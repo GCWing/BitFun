@@ -887,9 +887,12 @@ fn start_event_loop_with_transport(
     tokio::spawn(async move {
         loop {
             event_queue.wait_for_events().await;
-            let batch = event_queue.dequeue_batch(10).await;
+            loop {
+                let batch = event_queue.dequeue_configured_batch().await;
+                if batch.is_empty() {
+                    break;
+                }
 
-            if !batch.is_empty() {
                 for envelope in batch {
                     // Route to internal subscribers (e.g. RemoteSessionStateTracker)
                     // sequentially so that text chunks are appended in order.

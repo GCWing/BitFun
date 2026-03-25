@@ -5,6 +5,7 @@
 import {
   SessionExecutionState,
   SessionExecutionEvent,
+  ProcessingPhase,
   SessionStateMachine,
   SessionStateMachineContext,
   StateTransition,
@@ -146,9 +147,15 @@ export class SessionStateMachineImpl {
   }
 
   private updateContext(event: SessionExecutionEvent, payload?: any) {
-    if (this.currentState === SessionExecutionState.PROCESSING) {
+    if (
+      this.currentState === SessionExecutionState.PROCESSING ||
+      this.currentState === SessionExecutionState.FINISHING
+    ) {
       const newPhase = PHASE_TRANSITIONS[event];
-      if (newPhase !== null && newPhase !== undefined) {
+      const shouldUpdatePhase =
+        this.currentState === SessionExecutionState.PROCESSING ||
+        event === SessionExecutionEvent.BACKEND_STREAM_COMPLETED;
+      if (shouldUpdatePhase && newPhase !== null && newPhase !== undefined) {
         this.context.processingPhase = newPhase;
       }
     } else {
@@ -202,8 +209,12 @@ export class SessionStateMachineImpl {
         this.context.errorRecovery.recoverable = payload?.recoverable !== false;
         break;
 
+      case SessionExecutionEvent.BACKEND_STREAM_COMPLETED:
+        this.context.processingPhase = ProcessingPhase.FINALIZING;
+        break;
+
       case SessionExecutionEvent.USER_CANCEL:
-      case SessionExecutionEvent.STREAM_COMPLETE:
+      case SessionExecutionEvent.FINISHING_SETTLED:
       case SessionExecutionEvent.RESET:
         if (this.currentState === SessionExecutionState.IDLE) {
           const queuedInput = this.context.queuedInput;

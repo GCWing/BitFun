@@ -4,11 +4,12 @@
  */
 
 /**
- * Session execution state (minimal three-state design)
+ * Session execution state.
  * 
  * Design philosophy:
  * - IDLE: idle, waiting for user input
  * - PROCESSING: running (dialog turn executing, including model thinking, output, tool execution, etc.)
+ * - FINISHING: backend has reported completion, but the UI is still draining late data events
  * - ERROR: error state
  * 
  * Cancellation logic:
@@ -22,6 +23,7 @@
 export enum SessionExecutionState {
   IDLE = 'idle',
   PROCESSING = 'processing',
+  FINISHING = 'finishing',
   ERROR = 'error',
 }
 
@@ -33,6 +35,7 @@ export enum ProcessingPhase {
   STARTING = 'starting',
   THINKING = 'thinking',
   STREAMING = 'streaming',
+  FINALIZING = 'finalizing',
   TOOL_CALLING = 'tool_calling',
   TOOL_CONFIRMING = 'tool_confirming',
 }
@@ -50,7 +53,8 @@ export enum SessionExecutionEvent {
   TOOL_CONFIRMATION_NEEDED = 'tool_confirmation_needed',
   TOOL_CONFIRMED = 'tool_confirmed',
   TOOL_REJECTED = 'tool_rejected',
-  STREAM_COMPLETE = 'stream_complete',
+  BACKEND_STREAM_COMPLETED = 'backend_stream_completed',
+  FINISHING_SETTLED = 'finishing_settled',
   USER_CANCEL = 'user_cancel',
   ERROR_OCCURRED = 'error_occurred',
   RESET = 'reset',

@@ -70,7 +70,10 @@ export const FloatingMiniChat: React.FC = () => {
     }
 
     const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
-    const isStreaming = lastTurn.status === 'processing' || lastTurn.status === 'image_analyzing';
+    const isStreaming =
+      lastTurn.status === 'processing' ||
+      lastTurn.status === 'finishing' ||
+      lastTurn.status === 'image_analyzing';
     return { isStreaming };
   }, [flowChatState]);
 

@@ -339,21 +339,46 @@ impl AgenticEvent {
 
             Self::SessionStateChanged { .. }
             | Self::SessionTitleGenerated { .. }
-            | Self::DialogTurnCompleted { .. }
             | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
 
             Self::ImageAnalysisStarted { .. }
             | Self::ImageAnalysisCompleted { .. }
             | Self::TextChunk { .. }
             | Self::ThinkingChunk { .. }
-            | Self::ToolEvent { .. }
             | Self::ModelRoundStarted { .. }
             | Self::ModelRoundCompleted { .. }
             | Self::TokenUsageUpdated { .. }
+            | Self::DialogTurnCompleted { .. }
             | Self::ContextCompressionStarted { .. }
             | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
 
+            Self::ToolEvent { tool_event, .. } => tool_event.default_priority(),
+
             _ => AgenticEventPriority::Low,
+        }
+    }
+}
+
+impl ToolEventData {
+    /// Get the default priority for a specific tool event variant.
+    pub fn default_priority(&self) -> AgenticEventPriority {
+        match self {
+            Self::Cancelled { .. } => AgenticEventPriority::Critical,
+
+            Self::Started { .. }
+            | Self::Completed { .. }
+            | Self::Failed { .. }
+            | Self::ConfirmationNeeded { .. } => AgenticEventPriority::High,
+
+            Self::EarlyDetected { .. }
+            | Self::ParamsPartial { .. }
+            | Self::Queued { .. }
+            | Self::Waiting { .. }
+            | Self::Progress { .. }
+            | Self::Streaming { .. }
+            | Self::StreamChunk { .. }
+            | Self::Confirmed { .. }
+            | Self::Rejected { .. } => AgenticEventPriority::Normal,
         }
     }
 }

@@ -1447,6 +1447,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     if (
       lastDialogTurn.status === 'processing' ||
+      lastDialogTurn.status === 'finishing' ||
       lastDialogTurn.status === 'image_analyzing'
     ) {
       return true;
@@ -1781,8 +1782,10 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       : undefined;
 
     const content = lastItem && 'content' in lastItem ? (lastItem as any).content : '';
-    const isTurnProcessing = lastDialogTurn?.status === 'processing' ||
-                              lastDialogTurn?.status === 'image_analyzing';
+    const isTurnProcessing =
+      lastDialogTurn?.status === 'processing' ||
+      lastDialogTurn?.status === 'finishing' ||
+      lastDialogTurn?.status === 'image_analyzing';
 
     return { lastItem, lastDialogTurn, content, isTurnProcessing };
   }, [activeSession]);

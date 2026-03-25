@@ -160,6 +160,14 @@ export function cleanupSessionBuffers(context: FlowChatContext, sessionId: strin
   if (batcherSize > 0) {
     context.eventBatcher.clear();
   }
+
+  const pendingCompletion = context.pendingTurnCompletions.get(sessionId);
+  if (pendingCompletion) {
+    if (pendingCompletion.timer) {
+      clearTimeout(pendingCompletion.timer);
+    }
+    context.pendingTurnCompletions.delete(sessionId);
+  }
   
   const contentBuffer = context.contentBuffers.get(sessionId);
   if (contentBuffer) {
@@ -176,6 +184,13 @@ export function cleanupSessionBuffers(context: FlowChatContext, sessionId: strin
  * Clear all buffers and transient state.
  */
 export function clearAllBuffers(context: FlowChatContext): void {
+  for (const pendingCompletion of context.pendingTurnCompletions.values()) {
+    if (pendingCompletion.timer) {
+      clearTimeout(pendingCompletion.timer);
+    }
+  }
+  context.pendingTurnCompletions.clear();
+
   context.contentBuffers.clear();
   context.activeTextItems.clear();
   

@@ -131,7 +131,7 @@ export interface DialogTurn {
   enhancedMessage?: string;
   
   modelRounds: ModelRound[];  // Model rounds in chronological order.
-  status: 'pending' | 'image_analyzing' | 'processing' | 'completed' | 'cancelling' | 'cancelled' | 'error'; // Includes image_analyzing.
+  status: 'pending' | 'image_analyzing' | 'processing' | 'finishing' | 'completed' | 'cancelling' | 'cancelled' | 'error'; // Includes image_analyzing.
   startTime: number;
   endTime?: number;
   error?: string;

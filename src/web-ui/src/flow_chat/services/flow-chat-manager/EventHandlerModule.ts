@@ -49,6 +49,25 @@ import {
 } from './SubagentModule';
 
 const log = createLogger('EventHandlerModule');
+const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
+
+function isStreamingExecutionState(state: SessionExecutionState): boolean {
+  return state === SessionExecutionState.PROCESSING || state === SessionExecutionState.FINISHING;
+}
+
+function logDroppedDataEvent(
+  eventName: string,
+  sessionId: string,
+  turnId: string | null,
+  details: Record<string, unknown>
+): void {
+  log.debug('Dropped agentic data event', {
+    eventName,
+    sessionId,
+    turnId,
+    ...details,
+  });
+}
 
 /**
  * Event filtering mechanism: determines if an event should be processed
@@ -56,10 +75,14 @@ const log = createLogger('EventHandlerModule');
 export function shouldProcessEvent(
   sessionId: string,
   turnId: string | null,
-  eventType: 'data' | 'control' | 'state_sync'
+  eventType: 'data' | 'control' | 'state_sync',
+  eventName = 'unknown'
 ): boolean {
   const machine = stateMachineManager.get(sessionId);
   if (!machine) {
+    if (eventType === 'data') {
+      logDroppedDataEvent(eventName, sessionId, turnId, { reason: 'missing_state_machine' });
+    }
     return false;
   }
 
@@ -77,16 +100,21 @@ export function shouldProcessEvent(
     return false;
   }
 
-  if (currentState !== SessionExecutionState.PROCESSING) {
+  if (!isStreamingExecutionState(currentState)) {
+    logDroppedDataEvent(eventName, sessionId, turnId, {
+      reason: 'state_not_accepting_data',
+      currentState,
+      currentDialogTurnId: context.currentDialogTurnId,
+    });
     return false;
   }
 
   if (turnId && context.currentDialogTurnId !== turnId) {
-    log.debug('Event filtered: turnId mismatch', {
+    logDroppedDataEvent(eventName, sessionId, turnId, {
+      reason: 'turn_id_mismatch',
       sessionId,
-      eventTurnId: turnId,
-      currentTurnId: context.currentDialogTurnId,
-      currentState
+      currentState,
+      currentDialogTurnId: context.currentDialogTurnId,
     });
     return false;
   }
@@ -267,6 +295,175 @@ function extractEventRemoteSshHost(event?: Record<string, unknown> | null): stri
   return h?.trim() || undefined;
 }
 
+function clearPendingTurnCompletion(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId?: string
+): void {
+  const pending = context.pendingTurnCompletions.get(sessionId);
+  if (!pending) {
+    return;
+  }
+
+  if (turnId && pending.turnId !== turnId) {
+    return;
+  }
+
+  if (pending.timer) {
+    clearTimeout(pending.timer);
+  }
+
+  context.pendingTurnCompletions.delete(sessionId);
+}
+
+function touchPendingTurnCompletion(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string
+): void {
+  const pending = context.pendingTurnCompletions.get(sessionId);
+  if (!pending || pending.turnId !== turnId) {
+    return;
+  }
+
+  pending.lastActivityAt = Date.now();
+  schedulePendingTurnCompletion(context, sessionId, turnId);
+}
+
+function schedulePendingTurnCompletion(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string
+): void {
+  const pending = context.pendingTurnCompletions.get(sessionId);
+  if (!pending || pending.turnId !== turnId) {
+    return;
+  }
+
+  if (pending.timer) {
+    clearTimeout(pending.timer);
+  }
+
+  pending.timer = setTimeout(() => {
+    finalizePendingTurnCompletion(context, sessionId, turnId);
+  }, TURN_COMPLETION_QUIET_WINDOW_MS);
+}
+
+function beginTurnCompletion(context: FlowChatContext, sessionId: string, turnId: string): void {
+  clearPendingTurnCompletion(context, sessionId);
+
+  context.pendingTurnCompletions.set(sessionId, {
+    turnId,
+    lastActivityAt: Date.now(),
+    timer: null,
+  });
+
+  schedulePendingTurnCompletion(context, sessionId, turnId);
+}
+
+function flushPendingBatchedEvents(context: FlowChatContext): void {
+  if (context.eventBatcher.getBufferSize() > 0) {
+    context.eventBatcher.flushNow();
+  }
+}
+
+function finalizeTurnCompletionState(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string
+): void {
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+
+  if (!session) {
+    clearPendingTurnCompletion(context, sessionId, turnId);
+    return;
+  }
+
+  completeActiveTextItems(context, sessionId, turnId);
+
+  const sessionContentBuffer = context.contentBuffers.get(sessionId);
+  if (sessionContentBuffer) {
+    sessionContentBuffer.clear();
+  }
+
+  context.flowChatStore.markSessionFinished(sessionId);
+
+  context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
+    const updatedModelRounds = turn.modelRounds.map((round) => {
+      if (round.isStreaming) {
+        return {
+          ...round,
+          isStreaming: false,
+          isComplete: true,
+          status: 'completed' as const,
+          endTime: Date.now()
+        };
+      }
+      return round;
+    });
+
+    return {
+      ...turn,
+      modelRounds: updatedModelRounds,
+      status: 'completed' as const,
+      endTime: Date.now()
+    };
+  });
+
+  const currentState = stateMachineManager.getCurrentState(sessionId);
+  if (isStreamingExecutionState(currentState)) {
+    stateMachineManager.transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED);
+  } else {
+    log.debug('Skipping FINISHING_SETTLED transition', { currentState, sessionId, turnId });
+  }
+
+  const dialogTurn = store.getState().sessions.get(sessionId)?.dialogTurns.find(t => t.id === turnId);
+  if (dialogTurn) {
+    appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
+  }
+
+  saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+    log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
+  });
+
+  clearPendingTurnCompletion(context, sessionId, turnId);
+}
+
+function finalizePendingTurnCompletion(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string
+): void {
+  const pending = context.pendingTurnCompletions.get(sessionId);
+  if (!pending || pending.turnId !== turnId) {
+    return;
+  }
+
+  const elapsed = Date.now() - pending.lastActivityAt;
+  if (elapsed < TURN_COMPLETION_QUIET_WINDOW_MS) {
+    schedulePendingTurnCompletion(context, sessionId, turnId);
+    return;
+  }
+
+  flushPendingBatchedEvents(context);
+  finalizeTurnCompletionState(context, sessionId, turnId);
+}
+
+function finalizePendingTurnCompletionNow(context: FlowChatContext, sessionId: string): void {
+  const pending = context.pendingTurnCompletions.get(sessionId);
+  if (!pending) {
+    return;
+  }
+
+  if (pending.timer) {
+    clearTimeout(pending.timer);
+  }
+
+  flushPendingBatchedEvents(context);
+  finalizeTurnCompletionState(context, sessionId, pending.turnId);
+}
+
 /**
  * Handle session title generated event (from AI auto-generation)
  */
@@ -290,6 +487,7 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
 
   log.info('Remote session deleted', { sessionId });
   removedSessionIds.forEach(id => {
+    clearPendingTurnCompletion(context, id);
     pendingImageAnalysisTurns.delete(id);
     stateMachineManager.delete(id);
     context.processingManager.clearSessionStatus(id);
@@ -313,11 +511,14 @@ function handleSessionStateChanged(event: any): void {
   
   const frontendState = mapBackendStateToFrontend(newState);
   const currentFrontendState = machine.getCurrentState();
+  const isExpectedFinishingDrift =
+    currentFrontendState === SessionExecutionState.FINISHING &&
+    frontendState === SessionExecutionState.IDLE;
   
   const context = machine.getContext();
   (context as any).backendSyncedAt = Date.now();
   
-  if (currentFrontendState !== frontendState) {
+  if (currentFrontendState !== frontendState && !isExpectedFinishingDrift) {
     log.warn('Frontend and backend state mismatch', {
       sessionId,
       frontend: currentFrontendState,
@@ -471,6 +672,9 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     return;
   }
 
+  finalizePendingTurnCompletionNow(context, sessionId);
+  clearPendingTurnCompletion(context, sessionId, turnId);
+
   const store = FlowChatStore.getInstance();
 
   // Clean up temp image analysis turn if one exists for this session
@@ -591,7 +795,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
   const targetSessionId = parentSessionId || sessionId;
   const targetTurnId = parentTurnId || turnId;
   
-  if (!shouldProcessEvent(targetSessionId, targetTurnId, 'data')) {
+  if (!shouldProcessEvent(targetSessionId, targetTurnId, 'data', 'TextChunk')) {
     return;
   }
   
@@ -612,8 +816,9 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
   }
 
   if (!subagentParentInfo) {
+    touchPendingTurnCompletion(context, sessionId, turnId);
     const currentState = stateMachineManager.getCurrentState(sessionId);
-    if (currentState === SessionExecutionState.PROCESSING) {
+    if (isStreamingExecutionState(currentState)) {
       stateMachineManager.transition(sessionId, SessionExecutionEvent.TEXT_CHUNK_RECEIVED, {
         content: text,
       }).catch(error => {
@@ -750,8 +955,12 @@ function handleToolEvent(
   const targetSessionId = parentSessionId || sessionId;
   const targetTurnId = parentTurnId || turnId;
   
-  if (!shouldProcessEvent(targetSessionId, targetTurnId, 'data')) {
+  if (!shouldProcessEvent(targetSessionId, targetTurnId, 'data', 'ToolEvent')) {
     return;
+  }
+
+  if (!subagentParentInfo) {
+    touchPendingTurnCompletion(context, sessionId, turnId);
   }
   
   const eventData: ToolEventData = {
@@ -812,7 +1021,7 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     return;
   }
   
-  if (!shouldProcessEvent(sessionId, turnId, 'data')) {
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundStarted')) {
     return;
   }
   
@@ -830,8 +1039,10 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     return;
   }
 
+  touchPendingTurnCompletion(context, sessionId, turnId);
+
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (currentState === SessionExecutionState.PROCESSING) {
+  if (isStreamingExecutionState(currentState)) {
     stateMachineManager.transition(sessionId, SessionExecutionEvent.MODEL_ROUND_START, {
       modelRoundId: roundId,
     }).catch(error => {
@@ -1023,58 +1234,25 @@ function handleDialogTurnComplete(
     return;
   }
 
-  if (context.eventBatcher.getBufferSize() > 0) {
-    context.eventBatcher.flushNow();
-  }
-
-  completeActiveTextItems(context, sessionId, turnId);
-  
-  const sessionContentBuffer = context.contentBuffers.get(sessionId);
-  if (sessionContentBuffer) {
-    sessionContentBuffer.clear();
-  }
-
-  context.flowChatStore.markSessionFinished(sessionId);
-
   context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
-    const updatedModelRounds = turn.modelRounds.map((round) => {
-      if (round.isStreaming) {
-        return {
-          ...round,
-          isStreaming: false,
-          isComplete: true,
-          status: 'completed' as const,
-          endTime: Date.now()
-        };
-      }
-      return round;
-    });
-    
     return {
       ...turn,
-      modelRounds: updatedModelRounds,
-      status: 'completed' as const,
-      endTime: Date.now()
+      status: 'finishing' as const,
     };
   });
 
   const currentState = stateMachineManager.getCurrentState(sessionId);
   if (currentState === SessionExecutionState.PROCESSING) {
-    stateMachineManager.transition(sessionId, SessionExecutionEvent.STREAM_COMPLETE).catch(error => {
-      log.error('State machine transition failed on stream complete', { sessionId, error });
-    });
+    void stateMachineManager
+      .transition(sessionId, SessionExecutionEvent.BACKEND_STREAM_COMPLETED)
+      .catch(error => {
+        log.error('State machine transition failed on backend stream completed', { sessionId, error });
+      });
   } else {
-    log.debug('Skipping STREAM_COMPLETE transition', { currentState, sessionId });
+    log.debug('Skipping BACKEND_STREAM_COMPLETED transition', { currentState, sessionId, turnId });
   }
-  
-  const dialogTurn = session.dialogTurns.find(t => t.id === turnId);
-  if (dialogTurn) {
-    appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
-  }
-  
-  saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
-    log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
-  });
+
+  beginTurnCompletion(context, sessionId, turnId);
 }
 
 /**
@@ -1088,6 +1266,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   }
   
   log.error('Dialog turn failed', { sessionId, turnId, error });
+  clearPendingTurnCompletion(context, sessionId, turnId);
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1154,7 +1333,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   }
   
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (currentState === SessionExecutionState.PROCESSING) {
+  if (isStreamingExecutionState(currentState)) {
     stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
       error: error || 'Execution failed'
     }).catch(err => {
@@ -1186,6 +1365,7 @@ function handleDialogTurnCancelled(
   }
   
   log.info('Dialog turn cancelled', { sessionId, turnId });
+  clearPendingTurnCompletion(context, sessionId, turnId);
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1243,10 +1423,12 @@ function handleDialogTurnCancelled(
   // so the machine is already IDLE.  When cancellation comes from an
   // external source (mobile remote), the machine is still PROCESSING.
   const currentState = stateMachineManager.getCurrentState(sessionId);
-  if (currentState === SessionExecutionState.PROCESSING) {
-    stateMachineManager.transition(sessionId, SessionExecutionEvent.STREAM_COMPLETE).catch(error => {
-      log.error('State machine transition failed on cancelled stream complete', { sessionId, error });
-    });
+  if (isStreamingExecutionState(currentState)) {
+    void stateMachineManager
+      .transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED)
+      .catch(error => {
+        log.error('State machine transition failed on cancelled finishing settled', { sessionId, error });
+      });
   }
 }
 

@@ -99,7 +99,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       const running = new Set<string>();
       for (const session of flowChatState.sessions.values()) {
         const machine = stateMachineManager.get(session.sessionId);
-        if (machine && machine.getCurrentState() === SessionExecutionState.PROCESSING) {
+        if (
+          machine &&
+          (machine.getCurrentState() === SessionExecutionState.PROCESSING ||
+            machine.getCurrentState() === SessionExecutionState.FINISHING)
+        ) {
           running.add(session.sessionId);
         }
       }

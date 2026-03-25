@@ -37,6 +37,7 @@ export function deriveSessionStatus(
     
     case SessionExecutionState.IDLE:
     case SessionExecutionState.PROCESSING:
+    case SessionExecutionState.FINISHING:
     default:
       return 'idle'; // Non-active sessions show as idle.
   }

@@ -54,6 +54,7 @@ export class FlowChatManager {
       eventBatcher: new EventBatcher({
         onFlush: (events) => this.processBatchedEvents(events)
       }),
+      pendingTurnCompletions: new Map(),
       contentBuffers: new Map(),
       activeTextItems: new Map(),
       saveDebouncers: new Map(),
@@ -351,7 +352,11 @@ export class FlowChatManager {
     const session = this.context.flowChatStore.getState().sessions.get(parentSessionId);
     const turn = session?.dialogTurns.find(t => t.id === dialogTurnId);
     if (!turn) return;
-    if (turn.status !== 'processing' && turn.status !== 'image_analyzing') {
+    if (
+      turn.status !== 'processing' &&
+      turn.status !== 'finishing' &&
+      turn.status !== 'image_analyzing'
+    ) {
       // Only inject into an actively streaming turn; otherwise we'd create dangling streaming items.
       return;
     }

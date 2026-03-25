@@ -1104,18 +1104,20 @@ impl ExecutionEngine {
         // Emit dialog turn completed event
         debug!("Preparing to send DialogTurnCompleted event");
 
-        self.emit_event(
-            AgenticEvent::DialogTurnCompleted {
-                session_id: context.session_id.clone(),
-                turn_id: context.dialog_turn_id.clone(),
-                total_rounds: round_index + 1,
-                total_tools,
-                duration_ms,
-                subagent_parent_info: event_subagent_parent_info,
-            },
-            EventPriority::High,
-        )
-        .await;
+        let _ = self
+            .event_queue
+            .enqueue(
+                AgenticEvent::DialogTurnCompleted {
+                    session_id: context.session_id.clone(),
+                    turn_id: context.dialog_turn_id.clone(),
+                    total_rounds: round_index + 1,
+                    total_tools,
+                    duration_ms,
+                    subagent_parent_info: event_subagent_parent_info,
+                },
+                None,
+            )
+            .await;
 
         debug!("DialogTurnCompleted event sent");
 

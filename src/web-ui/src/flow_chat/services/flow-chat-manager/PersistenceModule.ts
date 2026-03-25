@@ -268,6 +268,7 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
       
       if (
         lastTurn.status === 'processing' ||
+        lastTurn.status === 'finishing' ||
         lastTurn.status === 'pending' ||
         lastTurn.status === 'image_analyzing'
       ) {

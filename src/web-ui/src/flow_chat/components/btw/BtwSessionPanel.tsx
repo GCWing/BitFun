@@ -143,7 +143,10 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const lastModelRound = lastDialogTurn?.modelRounds[lastDialogTurn.modelRounds.length - 1];
   const lastItem = lastModelRound?.items[lastModelRound.items.length - 1];
   const lastItemContent = lastItem && 'content' in lastItem ? String((lastItem as any).content || '') : '';
-  const isTurnProcessing = lastDialogTurn?.status === 'processing' || lastDialogTurn?.status === 'image_analyzing';
+  const isTurnProcessing =
+    lastDialogTurn?.status === 'processing' ||
+    lastDialogTurn?.status === 'finishing' ||
+    lastDialogTurn?.status === 'image_analyzing';
   const [isContentGrowing, setIsContentGrowing] = useState(true);
   const lastContentRef = useRef(lastItemContent);
   const contentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

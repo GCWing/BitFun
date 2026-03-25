@@ -118,7 +118,10 @@ export const ToolbarMode: React.FC = () => {
     
     const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
     
-    const isStreaming = lastTurn.status === 'processing' || lastTurn.status === 'image_analyzing';
+    const isStreaming =
+      lastTurn.status === 'processing' ||
+      lastTurn.status === 'finishing' ||
+      lastTurn.status === 'image_analyzing';
     
     if (!isStreaming || !lastTurn.modelRounds || lastTurn.modelRounds.length === 0) {
       return { isStreaming, toolName: null, content: null };
