@@ -68,10 +68,10 @@ impl PromptBuilder {
         let current_date = now.format("%Y-%m-%d").to_string();
 
         let computer_use_keys = match os_name {
-            "macos" => "Computer use / `key_chord`: this host is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). Spotlight: command+space; switch app: command+tab.",
-            "windows" => "Computer use / `key_chord`: this host is **Windows** — use `meta`/`super` for the Windows key, `alt`, `control`, `shift`. Start menu: meta; Alt+Tab for window switch.",
-            "linux" => "Computer use / `key_chord`: this host is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super` depending on the desktop; match the user's session.",
-            _ => "Computer use / `key_chord`: match modifier names to this host's OS (see Operating System above).",
+            "macos" => "Computer use / `key_chord`: this host is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **System clipboard (prefer over long type_text):** command+a (select all), command+c (copy), command+x (cut), command+v (paste). Spotlight: command+space; switch app: command+tab.",
+            "windows" => "Computer use / `key_chord`: this host is **Windows** — use `meta`/`super` for the Windows key, `alt`, `control`, `shift`. **System clipboard:** control+a/c/x/v. Start menu: meta; Alt+Tab for window switch.",
+            "linux" => "Computer use / `key_chord`: this host is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super` depending on the desktop; match the user's session. **System clipboard:** usually control+a/c/x/v (confirm in-app menus if unsure).",
+            _ => "Computer use / `key_chord`: match modifier names to this host's OS (see Operating System above). Prefer standard clipboard chords before retyping long text.",
         };
 
         format!(

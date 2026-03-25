@@ -130,7 +130,7 @@ fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
 const COORD_GRID_DEFAULT_STEP: u32 = 100;
 const COORD_GRID_MAJOR_STEP: u32 = 500;
 /// Logical scale knob; mapped to TTF pixel size for `fontdue` (`scale * 3.5`).
-const COORD_LABEL_SCALE: i32 = 8;
+const COORD_LABEL_SCALE: i32 = 11;
 
 /// Inter (OFL); variable font from google/fonts OFL tree.
 const COORD_AXIS_FONT_TTF: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
@@ -188,7 +188,7 @@ fn coord_blit_glyph(
     }
 }
 
-/// Axis numerals: second raster pass 1px right (synthetic bold; still Inter Regular).
+/// Axis numerals: synthetic bold via small 2×2 offset stack (still Inter Regular source).
 fn coord_blit_glyph_bold(
     img: &mut RgbImage,
     baseline_x: i32,
@@ -199,6 +199,8 @@ fn coord_blit_glyph_bold(
 ) {
     coord_blit_glyph(img, baseline_x, baseline_y, metrics, bitmap, fg);
     coord_blit_glyph(img, baseline_x + 1, baseline_y, metrics, bitmap, fg);
+    coord_blit_glyph(img, baseline_x, baseline_y + 1, metrics, bitmap, fg);
+    coord_blit_glyph(img, baseline_x + 1, baseline_y + 1, metrics, bitmap, fg);
 }
 
 fn coord_measure_str_width(text: &str, px: f32) -> i32 {
@@ -358,7 +360,8 @@ fn compose_computer_use_frame(
     let grid = Rgb([52, 52, 68]);
     let grid_major = Rgb([95, 95, 118]);
     let tick = Rgb([180, 130, 40]);
-    let label = Rgb([28, 28, 36]);
+    // Coordinate numerals in white margins — saturated red for visibility.
+    let label = Rgb([200, 32, 40]);
 
     let cl = ml as i32;
     let ct = mt as i32;
