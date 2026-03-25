@@ -21,6 +21,12 @@ import type {
 } from '../EventBatcher';
 
 const log = createLogger('ToolEventModule');
+const pendingTerminalSessionIds = new Map<string, string>();
+
+interface ToolTerminalReadyEvent {
+  tool_use_id: string;
+  terminal_session_id: string;
+}
 
 /**
  * Unified tool event handler
@@ -122,6 +128,24 @@ function updateToolItem(
   store.updateModelRoundItem(sessionId, turnId, toolId, updates as any);
 }
 
+function applyPendingTerminalSessionId(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolId: string,
+  silent = false
+): void {
+  const terminalSessionId = pendingTerminalSessionIds.get(toolId);
+  if (!terminalSessionId) {
+    return;
+  }
+
+  updateToolItem(store, sessionId, turnId, toolId, {
+    terminalSessionId,
+  }, silent);
+  pendingTerminalSessionIds.delete(toolId);
+}
+
 function isTodoWriteSuccessResult(result: unknown): result is Record<string, unknown> {
   return typeof result === 'object' && result !== null && (result as { success?: unknown }).success === true;
 }
@@ -179,6 +203,7 @@ function applyParamsPartial(
       isParamsStreaming: true,
       _contentSize: hasContentField ? ((parsedParams.content || parsedParams.contents || '').length) : undefined
     }, silent);
+    applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id, silent);
   }
 }
 
@@ -309,11 +334,13 @@ function handleStarted(
       isParamsStreaming: false,
       partialParams: undefined
     } as any);
+    applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id);
   } else {
     const toolItem: FlowToolItem = {
       id: toolEvent.tool_id,
       type: 'tool',
       toolName: toolEvent.tool_name,
+      terminalSessionId: pendingTerminalSessionIds.get(toolEvent.tool_id),
       toolCall: {
         input: toolEvent.params,
         id: toolEvent.tool_id
@@ -331,10 +358,12 @@ function handleStarted(
     
     if (options?.isSubagent && options.parentToolId) {
       store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, toolItem);
+      pendingTerminalSessionIds.delete(toolEvent.tool_id);
     } else {
       const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
       if (lastModelRound) {
         store.addModelRoundItem(sessionId, turnId, toolItem, lastModelRound.id);
+        pendingTerminalSessionIds.delete(toolEvent.tool_id);
       } else {
         log.error('Tool Started event without ModelRound (backend bug)', {
           sessionId,
@@ -502,4 +531,37 @@ export function handleToolExecutionProgress(
   if (!found) {
     log.debug('Tool item not found', { tool_use_id });
   }
+}
+
+export function handleToolTerminalReady(
+  event: ToolTerminalReadyEvent
+): void {
+  const { tool_use_id, terminal_session_id } = event;
+  if (!tool_use_id || !terminal_session_id) {
+    return;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const state = store.getState();
+
+  for (const [sessionId, session] of state.sessions) {
+    for (const dialogTurn of session.dialogTurns) {
+      const toolItem = store.findToolItem(sessionId, dialogTurn.id, tool_use_id);
+      if (!toolItem) {
+        continue;
+      }
+
+      store.updateModelRoundItem(sessionId, dialogTurn.id, tool_use_id, {
+        terminalSessionId: terminal_session_id,
+      } as any);
+      pendingTerminalSessionIds.delete(tool_use_id);
+      return;
+    }
+  }
+
+  pendingTerminalSessionIds.set(tool_use_id, terminal_session_id);
+  log.debug('Cached terminal session for pending tool item', {
+    toolUseId: tool_use_id,
+    terminalSessionId: terminal_session_id,
+  });
 }

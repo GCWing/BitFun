@@ -145,8 +145,11 @@
   flex-shrink: 0;
   margin-left: 4px;
   padding-left: 4px;
-  border-left: 1px solid var(--border-base);
   transition: all 0.2s ease;
+
+  &.tool-card-status-icon--with-divider {
+    border-left: 1px solid var(--border-base);
+  }
 
   svg {
     width: 14px;

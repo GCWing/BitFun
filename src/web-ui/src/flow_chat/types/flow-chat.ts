@@ -35,6 +35,7 @@ export interface FlowThinkingItem extends FlowItem {
 export interface FlowToolItem extends FlowItem {
   type: 'tool';
   toolName: string;
+  terminalSessionId?: string;
   toolCall: {
     input: any;
     id: string;

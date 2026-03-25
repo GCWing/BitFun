@@ -22,6 +22,13 @@ pub struct ToolExecutionProgressInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolTerminalReadyInfo {
+    pub tool_use_id: String,
+    pub terminal_session_id: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionCompletedInfo {
     pub tool_use_id: String,
     pub tool_name: String,

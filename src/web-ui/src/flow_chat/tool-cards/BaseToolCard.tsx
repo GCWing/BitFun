@@ -113,7 +113,11 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
       {action && <span className="tool-card-action">{action}</span>}
       {content && <div className="tool-card-content">{content}</div>}
       {extra && <div className="tool-card-extra">{extra}</div>}
-      {statusIcon && <div className="tool-card-status-icon">{statusIcon}</div>}
+      {statusIcon && (
+        <div className={`tool-card-status-icon ${extra ? 'tool-card-status-icon--with-divider' : ''}`}>
+          {statusIcon}
+        </div>
+      )}
     </>
   );
 };

@@ -40,7 +40,8 @@ import {
   processToolEvent, 
   processToolParamsPartialInternal,
   processToolProgressInternal,
-  handleToolExecutionProgress 
+  handleToolExecutionProgress,
+  handleToolTerminalReady,
 } from './ToolEventModule';
 import {
   routeTextChunkToToolCardInternal,
@@ -144,6 +145,10 @@ export async function initializeEventListeners(
   const { listen } = await import('@tauri-apps/api/event');
   await listen('backend-event-toolexecutionprogress', (event: any) => {
     handleToolExecutionProgress(event.payload);
+  });
+  await listen('backend-event-toolterminalready', (event: any) => {
+    const eventData = (event.payload as any)?.value || event.payload;
+    handleToolTerminalReady(eventData);
   });
 
   const callbacks: AgenticEventCallbacks = {

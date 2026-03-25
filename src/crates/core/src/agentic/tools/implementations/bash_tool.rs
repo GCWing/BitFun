@@ -2,10 +2,12 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::infrastructure::events::event_system::get_global_event_system;
-use crate::infrastructure::events::event_system::BackendEvent::ToolExecutionProgress;
+use crate::infrastructure::events::event_system::BackendEvent::{
+    ToolExecutionProgress, ToolTerminalReady,
+};
 use crate::service::config::global::get_global_config_service;
 use crate::util::errors::{BitFunError, BitFunResult};
-use crate::util::types::event::ToolExecutionProgressInfo;
+use crate::util::types::event::{ToolExecutionProgressInfo, ToolTerminalReadyInfo};
 use async_trait::async_trait;
 use futures::StreamExt;
 use log::{debug, error, info};
@@ -168,6 +170,22 @@ impl BashTool {
         ));
 
         result_string
+    }
+
+    fn emit_terminal_ready_event(tool_use_id: &str, terminal_session_id: &str) {
+        let event = ToolTerminalReady(ToolTerminalReadyInfo {
+            tool_use_id: tool_use_id.to_string(),
+            terminal_session_id: terminal_session_id.to_string(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        });
+
+        let event_system = get_global_event_system();
+        tokio::spawn(async move {
+            let _ = event_system.emit(event).await;
+        });
     }
 }
 
@@ -399,7 +417,10 @@ Usage notes:
         // Remote workspace: execute via injected workspace shell
         if context.is_remote() {
             if let Some(ws_shell) = context.ws_shell() {
-                info!("Executing command on remote workspace via SSH: {}", command_str);
+                info!(
+                    "Executing command on remote workspace via SSH: {}",
+                    command_str
+                );
 
                 let timeout_ms = input
                     .get("timeout_ms")
@@ -409,7 +430,9 @@ Usage notes:
                 let (stdout, stderr, exit_code) = ws_shell
                     .exec(command_str, Some(timeout_ms))
                     .await
-                    .map_err(|e| BitFunError::tool(format!("Remote command execution failed: {}", e)))?;
+                    .map_err(|e| {
+                        BitFunError::tool(format!("Remote command execution failed: {}", e))
+                    })?;
 
                 let output = if stderr.is_empty() {
                     stdout.clone()
@@ -440,11 +463,10 @@ Usage notes:
                     }),
                     result_for_assistant: Some(format!(
                         "[Remote SSH] Command executed on remote server:\n{}\n\nExit code: {}",
-                        output,
-                        exit_code
+                        output, exit_code
                     )),
-            image_attachments: None,
-        };
+                    image_attachments: None,
+                };
                 return Ok(vec![result]);
             }
         }
@@ -529,6 +551,8 @@ Usage notes:
             )
             .await
             .map_err(|e| BitFunError::tool(format!("Failed to create Terminal session: {}", e)))?;
+
+        Self::emit_terminal_ready_event(&tool_use_id, &primary_session_id);
 
         // Get actual working directory from primary session
         let primary_cwd = terminal_api
@@ -750,6 +774,12 @@ impl BashTool {
                     e
                 ))
             })?;
+
+        let tool_use_id = context
+            .tool_call_id
+            .clone()
+            .unwrap_or_else(|| format!("bash_{}", uuid::Uuid::new_v4()));
+        Self::emit_terminal_ready_event(&tool_use_id, &bg_session_id);
 
         // Subscribe to session output before sending the command so no data is missed
         let mut output_rx = terminal_api.subscribe_session_output(&bg_session_id);

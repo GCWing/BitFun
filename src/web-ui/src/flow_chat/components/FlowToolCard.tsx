@@ -74,6 +74,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   return (
     prevProps.toolItem.id === nextProps.toolItem.id &&
     prevProps.toolItem.status === nextProps.toolItem.status &&
+    prevProps.toolItem.terminalSessionId === nextProps.toolItem.terminalSessionId &&
     prevProps.toolItem.userConfirmed === nextProps.toolItem.userConfirmed &&
     prevProps.toolItem.isParamsStreaming === nextProps.toolItem.isParamsStreaming &&
     prevProgress === nextProgress &&

@@ -84,6 +84,10 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   const progressMessage = (toolItem as any)._progressMessage || '';
   
   const terminalSessionId = useMemo(() => {
+    if (toolItem.terminalSessionId && !toolItem.terminalSessionId.startsWith('FlowChat-')) {
+      return toolItem.terminalSessionId;
+    }
+
     if (toolResult?.result?.terminal_session_id) {
       const id = toolResult.result.terminal_session_id;
       if (typeof id === 'string' && !id.startsWith('FlowChat-')) {
@@ -96,7 +100,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     }
     
     return undefined;
-  }, [toolResult, propTerminalSessionId]);
+  }, [toolItem.terminalSessionId, toolResult, propTerminalSessionId]);
 
   const showConfirmButtons = status === 'pending_confirmation';
   const showInterruptButton = status === 'running';
@@ -350,6 +354,20 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   };
 
   const renderStatusIcon = () => {
+    if (terminalSessionId) {
+      return (
+        <IconButton 
+          className="terminal-action-btn external-btn"
+          variant="ghost"
+          size="xs"
+          onClick={handleOpenInPanel}
+          tooltip={t('toolCards.terminal.openInPanel')}
+        >
+          <ExternalLink size={12} />
+        </IconButton>
+      );
+    }
+
     if (isLoading) {
       return <CubeLoading size="small" />;
     }
@@ -412,15 +430,18 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   };
 
   const renderHeader = () => {
+    const statusText = renderStatusText();
+    const hasHeaderExtra = Boolean(statusText || showConfirmButtons || showInterruptButton);
+
     return (
       <ToolCardHeader
         icon={renderToolIcon()}
         iconClassName="terminal-icon"
         action={t('toolCards.terminal.executeCommand')}
         content={renderCommandContent()}
-        extra={
+        extra={hasHeaderExtra ? (
           <>
-            {renderStatusText()}
+            {statusText}
 
             {showConfirmButtons && (
               <div className="terminal-confirm-actions" onClick={(e) => e.stopPropagation()}>
@@ -462,20 +483,8 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
                 <Square size={12} fill="currentColor" />
               </IconButton>
             )}
-
-            {terminalSessionId && (
-              <IconButton 
-                className="terminal-action-btn external-btn"
-                variant="ghost"
-                size="xs"
-                onClick={handleOpenInPanel}
-                tooltip={t('toolCards.terminal.openInPanel')}
-              >
-                <ExternalLink size={12} />
-              </IconButton>
-            )}
           </>
-        }
+        ) : undefined}
         statusIcon={renderStatusIcon()}
       />
     );
