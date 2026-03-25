@@ -34,6 +34,12 @@ import React, { useEffect, useRef, useCallback, memo, useId } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
+import { themeService } from '@/infrastructure/theme/core/ThemeService';
+import {
+  buildXtermTheme,
+  getXtermFontWeights,
+  DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
+} from '../utils';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalOutputRendererProps {
@@ -81,6 +87,8 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const currentTheme = themeService.getCurrentTheme();
+    const fontWeights = getXtermFontWeights(currentTheme.type);
     const terminal = new XTerm({
       disableStdin: true,       // Disable input for read-only rendering.
       cursorBlink: false,
@@ -88,33 +96,18 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
       cursorInactiveStyle: 'none',
       fontSize: 12,
       fontFamily: "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
+      fontWeight: fontWeights.fontWeight,
+      fontWeightBold: fontWeights.fontWeightBold,
       lineHeight: 1.4,
+      minimumContrastRatio: DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
       scrollback: 5000,
       convertEol: true,
       allowTransparency: true,
-      theme: {
+      theme: buildXtermTheme(currentTheme, {
         background: 'transparent',
-        foreground: '#d4d4d4',
         cursor: 'transparent',    // Hide cursor in read-only mode.
         cursorAccent: 'transparent',
-        selectionBackground: 'rgba(255, 255, 255, 0.2)',
-        black: '#1e1e1e',
-        red: '#e06c75',
-        green: '#98c379',
-        yellow: '#e5c07b',
-        blue: '#61afef',
-        magenta: '#c678dd',
-        cyan: '#56b6c2',
-        white: '#abb2bf',
-        brightBlack: '#5c6370',
-        brightRed: '#e06c75',
-        brightGreen: '#98c379',
-        brightYellow: '#e5c07b',
-        brightBlue: '#61afef',
-        brightMagenta: '#c678dd',
-        brightCyan: '#56b6c2',
-        brightWhite: '#ffffff',
-      },
+      }),
     });
 
     const fitAddon = new FitAddon();
@@ -170,49 +163,25 @@ export const TerminalOutputRenderer: React.FC<TerminalOutputRendererProps> = mem
     if (!terminal) return;
 
     const updateTheme = () => {
-      import('@/infrastructure/theme/core/ThemeService').then(({ themeService }) => {
-        const theme = themeService.getCurrentTheme();
-        const isDark = theme.type === 'dark';
+      const theme = themeService.getCurrentTheme();
+      const fontWeights = getXtermFontWeights(theme.type);
 
-        terminal.options.theme = {
-          background: theme.colors.background.scene,
-          foreground: theme.colors.text.primary,
-          cursor: 'transparent',
-          cursorAccent: theme.colors.background.secondary,
-          selectionBackground: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
-
-          // Keep ANSI colors aligned with Terminal.tsx.
-          black: '#000000',
-          red: '#cd3131',
-          green: '#0dbc79',
-          yellow: '#e5e510',
-          blue: '#2472c8',
-          magenta: '#bc3fbc',
-          cyan: '#11a8cd',
-          white: isDark ? '#e5e5e5' : '#ffffff',
-          brightBlack: '#666666',
-          brightRed: '#f14c4c',
-          brightGreen: '#23d18b',
-          brightYellow: '#f5f543',
-          brightBlue: '#3b8eea',
-          brightMagenta: '#d670d6',
-          brightCyan: '#29b8db',
-          brightWhite: '#ffffff',
-        };
-
-        terminal.refresh(0, terminal.rows - 1);
+      terminal.options.theme = buildXtermTheme(theme, {
+        background: 'transparent',
+        cursor: 'transparent',
+        cursorAccent: 'transparent',
       });
+      terminal.options.fontWeight = fontWeights.fontWeight;
+      terminal.options.fontWeightBold = fontWeights.fontWeightBold;
+      terminal.refresh(0, terminal.rows - 1);
     };
 
     updateTheme();
 
-    import('@/infrastructure/theme/core/ThemeService').then(({ themeService }) => {
-      const unsubscribe = themeService.on('theme:after-change', updateTheme);
-
-      return () => {
-        unsubscribe?.();
-      };
-    });
+    const unsubscribe = themeService.on('theme:after-change', updateTheme);
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 
   // Incremental write when content extends existing output.
