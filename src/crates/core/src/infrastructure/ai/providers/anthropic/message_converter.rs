@@ -175,14 +175,35 @@ impl AnthropicMessageConverter {
 
     fn convert_tool_result_message(msg: Message) -> Value {
         let tool_call_id = msg.tool_call_id.unwrap_or_default();
-        let content = msg.content.unwrap_or_default();
+        let text = msg.content.unwrap_or_default();
+
+        let tool_content: Value =
+            if let Some(attachments) = msg.tool_image_attachments.filter(|a| !a.is_empty()) {
+                let mut blocks: Vec<Value> = attachments
+                    .into_iter()
+                    .map(|att| {
+                        json!({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": att.mime_type,
+                                "data": att.data_base64,
+                            }
+                        })
+                    })
+                    .collect();
+                blocks.push(json!({ "type": "text", "text": text }));
+                json!(blocks)
+            } else {
+                json!(text)
+            };
 
         json!({
             "role": "user",
             "content": [{
                 "type": "tool_result",
                 "tool_use_id": tool_call_id,
-                "content": content
+                "content": tool_content
             }]
         })
     }

@@ -241,6 +241,7 @@ Additional guidelines:
         Ok(vec![ToolResult::Result {
             data: result,
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         }])
     }
 }

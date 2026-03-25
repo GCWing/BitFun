@@ -871,7 +871,12 @@ $_section-header-height: 24px;
 
   &__workspace-menu {
     position: fixed;
-    min-width: 156px;
+    /* Shrink-wrap to widest row; cap width for long paths + viewport on small screens */
+    display: inline-block;
+    width: fit-content;
+    max-width: min(440px, calc(100vw - 32px));
+    vertical-align: top;
+    box-sizing: border-box;
     padding: $size-gap-1 0;
     background: var(--color-bg-elevated, #1e1e22);
     border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
@@ -917,8 +922,10 @@ $_section-header-height: 24px;
       flex-shrink: 0;
     }
 
-    span {
+    /* Only the label row grows; nested spans inside --main must NOT get flex:1 or text splits across columns */
+    > span {
       flex: 1;
+      min-width: 0;
     }
 
     &--workspace {
@@ -931,6 +938,37 @@ $_section-header-height: 24px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__workspace-menu-item--workspace &__workspace-menu-item-main {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3em;
+    white-space: nowrap;
+  }
+
+  &__workspace-menu-item-host {
+    /* flex-shrink 0: host is not squeezed; max-width ~26ch fits 255.255.255.255 + margin in typical UI fonts */
+    flex: 0 0 auto;
+    max-width: min(26ch, 52%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-muted);
+    font-size: 0.92em;
+  }
+
+  &__workspace-menu-item-host-sep {
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    opacity: 0.55;
+    font-size: 0.92em;
+  }
+
+  &__workspace-menu-item-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &__workspace-menu-divider {

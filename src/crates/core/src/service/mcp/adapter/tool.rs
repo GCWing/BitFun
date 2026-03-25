@@ -207,6 +207,7 @@ impl Tool for MCPToolWrapper {
         Ok(vec![ToolResult::Result {
             data: result_value,
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         }])
     }
 }

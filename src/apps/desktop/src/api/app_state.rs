@@ -50,6 +50,8 @@ pub struct RemoteWorkspace {
     pub connection_id: String,
     pub connection_name: String,
     pub remote_path: String,
+    #[serde(default)]
+    pub ssh_host: String,
 }
 
 pub struct AppState {
@@ -211,6 +213,7 @@ impl AppState {
                         connection_id: first.connection_id.clone(),
                         remote_path: first.remote_path.clone(),
                         connection_name: first.connection_name.clone(),
+                        ssh_host: first.ssh_host.clone(),
                     };
                     *remote_workspace_clone.write().await = Some(app_workspace);
                 }
@@ -345,6 +348,7 @@ impl AppState {
                 connection_id: workspace.connection_id.clone(),
                 remote_path: workspace.remote_path.clone(),
                 connection_name: workspace.connection_name.clone(),
+                ssh_host: workspace.ssh_host.clone(),
             };
             if let Err(e) = manager.set_remote_workspace(core_workspace).await {
                 log::warn!("Failed to persist remote workspace: {}", e);
@@ -370,6 +374,7 @@ impl AppState {
             workspace.remote_path.clone(),
             workspace.connection_id.clone(),
             workspace.connection_name.clone(),
+            workspace.ssh_host.clone(),
         ).await;
         state_manager
             .set_active_connection_hint(Some(workspace.connection_id.clone()))

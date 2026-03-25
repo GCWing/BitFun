@@ -2020,6 +2020,7 @@ impl AIClient {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            tool_image_attachments: None,
         }];
 
         match self.send_message(test_messages, None).await {

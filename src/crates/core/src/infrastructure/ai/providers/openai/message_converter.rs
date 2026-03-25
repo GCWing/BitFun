@@ -307,6 +307,7 @@ mod tests {
                 tool_calls: None,
                 tool_call_id: Some("call_1".to_string()),
                 name: Some("get_weather".to_string()),
+                tool_image_attachments: None,
             },
         ];
 
@@ -344,6 +345,7 @@ mod tests {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            tool_image_attachments: None,
         }];
 
         let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(messages);

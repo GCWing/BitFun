@@ -13,6 +13,21 @@ import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 
 const log = createLogger('SSHRemoteProvider');
 
+/** Match opened `WorkspaceInfo` so list_sessions maps to ~/.bitfun/remote_ssh/... */
+function sshHostForRemoteWorkspace(connectionId: string, remotePath: string): string | undefined {
+  const norm = normalizeRemoteWorkspacePath(remotePath);
+  const cid = connectionId.trim();
+  for (const w of workspaceManager.getState().openedWorkspaces.values()) {
+    if (w.workspaceKind !== WorkspaceKind.Remote) continue;
+    if ((w.connectionId ?? '').trim() !== cid) continue;
+    if (normalizeRemoteWorkspacePath(w.rootPath) === norm) {
+      const h = w.sshHost?.trim();
+      if (h) return h;
+    }
+  }
+  return undefined;
+}
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 interface SSHContextValue {
@@ -176,6 +191,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           connectionId: result.connectionId,
           connectionName: savedConn.name,
           remotePath: workspace.remotePath,
+          sshHost: reconnectConfig.host?.trim() || workspace.sshHost?.trim() || undefined,
         };
 
         log.info('Successfully reconnected to remote workspace', {
@@ -222,6 +238,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
           connectionId: ws.connectionId,
           connectionName: ws.connectionName || 'Remote',
           remotePath: rp,
+          sshHost: ws.sshHost?.trim() || undefined,
         });
       }
 
@@ -273,7 +290,14 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             await workspaceManager.openRemoteWorkspace(workspace).catch(() => {});
           }
           // Re-initialize sessions now that the workspace is registered in the state manager
-          void flowChatStore.initializeFromDisk(workspace.remotePath).catch(() => {});
+          void flowChatStore
+            .initializeFromDisk(
+              workspace.remotePath,
+              workspace.connectionId,
+              workspace.sshHost?.trim() ||
+                sshHostForRemoteWorkspace(workspace.connectionId, workspace.remotePath)
+            )
+            .catch(() => {});
           continue;
         }
 
@@ -297,7 +321,17 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             await workspaceManager.openRemoteWorkspace(result.workspace).catch(() => {});
           }
           // Re-initialize sessions now that the workspace is registered in the state manager
-          void flowChatStore.initializeFromDisk(result.workspace.remotePath).catch(() => {});
+          void flowChatStore
+            .initializeFromDisk(
+              result.workspace.remotePath,
+              result.workspace.connectionId,
+              result.workspace.sshHost?.trim() ||
+                sshHostForRemoteWorkspace(
+                  result.workspace.connectionId,
+                  result.workspace.remotePath
+                )
+            )
+            .catch(() => {});
         } else {
           // Reconnection failed (or skipped for password auth) — remove the workspace
           // from the sidebar. Password-auth workspaces can never auto-reconnect, and
@@ -434,6 +468,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       connectionId,
       connectionName: connName,
       remotePath,
+      sshHost: connectionConfig?.host?.trim() || undefined,
     };
     setRemoteWorkspace(remoteWs);
     setShowFileBrowser(false);

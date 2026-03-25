@@ -175,7 +175,8 @@ export class FlowChatStore {
     maxContextTokens?: number,
     mode?: string,
     workspacePath?: string,
-    remoteConnectionId?: string
+    remoteConnectionId?: string,
+    remoteSshHost?: string
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -198,6 +199,7 @@ export class FlowChatStore {
         mode: mode || 'agentic',
         workspacePath,
         remoteConnectionId,
+        remoteSshHost,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
         btwThreads: [],
@@ -225,7 +227,8 @@ export class FlowChatStore {
     mode: string,
     workspacePath?: string,
     meta?: { parentSessionId?: string; sessionKind?: SessionKind; btwOrigin?: Session['btwOrigin'] },
-    remoteConnectionId?: string
+    remoteConnectionId?: string,
+    remoteSshHost?: string
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -253,6 +256,7 @@ export class FlowChatStore {
         isHistorical: false,
         workspacePath,
         remoteConnectionId,
+        remoteSshHost,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
         btwThreads: [],
@@ -521,12 +525,18 @@ export class FlowChatStore {
       const { agentAPI } = await import('@/infrastructure/api');
       const deleteResults = await Promise.allSettled(
         sessionIdsToDelete.map(async id => {
-          const workspacePath = this.state.sessions.get(id)?.workspacePath;
+          const sess = this.state.sessions.get(id);
+          const workspacePath = sess?.workspacePath;
           if (!workspacePath) {
             throw new Error(`Workspace path not found for session ${id}`);
           }
 
-          await agentAPI.deleteSession(id, workspacePath);
+          await agentAPI.deleteSession(
+            id,
+            workspacePath,
+            sess?.remoteConnectionId,
+            sess?.remoteSshHost
+          );
         })
       );
 
@@ -635,14 +645,23 @@ export class FlowChatStore {
     });
   }
 
-  public removeSessionsByWorkspace(workspacePath: string, remoteConnectionId?: string | null): string[] {
+  public removeSessionsByWorkspace(
+    workspacePath: string,
+    remoteConnectionId?: string | null,
+    remoteSshHost?: string | null
+  ): string[] {
     const wsConn = remoteConnectionId?.trim() ?? '';
+    const wsHost = remoteSshHost?.trim() ?? '';
     const removedSessionIds = Array.from(this.state.sessions.values())
       .filter(session => {
         if (session.workspacePath !== workspacePath) return false;
         const sc = session.remoteConnectionId?.trim() ?? '';
         if (wsConn.length > 0 || sc.length > 0) {
-          return sc === wsConn;
+          if (sc !== wsConn) return false;
+        }
+        const sh = session.remoteSshHost?.trim() ?? '';
+        if (wsHost.length > 0 || sh.length > 0) {
+          return sh === wsHost;
         }
         return true;
       })
@@ -1253,14 +1272,16 @@ export class FlowChatStore {
         const metadata = await sessionAPI.loadSessionMetadata(
           sessionId,
           workspacePath,
-          session.remoteConnectionId
+          session.remoteConnectionId,
+          session.remoteSshHost
         );
         const nextMetadata = buildSessionMetadata(session, metadata);
 
         await sessionAPI.saveSessionMetadata(
           nextMetadata,
           workspacePath,
-          session.remoteConnectionId
+          session.remoteConnectionId,
+          session.remoteSshHost
         );
       } catch (error) {
         log.error('Failed to sync session title', { sessionId, error });
@@ -1451,7 +1472,12 @@ export class FlowChatStore {
         status: 'cancelled' as const
       };
 
-      await sessionAPI.saveSessionTurn(turnData, workspacePath, session.remoteConnectionId);
+      await sessionAPI.saveSessionTurn(
+        turnData,
+        workspacePath,
+        session.remoteConnectionId,
+        session.remoteSshHost
+      );
     } catch (error) {
       log.error('Failed to save cancelled dialog turn', { sessionId, turnId, error });
     }
@@ -1462,11 +1488,15 @@ export class FlowChatStore {
    * Initialize by loading persisted session metadata from disk
    * Clears sessions from other workspaces, then loads sessions for the target workspace.
    */
-  public async initializeFromDisk(workspacePath: string, remoteConnectionId?: string): Promise<void> {
+  public async initializeFromDisk(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<void> {
     try {
       const { sessionAPI } = await import('@/infrastructure/api');
-      const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId);
-      
+      const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+
       const { stateMachineManager } = await import('../state-machine');
       sessions.forEach(metadata => {
         stateMachineManager.getOrCreate(metadata.sessionId);
@@ -1540,8 +1570,8 @@ export class FlowChatStore {
             maxContextTokens,
             mode: validatedAgentType,
             workspacePath: (metadata as any).workspacePath || workspacePath,
-            remoteConnectionId:
-              (metadata as any).remoteConnectionId || remoteConnectionId,
+            remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
+            remoteSshHost: metadata.remoteSshHost || remoteSshHost,
             parentSessionId: relationship.parentSessionId,
             sessionKind: relationship.sessionKind,
             btwThreads: [],
@@ -1571,7 +1601,8 @@ export class FlowChatStore {
     sessionId: string,
     workspacePath: string,
     limit?: number,
-    remoteConnectionId?: string
+    remoteConnectionId?: string,
+    remoteSshHost?: string
   ): Promise<void> {
     try {
       const { stateMachineManager } = await import('../state-machine');
@@ -1579,7 +1610,7 @@ export class FlowChatStore {
       
       try {
         const { agentAPI } = await import('@/infrastructure/api');
-        await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId);
+        await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
       } catch (error) {
         log.warn('Backend session restore failed (may be new session)', { sessionId, error });
       }
@@ -1589,7 +1620,8 @@ export class FlowChatStore {
         sessionId,
         workspacePath,
         limit,
-        remoteConnectionId
+        remoteConnectionId,
+        remoteSshHost
       );
       
       const dialogTurns = this.convertToDialogTurns(turns);

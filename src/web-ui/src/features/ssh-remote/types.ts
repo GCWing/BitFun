@@ -67,6 +67,8 @@ export interface RemoteWorkspace {
   connectionId: string;
   connectionName: string;
   remotePath: string;
+  /** SSH `host` from connection profile; required for correct local session mirror paths. */
+  sshHost?: string;
 }
 
 export interface SSHConfigEntry {

@@ -453,7 +453,8 @@ Optional inputs:
                         }
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
             SessionControlAction::Delete => {
                 let session_id = params.session_id.as_deref().ok_or_else(|| {
@@ -492,7 +493,8 @@ Optional inputs:
                         "Deleted session '{}' from workspace '{}'.",
                         session_id, workspace
                     )),
-                }])
+            image_attachments: None,
+        }])
             }
             SessionControlAction::List => {
                 let sessions = coordinator.list_sessions(workspace_path).await?;
@@ -510,7 +512,8 @@ Optional inputs:
                         "sessions": sessions,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
         }
     }

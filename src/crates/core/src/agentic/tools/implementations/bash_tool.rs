@@ -417,13 +417,25 @@ Usage notes:
                     format!("{}\n{}", stdout, stderr)
                 };
 
+                let execution_time_ms = start_time.elapsed().as_millis() as u64;
+                let working_directory = context
+                    .workspace_root()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
                 let result = ToolResult::Result {
                     data: json!({
+                        "success": exit_code == 0,
                         "command": command_str,
                         "stdout": stdout,
                         "stderr": stderr,
+                        "output": output,
                         "exit_code": exit_code,
-                        "duration_ms": start_time.elapsed().as_millis() as u64,
+                        "interrupted": false,
+                        "timed_out": false,
+                        "working_directory": working_directory,
+                        "execution_time_ms": execution_time_ms,
+                        "duration_ms": execution_time_ms,
                         "is_remote": true
                     }),
                     result_for_assistant: Some(format!(
@@ -431,7 +443,8 @@ Usage notes:
                         output,
                         exit_code
                     )),
-                };
+            image_attachments: None,
+        };
                 return Ok(vec![result]);
             }
         }
@@ -692,6 +705,7 @@ Usage notes:
         Ok(vec![ToolResult::Result {
             data: result_data,
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         }])
     }
 }
@@ -847,6 +861,7 @@ impl BashTool {
         Ok(vec![ToolResult::Result {
             data: result_data,
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         }])
     }
 }

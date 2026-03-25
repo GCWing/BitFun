@@ -133,6 +133,8 @@ impl ToolRegistry {
 
         // MiniApp Agent tool (single InitMiniApp)
         self.register_tool(Arc::new(InitMiniAppTool::new()));
+
+        self.register_tool(Arc::new(ComputerUseTool::new()));
     }
 
     /// Register a single tool

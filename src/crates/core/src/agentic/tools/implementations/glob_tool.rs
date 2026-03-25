@@ -234,7 +234,8 @@ impl Tool for GlobTool {
                     "match_count": limited.len()
                 }),
                 result_for_assistant: Some(result_text),
-            }]);
+            image_attachments: None,
+        }]);
         }
 
         let matches = call_glob(&resolved_path.display().to_string(), pattern, limit)
@@ -254,6 +255,7 @@ impl Tool for GlobTool {
                 "match_count": matches.len()
             }),
             result_for_assistant: Some(result_text),
+            image_attachments: None,
         };
 
         Ok(vec![result])

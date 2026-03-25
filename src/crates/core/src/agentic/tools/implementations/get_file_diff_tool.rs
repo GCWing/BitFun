@@ -429,7 +429,8 @@ Usage:
                     return Ok(vec![ToolResult::Result {
                         data,
                         result_for_assistant: Some(result_for_assistant),
-                    }]);
+            image_attachments: None,
+        }]);
                 }
                 Err(e) => {
                     warn!(
@@ -450,7 +451,8 @@ Usage:
                     return Ok(vec![ToolResult::Result {
                         data,
                         result_for_assistant: Some(result_for_assistant),
-                    }]);
+            image_attachments: None,
+        }]);
                 }
                 Err(e) => {
                     warn!(
@@ -470,6 +472,7 @@ Usage:
         Ok(vec![ToolResult::Result {
             data,
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         }])
     }
 }

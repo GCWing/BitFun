@@ -257,7 +257,8 @@ Usage:
                     "is_remote": true
                 }),
                 result_for_assistant: Some(result_text),
-            };
+            image_attachments: None,
+        };
             return Ok(vec![result]);
         }
 
@@ -299,6 +300,7 @@ Usage:
                 "limit": limit
             }),
             result_for_assistant: Some(result_text),
+            image_attachments: None,
         };
 
         Ok(vec![result])

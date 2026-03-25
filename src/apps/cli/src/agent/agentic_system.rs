@@ -62,6 +62,7 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
         tool_registry,
         tool_state_manager,
         None,
+        None,
     ));
 
     let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));

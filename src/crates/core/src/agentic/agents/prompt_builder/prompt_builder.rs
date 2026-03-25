@@ -67,6 +67,13 @@ impl PromptBuilder {
         let now = chrono::Local::now();
         let current_date = now.format("%Y-%m-%d").to_string();
 
+        let computer_use_keys = match os_name {
+            "macos" => "Computer use / `key_chord`: this host is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). Spotlight: command+space; switch app: command+tab.",
+            "windows" => "Computer use / `key_chord`: this host is **Windows** — use `meta`/`super` for the Windows key, `alt`, `control`, `shift`. Start menu: meta; Alt+Tab for window switch.",
+            "linux" => "Computer use / `key_chord`: this host is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super` depending on the desktop; match the user's session.",
+            _ => "Computer use / `key_chord`: match modifier names to this host's OS (see Operating System above).",
+        };
+
         format!(
             r#"# Environment Information
 <environment_details>
@@ -74,10 +81,16 @@ impl PromptBuilder {
 - Operating System: {} ({})
 - Architecture: {}
 - Current Date: {}
+- {}
 </environment_details>
 
 "#,
-            self.context.workspace_path, os_name, os_family, arch, current_date
+            self.context.workspace_path,
+            os_name,
+            os_family,
+            arch,
+            current_date,
+            computer_use_keys
         )
     }
 

@@ -417,6 +417,10 @@ pub struct AIConfig {
     /// Used to detect added and removed tools.
     #[serde(default)]
     pub known_tools: Vec<String>,
+
+    /// Allow Claw Computer use (desktop automation) when the desktop host is available.
+    #[serde(default)]
+    pub computer_use_enabled: bool,
 }
 
 impl AIConfig {
@@ -1167,6 +1171,7 @@ impl Default for AIConfig {
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
             known_tools: Vec::new(),
+            computer_use_enabled: false,
         }
     }
 }

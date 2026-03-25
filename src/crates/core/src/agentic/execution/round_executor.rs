@@ -6,6 +6,7 @@ use super::stream_processor::StreamProcessor;
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::Message;
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
+use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::MessageContent;
@@ -44,6 +45,12 @@ impl RoundExecutor {
             event_queue,
             cancellation_tokens: Arc::new(DashMap::new()),
         }
+    }
+
+    pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
+        self.tool_pipeline
+            .as_ref()
+            .and_then(|p| p.computer_use_host())
     }
 
     /// Execute a single model round

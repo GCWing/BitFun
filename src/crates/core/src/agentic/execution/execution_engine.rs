@@ -5,7 +5,7 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::{get_agent_registry, PromptBuilderContext};
-use crate::agentic::core::{Message, MessageContent, MessageHelper, Session};
+use crate::agentic::core::{Message, MessageContent, MessageHelper, MessageSemanticKind, Session};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
@@ -22,7 +22,7 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use log::{debug, error, info, trace, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -213,6 +213,44 @@ impl ExecutionEngine {
         Ok(model_id)
     }
 
+    /// Omit from model request: UI-only verification frames and legacy auto desktop snapshots.
+    fn skip_message_for_model_send(msg: &Message) -> bool {
+        matches!(
+            msg.metadata.semantic_kind.as_ref(),
+            Some(MessageSemanticKind::ComputerUseVerificationScreenshot)
+                | Some(MessageSemanticKind::ComputerUsePostActionSnapshot)
+        )
+    }
+
+    /// True if this message would contribute at least one image to the model (before pruning).
+    fn message_bears_images(msg: &Message) -> bool {
+        if Self::skip_message_for_model_send(msg) {
+            return false;
+        }
+        match &msg.content {
+            MessageContent::Multimodal { images, .. } => !images.is_empty(),
+            MessageContent::ToolResult {
+                image_attachments, ..
+            } => image_attachments.as_ref().is_some_and(|a| !a.is_empty()),
+            _ => false,
+        }
+    }
+
+    /// Indices of the last `max_rounds` messages that bear images (`max_rounds` = 2 → keep images only there).
+    fn image_bearing_indices_to_keep(messages: &[Message], max_rounds: usize) -> HashSet<usize> {
+        let with_images: Vec<usize> = messages
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| Self::message_bears_images(m))
+            .map(|(i, _)| i)
+            .collect();
+        let n = with_images.len();
+        if n <= max_rounds {
+            return with_images.into_iter().collect();
+        }
+        with_images[n - max_rounds..].iter().copied().collect()
+    }
+
     async fn build_ai_messages_for_send(
         messages: &[Message],
         provider: &str,
@@ -220,12 +258,26 @@ impl ExecutionEngine {
         current_turn_id: &str,
         attach_images: bool,
     ) -> BitFunResult<Vec<AIMessage>> {
+        /// Only the last this many **messages** that contain images keep their images for the API.
+        const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
+
         let limits = ImageLimits::for_provider(provider);
 
         let mut result = Vec::with_capacity(messages.len());
         let mut attached_image_count = 0usize;
 
-        for msg in messages {
+        let keep_image_messages = if attach_images {
+            Self::image_bearing_indices_to_keep(messages, MAX_IMAGE_BEARING_MESSAGE_ROUNDS)
+        } else {
+            HashSet::new()
+        };
+
+        for (msg_idx, msg) in messages.iter().enumerate() {
+            if Self::skip_message_for_model_send(msg) {
+                continue;
+            }
+            let keep_this_message_images =
+                attach_images && keep_image_messages.contains(&msg_idx);
             match &msg.content {
                 MessageContent::Multimodal { text, images } => {
                     if !attach_images {
@@ -235,13 +287,36 @@ impl ExecutionEngine {
                         continue;
                     }
 
+                    let (filtered_images, dropped_count): (Vec<ImageContextData>, usize) =
+                        if images.is_empty() {
+                            (Vec::new(), 0)
+                        } else if keep_this_message_images {
+                            (images.clone(), 0)
+                        } else {
+                            (Vec::new(), images.len())
+                        };
+
                     let prompt = if text.trim().is_empty() {
                         "(image attached)".to_string()
                     } else {
                         text.clone()
                     };
+                    let prompt = if dropped_count > 0 {
+                        format!(
+                            "{}\n\n[{} image(s) from this message omitted: only the latest {} message(s) in the conversation that contain images are sent to the model.]",
+                            prompt.trim_end(),
+                            dropped_count,
+                            MAX_IMAGE_BEARING_MESSAGE_ROUNDS
+                        )
+                    } else {
+                        prompt
+                    };
 
-                    match process_image_contexts_for_provider(images, provider, workspace_path)
+                    match process_image_contexts_for_provider(
+                        &filtered_images,
+                        provider,
+                        workspace_path,
+                    )
                         .await
                     {
                         Ok(processed) => {
@@ -281,6 +356,39 @@ impl ExecutionEngine {
                             }
                         }
                     }
+                }
+                MessageContent::ToolResult { .. } => {
+                    if !attach_images {
+                        result.push(AIMessage::from(msg));
+                        continue;
+                    }
+                    let mut ai = AIMessage::from(msg.clone());
+                    if let Some(atts) = ai.tool_image_attachments.take() {
+                        if !atts.is_empty() {
+                            if keep_this_message_images {
+                                let next_count = attached_image_count + atts.len();
+                                if next_count > limits.max_images_per_request {
+                                    return Err(BitFunError::validation(format!(
+                                        "Too many images in one request: {} > {}",
+                                        next_count, limits.max_images_per_request
+                                    )));
+                                }
+                                attached_image_count = next_count;
+                                ai.tool_image_attachments = Some(atts);
+                            } else {
+                                let dropped = atts.len();
+                                let content_str = ai.content.as_deref().unwrap_or("");
+                                ai.content = Some(format!(
+                                    "{}\n\n[{} image(s) from this tool result omitted: only the latest {} message(s) in the conversation that contain images are sent to the model.]",
+                                    content_str.trim_end(),
+                                    dropped,
+                                    MAX_IMAGE_BEARING_MESSAGE_ROUNDS
+                                ));
+                                ai.tool_image_attachments = None;
+                            }
+                        }
+                    }
+                    result.push(ai);
                 }
                 _ => result.push(AIMessage::from(msg)),
             }
@@ -1105,6 +1213,7 @@ impl ExecutionEngine {
             options: None,
             response_state: None,
             image_context_provider: None,
+            computer_use_host: None,
             subagent_parent_info: None,
             cancellation_token: None,
             workspace_services: None,

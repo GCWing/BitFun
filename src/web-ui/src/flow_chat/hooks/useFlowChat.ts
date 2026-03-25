@@ -19,6 +19,7 @@ import { aiExperienceConfigService } from '@/infrastructure/config/services';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { WorkspaceKind } from '@/shared/types';
 import { generateTempTitle } from '../utils/titleUtils';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -60,7 +61,7 @@ async function getModelContextWindow(modelName?: string): Promise<number> {
 
 export const useFlowChat = () => {
   const { t } = useI18n('flow-chat');
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspacePath, workspace } = useCurrentWorkspace();
   const [state, setState] = useState<FlowChatState>(flowChatStore.getState());
   const processingLock = useRef<boolean>(false);
 
@@ -102,10 +103,16 @@ export const useFlowChat = () => {
       
       const maxContextTokens = await getModelContextWindow(config?.modelName);
       
+      const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote;
+      const remoteConnectionId = isRemote ? workspace?.connectionId : undefined;
+      const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
+
       const response = await agentAPI.createSession({
         sessionName,
         agentType: 'agentic', // Default to agentic; can change via mode selector.
         workspacePath,
+        remoteConnectionId,
+        remoteSshHost,
         config: {
           modelName: config?.modelName || 'default',
           enableTools: true,
@@ -113,6 +120,8 @@ export const useFlowChat = () => {
           autoCompact: true,
           maxContextTokens: maxContextTokens,
           enableContextCompression: true,
+          remoteConnectionId,
+          remoteSshHost,
         }
       });
       
@@ -134,13 +143,19 @@ export const useFlowChat = () => {
         sessionName,
         maxContextTokens,
         undefined,
-        workspacePath
+        workspacePath,
+        remoteConnectionId,
+        remoteSshHost
       );
       
       return response.sessionId;
       
     } catch (error) {
       log.error('Failed to create session', { error });
+
+      const isRemoteFb = workspace?.workspaceKind === WorkspaceKind.Remote;
+      const remoteConnectionIdFb = isRemoteFb ? workspace?.connectionId : undefined;
+      const remoteSshHostFb = isRemoteFb ? workspace?.sshHost : undefined;
       
       // Fallback to a frontend-only session without Terminal.
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -169,14 +184,16 @@ export const useFlowChat = () => {
         sessionName,
         undefined,
         undefined,
-        workspacePath
+        workspacePath,
+        remoteConnectionIdFb,
+        remoteSshHostFb
       );
       
       log.warn('Using fallback mode without Terminal');
 
       return sessionId;
     }
-  }, [t, workspacePath]);
+  }, [t, workspacePath, workspace]);
 
   const switchSession = useCallback(async (sessionId: string) => {
     try {

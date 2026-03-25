@@ -874,6 +874,7 @@ When creating commits, use this format for the commit message:
         Ok(vec![ToolResult::Result {
             data: result_with_meta,
             result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
         }])
     }
 }

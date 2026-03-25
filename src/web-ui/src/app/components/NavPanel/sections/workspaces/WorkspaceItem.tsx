@@ -489,6 +489,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             workspaceId={workspace.id}
             workspacePath={workspace.rootPath}
             remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             isActiveWorkspace={isActive}
             assistantLabel={workspaceDisplayName}
           />
@@ -668,6 +669,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           workspaceId={workspace.id}
           workspacePath={workspace.rootPath}
           remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+          remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           isActiveWorkspace={isActive}
         />
       </div>

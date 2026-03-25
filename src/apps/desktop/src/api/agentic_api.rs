@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
+use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
@@ -13,8 +14,6 @@ use bitfun_core::agentic::coordination::{
 use bitfun_core::agentic::core::*;
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
-use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionRequest {
@@ -24,6 +23,8 @@ pub struct CreateSessionRequest {
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -40,6 +41,8 @@ pub struct SessionConfigDTO {
     pub model_name: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -84,6 +87,8 @@ pub struct EnsureCoordinatorSessionRequest {
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,6 +162,8 @@ pub struct DeleteSessionRequest {
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,6 +173,8 @@ pub struct RestoreSessionRequest {
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -174,6 +183,8 @@ pub struct ListSessionsRequest {
     pub workspace_path: String,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -214,6 +225,12 @@ pub async fn create_session(
             .as_ref()
             .and_then(|c| norm_conn(c.remote_connection_id.clone()))
     });
+    let remote_ssh_host = norm_conn(request.remote_ssh_host.clone()).or_else(|| {
+        request
+            .config
+            .as_ref()
+            .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
+    });
 
     let config = request
         .config
@@ -227,11 +244,13 @@ pub async fn create_session(
             compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: Some(request.workspace_path.clone()),
             remote_connection_id: remote_conn.clone(),
+            remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
             remote_connection_id: remote_conn.clone(),
+            remote_ssh_host: remote_ssh_host.clone(),
             ..Default::default()
         });
 
@@ -269,6 +288,7 @@ pub async fn update_session_model(
 #[tauri::command]
 pub async fn ensure_coordinator_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: EnsureCoordinatorSessionRequest,
 ) -> Result<(), String> {
     let session_id = request.session_id.trim();
@@ -288,7 +308,13 @@ pub async fn ensure_coordinator_session(
         return Err("workspace_path is required when the session is not loaded".to_string());
     }
 
-    let effective = get_effective_session_path(wp, request.remote_connection_id.as_deref()).await;
+    let effective = desktop_effective_session_storage_path(
+        &app_state,
+        wp,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
     coordinator
         .restore_session(&effective, session_id)
         .await
@@ -487,10 +513,16 @@ pub async fn cancel_tool(
 #[tauri::command]
 pub async fn delete_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: DeleteSessionRequest,
 ) -> Result<(), String> {
-    let effective_path =
-        get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
+    let effective_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
     coordinator
         .delete_session(&effective_path, &request.session_id)
         .await
@@ -500,10 +532,16 @@ pub async fn delete_session(
 #[tauri::command]
 pub async fn restore_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: RestoreSessionRequest,
 ) -> Result<SessionResponse, String> {
-    let effective_path =
-        get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
+    let effective_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
     let session = coordinator
         .restore_session(&effective_path, &request.session_id)
         .await
@@ -515,11 +553,16 @@ pub async fn restore_session(
 #[tauri::command]
 pub async fn list_sessions(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: ListSessionsRequest,
 ) -> Result<Vec<SessionResponse>, String> {
-    // Map remote workspace path to local session storage path
-    let effective_path =
-        get_effective_session_path(&request.workspace_path, request.remote_connection_id.as_deref()).await;
+    let effective_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
     let summaries = coordinator
         .list_sessions(&effective_path)
         .await
@@ -726,6 +769,7 @@ fn message_to_dto(message: Message) -> MessageDTO {
             result,
             result_for_assistant,
             is_error: _,
+            image_attachments,
         } => {
             serde_json::json!({
                 "type": "tool_result",
@@ -733,6 +777,7 @@ fn message_to_dto(message: Message) -> MessageDTO {
                 "tool_name": tool_name,
                 "result": result,
                 "result_for_assistant": result_for_assistant,
+                "has_image_attachments": image_attachments.as_ref().is_some_and(|a| !a.is_empty()),
             })
         }
         MessageContent::Mixed {

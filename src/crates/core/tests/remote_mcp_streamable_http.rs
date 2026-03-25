@@ -154,12 +154,17 @@ async fn remote_mcp_streamable_http_accepts_202_and_delivers_response_via_sse() 
         .await
         .expect("initialize should succeed");
 
-    tokio::time::timeout(
-        Duration::from_secs(2),
-        state.sse_connected_notify.notified(),
-    )
-    .await
-    .expect("SSE stream should connect");
+    // `Notify::notify_waiters` only wakes tasks already waiting. The rmcp client may open the
+    // SSE GET during `initialize` and fire notify before we await `notified()`, which would
+    // drop the wakeup and time out. The atomic records that the handler ran at least once.
+    if !state.sse_connected.load(Ordering::SeqCst) {
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            state.sse_connected_notify.notified(),
+        )
+        .await
+        .expect("SSE stream should connect");
+    }
 
     let tools = connection
         .list_tools(None)

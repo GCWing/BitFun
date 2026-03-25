@@ -140,7 +140,8 @@ Usage:
                     "match_count": match_count,
                 }),
                 result_for_assistant: Some(format!("Successfully edited {}", resolved_path)),
-            };
+            image_attachments: None,
+        };
             return Ok(vec![result]);
         }
 
@@ -158,6 +159,7 @@ Usage:
                 "new_end_line": edit_result.new_end_line,
             }),
             result_for_assistant: Some(format!("Successfully edited {}", resolved_path)),
+            image_attachments: None,
         };
 
         Ok(vec![result])

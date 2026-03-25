@@ -266,7 +266,8 @@ Important notes:
             return Ok(vec![ToolResult::Result {
                 data: result_data,
                 result_for_assistant: Some(result_text),
-            }]);
+            image_attachments: None,
+        }]);
         }
 
         let path = Path::new(path_str);
@@ -306,6 +307,7 @@ Important notes:
         Ok(vec![ToolResult::Result {
             data: result_data,
             result_for_assistant: Some(result_text),
+            image_attachments: None,
         }])
     }
 }

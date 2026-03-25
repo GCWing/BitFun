@@ -1,5 +1,7 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
+pub mod computer_use_capability;
+pub mod computer_use_host;
 pub mod framework;
 pub mod image_context;
 pub mod implementations;

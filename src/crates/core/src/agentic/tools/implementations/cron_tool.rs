@@ -934,7 +934,8 @@ Patch schema for "update":
                         "now": iso,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
             CronAction::List => {
                 let cron_service = get_global_cron_service()
@@ -966,7 +967,8 @@ Patch schema for "update":
                         "jobs": serialized_jobs,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
             CronAction::Add => {
                 let cron_service = get_global_cron_service()
@@ -1007,7 +1009,8 @@ Patch schema for "update":
                         "job": serialized_job,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
             CronAction::Update => {
                 let cron_service = get_global_cron_service()
@@ -1057,7 +1060,8 @@ Patch schema for "update":
                         "job": serialized_job,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
             CronAction::Remove => {
                 let cron_service = get_global_cron_service()
@@ -1082,7 +1086,8 @@ Patch schema for "update":
                         "deleted": deleted,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
             CronAction::Run => {
                 let cron_service = get_global_cron_service()
@@ -1107,7 +1112,8 @@ Patch schema for "update":
                         "job": serialized_job,
                     }),
                     result_for_assistant: Some(result_for_assistant),
-                }])
+            image_attachments: None,
+        }])
             }
         }
     }

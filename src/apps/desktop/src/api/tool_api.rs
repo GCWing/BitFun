@@ -99,6 +99,7 @@ fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         options: None,
         response_state: None,
         image_context_provider: Some(Arc::new(create_image_context_provider())),
+        computer_use_host: None,
         subagent_parent_info: None,
         cancellation_token: None,
         workspace_services: None,
@@ -297,7 +298,9 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
                     } else {
                         Some(serde_json::json!({
                                         "results": results.iter().map(|r| match r {
-                        bitfun_core::agentic::tools::framework::ToolResult::Result { data, .. } => data.clone(),
+                        bitfun_core::agentic::tools::framework::ToolResult::Result { data, .. } => {
+                            data.clone()
+                        }
                         bitfun_core::agentic::tools::framework::ToolResult::Progress { content, .. } => content.clone(),
                         bitfun_core::agentic::tools::framework::ToolResult::StreamChunk { data, .. } => data.clone(),
                                         }).collect::<Vec<_>>()

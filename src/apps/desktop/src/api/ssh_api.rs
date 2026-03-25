@@ -341,10 +341,17 @@ pub async fn remote_open_workspace(
     let connections = manager.get_saved_connections().await;
     let conn = connections.iter().find(|c| c.id == connection_id);
 
+    let ssh_host = manager
+        .get_connection_config(&connection_id)
+        .await
+        .map(|c| c.host)
+        .unwrap_or_default();
+
     let workspace = crate::api::RemoteWorkspace {
         connection_id: connection_id.clone(),
         connection_name: conn.map(|c| c.name.clone()).unwrap_or_default(),
         remote_path: remote_path.clone(),
+        ssh_host,
     };
 
     state.set_remote_workspace(workspace).await

@@ -27,6 +27,7 @@ impl ClawMode {
                 "SessionMessage".to_string(),
                 "SessionHistory".to_string(),
                 "Cron".to_string(),
+                "ComputerUse".to_string(),
             ],
         }
     }

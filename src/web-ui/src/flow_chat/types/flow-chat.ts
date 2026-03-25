@@ -190,6 +190,9 @@ export interface Session {
   /** SSH remote: same `workspacePath` on different hosts must not share coordinator/persistence. */
   remoteConnectionId?: string;
 
+  /** SSH config host for `~/.bitfun/remote_ssh/{host}/...` session paths when disconnected. */
+  remoteSshHost?: string;
+
   /**
    * Optional parent session id for hierarchical sessions.
    * Used by /btw "side threads" and potentially other derived sessions.
@@ -234,6 +237,7 @@ export interface SessionConfig {
   workspacePath?: string;
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
   remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 export interface QueuedMessage {
