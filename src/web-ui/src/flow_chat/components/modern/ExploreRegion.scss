@@ -137,9 +137,18 @@
 
 // ==================== Streaming adjustments ====================
 
-// Top/bottom gradient masks during streaming.
+// Top gradient mask during streaming.
 .explore-region--expanded.explore-region--streaming {
-  // Top mask
+  &::before {
+    content: none;
+  }
+
+  &::after {
+    content: none;
+  }
+}
+
+.explore-region--expanded.explore-region--streaming.explore-region--has-scroll:not(.explore-region--at-top) {
   &::before {
     content: '';
     position: absolute;
@@ -158,7 +167,13 @@
     );
   }
 
-  // Bottom mask
+  // Non-collapsible has no header, start mask from the very top.
+  &:not(.explore-region--collapsible)::before {
+    top: 0;
+  }
+}
+
+.explore-region--expanded.explore-region--streaming.explore-region--has-scroll:not(.explore-region--at-bottom) {
   &::after {
     content: '';
     position: absolute;
@@ -174,11 +189,6 @@
       color-mix(in srgb, var(--color-bg-flowchat, #121214) 60%, transparent) 50%,
       transparent 100%
     );
-  }
-
-  // Non-collapsible has no header, start mask from the very top.
-  &:not(.explore-region--collapsible)::before {
-    top: 0;
   }
 }
 

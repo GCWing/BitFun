@@ -3,7 +3,7 @@
  * Renders merged explore-only rounds as a collapsible region.
  */
 
-import React, { useRef, useMemo, useCallback, useEffect } from 'react';
+import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem } from '../../types/flow-chat';
@@ -26,6 +26,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
   
   const { 
     exploreGroupStates, 
@@ -61,6 +62,19 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
   const isCollapsed = !isExpanded;
   const allowManualToggle = !isGroupStreaming;
 
+  const checkScrollState = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+
+    setScrollState({
+      hasScroll: el.scrollHeight > el.clientHeight + 1,
+      atTop: el.scrollTop <= 5,
+      atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 5,
+    });
+  }, []);
+
   useEffect(() => {
     if (isGroupStreaming && !hasExplicitState) {
       applyExpandedState(false, true, () => {
@@ -95,10 +109,39 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
       requestAnimationFrame(() => {
         if (containerRef.current) {
           containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          checkScrollState();
         }
       });
     }
-  }, [allItems, isCollapsed, isGroupStreaming]);
+  }, [allItems, checkScrollState, isCollapsed, isGroupStreaming]);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      setScrollState({ hasScroll: false, atTop: true, atBottom: true });
+      return;
+    }
+
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(checkScrollState);
+
+    if (typeof ResizeObserver === 'undefined') {
+      return () => cancelAnimationFrame(frameId);
+    }
+
+    const observer = new ResizeObserver(() => {
+      checkScrollState();
+    });
+    observer.observe(el);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [allItems, checkScrollState, isExpanded]);
   
   // Build summary text with i18n.
   const displaySummary = useMemo(() => {
@@ -141,6 +184,9 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
     allowManualToggle ? 'explore-region--collapsible' : null,
     isCollapsed ? 'explore-region--collapsed' : 'explore-region--expanded',
     isGroupStreaming ? 'explore-region--streaming' : null,
+    scrollState.hasScroll ? 'explore-region--has-scroll' : null,
+    scrollState.atTop ? 'explore-region--at-top' : null,
+    scrollState.atBottom ? 'explore-region--at-bottom' : null,
   ].filter(Boolean).join(' ');
   return (
     <div
@@ -156,7 +202,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = ({
       )}
       <div className="explore-region__content-wrapper">
         <div className="explore-region__content-inner">
-          <div ref={containerRef} className="explore-region__content">
+          <div ref={containerRef} className="explore-region__content" onScroll={checkScrollState}>
             {allItems.map((item, idx) => (
               <ExploreItemRenderer
                 key={item.id}
