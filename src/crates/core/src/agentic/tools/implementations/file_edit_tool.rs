@@ -68,6 +68,10 @@ Usage:
         false
     }
 
+    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
+        false
+    }
+
     async fn call_impl(
         &self,
         input: &Value,

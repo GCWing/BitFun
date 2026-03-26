@@ -103,6 +103,10 @@ Returns app_id and the app root directory. Use the root directory and file names
         false
     }
 
+    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
+        false
+    }
+
     async fn call_impl(
         &self,
         input: &Value,

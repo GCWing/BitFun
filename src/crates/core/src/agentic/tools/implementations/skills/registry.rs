@@ -2,7 +2,7 @@
 //!
 //! Manages Skill loading and enabled/disabled filtering
 //! Supports multiple application paths:
-//! .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills, .agents/skills
+//! .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills, .opencode/skills, .agents/skills
 
 use super::builtin::ensure_builtin_skills_installed;
 use super::types::{SkillData, SkillInfo, SkillLocation};
@@ -22,17 +22,22 @@ static SKILL_REGISTRY: OnceLock<SkillRegistry> = OnceLock::new();
 const PROJECT_SKILL_SUBDIRS: &[(&str, &str)] = &[
     (".bitfun", "skills"),
     (".claude", "skills"),
-    (".cursor", "skills"),
     (".codex", "skills"),
+    (".cursor", "skills"),
+    (".opencode", "skills"),
     (".agents", "skills"),
 ];
 
 /// Home-directory based user-level Skill paths.
 const USER_HOME_SKILL_SUBDIRS: &[(&str, &str)] = &[
     (".claude", "skills"),
-    (".cursor", "skills"),
     (".codex", "skills"),
+    (".cursor", "skills"),
+    (".agents", "skills"),
 ];
+
+/// Config-directory based user-level Skill paths.
+const USER_CONFIG_SKILL_SUBDIRS: &[(&str, &str)] = &[("opencode", "skills"), ("agents", "skills")];
 
 /// Skill directory entry
 #[derive(Debug, Clone)]
@@ -87,12 +92,14 @@ impl SkillRegistry {
         }
 
         if let Some(config_dir) = dirs::config_dir() {
-            let p = config_dir.join("agents").join("skills");
-            if p.exists() && p.is_dir() {
-                entries.push(SkillDirEntry {
-                    path: p,
-                    level: SkillLocation::User,
-                });
+            for (parent, sub) in USER_CONFIG_SKILL_SUBDIRS {
+                let p = config_dir.join(parent).join(sub);
+                if p.exists() && p.is_dir() {
+                    entries.push(SkillDirEntry {
+                        path: p,
+                        level: SkillLocation::User,
+                    });
+                }
             }
         }
 
@@ -142,8 +149,8 @@ impl SkillRegistry {
     /// Get all possible Skill directory paths
     ///
     /// Returns existing directories and their levels (project/user)
-    /// - Project-level: .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills, .agents/skills under workspace
-    /// - User-level: skills under bitfun user config, ~/.claude/skills, ~/.cursor/skills, ~/.codex/skills, ~/.config/agents/skills
+    /// - Project-level: .bitfun/skills, .claude/skills, .cursor/skills, .codex/skills, .opencode/skills, .agents/skills under workspace
+    /// - User-level: skills under bitfun user config, ~/.claude/skills, ~/.cursor/skills, ~/.codex/skills, ~/.agents/skills, ~/.config/opencode/skills, ~/.config/agents/skills
     pub fn get_possible_paths() -> Vec<SkillDirEntry> {
         Self::get_possible_paths_for_workspace(None)
     }

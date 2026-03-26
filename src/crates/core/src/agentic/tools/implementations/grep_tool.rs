@@ -18,9 +18,9 @@ impl GrepTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let ws_shell = context.ws_shell().ok_or_else(|| {
-            BitFunError::tool("Workspace shell not available".to_string())
-        })?;
+        let ws_shell = context
+            .ws_shell()
+            .ok_or_else(|| BitFunError::tool("Workspace shell not available".to_string()))?;
 
         let pattern = input
             .get("pattern")
@@ -52,7 +52,10 @@ impl GrepTool {
         if let Some(ft) = file_type {
             cmd.push_str(&format!(" --type {}", ft));
         }
-        cmd.push_str(&format!(" '{}' '{}' 2>/dev/null | head -n {}", escaped_pattern, escaped_path, head_limit));
+        cmd.push_str(&format!(
+            " '{}' '{}' 2>/dev/null | head -n {}",
+            escaped_pattern, escaped_path, head_limit
+        ));
 
         let full_cmd = format!(
             "if command -v rg >/dev/null 2>&1; then {}; else grep -rn{} '{}' '{}' 2>/dev/null | head -n {}; fi",
@@ -103,7 +106,10 @@ impl GrepTool {
         let resolved_path = resolve_path_with_workspace(search_path, context.workspace_root())?;
 
         let case_insensitive = input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false);
-        let multiline = input.get("multiline").and_then(|v| v.as_bool()).unwrap_or(false);
+        let multiline = input
+            .get("multiline")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let output_mode_str = input
             .get("output_mode")
             .and_then(|v| v.as_str())
@@ -113,9 +119,18 @@ impl GrepTool {
         let context_c = input.get("-C").and_then(|v| v.as_u64()).map(|v| v as usize);
         let before_context = input.get("-B").and_then(|v| v.as_u64()).map(|v| v as usize);
         let after_context = input.get("-A").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let head_limit = input.get("head_limit").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let glob_pattern = input.get("glob").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let file_type = input.get("type").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let head_limit = input
+            .get("head_limit")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let glob_pattern = input
+            .get("glob")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let file_type = input
+            .get("type")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         let mut options = GrepOptions::new(pattern, resolved_path)
             .case_insensitive(case_insensitive)
@@ -123,12 +138,24 @@ impl GrepTool {
             .output_mode(output_mode)
             .show_line_numbers(show_line_numbers);
 
-        if let Some(c) = context_c { options = options.context(c); }
-        if let Some(b) = before_context { options = options.before_context(b); }
-        if let Some(a) = after_context { options = options.after_context(a); }
-        if let Some(h) = head_limit { options = options.head_limit(h); }
-        if let Some(g) = glob_pattern { options = options.glob(g); }
-        if let Some(t) = file_type { options = options.file_type(t); }
+        if let Some(c) = context_c {
+            options = options.context(c);
+        }
+        if let Some(b) = before_context {
+            options = options.before_context(b);
+        }
+        if let Some(a) = after_context {
+            options = options.after_context(a);
+        }
+        if let Some(h) = head_limit {
+            options = options.head_limit(h);
+        }
+        if let Some(g) = glob_pattern {
+            options = options.glob(g);
+        }
+        if let Some(t) = file_type {
+            options = options.file_type(t);
+        }
 
         Ok(options)
     }
@@ -188,9 +215,17 @@ Usage:
         })
     }
 
-    fn is_readonly(&self) -> bool { true }
-    fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool { true }
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool { false }
+    fn is_readonly(&self) -> bool {
+        true
+    }
+
+    fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
+        true
+    }
+    
+    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
+        false
+    }
 
     fn render_tool_use_message(
         &self,
@@ -201,9 +236,16 @@ Usage:
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
         let file_type = input.get("type").and_then(|v| v.as_str());
         let glob_pattern = input.get("glob").and_then(|v| v.as_str());
-        let output_mode = input.get("output_mode").and_then(|v| v.as_str()).unwrap_or("files_with_matches");
+        let output_mode = input
+            .get("output_mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("files_with_matches");
 
-        let scope = if search_path == "." { "Current workspace".to_string() } else { search_path.to_string() };
+        let scope = if search_path == "." {
+            "Current workspace".to_string()
+        } else {
+            search_path.to_string()
+        };
         let scope_with_filter = if let Some(ft) = file_type {
             format!("{} (*.{})", scope, ft)
         } else if let Some(gp) = glob_pattern {
@@ -217,7 +259,10 @@ Usage:
             _ => "List matching files",
         };
 
-        format!("Search \"{}\" | {} | {}", pattern, scope_with_filter, mode_desc)
+        format!(
+            "Search \"{}\" | {} | {}",
+            pattern, scope_with_filter, mode_desc
+        )
     }
 
     async fn call_impl(
