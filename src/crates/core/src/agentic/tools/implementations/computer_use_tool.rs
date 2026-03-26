@@ -36,12 +36,18 @@ impl ComputerUseTool {
             .to_lowercase()
     }
 
-    fn require_anthropic_for_screenshot(ctx: &ToolUseContext) -> BitFunResult<()> {
-        if Self::primary_api_format(ctx) == "anthropic" {
+    /// Screenshot tool results attach JPEGs via `tool_image_attachments`; only providers whose
+    /// request converters emit multimodal tool output are supported (Anthropic + OpenAI-compatible).
+    fn require_multimodal_tool_output_for_screenshot(ctx: &ToolUseContext) -> BitFunResult<()> {
+        let f = Self::primary_api_format(ctx);
+        if matches!(
+            f.as_str(),
+            "anthropic" | "openai" | "response" | "responses"
+        ) {
             return Ok(());
         }
         Err(BitFunError::tool(
-            "Screenshot results include images in tool results; set the primary model to an Anthropic (Claude) API format. Other providers are not supported for screenshots yet.".to_string(),
+            "Screenshot results include images in tool results; set the primary model to Anthropic (Claude) or OpenAI-compatible API format. Other providers are not supported for screenshots yet.".to_string(),
         ))
     }
 
@@ -598,7 +604,7 @@ Each **`screenshot`** JPEG: **four-side margin coordinate scales** (numbers), **
 
         match action {
             "screenshot" => {
-                Self::require_anthropic_for_screenshot(context)?;
+                Self::require_multimodal_tool_output_for_screenshot(context)?;
                 let (params, ignored_crop_for_quadrant) = Self::parse_screenshot_params(input)?;
                 let crop_for_debug = params.crop_center;
                 let nav_debug = params.navigate_quadrant.map(|q| match q {

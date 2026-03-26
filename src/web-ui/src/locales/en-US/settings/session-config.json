@@ -14,7 +14,7 @@
   },
   "computerUse": {
     "sectionTitle": "Computer use (Claw)",
-    "sectionDescription": "Let the assistant capture the screen and control the mouse and keyboard in BitFun desktop. Requires macOS Accessibility and Screen Recording (or equivalent on other platforms). Screenshots in tool results need a primary model with Anthropic API format.",
+    "sectionDescription": "Let the assistant capture the screen and control the mouse and keyboard in BitFun desktop.",
     "enable": "Enable Computer use",
     "enableDesc": "When off, the ComputerUse tool stays disabled even in Claw mode.",
     "accessibility": "Accessibility",
@@ -22,7 +22,7 @@
     "granted": "Granted",
     "notGranted": "Not granted",
     "request": "Request",
-    "openSettings": "Open System Settings",
+    "openSettings": "Setting",
     "refreshStatus": "Refresh status",
     "desktopOnly": "Computer use settings are only available in the BitFun desktop app.",
     "platformNote": "Note"

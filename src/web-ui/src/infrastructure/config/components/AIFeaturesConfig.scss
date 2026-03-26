@@ -15,6 +15,17 @@
     gap: $size-gap-2;
   }
 
+  /** Computer use: authorized status label (Granted / 已授权) */
+  &__perm-status--granted {
+    color: var(--color-text-muted);
+  }
+
+  /** Computer use permission row: keep label short, avoid squashing action buttons (nowrap). */
+  &__row-action-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
   &__row-control--model {
     width: 100%;
     align-items: stretch;

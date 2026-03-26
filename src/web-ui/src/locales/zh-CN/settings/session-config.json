@@ -14,7 +14,7 @@
   },
   "computerUse": {
     "sectionTitle": "Computer use（助理 Claw）",
-    "sectionDescription": "在 BitFun 桌面端允许助理截取屏幕并控制键鼠。macOS 需「辅助功能」与「屏幕录制」权限。截图型工具结果需主模型为 Anthropic API 格式。",
+    "sectionDescription": "在 BitFun 桌面端允许助理截取屏幕并控制键鼠。",
     "enable": "启用 Computer use",
     "enableDesc": "关闭时，即使在 Claw 模式下也不会启用 ComputerUse 工具。",
     "accessibility": "辅助功能",
@@ -22,7 +22,7 @@
     "granted": "已授权",
     "notGranted": "未授权",
     "request": "请求授权",
-    "openSettings": "打开系统设置",
+    "openSettings": "系统设置",
     "refreshStatus": "刷新状态",
     "desktopOnly": "Computer use 仅在 BitFun 桌面应用中可用。",
     "platformNote": "说明"

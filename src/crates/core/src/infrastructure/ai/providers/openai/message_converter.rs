@@ -83,9 +83,37 @@ impl OpenAIMessageConverter {
 
     fn convert_tool_message_to_responses_item(msg: Message) -> Option<Value> {
         let call_id = msg.tool_call_id?;
-        let output = msg
-            .content
-            .unwrap_or_else(|| "Tool execution completed".to_string());
+        let text = msg.content.unwrap_or_default();
+
+        // Responses API: `output` may be a string or a list of input_text / input_image / input_file
+        // (see OpenAI FunctionCallOutput schema).
+        let output: Value = if let Some(attachments) = msg.tool_image_attachments.filter(|a| !a.is_empty()) {
+            let mut parts: Vec<Value> = attachments
+                .into_iter()
+                .map(|att| {
+                    let data_url = format!("data:{};base64,{}", att.mime_type, att.data_base64);
+                    json!({
+                        "type": "input_image",
+                        "image_url": data_url
+                    })
+                })
+                .collect();
+            parts.push(json!({
+                "type": "input_text",
+                "text": if text.is_empty() {
+                    "Tool execution completed".to_string()
+                } else {
+                    text
+                }
+            }));
+            json!(parts)
+        } else {
+            json!(if text.is_empty() {
+                "Tool execution completed".to_string()
+            } else {
+                text
+            })
+        };
 
         Some(json!({
             "type": "function_call_output",
@@ -171,6 +199,44 @@ impl OpenAIMessageConverter {
     }
 
     fn convert_single_message(msg: Message) -> Value {
+        // Chat Completions: multimodal tool message (e.g. GPT-4o vision + tools) — image parts + text.
+        if msg.role == "tool" {
+            if let Some(ref attachments) = msg.tool_image_attachments {
+                if !attachments.is_empty() {
+                    let mut parts: Vec<Value> = attachments
+                        .iter()
+                        .map(|att| {
+                            let url = format!("data:{};base64,{}", att.mime_type, att.data_base64);
+                            json!({
+                                "type": "image_url",
+                                "image_url": { "url": url, "detail": "auto" }
+                            })
+                        })
+                        .collect();
+                    let text = msg.content.clone().unwrap_or_default();
+                    if text.trim().is_empty() {
+                        parts.push(json!({
+                            "type": "text",
+                            "text": "Tool execution completed"
+                        }));
+                    } else {
+                        parts.push(json!({ "type": "text", "text": text }));
+                    }
+                    let mut openai_msg = json!({
+                        "role": "tool",
+                        "content": Value::Array(parts),
+                    });
+                    if let Some(id) = msg.tool_call_id {
+                        openai_msg["tool_call_id"] = Value::String(id);
+                    }
+                    if let Some(name) = msg.name {
+                        openai_msg["name"] = Value::String(name);
+                    }
+                    return openai_msg;
+                }
+            }
+        }
+
         let mut openai_msg = json!({
             "role": msg.role,
         });
@@ -282,7 +348,7 @@ impl OpenAIMessageConverter {
 #[cfg(test)]
 mod tests {
     use super::OpenAIMessageConverter;
-    use crate::util::types::{Message, ToolCall};
+    use crate::util::types::{Message, ToolCall, ToolImageAttachment};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -353,5 +419,58 @@ mod tests {
 
         assert_eq!(content[0]["type"], json!("input_image"));
         assert_eq!(content[1]["type"], json!("input_text"));
+    }
+
+    #[test]
+    fn converts_tool_message_with_images_to_responses_function_call_output() {
+        let messages = vec![Message {
+            role: "tool".to_string(),
+            content: Some("Screen captured".to_string()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: Some("call_cu_1".to_string()),
+            name: Some("computer_use".to_string()),
+            tool_image_attachments: Some(vec![ToolImageAttachment {
+                mime_type: "image/jpeg".to_string(),
+                data_base64: "AAA".to_string(),
+            }]),
+        }];
+
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(messages);
+        let out = &input[0];
+        assert_eq!(out["type"], json!("function_call_output"));
+        assert_eq!(out["call_id"], json!("call_cu_1"));
+        let output = out["output"].as_array().expect("multimodal output");
+        assert_eq!(output[0]["type"], json!("input_image"));
+        assert!(output[0]["image_url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/jpeg;base64,"));
+        assert_eq!(output[1]["type"], json!("input_text"));
+        assert_eq!(output[1]["text"], json!("Screen captured"));
+    }
+
+    #[test]
+    fn converts_tool_message_with_images_to_chat_completions_content_parts() {
+        let msg = Message {
+            role: "tool".to_string(),
+            content: Some("ok".to_string()),
+            reasoning_content: None,
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: Some("call_1".to_string()),
+            name: Some("computer_use".to_string()),
+            tool_image_attachments: Some(vec![ToolImageAttachment {
+                mime_type: "image/jpeg".to_string(),
+                data_base64: "YmFi".to_string(),
+            }]),
+        };
+
+        let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
+        let content = openai[0]["content"].as_array().expect("content parts");
+        assert_eq!(content[0]["type"], json!("image_url"));
+        assert_eq!(content[1]["type"], json!("text"));
+        assert_eq!(content[1]["text"], json!("ok"));
     }
 }

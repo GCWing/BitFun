@@ -92,6 +92,11 @@ export interface ConfigPageRowProps {
   multiline?: boolean;
   /** Flip to 3/7 ratio giving the control column more space */
   wide?: boolean;
+  /**
+   * ~40% label / ~60% control — middle ground between default (7:3) and wide (2:8).
+   * Use when the label must stay on one line (e.g. two-word titles) and controls need room.
+   */
+  balanced?: boolean;
 }
 
 export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
@@ -102,17 +107,21 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
   align = 'start',
   multiline = false,
   wide = false,
+  balanced = false,
 }) => {
   const cls = [
     'bitfun-config-page-row',
     `bitfun-config-page-row--${align}`,
     multiline && 'bitfun-config-page-row--multiline',
     wide && 'bitfun-config-page-row--wide',
+    balanced && 'bitfun-config-page-row--balanced',
     className,
   ].filter(Boolean).join(' ');
 
   const gridStyle: React.CSSProperties | undefined = wide
     ? { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 8fr)' }
+    : balanced
+    ? { gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 3fr)' }
     : multiline
     ? { gridTemplateColumns: '1fr' }
     : undefined;
