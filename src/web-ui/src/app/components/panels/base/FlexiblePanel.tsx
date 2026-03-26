@@ -476,6 +476,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             jumpToLine={editorData.jumpToLine}
             jumpToColumn={editorData.jumpToColumn}
             jumpToRange={editorData.jumpToRange}
+            navigationToken={editorData.navigationToken}
             isActiveTab={isActive}
             onFileMissingFromDiskChange={onFileMissingFromDiskChange}
             onContentChange={(newContent, hasChanges) => {

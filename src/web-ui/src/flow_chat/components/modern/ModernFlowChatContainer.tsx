@@ -47,7 +47,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const autoPinnedSessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const { workspacePath } = useWorkspaceContext();
-  const { isBtwSession, btwOrigin, btwParentTitle } = useFlowChatSessionRelationship(activeSession);
+  const { btwOrigin, btwParentTitle } = useFlowChatSessionRelationship(activeSession);
   const {
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,

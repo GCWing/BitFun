@@ -21,6 +21,8 @@ export interface FileTabOptions {
   jumpToColumn?: number;
    
   jumpToRange?: LineRange;
+  
+  navigationToken?: number;
    
   mode?: 'agent' | 'project';
    
@@ -60,6 +62,7 @@ class FileTabManager {
       jumpToLine,
       jumpToColumn,
       jumpToRange,
+      navigationToken,
       mode = 'agent',
       forceNew = false,
       splitView = false,
@@ -84,6 +87,7 @@ class FileTabManager {
       filePath: normalizedPath,
       fileName,
       workspacePath,
+      navigationToken: navigationToken ?? Date.now(),
       
       ...(finalJumpToRange && { jumpToRange: finalJumpToRange }),
       

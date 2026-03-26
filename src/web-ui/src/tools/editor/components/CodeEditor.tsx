@@ -82,6 +82,8 @@ export interface CodeEditorProps {
   jumpToColumn?: number;
   /** Jump to line range (preferred, supports single or multi-line selection) */
   jumpToRange?: import('@/component-library/components/Markdown').LineRange;
+  /** Unique token for repeated jump requests to the same location. */
+  navigationToken?: number;
   /** When false, disk sync polling is paused (e.g. background editor tab). */
   isActiveTab?: boolean;
   /** File path is not an existing file on disk (drives tab "deleted" label). */
@@ -137,6 +139,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   jumpToLine,
   jumpToColumn,
   jumpToRange,
+  navigationToken,
   isActiveTab = true,
   onFileMissingFromDiskChange,
 }) => {
@@ -1043,6 +1046,61 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     });
   }, []);
 
+  const isJumpStillApplied = useCallback((
+    editor: any,
+    model: any,
+    line: number,
+    column: number,
+    endLine?: number
+  ): boolean => {
+    const lineCount = model.getLineCount();
+    const targetLine = Math.min(line, Math.max(1, lineCount));
+    const targetEndLine = endLine ? Math.min(endLine, Math.max(1, lineCount)) : undefined;
+    const maxColumnForLine = model.getLineMaxColumn(targetLine);
+    const targetColumn = Math.min(Math.max(1, column), maxColumnForLine);
+    const requiredEndLine = targetEndLine ?? targetLine;
+    const visibleRanges = typeof editor.getVisibleRanges === 'function'
+      ? editor.getVisibleRanges()
+      : [];
+    const isTargetVisible = visibleRanges.some((range: monaco.Range) =>
+      range.startLineNumber <= targetLine && range.endLineNumber >= requiredEndLine
+    );
+
+    if (!isTargetVisible) {
+      return false;
+    }
+
+    const selection = typeof editor.getSelection === 'function' ? editor.getSelection() : null;
+
+    if (targetEndLine && targetEndLine > targetLine) {
+      if (!selection) {
+        return false;
+      }
+
+      const endLineMaxColumn = model.getLineMaxColumn(targetEndLine);
+      return (
+        selection.startLineNumber === targetLine &&
+        selection.startColumn === 1 &&
+        selection.endLineNumber === targetEndLine &&
+        selection.endColumn === endLineMaxColumn
+      );
+    }
+
+    const position = typeof editor.getPosition === 'function' ? editor.getPosition() : null;
+    if (!position || !selection) {
+      return false;
+    }
+
+    return (
+      position.lineNumber === targetLine &&
+      position.column === targetColumn &&
+      selection.startLineNumber === targetLine &&
+      selection.startColumn === targetColumn &&
+      selection.endLineNumber === targetLine &&
+      selection.endColumn === targetColumn
+    );
+  }, []);
+
   // Handle initial jump (after content load). If the model has fewer lines than requested,
   // wait for content to sync into the model; otherwise we clamp to line 1, set lastJump,
   // and dedupe blocks a correct jump after the real text arrives.
@@ -1064,7 +1122,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       lastJump &&
       lastJump.filePath === filePath &&
       lastJump.line === finalRange.start &&
-      lastJump.endLine === finalRange.end
+      lastJump.endLine === finalRange.end &&
+      isJumpStillApplied(editor, model, finalRange.start, targetColumn, finalRange.end)
     ) {
       return;
     }
@@ -1136,7 +1195,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         timeoutId = null;
       }
     };
-  }, [jumpToRange, jumpToLine, jumpToColumn, monacoReady, loading, content, filePath, performJump]);
+  }, [jumpToRange, jumpToLine, jumpToColumn, navigationToken, monacoReady, loading, content, filePath, performJump, isJumpStillApplied]);
 
   // Status bar popover: open and confirm
   const openStatusBarPopover = useCallback((type: 'position' | 'indent' | 'encoding' | 'language', e: React.MouseEvent) => {
