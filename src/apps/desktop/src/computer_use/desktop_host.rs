@@ -2,12 +2,16 @@
 
 use async_trait::async_trait;
 use bitfun_core::agentic::tools::computer_use_host::{
-    clamp_point_crop_half_extent, ComputerScreenshot, ComputerUseHost, ComputerUseImageContentRect,
-    ComputerUseNavigateQuadrant, ComputerUseNavigationRect, ComputerUsePermissionSnapshot,
-    ComputerUseScreenshotParams, ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot,
-    ScreenshotCropCenter, UiElementLocateQuery, UiElementLocateResult,
-    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
+    clamp_point_crop_half_extent, ActionRecord, ComputerScreenshot, ComputerUseHost,
+    ComputerUseImageContentRect, ComputerUseImplicitScreenshotCenter,
+    ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseNavigateQuadrant,
+    ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
+    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
+    OcrRegionNative, ScreenshotCropCenter, SomElement, UiElementLocateQuery, UiElementLocateResult,
+    COMPUTER_USE_POINT_CROP_HALF_DEFAULT, COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
+    COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
+use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use bitfun_core::agentic::tools::computer_use_host::{
     ComputerUseForegroundApplication, ComputerUsePointerGlobal,
@@ -19,24 +23,39 @@ use enigo::{
 use fontdue::{Font, FontSettings};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, Rgb, RgbImage};
-use log::warn;
+use log::{debug, warn};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
-#[cfg(target_os = "macos")]
 use screenshots::display_info::DisplayInfo;
 use screenshots::Screen;
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Default pointer overlay; replace `assets/computer_use_pointer.svg` and rebuild to customize.
 /// Hotspot in SVG user space must stay at **(0,0)** (arrow tip).
 const POINTER_OVERLAY_SVG: &str = include_str!("../../assets/computer_use_pointer.svg");
 
+/// Screenshot cache validity duration (ms) - reuse full capture for subsequent crops within this window
+const SCREENSHOT_CACHE_TTL_MS: u64 = 300;
+
+/// Error text when `click_needs_fresh_screenshot` blocks `click` or Enter `key_chord` (single source of truth).
+const STALE_CAPTURE_TOOL_MESSAGE: &str = "Computer use refused: call **`screenshot`** first. Use a **bare** `screenshot` (do not set `screenshot_reset_navigation`) — the host applies a **~500×500** crop around the **mouse**. Before Return/Enter in a focused text field, set **`screenshot_implicit_center`**: **`text_caret`**. This is required after the pointer moved since the last capture, before **`click`** or before **`key_chord`** that includes Return/Enter.";
+
+/// Relative nudges (`pointer_move_rel`, `ComputerUseMouseStep`) right after a model-driven screenshot are almost always wrong when deltas are guessed from the image; block until a trusted absolute move.
+const VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG: &str = "Computer use refused: do not use `pointer_move_rel` or `ComputerUseMouseStep` immediately after a `screenshot` — nudging from the JPEG is inaccurate. First reposition with `move_to_text`, `click_element`, `click_label`, `locate` + `mouse_move` (`use_screen_coordinates`: true), or `mouse_move` using globals from tool JSON; then relative nudges are allowed if still needed.";
+
+#[derive(Debug, Clone)]
+struct ScreenshotCacheEntry {
+    rgba: image::RgbaImage,
+    screen: Screen,
+    capture_time: Instant,
+}
+
 #[derive(Debug)]
 struct PointerPixmapCache {
     w: u32,
     h: u32,
-    /// Premultiplied RGBA8 (`tiny-skia` / `resvg` format).
+    /// Premultiplied RGBA8 (`tiny-skya` / `resvg` format).
     rgba: Vec<u8>,
 }
 
@@ -131,12 +150,7 @@ fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
     }
 }
 
-// ── Computer-use coordinate grid (100 px step): lines + anti-aliased axis labels (Inter OFL) ──
-
-const COORD_GRID_DEFAULT_STEP: u32 = 100;
-const COORD_GRID_MAJOR_STEP: u32 = 500;
-/// Logical scale knob; mapped to TTF pixel size for `fontdue` (`scale * 3.5`).
-const COORD_LABEL_SCALE: i32 = 11;
+// ── SoM / overlay text: Inter (OFL) via fontdue ──
 
 /// Inter (OFL); variable font from google/fonts OFL tree.
 const COORD_AXIS_FONT_TTF: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
@@ -146,13 +160,8 @@ static COORD_AXIS_FONT: OnceLock<Font> = OnceLock::new();
 fn coord_axis_font() -> &'static Font {
     COORD_AXIS_FONT.get_or_init(|| {
         Font::from_bytes(COORD_AXIS_FONT_TTF, FontSettings::default())
-            .expect("Inter TTF embedded for computer-use axis labels")
+            .expect("Inter TTF embedded for computer-use SoM/overlay labels")
     })
-}
-
-#[inline]
-fn coord_label_px() -> f32 {
-    COORD_LABEL_SCALE as f32 * 3.5
 }
 
 /// Alpha-blend grayscale coverage onto `img` (baseline-anchored glyph).
@@ -228,243 +237,175 @@ fn coord_draw_text_h(img: &mut RgbImage, mut baseline_x: i32, baseline_y: i32, t
     }
 }
 
-/// Vertically center a horizontal digit string on tick `py`.
-fn coord_draw_u32_h_centered(img: &mut RgbImage, lx: i32, py: i32, n: u32, fg: Rgb<u8>, px: f32) {
-    let s = n.to_string();
+// ── Set-of-Mark (SoM) label rendering ──
+
+/// Badge font size for SoM labels (smaller than axis labels).
+const SOM_LABEL_PX: f32 = 28.0;
+/// Badge background color (bright magenta -- high contrast on most UIs).
+const SOM_BG: Rgb<u8> = Rgb([230, 40, 120]);
+/// Badge text color.
+const SOM_FG: Rgb<u8> = Rgb([255, 255, 255]);
+/// Padding around the label text inside the badge.
+const SOM_PAD_X: i32 = 4;
+const SOM_PAD_Y: i32 = 2;
+
+/// Draw SoM numbered labels on the frame at each element's mapped image position.
+/// `elements`: SoM elements with global coordinates.
+/// `margin_l`, `margin_t`: content area offset in the frame.
+/// `map_fn`: maps global (f64,f64) -> Option<(i32,i32)> in content-area pixel space.
+fn draw_som_labels<F>(
+    frame: &mut RgbImage,
+    elements: &[SomElement],
+    margin_l: u32,
+    margin_t: u32,
+    map_fn: F,
+) where
+    F: Fn(f64, f64) -> Option<(i32, i32)>,
+{
     let font = coord_axis_font();
-    let (m_rep, _) = font.rasterize('8', px);
-    let text_h = m_rep.height as i32;
-    let baseline_y = py - (m_rep.ymin + text_h / 2);
-    coord_draw_text_h(img, lx, baseline_y, &s, fg, px);
-}
+    let (fw, fh) = frame.dimensions();
 
-#[inline]
-fn coord_plot(img: &mut RgbImage, x: i32, y: i32, c: Rgb<u8>) {
-    let w = img.width() as i32;
-    let h = img.height() as i32;
-    if x >= 0 && x < w && y >= 0 && y < h {
-        img.put_pixel(x as u32, y as u32, c);
+    for elem in elements {
+        let Some((cx, cy)) = map_fn(elem.global_center_x, elem.global_center_y) else {
+            continue;
+        };
+
+        // Map from content-area space to frame space
+        let img_x = cx + margin_l as i32;
+        let img_y = cy + margin_t as i32;
+
+        // Measure label text width
+        let label_text = elem.label.to_string();
+        let text_w = coord_measure_str_width(&label_text, SOM_LABEL_PX);
+        let (m_rep, _) = font.rasterize('8', SOM_LABEL_PX);
+        let text_h = m_rep.height as i32;
+
+        let badge_w = text_w + SOM_PAD_X * 2 + 2; // +2 for bold offset
+        let badge_h = text_h + SOM_PAD_Y * 2;
+
+        // Position badge at top-left of element's bounds (mapped to image),
+        // but fall back to center if bounds mapping fails
+        let (badge_x, badge_y) = {
+            let bx = elem.bounds_left;
+            let by = elem.bounds_top;
+            if let Some((bix, biy)) = map_fn(bx, by) {
+                (bix + margin_l as i32, biy + margin_t as i32)
+            } else {
+                // Fall back to center
+                (img_x - badge_w / 2, img_y - badge_h / 2)
+            }
+        };
+
+        // Clamp to frame bounds
+        let bx0 = badge_x.max(0).min(fw as i32 - badge_w);
+        let by0 = badge_y.max(0).min(fh as i32 - badge_h);
+
+        // Draw badge background rectangle
+        for dy in 0..badge_h {
+            for dx in 0..badge_w {
+                let px = bx0 + dx;
+                let py = by0 + dy;
+                if px >= 0 && px < fw as i32 && py >= 0 && py < fh as i32 {
+                    frame.put_pixel(px as u32, py as u32, SOM_BG);
+                }
+            }
+        }
+
+        // Draw label text centered in badge
+        let text_x = bx0 + SOM_PAD_X;
+        let baseline_y = by0 + SOM_PAD_Y + text_h - (m_rep.ymin.max(0) as i32);
+        coord_draw_text_h(frame, text_x, baseline_y, &label_text, SOM_FG, SOM_LABEL_PX);
     }
 }
 
-fn coord_digit_block_width(digit_count: usize, px: f32) -> i32 {
-    if digit_count == 0 {
-        return 0;
-    }
-    let s: String = std::iter::repeat('8').take(digit_count).collect();
-    coord_measure_str_width(&s, px)
-}
-
-/// Height of a vertical digit stack (top-to-bottom) for `nd` decimal digits.
-fn coord_vertical_digit_stack_height(nd: usize, px: f32) -> i32 {
-    if nd == 0 {
-        return 0;
-    }
-    let font = coord_axis_font();
-    let gap = (px * 0.22).ceil().max(1.0) as i32;
-    let mut tot = 0i32;
-    for _ in 0..nd {
-        let (m, _) = font.rasterize('8', px);
-        tot += m.height as i32 + gap;
-    }
-    tot - gap
-}
-
-/// Draw decimal `n` with digits stacked **top-to-bottom** (high-order digit at top).
-/// Column is centered on `center_x` (tick position); narrow horizontal footprint for dense x-axis ticks.
-fn coord_draw_u32_vertical_stack(
-    img: &mut RgbImage,
-    center_x: i32,
-    top_y: i32,
-    n: u32,
-    fg: Rgb<u8>,
-    px: f32,
-) {
-    let s = n.to_string();
-    let font = coord_axis_font();
-    let gap = (px * 0.22).ceil().max(1.0) as i32;
-    let mut ty = top_y;
-    for c in s.chars() {
-        let (m, bmp) = font.rasterize(c, px);
-        let top_left_x = center_x - m.width as i32 / 2;
-        let top_left_y = ty;
-        let baseline_x = top_left_x - m.xmin as i32;
-        let baseline_y = top_left_y - m.ymin as i32;
-        coord_blit_glyph_bold(img, baseline_x, baseline_y, &m, &bmp, fg);
-        ty += m.height as i32 + gap;
-    }
-}
-
-fn content_grid_step(min_side: u32) -> u32 {
-    if min_side < 240 {
-        25u32
-    } else if min_side < 480 {
-        50u32
-    } else {
-        COORD_GRID_DEFAULT_STEP
-    }
-}
-
-/// Symmetric white margins (left = right, top = bottom) for ruler labels outside the capture.
-/// `ruler_origin_*` is the **full-capture native** pixel index of the content’s top-left (0,0 for full screen; crop `x0,y0` for point crops) so label digit width fits large coordinates.
-fn computer_use_margins(
-    cw: u32,
-    ch: u32,
-    ruler_origin_x: u32,
-    ruler_origin_y: u32,
-) -> (u32, u32) {
-    if cw < 2 || ch < 2 {
-        return (0, 0);
-    }
-    let px = coord_label_px();
-    let tick_len = 14i32;
-    let pad = 12i32;
-    let max_val_x = ruler_origin_x.saturating_add(cw.saturating_sub(1));
-    let max_val_y = ruler_origin_y.saturating_add(ch.saturating_sub(1));
-    let nd_x = (max_val_x.max(1).ilog10() as usize + 1).max(4);
-    let nd_y = (max_val_y.max(1).ilog10() as usize + 1).max(4);
-    let nd = nd_x.max(nd_y);
-    let ml = (coord_digit_block_width(nd, px) + tick_len + pad).max(0) as u32;
-    // Top/bottom: x-axis labels are vertical stacks — need height for `nd_x` digits.
-    let x_stack_h = coord_vertical_digit_stack_height(nd_x, px);
-    let mt = (x_stack_h + tick_len + pad).max(0) as u32;
-    (ml, mt)
-}
-
-/// White border, grid lines on the capture only, numeric labels in the margin.
-/// `ruler_origin_x/y`: **full-capture native** index of content pixel (0,0) — for a point crop, pass the crop’s `x0,y0` so tick labels match the same **whole-screen bitmap** space as a full-screen shot (not 0..crop_width only).
+/// Returns the capture bitmap unchanged (no grid, rulers, or margins). Pointer and SoM overlays are applied later.
 fn compose_computer_use_frame(
     content: RgbImage,
-    ruler_origin_x: u32,
-    ruler_origin_y: u32,
+    _ruler_origin_x: u32,
+    _ruler_origin_y: u32,
 ) -> (RgbImage, u32, u32) {
-    let cw = content.width();
-    let ch = content.height();
-    if cw < 2 || ch < 2 {
-        return (content, 0, 0);
-    }
-    let grid_step = content_grid_step(cw.min(ch));
-    let (ml, mt) = computer_use_margins(cw, ch, ruler_origin_x, ruler_origin_y);
-    let mr = ml;
-    let mb = mt;
-    let tw = ml + cw + mr;
-    let th = mt + ch + mb;
-    let label_px = coord_label_px();
-    let tick_len = 14i32;
-    let pad = 12i32;
+    (content, 0, 0)
+}
 
-    let mut out = RgbImage::new(tw, th);
-    for p in out.pixels_mut() {
-        *p = Rgb([255u8, 255, 255]);
+fn implicit_confirmation_should_apply(click_needs: bool, params: &ComputerUseScreenshotParams) -> bool {
+    // Applies on **every** bare `screenshot` while confirmation is required — including the
+    // first capture in a session (`last_shot_refinement` may still be `None`), so click/Enter
+    // guards get a ~500×500 around the mouse (or `text_caret` when requested) instead of full screen.
+    //
+    // **Always** apply when `click_needs` (even during quadrant/point-crop drill): previously we
+    // skipped implicit crop while `navigation_focus` was Quadrant/PointCrop, which produced large
+    // confirmation JPEGs; confirmation shots must stay ~500×500 around the pointer/caret.
+    if !click_needs {
+        return false;
     }
-    for yy in 0..ch {
-        for xx in 0..cw {
-            out.put_pixel(ml + xx, mt + yy, *content.get_pixel(xx, yy));
+    if params.crop_center.is_some()
+        || params.navigate_quadrant.is_some()
+        || params.reset_navigation
+    {
+        return false;
+    }
+    true
+}
+
+fn global_to_native_full_pixel_center(
+    gx: f64,
+    gy: f64,
+    native_w: u32,
+    native_h: u32,
+    d: &DisplayInfo,
+) -> (u32, u32) {
+    #[cfg(target_os = "macos")]
+    {
+        let geo = MacPointerGeo::from_display(native_w, native_h, d);
+        let lx = gx - geo.disp_ox;
+        let ly = gy - geo.disp_oy;
+        if lx < 0.0 || lx >= geo.disp_w || ly < 0.0 || ly >= geo.disp_h {
+            return clamp_center_to_native(native_w / 2, native_h / 2, native_w, native_h);
+        }
+        let full_ix = ((lx / geo.disp_w) * geo.full_px_w as f64).floor() as u32;
+        let full_iy = ((ly / geo.disp_h) * geo.full_px_h as f64).floor() as u32;
+        clamp_center_to_native(full_ix, full_iy, native_w, native_h)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let disp_w = d.width as f64;
+        let disp_h = d.height as f64;
+        if disp_w <= 0.0 || disp_h <= 0.0 || native_w == 0 || native_h == 0 {
+            return (0, 0);
+        }
+        let lx = gx - d.x as f64;
+        let ly = gy - d.y as f64;
+        if lx < 0.0 || lx >= disp_w || ly < 0.0 || ly >= disp_h {
+            return clamp_center_to_native(native_w / 2, native_h / 2, native_w, native_h);
+        }
+        let full_ix = ((lx / disp_w) * native_w as f64).floor() as u32;
+        let full_iy = ((ly / disp_h) * native_h as f64).floor() as u32;
+        clamp_center_to_native(full_ix, full_iy, native_w, native_h)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn implicit_global_center_for_confirmation(
+    center: ComputerUseImplicitScreenshotCenter,
+    mx: f64,
+    my: f64,
+) -> (f64, f64) {
+    match center {
+        ComputerUseImplicitScreenshotCenter::Mouse => (mx, my),
+        ComputerUseImplicitScreenshotCenter::TextCaret => {
+            crate::computer_use::macos_ax_ui::global_point_for_text_caret_screenshot(mx, my)
         }
     }
+}
 
-    let grid = Rgb([52, 52, 68]);
-    let grid_major = Rgb([95, 95, 118]);
-    let tick = Rgb([180, 130, 40]);
-    // Coordinate numerals in white margins — saturated red for visibility.
-    let label = Rgb([200, 32, 40]);
-
-    let cl = ml as i32;
-    let ct = mt as i32;
-    let cr = (ml + cw - 1) as i32;
-    let cb = (mt + ch - 1) as i32;
-    let wi = tw as i32;
-    let hi = th as i32;
-
-    let mut gx = grid_step as i32;
-    while gx < cw as i32 {
-        let major = (gx as u32) % COORD_GRID_MAJOR_STEP == 0;
-        let thick = if major { 2 } else { 1 };
-        let c = if major { grid_major } else { grid };
-        for t in 0..thick {
-            let px = cl + gx + t;
-            if px >= cl && px <= cr {
-                for py in ct..=cb {
-                    coord_plot(&mut out, px, py, c);
-                }
-            }
-        }
-        gx += grid_step as i32;
-    }
-
-    let mut gy = grid_step as i32;
-    while gy < ch as i32 {
-        let major = (gy as u32) % COORD_GRID_MAJOR_STEP == 0;
-        let thick = if major { 2 } else { 1 };
-        let c = if major { grid_major } else { grid };
-        for t in 0..thick {
-            let py = ct + gy + t;
-            if py >= ct && py <= cb {
-                for px in cl..=cr {
-                    coord_plot(&mut out, px, py, c);
-                }
-            }
-        }
-        gy += grid_step as i32;
-    }
-
-    let top_label_y = pad.max(2);
-    for gxc in (0..cw as i32).step_by(grid_step as usize) {
-        let tick_x = cl + gxc;
-        for k in 0..tick_len.min(ct.max(1)) {
-            coord_plot(&mut out, tick_x, ct - 1 - k, tick);
-        }
-        let val = ruler_origin_x.saturating_add(gxc.max(0) as u32);
-        let col_w = coord_measure_str_width("8", label_px).max(1);
-        let cx = tick_x.clamp(col_w / 2 + 2, wi - col_w / 2 - 2);
-        coord_draw_u32_vertical_stack(&mut out, cx, top_label_y, val, label, label_px);
-    }
-
-    let bot_label_y = cb + tick_len + 4;
-    for gxc in (0..cw as i32).step_by(grid_step as usize) {
-        let tick_x = cl + gxc;
-        for k in 0..tick_len {
-            let y = cb + 1 + k;
-            if y < hi {
-                coord_plot(&mut out, tick_x, y, tick);
-            }
-        }
-        let val = ruler_origin_x.saturating_add(gxc.max(0) as u32);
-        let col_w = coord_measure_str_width("8", label_px).max(1);
-        let cx = tick_x.clamp(col_w / 2 + 2, wi - col_w / 2 - 2);
-        coord_draw_u32_vertical_stack(&mut out, cx, bot_label_y, val, label, label_px);
-    }
-
-    let left_numbers_x = pad.max(2);
-    for gyc in (0..ch as i32).step_by(grid_step as usize) {
-        let py = ct + gyc;
-        for k in 0..tick_len.min(cl.max(1)) {
-            coord_plot(&mut out, cl - 1 - k, py, tick);
-        }
-        let val = ruler_origin_y.saturating_add(gyc.max(0) as u32);
-        let s = val.to_string();
-        let dw = coord_measure_str_width(&s, label_px);
-        let lx = left_numbers_x.min(cl - dw - 2).max(2);
-        coord_draw_u32_h_centered(&mut out, lx, py, val, label, label_px);
-    }
-
-    let right_text_x = cr + tick_len + 4;
-    for gyc in (0..ch as i32).step_by(grid_step as usize) {
-        let py = ct + gyc;
-        for k in 0..tick_len {
-            let x = cr + 1 + k;
-            if x < wi {
-                coord_plot(&mut out, x, py, tick);
-            }
-        }
-        let val = ruler_origin_y.saturating_add(gyc.max(0) as u32);
-        let s = val.to_string();
-        let dw = coord_measure_str_width(&s, label_px);
-        let lx = right_text_x.min(wi - dw - 2).max(2);
-        coord_draw_u32_h_centered(&mut out, lx, py, val, label, label_px);
-    }
-
-    (out, ml, mt)
+#[cfg(not(target_os = "macos"))]
+fn implicit_global_center_for_confirmation(
+    center: ComputerUseImplicitScreenshotCenter,
+    mx: f64,
+    my: f64,
+) -> (f64, f64) {
+    let _ = center;
+    (mx, my)
 }
 
 /// JPEG quality for computer-use screenshots. Native display resolution is preserved (no downscale)
@@ -686,13 +627,13 @@ impl MacPointerGeo {
 
 #[derive(Clone, Copy, Debug)]
 struct PointerMap {
-    /// Composed JPEG size (includes white margin).
+    /// Screenshot JPEG width/height (same as capture when there is no frame padding).
     image_w: u32,
     image_h: u32,
-    /// Top-left of capture inside the JPEG.
+    /// Top-left of capture inside the JPEG (0 when there is no padding).
     content_origin_x: u32,
     content_origin_y: u32,
-    /// Native capture pixel size (the screen bitmap, no margin).
+    /// Native capture pixel size (the cropped/visible bitmap).
     content_w: u32,
     content_h: u32,
     native_w: u32,
@@ -742,7 +683,7 @@ impl PointerMap {
         Ok((center_full_x, center_full_y))
     }
 
-    /// Normalized 0..=1000 maps to the **capture** (same as pre-margin bitmap; independent of ruler padding).
+    /// Normalized 0..=1000 maps to the **capture** bitmap.
     fn map_normalized_to_global_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
         if self.native_w == 0 || self.native_h == 0 {
             return Err(BitFunError::tool(
@@ -781,15 +722,67 @@ enum ComputerUseNavFocus {
     },
 }
 
-pub struct DesktopComputerUseHost {
-    last_pointer_map: Mutex<Option<PointerMap>>,
+/// Unified mutable session state for computer use — one mutex instead of five.
+/// State transitions are applied centrally after each action (screenshot, pointer move, click, etc.).
+#[derive(Debug)]
+struct ComputerUseSessionMutableState {
+    pointer_map: Option<PointerMap>,
     /// When true, a fresh `screenshot_display` is required before `click` and before `key_chord` that sends Return/Enter
     /// (set after pointer moves / click; cleared after screenshot).
-    click_needs_fresh_screenshot: Mutex<bool>,
+    click_needs_fresh_screenshot: bool,
     /// Last `screenshot_display` scope (full screen vs point crop) for tool hints and click rules.
-    last_shot_refinement: Mutex<Option<ComputerUseScreenshotRefinement>>,
+    last_shot_refinement: Option<ComputerUseScreenshotRefinement>,
     /// Drill / crop context for the next `screenshot` (see [`ComputerUseNavFocus`]).
-    navigation_focus: Mutex<Option<ComputerUseNavFocus>>,
+    navigation_focus: Option<ComputerUseNavFocus>,
+    /// Cached full-screen screenshot for fast consecutive crops.
+    screenshot_cache: Option<ScreenshotCacheEntry>,
+    /// After `screenshot`, block `pointer_move_rel` / `ComputerUseMouseStep` until an absolute move
+    /// from AX/OCR/globals (`mouse_move`, `move_to_text`, `click_element`, `click_label`) clears this.
+    block_vision_pixel_nudge_after_screenshot: bool,
+    /// Action optimizer for loop detection, history, and visual verification.
+    optimizer: ComputerUseOptimizer,
+}
+
+impl ComputerUseSessionMutableState {
+    fn new() -> Self {
+        Self {
+            pointer_map: None,
+            click_needs_fresh_screenshot: true,
+            last_shot_refinement: None,
+            navigation_focus: None,
+            screenshot_cache: None,
+            block_vision_pixel_nudge_after_screenshot: false,
+            optimizer: ComputerUseOptimizer::new(),
+        }
+    }
+
+    /// Called after a successful screenshot capture.
+    fn transition_after_screenshot(
+        &mut self,
+        map: PointerMap,
+        refinement: ComputerUseScreenshotRefinement,
+        nav_focus: Option<ComputerUseNavFocus>,
+    ) {
+        self.pointer_map = Some(map);
+        self.last_shot_refinement = Some(refinement);
+        self.navigation_focus = nav_focus;
+        self.click_needs_fresh_screenshot = false;
+        self.block_vision_pixel_nudge_after_screenshot = true;
+    }
+
+    /// Called after pointer mutation (move, step, relative), click, scroll, key_chord, or type_text.
+    fn transition_after_pointer_mutation(&mut self) {
+        self.click_needs_fresh_screenshot = true;
+    }
+
+    /// Called after click (same effect as pointer mutation for freshness).
+    fn transition_after_click(&mut self) {
+        self.click_needs_fresh_screenshot = true;
+    }
+}
+
+pub struct DesktopComputerUseHost {
+    state: Mutex<ComputerUseSessionMutableState>,
 }
 
 impl std::fmt::Debug for DesktopComputerUseHost {
@@ -801,10 +794,13 @@ impl std::fmt::Debug for DesktopComputerUseHost {
 impl DesktopComputerUseHost {
     pub fn new() -> Self {
         Self {
-            last_pointer_map: Mutex::new(None),
-            click_needs_fresh_screenshot: Mutex::new(true),
-            last_shot_refinement: Mutex::new(None),
-            navigation_focus: Mutex::new(None),
+            state: Mutex::new(ComputerUseSessionMutableState::new()),
+        }
+    }
+
+    fn clear_vision_pixel_nudge_block(&self) {
+        if let Ok(mut s) = self.state.lock() {
+            s.block_vision_pixel_nudge_after_screenshot = false;
         }
     }
 
@@ -1050,8 +1046,21 @@ end tell"#])
             "right" => Key::RightArrow,
             "home" => Key::Home,
             "end" => Key::End,
-            "pageup" => Key::PageUp,
-            "pagedown" => Key::PageDown,
+            "pageup" | "page_up" => Key::PageUp,
+            "pagedown" | "page_down" => Key::PageDown,
+            "capslock" | "caps_lock" => Key::CapsLock,
+            "f1" => Key::F1,
+            "f2" => Key::F2,
+            "f3" => Key::F3,
+            "f4" => Key::F4,
+            "f5" => Key::F5,
+            "f6" => Key::F6,
+            "f7" => Key::F7,
+            "f8" => Key::F8,
+            "f9" => Key::F9,
+            "f10" => Key::F10,
+            "f11" => Key::F11,
+            "f12" => Key::F12,
             s if s.len() == 1 => {
                 let c = s.chars().next().unwrap();
                 Key::Unicode(c)
@@ -1074,6 +1083,147 @@ end tell"#])
         Ok(buf)
     }
 
+    /// JPEG for OCR only: **no** pointer/SoM overlay — raw capture pixels.
+    const OCR_RAW_JPEG_QUALITY: u8 = 75;
+
+    /// Build [`ComputerScreenshot`] from a raw RGB crop; image pixels map 1:1 to `native_*` at `display_origin_*`.
+    fn raw_shot_from_rgb_crop(
+        rgb: RgbImage,
+        display_origin_x: i32,
+        display_origin_y: i32,
+        native_w: u32,
+        native_h: u32,
+    ) -> BitFunResult<ComputerScreenshot> {
+        let jpeg_bytes = Self::encode_jpeg(&rgb, Self::OCR_RAW_JPEG_QUALITY)?;
+        let iw = rgb.width();
+        let ih = rgb.height();
+        Ok(ComputerScreenshot {
+            bytes: jpeg_bytes,
+            mime_type: "image/jpeg".to_string(),
+            image_width: iw,
+            image_height: ih,
+            native_width: native_w,
+            native_height: native_h,
+            display_origin_x,
+            display_origin_y,
+            vision_scale: 1.0_f64,
+            pointer_image_x: None,
+            pointer_image_y: None,
+            screenshot_crop_center: None,
+            point_crop_half_extent_native: None,
+            navigation_native_rect: None,
+            quadrant_navigation_click_ready: false,
+            image_content_rect: Some(ComputerUseImageContentRect {
+                left: 0,
+                top: 0,
+                width: iw,
+                height: ih,
+            }),
+            som_labels: vec![],
+            implicit_confirmation_crop_applied: false,
+        })
+    }
+
+    /// Full primary-display region in **global logical coordinates** (same as `CGDisplayBounds` / AX).
+    fn ocr_full_primary_display_region() -> BitFunResult<OcrRegionNative> {
+        let screen = Screen::from_point(0, 0)
+            .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
+        let d = screen.display_info;
+        Ok(OcrRegionNative {
+            x0: d.x,
+            y0: d.y,
+            width: d.width,
+            height: d.height,
+        })
+    }
+
+    /// Region to OCR: explicit `ocr_region_native`, else (macOS) frontmost window from AX, else full primary display.
+    fn ocr_resolve_region_for_capture(region_native: Option<OcrRegionNative>) -> BitFunResult<OcrRegionNative> {
+        if let Some(r) = region_native {
+            return Ok(r);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            match crate::computer_use::macos_ax_ui::frontmost_window_bounds_global() {
+                Ok((x0, y0, w, h)) => Ok(OcrRegionNative { x0, y0, width: w, height: h }),
+                Err(e) => {
+                    warn!(
+                        "computer_use OCR: frontmost window bounds failed ({}); falling back to full primary display.",
+                        e
+                    );
+                    Self::ocr_full_primary_display_region()
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Self::ocr_full_primary_display_region()
+        }
+    }
+
+    /// Capture **raw** display pixels (no pointer/SoM overlay), cropped to `region` intersected with the chosen display.
+    ///
+    /// `region` and [`DisplayInfo::width`]/[`height`] are **global logical points** (CG / AX). The framebuffer
+    /// is **physical pixels** on Retina; intersect in point space, then map to pixels like [`MacPointerGeo`].
+    fn screenshot_raw_native_region(region: OcrRegionNative) -> BitFunResult<ComputerScreenshot> {
+        let cx = region.x0 + region.width as i32 / 2;
+        let cy = region.y0 + region.height as i32 / 2;
+        let screen = Screen::from_point(cx, cy)
+            .or_else(|_| Screen::from_point(0, 0))
+            .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
+        let rgba = screen.capture().map_err(|e| {
+            BitFunError::tool(format!("Screenshot failed (OCR raw): {}", e))
+        })?;
+        let (full_px_w, full_px_h) = rgba.dimensions();
+        let d = screen.display_info;
+        let disp_w = d.width as f64;
+        let disp_h = d.height as f64;
+        if disp_w <= 0.0 || disp_h <= 0.0 || full_px_w == 0 || full_px_h == 0 {
+            return Err(BitFunError::tool(
+                "Invalid display geometry for OCR raw crop.".to_string(),
+            ));
+        }
+        let ox = d.x as f64;
+        let oy = d.y as f64;
+        let full_rgb = DynamicImage::ImageRgba8(rgba).to_rgb8();
+        // Region from AX / user: global logical coords (points).
+        let rx0 = region.x0 as f64;
+        let ry0 = region.y0 as f64;
+        let rw = region.width as f64;
+        let rh = region.height as f64;
+        let ix0 = rx0.max(ox);
+        let iy0 = ry0.max(oy);
+        let ix1 = (rx0 + rw).min(ox + disp_w);
+        let iy1 = (ry0 + rh).min(oy + disp_h);
+        if ix1 <= ix0 || iy1 <= iy0 {
+            return Err(BitFunError::tool(
+                "OCR region does not intersect the captured display. Focus the target app or set ocr_region_native."
+                    .to_string(),
+            ));
+        }
+        let px0_f = ((ix0 - ox) / disp_w) * full_px_w as f64;
+        let py0_f = ((iy0 - oy) / disp_h) * full_px_h as f64;
+        let px1_f = ((ix1 - ox) / disp_w) * full_px_w as f64;
+        let py1_f = ((iy1 - oy) / disp_h) * full_px_h as f64;
+        let px0 = px0_f.floor().max(0.0) as u32;
+        let py0 = py0_f.floor().max(0.0) as u32;
+        let px1 = px1_f.ceil().min(full_px_w as f64) as u32;
+        let py1 = py1_f.ceil().min(full_px_h as f64) as u32;
+        if px1 <= px0 || py1 <= py0 {
+            return Err(BitFunError::tool(
+                "OCR crop rectangle is empty after point-to-pixel mapping.".to_string(),
+            ));
+        }
+        let crop_w = px1 - px0;
+        let crop_h = py1 - py0;
+        let cropped = Self::crop_rgb(&full_rgb, px0, py0, crop_w, crop_h)?;
+        let span_w = ((crop_w as f64 / full_px_w as f64) * disp_w).round().max(1.0) as u32;
+        let span_h = ((crop_h as f64 / full_px_h as f64) * disp_h).round().max(1.0) as u32;
+        let origin_gx = (ox + (px0 as f64 / full_px_w as f64) * disp_w).round() as i32;
+        let origin_gy = (oy + (py0 as f64 / full_px_h as f64) * disp_h).round() as i32;
+        Self::raw_shot_from_rgb_crop(cropped, origin_gx, origin_gy, span_w, span_h)
+    }
+
     /// Rasterizes `assets/computer_use_pointer.svg` via **resvg** (vector → antialiased pixmap).
     /// **Tip** in SVG user space **(0,0)** is placed at `(cx, cy)` = click hotspot.
     fn draw_pointer_marker(img: &mut RgbImage, cx: i32, cy: i32) {
@@ -1089,13 +1239,8 @@ end tell"#])
         if x0.saturating_add(w) > sw || y0.saturating_add(h) > sh {
             return Err(BitFunError::tool("Tile crop out of bounds.".to_string()));
         }
-        let mut out = RgbImage::new(w, h);
-        for yy in 0..h {
-            for xx in 0..w {
-                out.put_pixel(xx, yy, *src.get_pixel(x0 + xx, y0 + yy));
-            }
-        }
-        Ok(out)
+        let view = image::imageops::crop_imm(src, x0, y0, w, h);
+        Ok(view.to_image())
     }
 
     /// Pointer position in **scaled image** pixels, if it lies inside the captured display.
@@ -1129,9 +1274,13 @@ end tell"#])
         Some((ix, iy))
     }
 
-    fn screenshot_sync_tool(
+    fn screenshot_sync_tool_with_capture(
         params: ComputerUseScreenshotParams,
         nav_in: Option<ComputerUseNavFocus>,
+        rgba: image::RgbaImage,
+        screen: Screen,
+        som_elements: Vec<SomElement>,
+        implicit_confirmation_crop_applied: bool,
     ) -> BitFunResult<(
         ComputerScreenshot,
         PointerMap,
@@ -1144,14 +1293,6 @@ end tell"#])
             ));
         }
 
-        let screen = Screen::from_point(0, 0)
-            .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?;
-        let rgba = screen.capture().map_err(|e| {
-            BitFunError::tool(format!(
-                "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
-                e
-            ))
-        })?;
         let (native_w, native_h) = rgba.dimensions();
         let origin_x = screen.display_info.x;
         let origin_y = screen.display_info.y;
@@ -1416,6 +1557,44 @@ end tell"#])
             }
         };
 
+        // Draw SoM (Set-of-Mark) numbered labels on the frame
+        if !som_elements.is_empty() {
+            #[cfg(target_os = "macos")]
+            {
+                let geo = macos_map_geo;
+                draw_som_labels(
+                    &mut frame,
+                    &som_elements,
+                    margin_l,
+                    margin_t,
+                    |gx, gy| geo.global_to_view_pixel(gx, gy, content_w, content_h),
+                );
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                // On non-macOS: map global -> content pixel using the linear mapping
+                draw_som_labels(
+                    &mut frame,
+                    &som_elements,
+                    margin_l,
+                    margin_t,
+                    |gx, gy| {
+                        let ox = map_origin_x as f64;
+                        let oy = map_origin_y as f64;
+                        let nw = map_native_w as f64;
+                        let nh = map_native_h as f64;
+                        if nw <= 0.0 || nh <= 0.0 { return None; }
+                        let rx = (gx - ox) / nw * content_w as f64;
+                        let ry = (gy - oy) / nh * content_h as f64;
+                        if rx < 0.0 || ry < 0.0 || rx >= content_w as f64 || ry >= content_h as f64 {
+                            return None;
+                        }
+                        Some((rx.round() as i32, ry.round() as i32))
+                    },
+                );
+            }
+        }
+
         let jpeg_bytes = Self::encode_jpeg(&frame, JPEG_QUALITY)?;
 
         let point_crop_half_extent_native = params.crop_center.map(|_| {
@@ -1439,6 +1618,8 @@ end tell"#])
             navigation_native_rect: shot_navigation_rect,
             quadrant_navigation_click_ready,
             image_content_rect: Some(image_content_rect),
+            som_labels: som_elements,
+            implicit_confirmation_crop_applied,
         };
 
         #[cfg(target_os = "macos")]
@@ -1528,16 +1709,86 @@ end tell"#])
     }
 
     fn computer_use_guard_verified_ui(&self) -> BitFunResult<()> {
-        let guard = self
-            .click_needs_fresh_screenshot
+        let s = self
+            .state
             .lock()
             .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-        if *guard {
-            return Err(BitFunError::tool(
-                "Computer use refused: run action screenshot first. After the last pointer move or click you must capture a new screenshot before click or before key_chord that sends Return/Enter.".to_string(),
-            ));
+        if s.click_needs_fresh_screenshot {
+            return Err(BitFunError::tool(STALE_CAPTURE_TOOL_MESSAGE.to_string()));
         }
         Ok(())
+    }
+
+    /// Best-effort current mouse position in global screen coordinates.
+    fn current_mouse_position() -> (f64, f64) {
+        #[cfg(target_os = "macos")]
+        {
+            macos::quartz_mouse_location().unwrap_or((0.0, 0.0))
+        }
+        #[cfg(target_os = "windows")]
+        {
+            use windows::Win32::Foundation::POINT;
+            use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+            unsafe {
+                let mut pt = POINT::default();
+                if GetCursorPos(&mut pt).is_ok() {
+                    (pt.x as f64, pt.y as f64)
+                } else {
+                    (0.0, 0.0)
+                }
+            }
+        }
+        #[cfg(target_os = "linux")]
+        {
+            match Self::run_enigo_job(|e| {
+                e.location()
+                    .map_err(|err| BitFunError::tool(format!("pointer location: {}", err)))
+            }) {
+                Ok((x, y)) => (x as f64, y as f64),
+                Err(_) => (0.0, 0.0),
+            }
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        {
+            (0.0, 0.0)
+        }
+    }
+
+    /// Resolve a screen capture from cache (if still valid and same screen) or capture fresh.
+    fn resolve_screenshot_capture(
+        cached: Option<ScreenshotCacheEntry>,
+        mouse_x: f64,
+        mouse_y: f64,
+    ) -> BitFunResult<(image::RgbaImage, Screen)> {
+        let mx = mouse_x.round() as i32;
+        let my = mouse_y.round() as i32;
+
+        if let Some(cache) = cached {
+            let screen_id_match = cache.screen.display_info.id
+                == Screen::from_point(mx, my)
+                    .map(|s| s.display_info.id)
+                    .unwrap_or_default();
+            if cache.capture_time.elapsed() < Duration::from_millis(SCREENSHOT_CACHE_TTL_MS)
+                && screen_id_match
+            {
+                debug!(
+                    "Using cached screenshot (age: {}ms)",
+                    cache.capture_time.elapsed().as_millis()
+                );
+                return Ok((cache.rgba, cache.screen));
+            }
+        }
+
+        let screen = Screen::from_point(mx, my)
+            .or_else(|_| Screen::from_point(0, 0))
+            .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?;
+        let rgba = screen.capture().map_err(|e| {
+            BitFunError::tool(format!(
+                "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
+                e
+            ))
+        })?;
+        Ok((rgba, screen))
     }
 
     fn chord_includes_return_or_enter(keys: &[String]) -> bool {
@@ -1638,12 +1889,75 @@ mod macos {
     }
 }
 
+impl DesktopComputerUseHost {
+    /// Perform a physical click at the current pointer without running [`ComputerUseHost::computer_use_guard_click_allowed`].
+    /// Used after `mouse_move_global_f64` when coordinates came from AX, OCR, or SoM (not from vision model image coords).
+    async fn mouse_click_at_current_pointer(&self, button: &str) -> BitFunResult<()> {
+        let button = button.to_string();
+        tokio::task::spawn_blocking(move || {
+            Self::run_enigo_job(|e| {
+                let b = Self::map_button(&button)?;
+                e.button(b, Direction::Click)
+                    .map_err(|err| BitFunError::tool(format!("click: {}", err)))
+            })
+        })
+        .await
+        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        ComputerUseHost::computer_use_after_click(self);
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl ComputerUseHost for DesktopComputerUseHost {
     async fn permission_snapshot(&self) -> BitFunResult<ComputerUsePermissionSnapshot> {
         Ok(tokio::task::spawn_blocking(Self::permission_sync)
             .await
             .map_err(|e| BitFunError::tool(e.to_string()))?)
+    }
+
+    fn computer_use_interaction_state(&self) -> ComputerUseInteractionState {
+        let s = self.state.lock().unwrap();
+        let last_ref = s.last_shot_refinement;
+        let click_needs_fresh = s.click_needs_fresh_screenshot;
+
+        let (click_ready, screenshot_kind, recommended_next_action) = match last_ref {
+            Some(ComputerUseScreenshotRefinement::RegionAroundPoint { .. }) => (
+                !click_needs_fresh,
+                Some(ComputerUseInteractionScreenshotKind::RegionCrop),
+                None,
+            ),
+            Some(ComputerUseScreenshotRefinement::QuadrantNavigation { click_ready, .. }) if click_ready => (
+                !click_needs_fresh,
+                Some(ComputerUseInteractionScreenshotKind::QuadrantTerminal),
+                None,
+            ),
+            Some(ComputerUseScreenshotRefinement::QuadrantNavigation { .. }) => (
+                false,
+                Some(ComputerUseInteractionScreenshotKind::QuadrantDrill),
+                Some("screenshot_navigate_quadrant_until_click_ready".to_string()),
+            ),
+            Some(ComputerUseScreenshotRefinement::FullDisplay) => (
+                !click_needs_fresh,
+                Some(ComputerUseInteractionScreenshotKind::FullDisplay),
+                if click_needs_fresh {
+                    Some("screenshot".to_string())
+                } else {
+                    None
+                },
+            ),
+            None => (false, None, Some("screenshot".to_string())),
+        };
+
+        ComputerUseInteractionState {
+            click_ready,
+            enter_ready: !click_needs_fresh,
+            requires_fresh_screenshot_before_click: click_needs_fresh,
+            requires_fresh_screenshot_before_enter: click_needs_fresh,
+            last_screenshot_kind: screenshot_kind,
+            last_mutation: None,
+            recommended_next_action,
+        }
     }
 
     async fn request_accessibility_permission(&self) -> BitFunResult<()> {
@@ -1672,52 +1986,146 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         params: ComputerUseScreenshotParams,
     ) -> BitFunResult<ComputerScreenshot> {
-        let nav_snapshot = *self
-            .navigation_focus
-            .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+        let (nav_snapshot, cached, click_needs) = {
+            let s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            (
+                s.navigation_focus,
+                s.screenshot_cache.clone(),
+                s.click_needs_fresh_screenshot,
+            )
+        };
+
+        // Get current mouse position to select the right screen
+        let (mouse_x, mouse_y) = Self::current_mouse_position();
+
+        // Resolve capture from cache or fresh
+        let (rgba, screen) = Self::resolve_screenshot_capture(cached, mouse_x, mouse_y)?;
+        let (native_w, native_h) = rgba.dimensions();
+
+        let mut params = params;
+        let mut implicit_applied = false;
+        if implicit_confirmation_should_apply(click_needs, &params) {
+            let center = params
+                .implicit_confirmation_center
+                .unwrap_or(ComputerUseImplicitScreenshotCenter::Mouse);
+            let (gx, gy) = implicit_global_center_for_confirmation(center, mouse_x, mouse_y);
+            let (cx, cy) = global_to_native_full_pixel_center(
+                gx,
+                gy,
+                native_w,
+                native_h,
+                &screen.display_info,
+            );
+            params = ComputerUseScreenshotParams {
+                crop_center: Some(ScreenshotCropCenter { x: cx, y: cy }),
+                navigate_quadrant: None,
+                reset_navigation: false,
+                point_crop_half_extent_native: Some(COMPUTER_USE_POINT_CROP_HALF_DEFAULT),
+                implicit_confirmation_center: None,
+            };
+            implicit_applied = true;
+        }
+
+        // Update cache in state
+        {
+            let mut s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            s.screenshot_cache = Some(ScreenshotCacheEntry {
+                rgba: rgba.clone(),
+                screen: screen.clone(),
+                capture_time: Instant::now(),
+            });
+        }
+
+        // Enumerate SoM elements (AX tree walk) for label overlay
+        let som_elements = self.enumerate_som_elements().await;
 
         let (shot, map, nav_out) = tokio::task::spawn_blocking(move || {
-            Self::screenshot_sync_tool(params, nav_snapshot)
+            Self::screenshot_sync_tool_with_capture(
+                params,
+                nav_snapshot,
+                rgba,
+                screen,
+                som_elements,
+                implicit_applied,
+            )
         })
         .await
         .map_err(|e| BitFunError::tool(e.to_string()))??;
 
-        *self
-            .last_pointer_map
-            .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))? = Some(map);
-
-        *self
-            .navigation_focus
-            .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))? = nav_out;
-
         let refinement = Self::refinement_from_shot(&shot);
-        *self
-            .last_shot_refinement
-            .lock()
-            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))? = Some(refinement);
-
-        ComputerUseHost::computer_use_after_screenshot(self);
+        {
+            let mut s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            s.transition_after_screenshot(map, refinement, nav_out);
+        }
 
         Ok(shot)
     }
 
     async fn screenshot_peek_full_display(&self) -> BitFunResult<ComputerScreenshot> {
         let (shot, _map, _) = tokio::task::spawn_blocking(|| {
-            Self::screenshot_sync_tool(ComputerUseScreenshotParams::default(), None)
+            let screen = Screen::from_point(0, 0)
+                .map_err(|e| BitFunError::tool(format!("Screen capture init (peek): {}", e)))?;
+            let rgba = screen.capture().map_err(|e| {
+                BitFunError::tool(format!("Screenshot failed (peek): {}", e))
+            })?;
+            Self::screenshot_sync_tool_with_capture(
+                ComputerUseScreenshotParams::default(),
+                None,
+                rgba,
+                screen,
+                vec![], // No SoM labels for peek screenshots
+                false,
+            )
         })
         .await
         .map_err(|e| BitFunError::tool(e.to_string()))??;
         Ok(shot)
     }
 
+    async fn ocr_find_text_matches(
+        &self,
+        text_query: &str,
+        region_native: Option<bitfun_core::agentic::tools::computer_use_host::OcrRegionNative>,
+    ) -> BitFunResult<Vec<bitfun_core::agentic::tools::computer_use_host::OcrTextMatch>> {
+        let region_opt = region_native.clone();
+        let shot = tokio::task::spawn_blocking(move || {
+            let region = Self::ocr_resolve_region_for_capture(region_opt)?;
+            Self::screenshot_raw_native_region(region)
+        })
+        .await
+        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        let query = text_query.to_string();
+        let desktop_matches = tokio::task::spawn_blocking(move || {
+            super::screen_ocr::find_text_matches(&shot, &query)
+        })
+        .await
+        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        Ok(desktop_matches
+            .into_iter()
+            .map(|m| bitfun_core::agentic::tools::computer_use_host::OcrTextMatch {
+                text: m.text,
+                confidence: m.confidence,
+                center_x: m.center_x,
+                center_y: m.center_y,
+                bounds_left: m.bounds_left,
+                bounds_top: m.bounds_top,
+                bounds_width: m.bounds_width,
+                bounds_height: m.bounds_height,
+            })
+            .collect())
+    }
+
     fn last_screenshot_refinement(&self) -> Option<ComputerUseScreenshotRefinement> {
-        self.last_shot_refinement
-            .lock()
-            .ok()
-            .and_then(|g| *g)
+        self.state.lock().ok().and_then(|s| s.last_shot_refinement)
     }
 
     async fn locate_ui_element_screen_center(
@@ -1758,12 +2166,28 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
+    async fn enumerate_som_elements(&self) -> Vec<SomElement> {
+        #[cfg(target_os = "macos")]
+        {
+            const SOM_MAX_ELEMENTS: usize = 50;
+            tokio::task::spawn_blocking(move || {
+                crate::computer_use::macos_ax_ui::enumerate_interactive_elements(SOM_MAX_ELEMENTS)
+            })
+            .await
+            .unwrap_or_default()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            vec![]
+        }
+    }
+
     fn map_image_coords_to_pointer_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
-        let guard = self
-            .last_pointer_map
+        let s = self
+            .state
             .lock()
             .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-        let Some(map) = *guard else {
+        let Some(map) = s.pointer_map else {
             return Err(BitFunError::tool(
                 "No screenshot yet in this session: run action screenshot first, then use x,y in the screenshot image pixel grid (image_width x image_height), or set use_screen_coordinates true with global screen pixels.".to_string(),
             ));
@@ -1777,11 +2201,11 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     fn map_normalized_coords_to_pointer_f64(&self, x: i32, y: i32) -> BitFunResult<(f64, f64)> {
-        let guard = self
-            .last_pointer_map
+        let s = self
+            .state
             .lock()
             .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-        let Some(map) = *guard else {
+        let Some(map) = s.pointer_map else {
             return Err(BitFunError::tool(
                 "No screenshot yet: run screenshot first. For coordinate_mode \"normalized\", use x and y each in 0..=1000.".to_string(),
             ));
@@ -1802,6 +2226,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             })
             .await
             .map_err(|e| BitFunError::tool(e.to_string()))??;
+            self.clear_vision_pixel_nudge_block();
             ComputerUseHost::computer_use_after_pointer_mutation(self);
             return Ok(());
         }
@@ -1812,6 +2237,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     async fn mouse_move(&self, x: i32, y: i32) -> BitFunResult<()> {
+        debug!("computer_use: mouse_move absolute ({}, {})", x, y);
         tokio::task::spawn_blocking(move || {
             Self::run_enigo_job(|e| {
                 e.move_mouse(x, y, Coordinate::Abs)
@@ -1820,6 +2246,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         })
         .await
         .map_err(|e| BitFunError::tool(e.to_string()))??;
+        self.clear_vision_pixel_nudge_block();
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         Ok(())
     }
@@ -1829,17 +2256,29 @@ impl ComputerUseHost for DesktopComputerUseHost {
             return Ok(());
         }
 
+        {
+            let s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            if s.block_vision_pixel_nudge_after_screenshot {
+                return Err(BitFunError::tool(
+                    VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG.to_string(),
+                ));
+            }
+        }
+
         #[cfg(target_os = "macos")]
         {
             // enigo `Coordinate::Rel` uses `location()` on macOS, which mixes NSEvent + main-display
             // pixel height — not the same space as `CGEvent` / our screenshot mapping. Use Quartz
             // position + scale from the last capture (display points per screenshot pixel).
             let geo = {
-                let guard = self
-                    .last_pointer_map
+                let s = self
+                    .state
                     .lock()
                     .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-                let Some(map) = *guard else {
+                let Some(map) = s.pointer_map else {
                     return Err(BitFunError::tool(
                         "Run action screenshot first: on macOS, pointer_move_relative / ComputerUseMouseStep convert pixel deltas using the last capture scale."
                             .to_string(),
@@ -1892,18 +2331,45 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     async fn mouse_click(&self, button: &str) -> BitFunResult<()> {
+        debug!("computer_use: mouse_click button={}", button);
         ComputerUseHost::computer_use_guard_click_allowed(self)?;
+        self.mouse_click_at_current_pointer(button).await
+    }
+
+    async fn mouse_click_authoritative(&self, button: &str) -> BitFunResult<()> {
+        debug!("computer_use: mouse_click_authoritative button={}", button);
+        self.mouse_click_at_current_pointer(button).await
+    }
+
+    async fn mouse_down(&self, button: &str) -> BitFunResult<()> {
+        debug!("computer_use: mouse_down button={}", button);
         let button = button.to_string();
         tokio::task::spawn_blocking(move || {
             Self::run_enigo_job(|e| {
                 let b = Self::map_button(&button)?;
-                e.button(b, Direction::Click)
-                    .map_err(|err| BitFunError::tool(format!("click: {}", err)))
+                e.button(b, Direction::Press)
+                    .map_err(|err| BitFunError::tool(format!("mouse_down: {}", err)))
             })
         })
         .await
         .map_err(|e| BitFunError::tool(e.to_string()))??;
-        ComputerUseHost::computer_use_after_click(self);
+        ComputerUseHost::computer_use_after_pointer_mutation(self);
+        Ok(())
+    }
+
+    async fn mouse_up(&self, button: &str) -> BitFunResult<()> {
+        debug!("computer_use: mouse_up button={}", button);
+        let button = button.to_string();
+        tokio::task::spawn_blocking(move || {
+            Self::run_enigo_job(|e| {
+                let b = Self::map_button(&button)?;
+                e.button(b, Direction::Release)
+                    .map_err(|err| BitFunError::tool(format!("mouse_up: {}", err)))
+            })
+        })
+        .await
+        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        ComputerUseHost::computer_use_after_pointer_mutation(self);
         Ok(())
     }
 
@@ -1935,6 +2401,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         if keys.is_empty() {
             return Ok(());
         }
+        debug!("computer_use: key_chord keys={:?}", keys);
         if Self::chord_includes_return_or_enter(&keys) {
             Self::computer_use_guard_verified_ui(self)?;
         }
@@ -2010,41 +2477,89 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     fn computer_use_after_screenshot(&self) {
-        if let Ok(mut g) = self.click_needs_fresh_screenshot.lock() {
-            *g = false;
-        }
+        // Transition is handled centrally in screenshot_display via transition_after_screenshot.
     }
 
     fn computer_use_after_pointer_mutation(&self) {
-        if let Ok(mut g) = self.click_needs_fresh_screenshot.lock() {
-            *g = true;
+        if let Ok(mut s) = self.state.lock() {
+            s.transition_after_pointer_mutation();
         }
     }
 
     fn computer_use_after_click(&self) {
-        if let Ok(mut g) = self.click_needs_fresh_screenshot.lock() {
-            *g = true;
+        if let Ok(mut s) = self.state.lock() {
+            s.transition_after_click();
         }
     }
 
     fn computer_use_guard_click_allowed(&self) -> BitFunResult<()> {
-        self.computer_use_guard_verified_ui()?;
-        let refine = self
-            .last_shot_refinement
+        let s = self
+            .state
             .lock()
             .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-        match *refine {
+        if s.click_needs_fresh_screenshot {
+            return Err(BitFunError::tool(STALE_CAPTURE_TOOL_MESSAGE.to_string()));
+        }
+        match s.last_shot_refinement {
             Some(ComputerUseScreenshotRefinement::RegionAroundPoint { .. }) => {}
             Some(ComputerUseScreenshotRefinement::QuadrantNavigation {
                 click_ready: true,
                 ..
             }) => {}
+            // Fresh full-screen JPEG matches the display — valid for image-space `mouse_move` then
+            // guarded `click` as long as `click_needs_fresh_screenshot` is false above.
+            Some(ComputerUseScreenshotRefinement::FullDisplay) => {}
             _ => {
                 return Err(BitFunError::tool(
-                    "Click refused: use a **fine** screenshot basis — either a **~500×500 point crop** (`screenshot_crop_center_x` / `y` in full-display native pixels) **or** keep drilling with `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` is true in the tool result, then `ComputerUseMousePrecise` / `ComputerUseMouseStep` + `click`. Full-screen alone is not enough.".to_string(),
+                    "Click refused: use a **fine** screenshot basis — either a **~500×500 point crop** (`screenshot_crop_center_x` / `y` in full-display native pixels) **or** keep drilling with `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` is true in the tool result, then `ComputerUseMousePrecise` / `ComputerUseMouseStep` / **`ComputerUse`** **`mouse_move`** (**`use_screen_coordinates`: true** only) to position, then **`click`**. Or take a **full-screen** `screenshot` (no pointer move since capture), then **`mouse_move`** with globals from tool results, then **`click`**.".to_string(),
                 ));
             }
         }
         Ok(())
+    }
+
+    fn computer_use_guard_click_allowed_relaxed(&self) -> BitFunResult<()> {
+        // For AX-based click_element: we only require that no pointer mutation
+        // happened since the last known state (i.e. we moved the pointer ourselves
+        // inside click_element, so the flag is not set). No fine-screenshot needed.
+        // This is intentionally permissive — AX coordinates are authoritative.
+        Ok(())
+    }
+
+    fn record_action(&self, action_type: &str, action_params: &str, success: bool) {
+        if let Ok(mut s) = self.state.lock() {
+            s.optimizer.record_action(
+                action_type.to_string(),
+                action_params.to_string(),
+                success,
+            );
+        }
+    }
+
+    fn update_screenshot_hash(&self, hash: u64) {
+        if let Ok(mut s) = self.state.lock() {
+            s.optimizer.update_screenshot_hash(hash);
+        }
+    }
+
+    fn detect_action_loop(&self) -> LoopDetectionResult {
+        if let Ok(s) = self.state.lock() {
+            s.optimizer.detect_loop()
+        } else {
+            LoopDetectionResult {
+                is_loop: false,
+                pattern_length: 0,
+                repetitions: 0,
+                suggestion: String::new(),
+            }
+        }
+    }
+
+    fn get_action_history(&self) -> Vec<ActionRecord> {
+        if let Ok(s) = self.state.lock() {
+            s.optimizer.get_history()
+        } else {
+            vec![]
+        }
     }
 }

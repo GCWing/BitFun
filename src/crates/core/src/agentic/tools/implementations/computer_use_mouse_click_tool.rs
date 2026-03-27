@@ -24,7 +24,7 @@ impl Tool for ComputerUseMouseClickTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            "Click or scroll the **mouse wheel** at the **current** pointer (does not move the pointer). **`action`: `click`** — optional **`button`** (`left` | `right` | `middle`, default left); host enforces a fresh **fine** screenshot basis before click (same as former `ComputerUse` `click`). **`action`: `wheel`** — **`delta_x`** / **`delta_y`** (non-zero) for horizontal/vertical wheel ticks at the cursor (same as former `ComputerUse` `scroll`). Position the pointer first with **`ComputerUseMousePrecise`** / **`ComputerUseMouseStep`** / **`ComputerUse`** `pointer_move_rel`, then **`screenshot`** before click when the host requires it."
+            "Click or scroll the **mouse wheel** at the **current** pointer (does not move the pointer). **`action`: `click`** — optional **`button`** (`left` | `right` | `middle`, default left), optional **`num_clicks`** (1 = single click default, 2 = double click, 3 = triple click); host enforces a fresh **fine** screenshot basis before click (same as former `ComputerUse` `click`). **`action`: `wheel`** — **`delta_x`** / **`delta_y`** (non-zero) for horizontal/vertical wheel ticks at the cursor (same as former `ComputerUse` `scroll`). Position the pointer first with **`ComputerUseMousePrecise`** / **`ComputerUseMouseStep`** / **`ComputerUse`** `pointer_move_rel`, then **`screenshot`** before click when the host requires it."
                 .to_string(),
         )
     }
@@ -42,6 +42,12 @@ impl Tool for ComputerUseMouseClickTool {
                     "type": "string",
                     "enum": ["left", "right", "middle"],
                     "description": "For `action` **click** only (default left). Ignored for `wheel`."
+                },
+                "num_clicks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3,
+                    "description": "For `action` **click** only: number of clicks (1 = single click, 2 = double click for opening files / selecting words, 3 = triple click for selecting lines). Default 1."
                 },
                 "delta_x": {
                     "type": "integer",

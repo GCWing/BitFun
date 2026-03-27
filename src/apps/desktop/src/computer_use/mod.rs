@@ -2,6 +2,7 @@
 
 mod desktop_host;
 mod ui_locate_common;
+mod screen_ocr;
 #[cfg(target_os = "macos")]
 mod macos_ax_ui;
 #[cfg(target_os = "windows")]

@@ -4,6 +4,8 @@ pub mod ask_user_question_tool;
 pub mod bash_tool;
 pub mod code_review_tool;
 pub mod computer_use_tool;
+pub mod computer_use_input;
+pub mod computer_use_result;
 pub mod computer_use_mouse_precise_tool;
 pub mod computer_use_mouse_step_tool;
 pub mod computer_use_mouse_click_tool;

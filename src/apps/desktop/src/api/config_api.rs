@@ -272,27 +272,15 @@ pub async fn get_mode_configs(state: State<'_, AppState>) -> Result<Value, Strin
         } else if let Some(config) = mode_configs.get_mut(&mode_id) {
             config.default_tools = default_tools.clone();
             // Migrate older Claw sessions that only allowlisted "ComputerUse" before split mouse tools existed;
-            // otherwise the tool pipeline rejects ComputerUseMouse* with "not in the allowed list".
-            if mode_id == "Claw"
-                && config
-                    .available_tools
-                    .iter()
-                    .any(|t| t == "ComputerUse")
-                && !config
-                    .available_tools
-                    .iter()
-                    .any(|t| t == "ComputerUseMousePrecise")
-            {
-                for t in [
-                    "ComputerUseMousePrecise",
-                    "ComputerUseMouseStep",
-                    "ComputerUseMouseClick",
-                ] {
-                    if !config.available_tools.iter().any(|x| x == t) {
-                        config.available_tools.push(t.to_string());
-                    }
+            // All desktop automation is now consolidated into ComputerUse.
+            // Remove any stale split tool names from available_tools.
+            if mode_id == "Claw" {
+                let stale = ["ComputerUseMousePrecise", "ComputerUseMouseStep", "ComputerUseMouseClick"];
+                let before = config.available_tools.len();
+                config.available_tools.retain(|t| !stale.contains(&t.as_str()));
+                if config.available_tools.len() != before {
+                    needs_save = true;
                 }
-                needs_save = true;
             }
         }
     }

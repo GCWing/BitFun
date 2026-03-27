@@ -2,6 +2,8 @@
 
 pub mod computer_use_capability;
 pub mod computer_use_host;
+pub mod computer_use_optimizer;
+pub mod computer_use_verification;
 pub mod framework;
 pub mod image_context;
 pub mod implementations;

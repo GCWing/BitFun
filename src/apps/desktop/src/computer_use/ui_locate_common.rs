@@ -173,6 +173,7 @@ pub fn matches_filters(
     }
 }
 
+#[allow(dead_code)] // Used by windows_ax_ui / linux_ax_ui (not compiled on macOS)
 pub fn ok_result(
     gx: f64,
     gy: f64,
@@ -183,6 +184,27 @@ pub fn ok_result(
     matched_role: String,
     matched_title: Option<String>,
     matched_identifier: Option<String>,
+) -> BitFunResult<UiElementLocateResult> {
+    ok_result_with_context(
+        gx, gy, bounds_left, bounds_top, bounds_width, bounds_height,
+        matched_role, matched_title, matched_identifier,
+        None, 1, vec![],
+    )
+}
+
+pub fn ok_result_with_context(
+    gx: f64,
+    gy: f64,
+    bounds_left: f64,
+    bounds_top: f64,
+    bounds_width: f64,
+    bounds_height: f64,
+    matched_role: String,
+    matched_title: Option<String>,
+    matched_identifier: Option<String>,
+    parent_context: Option<String>,
+    total_matches: u32,
+    other_matches: Vec<String>,
 ) -> BitFunResult<UiElementLocateResult> {
     let (nx, ny) = global_to_native_center(gx, gy)?;
     let (nminx, nminy, nmaxx, nmaxy) = if bounds_width > 0.0 && bounds_height > 0.0 {
@@ -206,5 +228,18 @@ pub fn ok_result(
         matched_role,
         matched_title,
         matched_identifier,
+        parent_context,
+        total_matches,
+        other_matches,
     })
+}
+
+/// Whether an element's global bounds fall within any visible display.
+pub fn is_element_on_screen(gx: f64, gy: f64, width: f64, height: f64) -> bool {
+    // Element must have reasonable size (not a giant container)
+    if width > 3000.0 || height > 2000.0 {
+        return false;
+    }
+    // Center must be resolvable to a display
+    DisplayInfo::from_point(gx.round() as i32, gy.round() as i32).is_ok()
 }

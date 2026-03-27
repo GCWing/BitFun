@@ -1,10 +1,12 @@
 //! Host abstraction for desktop automation (implemented in `bitfun-desktop`).
 
+// Re-export optimizer types so downstream crates can import from computer_use_host.
+pub use crate::agentic::tools::computer_use_optimizer::{ActionRecord, LoopDetectionResult};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-/// Center of a **point crop** in **full-display native capture pixels** (same origin as ruler indices on a full-screen computer-use shot).
+/// Center of a **point crop** in **full-display native capture pixels** (same origin as full-screen computer-use JPEG pixels).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScreenshotCropCenter {
     pub x: u32,
@@ -30,6 +32,16 @@ pub enum ComputerUseNavigateQuadrant {
     BottomRight,
 }
 
+/// Center for host-applied **implicit** 500×500 confirmation crops (when a fresh screenshot is required).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerUseImplicitScreenshotCenter {
+    #[default]
+    Mouse,
+    /// Best-effort focused text field / insertion area (macOS AX); other platforms fall back to mouse.
+    TextCaret,
+}
+
 /// Parameters for [`ComputerUseHost::screenshot_display`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ComputerUseScreenshotParams {
@@ -39,6 +51,8 @@ pub struct ComputerUseScreenshotParams {
     pub reset_navigation: bool,
     /// Half-size of the point crop in **native** pixels (total width/height ≈ `2 * half`). `None` → [`COMPUTER_USE_POINT_CROP_HALF_DEFAULT`].
     pub point_crop_half_extent_native: Option<u32>,
+    /// For `action: screenshot`: when the host applies an implicit 500×500 crop, use mouse vs text-focus center (see desktop host).
+    pub implicit_confirmation_center: Option<ComputerUseImplicitScreenshotCenter>,
 }
 
 /// Longest side of the navigation region must be **strictly below** this to allow `click` without a separate point crop (desktop).
@@ -109,7 +123,7 @@ pub struct ComputerUseSessionSnapshot {
     pub pointer_global: Option<ComputerUsePointerGlobal>,
 }
 
-/// Pixel rectangle of the **screen capture** inside the JPEG (excludes white margin and rulers).
+/// Pixel rectangle of the **screen capture** in JPEG image coordinates (offset is zero when there is no frame padding).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ComputerUseImageContentRect {
     pub left: u32,
@@ -153,13 +167,44 @@ pub struct ComputerScreenshot {
     /// When true (desktop), `click` is allowed on this frame without an extra ~500×500 point crop — region is small enough for pointer positioning + `click`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub quadrant_navigation_click_ready: bool,
-    /// Screen pixels inside the JPEG (below/left of white margin); `ComputerUseMousePrecise` maps this rect to the display.
+    /// Screen capture rectangle in JPEG pixel coordinates (offset zero when there is no frame padding); `ComputerUseMousePrecise` maps this rect to the display.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_content_rect: Option<ComputerUseImageContentRect>,
+    /// Set-of-Mark labels: numbered interactive elements overlaid on the screenshot.
+    /// When non-empty, the model can use `click_label` with a label number instead of coordinates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub som_labels: Vec<SomElement>,
+    /// Desktop: this JPEG was produced by implicit 500×500 confirmation crop (mouse or text focus center).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub implicit_confirmation_crop_applied: bool,
 }
 
 fn is_false(b: &bool) -> bool {
     !*b
+}
+
+/// Optional **global native** rectangle (same space as pointer / `display_origin` + capture) to limit
+/// OCR to a screen region (e.g. one app window) and avoid matching text in other windows.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OcrRegionNative {
+    pub x0: i32,
+    pub y0: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// A single OCR text match with global display coordinates.
+/// Returned by [`ComputerUseHost::ocr_find_text_matches`].
+#[derive(Debug, Clone)]
+pub struct OcrTextMatch {
+    pub text: String,
+    pub confidence: f32,
+    pub center_x: f64,
+    pub center_y: f64,
+    pub bounds_left: f64,
+    pub bounds_top: f64,
+    pub bounds_width: f64,
+    pub bounds_height: f64,
 }
 
 /// Filter for native accessibility (macOS AX) BFS search — role/title/identifier substrings.
@@ -206,6 +251,16 @@ pub struct UiElementLocateResult {
     pub matched_title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub matched_identifier: Option<String>,
+    /// Parent element role + title for disambiguation (e.g. "AXWindow: Settings").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_context: Option<String>,
+    /// Total number of elements that matched the query (before ranking).
+    /// If > 1, the model should consider whether this is the right one.
+    #[serde(default)]
+    pub total_matches: u32,
+    /// Brief descriptions of other matches (up to 4) for disambiguation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub other_matches: Vec<String>,
 }
 
 #[async_trait]
@@ -230,6 +285,20 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     async fn screenshot_peek_full_display(&self) -> BitFunResult<ComputerScreenshot> {
         self.screenshot_display(ComputerUseScreenshotParams::default())
             .await
+    }
+
+    /// OCR on **raw display pixels** (no pointer/SoM overlay). Desktop captures only the relevant region:
+    /// optional `region_native`, else on macOS the frontmost window from Accessibility, else the primary display.
+    /// Default returns a "not implemented" error. Desktop overrides with Vision (macOS), WinRT OCR (Windows), or Tesseract (Linux).
+    async fn ocr_find_text_matches(
+        &self,
+        text_query: &str,
+        region_native: Option<OcrRegionNative>,
+    ) -> BitFunResult<Vec<OcrTextMatch>> {
+        let _ = (text_query, region_native);
+        Err(BitFunError::tool(
+            "OCR text recognition is not available on this host.".to_string(),
+        ))
     }
 
     /// Map `(x, y)` from the **last** screenshot's image pixel grid to global pointer pixels.
@@ -263,7 +332,27 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
 
     /// Click at the **current** pointer position only (does not move). Use `ComputerUseMousePrecise` / `ComputerUseMouseStep` / `pointer_move_rel` first.
     /// `button`: "left" | "right" | "middle"
+    /// On desktop, enforces the vision fine-screenshot guard (unlike [`mouse_click_authoritative`](Self::mouse_click_authoritative)).
     async fn mouse_click(&self, button: &str) -> BitFunResult<()>;
+
+    /// Click at the current pointer after the host has moved it to a **trusted** target (`click_element`, `click_label`, `move_to_text`).
+    /// Skips the vision fine-screenshot / stale-pointer guard that [`mouse_click`](Self::mouse_click) applies after a pointer move.
+    /// Default: delegates to [`mouse_click`](Self::mouse_click).
+    async fn mouse_click_authoritative(&self, button: &str) -> BitFunResult<()> {
+        self.mouse_click(button).await
+    }
+
+    /// Press a mouse button and hold it at the current pointer position.
+    /// `button`: "left" | "right" | "middle"
+    async fn mouse_down(&self, _button: &str) -> BitFunResult<()> {
+        Err(BitFunError::tool("mouse_down is not supported on this host.".to_string()))
+    }
+
+    /// Release a mouse button at the current pointer position.
+    /// `button`: "left" | "right" | "middle"
+    async fn mouse_up(&self, _button: &str) -> BitFunResult<()> {
+        Err(BitFunError::tool("mouse_up is not supported on this host.".to_string()))
+    }
 
     async fn scroll(&self, delta_x: i32, delta_y: i32) -> BitFunResult<()>;
 
@@ -297,10 +386,22 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
+    /// Relaxed click guard for AX-based `click_element`: skips the fine-screenshot requirement.
+    /// AX coordinates are authoritative, so no quadrant drill or point crop is needed.
+    fn computer_use_guard_click_allowed_relaxed(&self) -> BitFunResult<()> {
+        Ok(())
+    }
+
     /// What the **last** `screenshot_display` captured (e.g. coordinate hints for the model).
     /// Default: unknown (`None`). Desktop sets after each `screenshot_display`.
     fn last_screenshot_refinement(&self) -> Option<ComputerUseScreenshotRefinement> {
         None
+    }
+
+    /// Derive structured interaction readiness and guidance from the current session state.
+    /// Default: empty/default state. Desktop overrides with state-driven implementation.
+    fn computer_use_interaction_state(&self) -> ComputerUseInteractionState {
+        ComputerUseInteractionState::default()
     }
 
     /// Search the frontmost app’s accessibility tree (macOS AX) for a matching control and return a stable center.
@@ -313,7 +414,66 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
             "Native UI element (accessibility) lookup is not available on this host.".to_string(),
         ))
     }
+
+    /// Enumerate all visible interactive UI elements for Set-of-Mark (SoM) overlay.
+    /// Returns elements suitable for numbered label annotation on screenshots.
+    /// Default: empty (no SoM support).
+    async fn enumerate_som_elements(&self) -> Vec<SomElement> {
+        vec![]
+    }
+
+    /// Record a completed action for loop detection and history tracking.
+    /// Default: no-op. Desktop host overrides with optimizer integration.
+    fn record_action(&self, _action_type: &str, _action_params: &str, _success: bool) {}
+
+    /// Update the screenshot hash for visual change detection.
+    /// Default: no-op. Desktop host overrides with optimizer integration.
+    fn update_screenshot_hash(&self, _hash: u64) {}
+
+    /// Check if the agent is stuck in a repeating action loop.
+    /// Returns a detection result with suggestions if a loop is found.
+    /// Default: no loop detected.
+    fn detect_action_loop(&self) -> LoopDetectionResult {
+        LoopDetectionResult {
+            is_loop: false,
+            pattern_length: 0,
+            repetitions: 0,
+            suggestion: String::new(),
+        }
+    }
+
+    /// Get action history for context and backtracking.
+    /// Default: empty history.
+    fn get_action_history(&self) -> Vec<ActionRecord> {
+        vec![]
+    }
 }
+
+/// A visible interactive UI element discovered via the accessibility tree,
+/// used for Set-of-Mark (SoM) numbered label overlay on screenshots.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SomElement {
+    /// 1-based label number rendered on the screenshot.
+    pub label: u32,
+    /// AX role (e.g. "AXButton", "AXTextField").
+    pub role: String,
+    /// AX title (visible label text), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// AX identifier, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identifier: Option<String>,
+    /// Global screen center X (host pointer space).
+    pub global_center_x: f64,
+    /// Global screen center Y (host pointer space).
+    pub global_center_y: f64,
+    /// Element bounds in global screen space.
+    pub bounds_left: f64,
+    pub bounds_top: f64,
+    pub bounds_width: f64,
+    pub bounds_height: f64,
+}
+
 
 /// Whether the latest screenshot JPEG was the full display, a point crop, or a quadrant-drill region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -330,4 +490,80 @@ pub enum ComputerUseScreenshotRefinement {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerUseInteractionScreenshotKind {
+    FullDisplay,
+    RegionCrop,
+    QuadrantDrill,
+    QuadrantTerminal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerUseLastMutationKind {
+    Screenshot,
+    PointerMove,
+    Click,
+    Scroll,
+    KeyChord,
+    TypeText,
+    Wait,
+    Locate,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ComputerUseInteractionState {
+    pub click_ready: bool,
+    pub enter_ready: bool,
+    pub requires_fresh_screenshot_before_click: bool,
+    pub requires_fresh_screenshot_before_enter: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_screenshot_kind: Option<ComputerUseInteractionScreenshotKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_mutation: Option<ComputerUseLastMutationKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended_next_action: Option<String>,
+}
+
 pub type ComputerUseHostRef = std::sync::Arc<dyn ComputerUseHost>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interaction_state_serializes_expected_shape() {
+        let state = ComputerUseInteractionState {
+            click_ready: false,
+            enter_ready: true,
+            requires_fresh_screenshot_before_click: true,
+            requires_fresh_screenshot_before_enter: false,
+            last_screenshot_kind: Some(ComputerUseInteractionScreenshotKind::FullDisplay),
+            last_mutation: Some(ComputerUseLastMutationKind::Screenshot),
+            recommended_next_action: Some("screenshot_navigate_quadrant".to_string()),
+        };
+
+        let value = serde_json::to_value(&state).expect("serialize interaction state");
+
+        assert_eq!(value["click_ready"], serde_json::json!(false));
+        assert_eq!(value["enter_ready"], serde_json::json!(true));
+        assert_eq!(
+            value["requires_fresh_screenshot_before_click"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            value["requires_fresh_screenshot_before_enter"],
+            serde_json::json!(false)
+        );
+        assert_eq!(
+            value["last_screenshot_kind"],
+            serde_json::json!("full_display")
+        );
+        assert_eq!(value["last_mutation"], serde_json::json!("screenshot"));
+        assert_eq!(
+            value["recommended_next_action"],
+            serde_json::json!("screenshot_navigate_quadrant")
+        );
+    }
+}

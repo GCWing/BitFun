@@ -1,13 +1,18 @@
 //! Desktop automation for Claw (Computer use).
 
+use super::computer_use_input::{
+    coordinate_mode, ensure_pointer_move_uses_screen_coordinates_only, parse_screenshot_params,
+    use_screen_coordinates,
+};
 use super::computer_use_locate::execute_computer_use_locate;
 use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
 use crate::agentic::tools::computer_use_host::{
-    ComputerScreenshot, ComputerUseNavigateQuadrant, ComputerUseScreenshotParams,
-    ComputerUseScreenshotRefinement, ScreenshotCropCenter,
+    ComputerScreenshot, ComputerUseNavigateQuadrant, ComputerUseScreenshotRefinement,
+    ScreenshotCropCenter, UiElementLocateQuery,
     COMPUTER_USE_POINT_CROP_HALF_MAX, COMPUTER_USE_POINT_CROP_HALF_MIN,
     COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
+use crate::agentic::tools::computer_use_optimizer::hash_screenshot_bytes;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -18,12 +23,35 @@ use log::{debug, warn};
 use serde_json::{json, Value};
 
 /// Merges [`ComputerUseHost::computer_use_session_snapshot`] + optional `input_coordinates` into tool JSON.
+/// Also records the action for loop detection and adds loop warnings if detected.
 pub(crate) async fn computer_use_augment_result_json(
     host: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
     mut body: Value,
     input_coordinates: Option<Value>,
 ) -> Value {
     let snap = host.computer_use_session_snapshot().await;
+    let interaction = host.computer_use_interaction_state();
+
+    // Record action for loop detection
+    let action_type = body
+        .get("action")
+        .or_else(|| body.get("tool"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let action_params = input_coordinates
+        .as_ref()
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let success = body
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    host.record_action(&action_type, &action_params, success);
+
+    // Check for action loops
+    let loop_result = host.detect_action_loop();
+
     if let Value::Object(map) = &mut body {
         map.insert(
             "computer_use_context".to_string(),
@@ -33,6 +61,23 @@ pub(crate) async fn computer_use_augment_result_json(
                 "input_coordinates": input_coordinates,
             }),
         );
+        map.insert(
+            "interaction_state".to_string(),
+            json!(interaction),
+        );
+
+        // Add loop detection warning if a loop is detected
+        if loop_result.is_loop {
+            map.insert(
+                "loop_warning".to_string(),
+                json!({
+                    "detected": true,
+                    "pattern_length": loop_result.pattern_length,
+                    "repetitions": loop_result.repetitions,
+                    "suggestion": loop_result.suggestion,
+                }),
+            );
+        }
     }
     body
 }
@@ -73,36 +118,40 @@ impl ComputerUseTool {
         ))
     }
 
-    fn use_screen_coordinates(input: &Value) -> bool {
-        input
-            .get("use_screen_coordinates")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-    }
-
-    /// `image` (default): x,y are pixel indices in the attached screenshot (`image_width` x `image_height`).
-    /// `normalized`: x,y each in 0..=1000 across the captured display (coarser but easier for models).
-    fn coordinate_mode(input: &Value) -> &str {
-        input
-            .get("coordinate_mode")
-            .and_then(|v| v.as_str())
-            .unwrap_or("image")
-    }
-
     fn resolve_xy_f64(
         host: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
         input: &Value,
         x: i32,
         y: i32,
     ) -> BitFunResult<(f64, f64)> {
-        if Self::use_screen_coordinates(input) {
+        if use_screen_coordinates(input) {
             return Ok((x as f64, y as f64));
         }
-        if Self::coordinate_mode(input) == "normalized" {
+        if coordinate_mode(input) == "normalized" {
             host.map_normalized_coords_to_pointer_f64(x, y)
         } else {
             host.map_image_coords_to_pointer_f64(x, y)
         }
+    }
+
+    /// `click` must not carry coordinate fields — use `mouse_move` (or `move_to_text`, etc.) separately.
+    fn ensure_click_has_no_coordinate_fields(input: &Value) -> BitFunResult<()> {
+        if input.get("x").is_some() || input.get("y").is_some() {
+            return Err(BitFunError::tool(
+                "click does not accept x or y. Position with move_to_text, click_element, or `mouse_move` with use_screen_coordinates: true (globals from tool results), then `click` with only button and num_clicks.".to_string(),
+            ));
+        }
+        if input.get("coordinate_mode").is_some() {
+            return Err(BitFunError::tool(
+                "click does not accept coordinate_mode. Use `mouse_move` with use_screen_coordinates: true, then `click`.".to_string(),
+            ));
+        }
+        if input.get("use_screen_coordinates").is_some() {
+            return Err(BitFunError::tool(
+                "click does not accept use_screen_coordinates. Use `mouse_move` with use_screen_coordinates, then `click`.".to_string(),
+            ));
+        }
+        Ok(())
     }
 
     /// Runtime host OS label for tool description (desktop session matches this process).
@@ -122,6 +171,29 @@ impl ComputerUseTool {
             "linux" => "On this host use control, alt, shift, and meta/super as appropriate for the desktop. **System clipboard:** typically control+a/c/x/v (match the app and DE).",
             _ => "Match key_chord modifiers to the host OS in the system prompt Environment Information. Prefer standard clipboard chords (select all, copy, cut, paste) before long type_text.",
         }
+    }
+
+    async fn find_text_on_screen(
+        host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
+        text_query: &str,
+        region_native: Option<crate::agentic::tools::computer_use_host::OcrRegionNative>,
+    ) -> BitFunResult<Vec<ScreenOcrTextMatch>> {
+        let matches = host_ref
+            .ocr_find_text_matches(text_query, region_native)
+            .await?;
+        Ok(matches
+            .into_iter()
+            .map(|m| ScreenOcrTextMatch {
+                text: m.text,
+                confidence: m.confidence,
+                center_x: m.center_x,
+                center_y: m.center_y,
+                bounds_left: m.bounds_left,
+                bounds_top: m.bounds_top,
+                bounds_width: m.bounds_width,
+                bounds_height: m.bounds_height,
+            })
+            .collect())
     }
 
     /// Writes the exact JPEG sent to the model (including pointer overlay) under the workspace for debugging.
@@ -186,8 +258,16 @@ impl ComputerUseTool {
     ) -> BitFunResult<(Value, ToolImageAttachment, String)> {
         let b64 = B64.encode(&shot.bytes);
         let pointer_marker_note = match (shot.pointer_image_x, shot.pointer_image_y) {
-            (Some(_), Some(_)) => "The JPEG includes a **synthetic red cursor with gray border** marking the **actual mouse position** on this bitmap (not the OS arrow). The **tip** is the true click hotspot (same pixel as pointer_image_x and pointer_image_y). Use this marker and those numbers for **ComputerUseMousePrecise** — do not ignore them or guess from the OS cursor alone.",
-            _ => "No pointer overlay in this JPEG (pointer_image_x/y null): the cursor is not on this bitmap (e.g. another display). Do not infer position from the image; use global screen coordinates + use_screen_coordinates, or move the pointer onto this display and screenshot again.",
+            (Some(_), Some(_)) => "The JPEG includes a **synthetic red cursor with gray border** marking the **actual mouse position** on this bitmap (not the OS arrow). The **tip** is the true hotspot for **visual confirmation** only — **do not** use JPEG pixel indices for `mouse_move`; use `use_screen_coordinates: true` with globals from tool results (`pointer_global`, `move_to_text` global_center_*, `locate`, AX) or `move_to_text` / `click_element`.",
+            _ => "No pointer overlay in this JPEG (pointer_image_x/y null): the cursor is not on this bitmap (e.g. another display). Do not infer position from the image; use global coordinates with `use_screen_coordinates: true`, or move the pointer onto this display and screenshot again.",
+        };
+        let som_note = if shot.som_labels.is_empty() {
+            "No Set-of-Mark labels on this screenshot.".to_string()
+        } else {
+            format!(
+                "Set-of-Mark labels are overlaid on the screenshot: use `click_label` with a label number from 1..={}. Prefer this over raw coordinate clicks when the target has a visible label.",
+                shot.som_labels.len()
+            )
         };
         let mut data = json!({
             "success": true,
@@ -208,10 +288,12 @@ impl ComputerUseTool {
             "point_crop_half_extent_native": shot.point_crop_half_extent_native,
             "navigation_native_rect": shot.navigation_native_rect,
             "quadrant_navigation_click_ready": shot.quadrant_navigation_click_ready,
+            "implicit_confirmation_crop_applied": shot.implicit_confirmation_crop_applied,
             "debug_screenshot_path": debug_rel,
+            "som_label_note": som_note,
         });
         let shortcut_policy = format!(
-            "**First:** `key_chord` for shortcuts **and** system clipboard (copy/cut/paste/select-all per host OS) — avoid Edit-menu clicks and avoid long `type_text` when paste fits. **Then** pointer when shortcuts do not fit (then screenshot **only** when you need pixels or before host-guarded click/Enter). **Default for click prep:** after a full-frame shot, chain `screenshot` + `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px). **Do not** skip to `screenshot_crop_center_*` from full screen unless justified. **Quadrant narrowing is never automatic:** each drill step must set `screenshot_navigate_quadrant` on that `screenshot` call; a bare `screenshot` only refreshes. Point crop (~500×500) is a **fallback**. **Small pointer tweaks:** prefer **ComputerUseMouseStep** (`direction` + optional `pixels`) over tiny absolute **ComputerUseMousePrecise** `x`/`y` — easier for vision models than sub-pixel absolute coords. **Do not** screenshot after every `locate` or non-Enter `key_chord`; **fresh** screenshot **before** `key_chord` that sends Return/Enter (host) and before **click** (host).",
+            "**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move; no prior `screenshot` for targeting) → **`click_label`** if SoM exists on a shot → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation and navigation — do not guess move targets from JPEG pixels.** **`click`** never moves the pointer. **Host-only mandatory screenshot:** before **`click`** or Enter **`key_chord`** when the pointer changed since the last capture — **not** before `mouse_move`, `scroll`, `type_text`, `locate`, `wait`, or non-Enter `key_chord`. **Valid basis for a guarded `click`:** `FullDisplay`, `quadrant_navigation_click_ready`, or point crop; or bare **`screenshot`** after a pointer-changing action (**~500×500** implicit confirmation around mouse/caret). **`mouse_move`** must use **global** coordinates (from `move_to_text` global_center_*, `locate`, AX, or `pointer_global`). **Bare confirmation `screenshot`:** whenever the host still requires a capture before **`click`** or Enter **`key_chord`** (`requires_fresh_screenshot_*`), a bare `screenshot` (no crop / no reset) is **~500×500** centered on **mouse** (`screenshot_implicit_center` default `mouse`) — **including during quadrant drill** and the **first** such capture in a session. Before Enter in a text field, set **`screenshot_implicit_center`: `text_caret`**. Use **`screenshot_reset_navigation`**: true for a **full-screen** capture instead. **If AX failed:** try **`move_to_text`** before a long screenshot drill. **Optional refinement** for tiny targets: `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px) or point crop. Small moves: **ComputerUseMouseStep** over tiny **ComputerUseMousePrecise** (screen globals only).",
             COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE
         );
         let region_crop_size_note = shot
@@ -234,7 +316,7 @@ impl ComputerUseTool {
                 "image_is_crop_only": true,
                 "shortcut_policy": shortcut_policy,
                 "instruction": format!(
-                    "{}**margin ruler numbers** are **full-capture native** indices (same whole-screen bitmap space as a full-screen shot — not local 0..crop). `coordinate_mode` \"image\" uses **this JPEG’s** pixel grid (content area under the rulers). For another view, call screenshot with new `screenshot_crop_center_*` in that same full-capture space; optional `screenshot_crop_half_extent_native` adjusts crop size. See shortcut_policy.",
+                    "{}**Image pixel (0,0)** is the **top-left of this crop** in **full-capture native** space (same whole-screen bitmap as a full-screen shot — not local 0..crop only). This view is for **confirmation / drill** — do **not** use JPEG pixels for `mouse_move`. For another view, call screenshot with new `screenshot_crop_center_*` in that same full-capture space; optional `screenshot_crop_half_extent_native` adjusts crop size. See shortcut_policy.",
                     region_crop_size_note
                 )
             })
@@ -243,7 +325,7 @@ impl ComputerUseTool {
                 "phase": "quadrant_terminal",
                 "image_is_crop_only": true,
                 "shortcut_policy": shortcut_policy,
-                "instruction": "Region is small enough for precise pointer: **`quadrant_navigation_click_ready`** is true. For **small** alignment fixes, prefer **`ComputerUseMouseStep`** (`direction`, optional `pixels`); use **`ComputerUseMousePrecise`** absolute `x`/`y` only for larger jumps. Then **`ComputerUseMouseClick`** (`action`: click) (no extra point crop required). After pointer moves, screenshot again before the next click (host)."
+                "instruction": "Region is small enough for precise pointer: **`quadrant_navigation_click_ready`** is true. **Do not** use **`ComputerUseMouseStep`** / **`pointer_move_rel`** immediately after a **`screenshot`** (host blocks — vision nudges are wrong). First **`move_to_text`**, **`mouse_move`** (`use_screen_coordinates`: true), or **`click_element`**, then optional **`ComputerUseMouseStep`** / **`ComputerUseMousePrecise`**. Then **`ComputerUseMouseClick`** (`action`: click). Host requires a **fresh** screenshot before the next **`click`** or Enter **`key_chord`** if pointer state changed since last capture (see shortcut_policy)."
             })
         } else if !Self::shot_covers_full_display(shot) {
             json!({
@@ -251,7 +333,7 @@ impl ComputerUseTool {
                 "image_is_crop_only": true,
                 "shortcut_policy": shortcut_policy,
                 "instruction": format!(
-                    "**Keep drilling (default):** call **`screenshot`** again with **`screenshot_navigate_quadrant`**: `top_left` | `top_right` | `bottom_left` | `bottom_right` — pick the tile that contains your target. The host expands the chosen quadrant by **{} px** on each side (clamped) so split-edge controls stay in-frame. Repeat until `quadrant_navigation_click_ready`. To restart from the full display, set **`screenshot_reset_navigation`**: true on the next screenshot. Ruler numbers stay **full-display native**. See shortcut_policy.",
+                    "**Keep drilling (default):** call **`screenshot`** again with **`screenshot_navigate_quadrant`**: `top_left` | `top_right` | `bottom_left` | `bottom_right` — pick the tile that contains your target. The host expands the chosen quadrant by **{} px** on each side (clamped) so split-edge controls stay in-frame. Repeat until `quadrant_navigation_click_ready`. To restart from the full display, set **`screenshot_reset_navigation`**: true on the next screenshot. Coordinates remain **full-display native**. See shortcut_policy.",
                     COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX
                 )
             })
@@ -260,9 +342,9 @@ impl ComputerUseTool {
                 "phase": "full_display",
                 "image_is_crop_only": false,
                 "host_auto_quadrant": false,
-                "next_step_for_mouse_click": "**Preferred (0):** If **`ComputerUse`** **`action: locate`** can match the control, use **`screenshot_crop_center_*`** (+ optional **`screenshot_crop_half_extent_native`**) to **narrow the JPEG** before the quadrant drill. **Preferred (A):** next tool call = `screenshot` **with** `screenshot_navigate_quadrant` set (top_left|top_right|bottom_left|bottom_right). Repeat until `quadrant_navigation_click_ready`. **Fallback (B):** `screenshot` with `screenshot_crop_center_x/y` when quadrant drill is a poor fit. The host never splits the screen unless you pass `screenshot_navigate_quadrant`.",
+                "next_step_for_mouse_click": "**First:** **`move_to_text`** if visible text can name the target (OCR + move pointer; then **`click`** if you need a press). **If you must move by globals:** **`mouse_move`** with **`use_screen_coordinates`: true** and coordinates from **`locate`**, **`move_to_text`**, or **`pointer_global`** — **not** from guessing JPEG pixels. Then **`click`** when the host allows (`interaction_state.click_ready`). **Optional refinement:** `screenshot_crop_center_*`, quadrant drill, or **`screenshot_navigate_quadrant`** for smaller targets. Host never splits the screen unless you pass `screenshot_navigate_quadrant`.",
                 "shortcut_policy": shortcut_policy,
-                "instruction": "Full frame: ruler indices are **full-display native** pixels. **If DOM/AX can locate the target:** use `screenshot_crop_center_*` (+ optional `screenshot_crop_half_extent_native`) first — **before** a long quadrant-only chain. **Otherwise** start quadrant drill: next `screenshot` **must** include **`screenshot_navigate_quadrant`**. Repeat one quadrant per call until `quadrant_navigation_click_ready`, then **ComputerUseMousePrecise** / **ComputerUseMouseStep** + **`ComputerUseMouseClick`** (`action`: click). **`ComputerUseMouseClick` (click) is rejected** on full-screen-only. See `next_step_for_mouse_click`, `recommended_next_for_click_targeting`, shortcut_policy."
+                "instruction": "Full frame: JPEG aligns with **full-display native** space for **visual confirmation** only. **Prefer `move_to_text`** when readable text exists (then **`click`**). **Do not** derive `mouse_move` targets from this bitmap — use **`use_screen_coordinates`: true** with globals from tools, or AX/OCR actions. Then **`click`** when host allows (`click_ready`). For tiny targets, optionally narrow with `screenshot_crop_center_*` or quadrant drill. **`screenshot`**-heavy paths are **last** for targeting. See `next_step_for_mouse_click`, `recommended_next_for_click_targeting`, shortcut_policy."
             })
         };
         if let Some(obj) = data.as_object_mut() {
@@ -270,16 +352,41 @@ impl ComputerUseTool {
                 "hierarchical_navigation".to_string(),
                 hierarchical_navigation,
             );
-            if shot.screenshot_crop_center.is_none() && !shot.quadrant_navigation_click_ready {
-                let rec = if Self::shot_covers_full_display(shot) {
-                    "screenshot_navigate_quadrant"
-                } else {
-                    "screenshot_navigate_quadrant_until_click_ready"
-                };
+            if !shot.som_labels.is_empty() {
+                let som_labels = shot
+                    .som_labels
+                    .iter()
+                    .map(|e| json!({
+                        "label": e.label,
+                        "role": e.role,
+                        "title": e.title,
+                        "identifier": e.identifier,
+                    }))
+                    .collect::<Vec<_>>();
+                obj.insert("som_labels".to_string(), Value::Array(som_labels));
                 obj.insert(
                     "recommended_next_for_click_targeting".to_string(),
-                    Value::String(rec.to_string()),
+                    Value::String("click_label".to_string()),
                 );
+            } else if shot.screenshot_crop_center.is_none() && !shot.quadrant_navigation_click_ready {
+                if Self::shot_covers_full_display(shot) {
+                    obj.insert(
+                        "recommended_next_for_click_targeting".to_string(),
+                        Value::String(
+                            "move_to_text_then_click_or_mouse_move_screen_globals_then_click"
+                                .to_string(),
+                        ),
+                    );
+                } else {
+                    let rec = format!(
+                        "move_to_text_first_then_{}",
+                        "screenshot_navigate_quadrant_until_click_ready"
+                    );
+                    obj.insert(
+                        "recommended_next_for_click_targeting".to_string(),
+                        Value::String(rec),
+                    );
+                }
             }
         }
         let attach = ToolImageAttachment {
@@ -288,7 +395,7 @@ impl ComputerUseTool {
         };
         let pointer_line = match (shot.pointer_image_x, shot.pointer_image_y) {
             (Some(px), Some(py)) => format!(
-                " TRUE POINTER: **red cursor with gray border** (tip = hotspot) in the JPEG marks the mouse at this pixel — coordinate_mode \"image\" **ComputerUseMousePrecise** target x={}, y={}. Align moves so the **tip** sits on your click target, then **ComputerUseMouseClick** (`action`: click). Prior screenshot is stale after **ComputerUseMousePrecise** / **ComputerUseMouseStep** / `pointer_move_rel` until you screenshot again.",
+                " TRUE POINTER: **red cursor with gray border** (tip = hotspot) in the JPEG at image x={}, y={} — **confirmation only**; use **`mouse_move`** with **`use_screen_coordinates`: true** using globals from tool JSON (`pointer_global`, `move_to_text`, `locate`), then **`click`**. **Do not** use **`pointer_move_rel`** / **ComputerUseMouseStep** as the next action after this **`screenshot`** (host blocks). Prior screenshot is stale after **ComputerUseMousePrecise** / **ComputerUseMouseStep** / `pointer_move_rel` until you screenshot again.",
                 px, py
             ),
             _ => " TRUE POINTER: not on this capture (pointer_image_x/y null). No red synthetic cursor — OS mouse may be on another display; use use_screen_coordinates with global coords or bring the pointer here and re-screenshot."
@@ -305,7 +412,7 @@ impl ComputerUseTool {
             .unwrap_or_default();
         let hint = if let Some(c) = shot.screenshot_crop_center {
             format!(
-                "Region crop screenshot {}x{} around full-display native center ({}, {}). Use `image` coords in **this** bitmap only.{}.{} After pointer moves, screenshot again before click (host).",
+                "Region crop screenshot {}x{} around full-display native center ({}, {}). **Confirm** UI state here — do **not** use JPEG pixels for `mouse_move`.{}.{} After pointer moves, screenshot again before click (host).",
                 shot.image_width,
                 shot.image_height,
                 c.x,
@@ -315,7 +422,7 @@ impl ComputerUseTool {
             )
         } else if shot.quadrant_navigation_click_ready {
             format!(
-                "Quadrant terminal {}x{} (native region {:?}). **`quadrant_navigation_click_ready`**: use `image` coords on this JPEG, then **ComputerUseMousePrecise** / **ComputerUseMouseStep** + **`ComputerUseMouseClick`** (`action`: click).{}.{}",
+                "Quadrant terminal {}x{} (native region {:?}). **`quadrant_navigation_click_ready`**: align with **ComputerUseMouseStep** / **`mouse_move`** (**`use_screen_coordinates`: true** only) / **ComputerUseMousePrecise**, then **`ComputerUseMouseClick`** (`action`: click) — **`click`** has no coordinates.{}.{}",
                 shot.image_width,
                 shot.image_height,
                 shot.navigation_native_rect,
@@ -335,7 +442,7 @@ impl ComputerUseTool {
             let nx = shot.native_width.saturating_sub(1);
             let ny = shot.native_height.saturating_sub(1);
             format!(
-                "Full screenshot {}x{} (vision_scale={}). Rulers + grid: **native** 0..={} x 0..={}. **Quadrant drill is not automatic** — the next narrowing step must set **`screenshot_navigate_quadrant`** on `screenshot` (repeat until `quadrant_navigation_click_ready`), or use point crop (`screenshot_crop_center_*`).{}.{} After pointer moves, fresh fine screenshot before click; Return/Enter in key_chord needs fresh screenshot (host).",
+                "Full screenshot {}x{} (vision_scale={}). **Display native** range **0..={}** x **0..={}** (JPEG matches this rect for **confirmation**). **Targeting:** prefer **`move_to_text`** when text is visible; **`screenshot` + SoM/quad** is lowest priority. If SoM labels are visible, prefer `click_label`. **`mouse_move`** uses **`use_screen_coordinates`: true** with globals from tools — **not** JPEG guesses; then **`click`** when allowed (see `interaction_state`). **Only** guarded **`click`** / Enter **`key_chord`** need a fresh capture after pointer moves (see shortcut_policy).{}.{}",
                 shot.image_width,
                 shot.image_height,
                 shot.vision_scale,
@@ -361,130 +468,6 @@ impl ComputerUseTool {
                     && n.height == shot.native_height
             }
         }
-    }
-
-    fn parse_screenshot_crop_center(input: &Value) -> BitFunResult<Option<ScreenshotCropCenter>> {
-        let xv = input.get("screenshot_crop_center_x");
-        let yv = input.get("screenshot_crop_center_y");
-        let x_none = xv.map_or(true, |v| v.is_null());
-        let y_none = yv.map_or(true, |v| v.is_null());
-        match (x_none, y_none) {
-            (true, true) => Ok(None),
-            (false, false) => {
-                let x = xv
-                    .and_then(|v| v.as_u64())
-                    .ok_or_else(|| {
-                        BitFunError::tool(
-                            "screenshot_crop_center_x must be a non-negative integer (full-display native pixels)."
-                                .to_string(),
-                        )
-                    })?;
-                let y = yv
-                    .and_then(|v| v.as_u64())
-                    .ok_or_else(|| {
-                        BitFunError::tool(
-                            "screenshot_crop_center_y must be a non-negative integer (full-display native pixels)."
-                                .to_string(),
-                        )
-                    })?;
-                let x = u32::try_from(x).map_err(|_| {
-                    BitFunError::tool("screenshot_crop_center_x is too large.".to_string())
-                })?;
-                let y = u32::try_from(y).map_err(|_| {
-                    BitFunError::tool("screenshot_crop_center_y is too large.".to_string())
-                })?;
-                Ok(Some(ScreenshotCropCenter { x, y }))
-            }
-            _ => Err(BitFunError::tool(
-                "screenshot_crop_center_x and screenshot_crop_center_y must both be set or both omitted for action screenshot."
-                    .to_string(),
-            )),
-        }
-    }
-
-    /// Optional half-extent for point crop (native px); host clamps to [COMPUTER_USE_POINT_CROP_HALF_MIN, MAX].
-    fn parse_screenshot_crop_half_extent_native(input: &Value) -> BitFunResult<Option<u32>> {
-        match input.get("screenshot_crop_half_extent_native") {
-            None => Ok(None),
-            Some(v) if v.is_null() => Ok(None),
-            Some(v) => {
-                let n = v.as_u64().ok_or_else(|| {
-                    BitFunError::tool(
-                        "screenshot_crop_half_extent_native must be a non-negative integer.".to_string(),
-                    )
-                })?;
-                let n = u32::try_from(n).map_err(|_| {
-                    BitFunError::tool("screenshot_crop_half_extent_native is too large.".to_string())
-                })?;
-                Ok(Some(n))
-            }
-        }
-    }
-
-    /// True if the client sent non-null `screenshot_crop_center_x` and/or `y` (often `0` placeholders).
-    fn input_has_screenshot_crop_fields(input: &Value) -> bool {
-        let x = input.get("screenshot_crop_center_x");
-        let y = input.get("screenshot_crop_center_y");
-        x.map_or(false, |v| !v.is_null()) || y.map_or(false, |v| !v.is_null())
-    }
-
-    fn parse_screenshot_navigate_quadrant(input: &Value) -> BitFunResult<Option<ComputerUseNavigateQuadrant>> {
-        let v = input
-            .get("screenshot_navigate_quadrant")
-            .filter(|x| !x.is_null())
-            .and_then(|x| x.as_str());
-        let Some(s) = v else {
-            return Ok(None);
-        };
-        let n = s.trim().to_ascii_lowercase().replace('-', "_");
-        Ok(Some(match n.as_str() {
-            "top_left" | "topleft" | "upper_left" => ComputerUseNavigateQuadrant::TopLeft,
-            "top_right" | "topright" | "upper_right" => ComputerUseNavigateQuadrant::TopRight,
-            "bottom_left" | "bottomleft" | "lower_left" => ComputerUseNavigateQuadrant::BottomLeft,
-            "bottom_right" | "bottomright" | "lower_right" => ComputerUseNavigateQuadrant::BottomRight,
-            _ => {
-                return Err(BitFunError::tool(
-                    "screenshot_navigate_quadrant must be one of: top_left, top_right, bottom_left, bottom_right."
-                        .to_string(),
-                ));
-            }
-        }))
-    }
-
-    /// Second return value: crop fields were present but ignored because quadrant navigation wins.
-    fn parse_screenshot_params(input: &Value) -> BitFunResult<(ComputerUseScreenshotParams, bool)> {
-        let navigate = Self::parse_screenshot_navigate_quadrant(input)?;
-        let reset_navigation = input
-            .get("screenshot_reset_navigation")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if navigate.is_some() {
-            let ignored_crop = Self::input_has_screenshot_crop_fields(input);
-            return Ok((
-                ComputerUseScreenshotParams {
-                    crop_center: None,
-                    navigate_quadrant: navigate,
-                    reset_navigation,
-                    point_crop_half_extent_native: None,
-                },
-                ignored_crop,
-            ));
-        }
-        let crop = Self::parse_screenshot_crop_center(input)?;
-        let half = if crop.is_some() {
-            Self::parse_screenshot_crop_half_extent_native(input)?
-        } else {
-            None
-        };
-        Ok((
-            ComputerUseScreenshotParams {
-                crop_center: crop,
-                navigate_quadrant: None,
-                reset_navigation,
-                point_crop_half_extent_native: half,
-            },
-            false,
-        ))
     }
 
 }
@@ -525,11 +508,12 @@ pub(crate) async fn computer_use_execute_mouse_precise(
     host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
     input: &Value,
 ) -> BitFunResult<Vec<ToolResult>> {
+    ensure_pointer_move_uses_screen_coordinates_only(input)?;
     let snapshot_basis = computer_use_snapshot_coordinate_basis(host_ref);
     let x = req_i32(input, "x")?;
     let y = req_i32(input, "y")?;
-    let mode = ComputerUseTool::coordinate_mode(input);
-    let use_screen = ComputerUseTool::use_screen_coordinates(input);
+    let mode = coordinate_mode(input);
+    let use_screen = use_screen_coordinates(input);
     let (sx64, sy64) = ComputerUseTool::resolve_xy_f64(host_ref, input, x, y)?;
     host_ref.mouse_move_global_f64(sx64, sy64).await?;
     let sx = sx64.round() as i32;
@@ -636,8 +620,20 @@ pub(crate) async fn computer_use_execute_mouse_click_tool(
                 .get("button")
                 .and_then(|v| v.as_str())
                 .unwrap_or("left");
-            host_ref.mouse_click(button).await?;
-            let input_coords = json!({ "kind": "mouse_click", "action": "click", "button": button });
+            let num_clicks = input
+                .get("num_clicks")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1)
+                .clamp(1, 3) as u32;
+            for _ in 0..num_clicks {
+                host_ref.mouse_click(button).await?;
+            }
+            let click_label = match num_clicks {
+                2 => "double",
+                3 => "triple",
+                _ => "single",
+            };
+            let input_coords = json!({ "kind": "mouse_click", "action": "click", "button": button, "num_clicks": num_clicks });
             let body = computer_use_augment_result_json(
                 host_ref,
                 json!({
@@ -645,11 +641,12 @@ pub(crate) async fn computer_use_execute_mouse_click_tool(
                     "tool": "ComputerUseMouseClick",
                     "action": "click",
                     "button": button,
+                    "num_clicks": num_clicks,
                 }),
                 Some(input_coords),
             )
             .await;
-            let summary = format!("{} click at current pointer (does not move).", button);
+            let summary = format!("{} {} click at current pointer (does not move).", button, click_label);
             Ok(vec![ToolResult::ok(body, Some(summary))])
         }
         "wheel" => {
@@ -688,6 +685,70 @@ pub(crate) async fn computer_use_execute_mouse_click_tool(
     }
 }
 
+/// Helper: build `UiElementLocateQuery` from tool input JSON.
+fn parse_locate_query(input: &Value) -> UiElementLocateQuery {
+    UiElementLocateQuery {
+        title_contains: input.get("title_contains").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        role_substring: input.get("role_substring").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        identifier_contains: input.get("identifier_contains").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        max_depth: input.get("max_depth").and_then(|v| v.as_u64()).map(|v| v as u32),
+        filter_combine: input.get("filter_combine").and_then(|v| v.as_str()).map(|s| s.to_string()),
+    }
+}
+
+fn parse_ocr_region_native(
+    input: &Value,
+) -> BitFunResult<Option<crate::agentic::tools::computer_use_host::OcrRegionNative>> {
+    let v = input.get("ocr_region_native").or_else(|| input.get("ocr_region"));
+    let Some(val) = v else {
+        return Ok(None);
+    };
+    if val.is_null() {
+        return Ok(None);
+    }
+    let o = val.as_object().ok_or_else(|| {
+        BitFunError::tool(
+            "ocr_region_native must be an object { x0, y0, width, height } in global native pixels."
+                .to_string(),
+        )
+    })?;
+    let x0 = o
+        .get("x0")
+        .and_then(|x| x.as_i64())
+        .ok_or_else(|| BitFunError::tool("ocr_region_native.x0 (integer) is required.".to_string()))?
+        as i32;
+    let y0 = o
+        .get("y0")
+        .and_then(|x| x.as_i64())
+        .ok_or_else(|| BitFunError::tool("ocr_region_native.y0 (integer) is required.".to_string()))?
+        as i32;
+    let width = o
+        .get("width")
+        .and_then(|x| x.as_u64())
+        .ok_or_else(|| {
+            BitFunError::tool("ocr_region_native.width (positive integer) is required.".to_string())
+        })? as u32;
+    let height = o
+        .get("height")
+        .and_then(|x| x.as_u64())
+        .ok_or_else(|| {
+            BitFunError::tool("ocr_region_native.height (positive integer) is required.".to_string())
+        })? as u32;
+    if width == 0 || height == 0 {
+        return Err(BitFunError::tool(
+            "ocr_region_native width and height must be greater than zero.".to_string(),
+        ));
+    }
+    Ok(Some(
+        crate::agentic::tools::computer_use_host::OcrRegionNative {
+            x0,
+            y0,
+            width,
+            height,
+        },
+    ))
+}
+
 #[async_trait]
 impl Tool for ComputerUseTool {
     fn name(&self) -> &str {
@@ -697,111 +758,76 @@ impl Tool for ComputerUseTool {
     async fn description(&self) -> BitFunResult<String> {
         let os = Self::host_os_label();
         let keys = Self::key_chord_os_hint();
-        let hmin = COMPUTER_USE_POINT_CROP_HALF_MIN;
-        let hmax = COMPUTER_USE_POINT_CROP_HALF_MAX;
         Ok(format!(
-            "Desktop Computer use (host OS: {}). {} \
-**Automation priority (read order — same as Claw `claw_mode` “Computer use”):** (1) **Terminal** — **`Bash`** / **`TerminalControl`** — workspace shell; on **macOS** use **`open -a \"AppName\"`** to launch/focus apps (e.g. WeChat) **instead of** Spotlight+Return when possible (do **not** assume “computer use” = only `ComputerUse*` tools). (2) **System shortcuts** — **`key_chord`** for OS-wide actions and **system clipboard** (see hint below). (3) **Application shortcuts** — **`key_chord`** when the right app is focused. (4) **This tool — `action: locate`** — **named** controls in the **foreground** app (`AX` / UIA / AT-SPI); when it matches, you may **move** with **`coordinate_hints`** **without** an immediate full-frame **`screenshot`**; use **`action: screenshot`** with **`screenshot_crop_center_*`** / **`screenshot_crop_half_extent_native`** **when** you need a JPEG for vision (host clamps {}..{} per half). (5) **`type_text`** — short input, paste-blocked fields, or after the above failed. (6) **Vision / mouse** — only when (1)–(4) do not suffice. Prefer **paste** over **`type_text`** for long or duplicated content; do **not** drive the mouse to Edit → Copy/Paste when chords exist. **Do not** spam **`screenshot`** between unrelated actions — host mainly requires fresh capture before **click** and **Return/Enter**. \
-**`screenshot` image layout (read this):** Every **`screenshot`** returns a JPEG with **white margins on all four sides** showing **numeric coordinate tick labels** (full-capture native pixel indices — the same scale on full-screen and point-crop shots), and a **line grid** drawn on the captured desktop **inside** those margins. Read x/y from the **top/bottom/left/right** margin numbers to aim moves and for **point crop** (`screenshot_crop_center_*`) when that path is justified. The inner bitmap (below the rulers) is the live capture. \
-**Default before `ComputerUseMouseClick` (`action`: click) (mouse path):** After the **first** full **`screenshot`**, **if `action: locate` gave a native center:** use **`screenshot`** with **`screenshot_crop_center_*`** (+ optional **`screenshot_crop_half_extent_native`**) to narrow the view **first**. **Else** set **`screenshot_navigate_quadrant`** (one of `top_left`, `top_right`, `bottom_left`, `bottom_right`) on the next **`screenshot`** — **do not** refresh full screen repeatedly without `screenshot_navigate_quadrant` or a point crop. Chain **`screenshot` + `screenshot_navigate_quadrant`** until **`quadrant_navigation_click_ready`: true** in the tool JSON, then **`ComputerUseMousePrecise`** / **`ComputerUseMouseStep`** + **`ComputerUseMouseClick`**. Tool results may include **`recommended_next_for_click_targeting`** — obey it. \
-**Shortcut-first (default):** When a **standard OS or in-app shortcut** or **clipboard chord** achieves the same step (e.g. New/Open/Save, Copy/Cut/Paste, Undo/Redo, Find, Close tab/window, Quit, Refresh, tab/window switch, focus address bar, select all), you **must prefer `key_chord`** over moving the pointer and clicking — **do not** default to mouse for actions that have a well-known chord on this host. Use pointer + screenshots when **no** suitable shortcut exists, the target is only reachable by mouse, menus show no shortcut, or a shortcut attempt clearly failed (then **screenshot** and reassess). \
-**Between non-click steps:** **`computer_use_context`** often suffices; add **`screenshot`** when you need pixels or before **click / Enter** per host rules — **not** after every `key_chord` / `type_text` / `locate`. \
-**No blind submit or click (unchanged):** before **`ComputerUseMouseClick` (`action`: click)** (any button) and before **`key_chord` that sends Return/Enter** (or any key that submits/confirms), you **must** run **`screenshot` first** and visually confirm focus and target — **never** click or press Enter without a fresh screenshot when the outcome matters. Same discipline after moving the pointer. \
-**Quadrant drill (vision zoom; not automatic):** The app **never** splits the screen by itself. After an initial full **`screenshot`**, **when DOM is unavailable**, **each** narrowing step is **`screenshot` + `screenshot_navigate_quadrant`** ∈ {{`top_left`,`top_right`,`bottom_left`,`bottom_right`}} — omitting that field only **refreshes** full screen (or the current drill region). The host returns the chosen quarter **plus {} px on each side** (clamped); rulers stay **full-display native**. Repeat until **`quadrant_navigation_click_ready`: true** (longest native side < {} px), then **`ComputerUseMousePrecise`** / **`ComputerUseMouseStep`** and **`ComputerUseMouseClick` (`action`: click)**. **`screenshot_reset_navigation`**: true restarts from full display. **If `screenshot_navigate_quadrant` is set, `screenshot_crop_center_*` are ignored**. **Point crop** (`screenshot_crop_center_*` ± optional half-extent) is **preferred when DOM supplies `native_center_*`**; otherwise use quadrant drill. \
-**Screenshot zoom:** When you must **confirm** small text, dense UI, or the **red cursor** tip, **proactively** zoom — **DOM + point crop** when possible; else quadrant drill — **do not** rely only on huge full-display images when a smaller view answers the question. \
-**Pointer positioning (separate tools):** **`ComputerUseMousePrecise`** — absolute `x`/`y` with `coordinate_mode` / `use_screen_coordinates`. **`ComputerUseMouseStep`** — cardinal `direction` (`up`|`down`|`left`|`right`) and optional `pixels` (default 32, clamped 1..400; same screenshot-pixel space as `pointer_move_rel`). For **small** nudges onto a control, prefer **`ComputerUseMouseStep`** over tiny absolute coords. **`pointer_move_rel`** — arbitrary `delta_x`/`delta_y` when diagonal or non-cardinal deltas are needed. **`ComputerUseMouseClick`** — `action` **`click`** (button at pointer) or **`wheel`** (scroll wheel `delta_x`/`delta_y` at pointer); does not move the pointer. \
-**Host (desktop):** Call **`screenshot`** when you need current pixels; there is **no** automatic follow-up capture after other actions. Before **`ComputerUseMouseClick` (`action`: click)**, after pointer moves, the host requires a fresh **fine** basis: **`quadrant_navigation_click_ready`** (preferred path) **or** a **point crop** — **full-screen-only** is **not** enough. Before **`key_chord`** with **Return/Enter**, a fresh **`screenshot`** (any mode) is required. Numeric fields in each tool result JSON are authoritative for that frame. \
-Each **`screenshot`** JPEG: **four-side margin coordinate scales** (numbers), **grid on the capture**, and a **synthetic mouse marker** when the pointer is on that display (**red** with **gray border**; **tip** = hotspot, same as **`pointer_image_x` / `pointer_image_y`**). On macOS, **`ComputerUseMousePrecise`** uses sub-point Quartz when applicable. Also **wait**. **Per `action`:** send **only** the parameters that apply (e.g. for `screenshot` do not send `keys` or fields meant for **`ComputerUseMousePrecise`**) — extra keys may confuse you or the UI. macOS: Accessibility for the running binary.",
-            os,
-            keys,
-            hmin,
-            hmax,
-            COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
-            COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE
+            "Desktop automation (host OS: {}). {} All actions in one tool. Send only parameters that apply to the chosen `action`. \
+**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move pointer only) → `click_label` (when SoM exists) → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation — do not guess move targets from JPEG pixels.** \
+**`click_element`:** Accessibility tree (AX/UIA/AT-SPI) locate + click. Provide `title_contains` / `role_substring` / `identifier_contains`. Bypasses coordinate screenshot guard. \
+**`move_to_text`:** OCR-match visible text (`text_query`) and **move the pointer** to it (no click, no keys); **no prior `screenshot` required for targeting** (host captures **raw** pixels for Vision — no agent screenshot overlays; on macOS defaults to the **frontmost window** unless **`ocr_region_native`** overrides). Use **`click`** afterward if you need a mouse press. Prefer after `click_element` misses when text is visible. \
+**`click_label`:** After `screenshot` with `som_labels`, click by label number. Bypasses coordinate guard. \
+**`click`:** Press at **current pointer only** — **never** pass `x`, `y`, `coordinate_mode`, or `use_screen_coordinates`. Position first with **`move_to_text`**, **`mouse_move`** (**globals only**), or **`click_element`**. After pointer moves, **`screenshot`** again before the next guarded **`click`** when the host requires it. \
+**`mouse_move` / `drag`:** **`use_screen_coordinates`: true** required — global coordinates from **`move_to_text`**, **`locate`**, AX, or **`pointer_global`**; never JPEG pixel guesses. \
+**`scroll` / `type_text` / `pointer_move_rel` / `wait` / `locate`:** No mandatory pre-screenshot by themselves. **`pointer_move_rel`** (and **ComputerUseMouseStep**) are **blocked immediately after `screenshot`** until **`move_to_text`**, **`mouse_move`** (globals), **`click_element`**, or **`click_label`** — do not nudge from the JPEG. \
+**`key_chord`:** Press key combination. **Mandatory fresh screenshot only** when chord includes Return/Enter. \
+**`screenshot`:** JPEG for **confirmation** (optional pointer + SoM). When the host requires a fresh capture before **`click`** or Enter **`key_chord`**, a bare `screenshot` is **~500×500** around the **mouse** or **caret** (also during quadrant drill). Use **`screenshot_reset_navigation`**: true to force **full-screen** for wide context. \
+**`type_text`:** Type text; prefer clipboard for long content.",
+            os, keys,
         ))
     }
 
     async fn description_with_context(
         &self,
-        context: Option<&ToolUseContext>,
+        _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        let base = self.description().await?;
-        if context.and_then(|c| c.agent_type.as_deref()) == Some("Claw") {
-            Ok(format!(
-                "**Claw:** **`action: locate`** (accessibility) is the same tool as **`screenshot`** / **`key_chord`**. Use **`locate`** for **named** UI when AX exposes it; **do not** call **`screenshot`** after every **`locate`** / **`key_chord`** / **`type_text`** — only when you need pixels, or before **click** / **Return·Enter** (host). See `claw_mode` **Screenshot cadence**.\n\n{}",
-                base
-            ))
-        } else {
-            Ok(base)
-        }
+        self.description().await
     }
 
     fn input_schema(&self) -> Value {
-        let qpad = COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX;
         json!({
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["screenshot", "locate", "pointer_move_rel", "key_chord", "type_text", "wait"],
-                    "description": format!("**Same tool, different `action`:** **`locate`** — accessibility tree match on the **foreground** window (JSON only, no JPEG); use **`title_contains`** / **`role_substring`** / **`identifier_contains`** and optional **`filter_combine`**: **`all`** (default, AND) or **`any`** (OR) when one node has role but not title. **Before** ruler-only **`screenshot`** for named rows/buttons. **`screenshot`** — JPEG with **margin coordinate scales** + **grid**. **After `locate` matched:** prefer **`screenshot_crop_center_*`** + optional **`screenshot_crop_half_extent_native`** from the locate result **before** a long quadrant-only chain. **`key_chord`** — shortcuts + clipboard. **Pointer moves:** **`ComputerUseMousePrecise`**, **`ComputerUseMouseStep`**. **Click / wheel:** **`ComputerUseMouseClick`**. **When locate did not match:** **`screenshot_navigate_quadrant`** — 4-way drill; chosen quadrant **plus {} px per side** (clamped). Repeat until tool JSON `quadrant_navigation_click_ready`. **Modes:** (1) Plain / refresh — same region or full display (no narrowing). (2) **`screenshot_navigate_quadrant`**. (3) **`screenshot_reset_navigation`**: true — full display base. (4) **`screenshot_crop_center_*`** ± **`screenshot_crop_half_extent_native`** — point crop. **Precedence:** if `screenshot_navigate_quadrant` is set, **`screenshot_crop_center_*` are ignored**. **Prefer** sending **only** fields relevant to `screenshot` for this call. When **`quadrant_navigation_click_ready`** is true, you may **`ComputerUseMousePrecise`** / **`ComputerUseMouseStep`** + **`ComputerUseMouseClick`**. **Other actions:** `key_chord` + clipboard before `type_text`; red synthetic cursor when the mouse is on this display.", qpad)
+                    "enum": ["screenshot", "click_element", "click_label", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait"],
+                    "description": "The action to perform. `click_element` = find UI element by accessibility + click (preferred for named controls). `click_label` = click a numbered Set-of-Mark label from the latest screenshot. `move_to_text` = OCR visible text and move pointer **only** (no click). **After `click_element` fails, prefer `move_to_text` (visible substring, UI language) over vision guesses.** `click` = press at **current pointer only** — **do not** pass `x`, `y`, `coordinate_mode`, or `use_screen_coordinates` (use `mouse_move` first). `mouse_move` = absolute move with **`use_screen_coordinates`: true** (globals from tools — **no** JPEG pixel mode). `scroll` = mouse wheel. `drag` = drag between two globals (**`use_screen_coordinates`: true**). `screenshot` = confirmation JPEG (host may apply ~500×500 when required). `locate` = find UI element (no click). `key_chord` = keyboard shortcut. `type_text` = type string. `pointer_move_rel` = relative move — **host blocks right after `screenshot`** until a trusted absolute move (`move_to_text`, `mouse_move`, `click_element`, `click_label`). `wait` = pause."
                 },
-                "delta_x": { "type": "integer", "description": "For pointer_move_rel only: horizontal delta in screenshot/display pixels (negative=left). On macOS converted via last screenshot scale; screenshot first." },
-                "delta_y": { "type": "integer", "description": "For pointer_move_rel only: vertical delta in screenshot/display pixels (negative=up). On macOS converted via last screenshot scale; screenshot first." },
-                "keys": { "type": "array", "items": { "type": "string" }, "description": "For key_chord: **prefer this action** for standard shortcuts **and** **system clipboard** (e.g. select all + copy/cut/paste per host — see tool description OS hint). Do not use mouse menus for Copy/Paste when these chords work. OS-specific key names per Environment Information. If the chord includes **return** / **enter** (submit/confirm), **`screenshot` first** and verify — **no blind Enter.** Otherwise screenshot when the next action depends on UI." },
-                "text": { "type": "string", "description": "For type_text: short or paste-blocked input only — **prefer `key_chord` paste** (and focus/select chords) when inserting longer or duplicated content from the system clipboard. Then screenshot if you need to confirm focus or field content before further steps." },
-                "ms": { "type": "integer", "description": "Wait duration in milliseconds" },
-                "title_contains": {
-                    "type": "string",
-                    "description": "For **`action: locate`** only: case-insensitive substring on accessible title (AXTitle / etc.). Prefer the **same language as the app UI**. Optional if other filters match."
+                "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
+                "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
+                "coordinate_mode": { "type": "string", "enum": ["image", "normalized"], "description": "Ignored for `mouse_move` / `drag` — host rejects image/normalized positioning; always set **`use_screen_coordinates`: true**." },
+                "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates (e.g. macOS points) from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
+                "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For `click`, `click_element`, `drag`: mouse button (default left)." },
+                "num_clicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For `click`, `click_element`: 1=single (default), 2=double, 3=triple click." },
+                "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left). **Not** allowed as the first move after `screenshot` (host). For `scroll`: horizontal wheel delta." },
+                "delta_y": { "type": "integer", "description": "For `pointer_move_rel`: vertical delta (negative=up). **Not** allowed as the first move after `screenshot` (host). For `scroll`: vertical wheel delta." },
+                "start_x": { "type": "integer", "description": "For `drag`: start X coordinate." },
+                "start_y": { "type": "integer", "description": "For `drag`: start Y coordinate." },
+                "end_x": { "type": "integer", "description": "For `drag`: end X coordinate." },
+                "end_y": { "type": "integer", "description": "For `drag`: end Y coordinate." },
+                "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: key names to press together. Use OS-appropriate modifier names. Host requires a fresh screenshot only before chords that include Return/Enter (not before other chords)." },
+                "text": { "type": "string", "description": "For `type_text`: text to type. Prefer clipboard paste (key_chord) for long content." },
+                "ms": { "type": "integer", "description": "For `wait`: duration in milliseconds." },
+                "label": { "type": "integer", "minimum": 1, "description": "For `click_label`: 1-based Set-of-Mark label number from the latest screenshot." },
+                "text_query": { "type": "string", "description": "For `move_to_text`: visible text to OCR-match on screen (case-insensitive substring)." },
+                "ocr_region_native": {
+                    "type": "object",
+                    "description": "For `move_to_text`: optional global native rectangle for OCR. If omitted, macOS uses the frontmost window bounds from Accessibility; other OSes use the primary display. Overrides the automatic region when set. Requires x0, y0, width, height.",
+                    "properties": {
+                        "x0": { "type": "integer", "description": "Top-left X in global screen coordinates (macOS: same logical space as CGDisplayBounds / pointer; not physical Retina pixels)." },
+                        "y0": { "type": "integer", "description": "Top-left Y in global screen coordinates (macOS: logical, Y-down)." },
+                        "width": { "type": "integer", "minimum": 1, "description": "Width in the same coordinate unit as x0/y0 (logical on macOS)." },
+                        "height": { "type": "integer", "minimum": 1, "description": "Height in the same coordinate unit as x0/y0 (logical on macOS)." }
+                    }
                 },
-                "role_substring": {
-                    "type": "string",
-                    "description": "For **`action: locate`** only: case-insensitive substring on AXRole (e.g. \"Button\", \"AXButton\")."
-                },
-                "identifier_contains": {
-                    "type": "string",
-                    "description": "For **`action: locate`** only: case-insensitive substring on AXIdentifier when present."
-                },
-                "max_depth": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 200,
-                    "description": "For **`action: locate`** only: max BFS depth from the frontmost application root (default 48)."
-                },
-                "filter_combine": {
-                    "type": "string",
-                    "enum": ["all", "any"],
-                    "description": "For **`action: locate`** only: **`all`** (default) — every non-empty filter must match the **same** element (AND). **`any`** — match if **any** non-empty filter matches (OR). Use **`any`** when a field has a **role** (e.g. `AXTextField`) but **empty or different AXTitle** than your `title_contains` (common for search boxes). Prefer **one** filter (`role_substring` alone or `title_contains` alone) when unsure."
-                },
-                "screenshot_crop_center_x": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "For action `screenshot` only (point crop): X center in **full-capture native** pixels — same as margin tick labels on a prior full-screen shot. Pair with `screenshot_crop_center_y`. Optional **`screenshot_crop_half_extent_native`** adjusts crop size (default half=250 → ~500×500). Omit **both** centers when using `screenshot_navigate_quadrant` or plain refresh. **Ignored** if `screenshot_navigate_quadrant` is set."
-                },
-                "screenshot_crop_center_y": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "For action `screenshot` only (point crop): Y center in **full-capture native** pixels; pair with `screenshot_crop_center_x`. Omit **both** for quadrant drill or plain refresh. **Ignored** if `screenshot_navigate_quadrant` is set."
-                },
-                "screenshot_crop_half_extent_native": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": format!(
-                        "For action `screenshot` only, with **`screenshot_crop_center_*`**: half-size of the crop in **native** pixels (total region ≈ `2 × half`). Host clamps to {}..{}. Omit for default **250** (~500×500). After **`action: locate`**, copy **`coordinate_hints.screenshot_point_crop.screenshot_crop_half_extent_native`** when available for tighter crops around small controls.",
-                        COMPUTER_USE_POINT_CROP_HALF_MIN,
-                        COMPUTER_USE_POINT_CROP_HALF_MAX
-                    )
-                },
-                "screenshot_navigate_quadrant": {
-                    "type": "string",
-                    "enum": ["top_left", "top_right", "bottom_left", "bottom_right"],
-                    "description": format!("For action `screenshot` only: **set this on the next screenshot after a full-frame shot** (default path before click). Pick one quadrant of the **current** region (or full display after reset); host returns that tile + **{} px** padding per side (clamped). Enum: `top_left`, `top_right`, `bottom_left`, `bottom_right`. **Takes precedence:** any `screenshot_crop_center_*` in the same call are **ignored**.", qpad)
-                },
-                "screenshot_reset_navigation": {
-                    "type": "boolean",
-                    "description": "For action `screenshot` only: if true, clear quadrant navigation before this capture so the base region is the **full** display (then apply `screenshot_navigate_quadrant` if set)."
-                }
+                "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring match on accessible title (AXTitle). Use same language as the app UI." },
+                "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole (e.g. \"Button\", \"TextField\")." },
+                "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
+                "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48)." },
+                "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination." },
+                "screenshot_crop_center_x": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop X center in full-capture native pixels." },
+                "screenshot_crop_center_y": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop Y center in full-capture native pixels." },
+                "screenshot_crop_half_extent_native": { "type": "integer", "minimum": 0, "description": "For `screenshot`: half-size of point crop in native pixels (default 250)." },
+                "screenshot_navigate_quadrant": { "type": "string", "enum": ["top_left", "top_right", "bottom_left", "bottom_right"], "description": "For `screenshot`: zoom into quadrant. Repeat until `quadrant_navigation_click_ready` is true." },
+                "screenshot_reset_navigation": { "type": "boolean", "description": "For `screenshot`: reset to full display before this capture." },
+                "screenshot_implicit_center": { "type": "string", "enum": ["mouse", "text_caret"], "description": "For `screenshot` when `requires_fresh_screenshot_before_click` / `requires_fresh_screenshot_before_enter` is true: center the implicit ~500×500 on the mouse (`mouse`, default) or on the focused text control (`text_caret`, macOS AX; falls back to mouse). Applies to the **first** confirmation capture too. Ignored when you set `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation`." }
             },
             "required": ["action"],
             "additionalProperties": false
@@ -857,9 +883,366 @@ Each **`screenshot`** JPEG: **four-side margin coordinate scales** (numbers), **
         match action {
             "locate" => execute_computer_use_locate(input, context).await,
 
+            // ---- NEW: click_element (locate + move + click in one call) ----
+            "click_element" => {
+                let query = parse_locate_query(input);
+                if query.title_contains.is_none() && query.role_substring.is_none() && query.identifier_contains.is_none() {
+                    return Err(BitFunError::tool(
+                        "click_element requires at least one of title_contains, role_substring, or identifier_contains.".to_string(),
+                    ));
+                }
+                let button = input.get("button").and_then(|v| v.as_str()).unwrap_or("left");
+                let num_clicks = input.get("num_clicks").and_then(|v| v.as_u64()).unwrap_or(1).clamp(1, 3) as u32;
+
+                let res = host_ref.locate_ui_element_screen_center(query.clone()).await?;
+
+                // Move pointer to AX center using global screen coordinates (authoritative).
+                host_ref.mouse_move_global_f64(res.global_center_x, res.global_center_y).await?;
+
+                // Relaxed guard: AX coordinates are authoritative, no fine-screenshot needed.
+                host_ref.computer_use_guard_click_allowed_relaxed()?;
+
+                for _ in 0..num_clicks {
+                    host_ref.mouse_click_authoritative(button).await?;
+                }
+
+                let click_label = match num_clicks { 2 => "double", 3 => "triple", _ => "single" };
+                let input_coords = json!({
+                    "kind": "click_element",
+                    "query": {
+                        "title_contains": query.title_contains,
+                        "role_substring": query.role_substring,
+                        "identifier_contains": query.identifier_contains,
+                        "filter_combine": query.filter_combine,
+                    },
+                    "button": button,
+                    "num_clicks": num_clicks,
+                });
+                let mut result_json = json!({
+                    "success": true,
+                    "action": "click_element",
+                    "matched_role": res.matched_role,
+                    "matched_title": res.matched_title,
+                    "matched_identifier": res.matched_identifier,
+                    "global_center_x": res.global_center_x,
+                    "global_center_y": res.global_center_y,
+                    "button": button,
+                    "num_clicks": num_clicks,
+                });
+                if let Some(ref pc) = res.parent_context {
+                    result_json["parent_context"] = json!(pc);
+                }
+                if res.total_matches > 1 {
+                    result_json["total_matches"] = json!(res.total_matches);
+                    result_json["warning"] = json!(format!(
+                        "{} elements matched; clicked the best-ranked one. See other_matches if wrong.",
+                        res.total_matches
+                    ));
+                }
+                if !res.other_matches.is_empty() {
+                    result_json["other_matches"] = json!(res.other_matches);
+                }
+                let body = computer_use_augment_result_json(
+                    host_ref,
+                    result_json,
+                    Some(input_coords),
+                )
+                .await;
+                let match_info = if res.total_matches > 1 {
+                    format!(" ({} matches)", res.total_matches)
+                } else {
+                    String::new()
+                };
+                let summary = format!(
+                    "AX click_element: {} {} click on role={} at ({:.0}, {:.0}).{}",
+                    button, click_label, res.matched_role, res.global_center_x, res.global_center_y,
+                    match_info,
+                );
+                Ok(vec![ToolResult::ok(body, Some(summary))])
+            }
+
+            "click_label" => {
+                let label = input
+                    .get("label")
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| BitFunError::tool("click_label requires integer field `label`.".to_string()))?
+                    as u32;
+                if label == 0 {
+                    return Err(BitFunError::tool("click_label label must be >= 1.".to_string()));
+                }
+                let button = input.get("button").and_then(|v| v.as_str()).unwrap_or("left");
+                let num_clicks = input.get("num_clicks").and_then(|v| v.as_u64()).unwrap_or(1).clamp(1, 3) as u32;
+
+                let latest_shot = host_ref.screenshot_peek_full_display().await?;
+                let matched = latest_shot
+                    .som_labels
+                    .iter()
+                    .find(|e| e.label == label)
+                    .cloned()
+                    .ok_or_else(|| BitFunError::tool(format!(
+                        "No SoM label {} found. Take a fresh screenshot first and use one of the returned som_labels.",
+                        label
+                    )))?;
+
+                host_ref.mouse_move_global_f64(matched.global_center_x, matched.global_center_y).await?;
+                host_ref.computer_use_guard_click_allowed_relaxed()?;
+                for _ in 0..num_clicks {
+                    host_ref.mouse_click_authoritative(button).await?;
+                }
+
+                let input_coords = json!({
+                    "kind": "click_label",
+                    "label": label,
+                    "button": button,
+                    "num_clicks": num_clicks,
+                });
+                let body = computer_use_augment_result_json(
+                    host_ref,
+                    json!({
+                        "success": true,
+                        "action": "click_label",
+                        "label": label,
+                        "matched_role": matched.role,
+                        "matched_title": matched.title,
+                        "matched_identifier": matched.identifier,
+                        "global_center_x": matched.global_center_x,
+                        "global_center_y": matched.global_center_y,
+                        "button": button,
+                        "num_clicks": num_clicks,
+                    }),
+                    Some(input_coords),
+                )
+                .await;
+                let summary = format!(
+                    "SoM click_label: label={} role={} at ({:.0}, {:.0}).",
+                    label, matched.role, matched.global_center_x, matched.global_center_y
+                );
+                Ok(vec![ToolResult::ok(body, Some(summary))])
+            }
+
+            "move_to_text" => {
+                let text_query = input
+                    .get("text_query")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "move_to_text requires non-empty string field `text_query`.".to_string(),
+                        )
+                    })?;
+                let ocr_region_native = parse_ocr_region_native(input)?;
+
+                {
+                    let matches = Self::find_text_on_screen(
+                        host_ref,
+                        text_query,
+                        ocr_region_native.clone(),
+                    )
+                    .await?;
+                    let matched = matches.first().cloned().ok_or_else(|| {
+                        BitFunError::tool(format!(
+                            "move_to_text found no visible OCR match for {:?}. Take a fresh screenshot and try a shorter or more distinctive substring, or use click_label / click_element.",
+                            text_query
+                        ))
+                    })?;
+
+                    host_ref
+                        .mouse_move_global_f64(matched.center_x, matched.center_y)
+                        .await?;
+
+                    let other_matches = matches
+                        .iter()
+                        .skip(1)
+                        .take(4)
+                        .map(|m| {
+                            json!({
+                                "text": m.text,
+                                "confidence": m.confidence,
+                                "center_x": m.center_x,
+                                "center_y": m.center_y,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+
+                    let input_coords = json!({
+                        "kind": "move_to_text",
+                        "text_query": text_query,
+                        "ocr_region_native": &ocr_region_native,
+                    });
+                    let body = computer_use_augment_result_json(
+                        host_ref,
+                        json!({
+                            "success": true,
+                            "action": "move_to_text",
+                            "text_query": text_query,
+                            "ocr_region_native": ocr_region_native,
+                            "matched_text": matched.text,
+                            "confidence": matched.confidence,
+                            "global_center_x": matched.center_x,
+                            "global_center_y": matched.center_y,
+                            "bounds_left": matched.bounds_left,
+                            "bounds_top": matched.bounds_top,
+                            "bounds_width": matched.bounds_width,
+                            "bounds_height": matched.bounds_height,
+                            "total_matches": matches.len(),
+                            "other_matches": other_matches,
+                        }),
+                        Some(input_coords),
+                    )
+                    .await;
+                    let summary = format!(
+                        "OCR move_to_text: matched {:?} at ({:.0}, {:.0}).",
+                        matched.text, matched.center_x, matched.center_y
+                    );
+                    Ok(vec![ToolResult::ok(body, Some(summary))])
+                }
+            }
+
+            // ---- click: current pointer only; use `mouse_move` / `move_to_text` separately ----
+            "click" => {
+                Self::ensure_click_has_no_coordinate_fields(input)?;
+
+                let button = input.get("button").and_then(|v| v.as_str()).unwrap_or("left");
+                let num_clicks = input.get("num_clicks").and_then(|v| v.as_u64()).unwrap_or(1).clamp(1, 3) as u32;
+
+                host_ref.computer_use_guard_click_allowed()?;
+
+                for _ in 0..num_clicks {
+                    host_ref.mouse_click_authoritative(button).await?;
+                }
+
+                let click_label = match num_clicks { 2 => "double", 3 => "triple", _ => "single" };
+                let input_coords = json!({
+                    "kind": "click",
+                    "button": button,
+                    "num_clicks": num_clicks,
+                    "at_current_pointer_only": true,
+                });
+                let body = computer_use_augment_result_json(
+                    host_ref,
+                    json!({
+                        "success": true,
+                        "action": "click",
+                        "button": button,
+                        "num_clicks": num_clicks,
+                    }),
+                    Some(input_coords),
+                )
+                .await;
+                let summary = format!(
+                    "{} {} click at current pointer only (no move).",
+                    button, click_label
+                );
+                Ok(vec![ToolResult::ok(body, Some(summary))])
+            }
+
+            // ---- NEW: mouse_move (absolute pointer move, consolidated from ComputerUseMousePrecise) ----
+            "mouse_move" => {
+                ensure_pointer_move_uses_screen_coordinates_only(input)?;
+                let x = req_i32(input, "x")?;
+                let y = req_i32(input, "y")?;
+                let (sx64, sy64) = Self::resolve_xy_f64(host_ref, input, x, y)?;
+                host_ref.mouse_move_global_f64(sx64, sy64).await?;
+                let mode = coordinate_mode(input);
+                let use_screen = use_screen_coordinates(input);
+                let input_coords = json!({
+                    "kind": "mouse_move",
+                    "raw": { "x": x, "y": y, "coordinate_mode": mode, "use_screen_coordinates": use_screen },
+                    "resolved_global": { "x": sx64, "y": sy64 },
+                });
+                let body = computer_use_augment_result_json(
+                    host_ref,
+                    json!({
+                        "success": true,
+                        "action": "mouse_move",
+                        "x": x, "y": y,
+                        "pointer_x": sx64.round() as i32,
+                        "pointer_y": sy64.round() as i32,
+                        "coordinate_mode": mode,
+                        "use_screen_coordinates": use_screen,
+                    }),
+                    Some(input_coords),
+                )
+                .await;
+                let summary = format!(
+                    "Moved pointer to (~{}, ~{}).",
+                    sx64.round() as i32, sy64.round() as i32
+                );
+                Ok(vec![ToolResult::ok(body, Some(summary))])
+            }
+
+            // ---- NEW: scroll (consolidated from ComputerUseMouseClick wheel action) ----
+            "scroll" => {
+                let dx = input.get("delta_x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let dy = input.get("delta_y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                if dx == 0 && dy == 0 {
+                    return Err(BitFunError::tool(
+                        "scroll requires non-zero delta_x and/or delta_y".to_string(),
+                    ));
+                }
+                host_ref.scroll(dx, dy).await?;
+                let input_coords = json!({ "kind": "scroll", "delta_x": dx, "delta_y": dy });
+                let body = computer_use_augment_result_json(
+                    host_ref,
+                    json!({ "success": true, "action": "scroll", "delta_x": dx, "delta_y": dy }),
+                    Some(input_coords),
+                )
+                .await;
+                let summary = format!("Scrolled ({}, {}).", dx, dy);
+                Ok(vec![ToolResult::ok(body, Some(summary))])
+            }
+
+            // ---- NEW: drag (mouse_down at start + move to end + mouse_up) ----
+            "drag" => {
+                ensure_pointer_move_uses_screen_coordinates_only(input)?;
+                let start_x = req_i32(input, "start_x")?;
+                let start_y = req_i32(input, "start_y")?;
+                let end_x = req_i32(input, "end_x")?;
+                let end_y = req_i32(input, "end_y")?;
+                let button = input.get("button").and_then(|v| v.as_str()).unwrap_or("left");
+
+                let (sx0, sy0) = Self::resolve_xy_f64(host_ref, input, start_x, start_y)?;
+                let (sx1, sy1) = Self::resolve_xy_f64(host_ref, input, end_x, end_y)?;
+
+                // Move to start, press, move to end, release.
+                host_ref.mouse_move_global_f64(sx0, sy0).await?;
+                host_ref.mouse_down(button).await?;
+                // Small pause for apps that need time to register the press.
+                host_ref.wait_ms(50).await?;
+                host_ref.mouse_move_global_f64(sx1, sy1).await?;
+                host_ref.wait_ms(50).await?;
+                host_ref.mouse_up(button).await?;
+
+                let input_coords = json!({
+                    "kind": "drag",
+                    "start": { "x": start_x, "y": start_y },
+                    "end": { "x": end_x, "y": end_y },
+                    "button": button,
+                });
+                let body = computer_use_augment_result_json(
+                    host_ref,
+                    json!({
+                        "success": true,
+                        "action": "drag",
+                        "start_global": { "x": sx0.round() as i32, "y": sy0.round() as i32 },
+                        "end_global": { "x": sx1.round() as i32, "y": sy1.round() as i32 },
+                        "button": button,
+                    }),
+                    Some(input_coords),
+                )
+                .await;
+                let summary = format!(
+                    "Dragged from (~{}, ~{}) to (~{}, ~{}).",
+                    sx0.round() as i32, sy0.round() as i32,
+                    sx1.round() as i32, sy1.round() as i32,
+                );
+                Ok(vec![ToolResult::ok(body, Some(summary))])
+            }
+
             "screenshot" => {
                 Self::require_multimodal_tool_output_for_screenshot(context)?;
-                let (params, ignored_crop_for_quadrant) = Self::parse_screenshot_params(input)?;
+                let (params, ignored_crop_for_quadrant) = parse_screenshot_params(input)?;
                 let crop_for_debug = params.crop_center;
                 let nav_debug = params.navigate_quadrant.map(|q| match q {
                     ComputerUseNavigateQuadrant::TopLeft => "nav_tl",
@@ -868,6 +1251,10 @@ Each **`screenshot`** JPEG: **four-side margin coordinate scales** (numbers), **
                     ComputerUseNavigateQuadrant::BottomRight => "nav_br",
                 });
                 let shot = host_ref.screenshot_display(params).await?;
+                // Update screenshot hash for visual change detection
+                let shot_hash = hash_screenshot_bytes(&shot.bytes);
+                host_ref.update_screenshot_hash(shot_hash);
+                let crop_for_debug = shot.screenshot_crop_center.or(crop_for_debug);
                 let debug_rel = Self::try_save_screenshot_for_debug(
                     &shot.bytes,
                     context,
@@ -879,8 +1266,9 @@ Each **`screenshot`** JPEG: **four-side margin coordinate scales** (numbers), **
                     "kind": "screenshot",
                     "screenshot_reset_navigation": params.reset_navigation,
                     "screenshot_crop_ignored_for_quadrant": ignored_crop_for_quadrant,
-                    "screenshot_crop_center": params.crop_center.map(|c| json!({ "x": c.x, "y": c.y })),
-                    "screenshot_crop_half_extent_native": params.point_crop_half_extent_native,
+                    "screenshot_crop_center": shot.screenshot_crop_center.map(|c| json!({ "x": c.x, "y": c.y })),
+                    "screenshot_crop_half_extent_native": shot.point_crop_half_extent_native,
+                    "screenshot_implicit_confirmation_crop_applied": shot.implicit_confirmation_crop_applied,
                     "screenshot_navigate_quadrant": params.navigate_quadrant.map(|q| match q {
                         ComputerUseNavigateQuadrant::TopLeft => "top_left",
                         ComputerUseNavigateQuadrant::TopRight => "top_right",
@@ -1004,6 +1392,18 @@ Each **`screenshot`** JPEG: **four-side margin coordinate scales** (numbers), **
             _ => Err(BitFunError::tool(format!("Unknown action: {}", action))),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct ScreenOcrTextMatch {
+    text: String,
+    confidence: f32,
+    center_x: f64,
+    center_y: f64,
+    bounds_left: f64,
+    bounds_top: f64,
+    bounds_width: f64,
+    bounds_height: f64,
 }
 
 fn req_i32(input: &Value, key: &str) -> BitFunResult<i32> {

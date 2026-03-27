@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../types/flow-chat';
-import { compareSessionsForDisplay, getSessionSortTimestamp } from './sessionOrdering';
+import {
+  compareSessionsForDisplay,
+  getSessionSortTimestamp,
+  sessionBelongsToWorkspaceNavRow,
+} from './sessionOrdering';
 
 function createSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -54,5 +58,30 @@ describe('sessionOrdering', () => {
 
     const orderedIds = [...sessions].sort(compareSessionsForDisplay).map(session => session.sessionId);
     expect(orderedIds).toEqual(['a', 'b']);
+  });
+
+  it('remote SSH: same host but different remote root does not share nav row', () => {
+    const conn = 'ssh-user@myserver.example.com:22';
+    const host = 'myserver.example.com';
+    const rowPath = '/home/u/project-a';
+    const otherPath = '/home/u/project-b';
+
+    const sessionA = {
+      workspacePath: rowPath,
+      remoteConnectionId: conn,
+      remoteSshHost: host,
+    };
+    const sessionB = {
+      workspacePath: otherPath,
+      remoteConnectionId: conn,
+      remoteSshHost: host,
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(sessionA, rowPath, conn, host)
+    ).toBe(true);
+    expect(
+      sessionBelongsToWorkspaceNavRow(sessionB, rowPath, conn, host)
+    ).toBe(false);
   });
 });

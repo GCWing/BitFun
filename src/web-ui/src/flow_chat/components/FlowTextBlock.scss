@@ -4,7 +4,21 @@
 
 .flow-text-block {
   width: 100%;
-  
+
+  /* Chat: slightly roomier reading measure than generic markdown preview */
+  .markdown-renderer {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    letter-spacing: 0.01em;
+  }
+
+  .markdown-renderer p,
+  .markdown-renderer li,
+  .markdown-renderer ul,
+  .markdown-renderer ol {
+    font-size: inherit;
+  }
+
   .text-content {
     color: var(--color-text-primary);
     line-height: 1.6;

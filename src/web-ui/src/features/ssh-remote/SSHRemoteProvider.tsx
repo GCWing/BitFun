@@ -47,6 +47,8 @@ interface SSHContextValue {
   showConnectionDialog: boolean;
   showFileBrowser: boolean;
   error: string | null;
+  /** Default path for remote folder picker (`~` or resolved `$HOME` from server). */
+  remoteFileBrowserInitialPath: string;
 
   // Actions
   connect: (connectionId: string, config: SSHConnectionConfig) => Promise<void>;
@@ -85,6 +87,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [remoteFileBrowserInitialPath, setRemoteFileBrowserInitialPath] = useState('~');
   // Per-workspace connection statuses (keyed by connectionId)
   const [workspaceStatuses, setWorkspaceStatuses] = useState<Record<string, ConnectionStatus>>({});
   const heartbeatInterval = useRef<number | null>(null);
@@ -394,6 +397,10 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
       if (result.success && result.connectionId) {
         log.info('SSH connection successful', { connectionId: result.connectionId });
+        const home = result.serverInfo?.homeDir?.trim();
+        setRemoteFileBrowserInitialPath(
+          home && home.length > 0 ? normalizeRemoteWorkspacePath(home) : '~'
+        );
         setStatus('connected');
         setIsConnected(true);
         setConnectionId(result.connectionId);
@@ -446,6 +453,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     setRemoteWorkspace(null);
     setIsConnected(false);
     setShowFileBrowser(false);
+    setRemoteFileBrowserInitialPath('~');
 
     if (currentRemoteWorkspace) {
       setWorkspaceStatus(currentRemoteWorkspace.connectionId, 'disconnected');
@@ -515,6 +523,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     showConnectionDialog,
     showFileBrowser,
     error,
+    remoteFileBrowserInitialPath,
     connect,
     disconnect,
     openWorkspace,
