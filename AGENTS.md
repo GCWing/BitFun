@@ -115,3 +115,26 @@ In `agentic/agents/`:
 1. Create agent file
 2. Define prompt in `prompts/`
 3. Register in `registry.rs`
+
+## Frontend Debugging
+
+A local log receiver server is available at `scripts/debug-log-server.mjs`.
+
+**Start the server:**
+```bash
+node scripts/debug-log-server.mjs
+# Listens on http://127.0.0.1:7469, writes logs to debug-agent.log
+```
+
+**Instrument code (one-liner fetch):**
+```typescript
+fetch('http://127.0.0.1:7469/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'file.ts:LINE',message:'desc',data:{k:v},timestamp:Date.now()})}).catch(()=>{});
+```
+
+**Clear logs between runs:**
+```bash
+# Via HTTP
+curl -X POST http://127.0.0.1:7469/clear
+```
+
+Logs are written to `debug-agent.log` in project root as NDJSON. The agent reads this file directly — no copy-paste needed.

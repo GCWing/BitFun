@@ -258,73 +258,8 @@ export async function switchChatSession(
 ): Promise<void> {
   try {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
-    
-    if (session?.isHistorical) {
-      try {
-        const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
-        
-        await context.flowChatStore.loadSessionHistory(
-          sessionId,
-          workspacePath,
-          undefined,
-          session.remoteConnectionId,
-          session.remoteSshHost
-        );
-        
-        try {
-          await agentAPI.restoreSession(
-            sessionId,
-            workspacePath,
-            session.remoteConnectionId,
-            session.remoteSshHost
-          );
-          
-          context.flowChatStore.setState(prev => {
-            const newSessions = new Map(prev.sessions);
-            const sess = newSessions.get(sessionId);
-            if (sess) {
-              newSessions.set(sessionId, { ...sess, isHistorical: false });
-            }
-            return { ...prev, sessions: newSessions };
-          });
-        } catch (restoreError: any) {
-          log.warn('Historical session restore failed, creating new session', { sessionId, error: restoreError });
-          const currentSession = context.flowChatStore.getState().sessions.get(sessionId);
-          if (currentSession) {
-            await agentAPI.createSession({
-              sessionId: sessionId,
-              sessionName: currentSession.title || `Session ${sessionId.slice(0, 8)}`,
-              agentType: currentSession.mode || 'agentic',
-              workspacePath,
-              remoteConnectionId: currentSession.remoteConnectionId,
-              remoteSshHost: currentSession.remoteSshHost,
-              config: {
-                modelName: currentSession.config.modelName || 'auto',
-                enableTools: true,
-                safeMode: true,
-                remoteConnectionId: currentSession.remoteConnectionId,
-                remoteSshHost: currentSession.remoteSshHost,
-              }
-            });
-            
-            context.flowChatStore.setState(prev => {
-              const newSessions = new Map(prev.sessions);
-              const sess = newSessions.get(sessionId);
-              if (sess) {
-                newSessions.set(sessionId, { ...sess, isHistorical: false });
-              }
-              return { ...prev, sessions: newSessions };
-            });
-          }
-        }
-      } catch (error) {
-        log.error('Failed to load session history', { sessionId, error });
-        notificationService.warning('Failed to load session history, showing empty session', {
-          duration: 3000
-        });
-      }
-    }
-    
+
+    // Switch UI immediately so the user sees the new session without waiting for history load.
     context.flowChatStore.switchSession(sessionId);
 
     touchSessionActivity(
@@ -335,6 +270,29 @@ export async function switchChatSession(
     ).catch(error => {
       log.debug('Failed to touch session activity', { sessionId, error });
     });
+
+    if (session?.isHistorical) {
+      // Load history in the background — do not block the UI.
+      (async () => {
+        try {
+          const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+
+          // loadSessionHistory internally calls restoreSession + loadSessionTurns.
+          await context.flowChatStore.loadSessionHistory(
+            sessionId,
+            workspacePath,
+            undefined,
+            session.remoteConnectionId,
+            session.remoteSshHost
+          );
+        } catch (error) {
+          log.error('Failed to load session history', { sessionId, error });
+          notificationService.warning('Failed to load session history, showing empty session', {
+            duration: 3000
+          });
+        }
+      })();
+    }
   } catch (error) {
     log.error('Failed to switch chat session', { sessionId, error });
     notificationService.error('Failed to switch session', {
