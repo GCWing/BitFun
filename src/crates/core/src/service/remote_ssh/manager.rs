@@ -905,8 +905,31 @@ impl SSHConnectionManager {
         }
         log::info!("Authentication successful for user {}", config.username);
 
-        // Get server info
-        let server_info = Self::get_server_info_internal(&handle).await;
+        // Get server info (prefer full probe; fall back to $HOME only so SFTP `~` works when uname fails)
+        let mut server_info = Self::get_server_info_internal(&handle).await;
+        if server_info
+            .as_ref()
+            .map(|s| s.home_dir.trim().is_empty())
+            .unwrap_or(true)
+        {
+            if let Ok((stdout, _, status)) = Self::execute_command_internal(&handle, "echo $HOME").await {
+                if status == 0 {
+                    let home = stdout.trim().to_string();
+                    if !home.is_empty() {
+                        match &mut server_info {
+                            Some(si) => si.home_dir = home,
+                            None => {
+                                server_info = Some(ServerInfo {
+                                    os_type: "unknown".to_string(),
+                                    hostname: "unknown".to_string(),
+                                    home_dir: home,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         let connection_id = config.id.clone();
 
@@ -1041,6 +1064,40 @@ impl SSHConnectionManager {
     // SFTP Operations
     // ============================================================================
 
+    /// Expand leading `~` using the remote user's home from [`ServerInfo`] (SFTP paths are not shell-expanded).
+    pub async fn resolve_sftp_path(&self, connection_id: &str, path: &str) -> anyhow::Result<String> {
+        let path = path.trim();
+        if path.is_empty() {
+            return Err(anyhow!("Empty remote path"));
+        }
+        if path == "~" || path.starts_with("~/") {
+            let guard = self.connections.read().await;
+            let home = guard
+                .get(connection_id)
+                .and_then(|c| c.server_info.as_ref())
+                .map(|s| s.home_dir.trim())
+                .filter(|h| !h.is_empty());
+            let home = match home {
+                Some(h) => h.to_string(),
+                None => {
+                    return Err(anyhow!(
+                        "Cannot use '~' in remote path: home directory is not available for this connection"
+                    ));
+                }
+            };
+            if path == "~" || path == "~/" {
+                return Ok(home);
+            }
+            let rest = path[2..].trim_start_matches('/');
+            if rest.is_empty() {
+                return Ok(home);
+            }
+            Ok(format!("{}/{}", home.trim_end_matches('/'), rest))
+        } else {
+            Ok(path.to_string())
+        }
+    }
+
     /// Get or create SFTP session for a connection
     pub async fn get_sftp(&self, connection_id: &str) -> anyhow::Result<Arc<SftpSession>> {
         // First check if we have an existing SFTP session
@@ -1088,8 +1145,9 @@ impl SSHConnectionManager {
 
     /// Read a file via SFTP
     pub async fn sftp_read(&self, connection_id: &str, path: &str) -> anyhow::Result<Vec<u8>> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        let mut file = sftp.open(path).await
+        let mut file = sftp.open(&path).await
             .map_err(|e| anyhow!("Failed to open remote file '{}': {}", path, e))?;
 
         let mut buffer = Vec::new();
@@ -1102,8 +1160,9 @@ impl SSHConnectionManager {
 
     /// Write a file via SFTP
     pub async fn sftp_write(&self, connection_id: &str, path: &str, content: &[u8]) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        let mut file = sftp.create(path).await
+        let mut file = sftp.create(&path).await
             .map_err(|e| anyhow!("Failed to create remote file '{}': {}", path, e))?;
 
         use tokio::io::AsyncWriteExt;
@@ -1118,72 +1177,81 @@ impl SSHConnectionManager {
 
     /// Read directory via SFTP
     pub async fn sftp_read_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<ReadDir> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        let entries = sftp.read_dir(path).await
+        let entries = sftp.read_dir(&path).await
             .map_err(|e| anyhow!("Failed to read directory '{}': {}", path, e))?;
         Ok(entries)
     }
 
     /// Create directory via SFTP
     pub async fn sftp_mkdir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.create_dir(path).await
+        sftp.create_dir(&path).await
             .map_err(|e| anyhow!("Failed to create directory '{}': {}", path, e))?;
         Ok(())
     }
 
     /// Create directory and all parents via SFTP
     pub async fn sftp_mkdir_all(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
 
         // Check if path exists
-        match sftp.as_ref().try_exists(path).await {
+        match sftp.as_ref().try_exists(&path).await {
             Ok(true) => return Ok(()), // Already exists
             Ok(false) => {}
             Err(_) => {}
         }
 
         // Try to create
-        sftp.as_ref().create_dir(path).await
+        sftp.as_ref().create_dir(&path).await
             .map_err(|e| anyhow!("Failed to create directory '{}': {}", path, e))?;
         Ok(())
     }
 
     /// Remove file via SFTP
     pub async fn sftp_remove(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.remove_file(path).await
+        sftp.remove_file(&path).await
             .map_err(|e| anyhow!("Failed to remove file '{}': {}", path, e))?;
         Ok(())
     }
 
     /// Remove directory via SFTP
     pub async fn sftp_rmdir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.remove_dir(path).await
+        sftp.remove_dir(&path).await
             .map_err(|e| anyhow!("Failed to remove directory '{}': {}", path, e))?;
         Ok(())
     }
 
     /// Rename/move via SFTP
     pub async fn sftp_rename(&self, connection_id: &str, old_path: &str, new_path: &str) -> anyhow::Result<()> {
+        let old_path = self.resolve_sftp_path(connection_id, old_path).await?;
+        let new_path = self.resolve_sftp_path(connection_id, new_path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.rename(old_path, new_path).await
+        sftp.rename(&old_path, &new_path).await
             .map_err(|e| anyhow!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))?;
         Ok(())
     }
 
     /// Check if path exists via SFTP
     pub async fn sftp_exists(&self, connection_id: &str, path: &str) -> anyhow::Result<bool> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.as_ref().try_exists(path).await
+        sftp.as_ref().try_exists(&path).await
             .map_err(|e| anyhow!("Failed to check if '{}' exists: {}", path, e))
     }
 
     /// Get file metadata via SFTP
     pub async fn sftp_stat(&self, connection_id: &str, path: &str) -> anyhow::Result<russh_sftp::client::fs::Metadata> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.as_ref().metadata(path).await
+        sftp.as_ref().metadata(&path).await
             .map_err(|e| anyhow!("Failed to stat '{}': {}", path, e))
     }
 

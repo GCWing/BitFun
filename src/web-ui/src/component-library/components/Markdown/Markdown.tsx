@@ -422,6 +422,60 @@ function isEditorOpenableFilePath(filePath: string): boolean {
   return EDITOR_OPENABLE_EXTENSIONS.has(fileName.slice(dotIdx + 1));
 }
 
+/** Human-readable label for Prism language ids (code block toolbar). */
+function formatCodeLanguageLabel(lang: string): string {
+  if (!lang) return 'Text';
+  const key = lang.toLowerCase();
+  const aliases: Record<string, string> = {
+    js: 'JavaScript',
+    jsx: 'JavaScript',
+    mjs: 'JavaScript',
+    cjs: 'JavaScript',
+    ts: 'TypeScript',
+    tsx: 'TSX',
+    py: 'Python',
+    rs: 'Rust',
+    go: 'Go',
+    rb: 'Ruby',
+    sh: 'Shell',
+    bash: 'Bash',
+    zsh: 'Zsh',
+    fish: 'Fish',
+    md: 'Markdown',
+    yml: 'YAML',
+    yaml: 'YAML',
+    json: 'JSON',
+    html: 'HTML',
+    css: 'CSS',
+    scss: 'SCSS',
+    sass: 'Sass',
+    less: 'Less',
+    cpp: 'C++',
+    cxx: 'C++',
+    hpp: 'C++',
+    hxx: 'C++',
+    cc: 'C++',
+    c: 'C',
+    cs: 'C#',
+    fs: 'F#',
+    swift: 'Swift',
+    kt: 'Kotlin',
+    java: 'Java',
+    sql: 'SQL',
+    graphql: 'GraphQL',
+    dockerfile: 'Dockerfile',
+    makefile: 'Makefile',
+    toml: 'TOML',
+    xml: 'XML',
+    rust: 'Rust',
+    typescript: 'TypeScript',
+    javascript: 'JavaScript',
+  };
+  if (aliases[key]) return aliases[key];
+  const raw = lang.replace(/[_-]/g, ' ');
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
 const CopyButton: React.FC<{ code: string }> = ({ code }) => {
   const { t } = useI18n('components');
   const [copied, setCopied] = useState(false);
@@ -598,16 +652,20 @@ export const Markdown = React.memo<MarkdownProps>(({
       
       return (
         <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`}>
-          <CopyButton code={code} />
+          <div className="code-block-toolbar">
+            <span className="code-block-lang">{formatCodeLanguageLabel(normalizedLang)}</span>
+            <CopyButton code={code} />
+          </div>
+          <div className="code-block-body">
           <SyntaxHighlighter
             language={normalizedLang}
             style={syntaxTheme}
             showLineNumbers={true}
             customStyle={{
               margin: 0,
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              lineHeight: '1.5'
+              borderRadius: '0 0 8px 8px',
+              fontSize: '0.875rem',
+              lineHeight: '1.55'
             }}
             codeTagProps={{
               style: {
@@ -624,6 +682,7 @@ export const Markdown = React.memo<MarkdownProps>(({
           >
             {code}
           </SyntaxHighlighter>
+          </div>
         </div>
       );
     },

@@ -46,7 +46,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
       <p className="bitfun-remote-disclaimer__text">{t('remoteConnect.disclaimerIntro')}</p>
 
       <ol className="bitfun-remote-disclaimer__list">
-        <li>{t('remoteConnect.disclaimerItemBeta')}</li>
+        <li>{t('remoteConnect.disclaimerItemGeneralRisk')}</li>
         <li>{t('remoteConnect.disclaimerItemSecurity')}</li>
         <li>{t('remoteConnect.disclaimerItemEncryption')}</li>
         <li>{t('remoteConnect.disclaimerItemOpenSource')}</li>

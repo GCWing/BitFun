@@ -70,7 +70,11 @@ jobs:
             "$WEBKIT_PKG" \
             "$APPINDICATOR_PKG" \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
 
       - uses: dtolnay/rust-toolchain@stable
 

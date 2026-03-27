@@ -24,7 +24,7 @@ impl Tool for ComputerUseMousePreciseTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            "Move the mouse pointer to **absolute** coordinates. Use **`coordinate_mode`** (`image` = last screenshot JPEG — **preferred for precision**; `normalized` = 0..1000 — **coarse**, avoid for fine alignment) or **`use_screen_coordinates`** for global display units. Same semantics as the former `ComputerUse` `mouse_move` absolute path. For **small** cardinal nudges, prefer **`ComputerUseMouseStep`** instead of tiny absolute x/y.".to_string(),
+            "Move the mouse pointer to **absolute global** coordinates only: set **`use_screen_coordinates`: true** (macOS: **points**). **Do not** use `coordinate_mode` image/normalized — that path is disabled (vision-derived positions are unreliable). Use numbers from **`move_to_text`**, **`locate`**, AX tools, or **`pointer_global`** in tool JSON. Same as `ComputerUse` **`mouse_move`**. For **small** cardinal nudges, prefer **ComputerUseMouseStep**.".to_string(),
         )
     }
 
@@ -34,20 +34,20 @@ impl Tool for ComputerUseMousePreciseTool {
             "properties": {
                 "x": {
                     "type": "integer",
-                    "description": "Target x: in **image** mode, pixel on the latest screenshot JPEG; in **normalized**, 0..=1000 on the captured display; with **use_screen_coordinates**, global display units (host native, e.g. macOS points)."
+                    "description": "Target x in **global display** units — requires **use_screen_coordinates**: true (e.g. from move_to_text global_center_x, locate, pointer_global.x)."
                 },
-                "y": { "type": "integer", "description": "Target y; same coordinate space as x." },
+                "y": { "type": "integer", "description": "Target y; same as x (global display units)." },
                 "coordinate_mode": {
                     "type": "string",
                     "enum": ["image", "normalized"],
-                    "description": "When use_screen_coordinates is false. \"image\" = pixels on the latest screenshot JPEG (use for precise moves). \"normalized\" = 0..=1000 (coarse grid only)."
+                    "description": "Ignored — image/normalized positioning is disabled; always use **use_screen_coordinates**: true."
                 },
                 "use_screen_coordinates": {
                     "type": "boolean",
-                    "description": "If true, x/y are global display coordinates in the host's native units (on macOS: **points**)."
+                    "description": "**Must be true.** x/y are global display coordinates (macOS: **points**)."
                 }
             },
-            "required": ["x", "y"],
+            "required": ["x", "y", "use_screen_coordinates"],
             "additionalProperties": false
         })
     }

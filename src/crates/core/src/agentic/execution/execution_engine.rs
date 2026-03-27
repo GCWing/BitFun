@@ -1264,9 +1264,6 @@ impl ExecutionEngine {
             ("Log", 14),
             ("MermaidInteractive", 15),
             ("ComputerUse", 16),
-            ("ComputerUseMousePrecise", 17),
-            ("ComputerUseMouseStep", 18),
-            ("ComputerUseMouseClick", 19),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))

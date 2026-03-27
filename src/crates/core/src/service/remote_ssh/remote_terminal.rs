@@ -13,6 +13,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::time::{timeout, Duration};
+
+/// `pwd` can hang on some hosts (e.g. path resolution touching an unreachable `/`) while the shell still works;
+/// treat timeout the same as error and fall back to `~` for the initial `cd`.
+const REMOTE_PWD_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn shell_escape(s: &str) -> String {
     if s.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_') {
@@ -105,9 +110,41 @@ impl RemoteTerminalManager {
         let cwd = if let Some(dir) = initial_cwd {
             dir.to_string()
         } else {
-            match manager.execute_command(connection_id, "pwd").await {
-                Ok((output, _, _)) => output.trim().to_string(),
-                Err(_) => "/".to_string(),
+            match timeout(
+                REMOTE_PWD_PROBE_TIMEOUT,
+                manager.execute_command(connection_id, "pwd"),
+            )
+            .await
+            {
+                Ok(Ok((output, _, status))) => {
+                    let out = output.trim();
+                    if status == 0 && !out.is_empty() {
+                        out.to_string()
+                    } else {
+                        log::debug!(
+                            "remote_terminal: pwd empty or non-zero exit (status={}); using ~, connection_id={}",
+                            status,
+                            connection_id
+                        );
+                        "~".to_string()
+                    }
+                }
+                Ok(Err(e)) => {
+                    log::debug!(
+                        "remote_terminal: pwd error: {}; using ~, connection_id={}",
+                        e,
+                        connection_id
+                    );
+                    "~".to_string()
+                }
+                Err(_elapsed) => {
+                    log::debug!(
+                        "remote_terminal: pwd timed out after {:?}; using ~, connection_id={}",
+                        REMOTE_PWD_PROBE_TIMEOUT,
+                        connection_id
+                    );
+                    "~".to_string()
+                }
             }
         };
 
@@ -150,9 +187,14 @@ impl RemoteTerminalManager {
         tokio::spawn(async move {
             log::info!("Remote PTY owner task started: session_id={}", task_session_id);
 
-            // cd to workspace directory silently
-            if initial_cd != "/" {
-                let cd_cmd = format!("cd {} && clear\n", shell_escape(&initial_cd));
+            // cd to workspace directory silently (avoid `/` default — some hosts block listing `/`)
+            if initial_cd != "/" && !initial_cd.is_empty() {
+                let cd_arg = if initial_cd == "~" || initial_cd.starts_with("~/") {
+                    initial_cd.clone()
+                } else {
+                    shell_escape(&initial_cd)
+                };
+                let cd_cmd = format!("cd {} && clear\n", cd_arg);
                 if let Err(e) = writer.write_all(cd_cmd.as_bytes()).await {
                     log::warn!("Failed to cd to initial directory: {}", e);
                 }

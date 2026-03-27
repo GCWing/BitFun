@@ -134,10 +134,10 @@ impl ToolRegistry {
         // MiniApp Agent tool (single InitMiniApp)
         self.register_tool(Arc::new(InitMiniAppTool::new()));
 
+        // All desktop automation consolidated into ComputerUse (click_element, click, mouse_move,
+        // scroll, drag, screenshot, locate, key_chord, type_text, pointer_move_rel, wait).
+        // The separate ComputerUseMousePrecise/Step/Click tools are no longer registered.
         self.register_tool(Arc::new(ComputerUseTool::new()));
-        self.register_tool(Arc::new(ComputerUseMousePreciseTool::new()));
-        self.register_tool(Arc::new(ComputerUseMouseStepTool::new()));
-        self.register_tool(Arc::new(ComputerUseMouseClickTool::new()));
     }
 
     /// Register a single tool

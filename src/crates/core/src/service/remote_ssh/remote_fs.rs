@@ -64,6 +64,7 @@ impl RemoteFileService {
     /// Read directory contents via SFTP
     pub async fn read_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<Vec<RemoteDirEntry>> {
         let manager = self.get_manager(connection_id).await?;
+        let path_resolved = manager.resolve_sftp_path(connection_id, path).await?;
         let mut entries = manager.sftp_read_dir(connection_id, path).await?;
 
         let mut result = Vec::new();
@@ -76,10 +77,10 @@ impl RemoteFileService {
                 continue;
             }
 
-            let full_path = if path.ends_with('/') {
-                format!("{}{}", path, name)
+            let full_path = if path_resolved.ends_with('/') {
+                format!("{}{}", path_resolved, name)
             } else {
-                format!("{}/{}", path, name)
+                format!("{}/{}", path_resolved, name)
             };
 
             let metadata = entry.metadata();

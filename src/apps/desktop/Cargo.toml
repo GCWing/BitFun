@@ -59,10 +59,19 @@ fontdue = "0.9"
 core-foundation = "0.9"
 core-graphics = "0.23"
 dispatch = "0.2"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-vision = { version = "0.3.2", features = ["VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNRequestHandler", "VNUtils", "VNTypes", "objc2-core-foundation"] }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
 windows = { version = "0.61.3", features = [
+  "Foundation",
+  "Globalization",
+  "Graphics_Imaging",
+  "Media_Ocr",
+  "Storage_Streams",
   "Win32_Foundation",
   "Win32_System_Com",
   "Win32_UI_Accessibility",
@@ -72,3 +81,4 @@ windows-core = "0.61.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 atspi = "0.29"
+leptess = "0.14.0"

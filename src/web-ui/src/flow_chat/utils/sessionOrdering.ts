@@ -20,8 +20,8 @@ function effectiveWorkspaceSshHost(
 
 /**
  * Whether a persisted session belongs to a nav row for this workspace.
- * Remote mirror lists sessions by host+path on disk; metadata `workspacePath` / `remoteSshHost` can be stale,
- * so we must match by SSH host (from metadata or embedded in connection id) before rejecting on path alone.
+ * Remote workspaces are scoped by **SSH host + normalized remote root** (and connection id when present).
+ * We must never treat "same host" as sufficient: two tabs to the same server at `/a` vs `/b` are distinct.
  */
 export function sessionBelongsToWorkspaceNavRow(
   session: Pick<Session, 'workspacePath' | 'remoteConnectionId' | 'remoteSshHost'>,
@@ -40,10 +40,11 @@ export function sessionBelongsToWorkspaceNavRow(
   const wsConnHost = hostFromSshConnectionId(wsConn);
 
   if (wsHostEff.length > 0) {
-    if (sessHost === wsHostEff) {
+    // Host match alone is insufficient (same server, different remote folders).
+    if (sessHost === wsHostEff && sp === wp) {
       return true;
     }
-    if (sessConnHost === wsHostEff) {
+    if (sessConnHost === wsHostEff && sp === wp) {
       return true;
     }
     if (sessConnHost && wsConnHost && sessConnHost === wsConnHost) {

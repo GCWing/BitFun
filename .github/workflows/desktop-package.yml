@@ -147,7 +147,11 @@ jobs:
             librsvg2-dev \
             patchelf \
             fakeroot \
-            rpm
+            rpm \
+            libleptonica-dev \
+            libtesseract-dev \
+            tesseract-ocr \
+            tesseract-ocr-eng
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
