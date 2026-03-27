@@ -69,6 +69,20 @@
       "flowChatPxOption": "{{n}} px"
     }
   },
+  "autoUpdate": {
+    "sections": {
+      "title": "更新",
+      "hint": "启动后是否自动检查新版本"
+    },
+    "toggleLabel": "自动检查更新",
+    "toggleDescription": "开启后，启动片刻若发现新版本可能会提示。关闭后仍可在「关于」中手动检查更新。",
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取更新相关设置",
+      "saveFailed": "无法保存更新相关设置",
+      "saved": "已保存更新偏好"
+    }
+  },
   "launchAtLogin": {
     "sections": {
       "title": "登录时启动",

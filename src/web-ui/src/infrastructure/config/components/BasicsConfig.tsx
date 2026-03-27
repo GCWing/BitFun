@@ -254,6 +254,103 @@ function BasicsLaunchAtLoginSection() {
   );
 }
 
+function BasicsAutoUpdateSection() {
+  const { t } = useTranslation('settings/basics');
+  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        setLoading(true);
+        const v = await configManager.getConfig<boolean>('app.auto_update');
+        if (!cancelled) {
+          setEnabled(v !== false);
+        }
+      } catch (error) {
+        log.error('Failed to load app.auto_update', error);
+        if (!cancelled) {
+          showMessage('error', t('autoUpdate.messages.loadFailed'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauri, showMessage, t]);
+
+  const handleToggle = useCallback(
+    async (next: boolean) => {
+      const previous = enabled;
+      setEnabled(next);
+      setSaving(true);
+      try {
+        await configManager.setConfig('app.auto_update', next);
+        configManager.clearCache();
+        showMessage('success', t('autoUpdate.messages.saved'));
+      } catch (error) {
+        setEnabled(previous);
+        log.error('Failed to set app.auto_update', { next, error });
+        showMessage('error', t('autoUpdate.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [enabled, showMessage, t]
+  );
+
+  if (!isTauri) {
+    return null;
+  }
+
+  if (loading) {
+    return <ConfigPageLoading text={t('autoUpdate.messages.loading')} />;
+  }
+
+  return (
+    <div className="bitfun-auto-update-config">
+      <div className="bitfun-auto-update-config__content">
+        <ConfigPageMessage message={message} />
+        <ConfigPageSection
+          title={t('autoUpdate.sections.title')}
+          description={t('autoUpdate.sections.hint')}
+        >
+          <ConfigPageRow
+            label={t('autoUpdate.toggleLabel')}
+            description={t('autoUpdate.toggleDescription')}
+            align="center"
+          >
+            <Switch
+              checked={enabled}
+              onChange={(e) => {
+                void handleToggle(e.target.checked);
+              }}
+              disabled={saving}
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
+      </div>
+    </div>
+  );
+}
+
 function BasicsLoggingSection() {
   const { t } = useTranslation('settings/basics');
   const [configLevel, setConfigLevel] = useState<BackendLogLevel>('info');
@@ -889,6 +986,7 @@ const BasicsConfig: React.FC = () => {
         <BasicsAppearanceSection />
         <FontPreferencePanel />
         <BasicsLaunchAtLoginSection />
+        <BasicsAutoUpdateSection />
         <BasicsLoggingSection />
         <BasicsTerminalSection />
         <BasicsNotificationsSection />

@@ -9,6 +9,15 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('SystemAPI');
 
+/** Matches `check_for_updates` / `CheckForUpdatesResponse` from desktop `system_api.rs` (camelCase). */
+export interface CheckForUpdatesResponse {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseNotes: string | null;
+  releaseDate: string | null;
+}
+
 export class SystemAPI {
    
   async getSystemInfo(): Promise<any> {
@@ -33,13 +42,35 @@ export class SystemAPI {
   }
 
    
-  async checkForUpdates(): Promise<any> {
+  async checkForUpdates(): Promise<CheckForUpdatesResponse> {
     try {
       return await api.invoke('check_for_updates', { 
         request: {} 
       });
     } catch (error) {
       throw createTauriCommandError('check_for_updates', error);
+    }
+  }
+
+  /** Desktop only: download and install update after user confirms (calls updater again). */
+  async installUpdate(): Promise<void> {
+    try {
+      await api.invoke('install_update', {
+        request: {}
+      });
+    } catch (error) {
+      throw createTauriCommandError('install_update', error);
+    }
+  }
+
+  /** Desktop only: restart the app after an update has been installed. */
+  async restartApp(): Promise<void> {
+    try {
+      await api.invoke('restart_app', {
+        request: {}
+      });
+    } catch (error) {
+      throw createTauriCommandError('restart_app', error);
     }
   }
 

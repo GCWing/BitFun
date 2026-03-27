@@ -69,6 +69,20 @@
       "flowChatPxOption": "{{n}} px"
     }
   },
+  "autoUpdate": {
+    "sections": {
+      "title": "Updates",
+      "hint": "Check for new versions after startup"
+    },
+    "toggleLabel": "Automatic update check",
+    "toggleDescription": "When enabled, BitFun may prompt you shortly after launch if a newer version is available. Manual check from About is always available.",
+    "messages": {
+      "loading": "Loading...",
+      "loadFailed": "Failed to read update settings",
+      "saveFailed": "Failed to save update settings",
+      "saved": "Update preference saved"
+    }
+  },
   "launchAtLogin": {
     "sections": {
       "title": "Login",

@@ -1,9 +1,22 @@
 //! System API
 
+use std::sync::{Arc, Mutex};
+
 use crate::api::app_state::AppState;
 use bitfun_core::service::system;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_updater::UpdaterExt;
+
+/// Emitted during `install_update` download; matches `installUpdateWithProgress` / frontend listener.
+const UPDATE_PROGRESS_EVENT: &str = "bitfun-update-progress";
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateProgressPayload {
+    downloaded: u64,
+    total: Option<u64>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +35,135 @@ pub async fn get_system_info() -> Result<SystemInfoResponse, String> {
         arch: info.arch,
         os_version: info.os_version,
     })
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAppVersionRequest {}
+
+/// Returns the current application version (from `Cargo.toml` / bundle metadata).
+#[tauri::command]
+pub async fn get_app_version(
+    app: AppHandle,
+    request: GetAppVersionRequest,
+) -> Result<String, String> {
+    let _ = request;
+    Ok(app.package_info().version.to_string())
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckForUpdatesRequest {}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckForUpdatesResponse {
+    pub update_available: bool,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub release_notes: Option<String>,
+    pub release_date: Option<String>,
+}
+
+/// Checks the remote updater endpoint for a newer signed release (no download).
+#[tauri::command]
+pub async fn check_for_updates(
+    app: AppHandle,
+    request: CheckForUpdatesRequest,
+) -> Result<CheckForUpdatesResponse, String> {
+    let _ = request;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+    match update {
+        Some(u) => Ok(CheckForUpdatesResponse {
+            update_available: true,
+            current_version: u.current_version.clone(),
+            latest_version: Some(u.version.clone()),
+            release_notes: u.body.clone(),
+            release_date: u.date.map(|d| d.to_string()),
+        }),
+        None => Ok(CheckForUpdatesResponse {
+            update_available: false,
+            current_version: app.package_info().version.to_string(),
+            latest_version: None,
+            release_notes: None,
+            release_date: None,
+        }),
+    }
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallUpdateRequest {}
+
+/// Downloads and installs the latest update from the updater endpoint (re-checks remote).
+#[tauri::command]
+pub async fn install_update(
+    app: AppHandle,
+    request: InstallUpdateRequest,
+) -> Result<(), String> {
+    let _ = request;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+    let Some(update) = update else {
+        return Err("No update available".to_string());
+    };
+    let app_handle = app.clone();
+    let progress = Arc::new(Mutex::new((0u64, None::<u64>)));
+    let progress_chunk = Arc::clone(&progress);
+    let app_chunk = app_handle.clone();
+    update
+        .download_and_install(
+            move |chunk_len, content_len| {
+                let (downloaded, total) = {
+                    let mut g = progress_chunk.lock().expect("update progress mutex poisoned");
+                    g.0 = g.0.saturating_add(chunk_len as u64);
+                    g.1 = g.1.or(content_len);
+                    (g.0, g.1)
+                };
+                let _ = app_chunk.emit(
+                    UPDATE_PROGRESS_EVENT,
+                    UpdateProgressPayload {
+                        downloaded,
+                        total,
+                    },
+                );
+            },
+            {
+                let app_done = app_handle.clone();
+                let progress_done = Arc::clone(&progress);
+                move || {
+                    let (downloaded, total) = {
+                        let g = progress_done
+                            .lock()
+                            .expect("update progress mutex poisoned");
+                        (g.0, g.1)
+                    };
+                    let _ = app_done.emit(
+                        UPDATE_PROGRESS_EVENT,
+                        UpdateProgressPayload {
+                            downloaded,
+                            total,
+                        },
+                    );
+                }
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartAppRequest {}
+
+/// Restarts the desktop application after an update has been installed.
+#[tauri::command]
+#[allow(unreachable_code)]
+pub async fn restart_app(app: AppHandle, request: RestartAppRequest) -> Result<(), String> {
+    let _ = request;
+    app.restart();
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]

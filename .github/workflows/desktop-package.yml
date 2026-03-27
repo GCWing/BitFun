@@ -81,6 +81,11 @@ jobs:
     needs: prepare
     env:
       NODE_OPTIONS: --max-old-space-size=6144
+      BITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
+      TAURI_UPDATER_ENDPOINT: https://github.com/GCWing/BitFun/releases/latest/download/latest.json
+      TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
     strategy:
       fail-fast: false
@@ -105,7 +110,16 @@ jobs:
           - os: windows-latest
             name: windows-x64
             target: x86_64-pc-windows-msvc
-            build_command: pnpm run installer:build
+            build_command: |
+              $ErrorActionPreference = 'Stop'
+              pnpm run desktop:build:nsis --target x86_64-pc-windows-msvc --verbose
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              $desktopExe = "target/x86_64-pc-windows-msvc/release/bitfun-desktop.exe"
+              if (-not (Test-Path $desktopExe)) {
+                throw "Desktop executable was not found after NSIS build: $desktopExe"
+              }
+              pnpm run installer:build:only
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     steps:
       - name: Checkout
@@ -117,6 +131,29 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/ci/setup-openssl-windows.ps1
+
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install nsis -y --no-progress
+          $nsisRoot = "${env:ProgramFiles(x86)}\NSIS"
+          $nsisBin = "${env:ProgramFiles(x86)}\NSIS\Bin"
+          if (Test-Path $nsisRoot) {
+            Add-Content $env:GITHUB_PATH $nsisRoot
+          }
+          if (Test-Path $nsisBin) {
+            Add-Content $env:GITHUB_PATH $nsisBin
+          }
+
+      - name: Verify NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          where.exe makensis
+          makensis /VERSION
 
       - name: Install Linux system dependencies (Tauri bundler)
         if: runner.os == 'Linux'
@@ -198,8 +235,13 @@ jobs:
     needs: [prepare, package]
     if: needs.prepare.outputs.upload_to_release == 'true'
     runs-on: ubuntu-latest
+    env:
+      REQUIRED_UPDATER_PLATFORMS: windows-x86_64,darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download bundled artifacts
         uses: actions/download-artifact@v4
         with:
@@ -212,14 +254,51 @@ jobs:
           echo "Release assets:"
           find release-assets -type f | sort
 
+      - name: Collect updater assets
+        run: |
+          node scripts/collect-tauri-updater-assets.mjs \
+            --assets-dir release-assets \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --out-dir release-updater-assets \
+            --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
+
+      - name: Generate updater manifest
+        run: |
+          node scripts/generate-tauri-latest-json.mjs \
+            --assets-dir release-updater-assets \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --tag "${{ needs.prepare.outputs.release_tag }}" \
+            --repo "GCWing/BitFun" \
+            --out release-updater-assets/latest.json \
+            --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
+
+      - name: Verify updater manifest
+        run: |
+          node scripts/verify-tauri-latest-json.mjs \
+            --manifest release-updater-assets/latest.json \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
+
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           files: |
+            release-updater-assets/*
             release-assets/**/*.AppImage
             release-assets/**/*.deb
             release-assets/**/*.dmg
             release-assets/**/*.rpm
             release-assets/**/*bitfun-installer.exe
           fail_on_unmatched_files: true
+
+      - name: Verify published updater manifest
+        run: |
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/latest.json" \
+            -o latest.published.json
+          node scripts/verify-tauri-latest-json.mjs \
+            --manifest latest.published.json \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
+            --check-urls true

@@ -44,6 +44,9 @@ apps/desktop/gen/
 src/apps/desktop/gen/
 src-tauri/gen/
 
+# Updater signing private key (never commit; pubkey is in tauri.conf.json)
+src/apps/desktop/.tauri/*.key
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -6,7 +6,7 @@
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readdirSync } from 'fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { ensureOpenSslWindows } from './ensure-openssl-windows.mjs';
 import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
 
@@ -33,7 +33,7 @@ async function main() {
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).
   process.env.CI = 'true';
 
-  const tauriConfig = join(desktopDir, 'tauri.conf.json');
+  const tauriConfig = prepareTauriConfig(join(desktopDir, 'tauri.conf.json'));
   const tauriBin = join(ROOT, 'node_modules', '.bin', 'tauri');
   const r = spawnSync(tauriBin, ['build', '--config', tauriConfig, ...forward], {
     cwd: desktopDir,
@@ -52,6 +52,52 @@ async function main() {
   }
 
   process.exit(r.status ?? 1);
+}
+
+function prepareTauriConfig(baseConfigPath) {
+  const enabled = ['1', 'true', 'yes'].includes(
+    String(process.env.BITFUN_ENABLE_UPDATER_ARTIFACTS || '').toLowerCase()
+  );
+  if (!enabled) {
+    return baseConfigPath;
+  }
+
+  const pubkey = process.env.TAURI_UPDATER_PUBKEY;
+  if (!pubkey) {
+    console.error('BITFUN_ENABLE_UPDATER_ARTIFACTS is set, but TAURI_UPDATER_PUBKEY is missing.');
+    process.exit(1);
+  }
+  if (!process.env.TAURI_SIGNING_PRIVATE_KEY) {
+    console.error('BITFUN_ENABLE_UPDATER_ARTIFACTS is set, but TAURI_SIGNING_PRIVATE_KEY is missing.');
+    process.exit(1);
+  }
+
+  const endpoint =
+    process.env.TAURI_UPDATER_ENDPOINT ||
+    'https://github.com/GCWing/BitFun/releases/latest/download/latest.json';
+
+  const config = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
+  config.bundle = {
+    ...(config.bundle || {}),
+    createUpdaterArtifacts: true,
+  };
+  config.plugins = {
+    ...(config.plugins || {}),
+    updater: {
+      endpoints: [endpoint],
+      pubkey,
+      windows: {
+        installMode: 'passive',
+      },
+    },
+  };
+
+  const generatedDir = join(ROOT, '.bitfun', 'build');
+  mkdirSync(generatedDir, { recursive: true });
+  const generatedConfig = join(generatedDir, 'tauri.updater.conf.json');
+  writeFileSync(generatedConfig, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  console.log(`[tauri-build] Updater artifacts enabled: ${endpoint}`);
+  return generatedConfig;
 }
 
 // Find all .dmg files under target/ and inject the helper TXT files

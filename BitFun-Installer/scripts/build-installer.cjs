@@ -154,6 +154,20 @@ function getCandidateAppExePaths(mode) {
     candidates.push(
       path.join(
         BITFUN_ROOT,
+        "target",
+        "x86_64-pc-windows-msvc",
+        profile,
+        "bitfun-desktop.exe"
+      ),
+      path.join(
+        BITFUN_ROOT,
+        "target",
+        "x86_64-pc-windows-msvc",
+        profile,
+        "BitFun.exe"
+      ),
+      path.join(
+        BITFUN_ROOT,
         "src",
         "apps",
         "desktop",

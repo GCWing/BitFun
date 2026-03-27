@@ -32,6 +32,7 @@ tauri-plugin-fs = { workspace = true }
 tauri-plugin-log = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 tauri-plugin-notification = { workspace = true }
+tauri-plugin-updater = { workspace = true }
 
 # Inherited from workspace
 tokio = { workspace = true }
