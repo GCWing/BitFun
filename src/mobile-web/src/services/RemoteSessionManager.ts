@@ -15,12 +15,16 @@ export interface WorkspaceInfo {
   path?: string;
   project_name?: string;
   git_branch?: string;
+  /** Mirrors desktop `WorkspaceKind`: normal project, Claw assistant workspace, or remote SSH. */
+  workspace_kind?: 'normal' | 'assistant' | 'remote';
+  assistant_id?: string;
 }
 
 export interface RecentWorkspaceEntry {
   path: string;
   name: string;
   last_opened: string;
+  workspace_kind?: 'normal' | 'assistant' | 'remote';
 }
 
 export interface AssistantEntry {
@@ -127,6 +131,8 @@ export interface InitialSyncData {
   path?: string;
   project_name?: string;
   git_branch?: string;
+  workspace_kind?: 'normal' | 'assistant' | 'remote';
+  assistant_id?: string;
   sessions: SessionInfo[];
   has_more_sessions: boolean;
   authenticated_user_id?: string;
@@ -159,6 +165,8 @@ export class RemoteSessionManager {
       path: resp.path,
       project_name: resp.project_name,
       git_branch: resp.git_branch,
+      workspace_kind: resp.workspace_kind,
+      assistant_id: resp.assistant_id,
     };
   }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import LanguageToggleButton from '../components/LanguageToggleButton';
 import { useI18n } from '../i18n';
-import { RemoteSessionManager } from '../services/RemoteSessionManager';
+import { RemoteSessionManager, type RecentWorkspaceEntry } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
 import logoIcon from '../assets/Logo-ICON.png';
@@ -54,6 +54,16 @@ function isCoworkAgent(agentType: string): boolean {
 
 function isClawAgent(agentType: string): boolean {
   return agentType === 'claw' || agentType === 'Claw';
+}
+
+/** Pick first workspace suitable for Expert mode (exclude Claw assistant roots when kind is known). */
+function pickFirstProWorkspace(list: RecentWorkspaceEntry[]): RecentWorkspaceEntry | undefined {
+  if (list.length === 0) return undefined;
+  const anyKind = list.some((w) => w.workspace_kind != null);
+  if (anyKind) {
+    return list.find((w) => w.workspace_kind !== 'assistant');
+  }
+  return list[0];
 }
 
 function truncateMiddle(str: string, maxLen: number): string {
@@ -138,6 +148,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     setCurrentWorkspace,
     currentAssistant,
     setCurrentAssistant,
+    setPairedDisplayMode,
     authenticatedUserId,
   } = useMobileStore();
   const { isDark, toggleTheme } = useTheme();
@@ -145,7 +156,12 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('pro');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
+    const hint = useMobileStore.getState().pairedDisplayMode;
+    if (hint === 'assistant' || hint === 'pro') return hint;
+    return 'pro';
+  });
+
   const [assistantList, setAssistantList] = useState<Array<{ path: string; name: string; assistant_id?: string }>>([]);
   const [showAssistantPicker, setShowAssistantPicker] = useState(false);
   const [workspaceList, setWorkspaceList] = useState<Array<{ path: string; name: string; last_opened: string }>>([]);
@@ -220,6 +236,29 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     }
   }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage]);
 
+  const trySelectFirstProWorkspace = useCallback(async (): Promise<boolean> => {
+    try {
+      const list = await sessionMgr.listRecentWorkspaces();
+      const candidate = pickFirstProWorkspace(list);
+      if (!candidate) return false;
+      const result = await sessionMgr.setWorkspace(candidate.path);
+      if (result.success) {
+        setCurrentWorkspace({
+          has_workspace: true,
+          path: result.path || candidate.path,
+          project_name: result.project_name || candidate.name,
+        });
+        await loadFirstPage(result.path || candidate.path);
+        return true;
+      }
+      setError(result.error || t('workspace.failedToSetWorkspace'));
+      return false;
+    } catch (e: any) {
+      setError(e.message);
+      return false;
+    }
+  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, t]);
+
   const loadNextPage = useCallback(async (workspacePath: string | undefined) => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -241,11 +280,28 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       try {
         const info = await sessionMgr.getWorkspaceInfo();
         if (cancelled) return;
-        const ws = info.has_workspace ? info : null;
-        setCurrentWorkspace(ws);
-        await loadFirstPage(ws?.path);
+        if (info.workspace_kind === 'assistant' && info.path) {
+          setCurrentAssistant({
+            path: info.path,
+            name: info.project_name ?? 'Claw',
+            assistant_id: info.assistant_id,
+          });
+          setCurrentWorkspace(null);
+          setDisplayMode('assistant');
+          await loadFirstPage(info.path);
+        } else {
+          const ws = info.has_workspace ? info : null;
+          setCurrentWorkspace(ws);
+          if (ws?.path) {
+            await loadFirstPage(ws.path);
+          } else {
+            await trySelectFirstProWorkspace();
+          }
+        }
       } catch (e: any) {
         if (!cancelled) setError(e.message);
+      } finally {
+        if (!cancelled) setPairedDisplayMode(null);
       }
     };
     init();
@@ -257,6 +313,13 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     try {
       if (displayMode === 'pro') {
         const info = await sessionMgr.getWorkspaceInfo();
+        if (info.workspace_kind === 'assistant') {
+          setCurrentWorkspace(null);
+          setSessions([]);
+          setHasMore(false);
+          offsetRef.current = 0;
+          return;
+        }
         const ws = info.has_workspace ? info : null;
         setCurrentWorkspace(ws);
         const resp = await sessionMgr.listSessions(ws?.path, PAGE_SIZE, 0);
@@ -344,14 +407,16 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     setDisplayMode(mode);
     setShowAssistantPicker(false);
     if (mode === 'assistant') {
-      // Load assistant list and set default
       const assistantPath = await loadAssistantList();
       loadFirstPage(assistantPath);
     } else {
-      // Pro mode needs workspace
-      loadFirstPage(currentWorkspace?.path);
+      if (currentWorkspace?.path) {
+        await loadFirstPage(currentWorkspace.path);
+      } else {
+        await trySelectFirstProWorkspace();
+      }
     }
-  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList]);
+  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList, trySelectFirstProWorkspace]);
 
   const handleSelectAssistant = useCallback(async (assistant: { path: string; name: string; assistant_id?: string }) => {
     try {
@@ -489,17 +554,6 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {!currentWorkspace && (
-              <div className="session-list__hint">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span>{t('sessions.proModeNeedsWorkspace')}</span>
               </div>
             )}
           </>

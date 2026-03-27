@@ -155,12 +155,25 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
       const sessionMgr = new RemoteSessionManager(client);
       const store = useMobileStore.getState();
       if (initialSync.has_workspace) {
-        store.setCurrentWorkspace({
-          has_workspace: true,
-          path: initialSync.path,
-          project_name: initialSync.project_name,
-          git_branch: initialSync.git_branch,
-        });
+        if (initialSync.workspace_kind === 'assistant' && initialSync.path) {
+          store.setPairedDisplayMode('assistant');
+          store.setCurrentAssistant({
+            path: initialSync.path,
+            name: initialSync.project_name ?? 'Claw',
+            assistant_id: initialSync.assistant_id,
+          });
+          store.setCurrentWorkspace(null);
+        } else {
+          store.setPairedDisplayMode('pro');
+          store.setCurrentWorkspace({
+            has_workspace: true,
+            path: initialSync.path,
+            project_name: initialSync.project_name,
+            git_branch: initialSync.git_branch,
+            workspace_kind: initialSync.workspace_kind,
+            assistant_id: initialSync.assistant_id,
+          });
+        }
       }
       if (initialSync.sessions) {
         store.setSessions(initialSync.sessions);
