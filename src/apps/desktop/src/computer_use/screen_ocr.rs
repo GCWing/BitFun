@@ -568,6 +568,10 @@ mod windows_backend {
         COINIT_DISABLE_OLE1DDE,
     };
 
+    fn w<T>(r: windows::core::Result<T>) -> BitFunResult<T> {
+        r.map_err(|e| BitFunError::tool(format!("Windows OCR: {}", e)))
+    }
+
     pub fn find_text_matches(
         shot: &ComputerScreenshot,
         text_query: &str,
@@ -602,40 +606,42 @@ mod windows_backend {
 
         let result = (|| -> BitFunResult<Vec<OcrTextMatch>> {
             // 1. Write JPEG bytes to in-memory stream
-            let stream = InMemoryRandomAccessStream::new()?;
-            let writer = DataWriter::CreateDataWriter(&stream)?;
-            writer.WriteBytes(&shot.bytes)?;
-            writer.StoreAsync()?.get()?;
-            writer.FlushAsync()?.get()?;
-            writer.DetachStream()?;
+            let stream = w(InMemoryRandomAccessStream::new())?;
+            let writer = w(DataWriter::CreateDataWriter(&stream))?;
+            w(writer.WriteBytes(&shot.bytes))?;
+            w(w(writer.StoreAsync())?.get())?;
+            w(w(writer.FlushAsync())?.get())?;
+            w(writer.DetachStream())?;
 
             // 2. Decode JPEG to SoftwareBitmap
-            let decoder = BitmapDecoder::CreateAsync(&stream)?.get()?;
-            let software_bitmap = decoder.GetSoftwareBitmapAsync()?.get()?;
+            let decoder = w(w(BitmapDecoder::CreateAsync(&stream))?.get())?;
+            let software_bitmap = w(w(decoder.GetSoftwareBitmapAsync())?.get())?;
 
             // 3. Create OCR engine (use user profile languages)
             let engine = match OcrEngine::TryCreateFromUserProfileLanguages() {
                 Ok(e) => e,
                 Err(_) => {
                     // Fallback to English if user profile languages fail
-                    let lang = windows::Globalization::Language::CreateLanguage(&HSTRING::from("en-US"))?;
-                    if !OcrEngine::IsLanguageSupported(&lang)? {
+                    let lang = w(windows::Globalization::Language::CreateLanguage(&HSTRING::from(
+                        "en-US",
+                    )))?;
+                    if !w(OcrEngine::IsLanguageSupported(&lang))? {
                         return Err(BitFunError::tool(
                             "Windows OCR: No supported language packs installed.".to_string(),
                         ));
                     }
-                    OcrEngine::TryCreateFromLanguage(&lang)?
+                    w(OcrEngine::TryCreateFromLanguage(&lang))?
                 }
             };
 
             // 4. Run OCR recognition
-            let ocr_result = engine.RecognizeAsync(&software_bitmap)?.get()?;
-            let lines = ocr_result.Lines()?;
-            let line_count = lines.Size()?;
+            let ocr_result = w(w(engine.RecognizeAsync(&software_bitmap))?.get())?;
+            let lines = w(ocr_result.Lines())?;
+            let line_count = w(lines.Size())?;
 
             let mut raw_matches = Vec::new();
             for line in &lines {
-                let words = line.Words()?;
+                let words = w(line.Words())?;
                 for word in &words {
                     if let Some(m) = ocr_word_to_match(
                         shot,
@@ -676,8 +682,8 @@ mod windows_backend {
         word: &OcrWord,
         content_left: u32,
         content_top: u32,
-        content_width: u32,
-        content_height: u32,
+        _content_width: u32,
+        _content_height: u32,
     ) -> Option<OcrTextMatch> {
         let text = word.Text().ok()?.to_string();
 
@@ -716,6 +722,7 @@ mod linux_backend {
     };
     use bitfun_core::agentic::tools::computer_use_host::ComputerScreenshot;
     use bitfun_core::util::errors::{BitFunError, BitFunResult};
+    use leptess::capi::TessPageIteratorLevel_RIL_WORD;
     use leptess::{leptonica, tesseract::TessApi};
 
     pub fn find_text_matches(
@@ -735,7 +742,6 @@ mod linux_backend {
         let mut api = match TessApi::new(None, "eng") {
             Ok(api) => api,
             Err(_) => {
-                // Try common tessdata paths
                 let paths = [
                     "/usr/share/tesseract-ocr/5/tessdata/",
                     "/usr/share/tesseract-ocr/tessdata/",
@@ -756,68 +762,69 @@ mod linux_backend {
             }
         };
 
-        // Load JPEG from bytes using Leptonica
-        let pix = match unsafe {
-            leptonica::pix_read_mem(shot.bytes.as_ptr() as *const u8, shot.bytes.len() as libc::size_t)
-        } {
-            Some(p) => p,
-            None => {
-                return Err(BitFunError::tool(
-                    "Linux OCR: Failed to decode screenshot image with Leptonica.".to_string(),
-                ));
-            }
-        };
+        let pix = leptonica::pix_read_mem(&shot.bytes).map_err(|e| {
+            BitFunError::tool(format!(
+                "Linux OCR: Failed to decode screenshot image with Leptonica: {}",
+                e
+            ))
+        })?;
 
         api.set_image(&pix);
+        if api.recognize() != 0 {
+            return Err(BitFunError::tool(
+                "Linux OCR: Tesseract recognition failed.".to_string(),
+            ));
+        }
 
-        // Get iterator over recognized words
-        let mut iter = match api.get_iterator() {
-            Some(it) => it,
-            None => {
-                return Err(BitFunError::tool(
-                    "Linux OCR: No text found in screenshot.".to_string(),
-                ));
-            }
-        };
+        let boxa = api
+            .get_component_images(TessPageIteratorLevel_RIL_WORD, true)
+            .ok_or_else(|| {
+                BitFunError::tool(
+                    "Linux OCR: Tesseract did not return word regions.".to_string(),
+                )
+            })?;
 
+        let word_region_count = boxa.get_n();
         let mut raw_matches = Vec::new();
-        let level = leptess::tesseract::PageIteratorLevel::RIL_WORD;
 
-        loop {
-            // Get word text
-            if let Some(text) = iter.get_utf8_text(level) {
-                // Get bounding box
-                if let Some((x1, y1, x2, y2)) = iter.bounding_box(level) {
-                    if !text.trim().is_empty() {
-                        let confidence = iter.confidence(level).unwrap_or(0.7) as f32 / 100.0;
-                        if let Some(m) = tesseract_word_to_match(
-                            shot,
-                            text_query,
-                            &text,
-                            confidence,
-                            x1, y1, x2, y2,
-                            content_left,
-                            content_top,
-                            content_width,
-                            content_height,
-                        ) {
-                            raw_matches.push(m);
-                        }
-                    }
-                }
+        for b in &boxa {
+            let g = b.get_geometry();
+            if g.w <= 0 || g.h <= 0 {
+                continue;
             }
-
-            if !iter.next(level) {
-                break;
+            let x1 = g.x;
+            let y1 = g.y;
+            let x2 = g.x + g.w;
+            let y2 = g.y + g.h;
+            api.set_rectangle(g.x, g.y, g.w, g.h);
+            let text = match api.get_utf8_text() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let confidence = api.mean_text_conf() as f32 / 100.0;
+            if let Some(m) = tesseract_word_to_match(
+                shot,
+                text_query,
+                &text,
+                confidence,
+                x1,
+                y1,
+                x2,
+                y2,
+                content_left,
+                content_top,
+                content_width,
+                content_height,
+            ) {
+                raw_matches.push(m);
             }
         }
 
         let ranked = filter_and_rank(text_query, raw_matches);
         if ranked.is_empty() {
             return Err(BitFunError::tool(format!(
-                "No OCR text matched {:?} on screen (Tesseract found {} text regions total).",
-                text_query,
-                raw_matches.len()
+                "No OCR text matched {:?} on screen (Tesseract found {} word regions total).",
+                text_query, word_region_count
             )));
         }
         Ok(ranked)
