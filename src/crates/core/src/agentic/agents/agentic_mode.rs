@@ -48,16 +48,8 @@ impl Agent for AgenticMode {
         "Full-featured AI assistant with access to all tools for comprehensive software development tasks"
     }
 
-    fn prompt_template_name(&self, model_name: Option<&str>) -> &str {
-        let Some(model_name) = model_name else {
-            return "agentic_mode";
-        };
-        let model_name = model_name.trim().to_ascii_lowercase();
-        if model_name.contains("gpt-5") {
-            "agentic_mode_gpt5"
-        } else {
-            "agentic_mode"
-        }
+    fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
+        "agentic_mode"
     }
 
     fn default_tools(&self) -> Vec<String> {
@@ -74,21 +66,16 @@ mod tests {
     use super::{Agent, AgenticMode};
 
     #[test]
-    fn selects_gpt5_prompt_template() {
+    fn always_uses_default_prompt_template() {
         let agent = AgenticMode::new();
         assert_eq!(
             agent.prompt_template_name(Some("gpt-5.1")),
-            "agentic_mode_gpt5"
+            "agentic_mode"
         );
         assert_eq!(
             agent.prompt_template_name(Some("GPT-5-CODEX")),
-            "agentic_mode_gpt5"
+            "agentic_mode"
         );
-    }
-
-    #[test]
-    fn keeps_default_template_for_non_gpt5_models() {
-        let agent = AgenticMode::new();
         assert_eq!(
             agent.prompt_template_name(Some("claude-sonnet-4")),
             "agentic_mode"

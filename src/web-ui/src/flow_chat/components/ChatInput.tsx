@@ -63,6 +63,11 @@ type SlashModeItem = {
 
 type SlashPickerItem = SlashActionItem | SlashModeItem;
 type ChatInputTarget = 'main' | 'btw';
+type PendingLargePasteMap = Record<string, string>;
+
+function getCharacterCount(text: string): number {
+  return Array.from(text).length;
+}
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
@@ -79,6 +84,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const lastImeCompositionEndAtRef = useRef(0);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
+  const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
+  const largePasteCountersRef = useRef<Record<number, number>>({});
   
   // History navigation state
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -246,6 +253,61 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     query: '',
     selectedIndex: 0,
   });
+
+  const clearPendingLargePastes = useCallback(() => {
+    pendingLargePastesRef.current = {};
+  }, []);
+
+  const createLargePastePlaceholder = useCallback((text: string): string | null => {
+    const charCount = getCharacterCount(text);
+    if (charCount <= CHAT_INPUT_CONFIG.largePaste.thresholdChars) {
+      return null;
+    }
+
+    const nextCounters = largePasteCountersRef.current;
+    const nextSuffix = (nextCounters[charCount] ?? 0) + 1;
+    nextCounters[charCount] = nextSuffix;
+
+    const base = t('input.largePastePlaceholder', {
+      count: charCount,
+      defaultValue: '[Pasted Content {{count}} chars]',
+    });
+    const placeholder = nextSuffix === 1 ? base : `${base} #${nextSuffix}`;
+
+    pendingLargePastesRef.current = {
+      ...pendingLargePastesRef.current,
+      [placeholder]: text,
+    };
+
+    return placeholder;
+  }, [t]);
+
+  const prunePendingLargePastes = useCallback((text: string) => {
+    const entries = Object.entries(pendingLargePastesRef.current);
+    if (entries.length === 0) {
+      return;
+    }
+
+    pendingLargePastesRef.current = Object.fromEntries(
+      entries.filter(([placeholder]) => text.includes(placeholder))
+    );
+  }, []);
+
+  const expandPendingLargePastes = useCallback((text: string) => {
+    let expanded = text;
+    for (const [placeholder, actual] of Object.entries(pendingLargePastesRef.current)) {
+      if (expanded.includes(placeholder)) {
+        expanded = expanded.split(placeholder).join(actual);
+      }
+    }
+    return expanded;
+  }, []);
+
+  React.useEffect(() => {
+    if (inputState.value === '') {
+      clearPendingLargePastes();
+    }
+  }, [clearPendingLargePastes, inputState.value]);
   
   React.useEffect(() => {
     const store = FlowChatStore.getInstance();
@@ -282,6 +344,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const message = customEvent.detail?.message;
       
       if (message) {
+        clearPendingLargePastes();
         dispatchInput({ type: 'ACTIVATE' });
         dispatchInput({ type: 'SET_VALUE', payload: message });
         
@@ -296,10 +359,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       window.removeEventListener('fill-chat-input', handleFillInput);
     };
-  }, []);
+  }, [clearPendingLargePastes]);
 
   React.useEffect(() => {
     const handleFillChatInput = (data: { content: string }) => {
+      clearPendingLargePastes();
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: data.content });
 
@@ -313,7 +377,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
-  }, []);
+  }, [clearPendingLargePastes]);
 
   // Handle MCP App ui/message requests (aligned with VSCode behavior)
   React.useEffect(() => {
@@ -339,6 +403,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           .join('\n\n');
 
         if (textContent) {
+          clearPendingLargePastes();
           dispatchInput({ type: 'ACTIVATE' });
           dispatchInput({ type: 'SET_VALUE', payload: textContent });
         }
@@ -391,7 +456,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('mcp-app:message', handleMcpAppMessage);
     };
-  }, [inputState.value, addContext, currentImageCount]);
+  }, [inputState.value, addContext, clearPendingLargePastes, currentImageCount]);
 
   React.useEffect(() => {
     const handleInsertContextTag = (event: Event) => {
@@ -517,6 +582,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       // (EventHandlerModule sets queuedInput on failed turns), NOT for live typing.
       // Restoring while the user is actively typing would overwrite their draft.
       log.debug('Detected queuedInput, restoring message to input', { queuedInput });
+      clearPendingLargePastes();
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: queuedInput });
       inputValueRef.current = queuedInput;
@@ -528,6 +594,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     derivedState?.queuedInput,
     effectiveTargetSessionId,
+    clearPendingLargePastes,
   ]);
 
   React.useEffect(() => {
@@ -693,6 +760,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     });
     
+    prunePendingLargePastes(text);
     dispatchInput({ type: 'SET_VALUE', payload: text });
     inputValueRef.current = text;
 
@@ -748,7 +816,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, inputState.isActive, removeContext, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+  }, [contexts, derivedState, inputState.isActive, prunePendingLargePastes, removeContext, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -761,16 +829,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    const message = inputState.value.trim();
+    const originalMessage = inputState.value.trim();
+    const originalPendingLargePastes = { ...pendingLargePastesRef.current };
+    const message = expandPendingLargePastes(originalMessage).trim();
+    const messageCharCount = getCharacterCount(message);
     const question = message.replace(/^\/btw\b/i, '').trim();
 
     // Clear input without adding to main history.
     dispatchInput({ type: 'CLEAR_VALUE' });
+    clearPendingLargePastes();
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     if (!question) {
       notificationService.warning(t('btw.empty', { defaultValue: 'Please provide a question after /btw' }));
+      return;
+    }
+
+    if (messageCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
+      notificationService.error(
+        t('input.messageTooLarge', {
+          max: CHAT_INPUT_CONFIG.largePaste.maxMessageChars,
+          count: messageCharCount,
+          defaultValue: 'Message exceeds the maximum length of {{max}} characters ({{count}} provided).',
+        }),
+        { duration: 4000 }
+      );
+      pendingLargePastesRef.current = originalPendingLargePastes;
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
     }
 
@@ -793,9 +880,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } catch (e) {
       log.error('Failed to start /btw thread', { e });
       dispatchInput({ type: 'ACTIVATE' });
-      dispatchInput({ type: 'SET_VALUE', payload: message });
+      pendingLargePastesRef.current = originalPendingLargePastes;
+      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
     }
-  }, [currentSessionId, derivedState, inputState.value, isBtwSession, setQueuedInput, t, workspacePath]);
+  }, [clearPendingLargePastes, currentSessionId, derivedState, expandPendingLargePastes, inputState.value, isBtwSession, setQueuedInput, t, workspacePath]);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
@@ -816,7 +904,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     
     if (!draftTrimmed) return;
     
-    const message = draftTrimmed;
+    const originalMessage = draftTrimmed;
+    const originalPendingLargePastes = { ...pendingLargePastesRef.current };
+    const message = expandPendingLargePastes(originalMessage).trim();
+    const messageCharCount = getCharacterCount(message);
 
     if (message.toLowerCase().startsWith('/btw')) {
       // When idle, /btw can be sent via the normal send button.
@@ -832,19 +923,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSavedDraft('');
     
     dispatchInput({ type: 'CLEAR_VALUE' });
+    clearPendingLargePastes();
     // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
     setQueuedInput(null);
 
+    if (messageCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
+      notificationService.error(
+        t('input.messageTooLarge', {
+          max: CHAT_INPUT_CONFIG.largePaste.maxMessageChars,
+          count: messageCharCount,
+          defaultValue: 'Message exceeds the maximum length of {{max}} characters ({{count}} provided).',
+        }),
+        { duration: 4000 }
+      );
+      pendingLargePastesRef.current = originalPendingLargePastes;
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
+      return;
+    }
+
     try {
       await sendMessage(message);
+      clearPendingLargePastes();
       dispatchInput({ type: 'CLEAR_VALUE' });
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to send message', { error });
+      pendingLargePastesRef.current = originalPendingLargePastes;
       dispatchInput({ type: 'ACTIVATE' });
-      dispatchInput({ type: 'SET_VALUE', payload: message });
+      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       if (derivedState?.isProcessing) {
-        setQueuedInput(message);
+        setQueuedInput(originalMessage);
       }
     }
   }, [
@@ -854,8 +963,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     sendMessage,
     addToHistory,
     effectiveTargetSessionId,
+    clearPendingLargePastes,
+    expandPendingLargePastes,
     setQueuedInput,
     submitBtwFromInput,
+    t,
   ]);
   
   const getFilteredIncrementalModes = useCallback(() => {
@@ -1578,6 +1690,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 ref={richTextInputRef}
                 value={inputState.value}
                 onChange={handleInputChange}
+                onLargePaste={createLargePastePlaceholder}
                 onKeyDown={handleKeyDown}
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}

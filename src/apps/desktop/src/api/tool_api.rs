@@ -84,15 +84,19 @@ pub struct ToolConfirmationResponse {
 }
 
 fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
+    let normalized_workspace_path = workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty());
+
     ToolUseContext {
         tool_call_id: None,
         message_id: None,
         agent_type: None,
         session_id: None,
         dialog_turn_id: None,
-        workspace: workspace_path
-            .filter(|path| !path.is_empty())
+        workspace: normalized_workspace_path
             .map(|path| WorkspaceBinding::new(None, PathBuf::from(path))),
+        current_working_directory: normalized_workspace_path.map(str::to_string),
         safe_mode: Some(false),
         abort_controller: None,
         read_file_timestamps: HashMap::new(),

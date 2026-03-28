@@ -28,7 +28,11 @@ impl GrepTool {
             .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
 
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let resolved_path = resolve_path_with_workspace(search_path, context.workspace_root())?;
+        let resolved_path = resolve_path_with_workspace(
+            search_path,
+            context.current_working_directory(),
+            context.workspace_root(),
+        )?;
 
         let case_insensitive = input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false);
         let head_limit = input
@@ -103,7 +107,11 @@ impl GrepTool {
             .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
 
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let resolved_path = resolve_path_with_workspace(search_path, context.workspace_root())?;
+        let resolved_path = resolve_path_with_workspace(
+            search_path,
+            context.current_working_directory(),
+            context.workspace_root(),
+        )?;
 
         let case_insensitive = input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false);
         let multiline = input

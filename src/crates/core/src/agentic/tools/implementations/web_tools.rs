@@ -556,6 +556,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            current_working_directory: None,
             safe_mode: None,
             abort_controller: None,
             read_file_timestamps: HashMap::new(),

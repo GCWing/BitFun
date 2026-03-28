@@ -3,6 +3,11 @@
  */
 
 export const CHAT_INPUT_CONFIG = {
+  largePaste: {
+    thresholdChars: 1000,
+    maxMessageChars: 1 << 20,
+  },
+
   // Image input constraints.
   image: {
     maxCount: 5,

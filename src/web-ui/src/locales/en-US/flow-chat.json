@@ -126,6 +126,8 @@
     "imageAddedSuccess": "Successfully added {{count}} images",
     "imageAddedSingle": "Added clipboard image: {{name}}",
     "imagePasteFailed": "Image paste failed",
+    "largePastePlaceholder": "[Pasted Content {{count}} chars]",
+    "messageTooLarge": "Message exceeds the maximum length of {{max}} characters ({{count}} provided).",
     "openWorkspaceFolder": "Open workspace folder",
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
     "spaceToActivate": "Press <space>Space</space> to type"

@@ -17,6 +17,7 @@ export interface MentionState {
 export interface RichTextInputProps {
   value: string;
   onChange: (value: string, contexts: ContextItem[]) => void;
+  onLargePaste?: (text: string) => string | null;
   onKeyDown?: (e: React.KeyboardEvent) => void;
   onCompositionStart?: () => void;
   onCompositionEnd?: () => void;
@@ -34,6 +35,7 @@ export interface RichTextInputProps {
 export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps>(({
   value,
   onChange,
+  onLargePaste,
   onKeyDown,
   onCompositionStart,
   onCompositionEnd,
@@ -446,14 +448,15 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     const text = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
+    const largePastePlaceholder = onLargePaste?.(text);
+    document.execCommand('insertText', false, largePastePlaceholder ?? text);
     
     // Mark that we just pasted to prevent mention detection in the next input event
     isComposingRef.current = true;
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
-  }, [onMentionStateChange]);
+  }, [onLargePaste, onMentionStateChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeIsComposing = (e.nativeEvent as KeyboardEvent).isComposing;

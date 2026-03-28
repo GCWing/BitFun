@@ -126,6 +126,8 @@
     "imageAddedSuccess": "成功添加 {{count}} 张图片",
     "imageAddedSingle": "已添加剪贴板图片: {{name}}",
     "imagePasteFailed": "图片粘贴失败",
+    "largePastePlaceholder": "[已粘贴内容 {{count}} 字符]",
+    "messageTooLarge": "消息超过最大长度 {{max}} 个字符（当前 {{count}} 个字符）。",
     "openWorkspaceFolder": "打开工作区文件夹",
     "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
     "spaceToActivate": "按<space>空格键</space>快速键入"

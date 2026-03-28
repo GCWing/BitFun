@@ -409,7 +409,11 @@ Usage:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
 
-        let resolved_path = resolve_path_with_workspace(file_path, context.workspace_root())?;
+        let resolved_path = resolve_path_with_workspace(
+            file_path,
+            context.current_working_directory(),
+            context.workspace_root(),
+        )?;
 
         debug!(
             "GetFileDiff tool starting diff retrieval for file: {:?}",

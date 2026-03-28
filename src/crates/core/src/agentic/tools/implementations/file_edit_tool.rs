@@ -97,7 +97,11 @@ Usage:
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let resolved_path = resolve_path_with_workspace(file_path, context.workspace_root())?;
+        let resolved_path = resolve_path_with_workspace(
+            file_path,
+            context.current_working_directory(),
+            context.workspace_root(),
+        )?;
 
         // When WorkspaceServices is available (both local and remote),
         // use the abstract FS to read → edit in memory → write back.
