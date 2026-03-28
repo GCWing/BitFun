@@ -10,8 +10,8 @@ pub struct CompressionFallbackOptions {
 }
 
 #[derive(Debug, Clone)]
-pub struct CompressionReminder {
-    pub model_text: String,
+pub struct CompressionSummaryArtifact {
+    pub summary_text: String,
     pub payload: CompressionPayload,
     pub used_model_summary: bool,
 }

@@ -204,6 +204,11 @@
     "noIncrementalModes": "暂无可附加模式",
     "switchMode": "切换模式",
     "quickAction": "快捷操作",
+    "compactAction": "压缩会话",
+    "compactNoSession": "当前没有可用于 /compact 的会话",
+    "compactBusy": "请等待当前会话空闲后再使用 /compact。",
+    "compactUsage": "请直接使用 /compact，不要附加额外参数。",
+    "compactFailed": "会话压缩失败",
     "currentMode": "当前模式: {{mode}}",
     "noMatchingMode": "没有匹配的模式",
     "noMatchingCommand": "没有匹配的命令",
@@ -693,7 +698,9 @@
       "manualTrigger": "手动触发",
       "autoTrigger": "自动触发",
       "contextCompressionFailed": "上下文压缩失败",
-      "contextCompression": "上下文压缩:"
+      "contextCompression": "上下文压缩:",
+      "localFallbackNotice": "本次压缩无法使用模型生成总结，因此改用了本地结构化裁剪。",
+      "noSummaryNotice": "本次压缩没有生成额外的总结内容。"
     },
     "globSearch": {
       "parsingPattern": "解析搜索模式中...",

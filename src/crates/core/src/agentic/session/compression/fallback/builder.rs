@@ -145,14 +145,21 @@ fn flush_turn_entry(
 }
 
 fn extract_nested_compression_entries(message: &Message) -> Option<Vec<CompressionEntry>> {
-    if message.metadata.semantic_kind != Some(MessageSemanticKind::InternalReminder) {
-        return None;
+    match message.metadata.semantic_kind {
+        Some(MessageSemanticKind::CompressionBoundaryMarker) => return Some(Vec::new()),
+        Some(MessageSemanticKind::CompressionSummary)
+        | Some(MessageSemanticKind::InternalReminder) => {}
+        _ => return None,
     }
 
     if let Some(payload) = message.metadata.compression_payload.clone() {
         if !payload.is_empty() {
             return Some(payload.entries);
         }
+    }
+
+    if message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary) {
+        return None;
     }
 
     let raw_text = match &message.content {

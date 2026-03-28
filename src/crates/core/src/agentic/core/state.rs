@@ -26,6 +26,7 @@ pub enum SessionState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProcessingPhase {
     Starting,       // Starting
+    Compacting,     // Context compaction
     Thinking,       // AI thinking
     Streaming,      // Streaming output
     ToolCalling,    // Tool calling

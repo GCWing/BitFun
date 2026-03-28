@@ -696,11 +696,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchInput({ type: 'SET_VALUE', payload: text });
     inputValueRef.current = text;
 
-    const isBtwCommand = text.trim().toLowerCase().startsWith('/btw');
+    const trimmedLower = text.trim().toLowerCase();
+    const isBtwCommand = trimmedLower.startsWith('/btw');
+    const isCompactCommand = trimmedLower.startsWith('/compact');
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw while the main session is processing; /btw runs independently.
-    if (derivedState?.isProcessing && !isBtwCommand) {
+    if (derivedState?.isProcessing && !isBtwCommand && !isCompactCommand) {
       setQueuedInput(text);
     }
 
@@ -728,8 +730,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return;
       }
 
-      // When idle, keep the picker for mode switching, but don't interfere with /btw being a real command.
-      if (!isBtwCommand) {
+      // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
+      if (!isBtwCommand && !isCompactCommand) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -796,6 +798,67 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'SET_VALUE', payload: message });
     }
   }, [currentSessionId, derivedState, inputState.value, isBtwSession, setQueuedInput, t, workspacePath]);
+
+  const submitCompactFromInput = useCallback(async () => {
+    if (!effectiveTargetSessionId || !effectiveTargetSession) {
+      notificationService.error(
+        t('chatInput.compactNoSession', { defaultValue: 'No active session for /compact' })
+      );
+      return;
+    }
+
+    if (derivedState?.isProcessing) {
+      notificationService.warning(
+        t('chatInput.compactBusy', {
+          defaultValue: 'Wait until the session is idle before using /compact.',
+        })
+      );
+      return;
+    }
+
+    const message = inputState.value.trim();
+    if (!/^\/compact\s*$/i.test(message)) {
+      notificationService.warning(
+        t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
+      );
+      return;
+    }
+
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+    try {
+      const { agentAPI } = await import('@/infrastructure/api');
+      await agentAPI.compactSession({
+        sessionId: effectiveTargetSessionId,
+        workspacePath: effectiveTargetSession.workspacePath,
+        remoteConnectionId: effectiveTargetSession.remoteConnectionId,
+        remoteSshHost: effectiveTargetSession.remoteSshHost,
+      });
+    } catch (error) {
+      log.error('Failed to trigger /compact', {
+        error,
+        sessionId: effectiveTargetSessionId,
+      });
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: message });
+      notificationService.error(
+        error instanceof Error ? error.message : t('error.unknown'),
+        {
+          title: t('chatInput.compactFailed', { defaultValue: 'Session compaction failed' }),
+          duration: 5000,
+        }
+      );
+    }
+  }, [
+    derivedState?.isProcessing,
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    inputState.value,
+    setQueuedInput,
+    t,
+  ]);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
@@ -821,6 +884,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (message.toLowerCase().startsWith('/btw')) {
       // When idle, /btw can be sent via the normal send button.
       await submitBtwFromInput();
+      return;
+    }
+
+    if (/^\/compact\s*$/i.test(message)) {
+      await submitCompactFromInput();
+      return;
+    }
+
+    if (message.toLowerCase().startsWith('/compact')) {
+      notificationService.warning(
+        t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
+      );
       return;
     }
     
@@ -856,6 +931,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSessionId,
     setQueuedInput,
     submitBtwFromInput,
+    submitCompactFromInput,
+    t,
   ]);
   
   const getFilteredIncrementalModes = useCallback(() => {
@@ -918,16 +995,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [requestModeChange]);
 
   const getFilteredActions = useCallback(() => {
-    if (isBtwSession) {
-      return [];
-    }
-    // For now we only support one action: /btw.
     const items: SlashActionItem[] = [
+      ...(isBtwSession
+        ? []
+        : [{
+            kind: 'action' as const,
+            id: 'btw',
+            command: '/btw',
+            label: t('btw.title', { defaultValue: 'Side question' }),
+          }]),
       {
         kind: 'action',
-        id: 'btw',
-        command: '/btw',
-        label: t('btw.title', { defaultValue: 'Side question' }),
+        id: 'compact',
+        command: '/compact',
+        label: t('chatInput.compactAction', { defaultValue: 'Compact session' }),
       },
     ];
 
@@ -960,25 +1041,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [canSwitchModes, getFilteredActions, incrementalCodeModes, slashCommandState.query]);
 
   const selectSlashCommandAction = useCallback((actionId: string) => {
-    if (isBtwSession) return;
-    if (actionId !== 'btw') return;
-
     const raw = inputState.value || '';
     const lower = raw.trimStart().toLowerCase();
 
     let next = raw;
-    if (!lower.startsWith('/btw')) {
-      next = '/btw ';
-    } else {
-      // Normalize to "/btw " + rest, preserving any already typed question.
-      const m = raw.match(/^(\s*)\/btw\b/i);
-      if (m) {
-        const leadingWs = m[1] || '';
-        const rest = raw.slice(m[0].length);
-        next = `${leadingWs}/btw ${rest.trimStart()}`;
-      } else {
-        next = '/btw ';
+
+    if (actionId === 'btw') {
+      if (isBtwSession) {
+        return;
       }
+      if (!lower.startsWith('/btw')) {
+        next = '/btw ';
+      } else {
+        // Normalize to "/btw " + rest, preserving any already typed question.
+        const m = raw.match(/^(\s*)\/btw\b/i);
+        if (m) {
+          const leadingWs = m[1] || '';
+          const rest = raw.slice(m[0].length);
+          next = `${leadingWs}/btw ${rest.trimStart()}`;
+        } else {
+          next = '/btw ';
+        }
+      }
+    } else if (actionId === 'compact') {
+      next = '/compact';
+    } else {
+      return;
     }
 
     dispatchInput({ type: 'SET_VALUE', payload: next });

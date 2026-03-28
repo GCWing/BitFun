@@ -132,6 +132,9 @@ function getSendButtonMode(
 
 function getProgressBarMode(phase: ProcessingPhase | null): SessionDerivedState['progressBarMode'] {
   switch (phase) {
+    case ProcessingPhase.COMPACTING:
+      return 'indeterminate';
+
     case ProcessingPhase.TOOL_CALLING:
       return 'segmented';
     
@@ -177,6 +180,9 @@ function getProgressBarLabel(
   context: SessionStateMachine['context']
 ): string {
   switch (phase) {
+    case ProcessingPhase.COMPACTING:
+      return 'Compressing session context...';
+
     case ProcessingPhase.STARTING:
       return 'Connecting to AI...';
     
@@ -207,6 +213,9 @@ function getProgressBarLabel(
 
 function getProgressBarColor(phase: ProcessingPhase | null): string {
   switch (phase) {
+    case ProcessingPhase.COMPACTING:
+      return '#0f766e';
+
     case ProcessingPhase.STARTING:
       return '#3b82f6';
     

@@ -651,6 +651,10 @@ fn turns_to_chat_messages(turns: &[crate::service::session::DialogTurnData]) -> 
     let mut result = Vec::new();
 
     for turn in turns {
+        if !turn.kind.is_model_visible() {
+            continue;
+        }
+
         let images = turn
             .user_message
             .metadata

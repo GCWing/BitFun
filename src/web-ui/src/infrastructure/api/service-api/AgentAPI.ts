@@ -57,6 +57,13 @@ export interface StartDialogTurnRequest {
   imageContexts?: ImageInputContextData[];
 }
 
+export interface CompactSessionRequest {
+  sessionId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
  
 export interface SessionInfo {
   sessionId: string;
@@ -154,6 +161,7 @@ export interface CompressionEvent extends AgenticEvent {
   compressionRatio?: number;       
   durationMs?: number;             
   hasSummary?: boolean;            
+  summarySource?: 'model' | 'local_fallback' | 'none';
   
   error?: string;                  
   subagentParentInfo?: SubagentParentInfo;
@@ -182,6 +190,14 @@ export class AgentAPI {
       return await api.invoke<{ success: boolean; message: string }>('start_dialog_turn', { request });
     } catch (error) {
       throw createTauriCommandError('start_dialog_turn', error, request);
+    }
+  }
+
+  async compactSession(request: CompactSessionRequest): Promise<{ success: boolean; message: string }> {
+    try {
+      return await api.invoke<{ success: boolean; message: string }>('compact_session', { request });
+    } catch (error) {
+      throw createTauriCommandError('compact_session', error, request);
     }
   }
 

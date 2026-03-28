@@ -1,12 +1,13 @@
 use super::types::CompressionFallbackOptions;
-use crate::agentic::core::{CompressedTodoItem, CompressedTodoSnapshot};
+use crate::agentic::core::{strip_prompt_markup, CompressedTodoItem, CompressedTodoSnapshot};
 use serde_json::{Map, Value};
 
 pub(super) fn sanitize_user_text(
     text: &str,
     options: &CompressionFallbackOptions,
 ) -> Option<String> {
-    sanitize_text(text, options.user_chars)
+    let normalized = strip_prompt_markup(text);
+    sanitize_text(&normalized, options.user_chars)
 }
 
 pub(super) fn sanitize_assistant_text(

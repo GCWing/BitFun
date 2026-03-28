@@ -730,6 +730,8 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const displayContent = originalUserInput
     ? cleanRemoteUserInput(originalUserInput)
     : cleanRemoteUserInput(userInput || '');
+  const turnKind =
+    userMessageMetadata?.kind === 'manual_compaction' ? 'manual_compaction' : 'user_dialog';
 
   const freshSession = store.getState().sessions.get(sessionId);
   const dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
@@ -737,11 +739,13 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     const newTurn: DialogTurn = {
       id: turnId,
       sessionId,
+      kind: turnKind,
       userMessage: {
         id: `user_remote_${Date.now()}`,
         content: displayContent,
         timestamp: Date.now(),
         hasImages,
+        metadata: userMessageMetadata,
         images,
       },
       modelRounds: [],
@@ -768,6 +772,11 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   if (typeof turnIndex === 'number' && dialogTurn.backendTurnIndex === undefined) {
     store.updateDialogTurn(sessionId, turnId, turn => ({
       ...turn,
+      kind: turn.kind || turnKind,
+      userMessage: {
+        ...turn.userMessage,
+        metadata: turn.userMessage.metadata || userMessageMetadata,
+      },
       backendTurnIndex: turnIndex,
     }));
   }
@@ -1115,6 +1124,15 @@ function handleCompressionStarted(_context: FlowChatContext, event: any): void {
     log.debug('Dialog turn not found (compression started)', { turnId });
     return;
   }
+
+  const currentState = stateMachineManager.getCurrentState(sessionId);
+  if (isStreamingExecutionState(currentState)) {
+    void stateMachineManager
+      .transition(sessionId, SessionExecutionEvent.COMPACTION_STARTED)
+      .catch(error => {
+        log.error('State machine transition failed on compression start', { sessionId, error });
+      });
+  }
   
   const compressionItem: FlowToolItem = {
     id: compressionId,
@@ -1159,7 +1177,7 @@ function handleCompressionStarted(_context: FlowChatContext, event: any): void {
 function handleCompressionCompleted(context: FlowChatContext, event: any): void {
   const { 
     sessionId, turnId, compressionId, compressionCount, 
-    tokensBefore, tokensAfter, compressionRatio, durationMs
+    tokensBefore, tokensAfter, compressionRatio, durationMs, hasSummary, summarySource
   } = event;
   
   log.info('Context compression completed', {
@@ -1177,6 +1195,8 @@ function handleCompressionCompleted(context: FlowChatContext, event: any): void 
         tokens_after: tokensAfter,
         compression_ratio: compressionRatio,
         duration: durationMs,
+        has_summary: hasSummary,
+        summary_source: summarySource,
       },
       success: true,
       duration_ms: durationMs || 0

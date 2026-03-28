@@ -38,6 +38,7 @@ export interface SessionMetadata {
 }
 
 export type SessionStatus = 'active' | 'archived' | 'completed';
+export type DialogTurnKind = 'user_dialog' | 'manual_compaction';
 
 export interface SessionList {
   sessions: SessionMetadata[];
@@ -50,6 +51,7 @@ export interface DialogTurnData {
   turnIndex: number;
   sessionId: string;
   timestamp: number;
+  kind?: DialogTurnKind;
   userMessage: UserMessageData;
   modelRounds: ModelRoundData[];
   startTime: number;

@@ -294,27 +294,35 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
  * Convert FlowChat DialogTurn to backend format
  */
 export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnIndex: number): any {
+  const userMetadata = dialogTurn.userMessage.metadata
+    ? { ...dialogTurn.userMessage.metadata }
+    : undefined;
+  const mergedUserMetadata =
+    dialogTurn.userMessage.images?.length
+      ? {
+          ...(userMetadata || {}),
+          images: dialogTurn.userMessage.images.map(img => ({
+            id: img.id,
+            name: img.name,
+            data_url: img.dataUrl,
+            image_path: img.imagePath,
+            mime_type: img.mimeType,
+          })),
+          original_text: dialogTurn.userMessage.content,
+        }
+      : userMetadata;
+
   return {
     turnId: dialogTurn.id,
     turnIndex,
     sessionId: dialogTurn.sessionId,
     timestamp: dialogTurn.startTime,
+    kind: dialogTurn.kind || 'user_dialog',
     userMessage: {
       id: dialogTurn.userMessage.id,
       content: dialogTurn.userMessage.content,
       timestamp: dialogTurn.userMessage.timestamp,
-      metadata: dialogTurn.userMessage.images?.length
-        ? {
-            images: dialogTurn.userMessage.images.map(img => ({
-              id: img.id,
-              name: img.name,
-              data_url: img.dataUrl,
-              image_path: img.imagePath,
-              mime_type: img.mimeType,
-            })),
-            original_text: dialogTurn.userMessage.content,
-          }
-        : undefined,
+      metadata: mergedUserMetadata,
     },
     modelRounds: dialogTurn.modelRounds.map((round, roundIndex) => {
       return {

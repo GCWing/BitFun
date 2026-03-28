@@ -82,6 +82,17 @@ pub struct StartDialogTurnResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CompactSessionRequest {
+    pub session_id: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnsureCoordinatorSessionRequest {
     pub session_id: String,
     pub workspace_path: String,
@@ -352,6 +363,54 @@ pub async fn start_dialog_turn(
     Ok(StartDialogTurnResponse {
         success: true,
         message: "Dialog turn started".to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn compact_session(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: CompactSessionRequest,
+) -> Result<StartDialogTurnResponse, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        let effective = desktop_effective_session_storage_path(
+            &app_state,
+            workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await;
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before compacting: {}", e))?;
+    }
+
+    coordinator
+        .compact_session_manually(session_id.to_string())
+        .await
+        .map_err(|e| format!("Failed to compact session: {}", e))?;
+
+    Ok(StartDialogTurnResponse {
+        success: true,
+        message: "Session compaction started".to_string(),
     })
 }
 

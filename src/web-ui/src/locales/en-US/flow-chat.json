@@ -204,6 +204,11 @@
     "noIncrementalModes": "No add-on modes available",
     "switchMode": "Switch Mode",
     "quickAction": "Quick action",
+    "compactAction": "Compact session",
+    "compactNoSession": "No active session for /compact",
+    "compactBusy": "Wait until the session is idle before using /compact.",
+    "compactUsage": "Use /compact without extra arguments.",
+    "compactFailed": "Session compaction failed",
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
     "noMatchingCommand": "No matching command",
@@ -701,7 +706,9 @@
       "manualTrigger": "Manual trigger",
       "autoTrigger": "Auto trigger",
       "contextCompressionFailed": "Context compression failed",
-      "contextCompression": "Context compression:"
+      "contextCompression": "Context compression:",
+      "localFallbackNotice": "Model-based summary was unavailable, so this compression used local structured truncation.",
+      "noSummaryNotice": "No additional summary was generated for this compaction pass."
     },
     "globSearch": {
       "parsingPattern": "Parsing search pattern...",

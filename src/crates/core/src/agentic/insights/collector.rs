@@ -442,6 +442,10 @@ fn rebuild_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
     let mut messages = Vec::new();
 
     for turn in turns {
+        if !turn.kind.is_model_visible() {
+            continue;
+        }
+
         let user_ts = UNIX_EPOCH + Duration::from_millis(turn.start_time);
         let mut user_msg = Message::user(turn.user_message.content.clone());
         user_msg.timestamp = user_ts;

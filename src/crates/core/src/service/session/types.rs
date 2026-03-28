@@ -134,6 +134,10 @@ pub struct DialogTurnData {
     /// Timestamp
     pub timestamp: u64,
 
+    /// Turn kind
+    #[serde(default, alias = "turn_kind")]
+    pub kind: DialogTurnKind,
+
     /// User message
     #[serde(alias = "user_message")]
     pub user_message: UserMessageData,
@@ -156,6 +160,26 @@ pub struct DialogTurnData {
 
     /// Turn status
     pub status: TurnStatus,
+}
+
+/// Persisted dialog turn kind.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DialogTurnKind {
+    UserDialog,
+    ManualCompaction,
+}
+
+impl Default for DialogTurnKind {
+    fn default() -> Self {
+        Self::UserDialog
+    }
+}
+
+impl DialogTurnKind {
+    pub fn is_model_visible(self) -> bool {
+        matches!(self, Self::UserDialog)
+    }
 }
 
 /// User message data
@@ -483,6 +507,23 @@ impl DialogTurnData {
         session_id: String,
         user_message: UserMessageData,
     ) -> Self {
+        Self::new_with_kind(
+            DialogTurnKind::UserDialog,
+            turn_id,
+            turn_index,
+            session_id,
+            user_message,
+        )
+    }
+
+    /// Creates a new dialog turn with an explicit persisted kind.
+    pub fn new_with_kind(
+        kind: DialogTurnKind,
+        turn_id: String,
+        turn_index: usize,
+        session_id: String,
+        user_message: UserMessageData,
+    ) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -493,6 +534,7 @@ impl DialogTurnData {
             turn_index,
             session_id,
             timestamp: now,
+            kind,
             user_message,
             model_rounds: Vec::new(),
             start_time: now,
@@ -520,5 +562,50 @@ impl DialogTurnData {
             .iter()
             .map(|round| round.tool_items.len())
             .sum()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DialogTurnData, DialogTurnKind, UserMessageData};
+
+    #[test]
+    fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {
+        let payload = serde_json::json!({
+            "turnId": "turn-1",
+            "turnIndex": 0,
+            "sessionId": "session-1",
+            "timestamp": 1,
+            "userMessage": {
+                "id": "user-1",
+                "content": "hello",
+                "timestamp": 1
+            },
+            "modelRounds": [],
+            "startTime": 1,
+            "status": "completed"
+        });
+
+        let turn: DialogTurnData =
+            serde_json::from_value(payload).expect("legacy payload should deserialize");
+
+        assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+    }
+
+    #[test]
+    fn dialog_turn_data_new_defaults_to_user_dialog() {
+        let turn = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            "session-1".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "hello".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+
+        assert_eq!(turn.kind, DialogTurnKind::UserDialog);
     }
 }

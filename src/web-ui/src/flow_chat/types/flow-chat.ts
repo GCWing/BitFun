@@ -3,7 +3,7 @@
  * Supports mixed streaming output.
  */
 
-import type { SessionKind } from '@/shared/types/session-history';
+import type { DialogTurnKind, SessionKind } from '@/shared/types/session-history';
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -106,11 +106,13 @@ export interface TokenUsage {
 export interface DialogTurn {
   id: string;
   sessionId: string; // Used for event filtering.
+  kind?: DialogTurnKind;
   userMessage: {
     id: string;
     content: string;
     timestamp: number;
     hasImages?: boolean;
+    metadata?: Record<string, any>;
     images?: Array<{
       id: string;
       name: string;

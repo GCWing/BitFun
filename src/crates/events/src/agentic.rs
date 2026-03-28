@@ -126,6 +126,7 @@ pub enum AgenticEvent {
         compression_ratio: f64,
         duration_ms: u64,
         has_summary: bool,
+        summary_source: String,
         subagent_parent_info: Option<SubagentParentInfo>,
     },
 

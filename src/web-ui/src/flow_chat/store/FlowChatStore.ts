@@ -1425,10 +1425,12 @@ export class FlowChatStore {
         turnIndex,
         sessionId,
         timestamp: dialogTurn.startTime,
+        kind: dialogTurn.kind || 'user_dialog',
         userMessage: {
           id: dialogTurn.userMessage.id,
           content: dialogTurn.userMessage.content,
-          timestamp: dialogTurn.userMessage.timestamp
+          timestamp: dialogTurn.userMessage.timestamp,
+          metadata: dialogTurn.userMessage.metadata,
         },
         modelRounds: dialogTurn.modelRounds.map((round, roundIndex) => {
           const textItems = round.items
@@ -1704,12 +1706,14 @@ export class FlowChatStore {
       return {
       id: turn.turnId,
       sessionId: turn.sessionId,
+      kind: turn.kind || 'user_dialog',
       userMessage: {
         id: turn.userMessage.id,
         type: 'user' as const,
         content: displayContent,
         timestamp: turn.userMessage.timestamp,
         hasImages,
+        metadata,
         images,
       },
       modelRounds: turn.modelRounds.map((round: any) => ({

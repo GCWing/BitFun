@@ -33,6 +33,7 @@ export enum SessionExecutionState {
  */
 export enum ProcessingPhase {
   STARTING = 'starting',
+  COMPACTING = 'compacting',
   THINKING = 'thinking',
   STREAMING = 'streaming',
   FINALIZING = 'finalizing',
@@ -45,6 +46,7 @@ export enum ProcessingPhase {
  */
 export enum SessionExecutionEvent {
   START = 'start',
+  COMPACTION_STARTED = 'compaction_started',
   MODEL_ROUND_START = 'model_round_start',
   TEXT_CHUNK_RECEIVED = 'text_chunk_received',
   TOOL_DETECTED = 'tool_detected',

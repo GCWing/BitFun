@@ -1562,10 +1562,31 @@ console.log(user.greet());`);
                 {
                   compression_count: 3,
                   has_summary: true,
+                  summary_source: 'model',
                   tokens_before: 50000,
                   tokens_after: 15000,
                   compression_ratio: 0.7,
                   duration: 2500
+                },
+                'completed'
+              )}
+            />
+
+            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>上下文压缩 - 本地 fallback</h3>
+            <ContextCompressionDisplay
+              toolItem={createMockToolItem('ContextCompression',
+                {
+                  trigger: 'manual',
+                  tokens_before: 42000
+                },
+                {
+                  compression_count: 4,
+                  has_summary: false,
+                  summary_source: 'local_fallback',
+                  tokens_before: 42000,
+                  tokens_after: 18000,
+                  compression_ratio: 0.43,
+                  duration: 1800
                 },
                 'completed'
               )}

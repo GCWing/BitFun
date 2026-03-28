@@ -160,6 +160,6 @@ fn flush_rebuilt_turn(
 
 fn estimate_payload_tokens(payload: &CompressionPayload) -> usize {
     let rendered = render_payload_for_model(payload);
-    let mut reminder = Message::user(render_system_reminder(&rendered));
-    reminder.get_tokens()
+    let mut synthetic_message = Message::user(render_system_reminder(&rendered));
+    synthetic_message.get_tokens()
 }

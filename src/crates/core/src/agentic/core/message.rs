@@ -71,6 +71,8 @@ pub struct MessageMetadata {
 pub enum MessageSemanticKind {
     ActualUserInput,
     InternalReminder,
+    CompressionBoundaryMarker,
+    CompressionSummary,
     /// Shown in chat after Computer use; omitted from model API requests (see `build_ai_messages_for_send`).
     ComputerUseVerificationScreenshot,
     /// Full-screen snapshot appended after mutating ComputerUse tool results within the same turn;

@@ -28,6 +28,7 @@ export const STATE_TRANSITIONS: StateTransitionTable = {
     
     [SessionExecutionEvent.BACKEND_STREAM_COMPLETED]: SessionExecutionState.FINISHING,
     
+    [SessionExecutionEvent.COMPACTION_STARTED]: SessionExecutionState.PROCESSING,
     [SessionExecutionEvent.MODEL_ROUND_START]: SessionExecutionState.PROCESSING,
     [SessionExecutionEvent.TEXT_CHUNK_RECEIVED]: SessionExecutionState.PROCESSING,
     [SessionExecutionEvent.TOOL_DETECTED]: SessionExecutionState.PROCESSING,
@@ -42,6 +43,7 @@ export const STATE_TRANSITIONS: StateTransitionTable = {
     [SessionExecutionEvent.USER_CANCEL]: SessionExecutionState.IDLE,
     [SessionExecutionEvent.ERROR_OCCURRED]: SessionExecutionState.ERROR,
     [SessionExecutionEvent.FINISHING_SETTLED]: SessionExecutionState.IDLE,
+    [SessionExecutionEvent.COMPACTION_STARTED]: SessionExecutionState.FINISHING,
     [SessionExecutionEvent.MODEL_ROUND_START]: SessionExecutionState.FINISHING,
     [SessionExecutionEvent.TEXT_CHUNK_RECEIVED]: SessionExecutionState.FINISHING,
     [SessionExecutionEvent.TOOL_DETECTED]: SessionExecutionState.FINISHING,
@@ -64,6 +66,7 @@ export const STATE_TRANSITIONS: StateTransitionTable = {
  */
 export const PHASE_TRANSITIONS: Record<SessionExecutionEvent, ProcessingPhase | null> = {
   [SessionExecutionEvent.START]: ProcessingPhase.STARTING,
+  [SessionExecutionEvent.COMPACTION_STARTED]: ProcessingPhase.COMPACTING,
   [SessionExecutionEvent.MODEL_ROUND_START]: ProcessingPhase.THINKING,
   [SessionExecutionEvent.TEXT_CHUNK_RECEIVED]: ProcessingPhase.STREAMING,
   [SessionExecutionEvent.TOOL_DETECTED]: ProcessingPhase.TOOL_CALLING,

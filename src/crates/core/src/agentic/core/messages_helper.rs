@@ -1,4 +1,4 @@
-use super::{Message, MessageContent, MessageRole};
+use super::{CompressedTodoItem, CompressedTodoSnapshot, Message, MessageContent, MessageRole};
 use crate::util::types::Message as AIMessage;
 use log::warn;
 pub struct MessageHelper;
@@ -136,22 +136,60 @@ impl MessageHelper {
         }
     }
 
-    pub fn get_last_todo(messages: &[Message]) -> Option<String> {
+    pub fn get_last_todo_snapshot(messages: &[Message]) -> Option<CompressedTodoSnapshot> {
         for message in messages.iter().rev() {
             if message.role == MessageRole::Assistant {
-                match &message.content {
-                    MessageContent::Mixed { tool_calls, .. } => {
-                        if tool_calls.is_empty() {
-                            continue;
-                        }
-                        for tool_call in tool_calls.iter().rev() {
-                            if tool_call.tool_name == "TodoWrite" {
-                                let todos = tool_call.arguments.get("todos").unwrap_or_default();
-                                return Some(todos.to_string());
-                            }
-                        }
+                let MessageContent::Mixed { tool_calls, .. } = &message.content else {
+                    continue;
+                };
+                if tool_calls.is_empty() {
+                    continue;
+                }
+                for tool_call in tool_calls.iter().rev() {
+                    if tool_call.tool_name != "TodoWrite" {
+                        continue;
                     }
-                    _ => {}
+
+                    let todos = tool_call.arguments.get("todos")?.as_array()?;
+                    let mut compressed_todos = Vec::new();
+
+                    for todo in todos {
+                        let Some(todo_object) = todo.as_object() else {
+                            continue;
+                        };
+                        let Some(content) = todo_object
+                            .get("content")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::trim)
+                            .filter(|content| !content.is_empty())
+                        else {
+                            continue;
+                        };
+
+                        let status = todo_object
+                            .get("status")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("pending");
+                        let id = todo_object
+                            .get("id")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string);
+
+                        compressed_todos.push(CompressedTodoItem {
+                            id,
+                            content: content.to_string(),
+                            status: status.to_string(),
+                        });
+                    }
+
+                    if compressed_todos.is_empty() {
+                        continue;
+                    }
+
+                    return Some(CompressedTodoSnapshot {
+                        todos: compressed_todos,
+                        summary: None,
+                    });
                 }
             }
         }

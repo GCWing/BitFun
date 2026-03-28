@@ -11,7 +11,7 @@ use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::SessionContextStore;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::session::{
-    DialogTurnData, ModelRoundData, TextItemData, TurnStatus, UserMessageData,
+    DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -128,6 +128,10 @@ impl SessionManager {
         let mut messages = Vec::new();
 
         for turn in turns {
+            if !turn.kind.is_model_visible() {
+                continue;
+            }
+
             let user_message = if let Some(metadata) = &turn.user_message.metadata {
                 let images = metadata
                     .get("images")
@@ -826,18 +830,16 @@ impl SessionManager {
 
     // ============ Dialog Turn Management ============
 
-    /// Start a new dialog turn
-    /// turn_id: Optional frontend-specified ID, if None then backend generates
-    /// Returns: turn_id
-    pub async fn start_dialog_turn(
+    async fn start_persisted_turn(
         &self,
         session_id: &str,
+        kind: DialogTurnKind,
         user_input: String,
         turn_id: Option<String>,
-        image_contexts: Option<Vec<ImageContextData>>,
+        context_message: Option<Message>,
+        processing_phase: ProcessingPhase,
         user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<String> {
-        // Check if session exists
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
@@ -851,7 +853,6 @@ impl SessionManager {
             })?;
 
         let turn_index = session.dialog_turn_ids.len();
-        // Pass frontend's turnId
         let turn = DialogTurn::new(
             session_id.to_string(),
             turn_index,
@@ -860,33 +861,24 @@ impl SessionManager {
         );
         let turn_id = turn.turn_id.clone();
 
-        // 1. Add to session and update state to Processing (includes current_turn_id)
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.dialog_turn_ids.push(turn_id.clone());
             session.state = SessionState::Processing {
                 current_turn_id: turn_id.clone(),
-                phase: ProcessingPhase::Starting,
+                phase: processing_phase,
             };
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
         }
 
-        // 2. Add the user message to the in-memory context cache.
-        let user_message =
-            if let Some(images) = image_contexts.as_ref().filter(|v| !v.is_empty()).cloned() {
-                Message::user_multimodal(user_input.clone(), images)
-                    .with_turn_id(turn_id.clone())
-                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
-            } else {
-                Message::user(user_input.clone())
-                    .with_turn_id(turn_id.clone())
-                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
-            };
-        self.context_store.add_message(session_id, user_message);
+        if let Some(message) = context_message {
+            self.context_store
+                .add_message(session_id, message.with_turn_id(turn_id.clone()));
+        }
 
-        // 3. Persist
         if self.config.enable_persistence {
-            let turn_data = DialogTurnData::new(
+            let turn_data = DialogTurnData::new_with_kind(
+                kind,
                 turn_id.clone(),
                 turn_index,
                 session_id.to_string(),
@@ -914,10 +906,67 @@ impl SessionManager {
         self.persist_context_snapshot_for_turn_best_effort(session_id, turn_index, "turn_started")
             .await;
 
-        debug!(
-            "Starting dialog turn: turn_id={}, turn_index={}",
-            turn_id, turn_index
-        );
+        Ok(turn_id)
+    }
+
+    /// Start a new dialog turn
+    /// turn_id: Optional frontend-specified ID, if None then backend generates
+    /// Returns: turn_id
+    pub async fn start_dialog_turn(
+        &self,
+        session_id: &str,
+        user_input: String,
+        turn_id: Option<String>,
+        image_contexts: Option<Vec<ImageContextData>>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> BitFunResult<String> {
+        let user_message =
+            if let Some(images) = image_contexts.as_ref().filter(|v| !v.is_empty()).cloned() {
+                Message::user_multimodal(user_input.clone(), images)
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            } else {
+                Message::user(user_input.clone())
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            };
+
+        let turn_id = self
+            .start_persisted_turn(
+                session_id,
+                DialogTurnKind::UserDialog,
+                user_input,
+                turn_id,
+                Some(user_message),
+                ProcessingPhase::Starting,
+                user_message_metadata,
+            )
+            .await?;
+
+        debug!("Starting dialog turn: turn_id={}", turn_id);
+
+        Ok(turn_id)
+    }
+
+    /// Start a persisted maintenance turn that should not enter model-visible context.
+    pub async fn start_maintenance_turn(
+        &self,
+        session_id: &str,
+        display_message: String,
+        turn_id: Option<String>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> BitFunResult<String> {
+        let turn_id = self
+            .start_persisted_turn(
+                session_id,
+                DialogTurnKind::ManualCompaction,
+                display_message,
+                turn_id,
+                None,
+                ProcessingPhase::Compacting,
+                user_message_metadata,
+            )
+            .await?;
+
+        debug!("Starting maintenance turn: turn_id={}", turn_id);
 
         Ok(turn_id)
     }
@@ -1063,6 +1112,117 @@ impl SessionManager {
 
         debug!(
             "Dialog turn marked as failed: turn_id={}, turn_index={}, error={}",
+            turn_id, turn.turn_index, error
+        );
+
+        Ok(())
+    }
+
+    /// Complete a maintenance turn and persist its synthetic model round payload.
+    pub async fn complete_maintenance_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        model_rounds: Vec<ModelRoundData>,
+        duration_ms: u64,
+    ) -> BitFunResult<()> {
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+        let turn_index = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+        let mut turn = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+
+        let completion_timestamp = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        turn.model_rounds = model_rounds;
+        turn.status = TurnStatus::Completed;
+        turn.duration_ms = Some(duration_ms);
+        turn.end_time = Some(completion_timestamp);
+
+        self.persist_context_snapshot_for_turn_best_effort(
+            session_id,
+            turn.turn_index,
+            "maintenance_turn_completed",
+        )
+        .await;
+
+        if self.config.enable_persistence {
+            self.persistence_manager
+                .save_dialog_turn(&workspace_path, &turn)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Mark a maintenance turn as failed while preserving its synthetic tool state.
+    pub async fn fail_maintenance_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        error: String,
+        model_rounds: Vec<ModelRoundData>,
+    ) -> BitFunResult<()> {
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+        let turn_index = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+        let mut turn = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+
+        let completion_timestamp = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        turn.model_rounds = model_rounds;
+        turn.status = TurnStatus::Error;
+        turn.duration_ms = Some(completion_timestamp.saturating_sub(turn.start_time));
+        turn.end_time = Some(completion_timestamp);
+
+        self.persist_context_snapshot_for_turn_best_effort(
+            session_id,
+            turn.turn_index,
+            "maintenance_turn_failed",
+        )
+        .await;
+
+        if self.config.enable_persistence {
+            self.persistence_manager
+                .save_dialog_turn(&workspace_path, &turn)
+                .await?;
+        }
+
+        debug!(
+            "Maintenance turn marked as failed: turn_id={}, turn_index={}, error={}",
             turn_id, turn.turn_index, error
         );
 
@@ -1470,5 +1630,45 @@ impl SessionManager {
         });
 
         debug!("Cleanup task started");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SessionManager;
+    use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
+
+    #[test]
+    fn build_messages_from_turns_skips_manual_compaction_turns() {
+        let turns = vec![
+            DialogTurnData::new(
+                "turn-1".to_string(),
+                0,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-1".to_string(),
+                    content: "hello".to_string(),
+                    timestamp: 1,
+                    metadata: None,
+                },
+            ),
+            DialogTurnData::new_with_kind(
+                DialogTurnKind::ManualCompaction,
+                "turn-2".to_string(),
+                1,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-2".to_string(),
+                    content: "/compact".to_string(),
+                    timestamp: 2,
+                    metadata: None,
+                },
+            ),
+        ];
+
+        let messages = SessionManager::build_messages_from_turns(&turns);
+
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].is_actual_user_message());
     }
 }
