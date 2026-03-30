@@ -18,7 +18,6 @@ import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { SessionKind } from '@/shared/types/session-history';
 import {
-  buildSessionMetadata,
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
@@ -1268,40 +1267,6 @@ export class FlowChatStore {
         sessions: newSessions
       };
     });
-
-    if (status === 'generated') {
-      try {
-        const { sessionAPI } = await import('@/infrastructure/api');
-        const session = this.state.sessions.get(sessionId);
-        if (!session) {
-          log.warn('Session not found, skipping title sync', { sessionId });
-          return;
-        }
-
-        const workspacePath = session.workspacePath;
-        if (!workspacePath) {
-          log.warn('Workspace path not available, skipping title sync', { sessionId });
-          return;
-        }
-
-        const metadata = await sessionAPI.loadSessionMetadata(
-          sessionId,
-          workspacePath,
-          session.remoteConnectionId,
-          session.remoteSshHost
-        );
-        const nextMetadata = buildSessionMetadata(session, metadata);
-
-        await sessionAPI.saveSessionMetadata(
-          nextMetadata,
-          workspacePath,
-          session.remoteConnectionId,
-          session.remoteSshHost
-        );
-      } catch (error) {
-        log.error('Failed to sync session title', { sessionId, error });
-      }
-    }
   }
 
   /**

@@ -16,6 +16,7 @@ use crate::service::session::{
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::sanitize_plain_model_output;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use serde_json::json;
@@ -44,6 +45,27 @@ impl Default for SessionManagerConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionTitleMethod {
+    Ai,
+    Fallback,
+}
+
+impl SessionTitleMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ai => "ai",
+            Self::Fallback => "fallback",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedSessionTitle {
+    pub title: String,
+    pub method: SessionTitleMethod,
+}
+
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
@@ -58,6 +80,67 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
+    fn normalize_session_title_input(title: &str) -> BitFunResult<String> {
+        let trimmed = title.trim();
+        if trimmed.is_empty() {
+            return Err(BitFunError::validation(
+                "Session title must not be empty".to_string(),
+            ));
+        }
+
+        Ok(trimmed.to_string())
+    }
+
+    fn normalize_whitespace(value: &str) -> String {
+        value.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    fn truncate_chars(value: &str, max_length: usize) -> String {
+        value.chars().take(max_length).collect()
+    }
+
+    fn fallback_session_title(user_message: &str, max_length: usize) -> String {
+        let max_length = max_length.max(1);
+        let normalized = Self::normalize_whitespace(user_message);
+
+        if normalized.is_empty() {
+            return Self::truncate_chars("New Session", max_length);
+        }
+
+        let truncated_chars: Vec<char> = normalized.chars().take(max_length).collect();
+        if normalized.chars().count() <= max_length {
+            return truncated_chars.iter().collect();
+        }
+
+        let sentence_break_chars = ['。', '！', '？', '；', '.', '!', '?'];
+        let break_chars = ['。', '！', '？', '；', '.', '!', '?', '，', ',', ' '];
+        let min_break_index = max_length / 2;
+        let mut best_break_index: Option<usize> = None;
+
+        for (idx, ch) in truncated_chars.iter().enumerate() {
+            if break_chars.contains(ch) && idx > min_break_index {
+                best_break_index = Some(idx);
+            }
+        }
+
+        if let Some(idx) = best_break_index {
+            let candidate: String = truncated_chars[..=idx].iter().collect();
+            if candidate
+                .chars()
+                .last()
+                .map(|ch| sentence_break_chars.contains(&ch))
+                .unwrap_or(false)
+            {
+                return candidate;
+            }
+
+            return format!("{}...", candidate.trim_end());
+        }
+
+        let truncated: String = truncated_chars.iter().collect();
+        format!("{truncated}...")
+    }
+
     fn paginate_messages(
         messages: &[Message],
         limit: usize,
@@ -90,14 +173,17 @@ impl SessionManager {
     /// Resolve the effective storage path for a session's workspace.
     async fn effective_workspace_path_from_config(config: &SessionConfig) -> Option<PathBuf> {
         let workspace_path = config.workspace_path.as_ref()?;
-        let identity = crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-            workspace_path,
-            config.remote_connection_id.as_deref(),
-            config.remote_ssh_host.as_deref(),
-        )
-        .await?;
+        let identity =
+            crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                workspace_path,
+                config.remote_connection_id.as_deref(),
+                config.remote_ssh_host.as_deref(),
+            )
+            .await?;
 
-        if identity.hostname == crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST {
+        if identity.hostname
+            == crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST
+        {
             Some(PathBuf::from(identity.workspace_path))
         } else if identity.hostname == "_unresolved" {
             Some(
@@ -418,30 +504,73 @@ impl SessionManager {
 
     /// Update session title (in-memory + persistence)
     pub async fn update_session_title(&self, session_id: &str, title: &str) -> BitFunResult<()> {
+        let normalized_title = Self::normalize_session_title_input(title)?;
         let workspace_path = self.effective_session_workspace_path(session_id).await;
 
-        if let Some(mut session) = self.sessions.get_mut(session_id) {
-            session.session_name = title.to_string();
+        {
+            let Some(mut session) = self.sessions.get_mut(session_id) else {
+                return Err(BitFunError::NotFound(format!(
+                    "Session not found: {}",
+                    session_id
+                )));
+            };
+            session.session_name = normalized_title.clone();
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
         }
 
         if self.config.enable_persistence {
-            if let (Some(workspace_path), Some(session)) =
-                (workspace_path.as_ref(), self.sessions.get(session_id))
-            {
-                self.persistence_manager
-                    .save_session(workspace_path, &session)
-                    .await?;
-            }
+            let Some(workspace_path) = workspace_path.as_ref() else {
+                return Err(BitFunError::Session(format!(
+                    "Workspace path is unavailable for session {}",
+                    session_id
+                )));
+            };
+            let Some(session) = self.sessions.get(session_id) else {
+                return Err(BitFunError::NotFound(format!(
+                    "Session not found: {}",
+                    session_id
+                )));
+            };
+            self.persistence_manager
+                .save_session(workspace_path, &session)
+                .await?;
         }
 
         info!(
             "Session title updated: session_id={}, title={}",
-            session_id, title
+            session_id, normalized_title
         );
 
         Ok(())
+    }
+
+    pub async fn update_session_title_if_current(
+        &self,
+        session_id: &str,
+        expected_current_title: &str,
+        title: &str,
+    ) -> BitFunResult<bool> {
+        let Some(session) = self.sessions.get(session_id) else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        };
+
+        if session.session_name != expected_current_title {
+            debug!(
+                "Skipping auto-generated title because current title changed: session_id={}, expected_title={}, current_title={}",
+                session_id,
+                expected_current_title,
+                session.session_name
+            );
+            return Ok(false);
+        }
+        drop(session);
+
+        self.update_session_title(session_id, title).await?;
+        Ok(true)
     }
 
     /// Update session agent type (in-memory + persistence)
@@ -1452,17 +1581,12 @@ impl SessionManager {
         }
     }
 
-    /// Generate session title
-    ///
-    /// Generate a concise and accurate session title based on user message content using AI
-    pub async fn generate_session_title(
+    async fn try_generate_session_title_with_ai(
         &self,
         user_message: &str,
-        max_length: Option<usize>,
-    ) -> BitFunResult<String> {
+        max_length: usize,
+    ) -> BitFunResult<Option<String>> {
         use crate::util::types::Message;
-
-        let max_length = max_length.unwrap_or(20);
 
         // Match agent `LANGUAGE_PREFERENCE`: use `app.language`, not I18nService (see `app_language` module).
         let lang_code = get_app_language_code().await;
@@ -1517,7 +1641,7 @@ impl SessionManager {
         })?;
 
         let ai_client = ai_client_factory
-            .get_client_resolved("fast")
+            .get_client_by_func_agent("session-title-func-agent")
             .await
             .map_err(|e| BitFunError::AIClient(format!("Failed to get AI client: {}", e)))?;
 
@@ -1526,14 +1650,10 @@ impl SessionManager {
             .await
             .map_err(|e| BitFunError::ai(format!("AI call failed: {}", e)))?;
 
-        let title = response.text.trim().to_string();
-
-        // If title is empty, use default title
-        let title = if title.is_empty() {
-            "New Session".to_string()
-        } else {
-            title
-        };
+        let title = sanitize_plain_model_output(&response.text);
+        if title.is_empty() {
+            return Ok(None);
+        }
 
         // Truncate title
         let final_title = if title.chars().count() > max_length {
@@ -1542,7 +1662,56 @@ impl SessionManager {
             title
         };
 
-        Ok(final_title)
+        Ok(Some(final_title))
+    }
+
+    /// Generate a concise session title, using AI first and falling back to a local heuristic.
+    pub async fn resolve_session_title(
+        &self,
+        user_message: &str,
+        max_length: Option<usize>,
+        allow_ai: bool,
+    ) -> ResolvedSessionTitle {
+        let max_length = max_length.unwrap_or(20).max(1);
+
+        if allow_ai {
+            match self
+                .try_generate_session_title_with_ai(user_message, max_length)
+                .await
+            {
+                Ok(Some(title)) => {
+                    return ResolvedSessionTitle {
+                        title,
+                        method: SessionTitleMethod::Ai,
+                    };
+                }
+                Ok(None) => {
+                    warn!("AI session title generation returned empty output; using fallback");
+                }
+                Err(error) => {
+                    warn!("AI session title generation failed; using fallback: {error}");
+                }
+            }
+        }
+
+        ResolvedSessionTitle {
+            title: Self::fallback_session_title(user_message, max_length),
+            method: SessionTitleMethod::Fallback,
+        }
+    }
+
+    /// Generate session title
+    ///
+    /// Generate a concise and accurate session title based on user message content.
+    pub async fn generate_session_title(
+        &self,
+        user_message: &str,
+        max_length: Option<usize>,
+    ) -> BitFunResult<String> {
+        Ok(self
+            .resolve_session_title(user_message, max_length, true)
+            .await
+            .title)
     }
 
     // ============ Background Tasks ============
@@ -1663,5 +1832,32 @@ mod tests {
 
         assert_eq!(messages.len(), 1);
         assert!(messages[0].is_actual_user_message());
+    }
+
+    #[test]
+    fn fallback_session_title_uses_sentence_break_when_available() {
+        let title = SessionManager::fallback_session_title(
+            "Fix the flaky integration test. Add logging for retries.",
+            20,
+        );
+
+        assert_eq!(title, "Fix the flaky...");
+    }
+
+    #[test]
+    fn fallback_session_title_appends_ellipsis_when_truncated_without_sentence_break() {
+        let title = SessionManager::fallback_session_title(
+            "Implement session title generation fallback",
+            12,
+        );
+
+        assert_eq!(title, "Implement...");
+    }
+
+    #[test]
+    fn fallback_session_title_uses_default_for_blank_input() {
+        let title = SessionManager::fallback_session_title("   ", 20);
+
+        assert_eq!(title, "New Session");
     }
 }

@@ -465,7 +465,7 @@ function finalizePendingTurnCompletionNow(context: FlowChatContext, sessionId: s
 }
 
 /**
- * Handle session title generated event (from AI auto-generation)
+ * Handle session title generated event (AI or fallback auto-generation)
  */
 function handleSessionTitleGenerated(event: any): void {
   const { sessionId, title } = event;

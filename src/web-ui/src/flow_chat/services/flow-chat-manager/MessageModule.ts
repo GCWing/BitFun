@@ -5,7 +5,6 @@
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import { aiExperienceConfigService } from '@/infrastructure/config/services';
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
 import { stateMachineManager } from '../../state-machine';
@@ -268,14 +267,9 @@ function handleTitleGeneration(
   message: string
 ): void {
   const tempTitle = generateTempTitle(message, 20);
-
-  if (aiExperienceConfigService.isSessionTitleGenerationEnabled()) {
-    // Set temp title while waiting for coordinator's auto-generated AI title
-    // (delivered via SessionTitleGenerated event).
-    context.flowChatStore.updateSessionTitle(sessionId, tempTitle, 'generating');
-  } else {
-    context.flowChatStore.updateSessionTitle(sessionId, tempTitle, 'generated');
-  }
+  // Show a readable placeholder immediately; backend later confirms the
+  // authoritative title via AI or local fallback generation.
+  context.flowChatStore.updateSessionTitle(sessionId, tempTitle, 'generating');
 }
 
 export async function cancelCurrentTask(context: FlowChatContext): Promise<boolean> {

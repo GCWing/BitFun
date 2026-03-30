@@ -337,6 +337,33 @@ export async function deleteChatSession(
   }
 }
 
+export async function renameChatSessionTitle(
+  context: FlowChatContext,
+  sessionId: string,
+  title: string
+): Promise<string> {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session) {
+    throw new Error(`Session does not exist: ${sessionId}`);
+  }
+
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    throw new Error('Session title must not be empty');
+  }
+
+  const updatedTitle = await agentAPI.updateSessionTitle({
+    sessionId,
+    title: trimmedTitle,
+    workspacePath: session.workspacePath,
+    remoteConnectionId: session.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost,
+  });
+
+  await context.flowChatStore.updateSessionTitle(sessionId, updatedTitle, 'generated');
+  return updatedTitle;
+}
+
 /**
  * Ensure backend session exists (check before sending message)
  */

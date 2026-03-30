@@ -39,7 +39,8 @@ export {
   getModelMaxTokens,
   createChatSession,
   switchChatSession,
-  deleteChatSession
+  deleteChatSession,
+  renameChatSessionTitle
 } from './SessionModule';
 
 export {

@@ -15,7 +15,6 @@ import {
 import { flowChatStore } from '../store/FlowChatStore';
 import { flowChatManager } from '../services/FlowChatManager';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-import { aiExperienceConfigService } from '@/infrastructure/config/services';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -257,19 +256,14 @@ export const useFlowChat = () => {
       startTime: Date.now()
     };
 
-    const isFirstMessage = session && session.dialogTurns.length === 0 && !session.title;
+    const isFirstMessage =
+      session && session.dialogTurns.length === 0 && session.titleStatus !== 'generated';
     
     flowChatStore.addDialogTurn(targetSessionId, dialogTurn);
 
     if (isFirstMessage) {
       const tempTitle = generateTempTitle(content, 20);
-      if (aiExperienceConfigService.isSessionTitleGenerationEnabled()) {
-        // Set temp title while waiting for coordinator's auto-generated AI title
-        // (delivered via SessionTitleGenerated event).
-        flowChatStore.updateSessionTitle(targetSessionId, tempTitle, 'generating');
-      } else {
-        flowChatStore.updateSessionTitle(targetSessionId, tempTitle, 'generated');
-      }
+      flowChatStore.updateSessionTitle(targetSessionId, tempTitle, 'generating');
     }
 
     return dialogTurnId;

@@ -375,7 +375,7 @@ pub struct AIConfig {
     /// agent_type -> model_id
     pub agent_models: HashMap<String, String>,
 
-    /// Model mapping for functional agents (e.g. startchat-func-agent, git-func-agent).
+    /// Model mapping for functional agents (e.g. startchat-func-agent, session-title-func-agent).
     /// func_agent_name -> model_id
     #[serde(default)]
     pub func_agent_models: HashMap<String, String>,
@@ -1355,7 +1355,10 @@ impl AIModelConfig {
         match self.category {
             ModelCategory::GeneralChat => vec![ModelCapability::TextChat],
             ModelCategory::Multimodal => {
-                vec![ModelCapability::TextChat, ModelCapability::ImageUnderstanding]
+                vec![
+                    ModelCapability::TextChat,
+                    ModelCapability::ImageUnderstanding,
+                ]
             }
             ModelCategory::ImageGeneration => vec![ModelCapability::ImageGeneration],
             ModelCategory::Embedding => vec![ModelCapability::Embedding],

@@ -327,7 +327,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     const trimmed = editingTitle.trim();
     if (trimmed) {
       try {
-        await flowChatStore.updateSessionTitle(editingSessionId, trimmed, 'generated');
+        await flowChatManager.renameChatSessionTitle(editingSessionId, trimmed);
       } catch (err) {
         log.error('Failed to update session title', err);
       }

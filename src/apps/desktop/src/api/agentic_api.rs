@@ -62,6 +62,18 @@ pub struct UpdateSessionModelRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UpdateSessionTitleRequest {
+    pub session_id: String,
+    pub title: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StartDialogTurnRequest {
     pub session_id: String,
     pub user_input: String,
@@ -276,6 +288,51 @@ pub async fn update_session_model(
         .update_session_model(&request.session_id, &request.model_name)
         .await
         .map_err(|e| format!("Failed to update session model: {}", e))
+}
+
+#[tauri::command]
+pub async fn update_session_title(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: UpdateSessionTitleRequest,
+) -> Result<String, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+
+        let effective = desktop_effective_session_storage_path(
+            &app_state,
+            workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await;
+
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before renaming: {}", e))?;
+    }
+
+    coordinator
+        .update_session_title(session_id, &request.title)
+        .await
+        .map_err(|e| format!("Failed to update session title: {}", e))
 }
 
 /// Load the session into the coordinator process when it exists on disk but is not in memory.

@@ -101,6 +101,14 @@ export interface UpdateSessionModelRequest {
   modelName: string;
 }
 
+export interface UpdateSessionTitleRequest {
+  sessionId: string;
+  title: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
  
 export interface ModeInfo {
   id: string;
@@ -276,6 +284,14 @@ export class AgentAPI {
       await api.invoke<void>('update_session_model', { request });
     } catch (error) {
       throw createTauriCommandError('update_session_model', error, request);
+    }
+  }
+
+  async updateSessionTitle(request: UpdateSessionTitleRequest): Promise<string> {
+    try {
+      return await api.invoke<string>('update_session_title', { request });
+    } catch (error) {
+      throw createTauriCommandError('update_session_title', error, request);
     }
   }
 

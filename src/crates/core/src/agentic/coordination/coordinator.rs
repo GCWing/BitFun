@@ -124,21 +124,23 @@ impl ConversationCoordinator {
         let workspace_path = config.workspace_path.as_ref()?;
         let path_buf = PathBuf::from(workspace_path);
 
-        let identity = crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-            workspace_path,
-            config.remote_connection_id.as_deref(),
-            config.remote_ssh_host.as_deref(),
-        )
-        .await?;
+        let identity =
+            crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                workspace_path,
+                config.remote_connection_id.as_deref(),
+                config.remote_ssh_host.as_deref(),
+            )
+            .await?;
 
         if let Some(rid) = identity.remote_connection_id.as_deref() {
-            let connection_name = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
-                workspace_path,
-                Some(rid),
-            )
-            .await
-            .map(|e| e.connection_name)
-            .unwrap_or_else(|| rid.to_string());
+            let connection_name =
+                crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
+                    workspace_path,
+                    Some(rid),
+                )
+                .await
+                .map(|e| e.connection_name)
+                .unwrap_or_else(|| rid.to_string());
 
             return Some(WorkspaceBinding::new_remote(
                 None,
@@ -577,7 +579,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         use crate::agentic::core::SessionConfig;
         use crate::agentic::persistence::PersistenceManager;
         use crate::infrastructure::PathManager;
-        use crate::service::session::{DialogTurnData, SessionMetadata, SessionStatus, UserMessageData};
+        use crate::service::session::{
+            DialogTurnData, SessionMetadata, SessionStatus, UserMessageData,
+        };
 
         let path_manager = match PathManager::new() {
             Ok(pm) => std::sync::Arc::new(pm),
@@ -1413,37 +1417,36 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             let eq = self.event_queue.clone();
             let sid = session_id.clone();
             let msg = original_user_input;
+            let expected_title = self
+                .session_manager
+                .get_session(&session_id)
+                .map(|session| session.session_name)
+                .unwrap_or_default();
             tokio::spawn(async move {
-                let enabled = match crate::service::config::get_global_config_service().await {
-                    Ok(svc) => svc
-                        .get_config::<bool>(Some(
-                            "app.ai_experience.enable_session_title_generation",
-                        ))
-                        .await
-                        .unwrap_or(true),
-                    Err(_) => true,
-                };
-                if !enabled {
-                    return;
-                }
-                match sm.generate_session_title(&msg, Some(20)).await {
-                    Ok(title) => {
-                        if let Err(e) = sm.update_session_title(&sid, &title).await {
-                            debug!("Failed to persist auto-generated title: {e}");
-                        }
+                let allow_ai = is_ai_session_title_generation_enabled().await;
+                let resolved = sm.resolve_session_title(&msg, Some(20), allow_ai).await;
+
+                match sm
+                    .update_session_title_if_current(&sid, &expected_title, &resolved.title)
+                    .await
+                {
+                    Ok(true) => {
                         let _ = eq
                             .enqueue(
                                 AgenticEvent::SessionTitleGenerated {
                                     session_id: sid,
-                                    title,
-                                    method: "ai".to_string(),
+                                    title: resolved.title,
+                                    method: resolved.method.as_str().to_string(),
                                 },
                                 Some(EventPriority::Normal),
                             )
                             .await;
                     }
-                    Err(e) => {
-                        debug!("Auto session title generation failed: {e}");
+                    Ok(false) => {
+                        debug!("Skipped auto session title update because title changed");
+                    }
+                    Err(error) => {
+                        debug!("Auto session title generation failed to apply: {error}");
                     }
                 }
             });
@@ -2077,32 +2080,48 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         user_message: &str,
         max_length: Option<usize>,
     ) -> BitFunResult<String> {
-        let title = self
+        let allow_ai = is_ai_session_title_generation_enabled().await;
+        let resolved = self
             .session_manager
-            .generate_session_title(user_message, max_length)
-            .await?;
+            .resolve_session_title(user_message, max_length, allow_ai)
+            .await;
 
-        if let Err(e) = self
-            .session_manager
-            .update_session_title(session_id, &title)
-            .await
-        {
-            debug!("Failed to persist generated title: {e}");
-        }
+        self.session_manager
+            .update_session_title(session_id, &resolved.title)
+            .await?;
 
         let event = AgenticEvent::SessionTitleGenerated {
             session_id: session_id.to_string(),
-            title: title.clone(),
-            method: "ai".to_string(),
+            title: resolved.title.clone(),
+            method: resolved.method.as_str().to_string(),
         };
         self.emit_event(event).await;
 
         debug!(
             "Session title generation event sent: session_id={}, title={}",
-            session_id, title
+            session_id, resolved.title
         );
 
-        Ok(title)
+        Ok(resolved.title)
+    }
+
+    pub async fn update_session_title(
+        &self,
+        session_id: &str,
+        title: &str,
+    ) -> BitFunResult<String> {
+        let normalized = title.trim().to_string();
+        if normalized.is_empty() {
+            return Err(BitFunError::validation(
+                "Session title must not be empty".to_string(),
+            ));
+        }
+
+        self.session_manager
+            .update_session_title(session_id, &normalized)
+            .await?;
+
+        Ok(normalized)
     }
 
     /// Emit event
@@ -2156,6 +2175,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 debug!("Global coordinator already exists, skipping set");
             }
         }
+    }
+}
+
+async fn is_ai_session_title_generation_enabled() -> bool {
+    match crate::service::config::get_global_config_service().await {
+        Ok(service) => service
+            .get_config::<bool>(Some("app.ai_experience.enable_session_title_generation"))
+            .await
+            .unwrap_or(true),
+        Err(_) => true,
     }
 }
 
