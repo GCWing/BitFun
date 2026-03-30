@@ -141,6 +141,7 @@ pub async fn run() {
                 .level_for("tracing", log::LevelFilter::Off)
                 .level_for("opentelemetry_sdk", log::LevelFilter::Off)
                 .level_for("opentelemetry-otlp", log::LevelFilter::Off)
+                .level_for("notify", log::LevelFilter::Off)
                 .level_for("hyper_util", log::LevelFilter::Info)
                 .level_for("h2", log::LevelFilter::Info)
                 .level_for("portable_pty", log::LevelFilter::Info)

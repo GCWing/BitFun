@@ -18,7 +18,7 @@ use crate::agentic::session::SessionManager;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
-    initialize_workspace_persona_files, is_workspace_bootstrap_pending,
+    ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
@@ -743,8 +743,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<AssistantBootstrapEnsureOutcome> {
         let workspace_root = PathBuf::from(&workspace_path);
         // Empty or partial assistant dirs may never have run create_assistant_workspace; fill only
-        // missing persona stubs (never overwrite). Ensures BOOTSTRAP.md exists when appropriate.
-        initialize_workspace_persona_files(&workspace_root).await?;
+        // missing persona stubs (never overwrite), while preserving completed bootstrap state.
+        ensure_workspace_persona_files_for_prompt(&workspace_root).await?;
         let bootstrap_pending = is_workspace_bootstrap_pending(&workspace_root);
         if !bootstrap_pending {
             return Ok(AssistantBootstrapEnsureOutcome::Skipped {

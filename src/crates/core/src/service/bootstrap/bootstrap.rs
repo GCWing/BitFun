@@ -237,8 +237,9 @@ fn persona_file_description(file_name: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        initialize_workspace_persona_files, normalize_line_endings, BOOTSTRAP_FILE_NAME,
-        IDENTITY_FILE_NAME, SOUL_FILE_NAME, USER_FILE_NAME,
+        ensure_workspace_persona_files_for_prompt, initialize_workspace_persona_files,
+        normalize_line_endings, BOOTSTRAP_FILE_NAME, IDENTITY_FILE_NAME, SOUL_FILE_NAME,
+        USER_FILE_NAME,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::fs;
@@ -283,6 +284,47 @@ mod tests {
                 file_name
             );
         }
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp workspace");
+    }
+
+    #[tokio::test]
+    async fn ensure_workspace_persona_files_for_prompt_preserves_completed_bootstrap() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before unix epoch")
+            .as_nanos();
+        let workspace_root = std::env::temp_dir().join(format!(
+            "bitfun-bootstrap-preserve-{}-{}",
+            std::process::id(),
+            unique
+        ));
+
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp workspace");
+
+        fs::write(workspace_root.join(USER_FILE_NAME), "user")
+            .await
+            .expect("Failed to write USER.md");
+        fs::write(workspace_root.join(IDENTITY_FILE_NAME), "identity")
+            .await
+            .expect("Failed to write IDENTITY.md");
+
+        ensure_workspace_persona_files_for_prompt(&workspace_root)
+            .await
+            .expect("Failed to ensure persona files for prompt");
+
+        assert!(
+            !workspace_root.join(BOOTSTRAP_FILE_NAME).exists(),
+            "BOOTSTRAP.md should not be recreated when USER.md and IDENTITY.md already exist"
+        );
+        assert!(
+            workspace_root.join(SOUL_FILE_NAME).exists(),
+            "SOUL.md should still be backfilled"
+        );
 
         fs::remove_dir_all(&workspace_root)
             .await
