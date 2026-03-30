@@ -69,8 +69,43 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     const disposablesRef = useRef<monaco.IDisposable[]>([]);
     const macosEditorBindingCleanupRef = useRef<(() => void) | null>(null);
     const hasJumpedRef = useRef(false);
+    const filePathRef = useRef(filePath);
+    const workspacePathRef = useRef(workspacePath);
+    const languageRef = useRef(language);
+    const initialContentRef = useRef(initialContent);
+    const presetRef = useRef(preset);
+    const configRef = useRef(config);
+    const readOnlyRef = useRef(readOnly);
+    const themeRef = useRef(theme);
+    const enableLspRef = useRef(enableLsp);
+    const showLineNumbersRef = useRef(showLineNumbers);
+    const showMinimapRef = useRef(showMinimap);
+    const onContentChangeRef = useRef(onContentChange);
+    const onCursorChangeRef = useRef(onCursorChange);
+    const onSelectionChangeRef = useRef(onSelectionChange);
+    const onEditorReadyRef = useRef(onEditorReady);
+    const onEditorWillDisposeRef = useRef(onEditorWillDispose);
+    const onSaveRef = useRef(onSave);
     
     const [isReady, setIsReady] = useState(false);
+
+    filePathRef.current = filePath;
+    workspacePathRef.current = workspacePath;
+    languageRef.current = language;
+    initialContentRef.current = initialContent;
+    presetRef.current = preset;
+    configRef.current = config;
+    readOnlyRef.current = readOnly;
+    themeRef.current = theme;
+    enableLspRef.current = enableLsp;
+    showLineNumbersRef.current = showLineNumbers;
+    showMinimapRef.current = showMinimap;
+    onContentChangeRef.current = onContentChange;
+    onCursorChangeRef.current = onCursorChange;
+    onSelectionChangeRef.current = onSelectionChange;
+    onEditorReadyRef.current = onEditorReady;
+    onEditorWillDisposeRef.current = onEditorWillDispose;
+    onSaveRef.current = onSave;
     
     useImperativeHandle(ref, () => ({
       getEditor: () => editorRef.current,
@@ -98,52 +133,61 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       },
     }), []);
     
-    const createExtensionContext = useCallback((): EditorExtensionContext => {
+    const createExtensionContext = useCallback((overrides?: Partial<EditorExtensionContext>): EditorExtensionContext => {
       return {
-        filePath,
-        language,
-        workspacePath,
-        readOnly,
-        enableLsp,
+        filePath: overrides?.filePath ?? filePathRef.current,
+        language: overrides?.language ?? languageRef.current,
+        workspacePath: overrides?.workspacePath ?? workspacePathRef.current,
+        readOnly: overrides?.readOnly ?? readOnlyRef.current,
+        enableLsp: overrides?.enableLsp ?? enableLspRef.current,
       };
-    }, [filePath, language, workspacePath, readOnly, enableLsp]);
+    }, []);
     
     useEffect(() => {
       if (!containerRef.current) return;
       
       isUnmountedRef.current = false;
       hasJumpedRef.current = false;
+      const container = containerRef.current;
+      const currentFilePath = filePath;
+      const initialContext = createExtensionContext({
+        filePath: currentFilePath,
+        language: languageRef.current,
+        workspacePath: workspacePathRef.current,
+        readOnly: readOnlyRef.current,
+        enableLsp: enableLspRef.current,
+      });
       
       const initEditor = async () => {
         try {
           await monacoInitManager.initialize();
           
-          if (isUnmountedRef.current || !containerRef.current) return;
+          if (isUnmountedRef.current) return;
           
           themeManager.initialize();
           
           const model = monacoModelManager.getOrCreateModel(
-            filePath,
-            language,
-            initialContent,
-            workspacePath
+            currentFilePath,
+            languageRef.current,
+            initialContentRef.current,
+            workspacePathRef.current
           );
           modelRef.current = model;
           
           const overrides: EditorOptionsOverrides = {
-            readOnly,
-            lineNumbers: showLineNumbers,
-            minimap: showMinimap,
-            theme,
+            readOnly: readOnlyRef.current,
+            lineNumbers: showLineNumbersRef.current,
+            minimap: showMinimapRef.current,
+            theme: themeRef.current,
           };
           
           const editorOptions = buildEditorOptions({
-            config,
-            preset,
+            config: configRef.current,
+            preset: presetRef.current,
             overrides,
           });
           
-          const editor = monaco.editor.create(containerRef.current, {
+          const editor = monaco.editor.create(container, {
             ...editorOptions,
             model,
           });
@@ -170,21 +214,16 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
           
           registerEventListeners(editor, model);
           
-          if (onSave) {
-            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-              const content = model.getValue();
-              onSave(content);
-            });
-          }
+          editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            const content = model.getValue();
+            onSaveRef.current?.(content);
+          });
           
-          const context = createExtensionContext();
-          editorIdRef.current = editorExtensionManager.notifyEditorCreated(editor, model, context);
+          editorIdRef.current = editorExtensionManager.notifyEditorCreated(editor, model, initialContext);
           
           setIsReady(true);
           
-          if (onEditorReady) {
-            onEditorReady(editor, model);
-          }
+          onEditorReadyRef.current?.(editor, model);
           
         } catch (error) {
           log.error('Failed to initialize editor', error);
@@ -196,17 +235,14 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       return () => {
         isUnmountedRef.current = true;
         
-        if (onEditorWillDispose) {
-          onEditorWillDispose();
-        }
+        onEditorWillDisposeRef.current?.();
         
         if (editorRef.current && modelRef.current && editorIdRef.current) {
-          const context = createExtensionContext();
           editorExtensionManager.notifyEditorWillDispose(
             editorIdRef.current,
             editorRef.current,
             modelRef.current,
-            context
+            initialContext
           );
         }
         
@@ -224,22 +260,20 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
         }
         
         if (modelRef.current) {
-          monacoModelManager.releaseModel(filePath);
+          monacoModelManager.releaseModel(currentFilePath);
           modelRef.current = null;
         }
         
         setIsReady(false);
       };
-    }, [filePath]);
+    }, [filePath, createExtensionContext, registerEventListeners]);
     
     const registerEventListeners = useCallback((
       editor: monaco.editor.IStandaloneCodeEditor,
       model: monaco.editor.ITextModel
     ) => {
       const contentDisposable = model.onDidChangeContent((event) => {
-        if (onContentChange) {
-          onContentChange(model.getValue(), event);
-        }
+        onContentChangeRef.current?.(model.getValue(), event);
         
         const context = createExtensionContext();
         editorExtensionManager.notifyContentChanged(editor, model, event, context);
@@ -247,19 +281,15 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       disposablesRef.current.push(contentDisposable);
       
       const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
-        if (onCursorChange) {
-          onCursorChange(e.position);
-        }
+        onCursorChangeRef.current?.(e.position);
       });
       disposablesRef.current.push(cursorDisposable);
       
       const selectionDisposable = editor.onDidChangeCursorSelection((e) => {
-        if (onSelectionChange) {
-          onSelectionChange(e.selection);
-        }
+        onSelectionChangeRef.current?.(e.selection);
       });
       disposablesRef.current.push(selectionDisposable);
-    }, [onContentChange, onCursorChange, onSelectionChange, createExtensionContext]);
+    }, [createExtensionContext]);
     
     useEffect(() => {
       if (!isReady || !editorRef.current || hasJumpedRef.current) return;
@@ -316,6 +346,16 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
       
       editorRef.current.updateOptions(editorOptions);
     }, [config, preset, readOnly, showLineNumbers, showMinimap, theme]);
+
+    useEffect(() => {
+      if (!isReady || !modelRef.current) {
+        return;
+      }
+
+      if (modelRef.current.getLanguageId() !== language) {
+        monaco.editor.setModelLanguage(modelRef.current, language);
+      }
+    }, [isReady, language]);
     
     useEffect(() => {
       const unsubscribe = themeManager.onThemeChange((event) => {

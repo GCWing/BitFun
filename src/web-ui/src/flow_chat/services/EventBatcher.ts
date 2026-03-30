@@ -207,7 +207,7 @@ interface BaseToolEvent<T extends ToolEventType> {
   tool_name: string;
 }
 
-export interface EarlyDetectedToolEvent extends BaseToolEvent<'EarlyDetected'> {}
+export type EarlyDetectedToolEvent = BaseToolEvent<'EarlyDetected'>;
 
 export interface ParamsPartialToolEvent extends BaseToolEvent<'ParamsPartial'> {
   params: string;
@@ -242,9 +242,9 @@ export interface ConfirmationNeededToolEvent extends BaseToolEvent<'Confirmation
   params: unknown;
 }
 
-export interface ConfirmedToolEvent extends BaseToolEvent<'Confirmed'> {}
+export type ConfirmedToolEvent = BaseToolEvent<'Confirmed'>;
 
-export interface RejectedToolEvent extends BaseToolEvent<'Rejected'> {}
+export type RejectedToolEvent = BaseToolEvent<'Rejected'>;
 
 export interface CompletedToolEvent extends BaseToolEvent<'Completed'> {
   result: unknown;
@@ -449,4 +449,3 @@ export function parseEventKey(key: string): {
 
   return null;
 }
-

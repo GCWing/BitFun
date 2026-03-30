@@ -1,6 +1,6 @@
  
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, FileImage, FileJson, FileCode, File, Search as SearchIcon, ArrowLeft } from 'lucide-react';
 import { MCPResource } from '../../api/service-api/MCPAPI';
@@ -25,15 +25,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
   const [resourceContent, setResourceContent] = useState<string | null>(null);
   const [loadingContent, setLoadingContent] = useState(false);
 
-  useEffect(() => {
-    loadResources();
-  }, [serverId]);
-
-  useEffect(() => {
-    filterResources();
-  }, [searchQuery, resources]);
-
-  const loadResources = async () => {
+  const loadResources = useCallback(async () => {
     
     
     setLoading(true);
@@ -64,9 +56,9 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
       log.error('Failed to load resources', error);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterResources = () => {
+  const filterResources = useCallback(() => {
     if (!searchQuery.trim()) {
       setFilteredResources(resources);
       return;
@@ -79,7 +71,15 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
       (resource.description && resource.description.toLowerCase().includes(query))
     );
     setFilteredResources(filtered);
-  };
+  }, [resources, searchQuery]);
+
+  useEffect(() => {
+    loadResources();
+  }, [serverId, loadResources]);
+
+  useEffect(() => {
+    filterResources();
+  }, [filterResources]);
 
   const loadResourceContent = async (resource: MCPResource) => {
     setSelectedResource(resource);

@@ -76,7 +76,7 @@ export interface OpenRemoteWorkspaceRequest {
   sshHost?: string;
 }
 
-export interface CreateAssistantWorkspaceRequest {}
+export type CreateAssistantWorkspaceRequest = Record<string, never>;
 
 export interface CloseWorkspaceRequest {
   workspaceId: string;

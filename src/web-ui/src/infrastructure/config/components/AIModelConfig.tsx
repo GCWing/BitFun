@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, SquarePen, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, Checkbox, Modal, Input, Textarea, type SelectOption } from '@/component-library';
@@ -273,11 +273,7 @@ const AIModelConfig: React.FC = () => {
   );
 
   
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       const models = await configManager.getConfig<AIModelConfigType[]>('ai.models') || [];
       const proxy = await configManager.getConfig<ProxyConfig>('ai.proxy');
@@ -288,10 +284,17 @@ const AIModelConfig: React.FC = () => {
     } catch (error) {
       log.error('Failed to load AI config', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
   
   // Provider options with translations (must be at top level, before any conditional returns)
-  const providerOrder = ['openbitfun', 'zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'gemini', 'anthropic'];
+  const providerOrder = useMemo(
+    () => ['openbitfun', 'zhipu', 'qwen', 'deepseek', 'volcengine', 'minimax', 'moonshot', 'gemini', 'anthropic'],
+    []
+  );
   const providers = useMemo(() => {
     const sorted = Object.values(PROVIDER_TEMPLATES).sort((a, b) => {
       const indexA = providerOrder.indexOf(a.id);
@@ -305,7 +308,7 @@ const AIModelConfig: React.FC = () => {
       name: t(`providers.${provider.id}.name`),
       description: t(`providers.${provider.id}.description`)
     }));
-  }, [t]);
+  }, [providerOrder, t]);
 
   // Current template with translations (must be at top level, before any conditional returns)
   const currentTemplate = useMemo(() => {

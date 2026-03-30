@@ -139,7 +139,7 @@ export function useGitOperations(options: UseGitOperationsOptions): UseGitOperat
 
     try {
 
-      let pushParams = { ...params };
+      const pushParams = { ...params };
       
 
       if (!pushParams.remote || !pushParams.branch) {

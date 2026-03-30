@@ -1,21 +1,12 @@
  
-
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { useEffect, useState, ReactNode } from 'react';
 import { initializeCore, destroyCore } from '../index';
 import { globalEventBus } from '../event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
+import { CoreContext, type CoreContextType } from './CoreContext';
 
 const log = createLogger('CoreProvider');
-
-interface CoreContextType {
-  isInitialized: boolean;
-  isLoading: boolean;
-  error: string | null;
-  eventBus: typeof globalEventBus;
-}
-
-const CoreContext = createContext<CoreContextType | null>(null);
 
 interface CoreProviderProps {
   children: ReactNode;
@@ -119,28 +110,4 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
       {children}
     </CoreContext.Provider>
   );
-};
-
-export const useCore = (): CoreContextType => {
-  const context = useContext(CoreContext);
-  if (!context) {
-    throw new Error('useCore must be used within a CoreProvider');
-  }
-  return context;
-};
-
-
-export const useCoreInitialized = (): boolean => {
-  const { isInitialized } = useCore();
-  return isInitialized;
-};
-
-export const useCoreLoading = (): boolean => {
-  const { isLoading } = useCore();
-  return isLoading;
-};
-
-export const useCoreError = (): string | null => {
-  const { error } = useCore();
-  return error;
 };

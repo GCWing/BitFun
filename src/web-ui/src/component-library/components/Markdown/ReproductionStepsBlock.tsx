@@ -38,7 +38,7 @@ export const ReproductionStepsBlock: React.FC<ReproductionStepsBlockProps> = ({
   const stepList = React.useMemo(() => {
     const lines = steps.split('\n').filter(line => line.trim());
     return lines.map(line => {
-      const cleaned = line.replace(/^[\d\.\-\*\)\s]+/, '').trim();
+      const cleaned = line.replace(/^[\d.*)\s-]+/, '').trim();
       return cleaned || line.trim();
     });
   }, [steps]);

@@ -213,44 +213,35 @@ export class EventManager implements EventManagerInterface {
     return info;
   }
 }
-export namespace EventTypes {
-  
-  export const SESSION_START = 'session:start';
-  export const SESSION_END = 'session:end';
-  export const SESSION_ERROR = 'session:error';
-  export const SESSION_STATE_CHANGE = 'session:state_change';
-
-  
-  export const TOOL_CALL_REQUEST = 'tool:call_request';
-  export const TOOL_CALL_RESPONSE = 'tool:call_response';
-  export const TOOL_EXECUTION_START = 'tool:execution_start';
-  export const TOOL_EXECUTION_UPDATE = 'tool:execution_update';
-  export const TOOL_EXECUTION_COMPLETE = 'tool:execution_complete';
-  export const TOOL_EXECUTION_ERROR = 'tool:execution_error';
-  export const TOOL_BATCH_START = 'tool:batch_start';
-  export const TOOL_BATCH_UPDATE = 'tool:batch_update';
-  export const TOOL_BATCH_COMPLETE = 'tool:batch_complete';
-
-  
-  export const WORKSPACE_OPENED = 'workspace:opened';
-  export const WORKSPACE_CLOSED = 'workspace:closed';
-  export const WORKSPACE_SWITCHED = 'workspace:switched';
-  export const WORKSPACE_UPDATED = 'workspace:updated';
-  export const WORKSPACE_ERROR = 'workspace:error';
-
-  
-  export const MESSAGE_ADD = 'message:add';
-  export const MESSAGE_UPDATE = 'message:update';
-  export const MESSAGE_DELETE = 'message:delete';
-  export const MESSAGE_STREAM_START = 'message:stream_start';
-  export const MESSAGE_STREAM_CHUNK = 'message:stream_chunk';
-  export const MESSAGE_STREAM_END = 'message:stream_end';
-
-  
-  export const CONFIG_CHANGE = 'config:change';
-  export const MODEL_CHANGE = 'model:change';
-  export const THEME_CHANGE = 'theme:change';
-}
+export const EventTypes = {
+  SESSION_START: 'session:start',
+  SESSION_END: 'session:end',
+  SESSION_ERROR: 'session:error',
+  SESSION_STATE_CHANGE: 'session:state_change',
+  TOOL_CALL_REQUEST: 'tool:call_request',
+  TOOL_CALL_RESPONSE: 'tool:call_response',
+  TOOL_EXECUTION_START: 'tool:execution_start',
+  TOOL_EXECUTION_UPDATE: 'tool:execution_update',
+  TOOL_EXECUTION_COMPLETE: 'tool:execution_complete',
+  TOOL_EXECUTION_ERROR: 'tool:execution_error',
+  TOOL_BATCH_START: 'tool:batch_start',
+  TOOL_BATCH_UPDATE: 'tool:batch_update',
+  TOOL_BATCH_COMPLETE: 'tool:batch_complete',
+  WORKSPACE_OPENED: 'workspace:opened',
+  WORKSPACE_CLOSED: 'workspace:closed',
+  WORKSPACE_SWITCHED: 'workspace:switched',
+  WORKSPACE_UPDATED: 'workspace:updated',
+  WORKSPACE_ERROR: 'workspace:error',
+  MESSAGE_ADD: 'message:add',
+  MESSAGE_UPDATE: 'message:update',
+  MESSAGE_DELETE: 'message:delete',
+  MESSAGE_STREAM_START: 'message:stream_start',
+  MESSAGE_STREAM_CHUNK: 'message:stream_chunk',
+  MESSAGE_STREAM_END: 'message:stream_end',
+  CONFIG_CHANGE: 'config:change',
+  MODEL_CHANGE: 'model:change',
+  THEME_CHANGE: 'theme:change',
+} as const;
 
 
 export interface SessionEventData {

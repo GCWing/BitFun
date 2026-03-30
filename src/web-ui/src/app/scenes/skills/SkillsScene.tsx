@@ -80,7 +80,7 @@ const SkillsScene: React.FC = () => {
 
   const refetchSkillsScene = useCallback(async () => {
     await Promise.all([installed.loadSkills(true), market.refresh()]);
-  }, [installed.loadSkills, market.refresh]);
+  }, [installed, market]);
 
   useGallerySceneAutoRefresh({
     sceneId: 'skills',

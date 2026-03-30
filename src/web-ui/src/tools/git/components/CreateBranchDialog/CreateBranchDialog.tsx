@@ -63,7 +63,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
     if (name.includes(' ')) {
       return t('validation.branchNameSpaces');
     }
-    if (/[\^~:?*\[\\]/.test(name)) {
+    if (['^', '~', ':', '?', '*', '[', '\\'].some((char) => name.includes(char))) {
       return t('validation.branchNameSpecialChars');
     }
     if (name.includes('@{')) {

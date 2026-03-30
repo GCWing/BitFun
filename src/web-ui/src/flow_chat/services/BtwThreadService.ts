@@ -12,7 +12,6 @@ const log = createLogger('BtwThreadService');
 
 function safeUuid(prefix = 'btw'): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const fn = (globalThis as any)?.crypto?.randomUUID as (() => string) | undefined;
     if (fn) return fn();
   } catch {

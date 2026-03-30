@@ -111,7 +111,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
   const contentRef = React.useRef(content);
   React.useEffect(() => {
     contentRef.current = content;
-  }, [content]);
+  }, [content, onInteraction]);
 
   // Sync dirty state from MonacoModelManager on component mount
   React.useEffect(() => {
@@ -161,7 +161,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         onInteraction('copy', 'failed');
       }
     });
-  }, [content]);
+  }, [content, onInteraction]);
 
   const handleDownload = useCallback(() => {
     if (!content?.data) return;
@@ -223,7 +223,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         }
       }
     };
-  }, [content, onContentChange, onDirtyStateChange, onInteraction]);
+  }, [content, onContentChange, onDirtyStateChange, onInteraction, t]);
 
   const renderContent = () => {
     if (!content || content.type === 'empty') {
@@ -239,7 +239,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
     }
 
     switch (content.type) {
-      case 'code-preview':
+      case 'code-preview': {
         const previewData = content.data || {};
         const hasFixNeeded = previewData.migrationContext?.hasUpgradePoints || previewData.needsFix || false;
         
@@ -248,6 +248,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             <pre><code>{typeof content.data === 'string' ? content.data : t('flexiblePanel.fallback.noCodeContent')}</code></pre>
           </div>
         );
+      }
 
       case 'markdown-viewer':
         return (
@@ -256,7 +257,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           </div>
         );
 
-      case 'markdown-editor':
+      case 'markdown-editor': {
         const markdownEditorData = content.data || {};
         const markdownFilePath = markdownEditorData.filePath;
         const markdownInitialContent = markdownEditorData.initialContent;
@@ -297,9 +298,10 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             )}
           </div>
         );
+      }
 
 
-      case 'mermaid-editor':
+      case 'mermaid-editor': {
         const mermaidData = content.data || {};
         
         if (mermaidData.mode || mermaidData.interactive_config || mermaidData.mermaid_code) {
@@ -389,6 +391,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             </div>
           );
         }
+      }
 
       case 'text-viewer':
         return (
@@ -397,7 +400,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           </div>
         );
 
-      case 'file-viewer':
+      case 'file-viewer': {
         const fileViewerData = content.data || {};
         const fileNeedsFix = fileViewerData.migrationContext?.hasUpgradePoints || fileViewerData.needsFix || false;
         const fileViewerClass = `bitfun-flexible-panel__panel-code-viewer ${fileNeedsFix ? 'needs-fix' : ''}`;
@@ -417,8 +420,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             />
           </div>
         );
+      }
 
-      case 'image-viewer':
+      case 'image-viewer': {
         const imageViewerData = content.data || {};
         
         return (
@@ -431,8 +435,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             />
           </div>
         );
+      }
 
-      case 'code-viewer':
+      case 'code-viewer': {
         const codeData = content.data || {};
         const migrationContext = codeData.migrationContext || {};
         const needsFix = migrationContext.hasUpgradePoints || codeData.needsFix || false;
@@ -455,8 +460,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             </div>
           </div>
         );
+      }
 
-      case 'code-editor':
+      case 'code-editor': {
         const editorData = content.data || {};
         const filePath = editorData.filePath || '';
         const fileName = editorData.fileName || content.title;
@@ -506,8 +512,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               }}
           />
         );
+      }
 
-      case 'diff-code-editor':
+      case 'diff-code-editor': {
         const diffData = content.data || {};
         const originalCode = diffData.originalCode || '';
         const modifiedCode = diffData.modifiedCode || originalCode;
@@ -586,6 +593,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             }}
           />
         );
+      }
 
       case 'git-diff':
         return (
@@ -682,15 +690,16 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         );
 
 
-      case 'task-detail':
+      case 'task-detail': {
         const taskDetailData = content.data || {};
         return (
           <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
             <TaskDetailPanel data={taskDetailData} />
           </React.Suspense>
         );
+      }
 
-      case 'plan-viewer':
+      case 'plan-viewer': {
         const planViewerData = content.data || {};
         const planFilePath = planViewerData.filePath || '';
         const planFileName = planViewerData.fileName || content.title;
@@ -718,8 +727,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             />
           </React.Suspense>
         );
+      }
 
-      case 'terminal':
+      case 'terminal': {
         // Terminal panel
         const terminalData = content.data || {};
         const sessionId = terminalData.sessionId;
@@ -744,6 +754,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             </div>
           </React.Suspense>
         );
+      }
 
       case 'btw-session':
         return (

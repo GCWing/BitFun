@@ -51,7 +51,7 @@ export const CopyOutputButton: React.FC<CopyOutputButtonProps> = ({
     });
 
     return contentParts.join('\n\n');
-  }, []);
+  }, [t]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -101,7 +101,7 @@ export const CopyOutputButton: React.FC<CopyOutputButtonProps> = ({
     } catch (error) {
       log.error('Failed to open editor', error);
     }
-  }, [dialogTurn, extractOutputContent]);
+  }, [dialogTurn, extractOutputContent, t]);
 
   const hasContent = dialogTurn.modelRounds.some(round => 
     round.items.some(item => 

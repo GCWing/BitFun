@@ -130,7 +130,7 @@ class AIService {
   }
 
   async sendMessage(content: string, options: AIServiceOptions): Promise<{ response: string, sessionId: string }> {
-    const { onToolExecution } = options;
+    const { onToolExecution: _onToolExecution } = options;
 
     try {
       
@@ -143,11 +143,6 @@ class AIService {
         message: content,
         context: workspacePath ? { workspacePath } : undefined,
       });
-
-      
-      if (onToolExecution) {
-        
-      }
 
       return {
         response: result || '',

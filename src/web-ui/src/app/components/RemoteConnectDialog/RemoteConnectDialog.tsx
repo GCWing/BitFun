@@ -16,10 +16,12 @@ import {
   type RemoteConnectStatus,
 } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import {
-  getRemoteConnectDisclaimerAgreed,
-  setRemoteConnectDisclaimerAgreed,
   RemoteConnectDisclaimerContent,
 } from './RemoteConnectDisclaimer';
+import {
+  getRemoteConnectDisclaimerAgreed,
+  setRemoteConnectDisclaimerAgreed,
+} from './remoteConnectDisclaimerStorage';
 import './RemoteConnectDialog.scss';
 
 // ── Types ────────────────────────────────────────────────────────────

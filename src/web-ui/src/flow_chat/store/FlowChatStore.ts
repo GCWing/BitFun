@@ -1069,17 +1069,8 @@ export class FlowChatStore {
   }
 
   public updateModelRoundItem(sessionId: string, dialogTurnId: string, itemId: string, updates: Partial<FlowItem>): void {
-    let foundItemsCount = 0;
-
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       let updated = false;
-      
-      turn.modelRounds.forEach(modelRound => {
-        const hasItem = modelRound.items.some((item: any) => item.id === itemId);
-        if (hasItem) {
-          foundItemsCount++;
-        }
-      });
       
       const updatedModelRounds = turn.modelRounds.map(modelRound => {
         if (updated) return modelRound;

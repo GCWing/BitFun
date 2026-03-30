@@ -90,7 +90,7 @@ function useSettingsSearch(
 ): SettingsSearchRow[] {
   const index = useMemo(
     () => buildSettingsSearchIndex(t, i18n),
-    [t, i18n, i18n.language]
+    [t, i18n]
   );
 
   return useMemo(() => {

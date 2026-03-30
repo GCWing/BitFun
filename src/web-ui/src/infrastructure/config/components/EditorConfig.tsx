@@ -21,7 +21,7 @@ const log = createLogger('EditorConfig');
 
 const AUTO_SAVE_DELAY = 500;
 
-export interface EditorConfigProps {}
+export type EditorConfigProps = Record<string, never>;
 
 
 const fontFamilyOptions = [
@@ -227,11 +227,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   }, [config]);
 
   
-  useEffect(() => {
-    loadConfig();
-  }, []);
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       setIsLoading(true);
       isInitialLoadRef.current = true;
@@ -253,7 +249,11 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
 
   
   const doSave = useCallback(async (configToSave: EditorConfigType) => {

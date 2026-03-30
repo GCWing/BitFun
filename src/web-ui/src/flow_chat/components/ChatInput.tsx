@@ -126,8 +126,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     ? flowChatState.sessions.get(activeBtwSessionId)?.title?.trim() || t('btw.threadLabel')
     : '';
   
-  // Get input history for current session (after currentSessionId is defined)
-  const inputHistory = effectiveTargetSessionId ? getSessionHistory(effectiveTargetSessionId) : [];
+  // Memoize history so keyboard handlers don't see a fresh [] on every render.
+  const inputHistory = useMemo(
+    () => (effectiveTargetSessionId ? getSessionHistory(effectiveTargetSessionId) : []),
+    [effectiveTargetSessionId, getSessionHistory],
+  );
   const derivedState = useSessionDerivedState(
     effectiveTargetSessionId,
     inputState.value.trim()
@@ -138,7 +141,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
   const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
-  const canSwitchModes = !isAssistantWorkspace && modeState.current !== 'Cowork';
+  const currentMode = modeState.current;
+  const canSwitchModes = !isAssistantWorkspace && currentMode !== 'Cowork';
 
   // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
   const switchableModes = useMemo(
@@ -559,12 +563,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [effectiveTargetSessionId]);
 
   React.useEffect(() => {
-    if (!isAssistantWorkspace || modeState.current === 'Claw') {
+    if (!isAssistantWorkspace || currentMode === 'Claw') {
       return;
     }
 
     dispatchMode({ type: 'SET_CURRENT_MODE', payload: 'Claw' });
-  }, [isAssistantWorkspace, modeState.current]);
+  }, [currentMode, isAssistantWorkspace]);
 
   React.useEffect(() => {
     const queuedInput = derivedState?.queuedInput;
@@ -590,7 +594,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         richTextInputRef.current.focus();
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     derivedState?.queuedInput,
     effectiveTargetSessionId,
@@ -698,7 +701,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         inputElement.removeEventListener('imagePaste', handleImagePaste);
       }
     };
-  }, [addContext, currentImageCount]);
+  }, [addContext, currentImageCount, t]);
 
   React.useEffect(() => {
     if (!effectiveTargetSessionId || !workspacePath) {
@@ -1079,7 +1082,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (modeId === modeState.current) {
+    if (modeId === currentMode) {
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
       return;
     }
@@ -1091,7 +1094,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     applyModeChange(modeId);
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
-  }, [applyModeChange, modeState.current, canSwitchModes, switchableModes]);
+  }, [applyModeChange, canSwitchModes, currentMode, switchableModes]);
   
   const selectSlashCommandMode = useCallback((modeId: string) => {
     requestModeChange(modeId);
@@ -1491,7 +1494,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
     
     input.click();
-  }, [addContext, currentImageCount]);
+  }, [addContext, currentImageCount, t]);
   
   const toggleExpand = useCallback(() => {
     dispatchInput({ type: 'TOGGLE_EXPAND' });

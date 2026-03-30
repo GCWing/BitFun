@@ -3,7 +3,7 @@
  * Used to browse and select remote directory as workspace
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Button } from '@/component-library';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -112,22 +112,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   const [transferBusy, setTransferBusy] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    loadDirectory(currentPath);
-  }, [currentPath]);
-
-  // Close context menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu({ show: false, x: 0, y: 0, entry: null });
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const loadDirectory = async (path: string) => {
+  const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -144,7 +129,22 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [connectionId]);
+
+  useEffect(() => {
+    loadDirectory(currentPath);
+  }, [currentPath, loadDirectory]);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu({ show: false, x: 0, y: 0, entry: null });
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const navigateTo = (path: string) => {
     setCurrentPath(path);

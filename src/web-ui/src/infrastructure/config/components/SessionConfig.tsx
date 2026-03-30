@@ -72,10 +72,6 @@ const SessionConfig: React.FC = () => {
   const [expandedTemplates, setExpandedTemplates] = useState<Set<string>>(new Set());
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
 
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
   const refreshComputerUseStatus = useCallback(async (): Promise<boolean> => {
     if (!IS_TAURI_DESKTOP) return false;
     try {
@@ -92,7 +88,7 @@ const SessionConfig: React.FC = () => {
     }
   }, []);
 
-  const loadAllData = async () => {
+  const loadAllData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [
@@ -135,7 +131,11 @@ const SessionConfig: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [refreshComputerUseStatus]);
+
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
 
   // ── Session config handlers ──────────────────────────────────────────────
 
@@ -364,7 +364,11 @@ const SessionConfig: React.FC = () => {
   const toggleTemplateExpand = useCallback((language: string) => {
     setExpandedTemplates(prev => {
       const next = new Set(prev);
-      next.has(language) ? next.delete(language) : next.add(language);
+      if (next.has(language)) {
+        next.delete(language);
+      } else {
+        next.add(language);
+      }
       return next;
     });
   }, []);

@@ -48,7 +48,7 @@ export function useSSHRemote() {
           remoteWorkspace: workspace,
         }));
       }
-    } catch (e) {
+    } catch (_error) {
       // Ignore errors on initial check
     }
   };
@@ -72,7 +72,7 @@ export function useSSHRemote() {
     if (state.connectionId) {
       try {
         await sshApi.disconnect(state.connectionId);
-      } catch (e) {
+      } catch (_error) {
         // Ignore disconnect errors
       }
     }
@@ -94,7 +94,7 @@ export function useSSHRemote() {
         if (localWorkspaces.length > 0) {
           await switchWorkspace(localWorkspaces[0]);
         }
-      } catch (e) {
+      } catch (_error) {
         // Ignore errors when switching workspaces
       }
     }
@@ -132,7 +132,7 @@ export function useSSHRemote() {
 
     try {
       await sshApi.closeWorkspace();
-    } catch (e) {
+    } catch (_error) {
       // Ignore errors
     }
     setState((prev) => ({
@@ -147,7 +147,7 @@ export function useSSHRemote() {
         if (targetWorkspace && !targetWorkspace.rootPath.startsWith('ssh://')) {
           await switchWorkspace(targetWorkspace);
         }
-      } catch (e) {
+      } catch (_error) {
         // Ignore errors when switching workspaces
       }
     }

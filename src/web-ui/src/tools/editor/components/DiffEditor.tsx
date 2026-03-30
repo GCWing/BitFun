@@ -109,6 +109,23 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   const isUnmountedRef = useRef(false);
   const [modifiedEditorInstance, setModifiedEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const onSaveRef = useRef(onSave);
+  const originalContentRuntimeRef = useRef(originalContent);
+  const modifiedContentRuntimeRef = useRef(modifiedContent);
+  const editorConfigRuntimeRef = useRef(editorConfig);
+  const renderIndicatorsRuntimeRef = useRef(renderIndicators);
+  const onModifiedContentChangeRef = useRef(onModifiedContentChange);
+  const onDiffChangeRef = useRef(onDiffChange);
+  const notificationRef = useRef(notification);
+  const tRef = useRef(t);
+
+  originalContentRuntimeRef.current = originalContent;
+  modifiedContentRuntimeRef.current = modifiedContent;
+  editorConfigRuntimeRef.current = editorConfig;
+  renderIndicatorsRuntimeRef.current = renderIndicators;
+  onModifiedContentChangeRef.current = onModifiedContentChange;
+  onDiffChangeRef.current = onDiffChange;
+  notificationRef.current = notification;
+  tRef.current = t;
   
   useEffect(() => {
     onSaveRef.current = onSave;
@@ -156,6 +173,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const container = containerRef.current;
     let editor: monaco.editor.IStandaloneDiffEditor | null = null;
     let originalModel: monaco.editor.ITextModel | null = null;
     let modifiedModel: monaco.editor.ITextModel | null = null;
@@ -163,11 +181,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
     const initDiffEditor = async () => {
       try {
         await monacoInitManager.initialize();
-
-        if (!containerRef.current) {
-          log.error('Container ref is null during initialization');
-          return;
-        }
 
         const timestamp = Date.now();
         const originalUri = monaco.Uri.parse(`inmemory://diff-original/${timestamp}/${filePath || 'untitled'}`);
@@ -193,8 +206,8 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           existingModified.dispose();
         }
 
-        originalModel = monaco.editor.createModel(originalContent, detectedLanguage, originalUri);
-        modifiedModel = monaco.editor.createModel(modifiedContent, detectedLanguage, modifiedUri);
+        originalModel = monaco.editor.createModel(originalContentRuntimeRef.current, detectedLanguage, originalUri);
+        modifiedModel = monaco.editor.createModel(modifiedContentRuntimeRef.current, detectedLanguage, modifiedUri);
 
         originalModelRef.current = originalModel;
         modifiedModelRef.current = modifiedModel;
@@ -216,7 +229,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         const editorOptions: monaco.editor.IStandaloneDiffEditorConstructionOptions = {
           renderSideBySide: renderSideBySide,
           renderOverviewRuler: false,
-          renderIndicators: renderIndicators,
+          renderIndicators: renderIndicatorsRuntimeRef.current,
           renderMarginRevertIcon: true,
           renderGutterMenu: true,
 
@@ -225,7 +238,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           
           ignoreTrimWhitespace: false,
           renderWhitespace: 'selection',
-          diffWordWrap: (editorConfig.word_wrap as any) || 'off',
+          diffWordWrap: (editorConfigRuntimeRef.current.word_wrap as any) || 'off',
           diffAlgorithm: 'advanced',
           
           hideUnchangedRegions: {
@@ -237,16 +250,16 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           
           theme: themeId,
           automaticLayout: true,
-          fontSize: editorConfig.font_size || 14,
-          fontFamily: editorConfig.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
-          lineHeight: editorConfig.line_height 
-            ? Math.round((editorConfig.font_size || 14) * editorConfig.line_height)
+          fontSize: editorConfigRuntimeRef.current.font_size || 14,
+          fontFamily: editorConfigRuntimeRef.current.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
+          lineHeight: editorConfigRuntimeRef.current.line_height 
+            ? Math.round((editorConfigRuntimeRef.current.font_size || 14) * editorConfigRuntimeRef.current.line_height)
             : 0,
-          lineNumbers: (editorConfig.line_numbers || 'on') as monaco.editor.LineNumbersType,
+          lineNumbers: (editorConfigRuntimeRef.current.line_numbers || 'on') as monaco.editor.LineNumbersType,
           minimap: { 
             enabled: showMinimap,
-            side: (editorConfig.minimap?.side || 'right') as 'right' | 'left',
-            size: (editorConfig.minimap?.size || 'proportional') as 'proportional' | 'fill' | 'fit'
+            side: (editorConfigRuntimeRef.current.minimap?.side || 'right') as 'right' | 'left',
+            size: (editorConfigRuntimeRef.current.minimap?.size || 'proportional') as 'proportional' | 'fill' | 'fit'
           },
           scrollBeyondLastLine: false,
           contextmenu: false,
@@ -263,7 +276,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           enableSplitViewResizing: true,
         };
 
-        editor = monaco.editor.createDiffEditor(containerRef.current, editorOptions);
+        editor = monaco.editor.createDiffEditor(container, editorOptions);
         
         editor.setModel({
           original: originalModel,
@@ -295,7 +308,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
             ];
             
             elementsToFix.forEach(selector => {
-              const elements = containerRef.current!.querySelectorAll(selector);
+              const elements = container.querySelectorAll(selector);
               elements.forEach((element) => {
                 const htmlElement = element as HTMLElement;
                 htmlElement.style.backgroundColor = 'var(--color-bg-primary)';
@@ -317,7 +330,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           contentChangeListenerRef.current = modifiedModel.onDidChangeContent(() => {
             if (!isUnmountedRef.current) {
               const newContent = modifiedModel!.getValue();
-              onModifiedContentChange?.(newContent);
+              onModifiedContentChangeRef.current?.(newContent);
             }
           });
 
@@ -335,10 +348,10 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           
           if (lineChanges) {
             setChanges(lineChanges);
-            onDiffChange?.(lineChanges);
+            onDiffChangeRef.current?.(lineChanges);
           } else {
             setChanges([]);
-            onDiffChange?.([]);
+            onDiffChangeRef.current?.([]);
           }
         });
 
@@ -349,9 +362,9 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
       } catch (err) {
         log.error('Failed to initialize DiffEditor', err);
         const errorMessage = err instanceof Error ? err.message : String(err);
-        setError(t('editor.diffEditor.openFailed'));
+        setError(tRef.current('editor.diffEditor.openFailed'));
         setLoading(false);
-        notification.error(t('editor.diffEditor.initFailedWithMessage', { message: errorMessage }));
+        notificationRef.current.error(tRef.current('editor.diffEditor.initFailedWithMessage', { message: errorMessage }));
       }
     };
 
@@ -629,4 +642,3 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
 };
 
 export default DiffEditor;
-

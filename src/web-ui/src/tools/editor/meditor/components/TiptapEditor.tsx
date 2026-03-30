@@ -32,8 +32,8 @@ import {
 } from '../extensions/MarkdownTableExtensions';
 import {
   InlineAiPreviewExtension,
-  inlineAiPreviewPluginKey,
 } from '../extensions/InlineAiPreviewExtension';
+import { inlineAiPreviewPluginKey } from '../extensions/InlineAiPreviewPluginKey';
 import { RawHtmlBlock, RawHtmlInline, RenderOnlyBlock } from '../extensions/RawHtmlExtensions';
 import { getBlockIndexForLine } from '../utils/markdownBlocks';
 import {
@@ -328,7 +328,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
   const inlineAiInputComposingRef = useRef(false);
   const [inlineAiState, setInlineAiState] = useState<InlineAiState | null>(null);
 
-  const initialContent = useMemo(() => markdownToTiptapDoc(value), []);
+  const initialContent = useMemo(() => markdownToTiptapDoc(value), [value]);
   const inlineAiTriggerHint = t('editor.meditor.inlineAi.triggerHint');
 
   useEffect(() => {

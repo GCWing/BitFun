@@ -45,19 +45,19 @@ function BasicsAppearanceSection() {
     await setTheme(newThemeId);
   };
 
-  const getThemeDisplayName = (theme: ThemeMetadata) => {
+  const getThemeDisplayName = useCallback((theme: ThemeMetadata) => {
     const i18nKey = `appearance.presets.${theme.id}`;
     return theme.builtin
       ? t(`${i18nKey}.name`, { defaultValue: theme.name })
       : theme.name;
-  };
+  }, [t]);
 
-  const getThemeDisplayDescription = (theme: ThemeMetadata) => {
+  const getThemeDisplayDescription = useCallback((theme: ThemeMetadata) => {
     const i18nKey = `appearance.presets.${theme.id}`;
     return theme.builtin
       ? t(`${i18nKey}.description`, { defaultValue: theme.description || '' })
       : theme.description || '';
-  };
+  }, [t]);
 
   const themeSelectOptions = useMemo(
     () => [
@@ -72,7 +72,7 @@ function BasicsAppearanceSection() {
         description: getThemeDisplayDescription(theme),
       })),
     ],
-    [themes, t]
+    [themes, t, getThemeDisplayDescription, getThemeDisplayName]
   );
 
   return (

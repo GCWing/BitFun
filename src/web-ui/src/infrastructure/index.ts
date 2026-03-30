@@ -9,8 +9,10 @@ export * from './event-bus';
 export * from './api';
 
 // Contexts (explicit exports to avoid name collisions)
-export { ChatProvider, useChat } from './contexts/ChatContext';
-export { WorkspaceProvider, useWorkspaceContext } from './contexts/WorkspaceContext';
+export { ChatProvider } from './contexts/ChatProvider';
+export { useChat } from './contexts/ChatContext';
+export { WorkspaceProvider } from './contexts/WorkspaceProvider';
+export { useWorkspaceContext } from './contexts/WorkspaceContext';
 
 // Configuration
 export * from './config';

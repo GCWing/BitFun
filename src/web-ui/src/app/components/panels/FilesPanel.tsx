@@ -155,7 +155,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       }
     }
     prevWorkspacePathRef.current = workspacePath;
-  }, [workspacePath, clearSearch]);
+  }, [workspacePath, clearSearch, onViewModeChange]);
 
   // ===== File Operation Handlers =====
   
@@ -866,6 +866,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         confirmText={inputDialog.type === 'newFile' ? t('dialog.newFile.confirm') : t('dialog.newFolder.confirm')}
         cancelText={inputDialog.type === 'newFile' ? t('dialog.newFile.cancel') : t('dialog.newFolder.cancel')}
         validator={(value) => {
+          // eslint-disable-next-line no-control-regex -- Windows filename rules explicitly forbid ASCII control characters.
           if (!/^[^<>:"/\\|?*\x00-\x1F]+$/.test(value)) {
             return t('validation.invalidFilename');
           }

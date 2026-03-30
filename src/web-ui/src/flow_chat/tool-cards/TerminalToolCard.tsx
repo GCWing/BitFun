@@ -293,7 +293,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     } finally {
       setIsExecuting(false);
     }
-  }, [command, editedCommand, isEditingCommand, toolCall?.input, onConfirm]);
+  }, [applyExpandedState, command, editedCommand, isEditingCommand, onConfirm, toolCall?.input]);
 
   const handleReject = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();

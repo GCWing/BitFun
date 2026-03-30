@@ -71,7 +71,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       setFileStats(new Map());
       setIsExpanded(false);
     }
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   // Close the popover when clicking outside.
   useEffect(() => {
@@ -204,7 +204,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     } finally {
       setLoadingStats(false);
     }
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   // Reload stats when the file list changes.
   useEffect(() => {
@@ -299,7 +299,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     } catch (error) {
       log.error('Failed to send review request', { sessionId, fileCount: fileStats.size, error });
     }
-  }, [sessionId, fileStats]);
+  }, [fileStats, sessionId, t]);
 
   const getOperationIcon = (operationType: 'write' | 'edit' | 'delete') => {
     switch (operationType) {

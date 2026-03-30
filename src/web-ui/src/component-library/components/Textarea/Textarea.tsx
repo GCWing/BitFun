@@ -1,4 +1,4 @@
-import React, { forwardRef, useRef, useImperativeHandle } from 'react';
+import React, { forwardRef, useRef, useImperativeHandle, useCallback } from 'react';
 import './Textarea.scss';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -37,16 +37,16 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 
     useImperativeHandle(ref, () => textareaRef.current!);
 
-    const adjustHeight = () => {
+    const adjustHeight = useCallback(() => {
       if (autoResize && textareaRef.current) {
         textareaRef.current.style.height = 'auto';
         textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
       }
-    };
+    }, [autoResize]);
 
     React.useEffect(() => {
       adjustHeight();
-    }, [value, autoResize]);
+    }, [value, adjustHeight]);
 
     React.useEffect(() => {
       const count = typeof value === 'string' ? value.length : 0;

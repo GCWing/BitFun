@@ -27,14 +27,11 @@ export interface ContextCompressionCardProps extends Omit<BaseToolCardProps, 'to
 
 export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
   compressionCount = 1,
-  hasSummary = true,
   tokensBefore,
   tokensAfter,
   compressionRatio,
   duration,
-  summaryContent,
   trigger = 'manual',
-  compressionTiers,
   input,
   result,
   status = 'pending',
@@ -158,4 +155,3 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
     </BaseToolCard>
   );
 };
-

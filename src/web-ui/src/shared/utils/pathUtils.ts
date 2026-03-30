@@ -45,7 +45,7 @@ export function normalizePath(path: string): string {
     if (decoded !== normalized) {
       normalized = decoded;
     }
-  } catch (e) {
+  } catch (_error) {
     
   }
   
@@ -79,4 +79,3 @@ export function joinPath(basePath: string, relativePath: string): string {
   
   return `${normalizedBase}/${normalizedRelative}`;
 }
-

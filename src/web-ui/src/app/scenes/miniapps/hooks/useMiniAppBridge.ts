@@ -93,7 +93,7 @@ export function useMiniAppBridge(
     return () => {
       window.removeEventListener('message', handler);
     };
-  }, []);
+  }, [iframeRef]);
 
   useEffect(() => {
     const payload = buildMiniAppThemeVars(currentTheme);
@@ -102,5 +102,5 @@ export function useMiniAppBridge(
       { type: 'bitfun:event', event: 'themeChange', payload },
       '*',
     );
-  }, [currentTheme]);
+  }, [currentTheme, iframeRef]);
 }

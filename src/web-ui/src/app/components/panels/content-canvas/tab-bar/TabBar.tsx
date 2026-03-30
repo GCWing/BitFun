@@ -194,7 +194,7 @@ export const TabBar: React.FC<TabBarProps> = ({
     const finalCount = Math.max(1, Math.min(count, visibleTabs.length));
     setVisibleTabsCount(finalCount);
     setLayoutReady(true);
-  }, [visibleTabs, getTabWidth, getTabCacheKey, onCloseAllTabs]);
+  }, [visibleTabs, getTabWidth, getTabCacheKey, onCloseAllTabs, onOpenMissionControl]);
 
   // Reset to render all tabs when list changes (re-measure)
   useEffect(() => {

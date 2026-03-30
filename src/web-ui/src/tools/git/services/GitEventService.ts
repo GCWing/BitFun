@@ -160,8 +160,7 @@ export class GitEventService {
     return new Promise((resolve, reject) => {
       const timeout = options?.timeout || 10000;
       
-      let timeoutId: NodeJS.Timeout;
-      let unsubscriber: () => void;
+      let unsubscriber: () => void = () => {};
 
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId);
@@ -169,7 +168,7 @@ export class GitEventService {
       };
 
 
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         cleanup();
         reject(new Error(`Timed out waiting for Git event ${eventType}`));
       }, timeout);

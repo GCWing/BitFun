@@ -104,7 +104,7 @@ export class ThemeService {
         });
         log.info('Loaded user themes', { count: themes.length });
       }
-    } catch (error) {
+    } catch (_error) {
       
     }
   }
@@ -121,7 +121,7 @@ export class ThemeService {
         return SYSTEM_THEME_ID;
       }
       return raw || null;
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }
@@ -865,5 +865,4 @@ export class ThemeService {
 
 
 export const themeService = new ThemeService();
-
 

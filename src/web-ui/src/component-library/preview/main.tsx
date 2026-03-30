@@ -6,7 +6,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { PreviewApp } from './PreviewApp';
 import { I18nProvider } from '@/infrastructure/i18n';
-import { WorkspaceProvider } from '@/infrastructure/contexts/WorkspaceContext';
+import { WorkspaceProvider } from '@/infrastructure/contexts/WorkspaceProvider';
 import { themeService } from '@/infrastructure/theme';
 import './preview.css';
 import './flowchat-cards-preview.css';

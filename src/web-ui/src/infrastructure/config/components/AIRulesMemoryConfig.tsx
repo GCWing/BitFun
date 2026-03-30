@@ -4,7 +4,7 @@
  * Rules: full CRUD for user/project. Memory: user-level CRUD; project-level placeholder.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Edit2, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { Select, Input, Textarea, Button, IconButton, Switch, Tooltip, Modal } from '@/component-library';
@@ -338,7 +338,7 @@ function MemoryPanel() {
   const [editingMemory, setEditingMemory] = useState<AIMemory | null>(null);
   const [scopeTab, setScopeTab] = useState<ScopeTab>('user');
 
-  const loadMemories = async () => {
+  const loadMemories = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getAllMemories();
@@ -348,11 +348,11 @@ function MemoryPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notification, t]);
 
   React.useEffect(() => {
     if (scopeTab === 'user') loadMemories();
-  }, [scopeTab]);
+  }, [scopeTab, loadMemories]);
 
   const memoryTypeMap: Record<MemoryType, { label: string; color: string }> = {
     tech_preference: { label: t('memoryTypes.tech_preference'), color: '#60a5fa' },

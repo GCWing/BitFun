@@ -82,7 +82,7 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(({
 
 CardHeader.displayName = 'CardHeader';
 
-export interface CardBodyProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type CardBodyProps = React.HTMLAttributes<HTMLDivElement>;
 
 export const CardBody = forwardRef<HTMLDivElement, CardBodyProps>(({
   children,

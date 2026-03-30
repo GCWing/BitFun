@@ -172,7 +172,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
         unsubscribeRef.current = null;
       }
     };
-  }, [sessionId, autoConnect]); // Removed handleEvent from deps since it's stable
+  }, [sessionId, autoConnect, handleEvent]);
 
   const write = useCallback(async (data: string) => {
     try {
@@ -234,4 +234,3 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
     refresh,
   };
 }
-

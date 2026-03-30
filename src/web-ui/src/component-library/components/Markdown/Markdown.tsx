@@ -623,7 +623,7 @@ export const Markdown = React.memo<MarkdownProps>(({
   }, []);
   
   const components = useMemo(() => ({
-    code({ node, className, children, ...props }: any) {
+    code({ node: _node, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
       const language = match ? match[1] : '';
       const code = String(children).replace(/\n$/, '');
@@ -703,7 +703,6 @@ export const Markdown = React.memo<MarkdownProps>(({
         let filePath = normalizeFileLikeHref(hrefValue);
 
         let lineRange: LineRange | undefined;
-        let fileName: string;
 
         const hashIndex = filePath.indexOf('#');
         if (hashIndex !== -1) {
@@ -729,7 +728,7 @@ export const Markdown = React.memo<MarkdownProps>(({
 
         filePath = resolveBaseRelativePath(filePath, basePath);
 
-        fileName = filePath.split(/[\\/]/).pop() || filePath;
+        const fileName = filePath.split(/[\\/]/).pop() || filePath;
 
         const isFolder = filePath.endsWith('/');
         const shouldRevealInExplorer = isComputerLink || !isEditorOpenableFilePath(filePath);
@@ -875,7 +874,7 @@ export const Markdown = React.memo<MarkdownProps>(({
       );
     },
 
-    img({ node, ...props }: any) {
+    img({ node: _node, ...props }: any) {
       return <MarkdownImage {...props} basePath={basePath} />;
     },
     

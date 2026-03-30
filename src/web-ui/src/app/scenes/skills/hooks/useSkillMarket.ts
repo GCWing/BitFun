@@ -57,7 +57,7 @@ export function useSkillMarket({
     } finally {
       setMarketLoading(false);
     }
-  }, [fetchSkills]);
+  }, [fetchSkills, pageSize]);
 
   useEffect(() => {
     loadFirstPage(searchQuery || undefined);
@@ -127,7 +127,7 @@ export function useSkillMarket({
     } finally {
       setLoadingMore(false);
     }
-  }, [currentPage, displayMarketSkills.length, fetchSkills, hasMore, searchQuery]);
+  }, [currentPage, displayMarketSkills.length, fetchSkills, hasMore, pageSize, searchQuery]);
 
   const handleDownload = useCallback(async (skill: SkillMarketItem) => {
     if (!hasWorkspace) {

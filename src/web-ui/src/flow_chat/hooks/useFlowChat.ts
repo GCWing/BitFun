@@ -203,25 +203,25 @@ export const useFlowChat = () => {
     }
   }, []);
 
-  // Avoid useCallback to always read the latest state.
-  const getActiveSession = (): Session | null => {
+  const getActiveSession = useCallback((): Session | null => {
+    const currentState = flowChatStore.getState();
     const session = flowChatStore.getActiveSession();
     if (!session) {
-      log.warn('No active session', { activeSessionId: state.activeSessionId });
+      log.warn('No active session', { activeSessionId: currentState.activeSessionId });
     }
     return session;
-  };
+  }, []);
 
-  // Avoid useCallback to always read the latest state.
-  const getLatestDialogTurn = (sessionId?: string): DialogTurn | null => {
-    const targetSessionId = sessionId || state.activeSessionId;
+  const getLatestDialogTurn = useCallback((sessionId?: string): DialogTurn | null => {
+    const currentState = flowChatStore.getState();
+    const targetSessionId = sessionId || currentState.activeSessionId;
     if (!targetSessionId) return null;
     
-    const session = state.sessions.get(targetSessionId);
+    const session = currentState.sessions.get(targetSessionId);
     if (!session || session.dialogTurns.length === 0) return null;
     
     return session.dialogTurns[session.dialogTurns.length - 1];
-  };
+  }, []);
 
   const deleteSession = useCallback(async (sessionId: string) => {
     try {
@@ -406,7 +406,7 @@ export const useFlowChat = () => {
     }
 
     processingLock.current = true;
-  }, [state.activeSessionId, state.sessions]);
+  }, [state.activeSessionId]);
 
   const endMessageProcessing = useCallback(() => {
     processingLock.current = false;

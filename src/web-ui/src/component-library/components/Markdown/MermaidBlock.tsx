@@ -110,7 +110,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
         setState('error');
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const trimmedCode = code.trim();
@@ -200,7 +200,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
         }
       }));
     }, 100);
-  }, [code]);
+  }, [code, tMermaid]);
 
   const renderContent = () => {
     switch (state) {

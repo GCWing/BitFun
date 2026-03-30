@@ -13,7 +13,7 @@ import './MEditor.scss'
 void createLogger('MEditor')
 let markdownTextareaTargetCounter = 0
 
-export interface MEditorProps extends EditorOptions {}
+export type MEditorProps = EditorOptions;
 
 function executeTextareaAction(
   textarea: HTMLTextAreaElement | null,

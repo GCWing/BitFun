@@ -22,7 +22,6 @@ export interface TodoCardProps extends Omit<BaseToolCardProps, 'toolName' | 'dis
 
 export const TodoCard: React.FC<TodoCardProps> = ({
   todos,
-  action = 'list',
   input,
   result,
   status = 'pending',

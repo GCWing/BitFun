@@ -29,7 +29,6 @@ export const ConfigCheckbox = forwardRef<HTMLInputElement, ConfigCheckboxProps>(
   success,
   labelIcon,
   inline = false,
-  compact = false,
   className = '',
   style,
   children,

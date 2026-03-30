@@ -100,7 +100,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onSwitchToChatPanel,
     handleToolConfirm,
     handleToolReject,
-    activeSession?.sessionId,
+    activeSession,
     config,
     exploreGroupStates,
     handleExploreGroupToggle,

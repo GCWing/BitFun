@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SnapshotStateManager, SessionState, SnapshotFile } from '../core/SnapshotStateManager';
 import { SnapshotEventBus, SNAPSHOT_EVENTS } from '../core/SnapshotEventBus';
@@ -40,7 +40,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
   const stateManager = SnapshotStateManager.getInstance();
   const eventBus = SnapshotEventBus.getInstance();
-  const diffEngine = new DiffDisplayEngine();
+  const diffEngine = useMemo(() => new DiffDisplayEngine(), []);
 
   const refreshSession = useCallback(async () => {
     if (!sessionId) return;
@@ -227,7 +227,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       unsubscribeSession();
       unsubscribeFile();
     };
-  }, [sessionId, stateManager]);
+  }, [sessionId, stateManager, refreshSession]);
 
   return {
     sessionState,

@@ -102,12 +102,12 @@ const ShellNav: React.FC = () => {
   const handleCreateManualTerminal = useCallback(async (shellType?: string) => {
     setMenuOpen(false);
     await createManualTerminal(shellType);
-  }, [createManualTerminal]);
+  }, [createManualTerminal, setMenuOpen]);
 
   const handleToggleCreateMenu = useCallback(() => {
     setWorkspaceMenuOpen(false);
     setMenuOpen((prev) => !prev);
-  }, []);
+  }, [setMenuOpen, setWorkspaceMenuOpen]);
 
   const shellMenuItems = useMemo(
     () =>
@@ -130,7 +130,7 @@ const ShellNav: React.FC = () => {
 
     setMenuOpen(false);
     setWorkspaceMenuOpen((prev) => !prev);
-  }, [hasMultipleWorkspaces]);
+  }, [hasMultipleWorkspaces, setMenuOpen, setWorkspaceMenuOpen]);
 
   const handleSelectWorkspace = useCallback(async (workspaceId: string) => {
     setWorkspaceMenuOpen(false);
@@ -138,7 +138,7 @@ const ShellNav: React.FC = () => {
       return;
     }
     await setActiveWorkspace(workspaceId);
-  }, [activeWorkspace?.id, setActiveWorkspace]);
+  }, [activeWorkspace?.id, setActiveWorkspace, setWorkspaceMenuOpen]);
 
   const openContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,

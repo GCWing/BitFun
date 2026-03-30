@@ -250,7 +250,7 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
   const segments = useMemo<PathSegment[]>(() => {
     if (!filePath) return [];
 
-    let normalizedPath = filePath.replace(/\\/g, '/');
+    const normalizedPath = filePath.replace(/\\/g, '/');
     let relativePath = normalizedPath;
     const normalizedWorkspace = workspacePath ? workspacePath.replace(/\\/g, '/') : '';
 

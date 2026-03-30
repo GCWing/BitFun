@@ -1543,7 +1543,7 @@ export class MonacoLspAdapter {
           if (action) {
             action.run();
           }
-        } catch (err) {
+        } catch (_error) {
           // silent
         }
       });

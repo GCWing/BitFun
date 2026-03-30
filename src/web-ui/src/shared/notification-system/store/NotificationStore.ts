@@ -109,7 +109,7 @@ class NotificationStore {
     
     
     let notificationHistory = [...this.state.notificationHistory];
-    let unreadCount = this.state.unreadCount;
+    const unreadCount = this.state.unreadCount;
     
     if (updatedNotification && 
         (updatedNotification.variant === 'progress' || updatedNotification.variant === 'loading')) {

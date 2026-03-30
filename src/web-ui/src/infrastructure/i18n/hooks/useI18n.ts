@@ -62,7 +62,7 @@ export function useI18n(
 
   const currentLocaleMetadata = useMemo(
     () => i18nService.getCurrentLocaleMetadata(),
-    [currentLanguage]
+    []
   );
 
   const supportedLocales = useMemo(
@@ -74,33 +74,33 @@ export function useI18n(
     (date: Date | number, options?: Intl.DateTimeFormatOptions) => {
       return i18nService.formatDate(date, options);
     },
-    [currentLanguage]
+    []
   );
 
   const formatNumber = useCallback(
     (number: number, options?: Intl.NumberFormatOptions) => {
       return i18nService.formatNumber(number, options);
     },
-    [currentLanguage]
+    []
   );
 
   const formatCurrency = useCallback(
     (amount: number, currency?: string) => {
       return i18nService.formatCurrency(amount, currency);
     },
-    [currentLanguage]
+    []
   );
 
   const formatRelativeTime = useCallback(
     (date: Date | number, unit?: Intl.RelativeTimeFormatUnit) => {
       return i18nService.formatRelativeTime(date, unit);
     },
-    [currentLanguage]
+    []
   );
 
   const isRTL = useMemo(
     () => i18nService.isRTL(),
-    [currentLanguage]
+    []
   );
 
   return {

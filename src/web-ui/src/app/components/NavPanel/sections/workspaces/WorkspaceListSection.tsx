@@ -96,7 +96,6 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       dropTargetRef.current = next;
       return next;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Intentionally empty: reads from refs, not closed-over state
 
   const handleDragLeave = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {

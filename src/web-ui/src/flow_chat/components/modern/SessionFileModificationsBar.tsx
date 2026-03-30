@@ -207,7 +207,7 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
     } finally {
       setLoadingStats(false);
     }
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {

@@ -5,10 +5,9 @@
 
 export { ToolbarMode, type ToolbarModeProps } from './ToolbarMode';
 export { 
-  ToolbarModeProvider, 
   useToolbarModeContext,
   type ToolbarModeContextType,
   type ToolbarModeState
 } from './ToolbarModeContext';
-
+export { ToolbarModeProvider } from './ToolbarModeProvider';
 

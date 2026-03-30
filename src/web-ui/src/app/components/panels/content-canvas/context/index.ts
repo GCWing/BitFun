@@ -3,7 +3,6 @@
  */
 
 export {
-  CanvasProvider,
   useCanvas,
   useEditorGroup,
   useCanvasLayout,
@@ -12,12 +11,13 @@ export {
   useMissionControl,
   default as CanvasContext,
 } from './CanvasContext';
+export { CanvasProvider } from './CanvasProvider';
 
 export type {
   CanvasContextValue,
-  CanvasProviderProps,
   TabOperations,
   DragOperations,
   LayoutOperations,
   MissionControlOperations,
 } from './CanvasContext';
+export type { CanvasProviderProps } from './CanvasProvider';

@@ -76,7 +76,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
         
         const maximized = await appWindow.isMaximized();
         setIsMaximized(maximized);
-      } catch (error) {
+      } catch (_error) {
         // Ignore errors to avoid noise when minimized
       }
     };
@@ -97,7 +97,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
             await updateWindowState(appWindow);
             await restoreMacOSOverlayTitlebar(appWindow);
           }, 300);
-        } catch (error) {
+        } catch (_error) {
           // Ignore errors
         }
       }
@@ -185,7 +185,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
               if (rect.width > 0 && rect.height > 0) {
                 activeElement.focus();
               }
-            } catch (error) {
+            } catch (_error) {
               // Ignore focus restore failures
             }
           }
@@ -271,7 +271,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
               if (rect.width > 0 && rect.height > 0) {
                 activeElement.focus();
               }
-            } catch (error) {
+            } catch (_error) {
               // Ignore focus restore failures
             }
           }

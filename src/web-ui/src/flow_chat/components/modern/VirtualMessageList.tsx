@@ -944,8 +944,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [
     buildPinReservation,
     applyFooterCompensationNow,
+    getRenderedUserMessageElement,
     getTotalBottomCompensationPx,
-    latestTurnId,
     resolveTurnPinMetrics,
     schedulePinReservationReconcile,
     scheduleVisibleTurnMeasure,
@@ -1325,11 +1325,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     pendingTurnPin?.pinMode,
     pendingTurnPin?.turnId,
     releaseAnchorLock,
-    restoreAnchorLockNow,
     scheduleHeightMeasure,
+    scheduleFollowToLatestWithViewportState,
     schedulePinReservationReconcile,
     scheduleVisibleTurnMeasure,
     scrollerElement,
+    shouldSuspendAutoFollow,
     updateBottomReservationState,
   ]);
 
@@ -1462,7 +1463,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       setPendingTurnPin(null);
       virtuosoRef.current.scrollTo({ top: 999999999, behavior });
     }
-  }, [getTotalBottomCompensationPx, releaseAnchorLock, virtualItems.length]);
+  }, [releaseAnchorLock, virtualItems.length]);
 
   const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
     const requestedPinMode = options?.pinMode ?? 'transient';

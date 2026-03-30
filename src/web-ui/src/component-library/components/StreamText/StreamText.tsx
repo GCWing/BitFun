@@ -2,7 +2,7 @@
  * Streaming text output component
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './StreamText.scss';
 
 export type StreamEffect = 
@@ -59,6 +59,42 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
   const hasStartedRef = useRef(false);
   const prevTextRef = useRef(text);
 
+  const streamCharacter = useCallback((index: number) => {
+    if (index < text.length) {
+      setDisplayedText(prev => prev + text[index]);
+      setCurrentIndex(index + 1);
+      
+      const progress = ((index + 1) / text.length) * 100;
+      onProgress?.(progress);
+
+      let nextSpeed = speed;
+      if (effect === 'glitch' && Math.random() > 0.7) {
+        nextSpeed = speed * (Math.random() * 2 + 0.5);
+      } else if (effect === 'wave') {
+        nextSpeed = speed + Math.sin(index * 0.5) * 20;
+      }
+
+      timeoutRef.current = setTimeout(() => {
+        streamCharacter(index + 1);
+      }, Math.max(10, nextSpeed));
+    } else {
+      setIsComplete(true);
+      setIsStreaming(false);
+      onComplete?.();
+    }
+  }, [effect, onComplete, onProgress, speed, text]);
+
+  const startStreaming = useCallback(() => {
+    setDisplayedText('');
+    setCurrentIndex(0);
+    setIsComplete(false);
+    setIsStreaming(true);
+
+    timeoutRef.current = setTimeout(() => {
+      streamCharacter(0);
+    }, delay);
+  }, [delay, streamCharacter]);
+
   useEffect(() => {
     const isTextChanged = prevTextRef.current !== text;
     let skipAutoStart = false;
@@ -96,7 +132,7 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [text, autoStart, paused]);
+  }, [text, autoStart, paused, isComplete, startStreaming]);
 
   useEffect(() => {
     if (paused && isStreaming) {
@@ -108,44 +144,7 @@ const StreamTextComponent: React.FC<StreamTextProps> = ({
     } else if (!paused && pausedIndexRef.current > 0) {
       streamCharacter(pausedIndexRef.current);
     }
-  }, [paused]);
-
-  const startStreaming = () => {
-    setDisplayedText('');
-    setCurrentIndex(0);
-    setIsComplete(false);
-    setIsStreaming(true);
-
-    timeoutRef.current = setTimeout(() => {
-      streamCharacter(0);
-    }, delay);
-  };
-
-
-  const streamCharacter = (index: number) => {
-    if (index < text.length) {
-      setDisplayedText(prev => prev + text[index]);
-      setCurrentIndex(index + 1);
-      
-      const progress = ((index + 1) / text.length) * 100;
-      onProgress?.(progress);
-
-      let nextSpeed = speed;
-      if (effect === 'glitch' && Math.random() > 0.7) {
-        nextSpeed = speed * (Math.random() * 2 + 0.5);
-      } else if (effect === 'wave') {
-        nextSpeed = speed + Math.sin(index * 0.5) * 20;
-      }
-
-      timeoutRef.current = setTimeout(() => {
-        streamCharacter(index + 1);
-      }, Math.max(10, nextSpeed));
-    } else {
-      setIsComplete(true);
-      setIsStreaming(false);
-      onComplete?.();
-    }
-  };
+  }, [paused, currentIndex, isStreaming, streamCharacter]);
 
   const renderText = () => {
     if (!charAnimation) {

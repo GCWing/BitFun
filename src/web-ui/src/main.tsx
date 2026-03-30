@@ -1,7 +1,7 @@
 import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
-import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceContext";
+import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import "./app/styles/index.scss";
 
 // Manually import Monaco Editor CSS.

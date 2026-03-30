@@ -145,9 +145,10 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   useEffect(() => {
     isUnmountedRef.current = false;
+    const editor = editorRef.current;
     return () => {
       isUnmountedRef.current = true;
-      editorRef.current?.destroy();
+      editor?.destroy();
     };
   }, []);
 

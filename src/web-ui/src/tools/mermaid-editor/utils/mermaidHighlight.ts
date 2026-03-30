@@ -20,7 +20,7 @@ Prism.languages.mermaid = {
     alias: 'operator'
   },
   'node-shape': {
-    pattern: /[\[\](){}><]/,
+    pattern: /[[\](){}><]/,
     alias: 'punctuation'
   },
   'string': {

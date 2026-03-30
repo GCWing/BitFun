@@ -195,19 +195,22 @@ class FileSystemService implements IFileSystemService {
         case 'name':
           comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
           break;
-        case 'size':
+        case 'size': {
           comparison = (a.size || 0) - (b.size || 0);
           break;
-        case 'lastModified':
+        }
+        case 'lastModified': {
           const aTime = a.lastModified?.getTime() || 0;
           const bTime = b.lastModified?.getTime() || 0;
           comparison = aTime - bTime;
           break;
-        case 'type':
+        }
+        case 'type': {
           const aExt = a.extension || '';
           const bExt = b.extension || '';
           comparison = aExt.localeCompare(bExt);
           break;
+        }
         default:
           comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
       }

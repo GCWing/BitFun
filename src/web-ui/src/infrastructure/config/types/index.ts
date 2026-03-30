@@ -34,9 +34,8 @@ export interface AppLoggingConfig {
   level: BackendLogLevel;
 }
 
-export interface AppSessionConfig {
-  // Reserved; legacy `default_mode` in saved JSON is ignored by the app.
-}
+// Reserved; legacy `default_mode` in saved JSON is ignored by the app.
+export type AppSessionConfig = Record<string, never>;
 
 export interface SidebarConfig {
   width: number;
@@ -561,5 +560,4 @@ export interface DefaultModels {
 }
 
  
-export interface OptionalCapabilityModels {
-}
+export type OptionalCapabilityModels = Record<string, never>;

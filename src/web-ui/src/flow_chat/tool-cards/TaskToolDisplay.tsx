@@ -54,7 +54,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     reason: 'manual' | 'auto' = 'manual',
   ) => {
     applyExpandedState(isExpanded, nextExpanded, setIsExpanded, { reason });
-  }, [applyExpandedState, isExpanded, isRunning, status, toolId]);
+  }, [applyExpandedState, isExpanded]);
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current;

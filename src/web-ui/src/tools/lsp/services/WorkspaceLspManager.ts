@@ -522,7 +522,7 @@ export class WorkspaceLspManager {
       if (callbacks && diagnostics) {
         callbacks.forEach(cb => cb(diagnostics));
       }
-    } catch (error) {
+    } catch (_error) {
 
     }
   }

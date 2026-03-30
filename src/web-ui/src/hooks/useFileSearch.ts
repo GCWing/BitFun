@@ -216,7 +216,7 @@ export function useFileSearch(options: UseFileSearchOptions = {}): UseFileSearch
     if (query.trim().length >= minSearchLength) {
       triggerSearch(query);
     }
-  }, [searchOptions]);
+  }, [searchOptions, minSearchLength, query, triggerSearch]);
 
   useEffect(() => {
     return () => {

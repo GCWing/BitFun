@@ -70,8 +70,45 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
     const isUnmountedRef = useRef(false);
     const disposablesRef = useRef<monaco.IDisposable[]>([]);
     const hasRevealedRef = useRef(false);
+    const filePathRef = useRef(filePath);
+    const originalContentRef = useRef(originalContent);
+    const modifiedContentRef = useRef(modifiedContent);
+    const languageRef = useRef(language);
+    const presetRef = useRef(preset);
+    const configRef = useRef(config);
+    const readOnlyRef = useRef(readOnly);
+    const themeRef = useRef(theme);
+    const renderSideBySideRef = useRef(renderSideBySide);
+    const renderOverviewRulerRef = useRef(renderOverviewRuler);
+    const renderIndicatorsRef = useRef(renderIndicators);
+    const originalEditableRef = useRef(originalEditable);
+    const ignoreTrimWhitespaceRef = useRef(ignoreTrimWhitespace);
+    const showMinimapRef = useRef(showMinimap);
+    const onModifiedContentChangeRef = useRef(onModifiedContentChange);
+    const onDiffChangeRef = useRef(onDiffChange);
+    const onEditorReadyRef = useRef(onEditorReady);
+    const onEditorWillDisposeRef = useRef(onEditorWillDispose);
     
     const [isReady, setIsReady] = useState(false);
+
+    filePathRef.current = filePath;
+    originalContentRef.current = originalContent;
+    modifiedContentRef.current = modifiedContent;
+    languageRef.current = language;
+    presetRef.current = preset;
+    configRef.current = config;
+    readOnlyRef.current = readOnly;
+    themeRef.current = theme;
+    renderSideBySideRef.current = renderSideBySide;
+    renderOverviewRulerRef.current = renderOverviewRuler;
+    renderIndicatorsRef.current = renderIndicators;
+    originalEditableRef.current = originalEditable;
+    ignoreTrimWhitespaceRef.current = ignoreTrimWhitespace;
+    showMinimapRef.current = showMinimap;
+    onModifiedContentChangeRef.current = onModifiedContentChange;
+    onDiffChangeRef.current = onDiffChange;
+    onEditorReadyRef.current = onEditorReady;
+    onEditorWillDisposeRef.current = onEditorWillDispose;
     
     useImperativeHandle(ref, () => ({
       getDiffEditor: () => diffEditorRef.current,
@@ -119,56 +156,57 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
     const generateUri = useCallback((type: 'original' | 'modified'): monaco.Uri => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 8);
-      const basePath = filePath || 'untitled';
+      const basePath = filePathRef.current || 'untitled';
       return monaco.Uri.parse(`inmemory://diff/${type}/${timestamp}/${random}/${basePath}`);
-    }, [filePath]);
+    }, []);
     
     useEffect(() => {
       if (!containerRef.current) return;
       
       isUnmountedRef.current = false;
       hasRevealedRef.current = false;
+      const container = containerRef.current;
       
       const initEditor = async () => {
         try {
           await monacoInitManager.initialize();
           
-          if (isUnmountedRef.current || !containerRef.current) return;
+          if (isUnmountedRef.current) return;
           
           themeManager.initialize();
           
           const originalModel = monaco.editor.createModel(
-            originalContent,
-            language,
+            originalContentRef.current,
+            languageRef.current,
             generateUri('original')
           );
           const modifiedModel = monaco.editor.createModel(
-            modifiedContent,
-            language,
+            modifiedContentRef.current,
+            languageRef.current,
             generateUri('modified')
           );
           originalModelRef.current = originalModel;
           modifiedModelRef.current = modifiedModel;
           
           const overrides: EditorOptionsOverrides = {
-            readOnly,
-            minimap: showMinimap,
-            theme,
+            readOnly: readOnlyRef.current,
+            minimap: showMinimapRef.current,
+            theme: themeRef.current,
           };
           
           const diffOptions = buildDiffEditorOptions({
-            config,
-            preset,
+            config: configRef.current,
+            preset: presetRef.current,
             overrides,
           });
           
-          const diffEditor = monaco.editor.createDiffEditor(containerRef.current, {
+          const diffEditor = monaco.editor.createDiffEditor(container, {
             ...diffOptions,
-            renderSideBySide,
-            renderOverviewRuler,
-            renderIndicators,
-            originalEditable,
-            ignoreTrimWhitespace,
+            renderSideBySide: renderSideBySideRef.current,
+            renderOverviewRuler: renderOverviewRulerRef.current,
+            renderIndicators: renderIndicatorsRef.current,
+            originalEditable: originalEditableRef.current,
+            ignoreTrimWhitespace: ignoreTrimWhitespaceRef.current,
           });
           diffEditorRef.current = diffEditor;
           
@@ -181,9 +219,7 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
           
           setIsReady(true);
           
-          if (onEditorReady) {
-            onEditorReady(diffEditor, originalModel, modifiedModel);
-          }
+          onEditorReadyRef.current?.(diffEditor, originalModel, modifiedModel);
           
         } catch (error) {
           log.error('Failed to initialize diff editor', error);
@@ -195,9 +231,7 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
       return () => {
         isUnmountedRef.current = true;
         
-        if (onEditorWillDispose) {
-          onEditorWillDispose();
-        }
+        onEditorWillDisposeRef.current?.();
         
         disposablesRef.current.forEach(d => d.dispose());
         disposablesRef.current = [];
@@ -218,16 +252,14 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
         
         setIsReady(false);
       };
-    }, []);
+    }, [filePath, generateUri, registerEventListeners]);
     
     const registerEventListeners = useCallback((
       diffEditor: monaco.editor.IStandaloneDiffEditor,
       modifiedModel: monaco.editor.ITextModel
     ) => {
       const contentDisposable = modifiedModel.onDidChangeContent(() => {
-        if (onModifiedContentChange) {
-          onModifiedContentChange(modifiedModel.getValue());
-        }
+        onModifiedContentChangeRef.current?.(modifiedModel.getValue());
       });
       disposablesRef.current.push(contentDisposable);
       
@@ -235,12 +267,10 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
         const changes = diffEditor.getLineChanges() || [];
         changesRef.current = changes;
         
-        if (onDiffChange) {
-          onDiffChange(changes);
-        }
+        onDiffChangeRef.current?.(changes);
       });
       disposablesRef.current.push(diffDisposable);
-    }, [onModifiedContentChange, onDiffChange]);
+    }, []);
     
     useEffect(() => {
       if (!isReady) return;

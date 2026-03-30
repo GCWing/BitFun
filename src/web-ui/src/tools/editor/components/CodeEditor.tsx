@@ -255,6 +255,25 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const largeFileExpansionBlockedLogRef = useRef(false);
   const pendingModelContentRef = useRef<string | null>(null);
   const macosEditorBindingCleanupRef = useRef<(() => void) | null>(null);
+  const workspacePathRuntimeRef = useRef(workspacePath);
+  const readOnlyRuntimeRef = useRef(readOnly);
+  const showLineNumbersRuntimeRef = useRef(showLineNumbers);
+  const showMinimapRuntimeRef = useRef(showMinimap);
+  const onContentChangeRef = useRef(onContentChange);
+  const tRef = useRef(t);
+  const contentRef = useRef(content);
+  const loadingRef = useRef(loading);
+  const editorConfigRuntimeRef = useRef(editorConfig);
+
+  workspacePathRuntimeRef.current = workspacePath;
+  readOnlyRuntimeRef.current = readOnly;
+  showLineNumbersRuntimeRef.current = showLineNumbers;
+  showMinimapRuntimeRef.current = showMinimap;
+  onContentChangeRef.current = onContentChange;
+  tRef.current = t;
+  contentRef.current = content;
+  loadingRef.current = loading;
+  editorConfigRuntimeRef.current = editorConfig;
 
   const detectLargeFileMode = useCallback((nextContent: string, fileSizeBytes?: number): boolean => {
     const size = typeof fileSizeBytes === 'number' && fileSizeBytes >= 0
@@ -520,6 +539,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       return;
     }
 
+    const container = containerRef.current;
     let editor: monaco.editor.IStandaloneCodeEditor | null = null;
     let model: monaco.editor.ITextModel | null = null;
 
@@ -531,8 +551,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         }
         
         let createFontSize = 14;
-        let createFontFamily = editorConfig.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace";
-        let createFontWeight = editorConfig.font_weight || 'normal';
+        let createFontFamily = editorConfigRuntimeRef.current.font_family || "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace";
+        let createFontWeight = editorConfigRuntimeRef.current.font_weight || 'normal';
         let createLineHeight = 0;
         const applyFontConfig = (c: Partial<EditorConfigType>) => {
           createFontSize = c.font_size ?? 14;
@@ -551,8 +571,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         model = monacoModelManager.getOrCreateModel(
           filePath,
           detectedLanguage,
-          content || '',
-          workspacePath
+          contentRef.current || '',
+          workspacePathRuntimeRef.current
         );
         
         modelRef.current = model;
@@ -570,14 +590,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           savedVersionIdRef.current = modelMetadata.savedVersionId;
           originalContentRef.current = modelMetadata.originalContent;
           
-          if (isDirty && onContentChange) {
-            onContentChange(modelContent, true);
+          if (isDirty && onContentChangeRef.current) {
+            onContentChangeRef.current(modelContent, true);
           }
         } else {
           savedVersionIdRef.current = model.getAlternativeVersionId();
         }
         
-        if (modelContent && modelContent !== content) {
+        if (modelContent && modelContent !== contentRef.current) {
           setContent(modelContent);
           if (!modelMetadata) {
             originalContentRef.current = modelContent;
@@ -602,21 +622,21 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           model: model,
           theme: themeId,
           automaticLayout: true,
-          readOnly: readOnly,
-          lineNumbers: showLineNumbers ? 'on' : (editorConfig.line_numbers as any) || 'on',
+          readOnly: readOnlyRuntimeRef.current,
+          lineNumbers: showLineNumbersRuntimeRef.current ? 'on' : (editorConfigRuntimeRef.current.line_numbers as any) || 'on',
           minimap: { 
-            enabled: showMinimap && !initialLargeFileMode,
-            side: (editorConfig.minimap?.side as any) || 'right',
-            size: (editorConfig.minimap?.size as any) || 'proportional'
+            enabled: showMinimapRuntimeRef.current && !initialLargeFileMode,
+            side: (editorConfigRuntimeRef.current.minimap?.side as any) || 'right',
+            size: (editorConfigRuntimeRef.current.minimap?.size as any) || 'proportional'
           },
           fontSize: createFontSize,
           fontFamily: createFontFamily,
           fontWeight: createFontWeight,
-          lineHeight: createLineHeight || (editorConfig.line_height ? Math.round(createFontSize * editorConfig.line_height) : 0),
+          lineHeight: createLineHeight || (editorConfigRuntimeRef.current.line_height ? Math.round(createFontSize * editorConfigRuntimeRef.current.line_height) : 0),
           scrollBeyondLastLine: false,
-          wordWrap: (editorConfig.word_wrap as any) || 'off',
-          tabSize: editorConfig.tab_size || 2,
-          insertSpaces: editorConfig.insert_spaces !== undefined ? editorConfig.insert_spaces : true,
+          wordWrap: (editorConfigRuntimeRef.current.word_wrap as any) || 'off',
+          tabSize: editorConfigRuntimeRef.current.tab_size || 2,
+          insertSpaces: editorConfigRuntimeRef.current.insert_spaces !== undefined ? editorConfigRuntimeRef.current.insert_spaces : true,
           contextmenu: false,
           links: true,
           gotoLocation: {
@@ -691,7 +711,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         };
 
-        editor = monaco.editor.create(containerRef.current, editorOptions);
+        editor = monaco.editor.create(container, editorOptions);
         editorRef.current = editor;
         setEditorInstance(editor);
         const editTarget = createMonacoEditTarget(editor);
@@ -715,7 +735,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         };
         // #endregion
         
-        (containerRef.current as any).__monacoEditor = editor;
+        (container as any).__monacoEditor = editor;
         
         if (model) {
           const { lspDocumentService } = await import('@/tools/lsp/services/LspDocumentService');
@@ -786,7 +806,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                   normalizedPath,
                   targetLine,
                   targetColumn,
-                  { workspacePath }
+                  { workspacePath: workspacePathRuntimeRef.current }
                 );
               } catch (error) {
                 log.error('Cross-file jump failed', error);
@@ -809,7 +829,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           setHasChanges(changed);
           hasChangesRef.current = changed;
           
-          onContentChange?.(newContent, changed);
+          onContentChangeRef.current?.(newContent, changed);
         });
 
         editor.onDidChangeCursorPosition((e) => {
@@ -834,16 +854,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         });
 
         const updateCursorPosition = (e: monaco.editor.IEditorMouseEvent) => {
-          if (e.target.position && containerRef.current?.parentElement?.parentElement) {
+          if (e.target.position && container.parentElement?.parentElement) {
             // containerRef -> .code-editor-tool__content -> .code-editor-tool (has data-monaco-editor)
-            const container = containerRef.current.parentElement.parentElement;
+            const editorContainer = container.parentElement.parentElement;
             const newLine = String(e.target.position.lineNumber);
             const newColumn = String(e.target.position.column);
             
-            if (container.getAttribute('data-cursor-line') !== newLine || 
-                container.getAttribute('data-cursor-column') !== newColumn) {
-              container.setAttribute('data-cursor-line', newLine);
-              container.setAttribute('data-cursor-column', newColumn);
+            if (editorContainer.getAttribute('data-cursor-line') !== newLine || 
+                editorContainer.getAttribute('data-cursor-column') !== newColumn) {
+              editorContainer.setAttribute('data-cursor-line', newLine);
+              editorContainer.setAttribute('data-cursor-column', newColumn);
             }
           }
         };
@@ -871,7 +891,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             if (ctrlDecorationsRef.current.length > 0) {
               try {
                 ctrlDecorationsRef.current = editor!.deltaDecorations(ctrlDecorationsRef.current, []);
-              } catch (err) {
+              } catch (_err) {
                 ctrlDecorationsRef.current = [];
               }
               lastHoverWordRef.current = null;
@@ -913,13 +933,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           log.error('Failed to load EditorReadyManager', err);
         });
         
-        if (!loading && content) {
+        if (!loadingRef.current && contentRef.current) {
           setLspReady(true);
         }
 
       } catch (error) {
         log.error('Failed to initialize editor', error);
-        setError(t('editor.codeEditor.initFailedWithMessage', { message: String(error) }));
+        setError(tRef.current('editor.codeEditor.initFailedWithMessage', { message: String(error) }));
       }
     };
 
@@ -951,9 +971,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         editorRef.current = null;
         setEditorInstance(null);
       }
-      
-      if (containerRef.current) {
-        delete (containerRef.current as any).__monacoEditor;
+
+      if (container) {
+        delete (container as any).__monacoEditor;
       }
 
       monacoModelManager.releaseModel(filePath);
@@ -1403,7 +1423,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         isLoadingContentRef.current = false;
       });
     }
-  }, [applyExternalContentToModel, filePath, detectedLanguage, reportFileMissingFromDisk, t, updateLargeFileMode]);
+  }, [applyExternalContentToModel, filePath, reportFileMissingFromDisk, t, updateLargeFileMode]);
 
   // Save file content
   const saveFileContent = useCallback(async () => {
@@ -1972,7 +1992,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [applyDiskSnapshotToEditor, applyExternalContentToModel, monacoReady, filePath, t]);
+  }, [applyDiskSnapshotToEditor, monacoReady, filePath, t, workspacePath]);
 
   useEffect(() => {
     userLanguageOverrideRef.current = false;

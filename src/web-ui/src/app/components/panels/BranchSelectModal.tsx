@@ -63,9 +63,9 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
 
   useEffect(() => {
     if (isOpen && repositoryPath) {
-      loadBranches();
+      void loadBranches();
     }
-  }, [isOpen, repositoryPath]);
+  }, [isOpen, loadBranches, repositoryPath]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -91,7 +91,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -103,7 +103,7 @@ export const BranchSelectModal: React.FC<BranchSelectModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [repositoryPath, t]);
 
   const filteredBranches = useMemo<SelectableBranch[]>(() => {
     let result = branches;

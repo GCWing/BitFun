@@ -31,8 +31,7 @@ type TemplateDetail =
   | { type: 'mcpServer'; serverId: string }
   | { type: 'skill'; skill: SkillInfo };
 
-const MODEL_SLOTS = ['primary', 'fast'] as const;
-type ModelSlot = typeof MODEL_SLOTS[number];
+type ModelSlot = 'primary' | 'fast';
 
 // MCP tools are registered as "mcp_{server_id}_{tool_name}" (single underscores)
 function isMcpTool(name: string): boolean {
@@ -350,7 +349,11 @@ const TemplateConfigPage: React.FC = () => {
   const toggleCollapse = useCallback((id: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }, []);

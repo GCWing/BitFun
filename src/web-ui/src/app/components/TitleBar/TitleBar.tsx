@@ -135,7 +135,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
     } catch (error) {
       log.error('Failed to open workspace', error);
     }
-  }, [openWorkspace]);
+  }, [openWorkspace, t]);
 
   const handleNewProject = useCallback(() => {
     setShowNewProjectDialog(true);

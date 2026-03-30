@@ -108,6 +108,9 @@ jobs:
       - name: Type-check web UI
         run: pnpm run type-check:web
 
+      - name: Lint web UI
+        run: pnpm run lint:web
+
       - name: Build web UI
         run: pnpm run build:web
 

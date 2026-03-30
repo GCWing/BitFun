@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { 
+import {
   Loader, 
   CheckCircle, 
   AlertCircle, 
@@ -14,7 +14,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import type { FlowImageAnalysisItem } from '../types/flow-chat';
-import type { ImageContext } from '@/shared/types/context';
 import { Button } from '@/component-library';
 import './ImageAnalysisCard.scss';
 
@@ -154,4 +153,3 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
 };
 
 export default ImageAnalysisCard;
-

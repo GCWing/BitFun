@@ -47,7 +47,11 @@ const CreateAgentPage: React.FC = () => {
   const toggleTool = (tool: string) => {
     setSelectedTools((prev) => {
       const next = new Set(prev);
-      next.has(tool) ? next.delete(tool) : next.add(tool);
+      if (next.has(tool)) {
+        next.delete(tool);
+      } else {
+        next.add(tool);
+      }
       return next;
     });
   };

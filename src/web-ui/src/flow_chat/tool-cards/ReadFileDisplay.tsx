@@ -42,7 +42,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     }
     
     return path;
-  }, [toolCall?.input]);
+  }, [t, toolCall?.input]);
 
   const handleOpenInEditor = () => {
     if (filePath !== t('toolCards.readFile.noFileSpecified') && filePath !== t('toolCards.readFile.parsingParams')) {
@@ -55,7 +55,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
       return filePath || t('toolCards.readFile.noFileSpecified');
     }
     return filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
-  }, [filePath]);
+  }, [filePath, t]);
 
   const lineRange = useMemo(() => {
     const start_line = toolCall?.input?.start_line;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { snapshotAPI } from '@/infrastructure/api';
 import type { TurnSnapshot } from '@/infrastructure/api/service-api/SnapshotAPI';
 import { TurnRollbackButton } from './TurnRollbackButton';
@@ -20,11 +20,7 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
   const [loading, setLoading] = useState(false);
   const [currentTurnIndex, setCurrentTurnIndex] = useState<number>(-1);
 
-  useEffect(() => {
-    loadTurns();
-  }, [sessionId]);
-
-  const loadTurns = async () => {
+  const loadTurns = useCallback(async () => {
     if (!sessionId) return;
     
     setLoading(true);
@@ -37,10 +33,14 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId]);
+
+  useEffect(() => {
+    void loadTurns();
+  }, [loadTurns]);
 
   const handleRollbackComplete = () => {
-    loadTurns();
+    void loadTurns();
   };
 
   if (loading) {
@@ -104,4 +104,3 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
     </div>
   );
 };
-

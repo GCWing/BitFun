@@ -506,13 +506,13 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
         silentRefreshing: false
       }));
     }
-  }, [autoLoad, rootPath, enableLazyLoad]);
+  }, [autoLoad, rootPath, enableLazyLoad, loadFileTree, loadFileTreeLazy]);
 
   useEffect(() => {
     if (rootPath && state.fileTree.length > 0) {
-      loadFileTree();
+      void loadFileTree();
     }
-  }, [state.options.showHiddenFiles, state.options.excludePatterns]);
+  }, [state.fileTree.length, state.options.showHiddenFiles, state.options.excludePatterns, rootPath, loadFileTree]);
 
   useEffect(() => {
     if (!rootPath) {

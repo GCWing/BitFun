@@ -66,7 +66,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
   const paramsSource = partialParams || toolCall?.input;
   const questions = useMemo(
     () => normalizeQuestionsFromParams(paramsSource),
-    [partialParams, toolCall?.input]
+    [paramsSource]
   );
 
   const awaitingPayload = isAwaitingQuestionPayload(

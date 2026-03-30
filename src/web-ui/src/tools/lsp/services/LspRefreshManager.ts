@@ -146,7 +146,7 @@ export class LspRefreshManager {
             tokenization.flushTokens();
             return;
           }
-        } catch (e) {
+        } catch (_error) {
           // silent
         }
       }
@@ -188,7 +188,7 @@ export class LspRefreshManager {
         const currentMarkers = monaco.editor.getModelMarkers({ resource: uri });
         monaco.editor.setModelMarkers(model, 'lsp', currentMarkers);
       }
-    } catch (error) {
+    } catch (_error) {
       // silent
     }
   }
@@ -281,4 +281,3 @@ export const lspRefreshManager = LspRefreshManager.getInstance();
 if (typeof window !== 'undefined') {
   (window as any).lspRefreshManager = lspRefreshManager;
 }
-

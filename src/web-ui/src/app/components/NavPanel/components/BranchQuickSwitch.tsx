@@ -75,9 +75,9 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
 
   useEffect(() => {
     if (isOpen && repositoryPath) {
-      loadBranches();
+      void loadBranches();
     }
-  }, [isOpen, repositoryPath]);
+  }, [isOpen, loadBranches, repositoryPath]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -113,7 +113,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     setIsLoading(true);
     try {
       const cachedState = gitStateManager.getState(repositoryPath);
@@ -142,7 +142,7 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [repositoryPath]);
 
   const filteredBranches = useMemo(() => {
     let result = branches;

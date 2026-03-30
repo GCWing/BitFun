@@ -2,7 +2,7 @@
  * MiniAppScene — standalone scene tab for a single MiniApp.
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -45,7 +45,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
     };
   }, [appId, openApp, closeApp]);
 
-  const load = async (id: string) => {
+  const load = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -58,13 +58,13 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [themeType, workspacePath]);
 
   useEffect(() => {
     if (appId) {
       void load(appId);
     }
-  }, [appId, themeType, workspacePath]);
+  }, [appId, load]);
 
   useEffect(() => {
     const tabId = `miniapp:${appId}` as SceneTabId;
@@ -107,7 +107,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
       unlistenRestarted();
       unlistenDeleted();
     };
-  }, [appId, closeScene]);
+  }, [appId, closeScene, load]);
 
   const handleReload = () => {
     if (appId) {

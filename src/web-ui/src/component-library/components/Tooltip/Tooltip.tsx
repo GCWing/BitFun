@@ -173,8 +173,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
     if (followCursor && mousePosition) {
-      let left = mousePosition.x + CURSOR_OFFSET_X;
-      let top = mousePosition.y + CURSOR_OFFSET_Y;
+      const left = mousePosition.x + CURSOR_OFFSET_X;
+      const top = mousePosition.y + CURSOR_OFFSET_Y;
       const pos = applyBoundaryConstraints({ top, left }, tooltipRect, viewportPadding);
       setActualPlacement('bottom');
       setPosition(pos);
@@ -225,7 +225,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }, delay);
   };
 
-  const hideTooltip = () => {
+  const hideTooltip = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
@@ -240,7 +240,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       latestMousePositionRef.current = null;
       setMousePosition(null);
     }
-  };
+  }, [followCursor]);
 
   const scheduleHideTooltip = useCallback(() => {
     if (!interactive) {
@@ -256,7 +256,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       hideTimeoutRef.current = null;
       hideTooltip();
     }, 150);
-  }, [interactive]);
+  }, [hideTooltip, interactive]);
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -352,7 +352,6 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const triggerElement = React.cloneElement(children as React.ReactElement<any>, {
     ref: handleTriggerRef,
     onMouseEnter: handleMouseEnter,

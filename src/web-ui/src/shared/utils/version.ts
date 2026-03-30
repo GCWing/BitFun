@@ -56,7 +56,7 @@ export function formatBuildDate(buildDate: string): string {
       second: '2-digit',
       hour12: false
     });
-  } catch (e) {
+  } catch (_error) {
     return buildDate;
   }
 }

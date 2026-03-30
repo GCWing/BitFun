@@ -175,7 +175,7 @@ export function useGitAdvanced(options: UseGitAdvancedOptions): UseGitAdvancedRe
       log.error('Failed to list stashes', { repositoryPath, error: err });
       return [];
     }
-  }, [repositoryPath, log]);
+  }, [repositoryPath]);
 
   /**
    * Cherry-pick a commit.

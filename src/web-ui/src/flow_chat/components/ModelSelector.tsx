@@ -290,7 +290,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentMode, loading]);
+  }, [currentMode, loading, sessionId]);
   
   if (availableModels.length === 0) {
     return null;

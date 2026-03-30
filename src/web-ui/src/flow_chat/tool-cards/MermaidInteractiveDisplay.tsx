@@ -50,7 +50,7 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
   const { t } = useTranslation('flow-chat');
   const { status, toolCall, toolResult } = toolItem;
 
-  const getInputData = () => {
+  const getInputData = useCallback(() => {
     if (!toolCall?.input) return null;
     
     const isEarlyDetection = toolCall.input._early_detection === true;
@@ -64,9 +64,9 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
     if (inputKeys.length === 0) return null;
     
     return toolCall.input;
-  };
+  }, [toolCall?.input]);
 
-  const getResultData = () => {
+  const getResultData = useCallback(() => {
     if (!toolResult?.result) return null;
     
     try {
@@ -78,7 +78,7 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
       log.error('Failed to parse result', e);
       return null;
     }
-  };
+  }, [toolResult?.result]);
 
   const handleOpenMermaid = useCallback(() => {
     // Read the latest data from store first, fallback to props if unavailable.
@@ -139,7 +139,7 @@ export const MermaidInteractiveDisplay: React.FC<ToolCardProps> = ({
         detail: eventData
       }));
     }, 100);
-  }, [toolCall, toolResult]);
+  }, [getInputData, getResultData, t, toolCall, toolItem.id]);
 
   const inputData = getInputData();
 

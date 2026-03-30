@@ -114,7 +114,7 @@ export const useCurrentModelConfig = (initialConfigId?: string) => {
         setCurrentConfig(updatedConfig);
       }
     }
-  }, [configs, initialConfigId]);
+  }, [configs, currentConfig, initialConfigId]);
 
   return {
     currentConfig,

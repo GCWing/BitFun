@@ -27,6 +27,7 @@
 function normalizeAbsoluteCursorPositions(content: string): string {
   // Matches ESC [ <optional digits> ; <optional digits> H|f
   // e.g. ESC[14;35H  ESC[18;1H  ESC[5;1H  ESC[H  ESC[;1H
+  // eslint-disable-next-line no-control-regex -- ESC sequences are intentional terminal control codes.
   return content.replace(/\x1b\[\d*;?\d*[Hf]/g, '\r\n');
 }
 

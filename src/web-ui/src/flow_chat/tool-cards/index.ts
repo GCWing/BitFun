@@ -448,15 +448,19 @@ export function getAllToolNames(): string[] {
 export {
   BaseToolCard,
   ToolCardHeader,
+} from './BaseToolCard';
+export {
   ToolCardHeaderLayoutContext,
   useToolCardHeaderLayout,
-} from './BaseToolCard';
+} from './ToolCardHeaderLayoutContext';
 export type {
   BaseToolCardProps,
   ToolCardHeaderProps,
+} from './BaseToolCard';
+export type {
   ToolCardHeaderLayoutContextValue,
   ToolCardHeaderAffordanceKind,
-} from './BaseToolCard';
+} from './ToolCardHeaderLayoutContext';
 export { PlanDisplay } from './CreatePlanDisplay';
 export type { PlanDisplayProps } from './CreatePlanDisplay';
 

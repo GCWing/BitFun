@@ -188,6 +188,13 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   const isVisibleRef = useRef(true);
   const wasVisibleRef = useRef(false);
   const lastBackendSizeRef = useRef<{ cols: number; rows: number } | null>(null);
+  const autoFocusRef = useRef(autoFocus);
+  const onDataRef = useRef(onData);
+  const onBinaryRef = useRef(onBinary);
+  const onTitleChangeRef = useRef(onTitleChange);
+  const onResizeRef = useRef(onResize);
+  const onReadyRef = useRef(onReady);
+  const onPasteRef = useRef(onPaste);
   const [isReady, setIsReady] = useState(false);
   const currentTheme = themeService.getCurrentTheme();
   const initialFontWeights = getXtermFontWeights(currentTheme.type);
@@ -203,6 +210,18 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       ...options.theme,
     },
   };
+  const mergedOptionsRef = useRef(mergedOptions);
+  const initialFontWeightsRef = useRef(initialFontWeights);
+
+  autoFocusRef.current = autoFocus;
+  onDataRef.current = onData;
+  onBinaryRef.current = onBinary;
+  onTitleChangeRef.current = onTitleChange;
+  onResizeRef.current = onResize;
+  onReadyRef.current = onReady;
+  onPasteRef.current = onPaste;
+  mergedOptionsRef.current = mergedOptions;
+  initialFontWeightsRef.current = initialFontWeights;
 
   // Force refresh for rendering consistency.
   const forceRefresh = useCallback((terminal: XTerm) => {
@@ -244,8 +263,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     
     lastBackendSizeRef.current = { cols, rows };
     
-    onResize?.(cols, rows);
-  }, [onResize]);
+    onResizeRef.current?.(cols, rows);
+  }, []);
 
   // Post-resize fixups (refresh and cursor visibility).
   const handleResizeComplete = useCallback(() => {
@@ -308,6 +327,17 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       forceRefresh(terminal);
     }
   }, [forceRefresh]);
+  const doXtermResizeRef = useRef(doXtermResize);
+  const doBackendResizeRef = useRef(doBackendResize);
+  const handleResizeCompleteRef = useRef(handleResizeComplete);
+  const fitRef = useRef(fit);
+  const forceRefreshRef = useRef(forceRefresh);
+
+  doXtermResizeRef.current = doXtermResize;
+  doBackendResizeRef.current = doBackendResize;
+  handleResizeCompleteRef.current = handleResizeComplete;
+  fitRef.current = fit;
+  forceRefreshRef.current = forceRefresh;
 
   useImperativeHandle(ref, () => ({
     write: (data: string) => {
@@ -342,19 +372,20 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const container = containerRef.current;
 
     // Let fit() determine size; backend starts at 80x24 and syncs via resize.
     const terminal = new XTerm({
-      fontSize: mergedOptions.fontSize,
-      fontFamily: mergedOptions.fontFamily,
-      fontWeight: initialFontWeights.fontWeight,
-      fontWeightBold: initialFontWeights.fontWeightBold,
-      lineHeight: mergedOptions.lineHeight,
-      minimumContrastRatio: mergedOptions.minimumContrastRatio,
-      cursorStyle: mergedOptions.cursorStyle,
-      cursorBlink: mergedOptions.cursorBlink,
-      scrollback: mergedOptions.scrollback,
-      theme: mergedOptions.theme,
+      fontSize: mergedOptionsRef.current.fontSize,
+      fontFamily: mergedOptionsRef.current.fontFamily,
+      fontWeight: initialFontWeightsRef.current.fontWeight,
+      fontWeightBold: initialFontWeightsRef.current.fontWeightBold,
+      lineHeight: mergedOptionsRef.current.lineHeight,
+      minimumContrastRatio: mergedOptionsRef.current.minimumContrastRatio,
+      cursorStyle: mergedOptionsRef.current.cursorStyle,
+      cursorBlink: mergedOptionsRef.current.cursorBlink,
+      scrollback: mergedOptionsRef.current.scrollback,
+      theme: mergedOptionsRef.current.theme,
       // Keep the interactive terminal on the opaque WebGL path. Transparent
       // glyph atlases use a different blending/clearing strategy and are much
       // more prone to artifacts on colored cell backgrounds.
@@ -401,7 +432,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
 
-    terminal.open(containerRef.current);
+    terminal.open(container);
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -425,24 +456,24 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     const resizeDebouncer = new TerminalResizeDebouncer({
       getTerminal: () => terminalRef.current,
       isVisible: () => isVisibleRef.current,
-      onXtermResize: doXtermResize,
-      onBackendResize: doBackendResize,
+      onXtermResize: (cols, rows) => doXtermResizeRef.current(cols, rows),
+      onBackendResize: (cols, rows) => doBackendResizeRef.current(cols, rows),
       onFlush: () => {
         if (terminalRef.current) {
-          forceRefresh(terminalRef.current);
+          forceRefreshRef.current(terminalRef.current);
         }
       },
-      onResizeComplete: handleResizeComplete,
+      onResizeComplete: () => handleResizeCompleteRef.current(),
     });
     resizeDebouncerRef.current = resizeDebouncer;
 
     requestAnimationFrame(() => {
-      fit(true);
+      fitRef.current(true);
 
       setIsReady(true);
-      onReady?.(terminal);
+      onReadyRef.current?.(terminal);
 
-      if (autoFocus) {
+      if (autoFocusRef.current) {
         terminal.focus();
       }
     });
@@ -460,11 +491,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
             if (!terminalRef.current) return;
 
             remeasureTerminal(terminalRef.current);
-            fit(true);
+            fitRef.current(true);
 
             requestAnimationFrame(() => {
               if (!terminalRef.current) return;
-              forceRefresh(terminalRef.current);
+              forceRefreshRef.current(terminalRef.current);
               scrollToBottomIfNeeded(terminalRef.current);
             });
           });
@@ -473,15 +504,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     }
 
     const dataDisposable = terminal.onData((data) => {
-      onData?.(data);
+      onDataRef.current?.(data);
     });
 
     const binaryDisposable = terminal.onBinary((data) => {
-      onBinary?.(data);
+      onBinaryRef.current?.(data);
     });
 
     const titleDisposable = terminal.onTitleChange((title) => {
-      onTitleChange?.(title);
+      onTitleChangeRef.current?.(title);
     });
 
     // Intercept paste (Ctrl+V / Ctrl+Shift+V).
@@ -494,14 +525,14 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
             const text = await navigator.clipboard.readText();
             if (!text) return;
 
-            if (onPaste) {
-              const allowed = await onPaste(text);
+            if (onPasteRef.current) {
+              const allowed = await onPasteRef.current(text);
               if (!allowed) {
                 return;
               }
             }
 
-            onData?.(text);
+            onDataRef.current?.(text);
           } catch (err) {
             log.error('Paste failed', err);
           }
@@ -515,10 +546,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
     const resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(() => {
-        fit(false);
+        fitRef.current(false);
       });
     });
-    resizeObserver.observe(containerRef.current);
+    resizeObserver.observe(container);
     resizeObserverRef.current = resizeObserver;
 
     // On visibility change, flush pending resize and refresh.
@@ -532,7 +563,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
         requestAnimationFrame(() => {
           resizeDebouncerRef.current?.flush();
           
-          fit(true);
+          fitRef.current(true);
           
           requestAnimationFrame(() => {
             const term = terminalRef.current;
@@ -540,7 +571,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
               term.refresh(0, term.rows - 1);
               clearTextureAtlas(term);
               scrollToBottomIfNeeded(term);
-              if (autoFocus) {
+              if (autoFocusRef.current) {
                 term.focus();
               }
             }
@@ -551,7 +582,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     }, {
       threshold: 0.1
     });
-    intersectionObserver.observe(containerRef.current);
+    intersectionObserver.observe(container);
     intersectionObserverRef.current = intersectionObserver;
 
     return () => {
@@ -596,6 +627,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     mergedOptions.cursorStyle,
     mergedOptions.cursorBlink,
     mergedOptions.scrollback,
+    mergedOptions.theme,
     isReady,
     fit,
   ]);

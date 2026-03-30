@@ -28,10 +28,12 @@ import NotificationButton from '../../TitleBar/NotificationButton';
 import { AboutDialog } from '../../AboutDialog';
 import { RemoteConnectDialog } from '../../RemoteConnectDialog';
 import {
-  getRemoteConnectDisclaimerAgreed,
-  setRemoteConnectDisclaimerAgreed,
   RemoteConnectDisclaimerContent,
 } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
+import {
+  getRemoteConnectDisclaimerAgreed,
+  setRemoteConnectDisclaimerAgreed,
+} from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 import { MERMAID_INTERACTIVE_EXAMPLE } from '@/flow_chat/constants/mermaidExamples';
 
 const PersistentFooterActions: React.FC = () => {

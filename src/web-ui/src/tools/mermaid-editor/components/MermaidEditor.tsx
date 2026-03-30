@@ -36,6 +36,7 @@ const detectDiagramType = (code: string): MermaidDiagramContext['diagramType'] =
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
 
+// eslint-disable-next-line no-control-regex -- Exported file names must strip ASCII control characters.
 const sanitizeFileName = (name: string) => name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'diagram';
 
 const createTimestampSuffix = () => {
@@ -245,7 +246,7 @@ export const MermaidEditor: React.FC<MermaidEditorProps> = React.memo(({
     } finally {
       setLoading(false);
     }
-  }, [isDirty, onSave, sourceCode, setLoading, setError]);
+  }, [isDirty, onSave, sourceCode, setLoading, setError, t]);
 
   const handleExport = useCallback(async (format: string) => {
     const loadingCtrl = notificationService.loading({
@@ -390,7 +391,7 @@ export const MermaidEditor: React.FC<MermaidEditorProps> = React.memo(({
       setIsFixing(false);
       setFixProgress({ current: 0, total: 0 });
     }
-  }, [error, sourceCode, isFixing, setSourceCode, setError, onSave]);
+  }, [error, sourceCode, isFixing, setSourceCode, setError, onSave, t]);
 
   const handleToolbarSave = useCallback((editedData: any) => {
     if (floatingToolbar.type === 'node') {

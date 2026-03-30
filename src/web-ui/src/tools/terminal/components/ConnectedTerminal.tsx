@@ -23,6 +23,7 @@ const MULTILINE_PASTE_THRESHOLD = 1;
  * ConPTY sends these after resize to reposition the cursor in its own coordinate
  * system, which diverges from xterm.js coordinates after history replay.
  */
+// eslint-disable-next-line no-control-regex -- ESC-based cursor reposition sequences are part of terminal protocol parsing.
 const CURSOR_POS_RE = /^\x1b\[(\d+);(\d+)H$/;
 
 export interface ConnectedTerminalProps {
@@ -177,7 +178,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
     setExitCode(code ?? null);
     setIsExited(true);
     onExit?.(code);
-  }, [sessionId, onExit]);
+  }, [onExit]);
 
   const handleError = useCallback((message: string) => {
     log.error('Terminal error', { sessionId, message });
@@ -212,7 +213,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
         log.error('Write failed', { sessionId, error: err });
       });
     }
-  }, [write, isExited]);
+  }, [write, isExited, sessionId]);
 
   const handleResize = useCallback((cols: number, rows: number) => {
     const lastSize = lastSentSizeRef.current;
@@ -238,7 +239,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
       log.error('Resize failed', { sessionId, cols, rows, error: err });
       lastSentSizeRef.current = null;
     });
-  }, [resize]);
+  }, [resize, sessionId]);
 
   const handleTitleChange = useCallback((newTitle: string) => {
     setTitle(newTitle);
@@ -301,7 +302,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
       log.error('Failed to close', { sessionId, error: err });
     });
     onClose?.();
-  }, [close, onClose]);
+  }, [close, onClose, sessionId]);
 
   const handleRetry = useCallback(() => {
     refresh().catch(err => {

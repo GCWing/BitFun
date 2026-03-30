@@ -20,7 +20,7 @@ let _useNobleFallback: boolean | null = null;
 async function supportsWebCryptoX25519(): Promise<boolean> {
   if (_useNobleFallback !== null) return !_useNobleFallback;
   try {
-    const kp = await crypto.subtle.generateKey(
+    await crypto.subtle.generateKey(
       { name: 'X25519' } as any,
       true,
       ['deriveKey'],

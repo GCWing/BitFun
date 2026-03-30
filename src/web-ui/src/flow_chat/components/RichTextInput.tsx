@@ -32,6 +32,73 @@ export interface RichTextInputProps {
   onMentionStateChange?: (state: MentionState) => void;
 }
 
+function getContextDisplayName(context: ContextItem): string {
+  switch (context.type) {
+    case 'file': return context.fileName;
+    case 'directory': return context.directoryName;
+    case 'code-snippet': return `${context.fileName}:${context.startLine}-${context.endLine}`;
+    case 'image': return context.imageName;
+    case 'terminal-command': return context.command;
+    case 'git-ref': return context.refValue;
+    case 'url': return context.title || context.url;
+    case 'mermaid-node': return context.nodeText;
+    case 'mermaid-diagram': return context.diagramTitle || 'Mermaid diagram';
+    case 'web-element': return context.tagName;
+    default: {
+      const exhaustive: never = context;
+      return String(exhaustive);
+    }
+  }
+}
+
+function getContextTagFormat(context: ContextItem): string {
+  switch (context.type) {
+    case 'file': return `#file:${context.fileName}`;
+    case 'directory': return `#dir:${context.directoryName}`;
+    case 'code-snippet': return `#code:${context.fileName}:${context.startLine}-${context.endLine}`;
+    case 'image': return `#img:${context.imageName}`;
+    case 'terminal-command': return `#cmd:${context.command}`;
+    case 'git-ref': return `#git:${context.refValue}`;
+    case 'url': return `#link:${context.title || context.url}`;
+    case 'mermaid-node': return `#chart:${context.nodeText}`;
+    case 'mermaid-diagram': return `#mermaid:${context.diagramTitle || 'Mermaid diagram'}`;
+    case 'web-element': return `#element:${context.tagName}`;
+    default: {
+      const exhaustive: never = context;
+      return String(exhaustive);
+    }
+  }
+}
+
+function getContextFullPath(context: ContextItem): string {
+  switch (context.type) {
+    case 'file':
+      return context.filePath;
+    case 'directory':
+      return context.directoryPath + (context.recursive ? ' (recursive)' : '');
+    case 'code-snippet':
+      return `${context.filePath} (lines ${context.startLine}-${context.endLine})`;
+    case 'image':
+      return context.imagePath;
+    case 'terminal-command':
+      return context.workingDirectory ? `${context.command} @ ${context.workingDirectory}` : context.command;
+    case 'git-ref':
+      return `Git ${context.refType}: ${context.refValue}`;
+    case 'url':
+      return context.url;
+    case 'mermaid-node':
+      return context.diagramTitle ? `${context.diagramTitle} - ${context.nodeText}` : context.nodeText;
+    case 'mermaid-diagram':
+      return `Mermaid diagram${context.diagramTitle ? ': ' + context.diagramTitle : ''} (${context.diagramCode.length} chars)`;
+    case 'web-element':
+      return context.path;
+    default: {
+      const exhaustive: never = context;
+      return String(exhaustive);
+    }
+  }
+}
+
 export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps>(({
   value,
   onChange,
@@ -56,78 +123,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
   const isLocalChangeRef = useRef(false);
 
-  // Display name without the # prefix
-  const getContextDisplayName = (context: ContextItem): string => {
-    switch (context.type) {
-      case 'file': return context.fileName;
-      case 'directory': return context.directoryName;
-      case 'code-snippet': return `${context.fileName}:${context.startLine}-${context.endLine}`;
-      case 'image': return context.imageName;
-      case 'terminal-command': return context.command;
-      case 'git-ref': return context.refValue;
-      case 'url': return context.title || context.url;
-      case 'mermaid-node': return context.nodeText;
-      case 'mermaid-diagram': return context.diagramTitle || 'Mermaid diagram';
-      case 'web-element': return context.tagName;
-      default:
-        // TypeScript exhaustiveness check
-        const _exhaustive: never = context;
-        return String(_exhaustive);
-    }
-  };
-
-  // # tag format for text extraction
-  const getContextTagFormat = (context: ContextItem): string => {
-    switch (context.type) {
-      case 'file': return `#file:${context.fileName}`;
-      case 'directory': return `#dir:${context.directoryName}`;
-      case 'code-snippet': return `#code:${context.fileName}:${context.startLine}-${context.endLine}`;
-      case 'image': return `#img:${context.imageName}`;
-      case 'terminal-command': return `#cmd:${context.command}`;
-      case 'git-ref': return `#git:${context.refValue}`;
-      case 'url': return `#link:${context.title || context.url}`;
-      case 'mermaid-node': return `#chart:${context.nodeText}`;
-      case 'mermaid-diagram': return `#mermaid:${context.diagramTitle || 'Mermaid diagram'}`;
-      case 'web-element': return `#element:${context.tagName}`;
-      default:
-        // TypeScript exhaustiveness check
-        const _exhaustive: never = context;
-        return String(_exhaustive);
-    }
-  };
-
-  // Full context path for tooltips
-  const getContextFullPath = (context: ContextItem): string => {
-    switch (context.type) {
-      case 'file': 
-        return context.filePath;
-      case 'directory': 
-        return context.directoryPath + (context.recursive ? ' (recursive)' : '');
-      case 'code-snippet': 
-        return `${context.filePath} (lines ${context.startLine}-${context.endLine})`;
-      case 'image': 
-        return context.imagePath;
-      case 'terminal-command': 
-        return context.workingDirectory ? `${context.command} @ ${context.workingDirectory}` : context.command;
-      case 'git-ref': 
-        return `Git ${context.refType}: ${context.refValue}`;
-      case 'url': 
-        return context.url;
-      case 'mermaid-node': 
-        return context.diagramTitle ? `${context.diagramTitle} - ${context.nodeText}` : context.nodeText;
-      case 'mermaid-diagram': 
-        return `Mermaid diagram${context.diagramTitle ? ': ' + context.diagramTitle : ''} (${context.diagramCode.length} chars)`;
-      case 'web-element':
-        return context.path;
-      default:
-        // TypeScript exhaustiveness check
-        const _exhaustive: never = context;
-        return String(_exhaustive);
-    }
-  };
-
   // Create tag element with pill style
-  const createTagElement = (context: ContextItem): HTMLSpanElement => {
+  const createTagElement = useCallback((context: ContextItem): HTMLSpanElement => {
     const tag = document.createElement('span');
     tag.className = 'rich-text-tag-pill';
     tag.contentEditable = 'false';
@@ -156,7 +153,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     tag.appendChild(remove);
     
     return tag;
-  };
+  }, [onRemoveContext]);
 
   /** Map textContent offsets to a DOM Range to replace only the @ span. */
   const getRangeByTextOffsets = useCallback((root: Node, start: number, end: number): Range | null => {
@@ -197,7 +194,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   }, []);
 
   // Extract plain text including # tag format
-  const extractTextContent = (): string => {
+  const extractTextContent = useCallback((): string => {
     if (!internalRef.current) return '';
     
     let text = '';
@@ -220,7 +217,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     
     internalRef.current.childNodes.forEach(traverse);
     return sanitizeText(text).trim();
-  };
+  }, [internalRef]);
 
   // Detect @ mention
   const detectMention = useCallback(() => {
@@ -309,6 +306,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     // Strip zero-width and control characters that WebKit/WebView may inject
     // (e.g. from dead-key sequences, function keys, arrow keys, etc.)
     // Preserve normal whitespace: space (0x20), tab (0x09), newline (0x0A), carriage return (0x0D).
+    // eslint-disable-next-line no-control-regex -- This intentionally removes specific ASCII control-character ranges.
     return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200F\u2028\u2029\uFEFF\u2060\u00AD]/g, '');
   };
 
@@ -404,7 +402,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     requestAnimationFrame(() => {
       detectMention();
     });
-  }, [contexts, onChange, detectMention, internalRef]);
+  }, [contexts, detectMention, extractTextContent, getCursorOffset, internalRef, onChange, setCursorOffset]);
 
   const handleBeforeInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     const inputEvent = e.nativeEvent as InputEvent;
@@ -456,6 +454,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
+<<<<<<< HEAD
   }, [onLargePaste, onMentionStateChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -486,7 +485,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
 
     onKeyDown?.(e);
-  }, [onKeyDown, onRemoveContext]);
+  }, [internalRef, onKeyDown, onRemoveContext]);
 
   // Insert tag at cursor
   const insertTagAtCursor = useCallback((context: ContextItem) => {
@@ -518,7 +517,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       internalRef.current.appendChild(space);
       handleInput();
     }
-  }, [createTagElement, handleInput]);
+  }, [createTagElement, handleInput, internalRef]);
 
   // Replace @ mention span with a tag, preserving existing tags
   const insertTagReplacingMention = useCallback((context: ContextItem) => {
@@ -558,7 +557,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     insertTagAtCursor(context);
     mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
     onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-  }, [createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, onMentionStateChange]);
+  }, [createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, internalRef, onMentionStateChange]);
 
   /** Insert @ at caret and open the file/folder mention picker (e.g. from ChatInput + menu). */
   const openMention = useCallback(() => {
@@ -646,7 +645,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         editor.focus();
       });
     }
-  }, [value]);
+  }, [extractTextContent, internalRef, value]);
 
   // Remove tags for deleted contexts
   useEffect(() => {

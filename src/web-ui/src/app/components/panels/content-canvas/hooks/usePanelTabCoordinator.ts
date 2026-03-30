@@ -59,7 +59,7 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
     if (!isInitializedRef.current) {
       isInitializedRef.current = true;
     }
-  }, [state?.layout?.rightPanelCollapsed, toggleRightPanel]);
+  }, [state?.layout, toggleRightPanel]);
 
   /**
    * Expand right panel (with debounce and state checks).

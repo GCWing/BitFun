@@ -32,7 +32,7 @@ const ScrollBreadcrumb: React.FC<ScrollBreadcrumbProps> = ({ containerRef, works
       
       const expandedDirNodes = treeContainer.querySelectorAll('[data-is-directory="true"][data-is-expanded="true"]');
       
-      let activeDirs: { path: string; top: number }[] = [];
+      const activeDirs: { path: string; top: number }[] = [];
       
       expandedDirNodes.forEach((node) => {
         const rect = node.getBoundingClientRect();

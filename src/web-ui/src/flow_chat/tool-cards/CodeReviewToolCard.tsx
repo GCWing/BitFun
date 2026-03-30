@@ -354,7 +354,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         )}
       </div>
     );
-  }, [reviewData, isExpanded, t]);
+  }, [reviewData, t]);
 
   const normalizedStatus = status === 'analyzing' ? 'running' : status;
 

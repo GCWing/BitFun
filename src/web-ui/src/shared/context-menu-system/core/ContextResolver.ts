@@ -55,18 +55,16 @@ export class ContextResolver {
     };
 
     
-    let context: MenuContext | null = null;
-    if (context = this.resolveSelection(baseContext)) {
-    } else if (context = this.resolveTerminal(baseContext)) {
-    } else if (context = this.resolveFileNode(baseContext)) {
-    } else if (context = this.resolveEditor(baseContext)) {
-    } else if (context = this.resolveFlowChat(baseContext)) {
-    } else if (context = this.resolveTab(baseContext)) {
-    } else if (context = this.resolvePanelHeader(baseContext)) {
-    } else if (context = this.resolveCustom(baseContext)) {
-    } else {
-      context = this.resolveEmptySpace(baseContext);
-    }
+    const context =
+      this.resolveSelection(baseContext) ??
+      this.resolveTerminal(baseContext) ??
+      this.resolveFileNode(baseContext) ??
+      this.resolveEditor(baseContext) ??
+      this.resolveFlowChat(baseContext) ??
+      this.resolveTab(baseContext) ??
+      this.resolvePanelHeader(baseContext) ??
+      this.resolveCustom(baseContext) ??
+      this.resolveEmptySpace(baseContext);
 
     return context;
   }
@@ -296,7 +294,7 @@ export class ContextResolver {
                 };
               }
             }
-          } catch (e) {
+          } catch (_error) {
             
           }
           

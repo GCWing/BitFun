@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { ChatProvider, useAIInitialization } from '../infrastructure';
-import { ViewModeProvider } from '../infrastructure/contexts/ViewModeContext';
+import { ViewModeProvider } from '../infrastructure/contexts/ViewModeProvider';
 import { SSHRemoteProvider } from '../features/ssh-remote';
 import AppLayout from './layout/AppLayout';
 import { useCurrentModelConfig } from '../hooks/useModelConfigs';

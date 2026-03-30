@@ -65,7 +65,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
     } finally {
       setBranchLoading(false);
     }
-  }, [workspacePath]);
+  }, [selectedBranchName, workspacePath]);
 
   const loadCommits = useCallback(
     async (branchRef: string | null) => {
@@ -160,7 +160,11 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
   const toggleCommitExpand = useCallback((hash: string) => {
     setExpandedCommits(prev => {
       const next = new Set(prev);
-      next.has(hash) ? next.delete(hash) : next.add(hash);
+      if (next.has(hash)) {
+        next.delete(hash);
+      } else {
+        next.add(hash);
+      }
       return next;
     });
   }, []);
@@ -193,7 +197,7 @@ const BranchesView: React.FC<BranchesViewProps> = ({ workspacePath }) => {
         setIsResetting(false);
       }
     },
-    [workspacePath, notification, t, selectedBranchName, loadCommits]
+    [workspacePath, notification, t, selectedBranchName, loadBranches, loadCommits]
   );
 
   if (!workspacePath) {

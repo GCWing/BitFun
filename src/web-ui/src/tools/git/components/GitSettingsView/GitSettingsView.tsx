@@ -100,7 +100,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [repositoryPath, t]);
+  }, [t]);
 
   const saveConfig = useCallback(async () => {
     setSaving(true);
@@ -118,7 +118,7 @@ const GitSettingsView: React.FC<GitSettingsViewProps> = ({
     } finally {
       setSaving(false);
     }
-  }, [config, t]);
+  }, [t]);
 
   const updateUserConfig = useCallback((field: 'name' | 'email', value: string) => {
     setConfig(prev => ({

@@ -127,12 +127,13 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
       case 'switchToTab5':
       case 'switchToTab6':
       case 'switchToTab7':
-      case 'switchToTab8':
+      case 'switchToTab8': {
         const tabIndex = parseInt(action.replace('switchToTab', '')) - 1;
         if (visibleTabs[tabIndex]) {
           switchToTab(visibleTabs[tabIndex].id, activeGroupId);
         }
         break;
+      }
         
       case 'switchToLastTab':
         if (visibleTabs.length > 0) {
@@ -142,6 +143,7 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     }
   }, [
     activeGroupId,
+    handleCloseWithDirtyCheck,
     primaryGroup,
     secondaryGroup,
     layout,

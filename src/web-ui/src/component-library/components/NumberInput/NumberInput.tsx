@@ -56,18 +56,18 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
     const inputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-      if (!isEditing) {
-        setInputValue(formatValue(value));
-      }
-    }, [value, isEditing, precision]);
-
     const formatValue = useCallback(
       (val: number) => {
         return precision > 0 ? val.toFixed(precision) : String(Math.round(val));
       },
       [precision]
     );
+
+    useEffect(() => {
+      if (!isEditing) {
+        setInputValue(formatValue(value));
+      }
+    }, [value, isEditing, formatValue]);
 
     const clampValue = useCallback(
       (val: number) => Math.min(max, Math.max(min, val)),
@@ -293,4 +293,3 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
 );
 
 NumberInput.displayName = 'NumberInput';
-

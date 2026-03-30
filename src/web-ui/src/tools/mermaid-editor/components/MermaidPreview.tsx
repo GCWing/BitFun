@@ -306,7 +306,7 @@ export const MermaidPreview = React.memo(forwardRef<MermaidPreviewRef, MermaidPr
     } finally {
       setIsLoading(false);
     }
-  }, [sourceCode, transform.translateX, transform.translateY, transform.scale, isDragging, containerRef, applyBaseStyles, setupInteraction, controls]);
+  }, [sourceCode, transform.translateX, transform.translateY, transform.scale, isDragging, containerRef, applyBaseStyles, setupInteraction, controls, t]);
 
   useEffect(() => {
     if (lastSourceCodeRef.current !== null && lastSourceCodeRef.current === sourceCode) {

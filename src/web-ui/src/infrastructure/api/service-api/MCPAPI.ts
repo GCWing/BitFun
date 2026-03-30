@@ -79,13 +79,13 @@ export interface McpUiResourceCsp {
 /** Sandbox permissions requested by the UI resource (aligned with VSCode). */
 export interface McpUiResourcePermissions {
   /** Request camera access. */
-  camera?: {};
+  camera?: Record<string, never>;
   /** Request microphone access. */
-  microphone?: {};
+  microphone?: Record<string, never>;
   /** Request geolocation access. */
-  geolocation?: {};
+  geolocation?: Record<string, never>;
   /** Request clipboard write access. */
-  clipboardWrite?: {};
+  clipboardWrite?: Record<string, never>;
 }
 
 // ==================== MCP App ui/message types ====================

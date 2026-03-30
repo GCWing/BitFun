@@ -161,7 +161,7 @@ export class MonacoHelper {
     
     try {
       filePath = decodeURIComponent(filePath);
-    } catch (e) {
+    } catch (_error) {
       log.debug('Failed to decode URI', { filePath });
     }
 
@@ -228,7 +228,7 @@ export class MonacoHelper {
 
     try {
       return model.getLineContent(lineNumber);
-    } catch (e) {
+    } catch (_error) {
       log.debug('Failed to get line content', { lineNumber });
       return null;
     }
@@ -257,7 +257,7 @@ export class MonacoHelper {
         endLineNumber: contextEnd,
         endColumn: model.getLineMaxColumn(contextEnd)
       });
-    } catch (e) {
+    } catch (_error) {
       log.debug('Failed to get context code');
       return null;
     }

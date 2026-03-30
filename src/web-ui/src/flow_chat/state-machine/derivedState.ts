@@ -189,19 +189,21 @@ function getProgressBarLabel(
     case ProcessingPhase.THINKING:
       return 'Thinking...';
     
-    case ProcessingPhase.STREAMING:
+    case ProcessingPhase.STREAMING: {
       const chars = context.stats.textCharsGenerated;
       const duration = context.stats.startTime 
         ? ((Date.now() - context.stats.startTime) / 1000).toFixed(1)
         : '0';
       return `Generating response (${chars} chars) · ${duration}s`;
+    }
 
     case ProcessingPhase.FINALIZING:
       return 'Finalizing response...';
     
-    case ProcessingPhase.TOOL_CALLING:
+    case ProcessingPhase.TOOL_CALLING: {
       const toolsExecuted = context.stats.toolsExecuted;
       return `Executing tools... (${toolsExecuted} completed)`;
+    }
     
     case ProcessingPhase.TOOL_CONFIRMING:
       return 'Waiting for tool confirmation...';
@@ -253,4 +255,3 @@ function detectErrorType(errorMessage: string): SessionDerivedState['errorType']
   
   return 'unknown';
 }
-

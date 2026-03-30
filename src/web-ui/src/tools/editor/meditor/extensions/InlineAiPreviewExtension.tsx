@@ -1,38 +1,12 @@
 import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin } from '@tiptap/pm/state';
 import type { EditorState } from '@tiptap/pm/state';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { EditorView } from '@tiptap/pm/view';
 import { createRoot, type Root } from 'react-dom/client';
 import { InlineAiPreviewBlock } from '../components/InlineAiPreviewBlock';
-
-type InlineAiPreviewStatus = 'submitting' | 'streaming' | 'ready' | 'error';
-
-interface InlineAiPreviewLabels {
-  title: string;
-  streaming: string;
-  ready: string;
-  error: string;
-  accept: string;
-  reject: string;
-  retry: string;
-}
-
-export interface InlineAiPreviewWidgetState {
-  blockId: string;
-  status: InlineAiPreviewStatus;
-  response: string;
-  error: string | null;
-  basePath?: string;
-  canAccept: boolean;
-  labels: InlineAiPreviewLabels;
-  onAccept: () => void;
-  onReject: () => void;
-  onRetry: () => void;
-}
-
-export const inlineAiPreviewPluginKey = new PluginKey<InlineAiPreviewWidgetState | null>('meditorInlineAiPreview');
+import { inlineAiPreviewPluginKey, type InlineAiPreviewWidgetState } from './InlineAiPreviewPluginKey';
 
 function getWidgetPosition(doc: ProseMirrorNode, blockId: string): number | null {
   let position: number | null = null;

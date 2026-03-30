@@ -663,7 +663,7 @@ function applyLinkMarks(markdown: string, marks: Mark[] = []): string {
 function escapeMarkdownImageText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
-    .replace(/([\[\]])/g, '\\$1');
+    .replace(/[[\]]/g, '\\$&');
 }
 
 function escapeMarkdownUrl(value: string): string {
@@ -1304,7 +1304,7 @@ function closeFormattingMark(type: string, value: string): string {
 
 function renderInline(content: JSONContent[] = []): string {
   let result = '';
-  let activeFormatting: string[] = [];
+  const activeFormatting: string[] = [];
 
   const syncFormatting = (nextFormatting: string[]) => {
     while (activeFormatting.length > 0 && !nextFormatting.includes(activeFormatting[activeFormatting.length - 1])) {

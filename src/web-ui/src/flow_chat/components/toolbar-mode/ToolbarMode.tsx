@@ -154,7 +154,7 @@ export const ToolbarMode: React.FC = () => {
     }
     
     return { isStreaming, toolName, content };
-  }, [flowChatState]);
+  }, [flowChatState, t]);
   
   // Window position is initialized in ToolbarModeContext.tsx to avoid conflicts.
   

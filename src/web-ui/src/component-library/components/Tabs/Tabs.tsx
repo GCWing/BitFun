@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext, useMemo } from 'react';
 import './Tabs.scss';
 
 export interface TabItem {
@@ -66,16 +66,20 @@ export const Tabs: React.FC<TabsProps> = ({
 
   const activeKey = controlledActiveKey !== undefined ? controlledActiveKey : internalActiveKey;
 
-  const tabs: TabItem[] = [];
-  const panes: { [key: string]: React.ReactNode } = {};
+  const { tabs, panes } = useMemo(() => {
+    const nextTabs: TabItem[] = [];
+    const nextPanes: { [key: string]: React.ReactNode } = {};
 
-  React.Children.forEach(children, (child) => {
-    if (React.isValidElement<TabPaneProps>(child) && child.type === TabPane) {
-      const { tabKey, label, icon, disabled, closable } = child.props;
-      tabs.push({ key: tabKey, label, icon, disabled, closable });
-      panes[tabKey] = child;
-    }
-  });
+    React.Children.forEach(children, (child) => {
+      if (React.isValidElement<TabPaneProps>(child) && child.type === TabPane) {
+        const { tabKey, label, icon, disabled, closable } = child.props;
+        nextTabs.push({ key: tabKey, label, icon, disabled, closable });
+        nextPanes[tabKey] = child;
+      }
+    });
+
+    return { tabs: nextTabs, panes: nextPanes };
+  }, [children]);
 
   React.useEffect(() => {
     if (!activeKey && tabs.length > 0) {
@@ -84,7 +88,7 @@ export const Tabs: React.FC<TabsProps> = ({
         setInternalActiveKey(firstKey);
       }
     }
-  }, [tabs.length]);
+  }, [activeKey, controlledActiveKey, tabs]);
 
   const handleTabClick = (key: string, disabled?: boolean) => {
     if (disabled) return;

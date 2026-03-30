@@ -28,7 +28,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
-import { SSHContext } from '@/features/ssh-remote/SSHRemoteProvider';
+import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager } from '@/infrastructure/services/ShortcutManager';
 import './AppLayout.scss';
 
@@ -252,6 +252,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     initializeFlowChat();
   }, [
+    currentWorkspace,
     currentWorkspace?.id,
     currentWorkspace?.rootPath,
     currentWorkspace?.workspaceKind,

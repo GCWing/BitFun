@@ -165,7 +165,7 @@ export class ApiClient implements IApiClient {
       
       await this.invoke('ping', {}, { timeout: 5000, retries: 1 });
       return true;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }

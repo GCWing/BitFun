@@ -26,7 +26,6 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const dragCounterRef = useRef(0); 
   const addContext = useContextStore(state => state.addContext);
-  const setValidating = useContextStore(state => state.setValidating);
   const updateValidation = useContextStore(state => state.updateValidation);
   
   
@@ -76,7 +75,7 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     onDragOver: () => {
       
     }
-  }), [acceptedTypesArray, addContext, setValidating, updateValidation, onContextAdded]);
+  }), [acceptedTypesArray, addContext, updateValidation, onContextAdded]);
   
   
   const dropTargetRef = useRef(dropTarget);
@@ -93,7 +92,7 @@ export const ContextDropZone: React.FC<ContextDropZoneProps> = ({
     return () => {
       unregister();
     };
-  }, []);
+  }, [dropTarget]);
   
    
   const handleDragEnter = useCallback((e: React.DragEvent) => {

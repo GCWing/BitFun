@@ -8,4 +8,5 @@ export { SSHConnectionDialog } from './SSHConnectionDialog';
 export { RemoteFileBrowser } from './RemoteFileBrowser';
 export { SSHAuthPromptDialog } from './SSHAuthPromptDialog';
 export { ConfirmDialog } from './ConfirmDialog';
-export { SSHRemoteProvider, useSSHRemoteContext } from './SSHRemoteProvider';
+export { SSHRemoteProvider } from './SSHRemoteProvider';
+export { useSSHRemoteContext } from './SSHRemoteContext';

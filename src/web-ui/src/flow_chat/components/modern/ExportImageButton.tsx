@@ -249,7 +249,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-      }).replace(/[\/:\s]/g, '-');
+      }).replace(/[/:\s]/g, '-');
       const fileName = `${i18nService.t('flow-chat:exportImage.fileNamePrefix')}_${timestampStr}.png`;
       const downloadsPath = await downloadDir();
       const filePath = await join(downloadsPath, fileName);
@@ -295,7 +295,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
     } finally {
       setIsExporting(false);
     }
-  }, [turnId, getDialogTurn]);
+  }, [getDialogTurn]);
 
   return (
     <Tooltip content={isExporting ? i18nService.t('flow-chat:exportImage.exporting') : i18nService.t('flow-chat:exportImage.exportToImage')} placement="top">

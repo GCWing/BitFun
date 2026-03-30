@@ -55,7 +55,7 @@ export const useToolExecution = (
       const service = ToolExecutionService.getInstance();
       setActiveExecutions(service.getActiveExecutions());
     }
-  }, []);
+  }, [maxMessages]);
 
   useEffect(() => {
     if (!autoConnect) return;

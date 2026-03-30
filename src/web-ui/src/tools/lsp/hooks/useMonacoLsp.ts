@@ -79,5 +79,5 @@ export function useMonacoLsp(
         isRegisteredRef.current = false;
       }
     };
-  }, [editor, language, filePath, enabled, workspacePath, log]);
+  }, [editor, language, filePath, enabled, workspacePath]);
 }

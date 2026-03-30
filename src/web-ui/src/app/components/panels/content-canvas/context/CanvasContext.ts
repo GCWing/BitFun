@@ -2,8 +2,7 @@
  * CanvasContext - canvas global context.
  * Provides access to tabs and layout state to reduce props drilling.
  */
-
-import React, { createContext, useContext, useMemo, ReactNode } from 'react';
+import { createContext, useContext } from 'react';
 import type {
   CanvasTab,
   EditorGroupId,
@@ -121,42 +120,6 @@ export interface CanvasContextValue {
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
 
-// ==================== Provider Props ====================
-
-export interface CanvasProviderProps {
-  children: ReactNode;
-  value: CanvasContextValue;
-}
-
-// ==================== Provider Component ====================
-
-export const CanvasProvider: React.FC<CanvasProviderProps> = ({
-  children,
-  value,
-}) => {
-  // Memoize value to avoid unnecessary re-renders
-  const memoizedValue = useMemo(() => value, [
-    value.primaryGroup,
-    value.secondaryGroup,
-    value.activeGroupId,
-    value.layout,
-    value.isMissionControlOpen,
-    value.workspacePath,
-    value.tabOps,
-    value.dragOps,
-    value.layoutOps,
-    value.missionControlOps,
-    value.onInteraction,
-    value.onBeforeClose,
-  ]);
-
-  return (
-    <CanvasContext.Provider value={memoizedValue}>
-      {children}
-    </CanvasContext.Provider>
-  );
-};
-
 // ==================== Hooks ====================
 
 /**
@@ -221,4 +184,5 @@ export const useMissionControl = () => {
   return { isOpen: isMissionControlOpen, ...missionControlOps };
 };
 
+export { CanvasContext };
 export default CanvasContext;

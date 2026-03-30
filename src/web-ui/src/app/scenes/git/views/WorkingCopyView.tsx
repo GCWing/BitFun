@@ -256,7 +256,11 @@ const WorkingCopyView: React.FC<WorkingCopyViewProps> = ({ workspacePath }) => {
   const toggleFileGroup = useCallback((groupId: string) => {
     setExpandedFileGroups(prev => {
       const next = new Set(prev);
-      next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
       return next;
     });
   }, []);
