@@ -131,9 +131,10 @@ Important notes:
             };
         }
 
-        let path = Path::new(path_str);
-
-        if !path.is_absolute() {
+        let is_abs = context
+            .map(|c| c.workspace_path_is_effectively_absolute(path_str))
+            .unwrap_or_else(|| Path::new(path_str).is_absolute());
+        if !is_abs {
             return ValidationResult {
                 result: false,
                 message: Some("path must be an absolute path".to_string()),
@@ -144,7 +145,8 @@ Important notes:
 
         let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
         if !is_remote {
-            if !path.exists() {
+            let local_path = Path::new(path_str);
+            if !local_path.exists() {
                 return ValidationResult {
                     result: false,
                     message: Some(format!("Path does not exist: {}", path_str)),
@@ -153,13 +155,13 @@ Important notes:
                 };
             }
 
-            if path.is_dir() {
+            if local_path.is_dir() {
                 let recursive = input
                     .get("recursive")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                let is_empty = match fs::read_dir(path).await {
+                let is_empty = match fs::read_dir(local_path).await {
                     Ok(mut entries) => entries.next_entry().await.ok().flatten().is_none(),
                     Err(_) => false,
                 };
@@ -234,6 +236,8 @@ Important notes:
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        let resolved_path = context.resolve_workspace_tool_path(path_str)?;
+
         // Remote workspace: delete via shell command
         if context.is_remote() {
             let ws_shell = context.ws_shell().ok_or_else(|| {
@@ -241,9 +245,9 @@ Important notes:
             })?;
 
             let rm_cmd = if recursive {
-                format!("rm -rf '{}'", path_str.replace('\'', "'\\''"))
+                format!("rm -rf '{}'", resolved_path.replace('\'', "'\\''"))
             } else {
-                format!("rm -f '{}'", path_str.replace('\'', "'\\''"))
+                format!("rm -f '{}'", resolved_path.replace('\'', "'\\''"))
             };
 
             let (_stdout, stderr, exit_code) = ws_shell
@@ -257,7 +261,7 @@ Important notes:
 
             let result_data = json!({
                 "success": true,
-                "path": path_str,
+                "path": resolved_path,
                 "is_directory": recursive,
                 "recursive": recursive,
                 "is_remote": true
@@ -270,13 +274,13 @@ Important notes:
         }]);
         }
 
-        let path = Path::new(path_str);
+        let path = Path::new(&resolved_path);
         let is_directory = path.is_dir();
 
         debug!(
             "DeleteFile tool deleting {}: {}",
             if is_directory { "directory" } else { "file" },
-            path_str
+            resolved_path
         );
 
         if is_directory {
@@ -297,7 +301,7 @@ Important notes:
 
         let result_data = json!({
             "success": true,
-            "path": path_str,
+            "path": resolved_path,
             "is_directory": is_directory,
             "recursive": recursive
         });

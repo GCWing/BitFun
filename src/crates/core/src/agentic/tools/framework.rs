@@ -67,6 +67,30 @@ impl ToolUseContext {
     pub fn ws_shell(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceShell> {
         self.workspace_services.as_ref().map(|s| s.shell.as_ref())
     }
+
+    /// Resolve a user or model-supplied path for file/shell tools. Uses POSIX semantics when the
+    /// workspace is remote SSH so Windows-hosted clients still resolve `/home/...` correctly.
+    pub fn resolve_workspace_tool_path(&self, path: &str) -> BitFunResult<String> {
+        let workspace_root_owned = self
+            .workspace
+            .as_ref()
+            .map(|w| w.root_path_string());
+        crate::agentic::tools::workspace_paths::resolve_workspace_tool_path(
+            path,
+            self.current_working_directory.as_deref(),
+            workspace_root_owned.as_deref(),
+            self.is_remote(),
+        )
+    }
+
+    /// Whether `path` is absolute for the active workspace (POSIX `/` for remote SSH).
+    pub fn workspace_path_is_effectively_absolute(&self, path: &str) -> bool {
+        if self.is_remote() {
+            crate::agentic::tools::workspace_paths::posix_style_path_is_absolute(path)
+        } else {
+            Path::new(path).is_absolute()
+        }
+    }
 }
 
 /// Tool options
@@ -192,6 +216,12 @@ pub trait Tool: Send + Sync {
 
     /// Input mode definition - using JSON Schema
     fn input_schema(&self) -> Value;
+
+    /// JSON Schema sent to the model (may depend on app language or other runtime config).
+    /// Default: same as [`input_schema`].
+    async fn input_schema_for_model(&self) -> Value {
+        self.input_schema()
+    }
 
     /// Input JSON Schema - optional extra schema
     fn input_json_schema(&self) -> Option<Value> {

@@ -5,7 +5,7 @@ use globset::GlobBuilder;
 use ignore::WalkBuilder;
 use log::warn;
 use serde_json::{json, Value};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn glob_with_ignore(
     search_path: &str,
@@ -176,22 +176,17 @@ impl Tool for GlobTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
 
-        let resolved_path = match input.get("path").and_then(|v| v.as_str()) {
-            Some(user_path) if Path::new(user_path).is_absolute() => PathBuf::from(user_path),
-            Some(user_path) => {
-                let workspace_root = context.workspace_root().ok_or_else(|| {
-                    BitFunError::tool(format!(
-                        "workspace_path is required to resolve relative search path: {}",
-                        user_path
-                    ))
-                })?;
-                workspace_root.join(user_path)
-            }
-            None => context.workspace_root().map(PathBuf::from).ok_or_else(|| {
-                BitFunError::tool(
-                    "workspace_path is required when Glob path is omitted".to_string(),
-                )
-            })?,
+        let resolved_str = match input.get("path").and_then(|v| v.as_str()) {
+            Some(user_path) => context.resolve_workspace_tool_path(user_path)?,
+            None => context
+                .workspace
+                .as_ref()
+                .map(|w| w.root_path_string())
+                .ok_or_else(|| {
+                    BitFunError::tool(
+                        "workspace_path is required when Glob path is omitted".to_string(),
+                    )
+                })?,
         };
 
         let limit = input
@@ -206,7 +201,7 @@ impl Tool for GlobTool {
                 BitFunError::tool("Workspace shell not available".to_string())
             })?;
 
-            let search_dir = resolved_path.display().to_string();
+            let search_dir = resolved_str.clone();
             let find_cmd = build_remote_find_command(&search_dir, pattern, limit);
 
             let (stdout, _stderr, _exit_code) = ws_shell
@@ -238,7 +233,7 @@ impl Tool for GlobTool {
         }]);
         }
 
-        let matches = call_glob(&resolved_path.display().to_string(), pattern, limit)
+        let matches = call_glob(&resolved_str, pattern, limit)
             .map_err(|e| BitFunError::tool(e))?;
 
         let result_text = if matches.is_empty() {
@@ -250,7 +245,7 @@ impl Tool for GlobTool {
         let result = ToolResult::Result {
             data: json!({
                 "pattern": pattern,
-                "path": resolved_path.display().to_string(),
+                "path": resolved_str,
                 "matches": matches,
                 "match_count": matches.len()
             }),

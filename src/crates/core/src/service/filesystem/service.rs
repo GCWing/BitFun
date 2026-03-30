@@ -32,8 +32,17 @@ impl FileSystemService {
 
     /// Builds a file tree.
     pub async fn build_file_tree(&self, root_path: &str) -> BitFunResult<Vec<FileTreeNode>> {
+        self.build_file_tree_with_remote_hint(root_path, None).await
+    }
+
+    /// Same as [`Self::build_file_tree`], but disambiguates remote roots when `preferred_remote_connection_id` is set.
+    pub async fn build_file_tree_with_remote_hint(
+        &self,
+        root_path: &str,
+        preferred_remote_connection_id: Option<&str>,
+    ) -> BitFunResult<Vec<FileTreeNode>> {
         self.file_tree_service
-            .build_tree(root_path)
+            .build_tree_with_remote_hint(root_path, preferred_remote_connection_id)
             .await
             .map_err(|e| BitFunError::service(e))
     }
@@ -58,8 +67,16 @@ impl FileSystemService {
 
     /// Gets directory contents (shallow).
     pub async fn get_directory_contents(&self, path: &str) -> BitFunResult<Vec<FileTreeNode>> {
+        self.get_directory_contents_with_remote_hint(path, None).await
+    }
+
+    pub async fn get_directory_contents_with_remote_hint(
+        &self,
+        path: &str,
+        preferred_remote_connection_id: Option<&str>,
+    ) -> BitFunResult<Vec<FileTreeNode>> {
         self.file_tree_service
-            .get_directory_contents(path)
+            .get_directory_contents_with_remote_hint(path, preferred_remote_connection_id)
             .await
             .map_err(|e| BitFunError::service(e))
     }

@@ -63,16 +63,29 @@ impl I18nService {
         self.load_all_bundles().await?;
 
         if let Some(ref config_service) = self.config_service {
-            match config_service
-                .get_config::<LocaleId>(Some("i18n.currentLanguage"))
+            // Prefer `app.language` (desktop source of truth), then legacy `i18n.currentLanguage`.
+            let mut resolved: Option<LocaleId> = None;
+            if let Ok(app_lang) = config_service
+                .get_config::<String>(Some("app.language"))
                 .await
             {
-                Ok(locale) => {
+                resolved = LocaleId::from_str(&app_lang);
+            }
+            if resolved.is_none() {
+                if let Ok(locale) = config_service
+                    .get_config::<LocaleId>(Some("i18n.currentLanguage"))
+                    .await
+                {
+                    resolved = Some(locale);
+                }
+            }
+            match resolved {
+                Some(locale) => {
                     let mut current = self.current_locale.write().await;
                     *current = locale;
                     info!("Loaded locale from config: {}", current.as_str());
                 }
-                Err(_) => {
+                None => {
                     debug!("Locale config not found, using default");
                 }
             }

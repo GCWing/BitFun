@@ -190,6 +190,9 @@ export interface Session {
   // Sessions are always kept in store for event processing; only display is filtered.
   workspacePath?: string;
 
+  /** Stable backend id — always set for new sessions; do not infer workspace from path alone. */
+  workspaceId?: string;
+
   /** SSH remote: same `workspacePath` on different hosts must not share coordinator/persistence. */
   remoteConnectionId?: string;
 
@@ -238,6 +241,8 @@ export interface SessionConfig {
   agentType?: string;
   context?: Record<string, string>;
   workspacePath?: string;
+  /** Binds session to `WorkspaceInfo.id` (path alone is insufficient for remotes). */
+  workspaceId?: string;
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
   remoteConnectionId?: string;
   remoteSshHost?: string;

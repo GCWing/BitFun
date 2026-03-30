@@ -10,6 +10,7 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::SessionContextStore;
 use crate::infrastructure::ai::get_global_ai_client_factory;
+use crate::service::config::{get_app_language_code, short_model_user_language_instruction};
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, TurnStatus, UserMessageData,
 };
@@ -1463,17 +1464,9 @@ impl SessionManager {
 
         let max_length = max_length.unwrap_or(20);
 
-        // Get current user locale for language setting
-        let user_language = if let Some(service) = crate::service::get_global_i18n_service().await {
-            service.get_current_locale().await
-        } else {
-            crate::service::LocaleId::ZhCN
-        };
-
-        let language_instruction = match user_language {
-            crate::service::LocaleId::ZhCN => "使用简体中文",
-            crate::service::LocaleId::EnUS => "Use English",
-        };
+        // Match agent `LANGUAGE_PREFERENCE`: use `app.language`, not I18nService (see `app_language` module).
+        let lang_code = get_app_language_code().await;
+        let language_instruction = short_model_user_language_instruction(lang_code.as_str());
 
         // Construct system prompt
         let system_prompt = format!(

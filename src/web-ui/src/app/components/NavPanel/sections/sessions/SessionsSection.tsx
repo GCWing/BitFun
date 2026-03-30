@@ -70,12 +70,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspacePath,
   remoteConnectionId = null,
   remoteSshHost = null,
-  isActiveWorkspace = true,
+  isActiveWorkspace: _isActiveWorkspace = true,
   assistantLabel,
   showSessionModeIcon = true,
 }) => {
   const { t } = useI18n('common');
-  const { setActiveWorkspace } = useWorkspaceContext();
+  const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
   const activeTabId = useSceneStore(s => s.activeTabId);
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
@@ -212,10 +212,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         const session = flowChatStore.getState().sessions.get(sessionId);
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
-        const activateWorkspace = workspaceId && !isActiveWorkspace
+        const mustActivateWorkspace =
+          Boolean(workspaceId) && workspaceId !== currentWorkspace?.id;
+        const activateWorkspace = mustActivateWorkspace
           ? async (targetWorkspaceId: string) => {
-            await setActiveWorkspace(targetWorkspaceId);
-          }
+              await setActiveWorkspace(targetWorkspaceId);
+            }
           : undefined;
 
         if (relationship.canOpenInAuxPane && parentSessionId && session) {
@@ -250,7 +252,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         log.error('Failed to switch session', err);
       }
     },
-    [activeSessionId, editingSessionId, isActiveWorkspace, setActiveWorkspace, workspaceId]
+    [
+      activeSessionId,
+      editingSessionId,
+      setActiveWorkspace,
+      workspaceId,
+      currentWorkspace?.id,
+    ]
   );
 
   const resolveSessionTitle = useCallback(

@@ -41,16 +41,22 @@ fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::Remote
     })
 }
 
+/// Resolves which SSH connection owns `path`. `request_preferred` comes from the workspace/session
+/// (explicit scoping); legacy UI omits it and we fall back to the last single-remote pointer.
 async fn lookup_remote_entry_for_path(
     state: &State<'_, AppState>,
     path: &str,
+    request_preferred: Option<&str>,
 ) -> Option<RemoteWorkspaceEntry> {
-    let hint = state
+    let manager = get_remote_workspace_manager()?;
+    let legacy = state
         .get_remote_workspace_async()
         .await
         .map(|w| w.connection_id);
-    let manager = get_remote_workspace_manager()?;
-    manager.lookup_connection(path, hint.as_deref()).await
+    let preferred: Option<String> = request_preferred
+        .map(|s| s.to_string())
+        .or(legacy);
+    manager.lookup_connection(path, preferred.as_deref()).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,6 +148,8 @@ pub struct ReadFileContentRequest {
     #[serde(rename = "filePath")]
     pub file_path: String,
     pub encoding: Option<String>,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +159,8 @@ pub struct WriteFileContentRequest {
     #[serde(rename = "filePath")]
     pub file_path: String,
     pub content: String,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,11 +183,15 @@ pub struct GetFileMetadataRequest {
 pub struct GetFileTreeRequest {
     pub path: String,
     pub max_depth: Option<usize>,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetDirectoryChildrenRequest {
     pub path: String,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,6 +200,8 @@ pub struct GetDirectoryChildrenPaginatedRequest {
     pub path: String,
     pub offset: Option<usize>,
     pub limit: Option<usize>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1366,8 +1382,12 @@ pub async fn get_file_tree(
         }
     }
 
+    let preferred = request.remote_connection_id.as_deref();
     let filesystem_service = &state.filesystem_service;
-    match filesystem_service.build_file_tree(&request.path).await {
+    match filesystem_service
+        .build_file_tree_with_remote_hint(&request.path, preferred)
+        .await
+    {
         Ok(nodes) => {
             fn convert_node_to_json(
                 node: bitfun_core::infrastructure::FileTreeNode,
@@ -1433,9 +1453,10 @@ pub async fn get_directory_children(
         }
     }
 
+    let preferred = request.remote_connection_id.as_deref();
     let filesystem_service = &state.filesystem_service;
     match filesystem_service
-        .get_directory_contents(&request.path)
+        .get_directory_contents_with_remote_hint(&request.path, preferred)
         .await
     {
         Ok(nodes) => {
@@ -1484,9 +1505,10 @@ pub async fn get_directory_children_paginated(
         }
     }
 
+    let preferred = request.remote_connection_id.as_deref();
     let filesystem_service = &state.filesystem_service;
     match filesystem_service
-        .get_directory_contents(&request.path)
+        .get_directory_contents_with_remote_hint(&request.path, preferred)
         .await
     {
         Ok(nodes) => {
@@ -1527,7 +1549,13 @@ pub async fn read_file_content(
     state: State<'_, AppState>,
     request: ReadFileContentRequest,
 ) -> Result<String, String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.file_path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(
+        &state,
+        &request.file_path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
+    {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         let bytes = remote_fs.read_file(&entry.connection_id, &request.file_path).await
@@ -1553,7 +1581,13 @@ pub async fn write_file_content(
     state: State<'_, AppState>,
     request: WriteFileContentRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.file_path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(
+        &state,
+        &request.file_path,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
+    {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.write_file(&entry.connection_id, &request.file_path, request.content.as_bytes()).await
@@ -1618,7 +1652,7 @@ pub async fn check_path_exists(
     state: State<'_, AppState>,
     request: CheckPathExistsRequest,
 ) -> Result<bool, String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         return remote_fs.exists(&entry.connection_id, &request.path).await
@@ -1636,7 +1670,7 @@ pub async fn get_file_metadata(
 ) -> Result<serde_json::Value, String> {
     use std::time::SystemTime;
 
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
 
@@ -1706,7 +1740,7 @@ pub async fn get_file_editor_sync_hash(
     state: State<'_, AppState>,
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state
             .get_remote_file_service_async()
             .await
@@ -1742,7 +1776,7 @@ pub async fn rename_file(
     state: State<'_, AppState>,
     request: RenameFileRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.old_path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.old_path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.rename(&entry.connection_id, &request.old_path, &request.new_path).await
@@ -1783,7 +1817,7 @@ pub async fn delete_file(
     state: State<'_, AppState>,
     request: DeleteFileRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.remove_file(&entry.connection_id, &request.path).await
@@ -1807,7 +1841,7 @@ pub async fn delete_directory(
 ) -> Result<(), String> {
     let recursive = request.recursive.unwrap_or(false);
 
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         if recursive {
@@ -1834,7 +1868,7 @@ pub async fn create_file(
     state: State<'_, AppState>,
     request: CreateFileRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.write_file(&entry.connection_id, &request.path, b"").await
@@ -1857,7 +1891,7 @@ pub async fn create_directory(
     state: State<'_, AppState>,
     request: CreateDirectoryRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         remote_fs.create_dir_all(&entry.connection_id, &request.path).await
@@ -1887,7 +1921,7 @@ pub async fn list_directory_files(
 ) -> Result<Vec<String>, String> {
     use std::path::Path;
 
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path).await {
+    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
         let remote_fs = state.get_remote_file_service_async().await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         let entries = remote_fs.read_dir(&entry.connection_id, &request.path).await

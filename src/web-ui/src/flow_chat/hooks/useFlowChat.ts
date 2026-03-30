@@ -133,7 +133,8 @@ export const useFlowChat = () => {
       
       const sessionConfig: SessionConfig = {
         modelName: config?.modelName || 'default',
-        ...config
+        ...config,
+        workspaceId: workspace?.id ?? config?.workspaceId,
       };
 
       flowChatStore.createSession(
@@ -172,7 +173,8 @@ export const useFlowChat = () => {
       
       const sessionConfig: SessionConfig = {
         modelName: config?.modelName || 'default',
-        ...config
+        ...config,
+        workspaceId: workspace?.id ?? config?.workspaceId,
       };
 
       const sessionCount = flowChatStore.getState().sessions.size + 1;

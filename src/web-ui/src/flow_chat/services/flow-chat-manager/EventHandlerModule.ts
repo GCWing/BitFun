@@ -782,13 +782,20 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   }
 
   // User may have pre-added this turn from the composer while the previous turn was still running;
-  // START was skipped then. When the backend dispatches this turn, move the state machine to PROCESSING.
+  // START failed then (PROCESSING/FINISHING cannot take START). When the backend dispatches this
+  // turn, align currentDialogTurnId so streaming events are not dropped.
   const machine = stateMachineManager.get(sessionId);
-  if (machine && machine.getCurrentState() === SessionExecutionState.IDLE) {
-    void stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
-      taskId: sessionId,
-      dialogTurnId: turnId,
-    });
+  if (machine) {
+    const ctx = machine.getContext();
+    if (ctx.currentDialogTurnId !== turnId) {
+      ctx.currentDialogTurnId = turnId;
+    }
+    if (machine.getCurrentState() === SessionExecutionState.IDLE) {
+      void stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
+        taskId: sessionId,
+        dialogTurnId: turnId,
+      });
+    }
   }
 }
 
@@ -1240,10 +1247,25 @@ function handleDialogTurnComplete(
   event: any,
   _onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
-  const { sessionId, turnId, subagentParentInfo } = event;
+  const sessionId = event?.sessionId ?? event?.session_id;
+  const turnId = event?.turnId ?? event?.turn_id;
+  const subagentParentInfo = event?.subagentParentInfo ?? event?.subagent_parent_info;
 
   if (subagentParentInfo) {
     return;
+  }
+
+  if (!sessionId || !turnId) {
+    log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
+    return;
+  }
+
+  const machine = stateMachineManager.get(sessionId);
+  if (machine) {
+    const ctx = machine.getContext();
+    if (ctx.currentDialogTurnId !== turnId) {
+      ctx.currentDialogTurnId = turnId;
+    }
   }
 
   const store = FlowChatStore.getInstance();

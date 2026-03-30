@@ -7,7 +7,12 @@
 
 import { forwardRef, useEffect, useRef, useImperativeHandle, useCallback } from 'react';
 import { ContentCanvas, useCanvasStore } from '../../components/panels/content-canvas';
+import {
+  switchAgentCanvasWorkspace,
+  removeAgentCanvasSnapshot,
+} from '../../components/panels/content-canvas/stores';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import type { PanelContent as OldPanelContent } from '../../components/panels/base/types';
 import type { PanelContent } from '../../components/panels/content-canvas/types';
 import { createLogger } from '@/shared/utils/logger';
@@ -31,6 +36,9 @@ interface AuxPaneProps {
 
 const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
   ({ workspacePath, isSceneActive = true }, ref) => {
+    const { workspace } = useCurrentWorkspace();
+    const workspaceId = workspace?.id;
+
     const {
       addTab,
       switchToTab,
@@ -89,28 +97,29 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
       convertContent,
     ]);
 
-    const prevWorkspacePathRef = useRef<string | undefined>(workspacePath);
+    const prevWorkspaceIdRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
-      if (prevWorkspacePathRef.current && prevWorkspacePathRef.current !== workspacePath) {
-        log.debug('Workspace path changed, resetting tabs', {
-          from: prevWorkspacePathRef.current,
-          to: workspacePath
-        });
-        closeAllTabs();
-      }
-      prevWorkspacePathRef.current = workspacePath;
-    }, [workspacePath, closeAllTabs]);
+      const next = workspaceId;
+      const prev = prevWorkspaceIdRef.current;
+      if (prev === next) return;
+
+      log.debug('Active workspace changed, swapping agent canvas snapshot', {
+        from: prev ?? '(none)',
+        to: next ?? '(none)',
+      });
+      switchAgentCanvasWorkspace(prev ?? null, next ?? null);
+      prevWorkspaceIdRef.current = next;
+    }, [workspaceId]);
 
     useEffect(() => {
       const removeListener = workspaceManager.addEventListener((event) => {
         if (event.type === 'workspace:closed') {
-          log.debug('Workspace closed, resetting tabs');
-          closeAllTabs();
+          removeAgentCanvasSnapshot(event.workspaceId);
         }
       });
       return () => removeListener();
-    }, [closeAllTabs]);
+    }, []);
 
     const handleInteraction = useCallback(async (itemId: string, userInput: string) => {
       log.debug('Panel interaction', { itemId, userInput });

@@ -1,7 +1,7 @@
-use super::util::resolve_path_with_workspace;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -89,10 +89,17 @@ Usage:
             };
         }
 
-        if let Err(err) = resolve_path_with_workspace(
+        let cwd_owned = context.and_then(|ctx| ctx.current_working_directory.clone());
+        let root_owned = context.and_then(|ctx| {
+            ctx.workspace
+                .as_ref()
+                .map(|w| w.root_path_string())
+        });
+        if let Err(err) = resolve_workspace_tool_path(
             file_path,
-            context.and_then(|ctx| ctx.current_working_directory()),
-            context.and_then(|ctx| ctx.workspace_root()),
+            cwd_owned.as_deref(),
+            root_owned.as_deref(),
+            context.map(|c| c.is_remote()).unwrap_or(false),
         ) {
             return ValidationResult {
                 result: false,
@@ -132,11 +139,7 @@ Usage:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
 
-        let resolved_path = resolve_path_with_workspace(
-            file_path,
-            context.current_working_directory(),
-            context.workspace_root(),
-        )?;
+        let resolved_path = context.resolve_workspace_tool_path(file_path)?;
 
         let content = input
             .get("content")

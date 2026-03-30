@@ -30,7 +30,7 @@ pub use explore_agent::ExploreAgent;
 pub use file_finder_agent::FileFinderAgent;
 pub use generate_doc_agent::GenerateDocAgent;
 pub use plan_mode::PlanMode;
-pub use prompt_builder::{PromptBuilder, PromptBuilderContext};
+pub use prompt_builder::{PromptBuilder, PromptBuilderContext, RemoteExecutionHints};
 pub use registry::{
     get_agent_registry, AgentCategory, AgentInfo, AgentRegistry, CustomSubagentConfig,
     SubAgentSource,

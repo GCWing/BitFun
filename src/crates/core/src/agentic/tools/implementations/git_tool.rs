@@ -64,19 +64,75 @@ impl GitTool {
             .any(|&danger| full_cmd.contains(danger))
     }
 
-    /// Get workspace path
+    fn sh_quote(s: &str) -> String {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+
+    /// Resolve repository root: workspace root or a path resolved with the same rules as file tools
+    /// (POSIX on remote SSH).
     fn get_repo_path(
         working_directory: Option<&str>,
         context: &ToolUseContext,
     ) -> BitFunResult<String> {
         if let Some(dir) = working_directory {
-            Ok(dir.to_string())
+            let trimmed = dir.trim();
+            if trimmed.is_empty() {
+                return context
+                    .workspace
+                    .as_ref()
+                    .map(|w| w.root_path_string())
+                    .ok_or_else(|| BitFunError::tool("No workspace path available".to_string()));
+            }
+            context.resolve_workspace_tool_path(trimmed)
         } else {
             context
-                .workspace_root()
-                .map(|p| p.to_string_lossy().to_string())
+                .workspace
+                .as_ref()
+                .map(|w| w.root_path_string())
                 .ok_or_else(|| BitFunError::tool("No workspace path available".to_string()))
         }
+    }
+
+    /// Run `git` on the remote host over SSH (same environment as native CLI on the server).
+    async fn execute_remote_git_cli(
+        repo_path: &str,
+        operation: &str,
+        args: Option<&str>,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Value> {
+        let shell = context
+            .ws_shell()
+            .ok_or_else(|| BitFunError::tool("Remote Git requires workspace shell (SSH)".to_string()))?;
+
+        let args_str = args.unwrap_or("").trim();
+        let cmd = if args_str.is_empty() {
+            format!(
+                "git --no-pager -C {} {}",
+                Self::sh_quote(repo_path),
+                operation
+            )
+        } else {
+            format!(
+                "git --no-pager -C {} {} {}",
+                Self::sh_quote(repo_path),
+                operation,
+                args_str
+            )
+        };
+
+        let (stdout, stderr, exit_code) = shell
+            .exec(&cmd, Some(180_000))
+            .await
+            .map_err(|e| BitFunError::tool(format!("Remote git failed: {}", e)))?;
+
+        Ok(json!({
+            "success": exit_code == 0,
+            "exit_code": exit_code,
+            "stdout": stdout,
+            "stderr": stderr,
+            "command": cmd,
+            "remote_execution": true,
+        }))
     }
 
     /// Execute status operation using GitService
@@ -595,7 +651,11 @@ This tool provides a safe and convenient way to execute Git commands. It support
 - Dangerous operations (like `push --force`, `reset --hard`) will show warnings
 - Never run `git config` to modify user settings
 - Always verify changes before committing
-- Use `--dry-run` for push/pull operations when unsure
+  - Use `--dry-run` for push/pull operations when unsure
+
+## Remote SSH
+
+When the workspace is opened over Remote SSH, Git runs on the **server** (see tool description context at runtime).
 
 ## Commit Message Guidelines
 
@@ -608,6 +668,19 @@ When creating commits, use this format for the commit message:
   Generated with BitFun
 
   Co-Authored-By: BitFun"#.to_string())
+    }
+
+    async fn description_with_context(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> BitFunResult<String> {
+        let mut base = self.description().await?;
+        if context.map(|c| c.is_remote()).unwrap_or(false) {
+            base.push_str(
+                "\n\n**Remote workspace:** Commands execute on the **SSH host** via `git -C <repo> …`, using the same repository and Git install as a native terminal on that server (equivalent to Claude Code / CLI on the remote machine). Paths are POSIX paths on the server.",
+            );
+        }
+        Ok(base)
     }
 
     fn input_schema(&self) -> Value {
@@ -831,19 +904,22 @@ When creating commits, use this format for the commit message:
 
         let start_time = std::time::Instant::now();
 
-        // Select execution method based on operation type
-        let result = match operation {
-            "status" => Self::execute_status(&repo_path).await?,
-            "diff" => Self::execute_diff(&repo_path, args).await?,
-            "log" => Self::execute_log(&repo_path, args).await?,
-            "add" => Self::execute_add(&repo_path, args).await?,
-            "commit" => Self::execute_commit(&repo_path, args).await?,
-            "push" => Self::execute_push(&repo_path, args).await?,
-            "pull" => Self::execute_pull(&repo_path, args).await?,
-            "checkout" | "switch" => Self::execute_checkout(&repo_path, args).await?,
-            "branch" => Self::execute_branch(&repo_path, args).await?,
-            // Other operations use generic command execution
-            _ => Self::execute_generic(&repo_path, operation, args).await?,
+        // Remote SSH workspace: run git on the server (not libgit2 on the PC).
+        let result = if context.is_remote() {
+            Self::execute_remote_git_cli(&repo_path, operation, args, context).await?
+        } else {
+            match operation {
+                "status" => Self::execute_status(&repo_path).await?,
+                "diff" => Self::execute_diff(&repo_path, args).await?,
+                "log" => Self::execute_log(&repo_path, args).await?,
+                "add" => Self::execute_add(&repo_path, args).await?,
+                "commit" => Self::execute_commit(&repo_path, args).await?,
+                "push" => Self::execute_push(&repo_path, args).await?,
+                "pull" => Self::execute_pull(&repo_path, args).await?,
+                "checkout" | "switch" => Self::execute_checkout(&repo_path, args).await?,
+                "branch" => Self::execute_branch(&repo_path, args).await?,
+                _ => Self::execute_generic(&repo_path, operation, args).await?,
+            }
         };
 
         let duration = start_time.elapsed();
@@ -860,10 +936,12 @@ When creating commits, use this format for the commit message:
                 "execution_time_ms".to_string(),
                 json!(duration.as_millis() as u64),
             );
-            obj.insert(
-                "command".to_string(),
-                json!(format!("git {} {}", operation, args.unwrap_or(""))),
-            );
+            if !context.is_remote() {
+                obj.insert(
+                    "command".to_string(),
+                    json!(format!("git {} {}", operation, args.unwrap_or(""))),
+                );
+            }
             obj.insert("operation".to_string(), json!(operation));
             obj.insert("working_directory".to_string(), json!(repo_path));
         }

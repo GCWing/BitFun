@@ -2,6 +2,7 @@
 //!
 //! A complete configuration management system based on the Provider mechanism.
 
+pub mod app_language;
 pub mod factory;
 pub mod global;
 pub mod manager;
@@ -10,6 +11,7 @@ pub mod service;
 pub mod tool_config_sync;
 pub mod types;
 
+pub use app_language::{get_app_language_code, short_model_user_language_instruction};
 pub use factory::ConfigFactory;
 pub use global::{
     get_global_config_service, initialize_global_config, reload_global_config,

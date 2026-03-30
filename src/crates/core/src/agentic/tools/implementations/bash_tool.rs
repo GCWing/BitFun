@@ -259,6 +259,14 @@ Usage notes:
         context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
         let mut base = self.description().await?;
+        if context.map(|c| c.is_remote()).unwrap_or(false) {
+            base = format!(
+                r#"**Remote workspace:** Commands run on the **SSH server** in a shell whose initial working directory is the **remote workspace root** (same as running a terminal on that machine). The shell name shown below may reflect your **local** BitFun settings; the actual interpreter on the server is typically `sh`/`bash`. Use **Unix** syntax and POSIX paths — not PowerShell or Windows paths.
+
+{base}"#,
+                base = base
+            );
+        }
         if context.and_then(|c| c.agent_type.as_deref()) == Some("Claw") {
             base.push_str(
                 "\n\n**Claw (desktop automation):** Prefer this tool for anything achievable from the **workspace shell** (build, test, git, scripts, CLIs). On **macOS**, `open -a \"AppName\"` launches or foregrounds an app with fewer steps than GUI workflows. Use **`ComputerUse`** **`action: locate`** for **named** on-screen controls before guessing coordinates from **`action: screenshot`** alone.",

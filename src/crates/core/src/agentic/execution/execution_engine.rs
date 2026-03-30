@@ -4,7 +4,7 @@
 
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
-use crate::agentic::agents::{get_agent_registry, PromptBuilderContext};
+use crate::agentic::agents::{get_agent_registry, PromptBuilderContext, RemoteExecutionHints};
 use crate::agentic::core::{Message, MessageContent, MessageHelper, MessageSemanticKind, Session};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::image_analysis::{
@@ -13,7 +13,9 @@ use crate::agentic::image_analysis::{
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
 use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
-use crate::agentic::WorkspaceBinding;
+use crate::agentic::util::build_remote_workspace_layout_preview;
+use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
+use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{ModelCapability, ModelCategory};
@@ -887,13 +889,90 @@ impl ExecutionEngine {
                 .workspace
                 .as_ref()
                 .map(|workspace| workspace.root_path_string());
-            let prompt_context = workspace_str.map(|workspace_path| {
-                PromptBuilderContext::new(
-                    workspace_path,
+            let prompt_context = if let Some(workspace_path) = workspace_str {
+                let base = PromptBuilderContext::new(
+                    workspace_path.clone(),
                     Some(context.session_id.clone()),
                     Some(ai_client.config.model.clone()),
-                )
-            });
+                );
+                let overlayed = if let Some(ws) = context.workspace.as_ref() {
+                    if ws.is_remote() {
+                        if let Some(cid) = ws.connection_id() {
+                            if let Some(mgr) = get_remote_workspace_manager() {
+                                let ssh_opt = mgr.get_ssh_manager().await;
+                                let fs_opt = mgr.get_file_service().await;
+                                let (kernel_name, hostname) =
+                                    if let Some(ref ssh) = ssh_opt {
+                                        if let Some(info) = ssh.get_server_info(cid).await {
+                                            (info.os_type, info.hostname)
+                                        } else {
+                                            (
+                                                "Linux".to_string(),
+                                                "remote".to_string(),
+                                            )
+                                        }
+                                    } else {
+                                        (
+                                            "Linux".to_string(),
+                                            "remote".to_string(),
+                                        )
+                                    };
+                                let connection_display_name =
+                                    match &ws.backend {
+                                        WorkspaceBackend::Remote {
+                                            connection_name,
+                                            ..
+                                        } => connection_name.clone(),
+                                        _ => cid.to_string(),
+                                    };
+                                let remote_layout = if let Some(ref fs) = fs_opt {
+                                    match build_remote_workspace_layout_preview(
+                                        fs,
+                                        cid,
+                                        &workspace_path,
+                                        200,
+                                    )
+                                    .await
+                                    {
+                                        Ok((_, s)) => Some(s),
+                                        Err(e) => {
+                                            warn!(
+                                                "Remote workspace layout for prompt failed: {}",
+                                                e
+                                            );
+                                            None
+                                        }
+                                    }
+                                } else {
+                                    None
+                                };
+                                base.with_remote_prompt_overlay(
+                                    RemoteExecutionHints {
+                                        connection_display_name,
+                                        kernel_name,
+                                        hostname,
+                                    },
+                                    remote_layout,
+                                )
+                            } else {
+                                warn!(
+                                    "Remote workspace active but RemoteWorkspaceStateManager is missing; using client OS hints only"
+                                );
+                                base
+                            }
+                        } else {
+                            base
+                        }
+                    } else {
+                        base
+                    }
+                } else {
+                    base
+                };
+                Some(overlayed)
+            } else {
+                None
+            };
             current_agent
                 .get_system_prompt(prompt_context.as_ref())
                 .await?
@@ -1437,7 +1516,7 @@ impl ExecutionEngine {
                 tool_definitions.push(ToolDefinition {
                     name: tool.name().to_string(),
                     description,
-                    parameters: tool.input_schema(),
+                    parameters: tool.input_schema_for_model().await,
                 });
             }
         }

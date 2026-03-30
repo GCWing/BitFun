@@ -7,6 +7,7 @@ pub mod computer_use_verification;
 pub mod framework;
 pub mod image_context;
 pub mod implementations;
+pub mod workspace_paths;
 pub mod input_validator;
 pub mod pipeline;
 pub mod registry;

@@ -348,6 +348,10 @@ impl Tool for WrappedTool {
         self.original_tool.input_schema()
     }
 
+    async fn input_schema_for_model(&self) -> Value {
+        self.original_tool.input_schema_for_model().await
+    }
+
     fn input_json_schema(&self) -> Option<Value> {
         self.original_tool.input_json_schema()
     }

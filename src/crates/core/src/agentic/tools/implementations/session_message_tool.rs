@@ -1,4 +1,5 @@
 use super::util::normalize_path;
+use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
     DialogTriggerSource,
@@ -42,12 +43,21 @@ impl SessionMessageTool {
         Ok(())
     }
 
-    fn resolve_workspace(&self, workspace: &str) -> BitFunResult<String> {
+    fn resolve_workspace(&self, workspace: &str, context: &ToolUseContext) -> BitFunResult<String> {
         let workspace = workspace.trim();
         if workspace.is_empty() {
             return Err(BitFunError::tool(
                 "workspace is required and cannot be empty".to_string(),
             ));
+        }
+
+        if context.is_remote() {
+            if !posix_style_path_is_absolute(workspace) {
+                return Err(BitFunError::tool(
+                    "workspace must be an absolute POSIX path on the remote host".to_string(),
+                ));
+            }
+            return context.resolve_workspace_tool_path(workspace);
         }
 
         let path = Path::new(workspace);
@@ -243,7 +253,26 @@ When overriding an existing session's agent_type, only switching between "agenti
             };
         }
 
-        if !Path::new(parsed.workspace.trim()).is_absolute() {
+        let Some(context) = context else {
+            if !Path::new(parsed.workspace.trim()).is_absolute()
+                && !posix_style_path_is_absolute(parsed.workspace.trim())
+            {
+                return ValidationResult {
+                    result: false,
+                    message: Some("workspace must be an absolute path".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+            return ValidationResult::default();
+        };
+
+        let ws_ok = if context.is_remote() {
+            posix_style_path_is_absolute(parsed.workspace.trim())
+        } else {
+            Path::new(parsed.workspace.trim()).is_absolute()
+        };
+        if !ws_ok {
             return ValidationResult {
                 result: false,
                 message: Some("workspace must be an absolute path".to_string()),
@@ -251,10 +280,6 @@ When overriding an existing session's agent_type, only switching between "agenti
                 meta: None,
             };
         }
-
-        let Some(context) = context else {
-            return ValidationResult::default();
-        };
 
         let Some(source_session_id) = context.session_id.as_deref() else {
             return ValidationResult {
@@ -301,7 +326,7 @@ When overriding an existing session's agent_type, only switching between "agenti
     ) -> BitFunResult<Vec<ToolResult>> {
         let params: SessionMessageInput = serde_json::from_value(input.clone())
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
-        let workspace = self.resolve_workspace(&params.workspace)?;
+        let workspace = self.resolve_workspace(&params.workspace, context)?;
         let workspace_path = Path::new(&workspace);
         let source_session_id = self.sender_session_id(context)?.to_string();
         let target_session_id = params.session_id.clone();

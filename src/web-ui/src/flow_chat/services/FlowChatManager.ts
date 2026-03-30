@@ -13,6 +13,7 @@ import { AgentService } from '../../shared/services/agent-service';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
+import type { WorkspaceInfo } from '@/shared/types';
 import {
   compareSessionsForDisplay,
   sessionBelongsToWorkspaceNavRow,
@@ -191,25 +192,18 @@ export class FlowChatManager {
   }
 
   async resetWorkspaceSessions(
-    workspacePath: string,
+    workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>,
     options?: {
       reinitialize?: boolean;
       preferredMode?: string;
       /** After reinit, ask core to run assistant bootstrap if BOOTSTRAP.md is present (e.g. workspace reset). */
       ensureAssistantBootstrap?: boolean;
-      /** When set, only removes/reinits sessions for this SSH connection (same path, different hosts). */
-      remoteConnectionId?: string | null;
-      /** Disambiguates remote workspaces that share the same `workspacePath` (e.g. `/` on different hosts). */
-      remoteSshHost?: string | null;
     }
   ): Promise<void> {
-    const remoteConnectionId = options?.remoteConnectionId;
-    const remoteSshHost = options?.remoteSshHost;
-    const removedSessionIds = this.context.flowChatStore.removeSessionsByWorkspace(
-      workspacePath,
-      remoteConnectionId,
-      remoteSshHost
-    );
+    const workspacePath = workspace.rootPath;
+    const remoteConnectionId = workspace.connectionId ?? null;
+    const remoteSshHost = workspace.sshHost ?? null;
+    const removedSessionIds = this.context.flowChatStore.removeSessionsForWorkspace(workspace);
 
     removedSessionIds.forEach(sessionId => {
       stateMachineManager.delete(sessionId);
@@ -249,6 +243,7 @@ export class FlowChatManager {
       await this.createChatSession(
         {
           workspacePath,
+          workspaceId: workspace.id,
           ...(remoteConnectionId ? { remoteConnectionId } : {}),
           ...(remoteSshHost ? { remoteSshHost } : {}),
         },

@@ -3,6 +3,7 @@
 //! Used to get structured code review results.
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::service::config::get_app_language_code;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
 use log::warn;
@@ -20,11 +21,38 @@ impl CodeReviewTool {
         "submit_code_review"
     }
 
-    pub fn description_str() -> &'static str {
-        "Submit code review results. After completing the review analysis, you must call this tool to submit a structured review report. All text fields must use Chinese (Simplified Chinese)."
+    /// Sync schema fallback (e.g. tests); prefers zh-CN wording. For model calls use [`input_schema_for_model`].
+    pub fn input_schema_value() -> Value {
+        Self::input_schema_value_for_language("zh-CN")
     }
 
-    pub fn input_schema_value() -> Value {
+    pub fn description_for_language(lang_code: &str) -> String {
+        match lang_code {
+            "en-US" => "Submit code review results. After completing the review analysis, you must call this tool to submit a structured review report. All user-visible text fields must be in English (per app language setting).".to_string(),
+            _ => "提交代码审查结果。完成审查分析后必须调用本工具提交结构化审查报告。所有用户可见的文本字段必须使用简体中文。".to_string(),
+        }
+    }
+
+    pub fn input_schema_value_for_language(lang_code: &str) -> Value {
+        let (oa, conf, title, desc, sugg, strengths) = match lang_code {
+            "en-US" => (
+                "Overall assessment (2-3 sentences, in English)",
+                "Context limitation note (optional, in English)",
+                "Issue title (in English)",
+                "Issue description (in English)",
+                "Fix suggestion (in English, optional)",
+                "Code strengths (1-2 items, in English)",
+            ),
+            _ => (
+                "总体评价（2-3 句，使用简体中文）",
+                "上下文局限说明（可选，使用简体中文）",
+                "问题标题（简体中文）",
+                "问题描述（简体中文）",
+                "修复建议（可选，简体中文）",
+                "代码优点（1-2 条，简体中文）",
+            ),
+        };
+
         json!({
             "type": "object",
             "properties": {
@@ -34,7 +62,7 @@ impl CodeReviewTool {
                     "properties": {
                         "overall_assessment": {
                             "type": "string",
-                            "description": "Overall assessment (2-3 sentences, use Chinese)"
+                            "description": oa
                         },
                         "risk_level": {
                             "type": "string",
@@ -48,7 +76,7 @@ impl CodeReviewTool {
                         },
                         "confidence_note": {
                             "type": "string",
-                            "description": "Context limitation note (optional, use Chinese)"
+                            "description": conf
                         }
                     },
                     "required": ["overall_assessment", "risk_level", "recommended_action"]
@@ -83,15 +111,15 @@ impl CodeReviewTool {
                             },
                             "title": {
                                 "type": "string",
-                                "description": "Issue title (Chinese)"
+                                "description": title
                             },
                             "description": {
                                 "type": "string",
-                                "description": "Issue description (Chinese)"
+                                "description": desc
                             },
                             "suggestion": {
                                 "type": ["string", "null"],
-                                "description": "Fix suggestion (Chinese, optional)"
+                                "description": sugg
                             }
                         },
                         "required": ["severity", "certainty", "category", "file", "title", "description"]
@@ -99,7 +127,7 @@ impl CodeReviewTool {
                 },
                 "positive_points": {
                     "type": "array",
-                    "description": "Code strengths (1-2 items, Chinese)",
+                    "description": strengths,
                     "items": {
                         "type": "string"
                     }
@@ -190,11 +218,17 @@ impl Tool for CodeReviewTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(Self::description_str().to_string())
+        let lang = get_app_language_code().await;
+        Ok(Self::description_for_language(lang.as_str()))
     }
 
     fn input_schema(&self) -> Value {
         Self::input_schema_value()
+    }
+
+    async fn input_schema_for_model(&self) -> Value {
+        let lang = get_app_language_code().await;
+        Self::input_schema_value_for_language(lang.as_str())
     }
 
     fn is_readonly(&self) -> bool {

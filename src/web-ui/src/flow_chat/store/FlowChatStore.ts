@@ -23,6 +23,9 @@ import {
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
+import type { WorkspaceInfo } from '@/shared/types';
+import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
+import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 
 const log = createLogger('FlowChatStore');
 
@@ -210,6 +213,7 @@ export class FlowChatStore {
         maxContextTokens: maxContextTokens || 128128,
         mode: mode || 'agentic',
         workspacePath,
+        workspaceId: config.workspaceId,
         remoteConnectionId,
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
@@ -657,27 +661,35 @@ export class FlowChatStore {
     });
   }
 
+  /**
+   * Remove sessions bound to a workspace using stable id + host/path scope (never path-only).
+   */
+  public removeSessionsForWorkspace(
+    workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>
+  ): string[] {
+    const removedSessionIds = Array.from(this.state.sessions.values())
+      .filter(session => sessionMatchesWorkspace(session, workspace))
+      .map(session => session.sessionId);
+
+    return this.removeSessionsByIds(removedSessionIds);
+  }
+
+  /** @deprecated Prefer `removeSessionsForWorkspace` with full `WorkspaceInfo`. */
   public removeSessionsByWorkspace(
     workspacePath: string,
     remoteConnectionId?: string | null,
     remoteSshHost?: string | null
   ): string[] {
-    const wsConn = remoteConnectionId?.trim() ?? '';
-    const wsHost = remoteSshHost?.trim() ?? '';
     const removedSessionIds = Array.from(this.state.sessions.values())
-      .filter(session => {
-        if (session.workspacePath !== workspacePath) return false;
-        const sc = session.remoteConnectionId?.trim() ?? '';
-        if (wsConn.length > 0 || sc.length > 0) {
-          if (sc !== wsConn) return false;
-        }
-        const sh = session.remoteSshHost?.trim() ?? '';
-        if (wsHost.length > 0 || sh.length > 0) {
-          return sh === wsHost;
-        }
-        return true;
-      })
+      .filter(session =>
+        sessionBelongsToWorkspaceNavRow(session, workspacePath, remoteConnectionId, remoteSshHost)
+      )
       .map(session => session.sessionId);
+
+    return this.removeSessionsByIds(removedSessionIds);
+  }
+
+  private removeSessionsByIds(removedSessionIds: string[]): string[] {
 
     if (removedSessionIds.length === 0) {
       return [];

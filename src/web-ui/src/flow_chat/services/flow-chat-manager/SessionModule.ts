@@ -62,10 +62,15 @@ const resolveSessionWorkspace = (
   context: FlowChatContext,
   config?: SessionConfig
 ): WorkspaceInfo | null => {
+  const state = workspaceManager.getState();
+  const configWorkspaceId = config?.workspaceId?.trim();
+  if (configWorkspaceId) {
+    const byId = state.openedWorkspaces.get(configWorkspaceId);
+    if (byId) return byId;
+  }
+
   const workspacePath = resolveSessionWorkspacePath(context, config);
   if (!workspacePath) return null;
-
-  const state = workspaceManager.getState();
   const pathMatches = Array.from(state.openedWorkspaces.values()).filter(workspace => {
     if (workspace.rootPath !== workspacePath) return false;
     if (workspace.workspaceKind !== WorkspaceKind.Remote) return true;
@@ -175,9 +180,11 @@ export async function createChatSession(
     const agentType = resolveAgentType(mode, workspace);
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
     const creationKey =
-      remoteConnectionId != null && remoteConnectionId !== ''
-        ? `${remoteConnectionId}\n${workspacePath}`
-        : workspacePath;
+      workspace?.id?.trim()
+        ? workspace.id
+        : remoteConnectionId != null && remoteConnectionId !== ''
+          ? `${remoteConnectionId}\n${workspacePath}`
+          : workspacePath;
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -196,6 +203,11 @@ export async function createChatSession(
           : i18nService.t('flow-chat:session.newCodeWithIndex', { count: sameModeCount });
     
     const maxContextTokens = await getModelMaxTokens(config.modelName);
+
+    const mergedConfig: SessionConfig = {
+      ...config,
+      workspaceId: workspace?.id ?? config.workspaceId,
+    };
 
     const createPromise = (async () => {
       const response = await agentAPI.createSession({
@@ -218,7 +230,7 @@ export async function createChatSession(
 
       context.flowChatStore.createSession(
         response.sessionId, 
-        config, 
+        mergedConfig, 
         undefined,
         sessionName,
         maxContextTokens,

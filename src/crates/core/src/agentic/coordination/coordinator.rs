@@ -644,7 +644,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     "Failed to create fallback session metadata during turn finalization: session_id={}, error={}",
                     session_id, e
                 );
-                return;
+                // Do not return: on read-only or transient IO errors we still try to persist the
+                // minimal dialog turn so local/remote UI history is not silently empty.
             }
         }
 

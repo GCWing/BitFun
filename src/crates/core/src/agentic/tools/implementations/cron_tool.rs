@@ -3,6 +3,7 @@ use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::service::{
     cron::{
         CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronSchedule,
@@ -55,9 +56,19 @@ impl CronTool {
         Ok(())
     }
 
-    fn validate_workspace_format(workspace: &str) -> Result<(), String> {
+    fn validate_workspace_format(
+        workspace: &str,
+        context: Option<&ToolUseContext>,
+    ) -> Result<(), String> {
         if workspace.trim().is_empty() {
             return Err("workspace cannot be empty".to_string());
+        }
+        let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
+        if is_remote {
+            if !posix_style_path_is_absolute(workspace.trim()) {
+                return Err("workspace must be an absolute POSIX path on the remote host".to_string());
+            }
+            return Ok(());
         }
         if !Path::new(workspace.trim()).is_absolute() {
             return Err("workspace must be an absolute path".to_string());
@@ -65,8 +76,18 @@ impl CronTool {
         Ok(())
     }
 
-    fn resolve_workspace(&self, workspace: &str) -> BitFunResult<String> {
-        Self::validate_workspace_format(workspace).map_err(BitFunError::tool)?;
+    fn resolve_workspace(
+        &self,
+        workspace: &str,
+        context: Option<&ToolUseContext>,
+    ) -> BitFunResult<String> {
+        Self::validate_workspace_format(workspace, context).map_err(BitFunError::tool)?;
+
+        if let Some(ctx) = context {
+            if ctx.is_remote() {
+                return ctx.resolve_workspace_tool_path(workspace.trim());
+            }
+        }
 
         let resolved = normalize_path(workspace.trim());
         let path = Path::new(&resolved);
@@ -91,7 +112,10 @@ impl CronTool {
                 "workspace is required when the current workspace is unavailable".to_string(),
             )
         })?;
-        self.resolve_workspace(&workspace.to_string_lossy().to_string())
+        self.resolve_workspace(
+            &workspace.to_string_lossy().to_string(),
+            Some(context),
+        )
     }
 
     fn resolve_effective_workspace(
@@ -100,7 +124,7 @@ impl CronTool {
         context: &ToolUseContext,
     ) -> BitFunResult<String> {
         match workspace {
-            Some(workspace) => self.resolve_workspace(workspace),
+            Some(workspace) => self.resolve_workspace(workspace, Some(context)),
             None => self.resolve_workspace_from_context(context),
         }
     }
@@ -669,7 +693,7 @@ Patch schema for "update":
         };
 
         if let Some(workspace) = parsed.workspace.as_deref() {
-            if let Err(message) = Self::validate_workspace_format(workspace) {
+            if let Err(message) = Self::validate_workspace_format(workspace, context) {
                 return ValidationResult {
                     result: false,
                     message: Some(message),

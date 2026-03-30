@@ -5,6 +5,7 @@ use crate::service::agent_memory::build_workspace_agent_memory_prompt;
 use crate::service::ai_memory::AIMemoryManager;
 use crate::service::ai_rules::get_global_ai_rules_service;
 use crate::service::bootstrap::build_workspace_persona_prompt;
+use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::project_context::ProjectContextService;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -24,11 +25,23 @@ const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 
+/// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
+#[derive(Debug, Clone)]
+pub struct RemoteExecutionHints {
+    pub connection_display_name: String,
+    pub kernel_name: String,
+    pub hostname: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
     pub workspace_path: String,
     pub session_id: Option<String>,
     pub model_name: Option<String>,
+    /// When set, file/shell tools target this remote environment; OS and path instructions follow it.
+    pub remote_execution: Option<RemoteExecutionHints>,
+    /// Pre-built tree text for `{PROJECT_LAYOUT}` when the workspace is not on the local disk.
+    pub remote_project_layout: Option<String>,
 }
 
 impl PromptBuilderContext {
@@ -41,7 +54,19 @@ impl PromptBuilderContext {
             workspace_path: workspace_path.into().replace("\\", "/"),
             session_id,
             model_name,
+            remote_execution: None,
+            remote_project_layout: None,
         }
+    }
+
+    pub fn with_remote_prompt_overlay(
+        mut self,
+        execution: RemoteExecutionHints,
+        project_layout: Option<String>,
+    ) -> Self {
+        self.remote_execution = Some(execution);
+        self.remote_project_layout = project_layout;
+        self
     }
 }
 
@@ -60,22 +85,48 @@ impl PromptBuilder {
 
     /// Provide complete environment information
     pub fn get_env_info(&self) -> String {
-        let os_name = std::env::consts::OS;
-        let os_family = std::env::consts::FAMILY;
-        let arch = std::env::consts::ARCH;
+        let host_os = std::env::consts::OS;
+        let host_family = std::env::consts::FAMILY;
+        let host_arch = std::env::consts::ARCH;
 
         let now = chrono::Local::now();
         let current_date = now.format("%Y-%m-%d").to_string();
 
-        let computer_use_keys = match os_name {
-            "macos" => "Computer use / `key_chord`: this host is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **System clipboard (prefer over long type_text):** command+a (select all), command+c (copy), command+x (cut), command+v (paste). Spotlight: command+space; switch app: command+tab.",
-            "windows" => "Computer use / `key_chord`: this host is **Windows** — use `meta`/`super` for the Windows key, `alt`, `control`, `shift`. **System clipboard:** control+a/c/x/v. Start menu: meta; Alt+Tab for window switch.",
-            "linux" => "Computer use / `key_chord`: this host is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super` depending on the desktop; match the user's session. **System clipboard:** usually control+a/c/x/v (confirm in-app menus if unsure).",
-            _ => "Computer use / `key_chord`: match modifier names to this host's OS (see Operating System above). Prefer standard clipboard chords before retyping long text.",
+        let computer_use_keys = match host_os {
+            "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **System clipboard (prefer over long type_text):** command+a (select all), command+c (copy), command+x (cut), command+v (paste). Spotlight: command+space; switch app: command+tab.",
+            "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for the Windows key, `alt`, `control`, `shift`. **System clipboard:** control+a/c/x/v. Start menu: meta; Alt+Tab for window switch.",
+            "linux" => "Computer use / `key_chord`: the **local BitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super` depending on the desktop; match the user's session. **System clipboard:** usually control+a/c/x/v (confirm in-app menus if unsure).",
+            _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. Prefer standard clipboard chords before retyping long text.",
         };
 
-        format!(
-            r#"# Environment Information
+        if let Some(remote) = &self.context.remote_execution {
+            format!(
+                r#"# Environment Information
+<environment_details>
+- Workspace root (file tools, Glob, LS, Bash on workspace): {}
+- Execution environment: **Remote SSH** — connection "{}".
+- Remote host: {} (uname/kernel: {})
+- **Paths and shell:** POSIX on the remote server — use forward slashes and Unix shell syntax (bash/sh). Do **not** use PowerShell, `cmd.exe`, or Windows-style paths for workspace operations.
+- Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only, not to workspace file or terminal tools.
+- Local client architecture: {}
+- Current Date: {}
+- {}
+</environment_details>
+
+"#,
+                self.context.workspace_path,
+                remote.connection_display_name.replace('"', "'"),
+                remote.hostname.replace('"', "'"),
+                remote.kernel_name.replace('"', "'"),
+                host_os,
+                host_family,
+                host_arch,
+                current_date,
+                computer_use_keys
+            )
+        } else {
+            format!(
+                r#"# Environment Information
 <environment_details>
 - Current Working Directory: {}
 - Operating System: {} ({})
@@ -85,17 +136,28 @@ impl PromptBuilder {
 </environment_details>
 
 "#,
-            self.context.workspace_path,
-            os_name,
-            os_family,
-            arch,
-            current_date,
-            computer_use_keys
-        )
+                self.context.workspace_path,
+                host_os,
+                host_family,
+                host_arch,
+                current_date,
+                computer_use_keys
+            )
+        }
     }
 
     /// Get workspace file list
     pub fn get_project_layout(&self) -> String {
+        if let Some(remote_layout) = &self.context.remote_project_layout {
+            let mut project_layout = "# Workspace Layout\n<project_layout>\n".to_string();
+            project_layout.push_str(
+                "Below is a snapshot of the current workspace's file structure on the **remote** host.\n\n",
+            );
+            project_layout.push_str(remote_layout);
+            project_layout.push_str("\n</project_layout>\n\n");
+            return project_layout;
+        }
+
         let (hit_limit, formatted_files_list) = get_formatted_files_list(
             &self.context.workspace_path,
             self.file_tree_max_entries,
@@ -120,6 +182,10 @@ impl PromptBuilder {
     /// Parameters:
     /// - filter: Optional filter, supports `include=category1,category2` or `exclude=category1`
     pub async fn get_project_context(&self, filter: Option<&str>) -> Option<String> {
+        if self.context.remote_execution.is_some() {
+            return None;
+        }
+
         let service = ProjectContextService::new();
         let workspace = Path::new(&self.context.workspace_path);
 
@@ -230,11 +296,7 @@ Prefer MermaidInteractive tool when available, otherwise output Mermaid code blo
     /// Returns empty string if config cannot be read
     /// Returns error if language code is unsupported
     async fn get_language_preference(&self) -> BitFunResult<String> {
-        let language_code = GlobalConfigManager::get_service()
-            .await?
-            .get_config::<String>(Some("app.language"))
-            .await?;
-
+        let language_code = get_app_language_code().await;
         Self::format_language_instruction(&language_code)
     }
 
@@ -285,16 +347,21 @@ Do not read from, modify, create, move, or delete files outside this workspace u
 
         // Replace {PERSONA}
         if result.contains(PLACEHOLDER_PERSONA) {
-            let workspace = Path::new(&self.context.workspace_path);
-            let persona = match build_workspace_persona_prompt(workspace).await {
-                Ok(prompt) => prompt.unwrap_or_default(),
-                Err(e) => {
-                    warn!(
-                        "Failed to build workspace persona prompt: path={} error={}",
-                        workspace.display(),
-                        e
-                    );
-                    String::new()
+            let persona = if self.context.remote_execution.is_some() {
+                "# Workspace persona\nMarkdown persona files (e.g. BOOTSTRAP.md, SOUL.md) live on the **remote** workspace. Use Read or Glob under the workspace root above to load them.\n\n"
+                    .to_string()
+            } else {
+                let workspace = Path::new(&self.context.workspace_path);
+                match build_workspace_persona_prompt(workspace).await {
+                    Ok(prompt) => prompt.unwrap_or_default(),
+                    Err(e) => {
+                        warn!(
+                            "Failed to build workspace persona prompt: path={} error={}",
+                            workspace.display(),
+                            e
+                        );
+                        String::new()
+                    }
                 }
             };
             result = result.replace(PLACEHOLDER_PERSONA, &persona);
@@ -361,16 +428,21 @@ Do not read from, modify, create, move, or delete files outside this workspace u
 
         // Replace {AGENT_MEMORY}
         if result.contains(PLACEHOLDER_AGENT_MEMORY) {
-            let workspace = Path::new(&self.context.workspace_path);
-            let agent_memory = match build_workspace_agent_memory_prompt(workspace).await {
-                Ok(prompt) => prompt,
-                Err(e) => {
-                    warn!(
-                        "Failed to build workspace agent memory prompt: path={} error={}",
-                        workspace.display(),
-                        e
-                    );
-                    String::new()
+            let agent_memory = if self.context.remote_execution.is_some() {
+                "# Agent memory\nSession memory under `.bitfun/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
+                    .to_string()
+            } else {
+                let workspace = Path::new(&self.context.workspace_path);
+                match build_workspace_agent_memory_prompt(workspace).await {
+                    Ok(prompt) => prompt,
+                    Err(e) => {
+                        warn!(
+                            "Failed to build workspace agent memory prompt: path={} error={}",
+                            workspace.display(),
+                            e
+                        );
+                        String::new()
+                    }
                 }
             };
             result = result.replace(PLACEHOLDER_AGENT_MEMORY, &agent_memory);

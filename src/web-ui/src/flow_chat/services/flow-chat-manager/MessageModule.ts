@@ -150,11 +150,20 @@ export async function sendMessage(
       pinMode: 'sticky-latest',
     };
     globalEventBus.emit(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, pinRequest, 'MessageModule');
-    
-    await stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
+
+    const startOk = await stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
       taskId: sessionId,
       dialogTurnId,
     });
+    // START is only valid from IDLE/ERROR (see STATE_TRANSITIONS). If the previous turn left the
+    // machine in PROCESSING/FINISHING, transition fails — but the backend still runs this turnId.
+    // Sync context so TextChunk/ModelRound events are not dropped (turn_id_mismatch).
+    if (!startOk) {
+      const machine = stateMachineManager.get(sessionId);
+      if (machine) {
+        machine.getContext().currentDialogTurnId = dialogTurnId;
+      }
+    }
 
     if (isFirstMessage) {
       handleTitleGeneration(context, sessionId, message);

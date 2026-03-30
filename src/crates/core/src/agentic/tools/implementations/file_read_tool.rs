@@ -1,7 +1,7 @@
-use super::util::resolve_path_with_workspace;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
 use crate::service::ai_rules::get_global_ai_rules_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -227,10 +227,17 @@ Usage:
             }
         };
 
-        let resolved_path = match resolve_path_with_workspace(
+        let cwd_owned = context.and_then(|ctx| ctx.current_working_directory.clone());
+        let root_owned = context.and_then(|ctx| {
+            ctx.workspace
+                .as_ref()
+                .map(|w| w.root_path_string())
+        });
+        let resolved_path = match resolve_workspace_tool_path(
             file_path,
-            context.and_then(|ctx| ctx.current_working_directory()),
-            context.and_then(|ctx| ctx.workspace_root()),
+            cwd_owned.as_deref(),
+            root_owned.as_deref(),
+            context.map(|c| c.is_remote()).unwrap_or(false),
         ) {
             Ok(path) => path,
             Err(err) => {
@@ -301,11 +308,7 @@ Usage:
             .and_then(|v| v.as_u64())
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
-        let resolved_path = resolve_path_with_workspace(
-            file_path,
-            context.current_working_directory(),
-            context.workspace_root(),
-        )?;
+        let resolved_path = context.resolve_workspace_tool_path(file_path)?;
 
         // Use the workspace file system from context — works for both local and remote.
         let read_file_result = if context.is_remote() {

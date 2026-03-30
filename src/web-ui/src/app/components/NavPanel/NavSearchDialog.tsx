@@ -9,6 +9,7 @@ import { useApp } from '@/app/hooks/useApp';
 import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
 import { useNurseryStore } from '@/app/scenes/profile/nurseryStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { findWorkspaceForSession } from '@/flow_chat/utils/workspaceScope';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -76,7 +77,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     const result: Array<{ session: Session; workspace: WorkspaceInfo | undefined }> = [];
     const allWorkspaces = [...openedWorkspacesList];
     for (const session of flowChatState.sessions.values()) {
-      const workspace = allWorkspaces.find(w => w.rootPath === session.workspacePath);
+      const workspace = findWorkspaceForSession(session, allWorkspaces);
       result.push({ session, workspace });
     }
     result.sort((a, b) => {

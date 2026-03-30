@@ -161,7 +161,7 @@ pub async fn get_all_tools_info() -> Result<Vec<ToolInfo>, String> {
         tool_infos.push(ToolInfo {
             name: tool.name().to_string(),
             description,
-            input_schema: tool.input_schema(),
+            input_schema: tool.input_schema_for_model().await,
             is_readonly: tool.is_readonly(),
             is_concurrency_safe: tool.is_concurrency_safe(None),
             needs_permissions: tool.needs_permissions(None),
@@ -188,7 +188,7 @@ pub async fn get_readonly_tools_info() -> Result<Vec<ToolInfo>, String> {
         tool_infos.push(ToolInfo {
             name: tool.name().to_string(),
             description,
-            input_schema: tool.input_schema(),
+            input_schema: tool.input_schema_for_model().await,
             is_readonly: tool.is_readonly(),
             is_concurrency_safe: tool.is_concurrency_safe(None),
             needs_permissions: tool.needs_permissions(None),
@@ -212,7 +212,7 @@ pub async fn get_tool_info(tool_name: String) -> Result<Option<ToolInfo>, String
             return Ok(Some(ToolInfo {
                 name: tool.name().to_string(),
                 description,
-                input_schema: tool.input_schema(),
+                input_schema: tool.input_schema_for_model().await,
                 is_readonly: tool.is_readonly(),
                 is_concurrency_safe: tool.is_concurrency_safe(None),
                 needs_permissions: tool.needs_permissions(None),

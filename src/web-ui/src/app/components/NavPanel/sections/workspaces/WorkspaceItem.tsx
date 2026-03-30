@@ -198,7 +198,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setIsResettingWorkspace(true);
     try {
       await resetAssistantWorkspace(workspace.id);
-      await flowChatManager.resetWorkspaceSessions(workspace.rootPath, {
+      await flowChatManager.resetWorkspaceSessions(workspace, {
         reinitialize: isActive,
         preferredMode: 'Claw',
         ensureAssistantBootstrap:
@@ -213,7 +213,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     } finally {
       setIsResettingWorkspace(false);
     }
-  }, [isActive, isDefaultAssistantWorkspace, isResettingWorkspace, resetAssistantWorkspace, t, workspace.id, workspace.rootPath, workspace.workspaceKind]);
+  }, [isActive, isDefaultAssistantWorkspace, isResettingWorkspace, resetAssistantWorkspace, t, workspace]);
 
   const handleReveal = useCallback(async () => {
     setMenuOpen(false);

@@ -85,9 +85,15 @@ impl Tool for SkillTool {
         &self,
         context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(self
+        let mut s = self
             .build_description(context.and_then(|ctx| ctx.workspace_root()))
-            .await)
+            .await;
+        if context.map(|c| c.is_remote()).unwrap_or(false) {
+            s.push_str(
+                "\n\n**Remote workspace:** Project-level skills under `.bitfun/skills` on the **server** may not appear in the list above because this index is built from the local workspace view. Use **Read** / **Glob** on the remote tree if you need a skill file that is not listed.",
+            );
+        }
+        Ok(s)
     }
 
     fn input_schema(&self) -> Value {
