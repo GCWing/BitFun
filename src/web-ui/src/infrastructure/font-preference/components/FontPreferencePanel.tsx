@@ -6,7 +6,7 @@ import { useFontPreference } from '../hooks/useFontPreference';
 import { FontSizeLevel, UI_FONT_SIZE_PRESETS } from '../types';
 import './FontPreferencePanel.scss';
 
-const UI_LEVELS: FontSizeLevel[] = ['compact', 'small', 'default', 'medium', 'large'];
+const UI_LEVELS: Array<Exclude<FontSizeLevel, 'custom'>> = ['compact', 'small', 'default', 'medium', 'large'];
 const FLOW_CHAT_PX_OPTIONS = [12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 export function FontPreferencePanel() {
