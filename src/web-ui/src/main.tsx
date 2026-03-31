@@ -21,10 +21,56 @@ import {
   isMinifiedReactErrorMessage,
 } from './shared/utils/reactProductionError';
 
+const STARTUP_EPOCH_KEY = '__bitfun_startup_epoch__';
+const STARTUP_STAGE_KEY = '__bitfun_startup_stage_epoch__';
+
+function getStartupWindowState(): Window & Record<string, unknown> {
+  return window as unknown as Window & Record<string, unknown>;
+}
+
+function initializeStartupClock(): void {
+  const startupWindow = getStartupWindowState();
+  if (typeof startupWindow[STARTUP_EPOCH_KEY] !== 'number') {
+    const now = performance.now();
+    startupWindow[STARTUP_EPOCH_KEY] = now;
+    startupWindow[STARTUP_STAGE_KEY] = now;
+  }
+}
+
+function logStartupStage(stage: string, data?: Record<string, unknown>): void {
+  const startupWindow = getStartupWindowState();
+  const now = performance.now();
+  const startupEpoch =
+    typeof startupWindow[STARTUP_EPOCH_KEY] === 'number'
+      ? startupWindow[STARTUP_EPOCH_KEY] as number
+      : now;
+  const previousStageEpoch =
+    typeof startupWindow[STARTUP_STAGE_KEY] === 'number'
+      ? startupWindow[STARTUP_STAGE_KEY] as number
+      : startupEpoch;
+
+  startupWindow[STARTUP_EPOCH_KEY] = startupEpoch;
+  startupWindow[STARTUP_STAGE_KEY] = now;
+
+  const stageMs = Math.round(now - previousStageEpoch);
+  const totalMs = Math.round(now - startupEpoch);
+
+  log.info('Startup timing', {
+    stage,
+    stageMs,
+    totalMs,
+    stageSeconds: Number((stageMs / 1000).toFixed(3)),
+    totalSeconds: Number((totalMs / 1000).toFixed(3)),
+    ...data,
+  });
+}
+
 // Install console forwarding before app startup so early console output is persisted too.
 bootstrapLogger();
+initializeStartupClock();
 
 const log = createLogger('App');
+logStartupStage('web.entry_loaded');
 
 /** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
 const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';
@@ -218,10 +264,12 @@ async function initializeApp() {
   try {
     // Initialize logger state before startup logs.
     await initLogger();
+    logStartupStage('frontend.logger_initialized');
 
     // Sync frontend logger with app.logging.level before startup logs.
     const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
     await initializeFrontendLogLevelSync();
+    logStartupStage('frontend.log_level_synced');
 
     log.debug('Monaco loader configured', { vs: monacoPath, isDev });
     log.info('Initializing BitFun');
@@ -229,20 +277,24 @@ async function initializeApp() {
     // Synchronous initialization: core systems that must run first.
     const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
     registerDefaultContextTypes();
+    logStartupStage('frontend.context_types_registered');
     
     // Initialize smart recommendation system.
     const { initRecommendationProviders } = await import('./flow_chat/components/smart-recommendations');
     initRecommendationProviders();
+    logStartupStage('frontend.recommendations_initialized');
     
     // Initialize theme system.
     const { themeService } = await import('./infrastructure/theme');
     await themeService.initialize();
     log.info('Theme system initialized');
+    logStartupStage('frontend.theme_initialized');
     
     // Preload editor configuration.
     const { configManager } = await import('./infrastructure/config');
     await configManager.getConfig('editor');
     log.info('Editor configuration preloaded');
+    logStartupStage('frontend.editor_config_preloaded');
     
     // Note: i18n is initialized by I18nProvider, not here.
     // This avoids blocking startup and ensures i18n is ready during React render.
@@ -289,8 +341,12 @@ async function initializeApp() {
     });
     
     log.info('BitFun core systems initialized successfully');
+    logStartupStage('frontend.parallel_init_completed');
   } catch (error) {
     log.error('Failed to initialize BitFun', error);
+    logStartupStage('frontend.initialize_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -310,3 +366,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     </I18nProvider>
   </AppErrorBoundary>
 );
+logStartupStage('react.root_render_scheduled');
+requestAnimationFrame(() => {
+  logStartupStage('react.first_animation_frame');
+});

@@ -15,6 +15,36 @@ import SplashScreen from './components/SplashScreen/SplashScreen';
 import { ToolbarModeProvider } from '../flow_chat';
 
 const log = createLogger('App');
+const STARTUP_EPOCH_KEY = '__bitfun_startup_epoch__';
+const STARTUP_STAGE_KEY = '__bitfun_startup_stage_epoch__';
+
+function logStartupStage(stage: string, data?: Record<string, unknown>): void {
+  const startupWindow = window as unknown as Window & Record<string, unknown>;
+  const now = performance.now();
+  const startupEpoch =
+    typeof startupWindow[STARTUP_EPOCH_KEY] === 'number'
+      ? startupWindow[STARTUP_EPOCH_KEY] as number
+      : now;
+  const previousStageEpoch =
+    typeof startupWindow[STARTUP_STAGE_KEY] === 'number'
+      ? startupWindow[STARTUP_STAGE_KEY] as number
+      : startupEpoch;
+
+  startupWindow[STARTUP_EPOCH_KEY] = startupEpoch;
+  startupWindow[STARTUP_STAGE_KEY] = now;
+
+  const stageMs = Math.round(now - previousStageEpoch);
+  const totalMs = Math.round(now - startupEpoch);
+
+  log.info('Startup timing', {
+    stage,
+    stageMs,
+    totalMs,
+    stageSeconds: Number((stageMs / 1000).toFixed(3)),
+    totalSeconds: Number((totalMs / 1000).toFixed(3)),
+    ...data,
+  });
+}
 
 /**
  * BitFun main application component.
@@ -43,17 +73,25 @@ function App() {
   const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
 
+  useEffect(() => {
+    logStartupStage('app.component_mounted');
+  }, []);
+
   // Once the workspace finishes loading, wait for the remaining min-display
   // time and then begin the exit animation.
   useEffect(() => {
     if (workspaceLoading) return;
     const elapsed = Date.now() - mountTimeRef.current;
     const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+    logStartupStage('workspace.loading_completed', {
+      remainingSplashMs: remaining,
+    });
     const timer = window.setTimeout(() => setSplashExiting(true), remaining);
     return () => window.clearTimeout(timer);
   }, [workspaceLoading]);
 
   const handleSplashExited = useCallback(() => {
+    logStartupStage('splash.exit_completed');
     setSplashVisible(false);
   }, []);
 
@@ -64,8 +102,10 @@ function App() {
     mainWindowShownRef.current = true;
 
     try {
+      logStartupStage('window.show_requested', { reason });
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('show_main_window');
+      logStartupStage('window.show_completed', { reason, method: 'invoke' });
       log.debug('Main window shown', { reason });
     } catch (error: any) {
       log.error('Failed to show main window', error);
@@ -75,6 +115,7 @@ function App() {
         const mainWindow = getCurrentWindow();
         await mainWindow.show();
         await mainWindow.setFocus();
+        logStartupStage('window.show_completed', { reason, method: 'fallback' });
         log.debug('Main window shown via fallback', { reason });
       } catch (fallbackError) {
         log.error('Fallback window show failed', fallbackError);
@@ -83,8 +124,14 @@ function App() {
     }
   }, []);
 
-  // Keep the native window hidden until the startup splash has fully exited.
-  // This avoids showing a blank/half-painted webview before the first stable frame.
+  // Reveal the native window as soon as React has painted a frame.
+  // The splash still covers the UI, so users see immediate feedback instead
+  // of waiting on a hidden window while startup continues in the background.
+  useEffect(() => {
+    void showMainWindow('startup-overlay');
+  }, [showMainWindow]);
+
+  // If the early reveal path fails, keep the old post-splash show as a retry.
   useEffect(() => {
     if (splashVisible) {
       return;
@@ -109,12 +156,14 @@ function App() {
   // Startup logs and initialization
   useEffect(() => {
     log.info('Application started, initializing systems');
+    logStartupStage('app.effect_initializers_started');
     
     // Initialize IDE control system
     const initIdeControl = async () => {
       try {
         const { initializeIdeControl } = await import('../shared/services/ide-control');
         await initializeIdeControl();
+        logStartupStage('app.ide_control_initialized');
         log.debug('IDE control system initialized');
       } catch (error) {
         log.error('Failed to initialize IDE control system', error);
@@ -126,6 +175,7 @@ function App() {
       try {
         const { MCPAPI } = await import('../infrastructure/api/service-api/MCPAPI');
         await MCPAPI.initializeServers();
+        logStartupStage('app.mcp_servers_initialized');
         log.debug('MCP servers initialized');
       } catch (error) {
         log.error('Failed to initialize MCP servers', error);
