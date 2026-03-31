@@ -18,23 +18,25 @@ impl TaskTool {
     }
 
     fn format_agent_descriptions(&self, agents: &[AgentInfo]) -> String {
-        agents
-            .iter()
-            .map(|agent| {
-                format!(
-                    "- {}: {} (Tools: {})",
-                    agent.id,
-                    agent.description,
-                    agent.default_tools.join(", ")
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("\n")
+        if agents.is_empty() {
+            return String::new();
+        }
+        let mut out = String::from("<available_agents>\n");
+        for agent in agents {
+            out.push_str(&format!(
+                "<agent type=\"{}\">\n<description>\n{}\n</description>\n<tools>{}</tools>\n</agent>\n",
+                agent.id,
+                agent.description,
+                agent.default_tools.join(", ")
+            ));
+        }
+        out.push_str("</available_agents>");
+        out
     }
 
     fn render_description(&self, agent_descriptions: String) -> String {
         let agent_descriptions = if agent_descriptions.is_empty() {
-            "- No enabled subagents found".to_string()
+            "<agents>No agents available</agents>".to_string()
         } else {
             agent_descriptions
         };
@@ -44,7 +46,7 @@ impl TaskTool {
 
 The Task tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-Available agent types and the tools they have access to:
+Available agents and the tools they have access to:
 {}
 
 When using the Task tool, you must specify a subagent_type parameter to select which agent type to use.
