@@ -6,10 +6,10 @@ use crate::agentic::core::{
     strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
     SessionState, SessionSummary,
 };
+use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
-use crate::infrastructure::PathManager;
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions, SessionTranscriptIndexEntry, ToolItemData, TranscriptLineRange,
@@ -581,18 +581,17 @@ impl PersistenceManager {
             .or_else(|| existing.map(|value| value.model_name.clone()))
             .unwrap_or_else(|| "default".to_string());
 
-        let resolved_identity = if let Some(workspace_root) =
-            session.config.workspace_path.as_deref()
-        {
-            resolve_workspace_session_identity(
-                workspace_root,
-                session.config.remote_connection_id.as_deref(),
-                session.config.remote_ssh_host.as_deref(),
-            )
-            .await
-        } else {
-            None
-        };
+        let resolved_identity =
+            if let Some(workspace_root) = session.config.workspace_path.as_deref() {
+                resolve_workspace_session_identity(
+                    workspace_root,
+                    session.config.remote_connection_id.as_deref(),
+                    session.config.remote_ssh_host.as_deref(),
+                )
+                .await
+            } else {
+                None
+            };
 
         let workspace_root = resolved_identity
             .as_ref()
@@ -620,6 +619,7 @@ impl PersistenceManager {
                 .created_by
                 .clone()
                 .or_else(|| existing.and_then(|value| value.created_by.clone())),
+            session_kind: session.kind,
             model_name,
             created_at,
             last_active_at,
@@ -1161,7 +1161,7 @@ impl PersistenceManager {
         }
     }
 
-    async fn rebuild_index_locked(
+    async fn scan_session_metadata_dirs(
         &self,
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
@@ -1200,15 +1200,28 @@ impl PersistenceManager {
 
         metadata_list.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
 
+        Ok(metadata_list)
+    }
+
+    async fn rebuild_index_locked(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<Vec<SessionMetadata>> {
+        let metadata_list = self.scan_session_metadata_dirs(workspace_path).await?;
+        let visible_sessions = metadata_list
+            .into_iter()
+            .filter(|metadata| !metadata.should_hide_from_user_lists())
+            .collect::<Vec<_>>();
+
         let index = StoredSessionIndex {
             schema_version: SESSION_SCHEMA_VERSION,
             updated_at: Self::system_time_to_unix_ms(SystemTime::now()),
-            sessions: metadata_list.clone(),
+            sessions: visible_sessions.clone(),
         };
         self.write_json_atomic(&self.index_path(workspace_path), &index)
             .await?;
 
-        Ok(metadata_list)
+        Ok(visible_sessions)
     }
 
     async fn upsert_index_entry_locked(
@@ -1319,6 +1332,17 @@ impl PersistenceManager {
         self.rebuild_index_locked(workspace_path).await
     }
 
+    pub async fn list_session_metadata_including_internal(
+        &self,
+        workspace_path: &Path,
+    ) -> BitFunResult<Vec<SessionMetadata>> {
+        if !workspace_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        self.scan_session_metadata_dirs(workspace_path).await
+    }
+
     pub async fn save_session_metadata(
         &self,
         workspace_path: &Path,
@@ -1337,7 +1361,12 @@ impl PersistenceManager {
             &file,
         )
         .await?;
-        self.upsert_index_entry(workspace_path, metadata).await
+        if !metadata.should_hide_from_user_lists() {
+            self.upsert_index_entry(workspace_path, metadata).await
+        } else {
+            self.remove_index_entry(workspace_path, &metadata.session_id)
+                .await
+        }
     }
 
     pub async fn load_session_metadata(
@@ -1581,6 +1610,7 @@ impl PersistenceManager {
             session_name: metadata.session_name.clone(),
             agent_type: metadata.agent_type.clone(),
             created_by: metadata.created_by.clone(),
+            kind: metadata.session_kind,
             snapshot_session_id: stored_state
                 .and_then(|value| value.snapshot_session_id)
                 .or(metadata.snapshot_session_id.clone()),
@@ -1655,6 +1685,7 @@ impl PersistenceManager {
                 session_name: metadata.session_name,
                 agent_type: metadata.agent_type,
                 created_by: metadata.created_by,
+                kind: metadata.session_kind,
                 turn_count: metadata.turn_count,
                 created_at: Self::unix_ms_to_system_time(metadata.created_at),
                 last_activity_at: Self::unix_ms_to_system_time(metadata.last_active_at),
@@ -2087,12 +2118,12 @@ impl PersistenceManager {
         }
         Ok(())
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::PersistenceManager;
+    use crate::agentic::core::SessionKind;
     use crate::infrastructure::PathManager;
     use crate::service::session::{
         DialogTurnData, SessionMetadata, SessionTranscriptExportOptions, UserMessageData,
@@ -2211,5 +2242,71 @@ mod tests {
             .expect("transcript file should be readable");
         assert!(transcript.contains("## Turn 0"));
         assert!(transcript.contains("hello transcript"));
+    }
+
+    #[tokio::test]
+    async fn subagent_session_kind_is_hidden_from_visible_session_index() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+
+        let mut metadata = SessionMetadata::new(
+            Uuid::new_v4().to_string(),
+            "Subagent: repo sweep".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        metadata.session_kind = SessionKind::Subagent;
+
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        let visible = manager
+            .list_session_metadata(workspace.path())
+            .await
+            .expect("visible metadata should load");
+        let raw = manager
+            .list_session_metadata_including_internal(workspace.path())
+            .await
+            .expect("raw metadata should load");
+
+        assert!(visible.is_empty());
+        assert_eq!(raw.len(), 1);
+        assert!(raw[0].is_subagent());
+    }
+
+    #[tokio::test]
+    async fn legacy_leaked_subagent_is_hidden_from_visible_session_index() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+
+        let mut metadata = SessionMetadata::new(
+            Uuid::new_v4().to_string(),
+            "Subagent: stale task".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        metadata.created_by = Some("session-parent".to_string());
+
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        let visible = manager
+            .list_session_metadata(workspace.path())
+            .await
+            .expect("visible metadata should load");
+        let raw = manager
+            .list_session_metadata_including_internal(workspace.path())
+            .await
+            .expect("raw metadata should load");
+
+        assert!(visible.is_empty());
+        assert_eq!(raw.len(), 1);
+        assert!(raw[0].is_legacy_leaked_subagent_candidate());
     }
 }

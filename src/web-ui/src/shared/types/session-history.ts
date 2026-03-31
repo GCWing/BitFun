@@ -5,6 +5,7 @@
  */
 
 export type SessionKind = 'normal' | 'btw';
+export type PersistedSessionKind = 'standard' | 'subagent';
 
 export interface SessionCustomMetadata extends Record<string, unknown> {
   kind?: SessionKind;
@@ -19,6 +20,7 @@ export interface SessionMetadata {
   sessionId: string;
   sessionName: string;
   agentType: string;
+  sessionKind?: PersistedSessionKind;
   modelName: string;
   createdAt: number;
   lastActiveAt: number;

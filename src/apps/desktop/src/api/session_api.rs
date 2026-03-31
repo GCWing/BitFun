@@ -290,8 +290,10 @@ pub async fn load_persisted_session_metadata(
     let manager = PersistenceManager::new(path_manager.inner().clone())
         .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
 
-    manager
+    let metadata = manager
         .load_session_metadata(&workspace_path, &request.session_id)
         .await
-        .map_err(|e| format!("Failed to load persisted session metadata: {}", e))
+        .map_err(|e| format!("Failed to load persisted session metadata: {}", e))?;
+
+    Ok(metadata.filter(|metadata| !metadata.should_hide_from_user_lists()))
 }

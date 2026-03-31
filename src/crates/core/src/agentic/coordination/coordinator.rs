@@ -6,7 +6,7 @@ use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::core::{
     has_prompt_markup, Message, MessageContent, ProcessingPhase, PromptEnvelope, Session,
-    SessionConfig, SessionState, SessionSummary, TurnStats,
+    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -625,6 +625,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_name: "Recovered Session".to_string(),
                 agent_type: "agentic".to_string(),
                 created_by: None,
+                session_kind: SessionKind::Standard,
                 model_name: "default".to_string(),
                 created_at: now_ms,
                 last_active_at: now_ms,
@@ -688,15 +689,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_name: String,
         agent_type: String,
         config: SessionConfig,
-        creator_session_id: Option<&str>,
+        parent_info: &SubagentParentInfo,
     ) -> BitFunResult<Session> {
         self.session_manager
-            .create_session_with_id_and_creator(
+            .create_session_with_id_and_details(
                 None,
                 session_name,
                 agent_type,
                 config,
-                creator_session_id.map(|session_id| format!("session-{}", session_id)),
+                Some(format!("session-{}", parent_info.session_id)),
+                SessionKind::Subagent,
             )
             .await
     }
@@ -1884,7 +1886,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 format!("Subagent: {}", task_description),
                 agent_type.clone(),
                 subagent_config,
-                Some(&subagent_parent_info.session_id),
+                &subagent_parent_info,
             )
             .await?;
 

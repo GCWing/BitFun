@@ -4,7 +4,7 @@
 
 use crate::agentic::core::{
     CompressionState, DialogTurn, Message, MessageSemanticKind, ProcessingPhase, Session,
-    SessionConfig, SessionState, SessionSummary, TurnStats,
+    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
@@ -390,8 +390,15 @@ impl SessionManager {
         agent_type: String,
         config: SessionConfig,
     ) -> BitFunResult<Session> {
-        self.create_session_with_id_and_creator(None, session_name, agent_type, config, None)
-            .await
+        self.create_session_with_id_and_details(
+            None,
+            session_name,
+            agent_type,
+            config,
+            None,
+            SessionKind::Standard,
+        )
+        .await
     }
 
     /// Create a new session (supports specifying session ID)
@@ -402,8 +409,15 @@ impl SessionManager {
         agent_type: String,
         config: SessionConfig,
     ) -> BitFunResult<Session> {
-        self.create_session_with_id_and_creator(session_id, session_name, agent_type, config, None)
-            .await
+        self.create_session_with_id_and_details(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            None,
+            SessionKind::Standard,
+        )
+        .await
     }
 
     /// Create a new session (supports specifying session ID and creator identity)
@@ -414,6 +428,27 @@ impl SessionManager {
         agent_type: String,
         config: SessionConfig,
         created_by: Option<String>,
+    ) -> BitFunResult<Session> {
+        self.create_session_with_id_and_details(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            created_by,
+            SessionKind::Standard,
+        )
+        .await
+    }
+
+    /// Create a new session with explicit kind.
+    pub async fn create_session_with_id_and_details(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
+        config: SessionConfig,
+        created_by: Option<String>,
+        kind: SessionKind,
     ) -> BitFunResult<Session> {
         let _workspace_path = Self::session_workspace_from_config(&config).ok_or_else(|| {
             BitFunError::Validation("Session workspace_path is required".to_string())
@@ -439,6 +474,7 @@ impl SessionManager {
             Session::new(session_name, agent_type.clone(), config)
         };
         session.created_by = created_by;
+        session.kind = kind;
         let session_id = session.session_id.clone();
 
         // 1. Add to memory
@@ -743,6 +779,18 @@ impl SessionManager {
                 .unwrap_or_else(|| workspace_path.to_path_buf())
         };
 
+        if self
+            .persistence_manager
+            .load_session_metadata(&session_storage_path, session_id)
+            .await?
+            .is_some_and(|metadata| metadata.should_hide_from_user_lists())
+        {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
         // 1. Load session from storage
         let mut session = self
             .persistence_manager
@@ -947,12 +995,14 @@ impl SessionManager {
                         session_name: session.session_name.clone(),
                         agent_type: session.agent_type.clone(),
                         created_by: session.created_by.clone(),
+                        kind: session.kind,
                         turn_count: session.dialog_turn_ids.len(),
                         created_at: session.created_at,
                         last_activity_at: session.last_activity_at,
                         state: session.state.clone(),
                     }
                 })
+                .filter(|summary| !matches!(summary.kind, SessionKind::Subagent))
                 .collect();
             Ok(summaries)
         }

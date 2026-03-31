@@ -1,5 +1,6 @@
 //! Types for session persistence
 
+use crate::agentic::core::SessionKind;
 use serde::{Deserialize, Serialize};
 
 /// Session metadata
@@ -21,6 +22,8 @@ pub struct SessionMetadata {
     /// Creator identity for future permission checks
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "created_by")]
     pub created_by: Option<String>,
+    #[serde(default, alias = "session_kind", alias = "sessionKind")]
+    pub session_kind: SessionKind,
 
     /// Model name
     #[serde(alias = "model_name")]
@@ -79,7 +82,11 @@ pub struct SessionMetadata {
 
     /// Unified hostname for workspace identity: `localhost` for local workspaces,
     /// SSH host for remote workspaces.
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "workspace_hostname")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "workspace_hostname"
+    )]
     pub workspace_hostname: Option<String>,
 }
 
@@ -458,6 +465,7 @@ impl SessionMetadata {
             session_name,
             agent_type,
             created_by: None,
+            session_kind: SessionKind::Standard,
             model_name,
             created_at: now,
             last_active_at: now,
@@ -496,6 +504,29 @@ impl SessionMetadata {
     /// Adds to the tool call count.
     pub fn add_tool_calls(&mut self, count: usize) {
         self.tool_call_count += count;
+    }
+
+    pub fn is_subagent(&self) -> bool {
+        matches!(self.session_kind, SessionKind::Subagent)
+    }
+
+    pub fn is_standard(&self) -> bool {
+        !self.is_subagent()
+    }
+
+    pub fn is_legacy_leaked_subagent_candidate(&self) -> bool {
+        let Some(created_by) = self.created_by.as_deref() else {
+            return false;
+        };
+        if !created_by.starts_with("session-") {
+            return false;
+        }
+
+        self.session_name.starts_with("Subagent: ")
+    }
+
+    pub fn should_hide_from_user_lists(&self) -> bool {
+        self.is_subagent() || self.is_legacy_leaked_subagent_candidate()
     }
 }
 
@@ -567,7 +598,8 @@ impl DialogTurnData {
 
 #[cfg(test)]
 mod tests {
-    use super::{DialogTurnData, DialogTurnKind, UserMessageData};
+    use super::{DialogTurnData, DialogTurnKind, SessionMetadata, UserMessageData};
+    use crate::agentic::core::SessionKind;
 
     #[test]
     fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {
@@ -607,5 +639,61 @@ mod tests {
         );
 
         assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+    }
+
+    #[test]
+    fn session_metadata_marks_explicit_subagent_as_non_standard() {
+        let mut metadata = SessionMetadata::new(
+            "session-1".to_string(),
+            "Subagent: explore repo".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        metadata.session_kind = SessionKind::Subagent;
+
+        assert!(metadata.is_subagent());
+        assert!(!metadata.is_standard());
+    }
+
+    #[test]
+    fn session_metadata_does_not_treat_standard_session_as_subagent_from_name_or_creator() {
+        let mut metadata = SessionMetadata::new(
+            "session-1".to_string(),
+            "Subagent: repo sweep".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        metadata.created_by = Some("session-parent".to_string());
+
+        assert!(!metadata.is_subagent());
+        assert!(metadata.is_standard());
+    }
+
+    #[test]
+    fn session_metadata_detects_legacy_leaked_subagent_candidate() {
+        let mut metadata = SessionMetadata::new(
+            "session-1".to_string(),
+            "Subagent: repo sweep".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        metadata.created_by = Some("session-parent".to_string());
+
+        assert!(!metadata.is_subagent());
+        assert!(metadata.is_legacy_leaked_subagent_candidate());
+        assert!(metadata.should_hide_from_user_lists());
+    }
+
+    #[test]
+    fn session_metadata_keeps_normal_sessions_visible() {
+        let metadata = SessionMetadata::new(
+            "session-1".to_string(),
+            "Normal Session".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+
+        assert!(!metadata.is_subagent());
+        assert!(metadata.is_standard());
     }
 }

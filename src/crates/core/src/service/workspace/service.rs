@@ -7,6 +7,7 @@ use super::manager::{
     WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
     WorkspaceSummary, WorkspaceType,
 };
+use crate::agentic::persistence::{PersistenceManager, SessionWorkspaceMaintenanceService};
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::initialize_workspace_persona_files;
@@ -28,6 +29,7 @@ pub struct WorkspaceService {
     config: WorkspaceManagerConfig,
     persistence: Arc<PersistenceService>,
     path_manager: Arc<PathManager>,
+    session_workspace_maintenance: Arc<SessionWorkspaceMaintenanceService>,
 }
 
 /// Workspace creation options.
@@ -94,6 +96,34 @@ struct AssistantWorkspaceDescriptor {
 }
 
 impl WorkspaceService {
+    async fn maintain_workspace_sessions_best_effort(&self, workspace_path: &Path, trigger: &str) {
+        match self
+            .session_workspace_maintenance
+            .ensure_workspace_maintained(workspace_path)
+            .await
+        {
+            Ok(report) if report.skipped || report.deleted_sessions == 0 => {}
+            Ok(report) => {
+                info!(
+                    "Workspace session maintenance finished: trigger={}, workspace_path={}, scanned_sessions={}, hidden_sessions={}, deleted_sessions={}",
+                    trigger,
+                    workspace_path.display(),
+                    report.scanned_sessions,
+                    report.hidden_sessions,
+                    report.deleted_sessions
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to maintain workspace sessions: trigger={}, workspace_path={}, error={}",
+                    trigger,
+                    workspace_path.display(),
+                    e
+                );
+            }
+        }
+    }
+
     /// Creates a new workspace service.
     pub async fn new() -> BitFunResult<Self> {
         let config = WorkspaceManagerConfig::default();
@@ -115,12 +145,16 @@ impl WorkspaceService {
         );
 
         let manager = WorkspaceManager::new(config.clone());
+        let session_workspace_maintenance = Arc::new(SessionWorkspaceMaintenanceService::new(
+            Arc::new(PersistenceManager::new(path_manager.clone())?),
+        ));
 
         let service = Self {
             manager: Arc::new(RwLock::new(manager)),
             config,
             persistence,
             path_manager,
+            session_workspace_maintenance,
         };
 
         if let Err(e) = service.load_workspace_history_only().await {
@@ -175,6 +209,11 @@ impl WorkspaceService {
             if let Err(e) = self.save_workspace_data().await {
                 warn!("Failed to save workspace data after opening: {}", e);
             }
+        }
+
+        if let Ok(workspace) = result.as_ref() {
+            self.maintain_workspace_sessions_best_effort(&workspace.root_path, "workspace_opened")
+                .await;
         }
 
         result
@@ -303,6 +342,16 @@ impl WorkspaceService {
                     "Failed to save workspace data after switching active workspace: {}",
                     e
                 );
+            }
+        }
+
+        if result.is_ok() {
+            if let Some(workspace) = self.get_workspace(workspace_id).await {
+                self.maintain_workspace_sessions_best_effort(
+                    &workspace.root_path,
+                    "workspace_activated",
+                )
+                .await;
             }
         }
 
@@ -1022,10 +1071,7 @@ impl WorkspaceService {
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
 
             if let Some(raw_current) = data.current_workspace_id {
-                let current_id = id_remap
-                    .get(&raw_current)
-                    .cloned()
-                    .unwrap_or(raw_current);
+                let current_id = id_remap.get(&raw_current).cloned().unwrap_or(raw_current);
                 if let Some(workspace) = manager.get_workspaces().get(&current_id) {
                     if workspace.is_valid().await {
                         if let Err(e) = manager.set_current_workspace(current_id) {
@@ -1056,6 +1102,8 @@ impl WorkspaceService {
             .await
             .map_err(|e| BitFunError::service(format!("Failed to load workspace data: {}", e)))?;
 
+        let mut workspace_to_maintain: Option<PathBuf> = None;
+
         if let Some(data) = workspace_data {
             let mut manager = self.manager.write().await;
 
@@ -1077,15 +1125,30 @@ impl WorkspaceService {
 
             *manager.get_workspaces_mut() = workspaces;
             // Also filter opened/recent lists to remove references to removed legacy workspaces
-            let filtered_opened_ids: Vec<String> = data.opened_workspace_ids.clone().into_iter().filter(|id| manager.get_workspaces().contains_key(id)).collect();
+            let filtered_opened_ids: Vec<String> = data
+                .opened_workspace_ids
+                .clone()
+                .into_iter()
+                .filter(|id| manager.get_workspaces().contains_key(id))
+                .collect();
             manager.set_opened_workspace_ids(filtered_opened_ids);
-            
-            let filtered_recent: Vec<String> = data.recent_workspaces.clone().into_iter().filter(|id| manager.get_workspaces().contains_key(id)).collect();
+
+            let filtered_recent: Vec<String> = data
+                .recent_workspaces
+                .clone()
+                .into_iter()
+                .filter(|id| manager.get_workspaces().contains_key(id))
+                .collect();
             manager.set_recent_workspaces(filtered_recent);
-            
-            let filtered_recent_assistant: Vec<String> = data.recent_assistant_workspaces.clone().into_iter().filter(|id| manager.get_workspaces().contains_key(id)).collect();
+
+            let filtered_recent_assistant: Vec<String> = data
+                .recent_assistant_workspaces
+                .clone()
+                .into_iter()
+                .filter(|id| manager.get_workspaces().contains_key(id))
+                .collect();
             manager.set_recent_assistant_workspaces(filtered_recent_assistant);
-            
+
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
 
             let raw_current = data
@@ -1097,9 +1160,21 @@ impl WorkspaceService {
                 if manager.get_workspaces().contains_key(&current_id) {
                     if let Err(e) = manager.set_current_workspace(current_id) {
                         warn!("Failed to restore current workspace on startup: {}", e);
+                    } else {
+                        workspace_to_maintain = manager
+                            .get_current_workspace()
+                            .map(|workspace| workspace.root_path.clone());
                     }
                 }
             }
+        }
+
+        if let Some(workspace_path) = workspace_to_maintain {
+            self.maintain_workspace_sessions_best_effort(
+                &workspace_path,
+                "workspace_history_restored",
+            )
+            .await;
         }
 
         Ok(())
@@ -1505,9 +1580,8 @@ impl WorkspaceService {
             // If a remote workspace tab exists but nothing is current yet (e.g. pending SSH
             // reconnect), do not auto-activate the default assistant workspace — that would look
             // like a spurious new local workspace.
-            let should_activate = !has_current_workspace
-                && !has_opened_remote
-                && descriptor.assistant_id.is_none();
+            let should_activate =
+                !has_current_workspace && !has_opened_remote && descriptor.assistant_id.is_none();
             let options = WorkspaceCreateOptions {
                 auto_set_current: should_activate,
                 add_to_recent: false,

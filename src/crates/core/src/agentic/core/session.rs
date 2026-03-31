@@ -3,6 +3,14 @@ use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionKind {
+    #[default]
+    Standard,
+    Subagent,
+}
+
 // ============ Session ============
 
 /// Session: contains multiple dialog turns
@@ -18,6 +26,8 @@ pub struct Session {
         alias = "createdBy"
     )]
     pub created_by: Option<String>,
+    #[serde(default, alias = "session_kind", alias = "sessionKind")]
+    pub kind: SessionKind,
 
     /// Associated resources
     #[serde(
@@ -78,6 +88,7 @@ impl Session {
             session_name,
             agent_type,
             created_by: None,
+            kind: SessionKind::Standard,
             snapshot_session_id: None,
             dialog_turn_ids: vec![],
             state: SessionState::Idle,
@@ -101,6 +112,7 @@ impl Session {
             session_name,
             agent_type,
             created_by: None,
+            kind: SessionKind::Standard,
             snapshot_session_id: None,
             dialog_turn_ids: vec![],
             state: SessionState::Idle,
@@ -173,6 +185,8 @@ pub struct SessionSummary {
         alias = "createdBy"
     )]
     pub created_by: Option<String>,
+    #[serde(default, alias = "session_kind", alias = "sessionKind")]
+    pub kind: SessionKind,
     pub turn_count: usize,
     pub created_at: SystemTime,
     pub last_activity_at: SystemTime,
