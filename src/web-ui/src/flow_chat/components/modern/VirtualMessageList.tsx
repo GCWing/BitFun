@@ -431,8 +431,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     const collapseIntent = pendingCollapseIntentRef.current;
     const now = performance.now();
     const hasValidCollapseIntent = collapseIntent.active && collapseIntent.expiresAtMs >= now;
-    const effectiveDistanceFromBottom = Math.max(0, distanceFromBottom - currentTotalCompensation);
-    const fallbackAdditionalCompensation = Math.max(0, shrinkAmount - effectiveDistanceFromBottom);
+    // For unsignaled shrinks, the visible gap to the bottom is what matters.
+    // Existing synthetic footer compensation may be stale from an earlier
+    // protected collapse, and subtracting it here makes the list think the
+    // viewport is still pinned near the bottom when the user has already moved
+    // away. That misclassification re-arms anchor restore and causes jitter.
+    const fallbackAdditionalCompensation = Math.max(0, shrinkAmount - distanceFromBottom);
     const cumulativeShrinkPx = hasValidCollapseIntent
       ? collapseIntent.cumulativeShrinkPx + shrinkAmount
       : 0;
@@ -452,6 +456,16 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         cumulativeShrinkPx,
       };
     }
+
+    if (!hasValidCollapseIntent && fallbackAdditionalCompensation <= COMPENSATION_EPSILON_PX) {
+      // If the user is already far enough from the bottom, this shrink does not
+      // need protection. Reusing stale bottom compensation here makes the
+      // scroll listener restore an older anchor during upward scroll and causes
+      // the visible "wall hit" jitter.
+      previousScrollTopRef.current = currentScrollTop;
+      return;
+    }
+
     const nextReservationState: BottomReservationState = {
       ...bottomReservationStateRef.current,
       collapse: {
@@ -1041,8 +1055,20 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     mutationObserverRef.current?.disconnect();
     let mutationPending = false;
-    mutationObserverRef.current = new MutationObserver(() => {
+    mutationObserverRef.current = new MutationObserver((mutations) => {
       if (mutationPending) return;
+      if (!isProcessing) {
+        return;
+      }
+      const characterDataMutations = mutations.filter(mutation => mutation.type === 'characterData');
+      const attributesMutations = mutations.filter(mutation => mutation.type === 'attributes');
+      const hasSemanticMutation = (
+        characterDataMutations.length > 0 ||
+        attributesMutations.length > 0
+      );
+      if (!hasSemanticMutation) {
+        return;
+      }
       mutationPending = true;
       requestAnimationFrame(() => {
         mutationPending = false;
@@ -1331,6 +1357,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     scheduleVisibleTurnMeasure,
     scrollerElement,
     shouldSuspendAutoFollow,
+    isProcessing,
     updateBottomReservationState,
   ]);
 
