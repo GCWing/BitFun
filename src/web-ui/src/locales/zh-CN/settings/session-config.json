@@ -13,10 +13,10 @@
     "sectionDescription": "本会话中 AI 调用工具时的确认与超时策略。"
   },
   "computerUse": {
-    "sectionTitle": "Computer use（助理 Claw）",
+    "sectionTitle": "Computer use（桌面自动化）",
     "sectionDescription": "在 BitFun 桌面端允许助理截取屏幕并控制键鼠；需多模态模型理解画面。",
     "enable": "启用 Computer use",
-    "enableDesc": "关闭时，即使在 Claw 模式下也不会启用 ComputerUse 工具。",
+    "enableDesc": "关闭时，任何会话模式都不会启用 ComputerUse 工具。",
     "accessibility": "辅助功能",
     "accessibilityDesc": "",
     "screenCapture": "屏幕录制",

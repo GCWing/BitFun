@@ -352,6 +352,15 @@ impl Tool for WrappedTool {
         self.original_tool.input_schema_for_model().await
     }
 
+    async fn input_schema_for_model_with_context(
+        &self,
+        context: Option<&crate::agentic::tools::framework::ToolUseContext>,
+    ) -> Value {
+        self.original_tool
+            .input_schema_for_model_with_context(context)
+            .await
+    }
+
     fn input_json_schema(&self) -> Option<Value> {
         self.original_tool.input_json_schema()
     }

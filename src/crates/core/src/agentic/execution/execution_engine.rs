@@ -12,6 +12,7 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
+use crate::agentic::tools::framework::ToolOptions;
 use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
@@ -873,6 +874,50 @@ impl ExecutionEngine {
                     model_id, e
                 ))
             })?;
+
+        // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
+        let (resolved_primary_model_id, primary_supports_image_understanding) = {
+            let config_service = get_global_config_service().await.ok();
+            if let Some(service) = config_service {
+                let ai_config: crate::service::config::types::AIConfig =
+                    service.get_config(Some("ai")).await.unwrap_or_default();
+
+                let resolved_id = Self::resolve_configured_model_id(&ai_config, &model_id);
+
+                let model_cfg = ai_config
+                    .models
+                    .iter()
+                    .find(|m| m.id == resolved_id)
+                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
+                    .or_else(|| {
+                        ai_config
+                            .models
+                            .iter()
+                            .find(|m| m.model_name == resolved_id)
+                    })
+                    .or_else(|| {
+                        ai_config.models.iter().find(|m| {
+                            m.model_name == ai_client.config.model
+                                && m.provider == ai_client.config.format
+                        })
+                    });
+
+                let supports = model_cfg.is_some_and(|m| {
+                    m.capabilities
+                        .iter()
+                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
+                        || matches!(m.category, ModelCategory::Multimodal)
+                });
+
+                (resolved_id, supports)
+            } else {
+                warn!(
+                    "Config service unavailable, assuming primary model is text-only for image input gating"
+                );
+                (model_id.clone(), false)
+            }
+        };
+
         // Get configuration for whether to support preserving historical thinking content
         let enable_thinking = ai_client.config.enable_thinking_process;
         let support_preserved_thinking = ai_client.config.support_preserved_thinking;
@@ -894,7 +939,8 @@ impl ExecutionEngine {
                     workspace_path.clone(),
                     Some(context.session_id.clone()),
                     Some(ai_client.config.model.clone()),
-                );
+                )
+                .with_supports_image_understanding(primary_supports_image_understanding);
                 let overlayed = if let Some(ws) = context.workspace.as_ref() {
                     if ws.is_remote() {
                         if let Some(cid) = ws.connection_id() {
@@ -1035,6 +1081,7 @@ impl ExecutionEngine {
                 &allowed_tools,
                 context.workspace.as_ref(),
                 &agent_type,
+                primary_supports_image_understanding,
             )
             .await
         } else {
@@ -1043,49 +1090,6 @@ impl ExecutionEngine {
 
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
-        // Detect whether the primary model supports multimodal image inputs.
-        // When false, multimodal user messages are converted to text placeholders before the provider call.
-        let (resolved_primary_model_id, primary_supports_image_understanding) = {
-            let config_service = get_global_config_service().await.ok();
-            if let Some(service) = config_service {
-                let ai_config: crate::service::config::types::AIConfig =
-                    service.get_config(Some("ai")).await.unwrap_or_default();
-
-                let resolved_id = Self::resolve_configured_model_id(&ai_config, &model_id);
-
-                let model_cfg = ai_config
-                    .models
-                    .iter()
-                    .find(|m| m.id == resolved_id)
-                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
-                    .or_else(|| {
-                        ai_config
-                            .models
-                            .iter()
-                            .find(|m| m.model_name == resolved_id)
-                    })
-                    .or_else(|| {
-                        ai_config.models.iter().find(|m| {
-                            m.model_name == ai_client.config.model
-                                && m.provider == ai_client.config.format
-                        })
-                    });
-
-                let supports = model_cfg.is_some_and(|m| {
-                    m.capabilities
-                        .iter()
-                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-                        || matches!(m.category, ModelCategory::Multimodal)
-                });
-
-                (resolved_id, supports)
-            } else {
-                warn!(
-                    "Config service unavailable, assuming primary model is text-only for image input gating"
-                );
-                (model_id.clone(), false)
-            }
-        };
 
         let mut execution_context_vars = context.context.clone();
         execution_context_vars.insert(
@@ -1475,12 +1479,18 @@ impl ExecutionEngine {
         mode_allowed_tools: &[String],
         workspace: Option<&crate::agentic::WorkspaceBinding>,
         agent_type: &str,
+        primary_supports_image_understanding: bool,
     ) -> (Vec<String>, Option<Vec<ToolDefinition>>) {
         // Use get_all_registered_tools to get all tools including MCP tools
         let all_tools = get_all_registered_tools().await;
 
         // Filter tools: 1) Check if enabled 2) Check if mode allows
         let mut tool_definitions = Vec::new();
+        let mut tool_opts_custom = HashMap::new();
+        tool_opts_custom.insert(
+            "primary_model_supports_image_understanding".to_string(),
+            serde_json::Value::Bool(primary_supports_image_understanding),
+        );
         let description_context = crate::agentic::tools::framework::ToolUseContext {
             tool_call_id: None,
             message_id: None,
@@ -1492,7 +1502,20 @@ impl ExecutionEngine {
             safe_mode: None,
             abort_controller: None,
             read_file_timestamps: Default::default(),
-            options: None,
+            options: Some(ToolOptions {
+                commands: vec![],
+                tools: vec![],
+                verbose: None,
+                slow_and_capable_model: None,
+                safe_mode: None,
+                fork_number: None,
+                message_log_name: None,
+                max_thinking_tokens: None,
+                is_koding_request: None,
+                koding_context: None,
+                is_custom_command: None,
+                custom_data: Some(tool_opts_custom),
+            }),
             response_state: None,
             image_context_provider: None,
             computer_use_host: None,
@@ -1513,10 +1536,14 @@ impl ExecutionEngine {
                     .await
                     .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
 
+                let parameters = tool
+                    .input_schema_for_model_with_context(Some(&description_context))
+                    .await;
+
                 tool_definitions.push(ToolDefinition {
                     name: tool.name().to_string(),
                     description,
-                    parameters: tool.input_schema_for_model().await,
+                    parameters,
                 });
             }
         }

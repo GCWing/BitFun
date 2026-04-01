@@ -1,4 +1,4 @@
-//! Desktop automation for Claw (Computer use).
+//! Desktop automation (Computer use).
 
 use super::computer_use_input::{
     coordinate_mode, ensure_pointer_move_uses_screen_coordinates_only, parse_screenshot_params,
@@ -93,6 +93,73 @@ impl ComputerUseTool {
         Self
     }
 
+    /// Tool description when the primary model is **text-only** (no `screenshot` / `click_label` / JPEG workflow).
+    fn description_text_only() -> String {
+        let os = Self::host_os_label();
+        let keys = Self::key_chord_os_hint();
+        format!(
+            "Desktop automation (host OS: {}). {} \
+The **primary model cannot consume images** in tool results — **do not** use **`screenshot`** or **`click_label`**.\n\
+**ACTION PRIORITY (CRITICAL):** Always think in this order:\n\
+1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`), shell automation. Most efficient.\n\
+2. **Keyboard shortcuts second** — Use **`key_chord`** / **`type_text`** for system/app shortcuts, navigation keys.\n\
+3. **Precise UI control last** — Only when above fail: **`click_element`** (AX) → **`move_to_text`** (OCR, use **`move_to_text_match_index`** from text `candidates` when multiple hits) → **`mouse_move`** (**`use_screen_coordinates`: true** with **`global_center_*`** / **`locate`** / **`pointer_global`**) → **`click`**.\n\
+**Rhythm:** one action at a time; use **`wait`** when UI animates. Observe **`interaction_state`** and **`computer_use_context`** in tool JSON.\n\
+**`click_element` / `locate`:** Accessibility (AX/UIA/AT-SPI). **`move_to_text`:** OCR match + move pointer only. **`click`:** at current pointer only — use **`mouse_move`** or **`move_to_text`** / **`click_element`** first.\n\
+**`mouse_move` / `drag`:** **`use_screen_coordinates`: true** with globals from tools. **`pointer_move_rel`:** relative nudge; host may block right after certain flows — follow tool errors.\n\
+**`key_chord` / `type_text` / `scroll` / `wait`:** standard desktop automation without any screenshot step.\n",
+            os, keys
+        )
+    }
+
+    /// JSON Schema without `screenshot`, `click_label`, or screenshot-only fields.
+    fn input_schema_text_only() -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait"],
+                    "description": "The action to perform. **Primary model is text-only — no `screenshot` or `click_label`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) Prefer `key_chord` for shortcuts/navigation. 3) Only when above fail: `click_element` (AX) → `move_to_text` (OCR, use `move_to_text_match_index` when multiple hits listed) → `mouse_move` (**`use_screen_coordinates`: true** with globals) + `click`. Never guess coordinates."
+                },
+                "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
+                "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
+                "coordinate_mode": { "type": "string", "enum": ["image", "normalized"], "description": "Ignored for `mouse_move` / `drag` — host rejects image/normalized positioning; always set **`use_screen_coordinates`: true**." },
+                "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
+                "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For `click`, `click_element`, `drag`: mouse button (default left)." },
+                "num_clicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For `click`, `click_element`: 1=single (default), 2=double, 3=triple click." },
+                "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left). For `scroll`: horizontal wheel delta." },
+                "delta_y": { "type": "integer", "description": "For `pointer_move_rel`: vertical delta (negative=up). For `scroll`: vertical wheel delta." },
+                "start_x": { "type": "integer", "description": "For `drag`: start X coordinate." },
+                "start_y": { "type": "integer", "description": "For `drag`: start Y coordinate." },
+                "end_x": { "type": "integer", "description": "For `drag`: end X coordinate." },
+                "end_y": { "type": "integer", "description": "For `drag`: end Y coordinate." },
+                "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: keys in order — modifiers first, then the main key. Desktop host waits after pressing modifiers so shortcuts register (important on macOS with IME)." },
+                "text": { "type": "string", "description": "For `type_text`: text to type. Prefer clipboard paste (key_chord) for long content." },
+                "ms": { "type": "integer", "description": "For `wait`: duration in milliseconds." },
+                "text_query": { "type": "string", "description": "For `move_to_text`: visible text to OCR-match on screen (case-insensitive substring)." },
+                "move_to_text_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_text`: **1-based** index from `candidates[].match_index` after disambiguation (multiple OCR hits). Omit on the first pass; set when choosing which hit to move to." },
+                "ocr_region_native": {
+                    "type": "object",
+                    "description": "For `move_to_text`: optional global native rectangle for OCR. If omitted, macOS uses the frontmost window bounds from Accessibility; other OSes use the primary display.",
+                    "properties": {
+                        "x0": { "type": "integer", "description": "Top-left X in global screen coordinates." },
+                        "y0": { "type": "integer", "description": "Top-left Y in global screen coordinates." },
+                        "width": { "type": "integer", "minimum": 1, "description": "Width in the same coordinate unit as x0/y0." },
+                        "height": { "type": "integer", "minimum": 1, "description": "Height in the same coordinate unit as x0/y0." }
+                    }
+                },
+                "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring match on accessible title (AXTitle)." },
+                "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole." },
+                "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
+                "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48)." },
+                "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination." }
+            },
+            "required": ["action"],
+            "additionalProperties": false
+        })
+    }
+
     /// Max OCR hits to attach as preview crops + AX (multimodal disambiguation).
     const MOVE_TO_TEXT_DISAMBIGUATION_MAX: usize = 8;
     /// Half-size in native screen pixels for each candidate preview (~400×400 logical crop).
@@ -177,6 +244,70 @@ impl ComputerUseTool {
         Ok(vec![ToolResult::ok_with_images(body, Some(hint), attachments)])
     }
 
+    /// Same as [`Self::move_to_text_disambiguation_response`] but **no image attachments** (primary model is text-only).
+    async fn move_to_text_disambiguation_text_only(
+        host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
+        text_query: &str,
+        ocr_region_native: Option<OcrRegionNative>,
+        matches: &[ScreenOcrTextMatch],
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let take = matches.len().min(Self::MOVE_TO_TEXT_DISAMBIGUATION_MAX);
+        let mut candidates: Vec<Value> = Vec::with_capacity(take);
+        for (i, m) in matches.iter().take(take).enumerate() {
+            let idx_1based = i + 1;
+            let ax = host_ref
+                .accessibility_hit_at_global_point(m.center_x, m.center_y)
+                .await?;
+            candidates.push(json!({
+                "match_index": idx_1based,
+                "ocr_text": m.text,
+                "confidence": m.confidence,
+                "global_center_x": m.center_x,
+                "global_center_y": m.center_y,
+                "bounds_left": m.bounds_left,
+                "bounds_top": m.bounds_top,
+                "bounds_width": m.bounds_width,
+                "bounds_height": m.bounds_height,
+                "accessibility": ax,
+            }));
+        }
+        let input_coords = json!({
+            "kind": "move_to_text",
+            "text_query": text_query,
+            "ocr_region_native": ocr_region_native,
+            "move_to_text_phase": "disambiguation",
+        });
+        let mut body = json!({
+            "success": true,
+            "action": "move_to_text",
+            "move_to_text_phase": "disambiguation",
+            "text_query": text_query,
+            "ocr_region_native": ocr_region_native,
+            "disambiguation_required": true,
+            "instruction": "Several OCR hits for this substring. The primary model **cannot** view screenshots — pick **`move_to_text_match_index`** using **`candidates`** (global_center_* + accessibility) only. Call **`move_to_text` again** with the same `text_query`, same `ocr_region_native`, and **`move_to_text_match_index`** = that index. Pointer was not moved.",
+            "candidates": candidates,
+            "total_ocr_matches": matches.len(),
+            "candidates_previewed": take,
+        });
+        if take < matches.len() {
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert(
+                    "truncation_note".to_string(),
+                    json!(format!(
+                        "Only the first {} of {} OCR matches are listed; narrow `ocr_region_native` or `text_query` if needed.",
+                        take, matches.len()
+                    )),
+                );
+            }
+        }
+        let body = computer_use_augment_result_json(host_ref, body, Some(input_coords)).await;
+        let hint = format!(
+            "move_to_text: {} OCR matches — set move_to_text_match_index using text candidates (no image previews). Pointer not moved.",
+            matches.len(),
+        );
+        Ok(vec![ToolResult::ok(body, Some(hint))])
+    }
+
     fn primary_api_format(ctx: &ToolUseContext) -> String {
         ctx.options
             .as_ref()
@@ -190,6 +321,11 @@ impl ComputerUseTool {
     /// Screenshot tool results attach JPEGs via `tool_image_attachments`; only providers whose
     /// request converters emit multimodal tool output are supported (Anthropic + OpenAI-compatible).
     fn require_multimodal_tool_output_for_screenshot(ctx: &ToolUseContext) -> BitFunResult<()> {
+        if !ctx.primary_model_supports_image_understanding() {
+            return Err(BitFunError::tool(
+                "The primary model does not accept images; do not use ComputerUse action `screenshot` or other image-producing steps. Use `click_element`, `locate`, `move_to_text` (with `move_to_text_match_index` when listed), `mouse_move` with globals from tool JSON, `key_chord`, etc.".to_string(),
+            ));
+        }
         let f = Self::primary_api_format(ctx);
         if matches!(
             f.as_str(),
@@ -845,9 +981,12 @@ impl Tool for ComputerUseTool {
         let keys = Self::key_chord_os_hint();
         Ok(format!(
             "Desktop automation (host OS: {}). {} All actions in one tool. Send only parameters that apply to the chosen `action`. \
-**Cowork-style loop (default rhythm):** **`screenshot`** (observe current UI) → **one** input action (`key_chord`, `type_text`, `move_to_text` + `click`, `click_element`, `scroll`, …) → **`screenshot`** again to **verify** the outcome before the next decision. Use **`wait`** if the UI animates. When **`interaction_state.recommend_screenshot_to_verify_last_action`** is true, your **next** call should usually be **`screenshot`** (optionally **`screenshot_reset_navigation`**: true for full-screen context). This is separate from the host rule that requires a **fresh** capture **before** guarded **`click`** / Enter **`key_chord`** after pointer moves — follow both. \
-**Input priority:** Prefer **`key_chord`** / **`type_text`** over mouse when one key or typing completes the step (e.g. **Enter** to confirm default, **Escape** to cancel, **Tab** to move focus). Do not click “OK”/“Submit” when **Enter** is equivalent; use **`screenshot`** then Enter **`key_chord`** per host when required. \
-**Targeting priority (when pointing is required):** `click_element` → **`move_to_text`** (OCR + move pointer only) → `click_label` (when SoM exists) → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation — do not guess move targets from JPEG pixels.** \
+**ACTION PRIORITY (CRITICAL):** Always think in this order before choosing an action:\n\
+1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`, AppleScript), shell automation. This is the MOST EFFICIENT approach.\n\
+2. **Keyboard shortcuts second** — Use **`key_chord`** for system shortcuts, app shortcuts, navigation keys (Enter, Escape, Tab, Space, Arrow keys). Prefer over mouse when equivalent.\n\
+3. **Precise UI control last** — Only when above methods fail: use **`click_element`** (AX/accessibility) → **`move_to_text`** (OCR) → **`click_label`** (SoM) → **`mouse_move`** + **`click`** (coordinate-based, last resort).\n\
+**Screenshot usage:** **`screenshot`** is ONLY for observing/confirming UI state and extracting text/information — NEVER use screenshot coordinates to control mouse movement. Always use precise methods (AX, OCR, system coordinates) for targeting.\n\
+**Cowork-style loop:** **`screenshot`** (observe) → **one** action → **`screenshot`** (verify). Use **`wait`** if UI animates. When **`interaction_state.recommend_screenshot_to_verify_last_action`** is true, call **`screenshot`** next. \
 **`click_element`:** Accessibility tree (AX/UIA/AT-SPI) locate + click. Provide `title_contains` / `role_substring` / `identifier_contains`. On macOS, **`TextArea`** and **`TextField`** match both `AXTextArea` and `AXTextField` (many chat apps use TextField for compose). If several text fields match, the host deprioritizes known **search** controls (e.g. WeChat `_SC_SEARCH_FIELD`) and prefers **lower** on-screen fields (composer). Bypasses coordinate screenshot guard. \
 **`move_to_text`:** OCR-match visible text (`text_query`) and **move the pointer** to it (no click, no keys); **no prior `screenshot` required for targeting** (host captures **raw** pixels for Vision — no agent screenshot overlays; on macOS defaults to the **frontmost window** unless **`ocr_region_native`** overrides). Matching **strips whitespace** between CJK glyphs and allows **small edit distance** when Vision mis-reads one character. The host **trusts** the resulting globals — **next `click`** does **not** require an extra `screenshot` (same as AX). If **several** hits match, the host returns **preview JPEGs + accessibility** per candidate — pick **`move_to_text_match_index`** (1-based) and call **`move_to_text` again** with the same query/region, or narrow with **`ocr_region_native`**. When **`click_label`** lists a results table (`AXTable`), prefer **`click_label`** on that label over guessing OCR row text. Use **`click`** afterward if you need a mouse press. Prefer after `click_element` misses when text is visible. \
 **`click_label`:** After `screenshot` with `som_labels`, click by label number. Bypasses coordinate guard. \
@@ -863,9 +1002,16 @@ impl Tool for ComputerUseTool {
 
     async fn description_with_context(
         &self,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        self.description().await
+        let vision = context
+            .map(|c| c.primary_model_supports_image_understanding())
+            .unwrap_or(true);
+        if vision {
+            self.description().await
+        } else {
+            Ok(Self::description_text_only())
+        }
     }
 
     fn input_schema(&self) -> Value {
@@ -875,7 +1021,7 @@ impl Tool for ComputerUseTool {
                 "action": {
                     "type": "string",
                     "enum": ["screenshot", "click_element", "click_label", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait"],
-                    "description": "The action to perform. **Prefer `key_chord` over `click` when a key completes the same step (Enter, Escape, Tab, Space, app shortcuts).** `click_element` = find UI element by accessibility + click (for named controls when keyboard is not equivalent). `click_label` = click a numbered Set-of-Mark label from the latest screenshot. `move_to_text` = OCR visible text and move pointer **only** (no click). **After `click_element` fails, prefer `move_to_text` (visible substring, UI language) over vision guesses.** `click` = press at **current pointer only** — **do not** pass `x`, `y`, `coordinate_mode`, or `use_screen_coordinates` (use `mouse_move` first). `mouse_move` = absolute move with **`use_screen_coordinates`: true** (globals from tools — **no** JPEG pixel mode). `scroll` = mouse wheel. `drag` = drag between two globals (**`use_screen_coordinates`: true**). `screenshot` = confirmation JPEG (host may apply ~500×500 when required). `locate` = find UI element (no click). `key_chord` = keyboard shortcut. `type_text` = type string. `pointer_move_rel` = relative move — **host blocks right after `screenshot`** until a trusted absolute move (`move_to_text`, `mouse_move`, `click_element`, `click_label`). `wait` = pause."
+                    "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. 3) Only when above fail: `click_element` (AX) → `move_to_text` (OCR, move pointer only) → `click_label` (SoM) → `mouse_move` (globals only, **`use_screen_coordinates`: true**) + `click` (last resort). **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll`, `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
                 "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -922,6 +1068,20 @@ impl Tool for ComputerUseTool {
         })
     }
 
+    async fn input_schema_for_model_with_context(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> Value {
+        let vision = context
+            .map(|c| c.primary_model_supports_image_understanding())
+            .unwrap_or(true);
+        if vision {
+            self.input_schema_for_model().await
+        } else {
+            Self::input_schema_text_only()
+        }
+    }
+
     fn is_readonly(&self) -> bool {
         false
     }
@@ -947,11 +1107,6 @@ impl Tool for ComputerUseTool {
     }
 
     async fn call_impl(&self, input: &Value, context: &ToolUseContext) -> BitFunResult<Vec<ToolResult>> {
-        if context.agent_type.as_deref() != Some("Claw") {
-            return Err(BitFunError::tool(
-                "ComputerUse is only available in Claw assistant mode.".to_string(),
-            ));
-        }
         if context.is_remote() {
             return Err(BitFunError::tool(
                 "ComputerUse cannot run while the session workspace is remote (SSH).".to_string(),
@@ -1050,6 +1205,11 @@ impl Tool for ComputerUseTool {
             }
 
             "click_label" => {
+                if !context.primary_model_supports_image_understanding() {
+                    return Err(BitFunError::tool(
+                        "click_label requires Set-of-Mark labels from a screenshot; the primary model is text-only. Use `click_element`, `move_to_text`, `locate`, or `mouse_move` with globals from tool JSON, then `click`.".to_string(),
+                    ));
+                }
                 let label = input
                     .get("label")
                     .and_then(|v| v.as_u64())
@@ -1141,9 +1301,18 @@ impl Tool for ComputerUseTool {
 
                     let n = matches.len();
                     if n > 1 && move_to_text_match_index.is_none() {
-                        return Self::move_to_text_disambiguation_response(
+                        if context.primary_model_supports_image_understanding() {
+                            return Self::move_to_text_disambiguation_response(
+                                host_ref,
+                                context,
+                                text_query,
+                                ocr_region_native.clone(),
+                                &matches,
+                            )
+                            .await;
+                        }
+                        return Self::move_to_text_disambiguation_text_only(
                             host_ref,
-                            context,
                             text_query,
                             ocr_region_native.clone(),
                             &matches,

@@ -42,6 +42,8 @@ pub struct PromptBuilderContext {
     pub remote_execution: Option<RemoteExecutionHints>,
     /// Pre-built tree text for `{PROJECT_LAYOUT}` when the workspace is not on the local disk.
     pub remote_project_layout: Option<String>,
+    /// When `Some(false)`, system prompt append Computer use text-only guidance (no screenshot tool output).
+    pub supports_image_understanding: Option<bool>,
 }
 
 impl PromptBuilderContext {
@@ -56,7 +58,13 @@ impl PromptBuilderContext {
             model_name,
             remote_execution: None,
             remote_project_layout: None,
+            supports_image_understanding: None,
         }
+    }
+
+    pub fn with_supports_image_understanding(mut self, supports: bool) -> Self {
+        self.supports_image_understanding = Some(supports);
+        self
     }
 
     pub fn with_remote_prompt_overlay(
@@ -93,10 +101,10 @@ impl PromptBuilder {
         let current_date = now.format("%Y-%m-%d").to_string();
 
         let computer_use_keys = match host_os {
-            "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **System clipboard (prefer over long type_text):** command+a (select all), command+c (copy), command+x (cut), command+v (paste). Spotlight: command+space; switch app: command+tab.",
-            "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for the Windows key, `alt`, `control`, `shift`. **System clipboard:** control+a/c/x/v. Start menu: meta; Alt+Tab for window switch.",
-            "linux" => "Computer use / `key_chord`: the **local BitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super` depending on the desktop; match the user's session. **System clipboard:** usually control+a/c/x/v (confirm in-app menus if unsure).",
-            _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. Prefer standard clipboard chords before retyping long text.",
+            "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
+            "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
+            "linux" => "Computer use / `key_chord`: the **local BitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for shell scripts, system commands) 2) Keyboard shortcuts: control+a/c/x/v (clipboard) 3) UI control (AX/OCR/mouse) only when above fail.",
+            _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. **ACTION PRIORITY:** 1) Terminal/CLI/system commands first 2) Keyboard shortcuts second 3) UI control (mouse/OCR) last resort.",
         };
 
         if let Some(remote) = &self.context.remote_execution {
@@ -464,6 +472,16 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_VISUAL_MODE) {
             let visual_mode = self.get_visual_mode_instruction().await;
             result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
+        }
+
+        if self.context.supports_image_understanding == Some(false) {
+            result.push_str(
+                "\n\n# Computer use (text-only primary model)\n\n\
+The configured **primary model does not accept image inputs**. When using **ComputerUse**:\n\
+- **Do not** use **`screenshot`** or **`click_label`**.\n\
+- **ACTION PRIORITY:** 1) Terminal/CLI/system commands (Bash tool) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**.\n\
+- **Never guess coordinates** — always use precise methods (AX, OCR, system coordinates from tool results).\n",
+            );
         }
 
         Ok(result.trim().to_string())

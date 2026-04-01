@@ -267,9 +267,9 @@ Usage notes:
                 base = base
             );
         }
-        if context.and_then(|c| c.agent_type.as_deref()) == Some("Claw") {
+        if !context.map(|c| c.is_remote()).unwrap_or(false) {
             base.push_str(
-                "\n\n**Claw (desktop automation):** Prefer this tool for anything achievable from the **workspace shell** (build, test, git, scripts, CLIs). On **macOS**, `open -a \"AppName\"` launches or foregrounds an app with fewer steps than GUI workflows. Use **`ComputerUse`** **`action: locate`** for **named** on-screen controls before guessing coordinates from **`action: screenshot`** alone.",
+                "\n\n**Desktop automation:** Prefer this tool for anything achievable from the **workspace shell** (build, test, git, scripts, CLIs). On **macOS**, `open -a \"AppName\"` launches or foregrounds an app with fewer steps than GUI workflows. When **Computer use** is enabled, use **`ComputerUse`** **`action: locate`** for **named** on-screen controls before guessing coordinates from **`action: screenshot`** alone.",
             );
         }
         Ok(base)

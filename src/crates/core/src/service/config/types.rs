@@ -445,7 +445,7 @@ pub struct AIConfig {
     #[serde(default)]
     pub known_tools: Vec<String>,
 
-    /// Allow Claw Computer use (desktop automation) when the desktop host is available.
+    /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
 }

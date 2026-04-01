@@ -231,6 +231,14 @@ impl Tool for CodeReviewTool {
         Self::input_schema_value_for_language(lang.as_str())
     }
 
+    async fn input_schema_for_model_with_context(
+        &self,
+        context: Option<&crate::agentic::tools::framework::ToolUseContext>,
+    ) -> Value {
+        let _ = context;
+        self.input_schema_for_model().await
+    }
+
     fn is_readonly(&self) -> bool {
         true
     }

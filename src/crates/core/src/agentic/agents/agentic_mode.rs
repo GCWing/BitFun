@@ -25,6 +25,7 @@ impl AgenticMode {
                 "AskUserQuestion".to_string(),
                 "Git".to_string(),
                 "TerminalControl".to_string(),
+                "ComputerUse".to_string(),
             ],
         }
     }

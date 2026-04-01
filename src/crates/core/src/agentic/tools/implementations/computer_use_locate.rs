@@ -15,11 +15,6 @@ pub(crate) async fn execute_computer_use_locate(
     input: &Value,
     context: &ToolUseContext,
 ) -> BitFunResult<Vec<ToolResult>> {
-    if context.agent_type.as_deref() != Some("Claw") {
-        return Err(BitFunError::tool(
-            "ComputerUse action locate is only available in Claw assistant mode.".to_string(),
-        ));
-    }
     if context.is_remote() {
         return Err(BitFunError::tool(
             "ComputerUse action locate cannot run while the session workspace is remote (SSH)."

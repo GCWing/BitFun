@@ -1,4 +1,4 @@
-//! Cardinal pointer step (up/down/left/right) for Claw Computer use.
+//! Cardinal pointer step (up/down/left/right) for Computer use.
 
 use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
 use crate::agentic::tools::implementations::computer_use_tool::computer_use_execute_mouse_step;
@@ -72,11 +72,6 @@ impl Tool for ComputerUseMouseStepTool {
     }
 
     async fn call_impl(&self, input: &Value, context: &ToolUseContext) -> BitFunResult<Vec<ToolResult>> {
-        if context.agent_type.as_deref() != Some("Claw") {
-            return Err(BitFunError::tool(
-                "ComputerUseMouseStep is only available in Claw assistant mode.".to_string(),
-            ));
-        }
         if context.is_remote() {
             return Err(BitFunError::tool(
                 "ComputerUseMouseStep cannot run while the session workspace is remote (SSH)."

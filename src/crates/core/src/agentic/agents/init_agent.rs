@@ -16,6 +16,7 @@ impl InitAgent {
                 "Write".to_string(),
                 "Edit".to_string(),
                 "Bash".to_string(),
+                "ComputerUse".to_string(),
             ],
         }
     }

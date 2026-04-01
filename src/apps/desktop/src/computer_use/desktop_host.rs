@@ -1036,6 +1036,85 @@ end tell"#])
         Ok(())
     }
 
+    /// Ease 0..1 for pointer paths (smooth acceleration/deceleration).
+    fn smoothstep01(t: f64) -> f64 {
+        let t = t.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+
+    /// Move the pointer along a short visible path instead of warping in one event.
+    #[cfg(target_os = "macos")]
+    fn smooth_mouse_move_cg_global(x1: f64, y1: f64) -> BitFunResult<()> {
+        const MIN_DIST: f64 = 2.5;
+        const MIN_STEPS: usize = 8;
+        const MAX_STEPS: usize = 85;
+        const MAX_DURATION_MS: u64 = 400;
+
+        let (x0, y0) = macos::quartz_mouse_location().unwrap_or((x1, y1));
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist < MIN_DIST {
+            return Self::post_mouse_moved_cg_global(x1, y1);
+        }
+        let duration_ms = (70.0 + dist * 0.28).min(MAX_DURATION_MS as f64) as u64;
+        let steps = ((dist / 5.5).ceil() as usize).clamp(MIN_STEPS, MAX_STEPS);
+        let step_delay = Duration::from_millis((duration_ms / steps as u64).max(1));
+
+        for i in 1..=steps {
+            let t = i as f64 / steps as f64;
+            let te = Self::smoothstep01(t);
+            let x = x0 + dx * te;
+            let y = y0 + dy * te;
+            Self::post_mouse_moved_cg_global(x, y)?;
+            if i < steps {
+                std::thread::sleep(step_delay);
+            }
+        }
+        Ok(())
+    }
+
+    /// Windows/Linux: same smooth path using enigo absolute moves (single `Enigo` session).
+    #[cfg(not(target_os = "macos"))]
+    fn smooth_mouse_move_enigo_abs(x1: f64, y1: f64) -> BitFunResult<()> {
+        const MIN_DIST: f64 = 2.5;
+        const MIN_STEPS: usize = 8;
+        const MAX_STEPS: usize = 85;
+        const MAX_DURATION_MS: u64 = 400;
+
+        Self::run_enigo_job(|e| {
+            let (cx, cy) = e.location().map_err(|err| {
+                BitFunError::tool(format!("smooth_mouse_move: pointer location: {}", err))
+            })?;
+            let x0 = cx as f64;
+            let y0 = cy as f64;
+            let dx = x1 - x0;
+            let dy = y1 - y0;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < MIN_DIST {
+                return e
+                    .move_mouse(x1.round() as i32, y1.round() as i32, Coordinate::Abs)
+                    .map_err(|err| BitFunError::tool(format!("mouse_move: {}", err)));
+            }
+            let duration_ms = (70.0 + dist * 0.28).min(MAX_DURATION_MS as f64) as u64;
+            let steps = ((dist / 5.5).ceil() as usize).clamp(MIN_STEPS, MAX_STEPS);
+            let step_delay = Duration::from_millis((duration_ms / steps as u64).max(1));
+
+            for i in 1..=steps {
+                let t = i as f64 / steps as f64;
+                let te = Self::smoothstep01(t);
+                let x = x0 + dx * te;
+                let y = y0 + dy * te;
+                e.move_mouse(x.round() as i32, y.round() as i32, Coordinate::Abs)
+                    .map_err(|err| BitFunError::tool(format!("mouse_move: {}", err)))?;
+                if i < steps {
+                    std::thread::sleep(step_delay);
+                }
+            }
+            Ok(())
+        })
+    }
+
     fn map_button(s: &str) -> BitFunResult<Button> {
         match s.to_lowercase().as_str() {
             "left" => Ok(Button::Left),
@@ -2313,36 +2392,29 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     async fn mouse_move_global_f64(&self, gx: f64, gy: f64) -> BitFunResult<()> {
-        #[cfg(target_os = "macos")]
-        {
-            tokio::task::spawn_blocking(move || {
-                Self::run_enigo_job(|_| Self::post_mouse_moved_cg_global(gx, gy))
-            })
-            .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
-            self.clear_vision_pixel_nudge_block();
-            ComputerUseHost::computer_use_after_pointer_mutation(self);
-            return Ok(());
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            self.mouse_move(gx.round() as i32, gy.round() as i32).await
-        }
-    }
-
-    async fn mouse_move(&self, x: i32, y: i32) -> BitFunResult<()> {
-        debug!("computer_use: mouse_move absolute ({}, {})", x, y);
+        debug!(
+            "computer_use: mouse_move_global_f64 smooth target ({:.2}, {:.2})",
+            gx, gy
+        );
         tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                e.move_mouse(x, y, Coordinate::Abs)
-                    .map_err(|err| BitFunError::tool(format!("mouse_move: {}", err)))
-            })
+            #[cfg(target_os = "macos")]
+            {
+                Self::run_enigo_job(|_| Self::smooth_mouse_move_cg_global(gx, gy))
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                Self::smooth_mouse_move_enigo_abs(gx, gy)
+            }
         })
         .await
         .map_err(|e| BitFunError::tool(e.to_string()))??;
         self.clear_vision_pixel_nudge_block();
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         Ok(())
+    }
+
+    async fn mouse_move(&self, x: i32, y: i32) -> BitFunResult<()> {
+        self.mouse_move_global_f64(x as f64, y as f64).await
     }
 
     async fn pointer_move_relative(&self, dx: i32, dy: i32) -> BitFunResult<()> {

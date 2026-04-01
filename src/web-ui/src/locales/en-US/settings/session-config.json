@@ -13,10 +13,10 @@
     "sectionDescription": "Confirmation and timeout settings when tools run in a session."
   },
   "computerUse": {
-    "sectionTitle": "Computer use (Claw)",
+    "sectionTitle": "Computer use (desktop)",
     "sectionDescription": "In the BitFun desktop app, the assistant can capture the screen and control the mouse and keyboard; requires a multimodal model for vision.",
     "enable": "Enable Computer use",
-    "enableDesc": "When off, the ComputerUse tool stays disabled even in Claw mode.",
+    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode.",
     "accessibility": "Accessibility",
     "accessibilityDesc": "",
     "screenCapture": "Screen recording",

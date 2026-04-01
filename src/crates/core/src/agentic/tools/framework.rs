@@ -68,6 +68,17 @@ impl ToolUseContext {
         self.workspace_services.as_ref().map(|s| s.shell.as_ref())
     }
 
+    /// Whether the session primary model accepts image inputs (from tool-definition / pipeline context).
+    /// Defaults to **true** when unset (e.g. API listings without model metadata).
+    pub fn primary_model_supports_image_understanding(&self) -> bool {
+        self.options
+            .as_ref()
+            .and_then(|o| o.custom_data.as_ref())
+            .and_then(|m| m.get("primary_model_supports_image_understanding"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+    }
+
     /// Resolve a user or model-supplied path for file/shell tools. Uses POSIX semantics when the
     /// workspace is remote SSH so Windows-hosted clients still resolve `/home/...` correctly.
     pub fn resolve_workspace_tool_path(&self, path: &str) -> BitFunResult<String> {
@@ -221,6 +232,16 @@ pub trait Tool: Send + Sync {
     /// Default: same as [`input_schema`].
     async fn input_schema_for_model(&self) -> Value {
         self.input_schema()
+    }
+
+    /// JSON Schema for the model when tool listing has a [`ToolUseContext`] (e.g. primary model vision capability).
+    /// Default: ignores context and delegates to [`input_schema_for_model`].
+    async fn input_schema_for_model_with_context(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> Value {
+        let _ = context;
+        self.input_schema_for_model().await
     }
 
     /// Input JSON Schema - optional extra schema
