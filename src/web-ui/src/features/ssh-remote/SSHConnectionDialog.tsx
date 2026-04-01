@@ -13,7 +13,7 @@ import { Input } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
 import { IconButton } from '@/component-library';
-import { FolderOpen, Loader2, Server, User, Key, Lock, Terminal, Trash2, Plus, Pencil, Play } from 'lucide-react';
+import { FolderOpen, Loader2, Server, User, Key, Lock, Trash2, Plus, Pencil, Play } from 'lucide-react';
 import type {
   SSHConnectionConfig,
   SSHAuthMethod,
@@ -58,7 +58,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     host: '',
     port: '22',
     username: '',
-    authType: 'password' as 'password' | 'privateKey' | 'agent',
+    authType: 'password' as 'password' | 'privateKey',
     password: '',
     keyPath: '~/.ssh/id_rsa',
     passphrase: '',
@@ -149,8 +149,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           keyPath: formData.keyPath,
           passphrase: formData.passphrase || undefined,
         };
-      case 'agent':
-        return { type: 'Agent' };
     }
   };
 
@@ -232,10 +230,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       } finally {
         setIsConnecting(false);
       }
-    } else {
-      const auth: SSHAuthMethod = conn.authType.type === 'PrivateKey'
-        ? { type: 'PrivateKey', keyPath: conn.authType.keyPath }
-        : { type: 'Agent' };
+    } else if (conn.authType.type === 'PrivateKey') {
+      const auth: SSHAuthMethod = {
+        type: 'PrivateKey',
+        keyPath: conn.authType.keyPath,
+      };
 
       setIsConnecting(true);
       try {
@@ -368,9 +367,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       host: conn.host,
       port: String(conn.port),
       username: conn.username,
-      authType: conn.authType.type === 'Password' ? 'password'
-        : conn.authType.type === 'PrivateKey' ? 'privateKey'
-        : 'agent',
+      authType: conn.authType.type === 'Password' ? 'password' : 'privateKey',
       password: '',
       keyPath,
       passphrase: '',
@@ -390,7 +387,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const authOptions = [
     { label: t('ssh.remote.password') || 'Password', value: 'password', icon: <Lock size={14} /> },
     { label: t('ssh.remote.privateKey') || 'Private Key', value: 'privateKey', icon: <Key size={14} /> },
-    { label: t('ssh.remote.sshAgent') || 'SSH Agent', value: 'agent', icon: <Terminal size={14} /> },
   ];
 
   const dismissError = () => {

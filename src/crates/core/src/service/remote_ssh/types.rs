@@ -1,6 +1,6 @@
 //! Type definitions for Remote SSH service
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Workspace backend type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -39,6 +39,7 @@ pub struct SSHConnectionConfig {
     /// SSH username
     pub username: String,
     /// Authentication method
+    #[serde(deserialize_with = "deserialize_ssh_auth_method")]
     pub auth: SSHAuthMethod,
     /// Default remote working directory
     #[serde(rename = "defaultWorkspace")]
@@ -61,8 +62,40 @@ pub enum SSHAuthMethod {
         /// Optional passphrase for encrypted private key
         passphrase: Option<String>,
     },
-    /// SSH agent authentication (uses system SSH agent)
-    Agent,
+}
+
+/// Legacy `{"type":"Agent"}` in saved config maps to default private key path.
+fn deserialize_ssh_auth_method<'de, D>(deserializer: D) -> Result<SSHAuthMethod, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(tag = "type")]
+    enum Helper {
+        Password {
+            password: String,
+        },
+        PrivateKey {
+            #[serde(rename = "keyPath")]
+            key_path: String,
+            passphrase: Option<String>,
+        },
+        Agent,
+    }
+    match Helper::deserialize(deserializer)? {
+        Helper::Password { password } => Ok(SSHAuthMethod::Password { password }),
+        Helper::PrivateKey {
+            key_path,
+            passphrase,
+        } => Ok(SSHAuthMethod::PrivateKey {
+            key_path,
+            passphrase,
+        }),
+        Helper::Agent => Ok(SSHAuthMethod::PrivateKey {
+            key_path: "~/.ssh/id_rsa".to_string(),
+            passphrase: None,
+        }),
+    }
 }
 
 /// Connection state
@@ -87,7 +120,7 @@ pub struct SavedConnection {
     pub host: String,
     pub port: u16,
     pub username: String,
-    #[serde(rename = "authType")]
+    #[serde(rename = "authType", deserialize_with = "deserialize_saved_auth_type")]
     pub auth_type: SavedAuthType,
     #[serde(rename = "defaultWorkspace")]
     pub default_workspace: Option<String>,
@@ -104,7 +137,29 @@ pub enum SavedAuthType {
         #[serde(rename = "keyPath")]
         key_path: String,
     },
-    Agent,
+}
+
+fn deserialize_saved_auth_type<'de, D>(deserializer: D) -> Result<SavedAuthType, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(tag = "type")]
+    enum Helper {
+        Password,
+        PrivateKey {
+            #[serde(rename = "keyPath")]
+            key_path: String,
+        },
+        Agent,
+    }
+    match Helper::deserialize(deserializer)? {
+        Helper::Password => Ok(SavedAuthType::Password),
+        Helper::PrivateKey { key_path } => Ok(SavedAuthType::PrivateKey { key_path }),
+        Helper::Agent => Ok(SavedAuthType::PrivateKey {
+            key_path: "~/.ssh/id_rsa".to_string(),
+        }),
+    }
 }
 
 /// Remote file entry information

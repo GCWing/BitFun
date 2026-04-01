@@ -125,8 +125,6 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     let authMethod: SSHConnectionConfig['auth'] | null = null;
     if (savedConn.authType.type === 'PrivateKey') {
       authMethod = { type: 'PrivateKey', keyPath: savedConn.authType.keyPath };
-    } else if (savedConn.authType.type === 'Agent') {
-      authMethod = { type: 'Agent' };
     } else {
       // Caller must only invoke password reconnect when vault has a password (see checkRemoteWorkspace).
       authMethod = { type: 'Password', password: '' };

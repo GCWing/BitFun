@@ -14,13 +14,11 @@ export interface SSHConnectionConfig {
 
 export type SSHAuthMethod =
   | { type: 'Password'; password: string }
-  | { type: 'PrivateKey'; keyPath: string; passphrase?: string }
-  | { type: 'Agent' };
+  | { type: 'PrivateKey'; keyPath: string; passphrase?: string };
 
 export type SavedAuthType =
   | { type: 'Password' }
-  | { type: 'PrivateKey'; keyPath: string }
-  | { type: 'Agent' };
+  | { type: 'PrivateKey'; keyPath: string };
 
 export interface SavedConnection {
   id: string;

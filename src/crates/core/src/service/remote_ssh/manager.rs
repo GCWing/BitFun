@@ -704,8 +704,11 @@ impl SSHConnectionManager {
             username: config.username.clone(),
             auth_type: match &config.auth {
                 SSHAuthMethod::Password { .. } => crate::service::remote_ssh::types::SavedAuthType::Password,
-                SSHAuthMethod::PrivateKey { key_path, .. } => crate::service::remote_ssh::types::SavedAuthType::PrivateKey { key_path: key_path.clone() },
-                SSHAuthMethod::Agent => crate::service::remote_ssh::types::SavedAuthType::Agent,
+                SSHAuthMethod::PrivateKey { key_path, .. } => {
+                    crate::service::remote_ssh::types::SavedAuthType::PrivateKey {
+                        key_path: key_path.clone(),
+                    }
+                }
             },
             default_workspace: config.default_workspace.clone(),
             last_connected: Some(chrono::Utc::now().timestamp() as u64),
@@ -722,7 +725,7 @@ impl SSHConnectionManager {
                         .with_context(|| format!("store ssh password vault for {}", config.id))?;
                 }
             }
-            SSHAuthMethod::PrivateKey { .. } | SSHAuthMethod::Agent => {
+            SSHAuthMethod::PrivateKey { .. } => {
                 self.password_vault.remove(&config.id).await?;
             }
         }
@@ -816,7 +819,6 @@ impl SSHConnectionManager {
                 log::info!("Successfully decoded private key");
                 Some(key_pair)
             }
-            SSHAuthMethod::Agent => None,
         };
 
         let ssh_config = Arc::new(russh::client::Config {
@@ -926,12 +928,6 @@ impl SSHConnectionManager {
                 } else {
                     return Err(anyhow!("Failed to load private key"));
                 }
-            }
-            SSHAuthMethod::Agent => {
-                log::debug!("Using SSH agent authentication - agent auth not supported, returning false");
-                // Agent auth is not supported in russh - return false to indicate auth failed
-                // The caller should try another auth method
-                false
             }
         };
 

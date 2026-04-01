@@ -1,5 +1,5 @@
 /**
- * Unified SSH authentication prompt: password, private key, or SSH agent.
+ * Unified SSH authentication prompt: password or private key.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -9,7 +9,7 @@ import { Button } from '@/component-library';
 import { Input } from '@/component-library';
 import { Select } from '@/component-library';
 import { IconButton } from '@/component-library';
-import { FolderOpen, Key, Loader2, Lock, Server, Terminal, User } from 'lucide-react';
+import { FolderOpen, Key, Loader2, Lock, Server, User } from 'lucide-react';
 import type { SSHAuthMethod } from './types';
 import { pickSshPrivateKeyPath } from './pickSshPrivateKeyPath';
 import './SSHAuthPromptDialog.scss';
@@ -24,7 +24,7 @@ interface SSHAuthPromptDialogProps {
   open: boolean;
   /** Shown in the header area (e.g. user@host:port or alias) */
   targetDescription: string;
-  defaultAuthMethod: 'password' | 'privateKey' | 'agent';
+  defaultAuthMethod: 'password' | 'privateKey';
   defaultKeyPath?: string;
   initialUsername: string;
   /** If false, user can edit username (e.g. SSH config without User) */
@@ -46,7 +46,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
   onCancel,
 }) => {
   const { t } = useI18n('common');
-  const [authMethod, setAuthMethod] = useState<'password' | 'privateKey' | 'agent'>(defaultAuthMethod);
+  const [authMethod, setAuthMethod] = useState<'password' | 'privateKey'>(defaultAuthMethod);
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState('');
   const [keyPath, setKeyPath] = useState(defaultKeyPath);
@@ -71,15 +71,13 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
   const authOptions = [
     { label: t('ssh.remote.password') || 'Password', value: 'password', icon: <Lock size={14} /> },
     { label: t('ssh.remote.privateKey') || 'Private Key', value: 'privateKey', icon: <Key size={14} /> },
-    { label: t('ssh.remote.sshAgent') || 'SSH Agent', value: 'agent', icon: <Terminal size={14} /> },
   ];
 
   const canSubmit = (): boolean => {
     const u = username.trim();
     if (!u) return false;
     if (authMethod === 'password') return password.length > 0;
-    if (authMethod === 'privateKey') return keyPath.trim().length > 0;
-    return true;
+    return keyPath.trim().length > 0;
   };
 
   const handleSubmit = () => {
@@ -88,14 +86,12 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
     let auth: SSHAuthMethod;
     if (authMethod === 'password') {
       auth = { type: 'Password', password };
-    } else if (authMethod === 'privateKey') {
+    } else {
       auth = {
         type: 'PrivateKey',
         keyPath: keyPath.trim(),
         passphrase: passphrase.trim() || undefined,
       };
-    } else {
-      auth = { type: 'Agent' };
     }
     onSubmit({ auth, username: u });
   };
@@ -154,7 +150,7 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
           <Select
             options={authOptions}
             value={authMethod}
-            onChange={(value) => setAuthMethod(value as 'password' | 'privateKey' | 'agent')}
+            onChange={(value) => setAuthMethod(value as 'password' | 'privateKey')}
             size="medium"
             disabled={isConnecting}
           />
@@ -214,10 +210,6 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
               />
             </div>
           </>
-        )}
-
-        {authMethod === 'agent' && (
-          <p className="ssh-auth-prompt-dialog__hint">{t('ssh.remote.authPromptAgentHint')}</p>
         )}
 
         <div className="ssh-auth-prompt-dialog__actions">
