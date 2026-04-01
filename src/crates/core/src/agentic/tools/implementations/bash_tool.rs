@@ -45,9 +45,28 @@ const BANNED_COMMANDS: &[&str] = &[
     "safari",
 ];
 
-fn truncate_string_by_chars(s: &str, max_chars: usize) -> String {
+fn truncate_output_preserving_tail(s: &str, max_chars: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
-    chars[..max_chars].into_iter().collect()
+    if chars.len() <= max_chars {
+        return s.to_string();
+    }
+
+    let tail_bias = max_chars.saturating_mul(4) / 5;
+    let separator = "\n... [truncated, middle omitted, tail preserved] ...\n";
+    let separator_len = separator.chars().count();
+
+    if separator_len >= max_chars {
+        return chars[chars.len() - max_chars..].iter().collect();
+    }
+
+    let content_budget = max_chars - separator_len;
+    let tail_len = tail_bias.min(content_budget);
+    let head_len = content_budget.saturating_sub(tail_len);
+
+    let head: String = chars[..head_len].iter().collect();
+    let tail: String = chars[chars.len() - tail_len..].iter().collect();
+
+    format!("{head}{separator}{tail}")
 }
 
 /// Result of shell resolution for bash tool
@@ -142,7 +161,7 @@ impl BashTool {
             let cleaned_output = strip_ansi(output_text);
             let output_len = cleaned_output.chars().count();
             if output_len > MAX_OUTPUT_LENGTH {
-                let truncated = truncate_string_by_chars(&cleaned_output, MAX_OUTPUT_LENGTH);
+                let truncated = truncate_output_preserving_tail(&cleaned_output, MAX_OUTPUT_LENGTH);
                 result_string.push_str(&format!(
                     "<output truncated=\"true\">{}</output>",
                     truncated
@@ -226,7 +245,7 @@ Usage notes:
   - DO NOT use multiline commands or HEREDOC syntax (e.g., <<EOF, heredoc with newlines). Only single-line commands are supported.
   - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
   - It is very helpful if you write a clear, concise description of what this command does. For simple commands, keep it brief (5-10 words). For complex commands (piped commands, obscure flags, or anything hard to understand at a glance), add enough context to clarify what it does.
-  - If the output exceeds {MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you.
+  - If the output exceeds {MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you, with the tail of the output preserved because the ending is usually more important.
   - You can use the `run_in_background` parameter to run the command in a new dedicated background terminal session. The tool returns the background session ID immediately without waiting for the command to finish. Only use this for long-running processes (e.g., dev servers, watchers) where you don't need the output right away. You do not need to append '&' to the command. NOTE: `timeout_ms` is ignored when `run_in_background` is true.
   - Each result includes a `<terminal_session_id>` tag identifying the terminal session. The persistent shell session ID remains constant throughout the entire conversation; background sessions each have their own unique ID.
   - The output may include the command echo and/or the shell prompt (e.g., `PS C:\path>`). Do not treat these as part of the command's actual result.
@@ -914,5 +933,36 @@ impl BashTool {
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_output_preserving_tail_keeps_end_of_output() {
+        let input = "BEGIN-".to_string() + &"x".repeat(120) + "-IMPORTANT-END";
+
+        let truncated = truncate_output_preserving_tail(&input, 80);
+
+        assert!(truncated.contains("tail preserved"));
+        assert!(truncated.ends_with("IMPORTANT-END"));
+        assert!(!truncated.contains("BEGIN-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"));
+        assert!(truncated.chars().count() <= 80);
+    }
+
+    #[test]
+    fn render_result_marks_truncated_output_and_keeps_tail() {
+        let tool = BashTool::new();
+        let long_output =
+            "prefix\n".to_string() + &"y".repeat(MAX_OUTPUT_LENGTH + 100) + "\nfinal-error";
+
+        let rendered = tool.render_result("session-1", &long_output, false, false, 1);
+
+        assert!(rendered.contains("<output truncated=\"true\">"));
+        assert!(rendered.contains("tail preserved"));
+        assert!(rendered.contains("final-error"));
+        assert!(rendered.contains("<exit_code>1</exit_code>"));
     }
 }
