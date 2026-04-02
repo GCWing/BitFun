@@ -117,7 +117,7 @@ const TemplateConfigPage: React.FC = () => {
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
 
   const enabledToolCount = useMemo(
-    () => agenticConfig?.available_tools?.length ?? 0,
+    () => agenticConfig?.enabled_tools?.length ?? 0,
     [agenticConfig],
   );
 
@@ -165,12 +165,12 @@ const TemplateConfigPage: React.FC = () => {
   );
 
   const builtinToolsEnabled = useMemo(
-    () => builtinTools.filter((tool) => agenticConfig?.available_tools?.includes(tool.name)),
+    () => builtinTools.filter((tool) => agenticConfig?.enabled_tools?.includes(tool.name)),
     [builtinTools, agenticConfig],
   );
 
   const builtinToolsDisabled = useMemo(
-    () => builtinTools.filter((tool) => !agenticConfig?.available_tools?.includes(tool.name)),
+    () => builtinTools.filter((tool) => !agenticConfig?.enabled_tools?.includes(tool.name)),
     [builtinTools, agenticConfig],
   );
 
@@ -268,10 +268,10 @@ const TemplateConfigPage: React.FC = () => {
   const handleToolToggle = useCallback(async (toolName: string) => {
     if (!agenticConfig) return;
     setToolsLoading((prev) => ({ ...prev, [toolName]: true }));
-    const current = agenticConfig.available_tools ?? [];
+    const current = agenticConfig.enabled_tools ?? [];
     const isEnabled = current.includes(toolName);
     const newTools = isEnabled ? current.filter((n) => n !== toolName) : [...current, toolName];
-    const newConfig = { ...agenticConfig, available_tools: newTools };
+    const newConfig = { ...agenticConfig, enabled_tools: newTools };
     setAgenticConfig(newConfig);
     try {
       await configAPI.setModeConfig('agentic', newConfig);
@@ -302,12 +302,12 @@ const TemplateConfigPage: React.FC = () => {
 
   const handleGroupToggleAll = useCallback(async (toolNames: string[]) => {
     if (!agenticConfig) return;
-    const current = agenticConfig.available_tools ?? [];
+    const current = agenticConfig.enabled_tools ?? [];
     const allEnabled = toolNames.every((n) => current.includes(n));
     const newTools = allEnabled
       ? current.filter((n) => !toolNames.includes(n))
       : [...new Set([...current, ...toolNames])];
-    const newConfig = { ...agenticConfig, available_tools: newTools };
+    const newConfig = { ...agenticConfig, enabled_tools: newTools };
     setAgenticConfig(newConfig);
     try {
       await configAPI.setModeConfig('agentic', newConfig);
@@ -403,7 +403,7 @@ const TemplateConfigPage: React.FC = () => {
   const renderToolList = (tools: ToolInfo[], isMcp: boolean) => (
     <div className="tc-tool-list">
       {tools.map((tool) => {
-        const enabled = agenticConfig?.available_tools?.includes(tool.name) ?? false;
+        const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
         const displayName = isMcp ? getMcpShortName(tool.name) : tool.name;
         const selected = detail?.type === 'tool' && detail.tool.name === tool.name;
         return (
@@ -518,8 +518,8 @@ const TemplateConfigPage: React.FC = () => {
     serverStatus?: string,
     mcpServerId?: string,
   ) => {
-    const groupEnabled = toolNames.filter(
-      (n) => agenticConfig?.available_tools?.includes(n),
+      const groupEnabled = toolNames.filter(
+      (n) => agenticConfig?.enabled_tools?.includes(n),
     ).length;
     const isCollapsed = collapsedGroups.has(id);
     const allOn = toolNames.length > 0 && groupEnabled === toolNames.length;
@@ -587,7 +587,7 @@ const TemplateConfigPage: React.FC = () => {
     if (detail.type === 'tool') {
       const { tool, isMcp } = detail;
       const displayName = isMcp ? getMcpShortName(tool.name) : tool.name;
-      const enabled = agenticConfig?.available_tools?.includes(tool.name) ?? false;
+      const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
       return (
         <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
           <div className="tc-template-detail__head tc-template-detail__head--center-line">
@@ -862,8 +862,8 @@ const TemplateConfigPage: React.FC = () => {
                     const serverInfo = mcpServers.find((s) => s.id === serverId);
                     const status = serverInfo?.status ?? (serverTools.length > 0 ? 'Connected' : 'Unknown');
                     const groupId = `mcp_${serverId}`;
-                    const mcpEnabled = serverTools.filter((tool) => agenticConfig?.available_tools?.includes(tool.name));
-                    const mcpDisabled = serverTools.filter((tool) => !agenticConfig?.available_tools?.includes(tool.name));
+                    const mcpEnabled = serverTools.filter((tool) => agenticConfig?.enabled_tools?.includes(tool.name));
+                    const mcpDisabled = serverTools.filter((tool) => !agenticConfig?.enabled_tools?.includes(tool.name));
 
                     return (
                       <div key={serverId} className="tc-tool-block">

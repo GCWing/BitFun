@@ -7,12 +7,13 @@ use crate::agentic::agents::custom_subagents::{
 };
 use crate::agentic::tools::get_all_registered_tool_names;
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
 use crate::service::config::types::{ModeConfig, SubAgentConfig};
 use crate::service::config::GlobalConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::sync::{Arc, OnceLock};
@@ -372,7 +373,7 @@ impl AgentRegistry {
 
     /// get agent tools from config
     /// if not set, return default tools
-    /// tool configuration synchronization is implemented through tool_config_sync, here only read configuration
+    /// mode config canonicalization is handled separately; this only reads resolved configuration
     pub async fn get_agent_tools(
         &self,
         agent_type: &str,
@@ -385,18 +386,13 @@ impl AgentRegistry {
         match entry.category {
             AgentCategory::Mode => {
                 let mode_configs = get_mode_configs().await;
-                let mut tools = mode_configs
-                    .get(agent_type)
-                    .map(|config| config.available_tools.clone())
-                    .unwrap_or_else(|| entry.agent.default_tools());
-                let defaults = entry.agent.default_tools();
-                const COMPUTER_USE: &str = "ComputerUse";
-                if defaults.iter().any(|t| t == COMPUTER_USE)
-                    && !tools.iter().any(|t| t == COMPUTER_USE)
-                {
-                    tools.push(COMPUTER_USE.to_string());
-                }
-                tools
+                let valid_tools: HashSet<String> =
+                    get_all_registered_tool_names().await.into_iter().collect();
+                resolve_effective_tools(
+                    &entry.agent.default_tools(),
+                    mode_configs.get(agent_type),
+                    &valid_tools,
+                )
             }
             AgentCategory::SubAgent | AgentCategory::Hidden => entry.agent.default_tools(),
         }
@@ -716,9 +712,9 @@ impl AgentRegistry {
         agent_id: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<CustomSubagentDetail> {
-        let entry = self.find_agent_entry(agent_id, workspace_root).ok_or_else(|| {
-            BitFunError::agent(format!("Subagent not found: {}", agent_id))
-        })?;
+        let entry = self
+            .find_agent_entry(agent_id, workspace_root)
+            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
         if entry.category != AgentCategory::SubAgent {
             return Err(BitFunError::agent(format!(
                 "Agent '{}' is not a subagent",
@@ -775,9 +771,9 @@ impl AgentRegistry {
         if let Some(root) = workspace_root {
             self.load_custom_subagents(root).await;
         }
-        let entry = self.find_agent_entry(agent_id, workspace_root).ok_or_else(|| {
-            BitFunError::agent(format!("Subagent not found: {}", agent_id))
-        })?;
+        let entry = self
+            .find_agent_entry(agent_id, workspace_root)
+            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
         if entry.category != AgentCategory::SubAgent {
             return Err(BitFunError::agent(format!(
                 "Agent '{}' is not a subagent",
@@ -799,16 +795,14 @@ impl AgentRegistry {
                     agent_id
                 ))
             })?;
-        let tools = tools
-            .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| {
-                vec![
-                    "LS".to_string(),
-                    "Read".to_string(),
-                    "Glob".to_string(),
-                    "Grep".to_string(),
-                ]
-            });
+        let tools = tools.filter(|t| !t.is_empty()).unwrap_or_else(|| {
+            vec![
+                "LS".to_string(),
+                "Read".to_string(),
+                "Glob".to_string(),
+                "Grep".to_string(),
+            ]
+        });
         let mut new_subagent = CustomSubagent::new(
             old.name.clone(),
             description,
@@ -838,9 +832,9 @@ impl AgentRegistry {
     ) -> BitFunResult<()> {
         let mut map = self.write_agents();
         if map.contains_key(agent_id) {
-            let old_entry = map.get(agent_id).ok_or_else(|| {
-                BitFunError::agent(format!("Subagent not found: {}", agent_id))
-            })?;
+            let old_entry = map
+                .get(agent_id)
+                .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
             if old_entry.category != AgentCategory::SubAgent {
                 return Err(BitFunError::agent(format!(
                     "Agent '{}' is not a subagent",
@@ -877,9 +871,9 @@ impl AgentRegistry {
         let entries = pm.get_mut(root).ok_or_else(|| {
             BitFunError::agent("Project subagent cache not loaded for this workspace".to_string())
         })?;
-        let old_entry = entries.get(agent_id).ok_or_else(|| {
-            BitFunError::agent(format!("Subagent not found: {}", agent_id))
-        })?;
+        let old_entry = entries
+            .get(agent_id)
+            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
         if old_entry.category != AgentCategory::SubAgent {
             return Err(BitFunError::agent(format!(
                 "Agent '{}' is not a subagent",

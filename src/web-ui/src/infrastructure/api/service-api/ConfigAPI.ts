@@ -3,6 +3,7 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
+  ModeConfigItem,
   RuntimeLoggingInfo,
   SkillInfo,
   SkillLevel,
@@ -163,18 +164,18 @@ export class ConfigAPI {
   
 
    
-  async getModeConfigs(): Promise<Record<string, any>> {
+  async getModeConfigs(): Promise<Record<string, ModeConfigItem>> {
     try {
-      return await api.invoke('get_mode_configs');
+      return await api.invoke<Record<string, ModeConfigItem>>('get_mode_configs');
     } catch (error) {
       throw createTauriCommandError('get_mode_configs', error);
     }
   }
 
    
-  async getModeConfig(modeId: string): Promise<any> {
+  async getModeConfig(modeId: string): Promise<ModeConfigItem> {
     try {
-      return await api.invoke('get_mode_config', { modeId });
+      return await api.invoke<ModeConfigItem>('get_mode_config', { modeId });
     } catch (error) {
       throw createTauriCommandError('get_mode_config', error, { modeId });
     }

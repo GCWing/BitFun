@@ -600,7 +600,7 @@ pub async fn run() {
             create_cron_job,
             update_cron_job,
             delete_cron_job,
-            api::config_api::sync_tool_configs,
+            api::config_api::canonicalize_mode_configs,
             api::terminal_api::terminal_get_shells,
             api::terminal_api::terminal_create,
             api::terminal_api::terminal_get,

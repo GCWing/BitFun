@@ -80,19 +80,18 @@ impl GlobalConfigManager {
 
         info!("Global config service initialized");
 
-        match super::tool_config_sync::sync_tool_configs().await {
+        match super::mode_config_canonicalizer::canonicalize_mode_configs().await {
             Ok(report) => {
-                if !report.new_tools.is_empty() || !report.deleted_tools.is_empty() {
+                if !report.removed_mode_configs.is_empty() || !report.updated_modes.is_empty() {
                     info!(
-                        "Tool config sync completed: {} new, {} deleted, {} updated modes",
-                        report.new_tools.len(),
-                        report.deleted_tools.len(),
+                        "Mode config canonicalization completed: removed_modes={}, updated_modes={}",
+                        report.removed_mode_configs.len(),
                         report.updated_modes.len()
                     );
                 }
             }
             Err(e) => {
-                warn!("Tool config sync failed: {}", e);
+                warn!("Mode config canonicalization failed: {}", e);
             }
         }
 
@@ -136,6 +135,12 @@ impl GlobalConfigManager {
     pub async fn reload() -> BitFunResult<()> {
         let service = Self::get_service().await?;
         service.reload().await?;
+        if let Err(error) = super::mode_config_canonicalizer::canonicalize_mode_configs().await {
+            warn!(
+                "Mode config canonicalization failed after reload: {}",
+                error
+            );
+        }
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;
         Ok(())
     }

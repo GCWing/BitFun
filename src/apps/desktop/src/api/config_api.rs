@@ -243,127 +243,24 @@ pub async fn get_runtime_logging_info(
 }
 
 #[tauri::command]
-pub async fn get_mode_configs(state: State<'_, AppState>) -> Result<Value, String> {
-    use bitfun_core::service::config::types::ModeConfig;
-    use std::collections::HashMap;
-
-    let config_service = &state.config_service;
-    let mut mode_configs: HashMap<String, ModeConfig> = config_service
-        .get_config(Some("ai.mode_configs"))
-        .await
-        .unwrap_or_default();
-
-    let all_modes = state.agent_registry.get_modes_info().await;
-    let mut needs_save = false;
-
-    for mode in all_modes {
-        let mode_id = mode.id;
-        let default_tools = mode.default_tools;
-
-        if !mode_configs.contains_key(&mode_id) {
-            let new_config = ModeConfig {
-                mode_id: mode_id.clone(),
-                available_tools: default_tools.clone(),
-                enabled: true,
-                default_tools: default_tools,
-            };
-            mode_configs.insert(mode_id.clone(), new_config);
-            needs_save = true;
-        } else if let Some(config) = mode_configs.get_mut(&mode_id) {
-            config.default_tools = default_tools.clone();
-            // Migration: add ComputerUse to available_tools when the mode default includes it.
-            if default_tools.iter().any(|t| t == "ComputerUse")
-                && !config.available_tools.iter().any(|t| t == "ComputerUse")
-            {
-                config.available_tools.push("ComputerUse".to_string());
-                needs_save = true;
-            }
-            // Migrate older Claw sessions that only allowlisted "ComputerUse" before split mouse tools existed;
-            // All desktop automation is now consolidated into ComputerUse.
-            // Remove any stale split tool names from available_tools.
-            if mode_id == "Claw" {
-                let stale = ["ComputerUseMousePrecise", "ComputerUseMouseStep", "ComputerUseMouseClick"];
-                let before = config.available_tools.len();
-                config.available_tools.retain(|t| !stale.contains(&t.as_str()));
-                if config.available_tools.len() != before {
-                    needs_save = true;
-                }
-            }
-        }
-    }
-
-    if needs_save {
-        match to_json_value(&mode_configs, "mode configs") {
-            Ok(mode_configs_value) => {
-                if let Err(e) = config_service
-                    .set_config("ai.mode_configs", mode_configs_value)
-                    .await
-                {
-                    warn!("Failed to save initialized mode configs: {}", e);
-                }
-            }
-            Err(e) => {
-                warn!("Failed to serialize initialized mode configs: {}", e);
-            }
-        }
-    }
+pub async fn get_mode_configs(_state: State<'_, AppState>) -> Result<Value, String> {
+    let mode_configs =
+        bitfun_core::service::config::mode_config_canonicalizer::get_mode_config_views()
+            .await
+            .map_err(|e| format!("Failed to get mode configs: {}", e))?;
 
     Ok(to_json_value(mode_configs, "mode configs")?)
 }
 
 #[tauri::command]
-pub async fn get_mode_config(state: State<'_, AppState>, mode_id: String) -> Result<Value, String> {
-    use bitfun_core::service::config::types::ModeConfig;
-
-    let config_service = &state.config_service;
-    let agent_registry = &state.agent_registry;
-    let path = format!("ai.mode_configs.{}", mode_id);
-    let config_result = config_service.get_config::<ModeConfig>(Some(&path)).await;
-
-    let config = match config_result {
-        Ok(existing_config) => {
-            let mut cfg = existing_config;
-            if let Some(mode) = agent_registry.get_mode_agent(&mode_id) {
-                cfg.default_tools = mode.default_tools();
-            }
-            cfg
-        }
-        Err(_) => {
-            if let Some(mode) = agent_registry.get_mode_agent(&mode_id) {
-                let default_tools = mode.default_tools();
-                let new_config = ModeConfig {
-                    mode_id: mode_id.clone(),
-                    available_tools: default_tools.clone(),
-                    enabled: true,
-                    default_tools: default_tools,
-                };
-                match to_json_value(&new_config, "initial mode config") {
-                    Ok(new_config_value) => {
-                        if let Err(e) = config_service.set_config(&path, new_config_value).await {
-                            warn!(
-                                "Failed to save initial mode config: mode_id={}, error={}",
-                                mode_id, e
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to serialize initial mode config: mode_id={}, error={}",
-                            mode_id, e
-                        );
-                    }
-                }
-                new_config
-            } else {
-                ModeConfig {
-                    mode_id: mode_id.clone(),
-                    available_tools: vec![],
-                    enabled: true,
-                    default_tools: vec![],
-                }
-            }
-        }
-    };
+pub async fn get_mode_config(
+    _state: State<'_, AppState>,
+    mode_id: String,
+) -> Result<Value, String> {
+    let config =
+        bitfun_core::service::config::mode_config_canonicalizer::get_mode_config_view(&mode_id)
+            .await
+            .map_err(|e| format!("Failed to get mode config: {}", e))?;
 
     Ok(to_json_value(config, "mode config")?)
 }
@@ -374,10 +271,13 @@ pub async fn set_mode_config(
     mode_id: String,
     config: Value,
 ) -> Result<String, String> {
-    let config_service = &state.config_service;
-    let path = format!("ai.mode_configs.{}", mode_id);
+    let _ = state;
 
-    match config_service.set_config(&path, config).await {
+    match bitfun_core::service::config::mode_config_canonicalizer::persist_mode_config_from_value(
+        &mode_id, config,
+    )
+    .await
+    {
         Ok(_) => {
             if let Err(e) = bitfun_core::service::config::reload_global_config().await {
                 warn!(
@@ -405,30 +305,14 @@ pub async fn set_mode_config(
 
 #[tauri::command]
 pub async fn reset_mode_config(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     mode_id: String,
 ) -> Result<String, String> {
-    use bitfun_core::service::config::types::ModeConfig;
-
-    let agent_registry = &state.agent_registry;
-    let default_tools = if let Some(mode) = agent_registry.get_mode_agent(&mode_id) {
-        mode.default_tools()
-    } else {
-        return Err(format!("Mode does not exist: {}", mode_id));
-    };
-
-    let default_config = ModeConfig {
-        mode_id: mode_id.clone(),
-        available_tools: default_tools.clone(),
-        enabled: true,
-        default_tools: default_tools,
-    };
-
-    let config_service = &state.config_service;
-    let path = format!("ai.mode_configs.{}", mode_id);
-    let default_config_value = to_json_value(&default_config, "default mode config")?;
-
-    match config_service.set_config(&path, default_config_value).await {
+    match bitfun_core::service::config::mode_config_canonicalizer::reset_mode_config_to_default(
+        &mode_id,
+    )
+    .await
+    {
         Ok(_) => {
             if let Err(e) = bitfun_core::service::config::reload_global_config().await {
                 warn!(
@@ -539,20 +423,23 @@ pub async fn set_subagent_config(
 }
 
 #[tauri::command]
-pub async fn sync_tool_configs(_state: State<'_, AppState>) -> Result<Value, String> {
-    match bitfun_core::service::config::tool_config_sync::sync_tool_configs().await {
+pub async fn canonicalize_mode_configs(_state: State<'_, AppState>) -> Result<Value, String> {
+    match bitfun_core::service::config::mode_config_canonicalizer::canonicalize_mode_configs().await
+    {
         Ok(report) => {
             info!(
-                "Tool configs synced: new_tools={}, deleted_tools={}, updated_modes={}",
-                report.new_tools.len(),
-                report.deleted_tools.len(),
+                "Mode configs canonicalized: removed_modes={}, updated_modes={}",
+                report.removed_mode_configs.len(),
                 report.updated_modes.len()
             );
-            Ok(to_json_value(report, "tool config sync report")?)
+            Ok(to_json_value(
+                report,
+                "mode config canonicalization report",
+            )?)
         }
         Err(e) => {
-            error!("Failed to sync tool configs: {}", e);
-            Err(format!("Failed to sync tool configs: {}", e))
+            error!("Failed to canonicalize mode configs: {}", e);
+            Err(format!("Failed to canonicalize mode configs: {}", e))
         }
     }
 }

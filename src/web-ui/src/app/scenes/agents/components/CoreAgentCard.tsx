@@ -21,6 +21,7 @@ interface CoreAgentCardProps {
   agent: AgentWithCapabilities;
   index?: number;
   meta: CoreAgentMeta;
+  toolCount?: number;
   skillCount?: number;
   onOpenDetails: (agent: AgentWithCapabilities) => void;
 }
@@ -29,12 +30,13 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   agent,
   index = 0,
   meta,
+  toolCount,
   skillCount = 0,
   onOpenDetails,
 }) => {
   const { t } = useTranslation('scenes/agents');
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
-  const totalTools = agent.toolCount ?? agent.defaultTools?.length ?? 0;
+  const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const openDetails = () => onOpenDetails(agent);
 
   return (

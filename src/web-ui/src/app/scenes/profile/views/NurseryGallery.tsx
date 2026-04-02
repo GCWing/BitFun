@@ -65,7 +65,7 @@ const NurseryGallery: React.FC = () => {
         setTemplateStats({
           primaryModelName: resolveModelName('primary', t('nursery.template.stats.primaryDefault')),
           fastModelName: resolveModelName('fast', t('nursery.template.stats.fastDefault')),
-          enabledToolCount: modeConf?.available_tools?.length ?? 0,
+          enabledToolCount: modeConf?.enabled_tools?.length ?? 0,
         });
       } catch (e) {
         log.error('Failed to load template stats', e);

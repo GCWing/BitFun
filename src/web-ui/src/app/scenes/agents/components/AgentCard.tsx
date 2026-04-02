@@ -17,6 +17,7 @@ interface AgentCardProps {
   agent: AgentWithCapabilities;
   index?: number;
   soloEnabled: boolean;
+  toolCount?: number;
   skillCount?: number;
   onToggleSolo: (agentId: string, enabled: boolean) => void;
   onOpenDetails: (agent: AgentWithCapabilities) => void;
@@ -26,6 +27,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   agent,
   index = 0,
   soloEnabled,
+  toolCount,
   skillCount = 0,
   onToggleSolo,
   onOpenDetails,
@@ -33,7 +35,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const { t } = useTranslation('scenes/agents');
   const badge = getAgentBadge(t, agent.agentKind, agent.subagentSource);
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
-  const totalTools = agent.toolCount ?? agent.defaultTools?.length ?? 0;
+  const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const openDetails = () => onOpenDetails(agent);
 
   return (

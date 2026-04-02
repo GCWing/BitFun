@@ -440,11 +440,6 @@ pub struct AIConfig {
     #[serde(default)]
     pub debug_mode_config: DebugModeConfig,
 
-    /// Known tools (all non-MCP tools from the registry at last startup).
-    /// Used to detect added and removed tools.
-    #[serde(default)]
-    pub known_tools: Vec<String>,
-
     /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
@@ -498,17 +493,34 @@ pub struct ModeConfig {
     /// Mode ID (e.g. agentic, debug, requirement, ui-design).
     pub mode_id: String,
 
-    /// Available tools.
-    pub available_tools: Vec<String>,
+    /// Tools explicitly enabled by the user that are not part of the mode defaults.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub added_tools: Vec<String>,
+
+    /// Default tools explicitly disabled by the user.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed_tools: Vec<String>,
 
     /// Whether this mode is enabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Default tools for this mode (from the mode registry; not read from config).
-    /// Used only for frontend display and reset; persisted but overwritten on load.
-    #[serde(skip_deserializing)]
+    /// Skill overrides for this mode.
+    /// `None` means follow the global skill enablement state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_skills: Option<Vec<String>>,
+}
+
+/// API view of a mode configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModeConfigView {
+    pub mode_id: String,
+    pub enabled_tools: Vec<String>,
     pub default_tools: Vec<String>,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available_skills: Option<Vec<String>>,
 }
 
 fn default_true() -> bool {
@@ -533,9 +545,22 @@ impl Default for ModeConfig {
     fn default() -> Self {
         Self {
             mode_id: String::new(),
-            available_tools: Vec::new(),
+            added_tools: Vec::new(),
+            removed_tools: Vec::new(),
             enabled: true,
+            available_skills: None,
+        }
+    }
+}
+
+impl Default for ModeConfigView {
+    fn default() -> Self {
+        Self {
+            mode_id: String::new(),
+            enabled_tools: Vec::new(),
             default_tools: Vec::new(),
+            enabled: true,
+            available_skills: None,
         }
     }
 }
@@ -1198,7 +1223,6 @@ impl Default for AIConfig {
             tool_confirmation_timeout_secs: default_tool_confirmation_timeout(),
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
-            known_tools: Vec::new(),
             computer_use_enabled: false,
         }
     }

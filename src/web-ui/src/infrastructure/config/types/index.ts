@@ -158,7 +158,7 @@ export interface AIConfig {
   default_models: DefaultModelsConfig;  
   agent_models: Record<string, string>;  
   func_agent_models: Record<string, string>;  
-  mode_configs: Record<string, ModeConfigItem>;  
+  mode_configs: Record<string, StoredModeConfigItem>;  
   subagent_configs: Record<string, SubAgentConfigItem>;  
   proxy: ProxyConfig;  
   debug_mode_config: DebugModeConfig;  
@@ -177,9 +177,18 @@ export interface AIConfig {
 
 
 
+
+export interface StoredModeConfigItem {
+  mode_id: string;
+  added_tools: string[];
+  removed_tools: string[];
+  enabled: boolean;
+  available_skills?: string[];
+}
+
 export interface ModeConfigItem {
   mode_id: string;  
-  available_tools: string[];  
+  enabled_tools: string[];  
   enabled: boolean;  
   default_tools: string[];  
   available_skills?: string[];  
