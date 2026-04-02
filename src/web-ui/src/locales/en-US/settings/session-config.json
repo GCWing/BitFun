@@ -6,6 +6,11 @@
       "title": "Auto Session Title",
       "subtitle": "AI automatically generates concise titles for new conversations",
       "warning": "Session title will use first 20 characters of user message"
+    },
+    "agentCompanion": {
+      "title": "Agent companion",
+      "subtitle": "Show a pixel-style companion animation in the collapsed chat input.",
+      "enable": "Show Agent companion"
     }
   },
   "toolExecution": {

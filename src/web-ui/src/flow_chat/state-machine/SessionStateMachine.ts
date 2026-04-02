@@ -132,7 +132,9 @@ export class SessionStateMachineImpl {
     this.context.version += 1;
     this.context.lastUpdateTime = Date.now();
 
+    const processingPhaseBefore = this.context.processingPhase;
     this.updateContext(event, payload);
+    const processingPhaseAfter = this.context.processingPhase;
 
     if (this.transitionHistory.length > SessionStateMachineImpl.MAX_HISTORY_LENGTH * 2) {
       this.transitionHistory = this.transitionHistory.slice(-SessionStateMachineImpl.MAX_HISTORY_LENGTH);
@@ -149,10 +151,11 @@ export class SessionStateMachineImpl {
 
     await this.runSideEffects(event, payload);
 
-    // TEXT_CHUNK_RECEIVED is a self-loop (PROCESSING→PROCESSING / FINISHING→FINISHING)
-    // that only increments stats.textCharsGenerated. Skip the expensive snapshot clone
-    // and listener broadcast to avoid per-chunk overhead during streaming.
+    // TEXT_CHUNK_RECEIVED is high-frequency: skip notify when phase is unchanged (STREAMING→STREAMING).
+    // When phase changes (e.g. THINKING→STREAMING on first chunk), subscribers must update (pet, progress).
     if (event !== SessionExecutionEvent.TEXT_CHUNK_RECEIVED) {
+      this.notifyListeners();
+    } else if (processingPhaseBefore !== processingPhaseAfter) {
       this.notifyListeners();
     }
 
@@ -168,7 +171,8 @@ export class SessionStateMachineImpl {
       const shouldUpdatePhase =
         this.currentState === SessionExecutionState.PROCESSING ||
         event === SessionExecutionEvent.BACKEND_STREAM_COMPLETED;
-      if (shouldUpdatePhase && newPhase !== null && newPhase !== undefined) {
+      // Allow null (e.g. TOOL_COMPLETED clears phase so UI leaves "tool calling" before the next round).
+      if (shouldUpdatePhase && newPhase !== undefined) {
         this.context.processingPhase = newPhase;
       }
     } else {

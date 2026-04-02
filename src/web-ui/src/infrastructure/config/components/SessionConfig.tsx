@@ -455,6 +455,22 @@ const SessionConfig: React.FC = () => {
           </ConfigPageRow>
         </ConfigPageSection>
 
+        {/* ── Agent companion (collapsed input) ─────────────────── */}
+        <ConfigPageSection
+          title={t('features.agentCompanion.title')}
+          description={t('features.agentCompanion.subtitle')}
+        >
+          <ConfigPageRow label={t('features.agentCompanion.enable')} align="center">
+            <div className="bitfun-func-agent-config__row-control">
+              <Switch
+                checked={settings.enable_agent_companion}
+                onChange={(e) => updateSetting('enable_agent_companion', e.target.checked)}
+                size="small"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
         {/* ── Tool execution behavior ────────────────────────────── */}
         <ConfigPageSection
           title={t('toolExecution.sectionTitle')}

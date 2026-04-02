@@ -54,6 +54,8 @@
     transform: translateY(3px);
     
     .bitfun-chat-input__box {
+      position: relative;
+      overflow: hidden;
       min-height: 42px;
       max-height: 42px;
       padding: 0 18px;
@@ -219,6 +221,96 @@
 
     &:hover .bitfun-chat-input__space-hint {
       opacity: 0.9;
+    }
+
+    &.bitfun-chat-input--pet-visible {
+      .bitfun-chat-input__input-area {
+        z-index: 1;
+      }
+
+      .bitfun-chat-input__actions {
+        z-index: 2;
+      }
+
+      .bitfun-chat-input__space-hint {
+        opacity: 0;
+        transition: opacity 0.36s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      &:hover .bitfun-chat-input__space-hint {
+        opacity: 0.88;
+      }
+
+      &.bitfun-chat-input--pet-split-send.bitfun-chat-input--processing {
+        .bitfun-chat-input__actions {
+          z-index: 5;
+        }
+      }
+    }
+
+    &.bitfun-chat-input--pet-replaces-stop.bitfun-chat-input--processing {
+      .bitfun-chat-input__input-area {
+        right: 52px;
+      }
+
+      &.bitfun-chat-input--pet-split-send .bitfun-chat-input__input-area {
+        right: 112px;
+      }
+    }
+
+    .bitfun-chat-input__pet-wrap {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    /* Full width so flex alignment is relative to the capsule (not the ~40px pet). */
+    .bitfun-chat-input__pet-inner {
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+      transition:
+        justify-content 0.45s cubic-bezier(0.34, 1.15, 0.64, 1),
+        padding 0.45s cubic-bezier(0.34, 1.15, 0.64, 1);
+    }
+
+    /* Align with former stop control (~same inset as .bitfun-chat-input__actions { right: 14px }). */
+    .bitfun-chat-input__pet-wrap--shift .bitfun-chat-input__pet-inner {
+      justify-content: flex-end;
+      padding-right: 8px;
+    }
+
+    .bitfun-chat-input__pet-wrap--shift.bitfun-chat-input__pet-wrap--split .bitfun-chat-input__pet-inner {
+      padding-right: 42px;
+    }
+
+    .bitfun-chat-input__pet-stop-btn {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin: 0;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 10px;
+      line-height: 0;
+
+      &:hover {
+        filter: brightness(1.08);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--color-accent-primary);
+        outline-offset: 2px;
+      }
     }
   }
 

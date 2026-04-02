@@ -60,6 +60,9 @@ export interface AIExperienceConfig {
 
   /** Whether to enable visual mode (use Mermaid diagrams to illustrate complex logic and flows). */
   enable_visual_mode: boolean;
+
+  /** Whether to show the pixel Agent companion in the collapsed chat input. */
+  enable_agent_companion: boolean;
 }
 
 

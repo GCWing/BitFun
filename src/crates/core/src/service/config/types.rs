@@ -104,6 +104,8 @@ pub struct AIExperienceConfig {
     pub enable_welcome_panel_ai_analysis: bool,
     /// Whether to enable visual mode.
     pub enable_visual_mode: bool,
+    /// Whether to show the pixel Agent companion in the collapsed chat input.
+    pub enable_agent_companion: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -998,6 +1000,7 @@ impl Default for AIExperienceConfig {
             enable_session_title_generation: true,
             enable_welcome_panel_ai_analysis: false,
             enable_visual_mode: false,
+            enable_agent_companion: false,
         }
     }
 }

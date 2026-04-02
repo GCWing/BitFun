@@ -1,0 +1,397 @@
+/**
+ * Pixel panda — process states use stronger motion + layered FX (dots / pips / sweat / speed).
+ */
+
+.bitfun-chat-input-pixel-pet {
+  position: relative;
+  z-index: 0;
+  width: 44px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: visible;
+  pointer-events: none;
+
+  &__layer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: opacity;
+
+    &[data-active='true'] {
+      opacity: 1;
+    }
+  }
+
+  &__svg {
+    width: min(92%, 220px);
+    height: 36px;
+    max-height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    shape-rendering: geometricPrecision;
+    overflow: visible;
+  }
+}
+
+.bitfun-panda__halo {
+  fill: #ffffff;
+}
+
+/* Face fill: light gray so the head reads on light UI; halo + eye whites stay brighter */
+.bitfun-panda__w {
+  fill: #e0e4e9;
+}
+
+.bitfun-panda__b {
+  fill: #141414;
+}
+
+.bitfun-panda__eye-hi {
+  fill: #ffffff;
+}
+
+.bitfun-panda__pupil {
+  fill: #141414;
+}
+
+.bitfun-panda-head {
+  transform-origin: 16px 16px;
+  transform-box: fill-box;
+
+  &--rest {
+    animation: bitfun-head-rest 2.2s ease-in-out infinite;
+  }
+
+  &--analyzing {
+    animation: bitfun-head-analyze 1.1s ease-in-out infinite;
+  }
+
+  &--waiting {
+    animation: bitfun-head-wait 0.85s ease-in-out infinite;
+  }
+
+  &--working {
+    animation: bitfun-head-work 0.32s ease-in-out infinite;
+  }
+
+  &__face--rest .bitfun-panda__eye-hi {
+    animation: bitfun-head-blink 3.2s ease-in-out infinite;
+  }
+
+  /* Thinking: eyes look around */
+  &--analyzing .bitfun-panda__pupil {
+    animation: bitfun-pupil-scan 0.9s ease-in-out infinite;
+  }
+
+  &--analyzing .bitfun-panda-head__ears {
+    animation: bitfun-ear-twitch 0.55s ease-in-out infinite;
+    transform-origin: 16px 6px;
+  }
+
+  /* Busy: ears wobble faster */
+  &--working .bitfun-panda-head__ears {
+    animation: bitfun-ear-wiggle 0.28s ease-in-out infinite;
+    transform-origin: 16px 6px;
+  }
+
+  &__dots .bitfun-panda-head__dot {
+    animation: bitfun-head-dot-bounce 0.55s ease-in-out infinite;
+  }
+
+  &__dots .bitfun-panda-head__dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  &__dots .bitfun-panda-head__dot:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+
+  &__dots .bitfun-panda-head__dot:nth-child(3) {
+    animation-delay: 0.36s;
+  }
+
+  &__wait-pips .bitfun-panda-head__wait-pip {
+    animation: bitfun-wait-pip 0.7s ease-in-out infinite;
+    fill: #94a3b8;
+  }
+
+  &__wait-pips .bitfun-panda-head__wait-pip:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  &__wait-pips .bitfun-panda-head__wait-pip:nth-child(2) {
+    animation-delay: 0.12s;
+  }
+
+  &__wait-pips .bitfun-panda-head__wait-pip:nth-child(3) {
+    animation-delay: 0.24s;
+  }
+
+  &__sweat .bitfun-panda-head__sweat-drop {
+    fill: #38bdf8;
+  }
+
+  &__sweat .bitfun-panda-head__sweat-drop:nth-child(1) {
+    animation: bitfun-sweat-a 0.55s ease-in-out infinite;
+  }
+
+  &__sweat .bitfun-panda-head__sweat-drop:nth-child(2) {
+    animation: bitfun-sweat-b 0.55s ease-in-out 0.2s infinite;
+  }
+
+  &__speed .bitfun-panda-head__speed-line {
+    fill: #94a3b8;
+    opacity: 0.85;
+  }
+
+  &__speed .bitfun-panda-head__speed-line:nth-child(1),
+  &__speed .bitfun-panda-head__speed-line:nth-child(4) {
+    animation: bitfun-speed-streak 0.22s linear infinite;
+  }
+
+  &__speed .bitfun-panda-head__speed-line:nth-child(2),
+  &__speed .bitfun-panda-head__speed-line:nth-child(5) {
+    animation: bitfun-speed-streak 0.22s linear 0.07s infinite;
+  }
+
+  &__speed .bitfun-panda-head__speed-line:nth-child(3),
+  &__speed .bitfun-panda-head__speed-line:nth-child(6) {
+    animation: bitfun-speed-streak 0.22s linear 0.14s infinite;
+  }
+}
+
+.bitfun-panda-head__dot {
+  fill: #7dd3fc;
+}
+
+@keyframes bitfun-head-rest {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.8deg) scale(1);
+  }
+
+  50% {
+    transform: translateY(0.6px) rotate(0.8deg) scale(1.03, 0.98);
+  }
+}
+
+@keyframes bitfun-head-blink {
+  0%,
+  84%,
+  100% {
+    opacity: 1;
+  }
+
+  88%,
+  93% {
+    opacity: 0.12;
+  }
+}
+
+/* Stronger “thinking” — squash + sway + bounce */
+@keyframes bitfun-head-analyze {
+  0% {
+    transform: translateY(0) rotate(-2.5deg) scale(1, 1);
+  }
+
+  25% {
+    transform: translateY(-1.8px) rotate(0deg) scale(1.05, 0.96);
+  }
+
+  50% {
+    transform: translateY(0) rotate(2.5deg) scale(0.98, 1.04);
+  }
+
+  75% {
+    transform: translateY(-1px) rotate(-1deg) scale(1.04, 0.97);
+  }
+
+  100% {
+    transform: translateY(0) rotate(-2.5deg) scale(1, 1);
+  }
+}
+
+@keyframes bitfun-pupil-scan {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  25% {
+    transform: translate(1px, 0);
+  }
+
+  50% {
+    transform: translate(-1px, 0);
+  }
+
+  75% {
+    transform: translate(0, 1px);
+  }
+}
+
+@keyframes bitfun-ear-twitch {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  30% {
+    transform: rotate(-4deg);
+  }
+
+  60% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes bitfun-head-dot-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* Waiting: side-to-side + squash — reads as “blocked / pending” */
+@keyframes bitfun-head-wait {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg) scale(1);
+  }
+
+  20% {
+    transform: translateX(2.5px) rotate(1.2deg) scale(1.04, 0.96);
+  }
+
+  40% {
+    transform: translateX(0) rotate(0deg) scale(1);
+  }
+
+  60% {
+    transform: translateX(-2.5px) rotate(-1.2deg) scale(0.96, 1.04);
+  }
+
+  80% {
+    transform: translateX(0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes bitfun-wait-pip {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  50% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+/* Working: fast vertical pump + stretch */
+@keyframes bitfun-head-work {
+  0%,
+  100% {
+    transform: translateY(0) scale(1.02, 0.96);
+  }
+
+  35% {
+    transform: translateY(-2.5px) scale(0.97, 1.06);
+  }
+
+  70% {
+    transform: translateY(1.2px) scale(1.03, 0.95);
+  }
+}
+
+@keyframes bitfun-ear-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(5deg);
+  }
+
+  50% {
+    transform: rotate(-5deg);
+  }
+
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes bitfun-sweat-a {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translate(0.5px, 5px);
+    opacity: 0;
+  }
+}
+
+@keyframes bitfun-sweat-b {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translate(-0.5px, 5px);
+    opacity: 0;
+  }
+}
+
+@keyframes bitfun-speed-streak {
+  0% {
+    opacity: 0.2;
+    transform: translateX(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateX(1px);
+  }
+
+  100% {
+    opacity: 0.35;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-chat-input-pixel-pet__layer {
+    transition-duration: 0.18s;
+  }
+
+  .bitfun-panda-head--rest,
+  .bitfun-panda-head--analyzing,
+  .bitfun-panda-head--waiting,
+  .bitfun-panda-head--working,
+  .bitfun-panda-head__face--rest .bitfun-panda__eye-hi,
+  .bitfun-panda-head--analyzing .bitfun-panda__pupil,
+  .bitfun-panda-head--analyzing .bitfun-panda-head__ears,
+  .bitfun-panda-head--working .bitfun-panda-head__ears,
+  .bitfun-panda-head__dots .bitfun-panda-head__dot,
+  .bitfun-panda-head__wait-pips .bitfun-panda-head__wait-pip,
+  .bitfun-panda-head__sweat .bitfun-panda-head__sweat-drop,
+  .bitfun-panda-head__speed .bitfun-panda-head__speed-line {
+    animation: none;
+  }
+}

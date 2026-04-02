@@ -92,6 +92,10 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'timeout',
           'confirmation',
           'history',
+          'companion',
+          'agent',
+          'partner',
+          '伙伴',
         ],
       },
       {

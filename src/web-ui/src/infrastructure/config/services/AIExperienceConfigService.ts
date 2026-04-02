@@ -8,6 +8,8 @@ const log = createLogger('AIExperienceConfig');
 export interface AIExperienceSettings {
   enable_session_title_generation: boolean;
   enable_visual_mode: boolean;
+  /** Pixel Agent companion in collapsed chat input (session settings). */
+  enable_agent_companion: boolean;
 }
 
 const CONFIG_PATH = 'app.ai_experience';
@@ -15,6 +17,7 @@ const CONFIG_PATH = 'app.ai_experience';
 const defaultSettings: AIExperienceSettings = {
   enable_session_title_generation: true,
   enable_visual_mode: false,
+  enable_agent_companion: false,
 };
 
  
