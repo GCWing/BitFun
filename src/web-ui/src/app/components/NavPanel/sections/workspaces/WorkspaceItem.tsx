@@ -471,28 +471,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <Plus size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newSession')}</span>
                 </button>
-                {isDefaultAssistantWorkspace && (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item is-danger"
-                    onClick={handleRequestResetWorkspace}
-                    disabled={isResettingWorkspace}
-                  >
-                    <RotateCcw size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.resetWorkspace')}</span>
-                  </button>
-                )}
-                {isNamedAssistantWorkspace && (
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__workspace-item-menu-item is-danger"
-                    onClick={handleRequestDeleteAssistant}
-                    disabled={isDeletingAssistant}
-                  >
-                    <Trash2 size={13} />
-                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteAssistant')}</span>
-                  </button>
-                )}
+                <div className="bitfun-nav-panel__workspace-item-menu-divider" />
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
@@ -511,6 +490,33 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <FolderSearch size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
                 </button>
+                {(isDefaultAssistantWorkspace || isNamedAssistantWorkspace) ? (
+                  <>
+                    <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                    {isDefaultAssistantWorkspace ? (
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                        onClick={handleRequestResetWorkspace}
+                        disabled={isResettingWorkspace}
+                      >
+                        <RotateCcw size={13} />
+                        <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.resetWorkspace')}</span>
+                      </button>
+                    ) : null}
+                    {isNamedAssistantWorkspace ? (
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                        onClick={handleRequestDeleteAssistant}
+                        disabled={isDeletingAssistant}
+                      >
+                        <Trash2 size={13} />
+                        <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteAssistant')}</span>
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
               </div>,
               document.body
             )}
@@ -649,6 +655,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <FileText size={13} />
                 <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>
               </button>
+              <div className="bitfun-nav-panel__workspace-item-menu-divider" />
               {isLinkedWorktree ? (
                 <button
                   type="button"
@@ -691,6 +698,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <FolderSearch size={13} />
                 <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
               </button>
+              <div className="bitfun-nav-panel__workspace-item-menu-divider" />
               <button type="button" className="bitfun-nav-panel__workspace-item-menu-item is-danger" onClick={() => { void handleCloseWorkspace(); }}>
                 <FolderOpen size={13} />
                 <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.close')}</span>

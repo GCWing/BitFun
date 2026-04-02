@@ -26,23 +26,36 @@
     align-self: stretch;
   }
 
-  &__level-buttons {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: $size-gap-2;
-    flex-shrink: 0;
-  }
-
-  &__ui-control-row {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-3;
-    flex-wrap: nowrap;
+  &__ui-segment-block {
     width: 100%;
     min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    padding-bottom: 2px;
+  }
+
+  &__level-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* 第六档「自定义」与右侧步进器保持同一行，整组可随前置按钮换行 */
+  &__custom-segment-inline {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
+  &__custom-controls {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: $size-gap-2;
+    flex-shrink: 0;
+    box-sizing: border-box;
   }
 
   &__flow-chat {
@@ -115,6 +128,7 @@
     align-items: center;
     justify-content: center;
     min-height: 36px;
+    min-width: 0;
     padding: $size-gap-2 $size-gap-3;
     font-size: var(--font-size-sm);
     font-family: var(--font-sans, var(--font-family-sans));
@@ -156,75 +170,6 @@
     color: inherit;
   }
 
-  &__custom-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: $size-gap-2;
-
-    &--capsule {
-      flex-wrap: nowrap;
-      margin-left: auto;
-      align-items: center;
-      gap: $size-gap-2;
-      padding: 4px 4px 4px $size-gap-3;
-      border: 1px solid var(--border-strong);
-      border-radius: 999px;
-      background: var(--bg-secondary);
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-    }
-
-    &--active {
-      .font-pref-panel__custom-label {
-        color: var(--text-primary);
-      }
-    }
-
-    &--capsule.font-pref-panel__custom-row--active {
-      @include btn-primary.btn-primary-surface-default;
-      border-color: var(--btn-primary-border, transparent);
-      box-shadow: var(--btn-primary-shadow, none);
-
-      .font-pref-panel__custom-label,
-      .font-pref-panel__custom-unit {
-        color: var(--btn-primary-color, var(--text-primary));
-        opacity: 0.95;
-      }
-
-      .font-pref-panel__stepper {
-        border-color: color-mix(in srgb, var(--btn-primary-color, #fff) 22%, transparent);
-      }
-
-      .font-pref-panel__step-btn {
-        color: var(--btn-primary-color, var(--text-primary));
-
-        &:hover:not(:disabled) {
-          background: color-mix(in srgb, var(--btn-primary-color, #fff) 14%, transparent);
-          color: var(--btn-primary-color, var(--text-primary));
-        }
-      }
-
-      .font-pref-panel__number-input {
-        background: color-mix(in srgb, var(--btn-primary-bg, #000) 12%, transparent);
-        color: var(--btn-primary-color, var(--text-primary));
-        border-left-color: color-mix(in srgb, var(--btn-primary-color, #fff) 22%, transparent);
-        border-right-color: color-mix(in srgb, var(--btn-primary-color, #fff) 22%, transparent);
-      }
-
-      .font-pref-panel__number-input--readonly {
-        background: color-mix(in srgb, var(--btn-primary-color, #fff) 8%, transparent);
-        color: var(--btn-primary-color, var(--text-primary));
-        opacity: 0.92;
-      }
-    }
-  }
-
-  &__custom-label {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-    flex-shrink: 0;
-  }
-
   &__stepper {
     display: flex;
     align-items: center;
@@ -242,8 +187,9 @@
   }
 
   &__custom-unit {
-    font-size: var(--font-size-xs);
-    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    flex-shrink: 0;
   }
 
   &__step-btn {
@@ -302,12 +248,6 @@
     &:disabled {
       opacity: 0.4;
       cursor: not-allowed;
-    }
-
-    &--readonly {
-      background: var(--bg-secondary);
-      color: var(--text-secondary);
-      cursor: pointer;
     }
 
     &--error {

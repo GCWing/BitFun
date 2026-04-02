@@ -91,8 +91,12 @@
     }
 
     &.is-active {
-      background: transparent;
-      border-color: transparent;
+      background: color-mix(
+        in srgb,
+        var(--color-accent-500) 9%,
+        color-mix(in srgb, var(--element-bg-soft) 68%, transparent)
+      );
+      border-color: color-mix(in srgb, var(--border-subtle) 45%, transparent);
     }
 
     &.is-single {
@@ -100,7 +104,12 @@
       border-color: transparent;
 
       &.is-active {
-        background: transparent;
+        background: color-mix(
+          in srgb,
+          var(--color-accent-500) 9%,
+          color-mix(in srgb, var(--element-bg-soft) 68%, transparent)
+        );
+        border-color: color-mix(in srgb, var(--border-subtle) 45%, transparent);
       }
     }
 
@@ -462,6 +471,13 @@
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
   }
 
+  /* Match `.bitfun-nav-panel__footer-menu-divider` (PersistentFooterActions more menu) */
+  &__workspace-item-menu-divider {
+    height: 1px;
+    margin: $size-gap-1 $size-gap-2;
+    background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  }
+
   &__workspace-item-menu-item {
     display: flex;
     align-items: center;
@@ -594,8 +610,12 @@
     }
 
     &.is-active {
-      background: transparent;
-      border-color: transparent;
+      background: color-mix(
+        in srgb,
+        var(--color-accent-500) 9%,
+        color-mix(in srgb, var(--element-bg-soft) 68%, transparent)
+      );
+      border-color: color-mix(in srgb, var(--border-subtle) 45%, transparent);
     }
 
     &:not(.is-active):not(:hover):not(:focus-within):not(.is-menu-open) {
