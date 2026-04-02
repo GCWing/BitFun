@@ -14,6 +14,7 @@
 //! - Special handling for Git Bash (longer delay needed)
 //! - Resize confirmation events for frontend synchronization
 
+use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -362,10 +363,9 @@ pub fn spawn_pty(
     });
     cmd.cwd(&cwd);
 
-    // Set environment variables
-    for (key, value) in &shell_config.env {
-        cmd.env(key, value);
-    }
+    // Sanitize inherited host environment to avoid leaking Tauri dev/build
+    // configuration into user terminals, then overlay terminal-specific env.
+    apply_sanitized_environment(&mut cmd, &shell_config.env);
 
     // Set terminal type
     #[cfg(not(windows))]
@@ -627,6 +627,34 @@ pub fn spawn_pty(
     })
 }
 
+fn apply_sanitized_environment(
+    cmd: &mut CommandBuilder,
+    overlay_env: &std::collections::HashMap<String, String>,
+) {
+    cmd.env_clear();
+
+    for (key, value) in std::env::vars_os() {
+        if should_preserve_parent_env(&key) {
+            cmd.env(&key, &value);
+        }
+    }
+
+    for (key, value) in overlay_env {
+        cmd.env(key, value);
+    }
+}
+
+fn should_preserve_parent_env(key: &OsStr) -> bool {
+    !is_tauri_host_env(key)
+}
+
+fn is_tauri_host_env(key: &OsStr) -> bool {
+    let key = key.to_string_lossy().to_ascii_uppercase();
+    key == "TAURI_CONFIG"
+        || key.starts_with("TAURI_ENV_")
+        || key.starts_with("TAURI_ANDROID_PACKAGE_NAME_")
+}
+
 // ============================================================================
 // Legacy compatibility - PtyCommand enum (for external use if needed)
 // ============================================================================
@@ -642,4 +670,25 @@ pub enum PtyCommand {
     Signal(String),
     /// Shutdown the process
     Shutdown { immediate: bool },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_tauri_host_env;
+
+    #[test]
+    fn strips_tauri_host_configuration_from_parent_env() {
+        assert!(is_tauri_host_env("TAURI_CONFIG".as_ref()));
+        assert!(is_tauri_host_env("TAURI_ENV_TARGET_TRIPLE".as_ref()));
+        assert!(is_tauri_host_env(
+            "TAURI_ANDROID_PACKAGE_NAME_PREFIX".as_ref()
+        ));
+    }
+
+    #[test]
+    fn keeps_non_host_tauri_and_normal_env_vars() {
+        assert!(!is_tauri_host_env("TAURI_PRIVATE_KEY".as_ref()));
+        assert!(!is_tauri_host_env("PATH".as_ref()));
+        assert!(!is_tauri_host_env("TERMINAL_NONCE".as_ref()));
+    }
 }

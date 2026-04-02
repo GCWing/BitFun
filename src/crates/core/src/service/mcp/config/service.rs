@@ -218,7 +218,6 @@ impl MCPConfigService {
             &mut id_index,
         );
 
-        info!("Loaded {} MCP server config(s)", configs.len());
         Ok(configs)
     }
 

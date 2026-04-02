@@ -56,14 +56,7 @@ impl AnsiCleaner {
         parser.advance(self, input.as_bytes());
         // Save last line if it has content
         if !self.current_line.is_empty() {
-            while self.lines.len() <= self.cursor_row {
-                self.lines.push(String::new());
-                self.line_is_real.push(false);
-            }
-            self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
-            // Non-empty lines are always included regardless of is_real,
-            // but mark true for consistency.
-            self.line_is_real[self.cursor_row] = true;
+            self.save_current_line(true);
         }
         self.build_output()
     }
@@ -74,12 +67,7 @@ impl AnsiCleaner {
         parser.advance(self, input);
         // Save last line if it has content
         if !self.current_line.is_empty() {
-            while self.lines.len() <= self.cursor_row {
-                self.lines.push(String::new());
-                self.line_is_real.push(false);
-            }
-            self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
-            self.line_is_real[self.cursor_row] = true;
+            self.save_current_line(true);
         }
         self.build_output()
     }
@@ -106,6 +94,21 @@ impl AnsiCleaner {
             }
         }
         result.join("\n")
+    }
+
+    fn ensure_row_exists(&mut self, row: usize) {
+        while self.lines.len() <= row {
+            self.lines.push(String::new());
+            self.line_is_real.push(false);
+        }
+    }
+
+    fn save_current_line(&mut self, is_real: bool) {
+        self.ensure_row_exists(self.cursor_row);
+        self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
+        if is_real {
+            self.line_is_real[self.cursor_row] = true;
+        }
     }
 
     /// Reset the cleaner state for reuse.
@@ -159,14 +162,9 @@ impl Perform for AnsiCleaner {
                 // Line feed: move to next line.
                 // Intermediate rows pushed here are phantom (cursor jumped over them
                 // via a prior B/H sequence without writing).
-                while self.lines.len() <= self.cursor_row {
-                    self.lines.push(String::new());
-                    self.line_is_real.push(false);
-                }
                 // Save current line content at cursor_row position (overwrites if exists).
                 // Mark as real: \n explicitly visited this row.
-                self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
-                self.line_is_real[self.cursor_row] = true;
+                self.save_current_line(true);
                 self.cursor_col = 0;
                 self.cursor_row += 1;
                 self.line_cleared = false;
@@ -237,44 +235,39 @@ impl Perform for AnsiCleaner {
             }
             'H' | 'f' => {
                 // \033[<row>;<col>H or \033[<row>;<col>f - Cursor Position
-                // Get row parameter (first) and column parameter (second)
-                let row = param;
+                //
+                // For terminal log cleanup we prefer reconstructing linear text over
+                // faithfully emulating the viewport. ConPTY often emits absolute screen
+                // coordinates here, which can reuse the same screen rows after scrolling.
+                // Treat column 1 as "start a fresh logical line"; treat high-column
+                // positions immediately after a line break as a wrapped continuation of
+                // the previous logical line.
                 let col = params
                     .iter()
                     .nth(1)
                     .and_then(|group| group.iter().next())
                     .unwrap_or(&1u16);
-
-                // Move to specified row (1-based)
-                let target_row = row.saturating_sub(1) as usize;
                 let target_col = col.saturating_sub(1) as usize;
 
-                // If we need to move to a different row, handle current line first
-                if target_row != self.cursor_row {
+                if target_col == 0 {
                     if !self.current_line.is_empty() {
-                        // Ensure lines has enough space; new slots are phantom.
-                        while self.lines.len() <= self.cursor_row {
-                            self.lines.push(String::new());
-                            self.line_is_real.push(false);
-                        }
-                        self.lines[self.cursor_row] = std::mem::take(&mut self.current_line);
-                        // Line has content so it will always be included;
-                        // no need to update line_is_real here.
+                        self.save_current_line(true);
+                        self.cursor_row += 1;
                     }
-
-                    // Fill rows between current position and target with phantom entries.
-                    // These rows are never written to by \n and are pure screen-layout
-                    // artifacts of the absolute-positioning sequence.
-                    while self.lines.len() <= target_row {
-                        self.lines.push(String::new());
-                        self.line_is_real.push(false);
-                    }
-
-                    // Load the target row
-                    self.current_line = self.lines[target_row].clone();
+                    self.ensure_row_exists(self.cursor_row);
+                    self.current_line = self.lines[self.cursor_row].clone();
+                    self.cursor_col = 0;
+                    return;
                 }
 
-                self.cursor_row = target_row;
+                if self.current_line.is_empty() && self.cursor_row > 0 {
+                    self.cursor_row -= 1;
+                    self.ensure_row_exists(self.cursor_row);
+                    self.current_line = self.lines[self.cursor_row].clone();
+                    self.cursor_col = self.current_line.len().saturating_sub(1);
+                    return;
+                }
+
                 self.cursor_col = target_col;
             }
             // Erase sequences
@@ -475,9 +468,7 @@ mod tests {
 
     #[test]
     fn test_cursor_position() {
-        // \x1b[5;1H moves cursor to row 5, column 1.
-        // Rows 1-4 are phantom (H-jump fillers, never written by \n), so they
-        // are omitted from output. Only real content rows are included.
+        // \x1b[5;1H is treated as moving to the next logical line.
         let input = "Header\x1b[5;1HNew content";
         assert_eq!(strip_ansi(input), "Header\nNew content");
     }
@@ -510,6 +501,35 @@ mod tests {
         // empty line.  With phantom-line filtering it is now omitted.
         let expected_output = "ls\n\n    Directory: E:\\Projects\\ForTest\\basic-rust\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\nd----           2026/1/10    19:23                .bitfun\nd----           2026/1/10    21:18                .worktrees\nd----           2026/1/10    19:21                src\nd----           2026/1/10    19:21                target\n-a---           2026/1/10    19:23             57 .gitignore\n-a---           2026/1/10    19:21            154 Cargo.lock\n-a---           2026/1/10    19:21             81 Cargo.toml";
         assert_eq!(strip_ansi(input), expected_output);
+    }
+
+    #[test]
+    fn test_cursor_position_soft_wrap_continuation() {
+        let input =
+            "This will stop working in the next maj\r\n\x1b[49;83Hjor version of npm.\r\nNext line";
+        assert_eq!(
+            strip_ansi(input),
+            "This will stop working in the next major version of npm.\nNext line"
+        );
+    }
+
+    #[test]
+    fn test_cursor_position_reused_screen_rows_do_not_overwrite_previous_lines() {
+        let input = concat!(
+            "First warning line ends in maj\r\n",
+            "\x1b[49;83Hjor version one.\r\n",
+            "Second warning line ends in maj\r\n",
+            "\x1b[49;83Hjor version two.\r\n",
+            "Final line"
+        );
+        assert_eq!(
+            strip_ansi(input),
+            concat!(
+                "First warning line ends in major version one.\n",
+                "Second warning line ends in major version two.\n",
+                "Final line"
+            )
+        );
     }
 
     #[test]
