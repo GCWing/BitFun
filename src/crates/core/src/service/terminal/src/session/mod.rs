@@ -29,8 +29,10 @@ use crate::shell::ShellType;
 
 /// Terminal session status
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum SessionStatus {
     /// Session is starting up
+    #[default]
     Starting,
     /// Session is active and running
     Active,
@@ -44,11 +46,6 @@ pub enum SessionStatus {
     Terminating,
 }
 
-impl Default for SessionStatus {
-    fn default() -> Self {
-        SessionStatus::Starting
-    }
-}
 
 /// Terminal session information
 #[derive(Debug, Clone, Serialize, Deserialize)]

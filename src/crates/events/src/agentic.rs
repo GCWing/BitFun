@@ -1,4 +1,4 @@
-///! Agentic Events Definition
+﻿//! Agentic Events Definition
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 

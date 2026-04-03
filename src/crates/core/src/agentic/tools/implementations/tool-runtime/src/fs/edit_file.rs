@@ -1,4 +1,4 @@
-use crate::util::string::normalize_string;
+﻿use crate::util::string::normalize_string;
 use std::fs;
 
 /// Edit result, contains line number range information
@@ -45,7 +45,7 @@ pub fn edit_file(
     let matches: Vec<_> = normalized_content.match_indices(&normalized_old).collect();
 
     if matches.is_empty() {
-        return Err(format!("old_string not found in file."));
+        return Err("old_string not found in file.".to_string());
     }
 
     if matches.len() > 1 && !replace_all {
@@ -75,7 +75,7 @@ pub fn edit_file(
         new_content = new_content.replace("\n", "\r\n");
     }
 
-    fs::write(&file_path, &new_content)
+    fs::write(file_path, &new_content)
         .map_err(|e| format!("Failed to write file {}: {}", file_path, e))?;
 
     Ok(EditResult {

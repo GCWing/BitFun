@@ -1,4 +1,4 @@
-//! Room management for the relay server.
+﻿//! Room management for the relay server.
 //!
 //! Each room holds a single desktop participant connected via WebSocket.
 //! Mobile clients interact through HTTP requests that the relay bridges
@@ -181,7 +181,7 @@ impl RoomManager {
                 if room
                     .desktop
                     .as_ref()
-                    .map_or(false, |d| d.conn_id == conn_id)
+                    .is_some_and(|d| d.conn_id == conn_id)
                 {
                     info!("Desktop disconnected from room {room_id}");
                     room.desktop = None;
@@ -203,7 +203,7 @@ impl RoomManager {
                 let is_match = room
                     .desktop
                     .as_ref()
-                    .map_or(false, |d| d.conn_id == conn_id);
+                    .is_some_and(|d| d.conn_id == conn_id);
                 if is_match {
                     let now = Utc::now().timestamp();
                     room.last_activity = now;
@@ -245,7 +245,7 @@ impl RoomManager {
     pub fn has_desktop(&self, room_id: &str) -> bool {
         self.rooms
             .get(room_id)
-            .map_or(false, |r| r.desktop.is_some())
+            .is_some_and(|r| r.desktop.is_some())
     }
 
     pub fn room_count(&self) -> usize {

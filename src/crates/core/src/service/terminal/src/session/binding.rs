@@ -99,7 +99,7 @@ impl TerminalSessionBinding {
             format!(
                 "term-{}-{}",
                 &owner_id[..8.min(owner_id.len())],
-                uuid::Uuid::new_v4().to_string()[..8].to_string()
+                &uuid::Uuid::new_v4().to_string()[..8]
             )
         });
 

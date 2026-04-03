@@ -1,4 +1,4 @@
-use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+﻿use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -12,6 +12,7 @@ pub struct Message {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
 pub struct Usage {
     input_tokens: Option<u32>,
     output_tokens: Option<u32>,
@@ -19,16 +20,6 @@ pub struct Usage {
     cache_creation_input_tokens: Option<u32>,
 }
 
-impl Default for Usage {
-    fn default() -> Self {
-        Self {
-            input_tokens: None,
-            output_tokens: None,
-            cache_read_input_tokens: None,
-            cache_creation_input_tokens: None,
-        }
-    }
-}
 
 impl Usage {
     pub fn update(&mut self, other: &Usage) {
@@ -123,16 +114,13 @@ pub enum ContentBlock {
 impl From<ContentBlockStart> for UnifiedResponse {
     fn from(value: ContentBlockStart) -> Self {
         let mut result = UnifiedResponse::default();
-        match value.content_block {
-            ContentBlock::ToolUse { id, name } => {
-                let tool_call = UnifiedToolCall {
-                    id: Some(id),
-                    name: Some(name),
-                    arguments: None,
-                };
-                result.tool_call = Some(tool_call);
-            }
-            _ => {}
+        if let ContentBlock::ToolUse { id, name } = value.content_block {
+            let tool_call = UnifiedToolCall {
+                id: Some(id),
+                name: Some(name),
+                arguments: None,
+            };
+            result.tool_call = Some(tool_call);
         }
         result
     }
@@ -147,13 +135,13 @@ pub struct ContentBlockDelta {
 #[serde(tag = "type")]
 pub enum Delta {
     #[serde(rename = "thinking_delta")]
-    ThinkingDelta { thinking: String },
+    Thinking { thinking: String },
     #[serde(rename = "text_delta")]
-    TextDelta { text: String },
+    Text { text: String },
     #[serde(rename = "input_json_delta")]
-    InputJsonDelta { partial_json: String },
+    InputJson { partial_json: String },
     #[serde(rename = "signature_delta")]
-    SignatureDelta { signature: String },
+    Signature { signature: String },
     #[serde(other)]
     Unknown,
 }
@@ -163,13 +151,13 @@ impl TryFrom<ContentBlockDelta> for UnifiedResponse {
     fn try_from(value: ContentBlockDelta) -> Result<Self, Self::Error> {
         let mut result = UnifiedResponse::default();
         match value.delta {
-            Delta::ThinkingDelta { thinking } => {
+            Delta::Thinking { thinking } => {
                 result.reasoning_content = Some(thinking);
             }
-            Delta::TextDelta { text } => {
+            Delta::Text { text } => {
                 result.text = Some(text);
             }
-            Delta::InputJsonDelta { partial_json } => {
+            Delta::InputJson { partial_json } => {
                 let tool_call = UnifiedToolCall {
                     id: None,
                     name: None,
@@ -177,7 +165,7 @@ impl TryFrom<ContentBlockDelta> for UnifiedResponse {
                 };
                 result.tool_call = Some(tool_call);
             }
-            Delta::SignatureDelta { signature } => {
+            Delta::Signature { signature } => {
                 result.thinking_signature = Some(signature);
             }
             Delta::Unknown => {

@@ -1,7 +1,7 @@
-/// Tauri transport adapter
-///
-/// Uses Tauri's app.emit() system to send events to frontend
-/// Maintains compatibility with current implementation
+﻿//! Tauri transport adapter
+//!
+//! Uses Tauri's app.emit() system to send events to frontend
+//! Maintains compatibility with current implementation
 
 #[cfg(feature = "tauri-adapter")]
 use crate::traits::{TextChunk, ToolEventPayload, TransportAdapter};

@@ -10,6 +10,7 @@ pub struct UnifiedToolCall {
 
 /// Unified AI response format
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct UnifiedResponse {
     pub text: Option<String>,
     pub reasoning_content: Option<String>,
@@ -23,19 +24,6 @@ pub struct UnifiedResponse {
     pub provider_metadata: Option<Value>,
 }
 
-impl Default for UnifiedResponse {
-    fn default() -> Self {
-        Self {
-            text: None,
-            reasoning_content: None,
-            thinking_signature: None,
-            tool_call: None,
-            usage: None,
-            finish_reason: None,
-            provider_metadata: None,
-        }
-    }
-}
 
 /// Unified token usage statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
