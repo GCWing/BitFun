@@ -2,7 +2,7 @@ use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tool_runtime::fs::edit_file::edit_file;
+use tool_runtime::fs::edit_file::{apply_edit_to_content, edit_file};
 
 pub struct FileEditTool;
 
@@ -104,39 +104,20 @@ Usage:
 
         let resolved_path = context.resolve_workspace_tool_path(file_path)?;
 
-        // When WorkspaceServices is available (both local and remote),
-        // use the abstract FS to read → edit in memory → write back.
-        if let Some(ws_fs) = context.ws_fs() {
+        // For remote workspaces, use the abstract FS to read → edit in memory → write back.
+        if context.is_remote() {
+            let ws_fs = context.ws_fs().ok_or_else(|| {
+                BitFunError::tool("Remote workspace file system is unavailable".to_string())
+            })?;
             let content = ws_fs
                 .read_file_text(&resolved_path)
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
-
-            let (new_content, match_count) = if replace_all {
-                let count = content.matches(old_string).count();
-                if count == 0 {
-                    return Err(BitFunError::tool(format!(
-                        "old_string not found in file: {}", resolved_path
-                    )));
-                }
-                (content.replace(old_string, new_string), count)
-            } else {
-                if !content.contains(old_string) {
-                    return Err(BitFunError::tool(format!(
-                        "old_string not found in file: {}", resolved_path
-                    )));
-                }
-                let count = content.matches(old_string).count();
-                if count > 1 {
-                    return Err(BitFunError::tool(format!(
-                        "old_string found {} times in file (expected exactly 1). Include more context to make it unique.", count
-                    )));
-                }
-                (content.replacen(old_string, new_string, 1), 1)
-            };
+            let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
+                .map_err(BitFunError::tool)?;
 
             ws_fs
-                .write_file(&resolved_path, new_content.as_bytes())
+                .write_file(&resolved_path, edit_result.new_content.as_bytes())
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
 
@@ -146,15 +127,18 @@ Usage:
                     "old_string": old_string,
                     "new_string": new_string,
                     "success": true,
-                    "match_count": match_count,
+                    "match_count": edit_result.match_count,
+                    "start_line": edit_result.edit_result.start_line,
+                    "old_end_line": edit_result.edit_result.old_end_line,
+                    "new_end_line": edit_result.edit_result.new_end_line,
                 }),
                 result_for_assistant: Some(format!("Successfully edited {}", resolved_path)),
-            image_attachments: None,
-        };
+                image_attachments: None,
+            };
             return Ok(vec![result]);
         }
 
-        // Fallback: direct local edit via tool-runtime (used when no services injected)
+        // Local: direct local edit via tool-runtime
         let edit_result = edit_file(&resolved_path, old_string, new_string, replace_all)?;
 
         let result = ToolResult::Result {
