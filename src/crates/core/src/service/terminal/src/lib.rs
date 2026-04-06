@@ -48,8 +48,7 @@ pub use pty::{
 pub use session::{
     CommandCompletionReason, CommandExecuteResult, CommandStream, CommandStreamEvent,
     ExecuteOptions, SessionManager, SessionSource, SessionStatus, TerminalBindingOptions,
-    TerminalSession,
-    TerminalSessionBinding,
+    TerminalSession, TerminalSessionBinding,
 };
 pub use shell::{
     get_integration_script_content, CommandState, ScriptsManager, ShellDetector, ShellIntegration,

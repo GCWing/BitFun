@@ -201,10 +201,10 @@ Usage:
                 limit + 1
             );
 
-            let (stdout, _stderr, _exit_code) = ws_shell
-                .exec(&ls_cmd, Some(15_000))
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to list remote directory: {}", e)))?;
+            let (stdout, _stderr, _exit_code) =
+                ws_shell.exec(&ls_cmd, Some(15_000)).await.map_err(|e| {
+                    BitFunError::tool(format!("Failed to list remote directory: {}", e))
+                })?;
 
             let mut file_lines = Vec::new();
             let mut dir_lines = Vec::new();
@@ -228,16 +228,11 @@ Usage:
                 shell_escape(path),
                 shell_escape(path)
             );
-            let (ls_output, _, _) = ws_shell
-                .exec(&stat_cmd, Some(15_000))
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to list remote directory: {}", e)))?;
+            let (ls_output, _, _) = ws_shell.exec(&stat_cmd, Some(15_000)).await.map_err(|e| {
+                BitFunError::tool(format!("Failed to list remote directory: {}", e))
+            })?;
 
-            let result_text = format!(
-                "Directory listing: {}\n\n{}",
-                path,
-                ls_output.trim()
-            );
+            let result_text = format!("Directory listing: {}\n\n{}", path, ls_output.trim());
 
             let entries_json: Vec<Value> = stdout
                 .lines()
@@ -265,8 +260,8 @@ Usage:
                     "is_remote": true
                 }),
                 result_for_assistant: Some(result_text),
-            image_attachments: None,
-        };
+                image_attachments: None,
+            };
             return Ok(vec![result]);
         }
 

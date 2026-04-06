@@ -348,26 +348,20 @@ Usage:
 
             let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
 
-            let root_owned = context.and_then(|c| {
-                c.workspace
-                    .as_ref()
-                    .map(|w| w.root_path_string())
-            });
-            let resolved_path = match resolve_workspace_tool_path(
-                file_path,
-                root_owned.as_deref(),
-                is_remote,
-            ) {
-                Ok(p) => p,
-                Err(e) => {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(e.to_string()),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
-            };
+            let root_owned =
+                context.and_then(|c| c.workspace.as_ref().map(|w| w.root_path_string()));
+            let resolved_path =
+                match resolve_workspace_tool_path(file_path, root_owned.as_deref(), is_remote) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(e.to_string()),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                };
 
             if !is_remote {
                 let path = Path::new(&resolved_path);
@@ -480,10 +474,7 @@ Usage:
 
         // Priority 1: Try baseline diff
         let path = Path::new(&resolved_path);
-        if let Some(result) = self
-            .try_baseline_diff(path, context.workspace_root())
-            .await
-        {
+        if let Some(result) = self.try_baseline_diff(path, context.workspace_root()).await {
             match result {
                 Ok(data) => {
                     debug!("GetFileDiff tool using baseline diff");
@@ -491,8 +482,8 @@ Usage:
                     return Ok(vec![ToolResult::Result {
                         data,
                         result_for_assistant: Some(result_for_assistant),
-            image_attachments: None,
-        }]);
+                        image_attachments: None,
+                    }]);
                 }
                 Err(e) => {
                     warn!(
@@ -513,8 +504,8 @@ Usage:
                     return Ok(vec![ToolResult::Result {
                         data,
                         result_for_assistant: Some(result_for_assistant),
-            image_attachments: None,
-        }]);
+                        image_attachments: None,
+                    }]);
                 }
                 Err(e) => {
                     warn!(

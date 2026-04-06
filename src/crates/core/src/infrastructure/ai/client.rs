@@ -101,8 +101,7 @@ impl AIClient {
             .filter(|s| !s.is_empty())
             .collect();
 
-        if tokens.contains(&Self::TEST_IMAGE_EXPECTED_CODE)
-        {
+        if tokens.contains(&Self::TEST_IMAGE_EXPECTED_CODE) {
             return true;
         }
 

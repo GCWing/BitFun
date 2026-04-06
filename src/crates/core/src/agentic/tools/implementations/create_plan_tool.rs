@@ -183,7 +183,9 @@ Additional guidelines:
 
         let plan_file_path_str = if context.is_remote() {
             let ws_fs = context.ws_fs().ok_or_else(|| {
-                BitFunError::tool("Workspace file system not available for remote CreatePlan".to_string())
+                BitFunError::tool(
+                    "Workspace file system not available for remote CreatePlan".to_string(),
+                )
             })?;
             let ws_shell = context.ws_shell().ok_or_else(|| {
                 BitFunError::tool("Workspace shell not available for remote CreatePlan".to_string())
@@ -196,8 +198,14 @@ Additional guidelines:
             ws_shell
                 .exec("mkdir -p .bitfun/plans", Some(30_000))
                 .await
-                .map_err(|e| BitFunError::tool(format!("Failed to create plans directory: {}", e)))?;
-            let plan_path = format!("{}/.bitfun/plans/{}", root.trim_end_matches('/'), plan_file_name);
+                .map_err(|e| {
+                    BitFunError::tool(format!("Failed to create plans directory: {}", e))
+                })?;
+            let plan_path = format!(
+                "{}/.bitfun/plans/{}",
+                root.trim_end_matches('/'),
+                plan_file_name
+            );
             ws_fs
                 .write_file(&plan_path, file_content.as_bytes())
                 .await
@@ -210,10 +218,9 @@ Additional guidelines:
             let path_manager = get_path_manager_arc();
             let plans_dir = path_manager.project_plans_dir(workspace_path);
             let plan_file_path = plans_dir.join(&plan_file_name);
-            path_manager
-                .ensure_dir(&plans_dir)
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to create plans directory: {}", e)))?;
+            path_manager.ensure_dir(&plans_dir).await.map_err(|e| {
+                BitFunError::tool(format!("Failed to create plans directory: {}", e))
+            })?;
             fs::write(&plan_file_path, &file_content)
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to write plan file: {}", e)))?;

@@ -1,5 +1,4 @@
 use super::util::normalize_path;
-use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
     DialogTriggerSource,
@@ -8,6 +7,7 @@ use crate::agentic::core::PromptEnvelope;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::Deserialize;

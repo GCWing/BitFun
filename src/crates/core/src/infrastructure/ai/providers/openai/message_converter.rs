@@ -87,33 +87,34 @@ impl OpenAIMessageConverter {
 
         // Responses API: `output` may be a string or a list of input_text / input_image / input_file
         // (see OpenAI FunctionCallOutput schema).
-        let output: Value = if let Some(attachments) = msg.tool_image_attachments.filter(|a| !a.is_empty()) {
-            let mut parts: Vec<Value> = attachments
-                .into_iter()
-                .map(|att| {
-                    let data_url = format!("data:{};base64,{}", att.mime_type, att.data_base64);
-                    json!({
-                        "type": "input_image",
-                        "image_url": data_url
+        let output: Value =
+            if let Some(attachments) = msg.tool_image_attachments.filter(|a| !a.is_empty()) {
+                let mut parts: Vec<Value> = attachments
+                    .into_iter()
+                    .map(|att| {
+                        let data_url = format!("data:{};base64,{}", att.mime_type, att.data_base64);
+                        json!({
+                            "type": "input_image",
+                            "image_url": data_url
+                        })
                     })
-                })
-                .collect();
-            parts.push(json!({
-                "type": "input_text",
-                "text": if text.is_empty() {
+                    .collect();
+                parts.push(json!({
+                    "type": "input_text",
+                    "text": if text.is_empty() {
+                        "Tool execution completed".to_string()
+                    } else {
+                        text
+                    }
+                }));
+                json!(parts)
+            } else {
+                json!(if text.is_empty() {
                     "Tool execution completed".to_string()
                 } else {
                     text
-                }
-            }));
-            json!(parts)
-        } else {
-            json!(if text.is_empty() {
-                "Tool execution completed".to_string()
-            } else {
-                text
-            })
-        };
+                })
+            };
 
         Some(json!({
             "type": "function_call_output",

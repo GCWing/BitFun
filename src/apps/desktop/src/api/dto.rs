@@ -1,8 +1,6 @@
 //! DTO Module
 
-use bitfun_core::service::remote_ssh::{
-    normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST,
-};
+use bitfun_core::service::remote_ssh::{normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST};
 use bitfun_core::service::workspace::manager::WorkspaceKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

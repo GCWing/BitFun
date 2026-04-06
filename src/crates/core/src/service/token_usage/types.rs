@@ -21,8 +21,7 @@ pub struct TokenUsageRecord {
 }
 
 /// Aggregated token statistics for a model
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModelTokenStats {
     pub model_id: String,
     pub total_input: u64,
@@ -39,7 +38,6 @@ pub struct ModelTokenStats {
     pub first_used: Option<DateTime<Utc>>,
     pub last_used: Option<DateTime<Utc>>,
 }
-
 
 /// Token statistics for a specific session
 #[derive(Debug, Clone, Serialize, Deserialize)]

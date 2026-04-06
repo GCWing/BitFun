@@ -95,11 +95,8 @@ Usage:
             };
         }
 
-        let root_owned = context.and_then(|ctx| {
-            ctx.workspace
-                .as_ref()
-                .map(|w| w.root_path_string())
-        });
+        let root_owned =
+            context.and_then(|ctx| ctx.workspace.as_ref().map(|w| w.root_path_string()));
         if let Err(err) = resolve_workspace_tool_path(
             file_path,
             root_owned.as_deref(),

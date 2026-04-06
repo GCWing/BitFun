@@ -28,7 +28,11 @@ impl OpenAIToolCallFilter {
             return Some(response);
         };
 
-        let tool_id = tool_call.id.as_ref().filter(|value| !value.is_empty()).cloned();
+        let tool_id = tool_call
+            .id
+            .as_ref()
+            .filter(|value| !value.is_empty())
+            .cloned();
         let has_name = tool_call
             .name
             .as_ref()

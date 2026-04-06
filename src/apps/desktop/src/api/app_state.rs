@@ -4,15 +4,16 @@ use bitfun_core::agentic::side_question::SideQuestionRuntime;
 use bitfun_core::agentic::{agents, tools};
 use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
 use bitfun_core::miniapp::{initialize_global_miniapp_manager, JsWorkerPool, MiniAppManager};
-use bitfun_core::service::{ai_rules, config, filesystem, mcp, token_usage, workspace};
 use bitfun_core::service::remote_ssh::{
-    init_remote_workspace_manager, SSHConnectionManager, RemoteFileService, RemoteTerminalManager,
+    init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
+use bitfun_core::service::{ai_rules, config, filesystem, mcp, token_usage, workspace};
 use bitfun_core::util::errors::*;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -78,6 +79,7 @@ pub struct AppState {
     pub remote_file_service: Arc<RwLock<Option<RemoteFileService>>>,
     pub remote_terminal_manager: Arc<RwLock<Option<RemoteTerminalManager>>>,
     pub remote_workspace: Arc<RwLock<Option<RemoteWorkspace>>>,
+    pub active_searches: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
 }
 
 impl AppState {
@@ -263,15 +265,14 @@ impl AppState {
             miniapp_manager,
             js_worker_pool,
             statistics,
-            macos_edit_menu_mode: Arc::new(RwLock::new(
-                crate::macos_menubar::EditMenuMode::System,
-            )),
+            macos_edit_menu_mode: Arc::new(RwLock::new(crate::macos_menubar::EditMenuMode::System)),
             start_time,
             // SSH Remote connection state
             ssh_manager,
             remote_file_service,
             remote_terminal_manager,
             remote_workspace,
+            active_searches: Arc::new(Mutex::new(HashMap::new())),
         };
 
         log::info!("AppState initialized successfully");
@@ -323,24 +324,40 @@ impl AppState {
 
     /// Get SSH connection manager synchronously (must be called within async context)
     pub async fn get_ssh_manager_async(&self) -> Result<SSHConnectionManager, SSHServiceError> {
-        self.ssh_manager.read().await.clone()
+        self.ssh_manager
+            .read()
+            .await
+            .clone()
             .ok_or(SSHServiceError::ManagerNotInitialized)
     }
 
     /// Get remote file service synchronously (must be called within async context)
-    pub async fn get_remote_file_service_async(&self) -> Result<RemoteFileService, SSHServiceError> {
-        self.remote_file_service.read().await.clone()
+    pub async fn get_remote_file_service_async(
+        &self,
+    ) -> Result<RemoteFileService, SSHServiceError> {
+        self.remote_file_service
+            .read()
+            .await
+            .clone()
             .ok_or(SSHServiceError::FileServiceNotInitialized)
     }
 
     /// Get remote terminal manager synchronously (must be called within async context)
-    pub async fn get_remote_terminal_manager_async(&self) -> Result<RemoteTerminalManager, SSHServiceError> {
-        self.remote_terminal_manager.read().await.clone()
+    pub async fn get_remote_terminal_manager_async(
+        &self,
+    ) -> Result<RemoteTerminalManager, SSHServiceError> {
+        self.remote_terminal_manager
+            .read()
+            .await
+            .clone()
             .ok_or(SSHServiceError::TerminalManagerNotInitialized)
     }
 
     /// Set current remote workspace
-    pub async fn set_remote_workspace(&self, workspace: RemoteWorkspace) -> Result<(), SSHServiceError> {
+    pub async fn set_remote_workspace(
+        &self,
+        workspace: RemoteWorkspace,
+    ) -> Result<(), SSHServiceError> {
         // Update local state
         *self.remote_workspace.write().await = Some(workspace.clone());
 
@@ -370,19 +387,28 @@ impl AppState {
         state_manager.set_terminal_manager(terminal.clone()).await;
 
         // Register this workspace (does not overwrite other workspaces)
-        log::info!("register_remote_workspace: connection_id={}, remote_path={}, connection_name={}",
-            workspace.connection_id, workspace.remote_path, workspace.connection_name);
-        state_manager.register_remote_workspace(
-            workspace.remote_path.clone(),
-            workspace.connection_id.clone(),
-            workspace.connection_name.clone(),
-            workspace.ssh_host.clone(),
-        ).await;
+        log::info!(
+            "register_remote_workspace: connection_id={}, remote_path={}, connection_name={}",
+            workspace.connection_id,
+            workspace.remote_path,
+            workspace.connection_name
+        );
+        state_manager
+            .register_remote_workspace(
+                workspace.remote_path.clone(),
+                workspace.connection_id.clone(),
+                workspace.connection_name.clone(),
+                workspace.ssh_host.clone(),
+            )
+            .await;
         state_manager
             .set_active_connection_hint(Some(workspace.connection_id.clone()))
             .await;
-        log::info!("Remote workspace registered: {} on {}",
-            workspace.remote_path, workspace.connection_name);
+        log::info!(
+            "Remote workspace registered: {} on {}",
+            workspace.remote_path,
+            workspace.connection_name
+        );
         Ok(())
     }
 
@@ -399,7 +425,9 @@ impl AppState {
                 log::warn!("Failed to remove persisted remote workspace: {}", e);
             }
         }
-        if let Some(state_manager) = bitfun_core::service::remote_ssh::get_remote_workspace_manager() {
+        if let Some(state_manager) =
+            bitfun_core::service::remote_ssh::get_remote_workspace_manager()
+        {
             state_manager
                 .unregister_remote_workspace(connection_id, &rp)
                 .await;
@@ -409,8 +437,9 @@ impl AppState {
             .as_ref()
             .map(|w| {
                 w.connection_id == connection_id
-                    && bitfun_core::service::remote_ssh::normalize_remote_workspace_path(&w.remote_path)
-                        == rp
+                    && bitfun_core::service::remote_ssh::normalize_remote_workspace_path(
+                        &w.remote_path,
+                    ) == rp
             })
             .unwrap_or(false);
         if clear_slot {

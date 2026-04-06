@@ -1,4 +1,4 @@
-﻿use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -244,8 +244,8 @@ impl GrepTool {
             .get("output_mode")
             .and_then(|v| v.as_str())
             .unwrap_or("files_with_matches");
-        let output_mode = OutputMode::from_str(output_mode_str)
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
+        let output_mode =
+            OutputMode::from_str(output_mode_str).map_err(|e| BitFunError::tool(e.to_string()))?;
         let show_line_numbers = input
             .get("-n")
             .and_then(|v| v.as_bool())

@@ -7,7 +7,9 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 
+use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use bitfun_core::service::runtime::RuntimeManager;
+use bitfun_core::service::terminal::TerminalEvent;
 use bitfun_core::service::terminal::{
     AcknowledgeRequest as CoreAcknowledgeRequest, CloseSessionRequest as CoreCloseSessionRequest,
     CommandCompletionReason as CoreCommandCompletionReason,
@@ -17,12 +19,9 @@ use bitfun_core::service::terminal::{
     GetHistoryRequest as CoreGetHistoryRequest, GetHistoryResponse as CoreGetHistoryResponse,
     ResizeRequest as CoreResizeRequest, SendCommandRequest as CoreSendCommandRequest,
     SessionResponse as CoreSessionResponse, SessionSource as CoreSessionSource,
-    ShellInfo as CoreShellInfo, ShellType,
-    SignalRequest as CoreSignalRequest, TerminalApi, TerminalConfig,
-    WriteRequest as CoreWriteRequest,
+    ShellInfo as CoreShellInfo, ShellType, SignalRequest as CoreSignalRequest, TerminalApi,
+    TerminalConfig, WriteRequest as CoreWriteRequest,
 };
-use bitfun_core::service::terminal::TerminalEvent;
-use bitfun_core::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 
 pub struct TerminalState {
     api: Arc<Mutex<Option<TerminalApi>>>,
@@ -67,8 +66,7 @@ impl TerminalState {
             *initialized = true;
         }
 
-        TerminalApi::from_singleton()
-            .map_err(|e| format!("Terminal API not initialized: {}", e))
+        TerminalApi::from_singleton().map_err(|e| format!("Terminal API not initialized: {}", e))
     }
 
     /// Get the scripts directory path for shell integration
@@ -330,7 +328,9 @@ pub async fn terminal_create(
     request: CreateSessionRequest,
     state: State<'_, TerminalState>,
 ) -> Result<SessionResponse, String> {
-    if let Some((connection_id, remote_cwd)) = lookup_remote_for_terminal(request.working_directory.as_deref()).await {
+    if let Some((connection_id, remote_cwd)) =
+        lookup_remote_for_terminal(request.working_directory.as_deref()).await
+    {
         if let Some(remote_manager) = get_remote_workspace_manager() {
             let terminal_manager = remote_manager
                 .get_terminal_manager()
@@ -395,7 +395,10 @@ pub async fn terminal_create(
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                            warn!("Remote terminal output lagged, skipped {} messages: session_id={}", n, sid);
+                            warn!(
+                                "Remote terminal output lagged, skipped {} messages: session_id={}",
+                                n, sid
+                            );
                             continue;
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => {
@@ -691,11 +694,18 @@ pub async fn terminal_execute(
 
             return Ok(ExecuteCommandResponse {
                 command: request.command,
-                command_id: format!("remote-cmd-{}", std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()),
-                output: if stderr.is_empty() { stdout } else { format!("{}\n{}", stdout, stderr) },
+                command_id: format!(
+                    "remote-cmd-{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                ),
+                output: if stderr.is_empty() {
+                    stdout
+                } else {
+                    format!("{}\n{}", stdout, stderr)
+                },
                 exit_code: Some(exit_code),
                 completion_reason: "completed".to_string(),
             });
@@ -732,7 +742,10 @@ pub async fn terminal_send_command(
                 .ok_or("Remote terminal manager not available")?;
 
             terminal_manager
-                .write(&request.session_id, format!("{}\n", request.command).as_bytes())
+                .write(
+                    &request.session_id,
+                    format!("{}\n", request.command).as_bytes(),
+                )
                 .await
                 .map_err(|e| format!("Failed to send command: {}", e))?;
 

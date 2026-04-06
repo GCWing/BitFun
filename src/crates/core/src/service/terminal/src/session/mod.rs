@@ -28,8 +28,7 @@ use std::collections::HashMap;
 use crate::shell::ShellType;
 
 /// Terminal session status
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SessionStatus {
     /// Session is starting up
     #[default]
@@ -45,7 +44,6 @@ pub enum SessionStatus {
     /// Session is being terminated
     Terminating,
 }
-
 
 /// Terminal session information
 #[derive(Debug, Clone, Serialize, Deserialize)]

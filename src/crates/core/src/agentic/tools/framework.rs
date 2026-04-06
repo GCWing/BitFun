@@ -1,10 +1,10 @@
 //! Tool framework - Tool interface definition and execution context
-use crate::util::types::ToolImageAttachment;
 use super::image_context::ImageContextProviderRef;
 use super::pipeline::SubagentParentInfo;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::util::errors::BitFunResult;
+use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -72,10 +72,7 @@ impl ToolUseContext {
     /// Resolve a user or model-supplied path for file/shell tools. Uses POSIX semantics when the
     /// workspace is remote SSH so Windows-hosted clients still resolve `/home/...` correctly.
     pub fn resolve_workspace_tool_path(&self, path: &str) -> BitFunResult<String> {
-        let workspace_root_owned = self
-            .workspace
-            .as_ref()
-            .map(|w| w.root_path_string());
+        let workspace_root_owned = self.workspace.as_ref().map(|w| w.root_path_string());
         crate::agentic::tools::workspace_paths::resolve_workspace_tool_path(
             path,
             workspace_root_owned.as_deref(),
@@ -225,10 +222,7 @@ pub trait Tool: Send + Sync {
 
     /// JSON Schema for the model when tool listing has a [`ToolUseContext`] (e.g. primary model vision capability).
     /// Default: ignores context and delegates to [`input_schema_for_model`].
-    async fn input_schema_for_model_with_context(
-        &self,
-        context: Option<&ToolUseContext>,
-    ) -> Value {
+    async fn input_schema_for_model_with_context(&self, context: Option<&ToolUseContext>) -> Value {
         let _ = context;
         self.input_schema_for_model().await
     }

@@ -105,13 +105,15 @@ pub fn list_files(
     let gitignore = load_gitignore(path);
 
     // Special folders that should not be expanded
-    let special_folders = [Path::new("/"),
+    let special_folders = [
+        Path::new("/"),
         Path::new("/home"),
         Path::new("/Users"),
         Path::new("/System"),
         Path::new("/Windows"),
         Path::new("/Program Files"),
-        Path::new("/Program Files (x86)")];
+        Path::new("/Program Files (x86)"),
+    ];
 
     // Folders to exclude
     let excluded_folders = vec![

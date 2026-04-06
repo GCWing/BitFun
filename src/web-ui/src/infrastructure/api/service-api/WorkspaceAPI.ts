@@ -6,6 +6,7 @@ import type {
   ExplorerChildrenPageDto,
   ExplorerNodeDto,
   WorkspaceInfo,
+  FileSearchResponse,
   FileSearchResult
 } from './tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
@@ -228,7 +229,52 @@ export class WorkspaceAPI {
     }
   }
 
-   
+  private createSearchId(prefix: string): string {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  async cancelSearch(searchId: string): Promise<void> {
+    if (!searchId) {
+      return;
+    }
+
+    try {
+      await api.invoke('cancel_search', {
+        request: { searchId }
+      });
+    } catch (error) {
+      log.warn('Failed to cancel search', { searchId, error });
+    }
+  }
+
+  private async raceCancelable<T>(
+    commandName: string,
+    resultPromise: Promise<T>,
+    searchId: string,
+    signal?: AbortSignal
+  ): Promise<T> {
+    if (!signal) {
+      return resultPromise;
+    }
+
+    if (signal.aborted) {
+      await this.cancelSearch(searchId);
+      throw new DOMException('Search aborted', 'AbortError');
+    }
+
+    return await Promise.race([
+      resultPromise,
+      new Promise<T>((_, reject) => {
+        const handleAbort = () => {
+          void this.cancelSearch(searchId);
+          reject(new DOMException(`${commandName} aborted`, 'AbortError'));
+        };
+
+        signal.addEventListener('abort', handleAbort, { once: true });
+      })
+    ]);
+  }
+
   async searchFiles(
     rootPath: string, 
     pattern: string, 
@@ -236,113 +282,185 @@ export class WorkspaceAPI {
     caseSensitive: boolean = false,
     useRegex: boolean = false,
     wholeWord: boolean = false,
+    searchId?: string,
+    maxResults?: number,
+    includeDirectories?: boolean,
     signal?: AbortSignal
   ): Promise<FileSearchResult[]> {
-    
-    if (signal?.aborted) {
-      throw new DOMException('Search aborted', 'AbortError');
-    }
+    const effectiveSearchId = searchId ?? this.createSearchId(searchContent ? 'legacy-content' : 'legacy-filenames');
 
     try {
-      const resultPromise = api.invoke('search_files', { 
+      const resultPromise = api.invoke<FileSearchResult[]>('search_files', { 
         request: { 
           rootPath, 
           pattern, 
           searchContent,
+          searchId: effectiveSearchId,
           caseSensitive,
           useRegex,
-          wholeWord
+          wholeWord,
+          maxResults,
+          includeDirectories,
         } 
       });
 
-      
-      if (signal) {
-        return await Promise.race([
-          resultPromise,
-          new Promise<FileSearchResult[]>((_, reject) => {
-            signal.addEventListener('abort', () => {
-              reject(new DOMException('Search aborted', 'AbortError'));
-            });
-          })
-        ]);
-      }
-
-      return await resultPromise;
+      return await this.raceCancelable('search_files', resultPromise, effectiveSearchId, signal);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         throw error;
       }
-      throw createTauriCommandError('search_files', error, { rootPath, pattern, searchContent, caseSensitive, useRegex, wholeWord });
+      throw createTauriCommandError('search_files', error, {
+        rootPath,
+        pattern,
+        searchContent,
+        searchId: effectiveSearchId,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        maxResults,
+        includeDirectories,
+      });
     }
   }
 
-   
   async searchFilenamesOnly(
     rootPath: string, 
     pattern: string, 
     caseSensitive: boolean = false,
     useRegex: boolean = false,
     wholeWord: boolean = false,
+    searchIdOrSignal?: string | AbortSignal,
+    maxResults?: number,
+    includeDirectories: boolean = true,
     signal?: AbortSignal
   ): Promise<FileSearchResult[]> {
-    return this.searchFiles(
+    const response = await this.searchFilenamesOnlyDetailed(
       rootPath,
       pattern,
-      false, 
       caseSensitive,
       useRegex,
       wholeWord,
+      searchIdOrSignal,
+      maxResults,
+      includeDirectories,
       signal
     );
+    return response.results;
   }
 
-   
+  async searchFilenamesOnlyDetailed(
+    rootPath: string,
+    pattern: string,
+    caseSensitive: boolean = false,
+    useRegex: boolean = false,
+    wholeWord: boolean = false,
+    searchIdOrSignal?: string | AbortSignal,
+    maxResults?: number,
+    includeDirectories: boolean = true,
+    signal?: AbortSignal
+  ): Promise<FileSearchResponse> {
+    const effectiveSignal = searchIdOrSignal instanceof AbortSignal ? searchIdOrSignal : signal;
+    const effectiveSearchId =
+      typeof searchIdOrSignal === 'string' ? searchIdOrSignal : this.createSearchId('filenames');
+
+    try {
+      const resultPromise = api.invoke<FileSearchResponse>('search_filenames', {
+        request: {
+          rootPath,
+          pattern,
+          searchId: effectiveSearchId,
+          caseSensitive,
+          useRegex,
+          wholeWord,
+          maxResults,
+          includeDirectories,
+        }
+      });
+
+      return await this.raceCancelable('search_filenames', resultPromise, effectiveSearchId, effectiveSignal);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+
+      throw createTauriCommandError('search_filenames', error, {
+        rootPath,
+        pattern,
+        searchId: effectiveSearchId,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        maxResults,
+        includeDirectories,
+      });
+    }
+  }
+
   async searchContentOnly(
     rootPath: string, 
     pattern: string, 
     caseSensitive: boolean = false,
     useRegex: boolean = false,
     wholeWord: boolean = false,
+    searchIdOrSignal?: string | AbortSignal,
+    maxResults?: number,
     signal?: AbortSignal
   ): Promise<FileSearchResult[]> {
-    
-    if (signal?.aborted) {
-      throw new DOMException('Search aborted', 'AbortError');
-    }
+    const response = await this.searchContentOnlyDetailed(
+      rootPath,
+      pattern,
+      caseSensitive,
+      useRegex,
+      wholeWord,
+      searchIdOrSignal,
+      maxResults,
+      signal
+    );
+    return response.results;
+  }
+
+  async searchContentOnlyDetailed(
+    rootPath: string,
+    pattern: string,
+    caseSensitive: boolean = false,
+    useRegex: boolean = false,
+    wholeWord: boolean = false,
+    searchIdOrSignal?: string | AbortSignal,
+    maxResults?: number,
+    signal?: AbortSignal
+  ): Promise<FileSearchResponse> {
+    const effectiveSignal = searchIdOrSignal instanceof AbortSignal ? searchIdOrSignal : signal;
+    const effectiveSearchId =
+      typeof searchIdOrSignal === 'string' ? searchIdOrSignal : this.createSearchId('content');
 
     try {
-      const resultPromise = api.invoke('search_files', { 
+      const resultPromise = api.invoke<FileSearchResponse>('search_file_contents', { 
         request: { 
           rootPath, 
           pattern, 
-          searchContent: true,
+          searchId: effectiveSearchId,
           caseSensitive,
           useRegex,
-          wholeWord
+          wholeWord,
+          maxResults,
         } 
       });
 
-      
-      if (signal) {
-        const results = await Promise.race([
-          resultPromise,
-          new Promise<FileSearchResult[]>((_, reject) => {
-            signal.addEventListener('abort', () => {
-              reject(new DOMException('Search aborted', 'AbortError'));
-            });
-          })
-        ]);
-        
-        return results.filter((r: FileSearchResult) => r.matchType === 'content');
-      }
-
-      const results = await resultPromise;
-      return results.filter((r: FileSearchResult) => r.matchType === 'content');
+      return await this.raceCancelable('search_file_contents', resultPromise, effectiveSearchId, effectiveSignal);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         throw error;
       }
-      throw createTauriCommandError('search_files', error, { rootPath, pattern });
+
+      throw createTauriCommandError('search_file_contents', error, {
+        rootPath,
+        pattern,
+        searchId: effectiveSearchId,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        maxResults,
+      });
     }
   }
 

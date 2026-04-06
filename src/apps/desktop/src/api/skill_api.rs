@@ -27,8 +27,8 @@ use bitfun_core::agentic::tools::implementations::skills::{
 };
 use bitfun_core::agentic::workspace::RemoteWorkspaceFs;
 use bitfun_core::infrastructure::get_path_manager_arc;
-use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
 use bitfun_core::service::runtime::RuntimeManager;
 use bitfun_core::util::process_manager;
 
@@ -189,61 +189,67 @@ async fn get_mode_skill_infos_for_workspace_input(
         .into_iter()
         .collect();
 
-    let (disabled_project, resolved_skills): (HashSet<String>, Vec<SkillInfo>) =
-        if let Some((remote_root, entry)) = resolve_remote_workspace(state, workspace_path).await? {
-            let remote_fs = state
-                .get_remote_file_service_async()
+    let (disabled_project, resolved_skills): (HashSet<String>, Vec<SkillInfo>) = if let Some((
+        remote_root,
+        entry,
+    )) =
+        resolve_remote_workspace(state, workspace_path).await?
+    {
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
+            .map_err(|e| format!("Remote file service not available: {}", e))?;
+        let remote_workspace_fs =
+            RemoteWorkspaceFs::new(entry.connection_id.clone(), remote_fs.clone());
+        let project_config_path = project_mode_skills_path_for_remote(&remote_root);
+        let project_config = if remote_fs
+            .exists(&entry.connection_id, &project_config_path)
+            .await
+            .map_err(|e| format!("Failed to check remote project skill overrides: {}", e))?
+        {
+            let content = remote_fs
+                .read_file(&entry.connection_id, &project_config_path)
                 .await
-                .map_err(|e| format!("Remote file service not available: {}", e))?;
-            let remote_workspace_fs =
-                RemoteWorkspaceFs::new(entry.connection_id.clone(), remote_fs.clone());
-            let project_config_path = project_mode_skills_path_for_remote(&remote_root);
-            let project_config = if remote_fs
-                .exists(&entry.connection_id, &project_config_path)
-                .await
-                .map_err(|e| format!("Failed to check remote project skill overrides: {}", e))?
-            {
-                let content = remote_fs
-                    .read_file(&entry.connection_id, &project_config_path)
-                    .await
-                    .map_err(|e| format!("Failed to read remote project skill overrides: {}", e))?;
-                let content = String::from_utf8(content)
-                    .map_err(|e| format!("Remote project skill overrides are not valid UTF-8: {}", e))?;
-                serde_json::from_str::<Value>(&content)
-                    .map_err(|e| format!("Invalid remote project skill overrides JSON: {}", e))?
-            } else {
-                serde_json::json!({})
-            };
-
-            (
-                get_disabled_mode_skills_from_document(&project_config, mode_id)
-                    .into_iter()
-                    .collect(),
-                registry
-                    .get_resolved_skills_for_remote_workspace(
-                        &remote_workspace_fs,
-                        &remote_root,
-                        Some(mode_id),
-                    )
-                    .await,
-            )
+                .map_err(|e| format!("Failed to read remote project skill overrides: {}", e))?;
+            let content = String::from_utf8(content).map_err(|e| {
+                format!("Remote project skill overrides are not valid UTF-8: {}", e)
+            })?;
+            serde_json::from_str::<Value>(&content)
+                .map_err(|e| format!("Invalid remote project skill overrides JSON: {}", e))?
         } else {
-            let workspace_root = workspace_root_from_input(workspace_path)
-                .ok_or_else(|| "Project-level skill overrides require an open workspace".to_string())?;
-            let project_config = load_project_mode_skills_document_local(&workspace_root)
-                .await
-                .map_err(|e| format!("Failed to load project mode skills: {}", e))?;
-            (
-                get_disabled_mode_skills_from_document(&project_config, mode_id)
-                    .into_iter()
-                    .collect(),
-                registry
-                    .get_resolved_skills_for_workspace(Some(&workspace_root), Some(mode_id))
-                    .await,
-            )
+            serde_json::json!({})
         };
 
-    let resolved_keys: HashSet<String> = resolved_skills.into_iter().map(|skill| skill.key).collect();
+        (
+            get_disabled_mode_skills_from_document(&project_config, mode_id)
+                .into_iter()
+                .collect(),
+            registry
+                .get_resolved_skills_for_remote_workspace(
+                    &remote_workspace_fs,
+                    &remote_root,
+                    Some(mode_id),
+                )
+                .await,
+        )
+    } else {
+        let workspace_root = workspace_root_from_input(workspace_path)
+            .ok_or_else(|| "Project-level skill overrides require an open workspace".to_string())?;
+        let project_config = load_project_mode_skills_document_local(&workspace_root)
+            .await
+            .map_err(|e| format!("Failed to load project mode skills: {}", e))?;
+        (
+            get_disabled_mode_skills_from_document(&project_config, mode_id)
+                .into_iter()
+                .collect(),
+            registry
+                .get_resolved_skills_for_workspace(Some(&workspace_root), Some(mode_id))
+                .await,
+        )
+    };
+
+    let resolved_keys: HashSet<String> =
+        resolved_skills.into_iter().map(|skill| skill.key).collect();
 
     Ok(all_skills
         .into_iter()
@@ -295,9 +301,13 @@ pub async fn get_mode_skill_configs(
         registry.refresh().await;
     }
 
-    let mode_skill_infos =
-        get_mode_skill_infos_for_workspace_input(&state, registry, &mode_id, workspace_path.as_deref())
-            .await?;
+    let mode_skill_infos = get_mode_skill_infos_for_workspace_input(
+        &state,
+        registry,
+        &mode_id,
+        workspace_path.as_deref(),
+    )
+    .await?;
 
     serde_json::to_value(mode_skill_infos)
         .map_err(|e| format!("Failed to serialize mode skill configs: {}", e))
@@ -333,7 +343,9 @@ pub async fn set_mode_skill_disabled(
         return Err(format!("Unsupported skill key '{}'", skill_key));
     }
 
-    if let Some((remote_root, entry)) = resolve_remote_workspace(&state, workspace_path.as_deref()).await? {
+    if let Some((remote_root, entry)) =
+        resolve_remote_workspace(&state, workspace_path.as_deref()).await?
+    {
         let remote_fs = state
             .get_remote_file_service_async()
             .await
@@ -348,8 +360,9 @@ pub async fn set_mode_skill_disabled(
                 .read_file(&entry.connection_id, &config_path)
                 .await
                 .map_err(|e| format!("Failed to read remote project skill overrides: {}", e))?;
-            let content = String::from_utf8(content)
-                .map_err(|e| format!("Remote project skill overrides are not valid UTF-8: {}", e))?;
+            let content = String::from_utf8(content).map_err(|e| {
+                format!("Remote project skill overrides are not valid UTF-8: {}", e)
+            })?;
             serde_json::from_str::<Value>(&content)
                 .map_err(|e| format!("Invalid remote project skill overrides JSON: {}", e))?
         } else {
@@ -367,13 +380,20 @@ pub async fn set_mode_skill_disabled(
         remote_fs
             .create_dir_all(&entry.connection_id, &config_dir)
             .await
-            .map_err(|e| format!("Failed to create remote project skill overrides directory: {}", e))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to create remote project skill overrides directory: {}",
+                    e
+                )
+            })?;
         remote_fs
             .write_file(
                 &entry.connection_id,
                 &config_path,
                 serde_json::to_vec_pretty(&document)
-                    .map_err(|e| format!("Failed to serialize remote project skill overrides: {}", e))?
+                    .map_err(|e| {
+                        format!("Failed to serialize remote project skill overrides: {}", e)
+                    })?
                     .as_slice(),
             )
             .await
@@ -557,12 +577,15 @@ pub async fn delete_skill(
     workspace_path: Option<String>,
 ) -> Result<String, String> {
     let registry = SkillRegistry::global();
-    if let Some((remote_root, entry)) = resolve_remote_workspace(&state, workspace_path.as_deref()).await? {
+    if let Some((remote_root, entry)) =
+        resolve_remote_workspace(&state, workspace_path.as_deref()).await?
+    {
         let remote_fs = state
             .get_remote_file_service_async()
             .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        let remote_workspace_fs = RemoteWorkspaceFs::new(entry.connection_id.clone(), remote_fs.clone());
+        let remote_workspace_fs =
+            RemoteWorkspaceFs::new(entry.connection_id.clone(), remote_fs.clone());
         let skill_info = registry
             .find_skill_by_key_for_remote_workspace(&remote_workspace_fs, &remote_root, &skill_key)
             .await
@@ -577,8 +600,7 @@ pub async fn delete_skill(
 
         info!(
             "Remote skill deleted: key={}, path={}",
-            skill_key,
-            skill_info.path
+            skill_key, skill_info.path
         );
         return Ok(format!("Skill '{}' deleted successfully", skill_info.name));
     }

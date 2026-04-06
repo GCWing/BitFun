@@ -12,8 +12,8 @@ pub use file_operations::{
     FileReadResult, FileWriteResult,
 };
 pub use file_tree::{
-    FileSearchResult, FileTreeNode, FileTreeOptions, FileTreeService, FileTreeStatistics,
-    SearchMatchType,
+    FileContentSearchOptions, FileNameSearchOptions, FileSearchOutcome, FileSearchResult,
+    FileTreeNode, FileTreeOptions, FileTreeService, FileTreeStatistics, SearchMatchType,
 };
 pub use file_watcher::initialize_file_watcher;
 #[cfg(feature = "tauri-support")]

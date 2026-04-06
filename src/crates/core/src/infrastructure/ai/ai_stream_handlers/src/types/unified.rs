@@ -9,8 +9,7 @@ pub struct UnifiedToolCall {
 }
 
 /// Unified AI response format
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UnifiedResponse {
     pub text: Option<String>,
     pub reasoning_content: Option<String>,
@@ -23,7 +22,6 @@ pub struct UnifiedResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_metadata: Option<Value>,
 }
-
 
 /// Unified token usage statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]

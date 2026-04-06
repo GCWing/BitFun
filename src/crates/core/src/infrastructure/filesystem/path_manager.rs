@@ -270,7 +270,7 @@ impl PathManager {
 
         let canonical_exists = canonical.exists();
         let legacy_exists = legacy.exists();
-        
+
         if canonical_exists {
             canonical.clone()
         } else if legacy_exists {

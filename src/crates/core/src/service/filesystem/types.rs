@@ -4,13 +4,11 @@ use crate::infrastructure::{
 use serde::{Deserialize, Serialize};
 
 /// File system service configuration
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct FileSystemConfig {
     pub tree_options: FileTreeOptions,
     pub operation_options: FileOperationOptions,
 }
-
 
 /// Directory scan result
 #[derive(Debug, Serialize, Deserialize)]

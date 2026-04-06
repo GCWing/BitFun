@@ -336,6 +336,8 @@
       "resultsFound": "找到 {{count}} 个结果",
       "resultsShowing": " (显示 {{count}} 个)",
       "loadMore": "加载更多 ({{count}} 个结果)",
+      "resultsTruncatedFiles": "当前仅显示前 {{count}} 个文件匹配结果。",
+      "resultsTruncatedContent": "当前仅显示前 {{count}} 个内容匹配结果。",
       "lineNumberPrefix": "第 {{line}} 行: "
     }
   },

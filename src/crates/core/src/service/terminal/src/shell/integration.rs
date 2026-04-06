@@ -40,8 +40,7 @@ pub enum OscSequence {
 }
 
 /// Command execution state
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum CommandState {
     /// Waiting for prompt
     #[default]
@@ -68,7 +67,6 @@ impl CommandState {
         )
     }
 }
-
 
 /// Event emitted by shell integration
 #[derive(Debug, Clone)]
@@ -426,10 +424,12 @@ impl ShellIntegration {
                 self.post_command_collecting = true;
 
                 // Emit event but keep command_id for output collection
-                let event = self.current_command_id.as_ref().map(|cmd_id| ShellIntegrationEvent::CommandFinished {
+                let event = self.current_command_id.as_ref().map(|cmd_id| {
+                    ShellIntegrationEvent::CommandFinished {
                         command_id: cmd_id.clone(),
                         exit_code,
-                    });
+                    }
+                });
 
                 self.current_command = None;
                 event

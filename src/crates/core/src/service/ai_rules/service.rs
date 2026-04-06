@@ -663,8 +663,7 @@ The rules section has a number of possible rules/memories/context that you shoul
             .map(|s| s.to_string())
             .ok_or_else(|| BitFunError::service("Invalid file name".to_string()))?;
 
-        AIRule::from_mdc(name, level, path.to_path_buf(), &content)
-            .map_err(BitFunError::service)
+        AIRule::from_mdc(name, level, path.to_path_buf(), &content).map_err(BitFunError::service)
     }
 
     /// Creates a rule file.

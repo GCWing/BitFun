@@ -1,5 +1,4 @@
 import {
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -14,6 +13,8 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('useExplorerSearch');
 
+export type ExplorerSearchMode = 'filenames' | 'content' | 'both';
+
 export interface ExplorerSearchOptions {
   caseSensitive: boolean;
   useRegex: boolean;
@@ -21,31 +22,65 @@ export interface ExplorerSearchOptions {
 }
 
 export interface ExplorerSearchPhase {
-  phase: 'idle' | 'filename' | 'content' | 'complete';
+  phase: 'idle' | 'searching' | 'complete';
+  mode: ExplorerSearchMode;
   filenameComplete: boolean;
   contentComplete: boolean;
 }
 
 export interface UseExplorerSearchOptions {
   workspacePath?: string;
-  enableContentSearch?: boolean;
+  initialMode?: ExplorerSearchMode;
+  filenameSearchDebounce?: number;
   contentSearchDebounce?: number;
-  minSearchLength?: number;
+  minFilenameLength?: number;
+  minContentLength?: number;
+  filenameMaxResults?: number;
+  contentMaxResults?: number;
 }
 
 export interface UseExplorerSearchResult {
   query: string;
   setQuery: (query: string) => void;
+  triggerSearch: (query: string) => void;
+  searchMode: ExplorerSearchMode;
+  setSearchMode: Dispatch<SetStateAction<ExplorerSearchMode>>;
   filenameResults: FileSearchResult[];
   contentResults: FileSearchResult[];
   allResults: FileSearchResult[];
   searchPhase: ExplorerSearchPhase;
+  filenameLimit: number;
+  contentLimit: number;
+  filenameTruncated: boolean;
+  contentTruncated: boolean;
+  hasTruncatedResults: boolean;
   isSearching: boolean;
   error: string | null;
   searchOptions: ExplorerSearchOptions;
   setSearchOptions: Dispatch<SetStateAction<ExplorerSearchOptions>>;
   clearSearch: () => void;
-  triggerSearch: (query: string) => void;
+}
+
+function buildIdlePhase(mode: ExplorerSearchMode): ExplorerSearchPhase {
+  return {
+    phase: 'idle',
+    mode,
+    filenameComplete: mode === 'content',
+    contentComplete: mode === 'filenames',
+  };
+}
+
+function buildSearchingPhase(
+  mode: ExplorerSearchMode,
+  shouldRunFilename: boolean,
+  shouldRunContent: boolean
+): ExplorerSearchPhase {
+  return {
+    phase: 'searching',
+    mode,
+    filenameComplete: !shouldRunFilename,
+    contentComplete: !shouldRunContent,
+  };
 }
 
 export function useExplorerSearch(
@@ -53,19 +88,24 @@ export function useExplorerSearch(
 ): UseExplorerSearchResult {
   const {
     workspacePath,
-    enableContentSearch = true,
-    contentSearchDebounce = 150,
-    minSearchLength = 1,
+    initialMode = 'filenames',
+    filenameSearchDebounce = 200,
+    contentSearchDebounce = 300,
+    minFilenameLength = 1,
+    minContentLength = 2,
+    filenameMaxResults = 512,
+    contentMaxResults = 1000,
   } = options;
 
   const [query, setQueryState] = useState('');
+  const [searchMode, setSearchMode] = useState<ExplorerSearchMode>(initialMode);
   const [filenameResults, setFilenameResults] = useState<FileSearchResult[]>([]);
   const [contentResults, setContentResults] = useState<FileSearchResult[]>([]);
-  const [searchPhase, setSearchPhase] = useState<ExplorerSearchPhase>({
-    phase: 'idle',
-    filenameComplete: false,
-    contentComplete: false,
-  });
+  const [searchPhase, setSearchPhase] = useState<ExplorerSearchPhase>(() => buildIdlePhase(initialMode));
+  const [filenameLimit, setFilenameLimit] = useState(filenameMaxResults);
+  const [contentLimit, setContentLimit] = useState(contentMaxResults);
+  const [filenameTruncated, setFilenameTruncated] = useState(false);
+  const [contentTruncated, setContentTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchOptions, setSearchOptions] = useState<ExplorerSearchOptions>({
     caseSensitive: false,
@@ -75,208 +115,279 @@ export function useExplorerSearch(
 
   const filenameAbortController = useRef<AbortController | null>(null);
   const contentAbortController = useRef<AbortController | null>(null);
-  const contentSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchIdRef = useRef(0);
+  const filenameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRunIdRef = useRef(0);
+  const requestIdRef = useRef(0);
+
+  const nextSearchId = useCallback((kind: 'filenames' | 'content'): string => {
+    requestIdRef.current += 1;
+    return `explorer-${kind}-${requestIdRef.current}`;
+  }, []);
+
+  const cancelFilenameSearch = useCallback(() => {
+    filenameAbortController.current?.abort();
+    filenameAbortController.current = null;
+    if (filenameTimer.current) {
+      clearTimeout(filenameTimer.current);
+      filenameTimer.current = null;
+    }
+  }, []);
+
+  const cancelContentSearch = useCallback(() => {
+    contentAbortController.current?.abort();
+    contentAbortController.current = null;
+    if (contentTimer.current) {
+      clearTimeout(contentTimer.current);
+      contentTimer.current = null;
+    }
+  }, []);
+
+  const cancelAllSearches = useCallback(() => {
+    cancelFilenameSearch();
+    cancelContentSearch();
+  }, [cancelContentSearch, cancelFilenameSearch]);
 
   const clearSearch = useCallback(() => {
-    filenameAbortController.current?.abort();
-    contentAbortController.current?.abort();
-    if (contentSearchTimer.current) {
-      clearTimeout(contentSearchTimer.current);
-      contentSearchTimer.current = null;
-    }
-
+    cancelAllSearches();
+    searchRunIdRef.current += 1;
     setQueryState('');
     setFilenameResults([]);
     setContentResults([]);
-    setSearchPhase({
-      phase: 'idle',
-      filenameComplete: false,
-      contentComplete: false,
-    });
+    setFilenameLimit(filenameMaxResults);
+    setContentLimit(contentMaxResults);
+    setFilenameTruncated(false);
+    setContentTruncated(false);
+    setSearchPhase(buildIdlePhase(searchMode));
     setError(null);
-  }, []);
+  }, [cancelAllSearches, contentMaxResults, filenameMaxResults, searchMode]);
 
   const executeFilenameSearch = useCallback(
-    async (searchQuery: string, searchId: number) => {
-      if (!workspacePath || searchQuery.trim().length < minSearchLength) {
-        setFilenameResults([]);
+    async (searchQuery: string, runId: number) => {
+      if (!workspacePath) {
         return;
       }
 
-      filenameAbortController.current?.abort();
-      filenameAbortController.current = new AbortController();
+      const controller = new AbortController();
+      filenameAbortController.current = controller;
 
       try {
-        setSearchPhase((prev) => ({
-          ...prev,
-          phase: 'filename',
-          filenameComplete: false,
-        }));
-
-        const results = await workspaceAPI.searchFilenamesOnly(
+        const response = await workspaceAPI.searchFilenamesOnlyDetailed(
           workspacePath,
-          searchQuery.trim(),
+          searchQuery,
           searchOptions.caseSensitive,
           searchOptions.useRegex,
           searchOptions.wholeWord,
-          filenameAbortController.current.signal
+          nextSearchId('filenames'),
+          filenameMaxResults,
+          true,
+          controller.signal
         );
 
-        if (searchId !== searchIdRef.current) {
+        if (runId !== searchRunIdRef.current) {
           return;
         }
 
-        setFilenameResults(results);
-        setSearchPhase((prev) => ({
-          ...prev,
-          filenameComplete: true,
-          phase: enableContentSearch ? 'content' : 'complete',
-        }));
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          return;
-        }
-        if (searchId !== searchIdRef.current) {
-          return;
-        }
-
-        log.error('Filename search failed', { query: searchQuery, error: err });
-        setError(err instanceof Error ? err.message : 'Search failed');
-      }
-    },
-    [workspacePath, minSearchLength, searchOptions, enableContentSearch]
-  );
-
-  const executeContentSearch = useCallback(
-    async (searchQuery: string, searchId: number) => {
-      if (
-        !workspacePath ||
-        !enableContentSearch ||
-        searchQuery.trim().length < minSearchLength
-      ) {
-        setContentResults([]);
-        return;
-      }
-
-      contentAbortController.current?.abort();
-      contentAbortController.current = new AbortController();
-
-      try {
-        const results = await workspaceAPI.searchContentOnly(
-          workspacePath,
-          searchQuery.trim(),
-          searchOptions.caseSensitive,
-          searchOptions.useRegex,
-          searchOptions.wholeWord,
-          contentAbortController.current.signal
-        );
-
-        if (searchId !== searchIdRef.current) {
-          return;
-        }
-
-        startTransition(() => {
-          setContentResults(results);
-          setSearchPhase((prev) => ({
-            ...prev,
-            contentComplete: true,
-            phase: 'complete',
-          }));
+        setFilenameResults(response.results);
+        setFilenameLimit(response.limit);
+        setFilenameTruncated(response.truncated);
+        setSearchPhase((prev) => {
+          const nextPhase = { ...prev, filenameComplete: true };
+          return {
+            ...nextPhase,
+            phase: nextPhase.filenameComplete && nextPhase.contentComplete ? 'complete' : 'searching',
+          };
         });
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           return;
         }
-        if (searchId !== searchIdRef.current) {
+
+        if (runId !== searchRunIdRef.current) {
+          return;
+        }
+
+        log.error('Filename search failed', { query: searchQuery, error: err });
+        setError(err instanceof Error ? err.message : 'Filename search failed');
+        setSearchPhase((prev) => ({ ...prev, filenameComplete: true, phase: prev.contentComplete ? 'complete' : prev.phase }));
+      }
+    },
+    [
+      workspacePath,
+      searchOptions.caseSensitive,
+      searchOptions.useRegex,
+      searchOptions.wholeWord,
+      nextSearchId,
+      filenameMaxResults,
+    ]
+  );
+
+  const executeContentSearch = useCallback(
+    async (searchQuery: string, runId: number) => {
+      if (!workspacePath) {
+        return;
+      }
+
+      const controller = new AbortController();
+      contentAbortController.current = controller;
+
+      try {
+        const response = await workspaceAPI.searchContentOnlyDetailed(
+          workspacePath,
+          searchQuery,
+          searchOptions.caseSensitive,
+          searchOptions.useRegex,
+          searchOptions.wholeWord,
+          nextSearchId('content'),
+          contentMaxResults,
+          controller.signal
+        );
+
+        if (runId !== searchRunIdRef.current) {
+          return;
+        }
+
+        setContentResults(response.results);
+        setContentLimit(response.limit);
+        setContentTruncated(response.truncated);
+        setSearchPhase((prev) => {
+          const nextPhase = { ...prev, contentComplete: true };
+          return {
+            ...nextPhase,
+            phase: nextPhase.filenameComplete && nextPhase.contentComplete ? 'complete' : 'searching',
+          };
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+
+        if (runId !== searchRunIdRef.current) {
           return;
         }
 
         log.error('Content search failed', { query: searchQuery, error: err });
-      }
-    },
-    [workspacePath, enableContentSearch, minSearchLength, searchOptions]
-  );
-
-  const triggerSearch = useCallback(
-    (searchQuery: string) => {
-      const newSearchId = ++searchIdRef.current;
-
-      if (contentSearchTimer.current) {
-        clearTimeout(contentSearchTimer.current);
-        contentSearchTimer.current = null;
-      }
-
-      setError(null);
-
-      if (!searchQuery.trim() || searchQuery.trim().length < minSearchLength) {
-        clearSearch();
-        return;
-      }
-
-      executeFilenameSearch(searchQuery, newSearchId);
-
-      if (enableContentSearch) {
-        contentSearchTimer.current = setTimeout(() => {
-          void executeContentSearch(searchQuery, newSearchId);
-        }, contentSearchDebounce);
+        setError(err instanceof Error ? err.message : 'Content search failed');
+        setSearchPhase((prev) => ({ ...prev, contentComplete: true, phase: prev.filenameComplete ? 'complete' : prev.phase }));
       }
     },
     [
-      minSearchLength,
-      clearSearch,
-      executeFilenameSearch,
-      executeContentSearch,
-      enableContentSearch,
-      contentSearchDebounce,
+      workspacePath,
+      searchOptions.caseSensitive,
+      searchOptions.useRegex,
+      searchOptions.wholeWord,
+      nextSearchId,
+      contentMaxResults,
     ]
   );
 
-  const setQuery = useCallback(
-    (newQuery: string) => {
-      setQueryState(newQuery);
-      triggerSearch(newQuery);
-    },
-    [triggerSearch]
-  );
+  const setQuery = useCallback((newQuery: string) => {
+    setQueryState(newQuery);
+  }, []);
+
+  const triggerSearch = useCallback((newQuery: string) => {
+    setQueryState(newQuery);
+  }, []);
 
   useEffect(() => {
-    if (query.trim().length >= minSearchLength) {
-      triggerSearch(query);
+    cancelAllSearches();
+
+    const trimmedQuery = query.trim();
+    const shouldRunFilename =
+      searchMode !== 'content' && trimmedQuery.length >= minFilenameLength;
+    const shouldRunContent =
+      searchMode !== 'filenames' && trimmedQuery.length >= minContentLength;
+
+    if (!workspacePath || (!shouldRunFilename && !shouldRunContent)) {
+      setFilenameResults([]);
+      setContentResults([]);
+      setFilenameLimit(filenameMaxResults);
+      setContentLimit(contentMaxResults);
+      setFilenameTruncated(false);
+      setContentTruncated(false);
+      setSearchPhase(buildIdlePhase(searchMode));
+      setError(null);
+      return;
     }
-  }, [searchOptions, minSearchLength, query, triggerSearch]);
+
+    const runId = ++searchRunIdRef.current;
+    setError(null);
+    setFilenameLimit(filenameMaxResults);
+    setContentLimit(contentMaxResults);
+    setFilenameTruncated(false);
+    setContentTruncated(false);
+    setSearchPhase(buildSearchingPhase(searchMode, shouldRunFilename, shouldRunContent));
+
+    if (!shouldRunFilename) {
+      setFilenameResults([]);
+    } else {
+      filenameTimer.current = setTimeout(() => {
+        void executeFilenameSearch(trimmedQuery, runId);
+      }, filenameSearchDebounce);
+    }
+
+    if (!shouldRunContent) {
+      setContentResults([]);
+    } else {
+      contentTimer.current = setTimeout(() => {
+        void executeContentSearch(trimmedQuery, runId);
+      }, contentSearchDebounce);
+    }
+
+    return () => {
+      cancelAllSearches();
+    };
+  }, [
+    cancelAllSearches,
+    contentMaxResults,
+    contentSearchDebounce,
+    executeContentSearch,
+    executeFilenameSearch,
+    filenameMaxResults,
+    filenameSearchDebounce,
+    minContentLength,
+    minFilenameLength,
+    query,
+    searchMode,
+    workspacePath,
+  ]);
 
   useEffect(() => {
     return () => {
-      filenameAbortController.current?.abort();
-      contentAbortController.current?.abort();
-      if (contentSearchTimer.current) {
-        clearTimeout(contentSearchTimer.current);
-      }
+      cancelAllSearches();
     };
-  }, []);
+  }, [cancelAllSearches]);
 
-  const allResults = useMemo(
-    () => [...filenameResults, ...contentResults],
-    [filenameResults, contentResults]
-  );
-
-  const isSearching =
-    searchPhase.phase === 'filename' ||
-    (searchPhase.phase === 'content' && !searchPhase.contentComplete);
+  const allResults = useMemo(() => {
+    switch (searchMode) {
+      case 'filenames':
+        return filenameResults;
+      case 'content':
+        return contentResults;
+      default:
+        return [...filenameResults, ...contentResults];
+    }
+  }, [contentResults, filenameResults, searchMode]);
 
   return {
     query,
     setQuery,
+    triggerSearch,
+    searchMode,
+    setSearchMode,
     filenameResults,
     contentResults,
     allResults,
     searchPhase,
-    isSearching,
+    filenameLimit,
+    contentLimit,
+    filenameTruncated,
+    contentTruncated,
+    hasTruncatedResults: filenameTruncated || contentTruncated,
+    isSearching: searchPhase.phase === 'searching',
     error,
     searchOptions,
     setSearchOptions,
     clearSearch,
-    triggerSearch,
   };
 }

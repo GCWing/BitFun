@@ -44,8 +44,9 @@ pub fn compute_next_run_after_ms(
             anchor_ms,
         } => compute_every_next_run_ms(*every_ms, anchor_ms.unwrap_or(created_at_ms), after_ms)
             .map(Some),
-        CronSchedule::Cron { expr, tz } => compute_cron_next_run_ms(expr, tz.as_deref(), after_ms)
-            .map(Some),
+        CronSchedule::Cron { expr, tz } => {
+            compute_cron_next_run_ms(expr, tz.as_deref(), after_ms).map(Some)
+        }
     }
 }
 
@@ -79,9 +80,8 @@ fn compute_every_next_run_ms(every_ms: u64, anchor_ms: i64, after_ms: i64) -> Bi
     let steps = ((after - anchor) / interval) + 1;
     let next = anchor + (steps * interval);
 
-    i64::try_from(next).map_err(|_| {
-        BitFunError::service("Recurring schedule next run timestamp overflowed i64")
-    })
+    i64::try_from(next)
+        .map_err(|_| BitFunError::service("Recurring schedule next run timestamp overflowed i64"))
 }
 
 fn compute_cron_next_run_ms(expr: &str, tz: Option<&str>, after_ms: i64) -> BitFunResult<i64> {

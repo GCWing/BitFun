@@ -124,9 +124,9 @@ pub fn set_mode_skill_disabled_in_document(
         *mode_entry = Value::Object(Map::new());
     }
 
-    let mode_object = mode_entry
-        .as_object_mut()
-        .ok_or_else(|| BitFunError::config("Mode skills entry must be a JSON object".to_string()))?;
+    let mode_object = mode_entry.as_object_mut().ok_or_else(|| {
+        BitFunError::config("Mode skills entry must be a JSON object".to_string())
+    })?;
 
     let current = mode_object
         .get(DISABLED_SKILLS_KEY)
@@ -158,15 +158,13 @@ pub fn set_mode_skill_disabled_in_document(
     Ok(next)
 }
 
-pub async fn load_project_mode_skills_document_local(
-    workspace_root: &Path,
-) -> BitFunResult<Value> {
+pub async fn load_project_mode_skills_document_local(workspace_root: &Path) -> BitFunResult<Value> {
     let path = get_path_manager_arc().project_mode_skills_file(workspace_root);
     match tokio::fs::read_to_string(&path).await {
-        Ok(content) => Ok(normalize_project_document_value(serde_json::from_str(&content)?)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            Ok(Value::Object(Map::new()))
-        }
+        Ok(content) => Ok(normalize_project_document_value(serde_json::from_str(
+            &content,
+        )?)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Value::Object(Map::new())),
         Err(error) => Err(BitFunError::config(format!(
             "Failed to read project skill overrides file '{}': {}",
             path.display(),
@@ -206,13 +204,12 @@ pub async fn load_disabled_mode_skills_remote(
         return Ok(Vec::new());
     }
 
-    let content = fs
-        .read_file_text(&path)
-        .await
-        .map_err(|error| BitFunError::config(format!(
+    let content = fs.read_file_text(&path).await.map_err(|error| {
+        BitFunError::config(format!(
             "Failed to read remote project skill overrides: {}",
             error
-        )))?;
+        ))
+    })?;
     let document = normalize_project_document_value(serde_json::from_str(&content)?);
     Ok(get_disabled_mode_skills_from_document(&document, mode_id))
 }

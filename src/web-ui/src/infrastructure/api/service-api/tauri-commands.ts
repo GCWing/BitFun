@@ -147,6 +147,37 @@ export interface SearchFilesRequest {
   rootPath: string;
   pattern: string;
   searchContent?: boolean;
+  searchId?: string;
+  caseSensitive?: boolean;
+  useRegex?: boolean;
+  wholeWord?: boolean;
+  maxResults?: number;
+  includeDirectories?: boolean;
+}
+
+export interface SearchFilenamesRequest {
+  rootPath: string;
+  pattern: string;
+  searchId?: string;
+  caseSensitive?: boolean;
+  useRegex?: boolean;
+  wholeWord?: boolean;
+  maxResults?: number;
+  includeDirectories?: boolean;
+}
+
+export interface SearchFileContentsRequest {
+  rootPath: string;
+  pattern: string;
+  searchId?: string;
+  caseSensitive?: boolean;
+  useRegex?: boolean;
+  wholeWord?: boolean;
+  maxResults?: number;
+}
+
+export interface CancelSearchRequest {
+  searchId: string;
 }
 
 export type SearchMatchType = 'fileName' | 'content';
@@ -158,6 +189,12 @@ export interface FileSearchResult {
   matchType: SearchMatchType;
   lineNumber?: number;
   matchedContent?: string;
+}
+
+export interface FileSearchResponse {
+  results: FileSearchResult[];
+  limit: number;
+  truncated: boolean;
 }
 
 export interface ExplorerNodeDto {

@@ -55,10 +55,7 @@ Important:
         )
     }
 
-    async fn build_description_for_context(
-        &self,
-        context: Option<&ToolUseContext>,
-    ) -> String {
+    async fn build_description_for_context(&self, context: Option<&ToolUseContext>) -> String {
         let registry = get_skill_registry();
         let available_skills = match context {
             Some(ctx) if ctx.is_remote() => {
@@ -92,9 +89,11 @@ Important:
                     )
                     .await
             }
-            None => registry
-                .get_resolved_skills_xml_for_workspace(None, None)
-                .await,
+            None => {
+                registry
+                    .get_resolved_skills_xml_for_workspace(None, None)
+                    .await
+            }
         };
 
         self.render_description(available_skills.join("\n"))
@@ -116,7 +115,8 @@ impl Tool for SkillTool {
         context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
         let mut s = self.build_description_for_context(context).await;
-        if context.map(|c| c.is_remote()).unwrap_or(false) && context.and_then(|c| c.ws_fs()).is_none()
+        if context.map(|c| c.is_remote()).unwrap_or(false)
+            && context.and_then(|c| c.ws_fs()).is_none()
         {
             s.push_str(
                 "\n\n**Remote workspace:** Project-level skills on the server could not be indexed (workspace I/O unavailable). Use **Read** / **Glob** on the remote tree if needed.",

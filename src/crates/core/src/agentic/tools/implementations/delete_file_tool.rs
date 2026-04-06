@@ -262,7 +262,10 @@ Important notes:
                 .map_err(|e| BitFunError::tool(format!("Failed to delete on remote: {}", e)))?;
 
             if exit_code != 0 && !stderr.is_empty() {
-                return Err(BitFunError::tool(format!("Remote delete failed: {}", stderr)));
+                return Err(BitFunError::tool(format!(
+                    "Remote delete failed: {}",
+                    stderr
+                )));
             }
 
             let result_data = json!({
@@ -276,8 +279,8 @@ Important notes:
             return Ok(vec![ToolResult::Result {
                 data: result_data,
                 result_for_assistant: Some(result_text),
-            image_attachments: None,
-        }]);
+                image_attachments: None,
+            }]);
         }
 
         let path = Path::new(&resolved_path);

@@ -23,7 +23,6 @@ pub enum MemoryType {
     Other,
 }
 
-
 /// AI memory point
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIMemory {

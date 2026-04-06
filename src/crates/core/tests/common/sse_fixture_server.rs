@@ -96,9 +96,8 @@ async fn stream_fixture_handler(State(state): State<FixtureSseState>) -> impl In
         ReceiverStream::new(rx).map(Ok::<Bytes, Infallible>),
     ));
     *response.status_mut() = StatusCode::OK;
-    response.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static("text/event-stream"),
-    );
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("text/event-stream"));
     response
 }

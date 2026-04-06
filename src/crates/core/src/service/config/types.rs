@@ -358,7 +358,6 @@ pub enum ModelCategory {
     SpeechRecognition,
 }
 
-
 /// Default model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -377,7 +376,6 @@ pub struct DefaultModelsConfig {
     /// Speech recognition model.
     pub speech_recognition: Option<String>,
 }
-
 
 /// AI configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1216,7 +1214,6 @@ impl Default for AIConfig {
         }
     }
 }
-
 
 impl Default for AIModelConfig {
     fn default() -> Self {

@@ -1,4 +1,4 @@
-﻿//! Session Manager - Manages terminal sessions lifecycle
+//! Session Manager - Manages terminal sessions lifecycle
 
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -391,15 +391,7 @@ impl SessionManager {
         source: Option<SessionSource>,
     ) -> TerminalResult<TerminalSession> {
         self.create_session_with_options(
-            session_id,
-            name,
-            shell_type,
-            cwd,
-            env,
-            cols,
-            rows,
-            true,
-            source,
+            session_id, name, shell_type, cwd, env, cols, rows, true, source,
         )
         .await
     }
