@@ -509,8 +509,10 @@ impl Tool for GlobTool {
                 build_remote_find_command(&search_dir, pattern, limit)
             };
 
-            let (stdout, _stderr, _exit_code) =
-                ws_shell.exec(&remote_cmd, Some(30_000)).await.map_err(|e| {
+            let (stdout, _stderr, _exit_code) = ws_shell
+                .exec(&remote_cmd, Some(30_000))
+                .await
+                .map_err(|e| {
                     BitFunError::tool(format!("Failed to glob on remote with rg: {}", e))
                 })?;
 

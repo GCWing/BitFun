@@ -70,12 +70,7 @@ struct SkillCandidate {
 }
 
 impl SkillCandidate {
-    fn from_data(
-        mut data: SkillData,
-        slot: &str,
-        key_prefix: &str,
-        priority: usize,
-    ) -> Self {
+    fn from_data(mut data: SkillData, slot: &str, key_prefix: &str, priority: usize) -> Self {
         data.source_slot = slot.to_string();
         data.key = build_skill_key(key_prefix, slot, &data.dir_name);
 
@@ -168,7 +163,10 @@ fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo> {
             .cmp(&b.priority)
             .then_with(|| a.info.name.to_lowercase().cmp(&b.info.name.to_lowercase()))
     });
-    resolved.into_iter().map(|candidate| candidate.info).collect()
+    resolved
+        .into_iter()
+        .map(|candidate| candidate.info)
+        .collect()
 }
 
 /// Skill registry
@@ -423,9 +421,11 @@ impl SkillRegistry {
             None => Vec::new(),
         };
 
-        let disabled_user: HashSet<String> = dedupe_preserving_order(disabled_user).into_iter().collect();
-        let disabled_project: HashSet<String> =
-            dedupe_preserving_order(disabled_project).into_iter().collect();
+        let disabled_user: HashSet<String> =
+            dedupe_preserving_order(disabled_user).into_iter().collect();
+        let disabled_project: HashSet<String> = dedupe_preserving_order(disabled_project)
+            .into_iter()
+            .collect();
 
         candidates
             .into_iter()
@@ -454,9 +454,11 @@ impl SkillRegistry {
             .await
             .unwrap_or_default();
 
-        let disabled_user: HashSet<String> = dedupe_preserving_order(disabled_user).into_iter().collect();
-        let disabled_project: HashSet<String> =
-            dedupe_preserving_order(disabled_project).into_iter().collect();
+        let disabled_user: HashSet<String> =
+            dedupe_preserving_order(disabled_user).into_iter().collect();
+        let disabled_project: HashSet<String> = dedupe_preserving_order(disabled_project)
+            .into_iter()
+            .collect();
 
         candidates
             .into_iter()
@@ -529,7 +531,9 @@ impl SkillRegistry {
         workspace_root: Option<&Path>,
         agent_type: Option<&str>,
     ) -> Vec<SkillInfo> {
-        let candidates = self.scan_skill_candidates_for_workspace(workspace_root).await;
+        let candidates = self
+            .scan_skill_candidates_for_workspace(workspace_root)
+            .await;
         let filtered = self
             .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
             .await;
@@ -662,7 +666,9 @@ impl SkillRegistry {
                 remote_fs
                     .read_file_text(&skill_md_path)
                     .await
-                    .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))
+                    .map_err(|error| {
+                        BitFunError::tool(format!("Failed to read skill file: {}", error))
+                    })
             }
         }
     }

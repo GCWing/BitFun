@@ -322,8 +322,8 @@ impl WorkspaceInfo {
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             (id, root_path.clone())
         } else {
-            let (canonical_pb, norm_str) = canonicalize_local_workspace_root(&root_path)
-                .map_err(BitFunError::service)?;
+            let (canonical_pb, norm_str) =
+                canonicalize_local_workspace_root(&root_path).map_err(BitFunError::service)?;
             let id = local_workspace_stable_storage_id(&norm_str);
             (id, canonical_pb)
         };
@@ -348,13 +348,21 @@ impl WorkspaceInfo {
         };
 
         if is_remote {
-            if let Some(ssh_host) = options.remote_ssh_host.as_ref().filter(|s| !s.trim().is_empty()) {
+            if let Some(ssh_host) = options
+                .remote_ssh_host
+                .as_ref()
+                .filter(|s| !s.trim().is_empty())
+            {
                 workspace.metadata.insert(
                     "sshHost".to_string(),
                     serde_json::Value::String(ssh_host.trim().to_string()),
                 );
             }
-            if let Some(conn_id) = options.remote_connection_id.as_ref().filter(|s| !s.trim().is_empty()) {
+            if let Some(conn_id) = options
+                .remote_connection_id
+                .as_ref()
+                .filter(|s| !s.trim().is_empty())
+            {
                 workspace.metadata.insert(
                     "connectionId".to_string(),
                     serde_json::Value::String(conn_id.trim().to_string()),
@@ -899,15 +907,18 @@ impl WorkspaceManager {
                 .filter(|s| !s.is_empty());
             let path_norm = normalize_remote_workspace_path(&path.to_string_lossy());
 
-            let by_stable = stable.and_then(|sid| self.workspaces.get(sid)).and_then(|w| {
-                if w.workspace_kind == WorkspaceKind::Remote
-                    && normalize_remote_workspace_path(&w.root_path.to_string_lossy()) == path_norm
-                {
-                    Some(w.id.clone())
-                } else {
-                    None
-                }
-            });
+            let by_stable = stable
+                .and_then(|sid| self.workspaces.get(sid))
+                .and_then(|w| {
+                    if w.workspace_kind == WorkspaceKind::Remote
+                        && normalize_remote_workspace_path(&w.root_path.to_string_lossy())
+                            == path_norm
+                    {
+                        Some(w.id.clone())
+                    } else {
+                        None
+                    }
+                });
 
             if let Some(id) = by_stable {
                 Some(id)
@@ -918,7 +929,8 @@ impl WorkspaceManager {
                         if w.workspace_kind != WorkspaceKind::Remote {
                             return false;
                         }
-                        if normalize_remote_workspace_path(&w.root_path.to_string_lossy()) != path_norm
+                        if normalize_remote_workspace_path(&w.root_path.to_string_lossy())
+                            != path_norm
                         {
                             return false;
                         }
@@ -996,13 +1008,21 @@ impl WorkspaceManager {
                     workspace.name = display_name.clone();
                 }
                 if options.workspace_kind == WorkspaceKind::Remote {
-                    if let Some(ssh_host) = options.remote_ssh_host.as_ref().filter(|s| !s.trim().is_empty()) {
+                    if let Some(ssh_host) = options
+                        .remote_ssh_host
+                        .as_ref()
+                        .filter(|s| !s.trim().is_empty())
+                    {
                         workspace.metadata.insert(
                             "sshHost".to_string(),
                             serde_json::Value::String(ssh_host.trim().to_string()),
                         );
                     }
-                    if let Some(conn_id) = options.remote_connection_id.as_ref().filter(|s| !s.trim().is_empty()) {
+                    if let Some(conn_id) = options
+                        .remote_connection_id
+                        .as_ref()
+                        .filter(|s| !s.trim().is_empty())
+                    {
                         workspace.metadata.insert(
                             "connectionId".to_string(),
                             serde_json::Value::String(conn_id.trim().to_string()),
@@ -1389,7 +1409,8 @@ impl WorkspaceManager {
             changed = true;
         }
         let before_a = self.recent_assistant_workspaces.len();
-        self.recent_assistant_workspaces.retain(|id| id != workspace_id);
+        self.recent_assistant_workspaces
+            .retain(|id| id != workspace_id);
         if self.recent_assistant_workspaces.len() != before_a {
             changed = true;
         }

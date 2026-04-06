@@ -250,7 +250,11 @@ Examples:
             };
         }
 
-        if parsed.turns.as_ref().is_some_and(|selectors| selectors.is_empty()) {
+        if parsed
+            .turns
+            .as_ref()
+            .is_some_and(|selectors| selectors.is_empty())
+        {
             return ValidationResult {
                 result: false,
                 message: Some("turns cannot be an empty array".to_string()),

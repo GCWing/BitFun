@@ -29,16 +29,18 @@ pub struct WorkspaceBinding {
 impl WorkspaceBinding {
     pub fn new(workspace_id: Option<String>, root_path: PathBuf) -> Self {
         let workspace_path = root_path.to_string_lossy().to_string();
-        let session_identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
-            &workspace_path,
-            None,
-            None,
-        )
-        .unwrap_or(WorkspaceSessionIdentity {
-            hostname: crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST.to_string(),
-            workspace_path,
-            remote_connection_id: None,
-        });
+        let session_identity =
+            crate::service::remote_ssh::workspace_state::workspace_session_identity(
+                &workspace_path,
+                None,
+                None,
+            )
+            .unwrap_or(WorkspaceSessionIdentity {
+                hostname: crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST
+                    .to_string(),
+                workspace_path,
+                remote_connection_id: None,
+            });
         Self {
             workspace_id,
             root_path,
@@ -121,7 +123,11 @@ pub trait WorkspaceFileSystem: Send + Sync {
 #[async_trait]
 pub trait WorkspaceShell: Send + Sync {
     /// Execute a command and return (stdout, stderr, exit_code).
-    async fn exec(&self, command: &str, timeout_ms: Option<u64>) -> anyhow::Result<(String, String, i32)>;
+    async fn exec(
+        &self,
+        command: &str,
+        timeout_ms: Option<u64>,
+    ) -> anyhow::Result<(String, String, i32)>;
 }
 
 /// Bundle of workspace I/O services injected into ToolUseContext.
@@ -220,7 +226,11 @@ pub struct LocalWorkspaceShell;
 
 #[async_trait]
 impl WorkspaceShell for LocalWorkspaceShell {
-    async fn exec(&self, command: &str, timeout_ms: Option<u64>) -> anyhow::Result<(String, String, i32)> {
+    async fn exec(
+        &self,
+        command: &str,
+        timeout_ms: Option<u64>,
+    ) -> anyhow::Result<(String, String, i32)> {
         let mut cmd = tokio::process::Command::new("sh");
         cmd.arg("-c").arg(command);
 
@@ -259,7 +269,10 @@ pub struct RemoteWorkspaceFs {
 
 impl RemoteWorkspaceFs {
     pub fn new(connection_id: String, file_service: RemoteFileService) -> Self {
-        Self { connection_id, file_service }
+        Self {
+            connection_id,
+            file_service,
+        }
     }
 }
 
@@ -331,14 +344,26 @@ pub struct RemoteWorkspaceShell {
 }
 
 impl RemoteWorkspaceShell {
-    pub fn new(connection_id: String, ssh_manager: SSHConnectionManager, workspace_root: String) -> Self {
-        Self { connection_id, ssh_manager, workspace_root }
+    pub fn new(
+        connection_id: String,
+        ssh_manager: SSHConnectionManager,
+        workspace_root: String,
+    ) -> Self {
+        Self {
+            connection_id,
+            ssh_manager,
+            workspace_root,
+        }
     }
 }
 
 #[async_trait]
 impl WorkspaceShell for RemoteWorkspaceShell {
-    async fn exec(&self, command: &str, _timeout_ms: Option<u64>) -> anyhow::Result<(String, String, i32)> {
+    async fn exec(
+        &self,
+        command: &str,
+        _timeout_ms: Option<u64>,
+    ) -> anyhow::Result<(String, String, i32)> {
         // Wrap the command with cd to workspace root so all commands
         // execute in the correct working directory on the remote server.
         let wrapped = format!("cd {} && {}", shell_escape(&self.workspace_root), command);
@@ -362,7 +387,10 @@ pub fn remote_workspace_services(
 ) -> WorkspaceServices {
     WorkspaceServices {
         fs: Arc::new(RemoteWorkspaceFs::new(connection_id.clone(), file_service)),
-        shell: Arc::new(RemoteWorkspaceShell::new(connection_id, ssh_manager, workspace_root)),
+        shell: Arc::new(RemoteWorkspaceShell::new(
+            connection_id,
+            ssh_manager,
+            workspace_root,
+        )),
     }
 }
-

@@ -162,9 +162,9 @@ fn groups_consecutive_assistant_messages_under_single_role_header() {
 
     let assistant_headers = summary_artifact.summary_text.matches("Assistant:").count();
     assert_eq!(assistant_headers, 1);
-    assert!(summary_artifact.summary_text.contains(
-        "Assistant:\nTool call: Read {\"file_path\":\"/workspace/example.txt\"}"
-    ));
+    assert!(summary_artifact
+        .summary_text
+        .contains("Assistant:\nTool call: Read {\"file_path\":\"/workspace/example.txt\"}"));
     assert!(summary_artifact
         .summary_text
         .contains("Updated the styling changes."));

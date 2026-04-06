@@ -214,10 +214,9 @@ pub async fn create_subagent(
     validate_agent_name(name)?;
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
 
-    if request.level == SubagentLevel::Project
-        && workspace.is_none() {
-            return Err("Project-level Agent requires opening a workspace first".to_string());
-        }
+    if request.level == SubagentLevel::Project && workspace.is_none() {
+        return Err("Project-level Agent requires opening a workspace first".to_string());
+    }
 
     let modes = state.agent_registry.get_modes_info().await;
     let subagents = state

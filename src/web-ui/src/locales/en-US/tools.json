@@ -336,6 +336,8 @@
       "resultsFound": "Found {{count}} results",
       "resultsShowing": " (showing {{count}})",
       "loadMore": "Load more ({{count}} results)",
+      "resultsTruncatedFiles": "Showing the first {{count}} file matches.",
+      "resultsTruncatedContent": "Showing the first {{count}} content matches.",
       "lineNumberPrefix": "Line {{line}}: "
     }
   },

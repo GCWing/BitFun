@@ -11,8 +11,10 @@ use bitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };
 use log::{debug, error, info, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, MutexGuard};
 use tauri::{AppHandle, State};
 
 fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::RemoteWorkspace> {
@@ -57,6 +59,85 @@ async fn lookup_remote_entry_for_path(
         .map(|w| w.connection_id);
     let preferred: Option<String> = request_preferred.map(|s| s.to_string()).or(legacy);
     manager.lookup_connection(path, preferred.as_deref()).await
+}
+
+fn lock_active_searches<'a>(
+    state: &'a State<'_, AppState>,
+) -> MutexGuard<'a, std::collections::HashMap<String, Arc<AtomicBool>>> {
+    match state.active_searches.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("Active search registry mutex was poisoned, recovering lock");
+            poisoned.into_inner()
+        }
+    }
+}
+
+fn register_search(
+    state: &State<'_, AppState>,
+    search_id: Option<&str>,
+) -> Option<Arc<AtomicBool>> {
+    let Some(search_id) = search_id.filter(|value| !value.is_empty()) else {
+        return None;
+    };
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let mut active_searches = lock_active_searches(state);
+    if let Some(previous_flag) = active_searches.insert(search_id.to_string(), cancel_flag.clone())
+    {
+        previous_flag.store(true, Ordering::Relaxed);
+    }
+
+    Some(cancel_flag)
+}
+
+fn unregister_search(state: &State<'_, AppState>, search_id: Option<&str>) {
+    let Some(search_id) = search_id.filter(|value| !value.is_empty()) else {
+        return;
+    };
+
+    lock_active_searches(state).remove(search_id);
+}
+
+fn serialize_search_results(
+    results: Vec<bitfun_core::infrastructure::FileSearchResult>,
+) -> Vec<serde_json::Value> {
+    results
+        .into_iter()
+        .map(|result| {
+            serde_json::json!({
+                "path": result.path,
+                "name": result.name,
+                "isDirectory": result.is_directory,
+                "matchType": match result.match_type {
+                    SearchMatchType::FileName => "fileName",
+                    SearchMatchType::Content => "content",
+                },
+                "lineNumber": result.line_number,
+                "matchedContent": result.matched_content,
+            })
+        })
+        .collect::<Vec<_>>()
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchCommandResponse {
+    results: Vec<serde_json::Value>,
+    limit: usize,
+    truncated: bool,
+}
+
+fn serialize_search_response(
+    outcome: bitfun_core::infrastructure::FileSearchOutcome,
+    limit: usize,
+) -> serde_json::Value {
+    serde_json::to_value(SearchCommandResponse {
+        results: serialize_search_results(outcome.results),
+        limit,
+        truncated: outcome.truncated,
+    })
+    .unwrap_or_else(|_| serde_json::json!({ "results": [], "limit": limit, "truncated": false }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -215,11 +296,73 @@ pub struct SearchFilesRequest {
     pub pattern: String,
     pub search_content: bool,
     #[serde(default)]
+    pub search_id: Option<String>,
+    #[serde(default)]
     pub case_sensitive: bool,
     #[serde(default)]
     pub use_regex: bool,
     #[serde(default)]
     pub whole_word: bool,
+    #[serde(default)]
+    pub max_results: Option<usize>,
+    #[serde(default = "default_include_directories")]
+    pub include_directories: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchFilenamesRequest {
+    pub root_path: String,
+    pub pattern: String,
+    #[serde(default)]
+    pub search_id: Option<String>,
+    #[serde(default)]
+    pub case_sensitive: bool,
+    #[serde(default)]
+    pub use_regex: bool,
+    #[serde(default)]
+    pub whole_word: bool,
+    #[serde(default)]
+    pub max_results: Option<usize>,
+    #[serde(default = "default_include_directories")]
+    pub include_directories: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchFileContentsRequest {
+    pub root_path: String,
+    pub pattern: String,
+    #[serde(default)]
+    pub search_id: Option<String>,
+    #[serde(default)]
+    pub case_sensitive: bool,
+    #[serde(default)]
+    pub use_regex: bool,
+    #[serde(default)]
+    pub whole_word: bool,
+    #[serde(default)]
+    pub max_results: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelSearchRequest {
+    pub search_id: String,
+}
+
+const DEFAULT_FILENAME_SEARCH_RESULTS: usize = 512;
+const DEFAULT_CONTENT_SEARCH_RESULTS: usize = 1_000;
+const HARD_MAX_SEARCH_RESULTS: usize = 2_000;
+
+fn default_include_directories() -> bool {
+    true
+}
+
+fn resolve_search_limit(requested: Option<usize>, fallback: usize) -> usize {
+    requested
+        .unwrap_or(fallback)
+        .clamp(1, HARD_MAX_SEARCH_RESULTS)
 }
 
 #[derive(Debug, Deserialize)]
@@ -2117,55 +2260,208 @@ pub async fn search_files(
 ) -> Result<serde_json::Value, String> {
     use bitfun_core::service::filesystem::FileSearchOptions;
 
+    let search_id = request.search_id.clone();
+    let cancel_flag = register_search(&state, search_id.as_deref());
+    let max_results = resolve_search_limit(
+        request.max_results,
+        if request.search_content {
+            DEFAULT_CONTENT_SEARCH_RESULTS
+        } else {
+            DEFAULT_FILENAME_SEARCH_RESULTS
+        },
+    );
     let options = FileSearchOptions {
         include_content: request.search_content,
         case_sensitive: request.case_sensitive,
         use_regex: request.use_regex,
         whole_word: request.whole_word,
-        max_results: None,
+        max_results: Some(max_results),
         file_extensions: None,
-        include_directories: true,
+        include_directories: request.include_directories,
     };
 
-    match state
-        .filesystem_service
-        .search_files(&request.root_path, &request.pattern, options)
-        .await
-    {
-        Ok(results) => {
-            let json_results: Vec<serde_json::Value> = results
-                .into_iter()
-                .map(|result| {
-                    serde_json::json!({
-                        "path": result.path,
-                        "name": result.name,
-                        "isDirectory": result.is_directory,
-                        "matchType": match result.match_type {
-                            SearchMatchType::FileName => "fileName",
-                            SearchMatchType::Content => "content",
-                        },
-                        "lineNumber": result.line_number,
-                        "matchedContent": result.matched_content,
-                    })
-                })
-                .collect();
+    let result = if request.search_content {
+        let filename_outcome = state
+            .filesystem_service
+            .search_file_names(
+                &request.root_path,
+                &request.pattern,
+                FileSearchOptions {
+                    include_content: false,
+                    include_directories: request.include_directories,
+                    ..options.clone()
+                },
+                cancel_flag.clone(),
+            )
+            .await?;
+        let mut filename_results = filename_outcome.results;
 
+        if filename_results.len() >= max_results {
+            Ok(filename_results)
+        } else {
+            let mut content_outcome = state
+                .filesystem_service
+                .search_file_contents(
+                    &request.root_path,
+                    &request.pattern,
+                    FileSearchOptions {
+                        include_content: true,
+                        include_directories: false,
+                        max_results: Some(max_results - filename_results.len()),
+                        ..options
+                    },
+                    cancel_flag,
+                )
+                .await?;
+            if filename_outcome.truncated || content_outcome.truncated {
+                debug!(
+                    "Legacy search truncated: root_path={}, pattern={}, search_content={}, limit={}",
+                    request.root_path,
+                    request.pattern,
+                    request.search_content,
+                    max_results
+                );
+            }
+            filename_results.append(&mut content_outcome.results);
+            Ok(filename_results)
+        }
+    } else {
+        state
+            .filesystem_service
+            .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
+            .await
+            .map(|outcome| outcome.results)
+    };
+    unregister_search(&state, search_id.as_deref());
+
+    match result {
+        Ok(results) => {
             info!(
-                "File search completed: root_path={}, pattern={}, results_count={}",
+                "Legacy search completed: root_path={}, pattern={}, search_content={}, results_count={}",
                 request.root_path,
                 request.pattern,
-                json_results.len()
+                request.search_content,
+                results.len()
             );
-            Ok(serde_json::json!(json_results))
+            Ok(serde_json::json!(serialize_search_results(results)))
         }
         Err(e) => {
             error!(
-                "Failed to search files: root_path={}, pattern={}, error={}",
-                request.root_path, request.pattern, e
+                "Failed to execute legacy search: root_path={}, pattern={}, search_content={}, error={}",
+                request.root_path, request.pattern, request.search_content, e
             );
-            Err(format!("Failed to search files: {}", e))
+            Err(format!("Failed to execute legacy search: {}", e))
         }
     }
+}
+
+#[tauri::command]
+pub async fn search_filenames(
+    state: State<'_, AppState>,
+    request: SearchFilenamesRequest,
+) -> Result<serde_json::Value, String> {
+    use bitfun_core::service::filesystem::FileSearchOptions;
+
+    let search_id = request.search_id.clone();
+    let cancel_flag = register_search(&state, search_id.as_deref());
+    let limit = resolve_search_limit(request.max_results, DEFAULT_FILENAME_SEARCH_RESULTS);
+    let options = FileSearchOptions {
+        include_content: false,
+        case_sensitive: request.case_sensitive,
+        use_regex: request.use_regex,
+        whole_word: request.whole_word,
+        max_results: Some(limit),
+        file_extensions: None,
+        include_directories: request.include_directories,
+    };
+
+    let result = state
+        .filesystem_service
+        .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
+        .await;
+    unregister_search(&state, search_id.as_deref());
+
+    match result {
+        Ok(outcome) => {
+            info!(
+                "Filename search completed: root_path={}, pattern={}, results_count={}, limit={}, truncated={}",
+                request.root_path,
+                request.pattern,
+                outcome.results.len(),
+                limit,
+                outcome.truncated
+            );
+            Ok(serialize_search_response(outcome, limit))
+        }
+        Err(error) => {
+            error!(
+                "Failed to search filenames: root_path={}, pattern={}, error={}",
+                request.root_path, request.pattern, error
+            );
+            Err(format!("Failed to search filenames: {}", error))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn search_file_contents(
+    state: State<'_, AppState>,
+    request: SearchFileContentsRequest,
+) -> Result<serde_json::Value, String> {
+    use bitfun_core::service::filesystem::FileSearchOptions;
+
+    let search_id = request.search_id.clone();
+    let cancel_flag = register_search(&state, search_id.as_deref());
+    let limit = resolve_search_limit(request.max_results, DEFAULT_CONTENT_SEARCH_RESULTS);
+    let options = FileSearchOptions {
+        include_content: true,
+        case_sensitive: request.case_sensitive,
+        use_regex: request.use_regex,
+        whole_word: request.whole_word,
+        max_results: Some(limit),
+        file_extensions: None,
+        include_directories: false,
+    };
+
+    let result = state
+        .filesystem_service
+        .search_file_contents(&request.root_path, &request.pattern, options, cancel_flag)
+        .await;
+    unregister_search(&state, search_id.as_deref());
+
+    match result {
+        Ok(outcome) => {
+            info!(
+                "Content search completed: root_path={}, pattern={}, results_count={}, limit={}, truncated={}",
+                request.root_path,
+                request.pattern,
+                outcome.results.len(),
+                limit,
+                outcome.truncated
+            );
+            Ok(serialize_search_response(outcome, limit))
+        }
+        Err(error) => {
+            error!(
+                "Failed to search file contents: root_path={}, pattern={}, error={}",
+                request.root_path, request.pattern, error
+            );
+            Err(format!("Failed to search file contents: {}", error))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn cancel_search(
+    state: State<'_, AppState>,
+    request: CancelSearchRequest,
+) -> Result<(), String> {
+    let mut active_searches = lock_active_searches(&state);
+    if let Some(cancel_flag) = active_searches.remove(&request.search_id) {
+        cancel_flag.store(true, Ordering::Relaxed);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

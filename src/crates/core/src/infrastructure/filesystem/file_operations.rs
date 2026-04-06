@@ -663,7 +663,10 @@ mod editor_sync_hash_tests {
 
     #[test]
     fn normalize_matches_web_contract() {
-        assert_eq!(normalize_text_for_editor_disk_sync("\u{FEFF}a\r\nb"), "a\nb");
+        assert_eq!(
+            normalize_text_for_editor_disk_sync("\u{FEFF}a\r\nb"),
+            "a\nb"
+        );
         assert_eq!(normalize_text_for_editor_disk_sync("x\ry"), "x\ny");
     }
 

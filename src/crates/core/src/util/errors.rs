@@ -138,9 +138,7 @@ impl BitFunError {
     }
 
     pub fn serialization<T: Into<String>>(msg: T) -> Self {
-        Self::Serialization(serde_json::Error::io(std::io::Error::other(
-            msg.into(),
-        )))
+        Self::Serialization(serde_json::Error::io(std::io::Error::other(msg.into())))
     }
 
     pub fn session<T: Into<String>>(msg: T) -> Self {

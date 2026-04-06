@@ -3,6 +3,7 @@ export { useExplorerController, useExplorerSnapshot } from './hooks/useExplorerC
 export { tauriExplorerFileSystemProvider } from './provider/TauriExplorerFileSystemProvider';
 export {
   useExplorerSearch,
+  type ExplorerSearchMode,
   type ExplorerSearchOptions,
   type ExplorerSearchPhase,
   type UseExplorerSearchOptions,

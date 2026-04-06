@@ -179,7 +179,6 @@ pub enum DialogTurnKind {
     ManualCompaction,
 }
 
-
 impl DialogTurnKind {
     pub fn is_model_visible(self) -> bool {
         matches!(self, Self::UserDialog)
@@ -388,7 +387,6 @@ pub struct SessionTranscriptExportOptions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turns: Option<Vec<String>>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

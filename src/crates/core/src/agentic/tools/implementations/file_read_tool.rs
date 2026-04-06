@@ -57,9 +57,9 @@ impl FileReadTool {
             .checked_add(limit.saturating_sub(1))
             .ok_or_else(|| BitFunError::tool("Requested line range is too large".to_string()))?;
 
-        let ws_shell = context
-            .ws_shell()
-            .ok_or_else(|| BitFunError::tool("Remote workspace shell is unavailable".to_string()))?;
+        let ws_shell = context.ws_shell().ok_or_else(|| {
+            BitFunError::tool("Remote workspace shell is unavailable".to_string())
+        })?;
 
         let escaped_path = shell_escape(resolved_path);
         let command = format!(
@@ -97,7 +97,10 @@ impl FileReadTool {
             } else if !stderr_messages.is_empty() {
                 stderr_messages.join("\n")
             } else {
-                format!("Failed to read file: remote command exited with status {}", status)
+                format!(
+                    "Failed to read file: remote command exited with status {}",
+                    status
+                )
             };
             return Err(BitFunError::tool(message));
         }
@@ -233,11 +236,8 @@ Usage:
             }
         };
 
-        let root_owned = context.and_then(|ctx| {
-            ctx.workspace
-                .as_ref()
-                .map(|w| w.root_path_string())
-        });
+        let root_owned =
+            context.and_then(|ctx| ctx.workspace.as_ref().map(|w| w.root_path_string()));
         let resolved_path = match resolve_workspace_tool_path(
             file_path,
             root_owned.as_deref(),
@@ -326,7 +326,7 @@ Usage:
                 self.max_line_chars,
                 self.max_total_chars,
             )
-                .map_err(BitFunError::tool)?
+            .map_err(BitFunError::tool)?
         };
 
         let file_rules = match get_global_ai_rules_service().await {

@@ -88,13 +88,21 @@ pub async fn run_stream_fixture_with_options(
             ));
         }
         StreamFixtureProvider::Anthropic => {
-            tokio::spawn(handle_anthropic_stream(response, tx_event, Some(tx_raw_sse)));
+            tokio::spawn(handle_anthropic_stream(
+                response,
+                tx_event,
+                Some(tx_raw_sse),
+            ));
         }
         StreamFixtureProvider::Gemini => {
             tokio::spawn(handle_gemini_stream(response, tx_event, Some(tx_raw_sse)));
         }
         StreamFixtureProvider::Responses => {
-            tokio::spawn(handle_responses_stream(response, tx_event, Some(tx_raw_sse)));
+            tokio::spawn(handle_responses_stream(
+                response,
+                tx_event,
+                Some(tx_raw_sse),
+            ));
         }
     }
 

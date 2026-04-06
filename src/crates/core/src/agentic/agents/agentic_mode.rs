@@ -75,10 +75,7 @@ mod tests {
     #[test]
     fn always_uses_default_prompt_template() {
         let agent = AgenticMode::new();
-        assert_eq!(
-            agent.prompt_template_name(Some("gpt-5.1")),
-            "agentic_mode"
-        );
+        assert_eq!(agent.prompt_template_name(Some("gpt-5.1")), "agentic_mode");
         assert_eq!(
             agent.prompt_template_name(Some("GPT-5-CODEX")),
             "agentic_mode"

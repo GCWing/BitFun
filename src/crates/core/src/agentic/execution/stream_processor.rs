@@ -25,13 +25,11 @@ use tokio::sync::mpsc;
 //==============================================================================
 
 /// SSE log collector configuration
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SseLogConfig {
     /// Maximum number of SSE data entries to output on error, None means unlimited
     pub max_output: Option<usize>,
 }
-
 
 /// SSE log collector - Collects raw SSE data, outputs only on error
 pub struct SseLogCollector {
@@ -461,10 +459,7 @@ impl StreamProcessor {
                             AgenticEvent::ToolEvent {
                                 session_id: ctx.session_id.clone(),
                                 turn_id: ctx.dialog_turn_id.clone(),
-                                tool_event: ToolEventData::EarlyDetected {
-                                    tool_id,
-                                    tool_name,
-                                },
+                                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
                                 subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                             },
                             None,

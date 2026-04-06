@@ -1,4 +1,4 @@
-﻿use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+use super::unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -11,15 +11,13 @@ pub struct Message {
     pub usage: Option<Usage>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct Usage {
     input_tokens: Option<u32>,
     output_tokens: Option<u32>,
     cache_read_input_tokens: Option<u32>,
     cache_creation_input_tokens: Option<u32>,
 }
-
 
 impl Usage {
     pub fn update(&mut self, other: &Usage) {

@@ -415,8 +415,7 @@ impl AgentRegistry {
             AgentCategory::Mode => {
                 let mode_configs = get_mode_configs().await;
                 let registered_tool_names = get_all_registered_tool_names().await;
-                let valid_tools: HashSet<String> =
-                    registered_tool_names.iter().cloned().collect();
+                let valid_tools: HashSet<String> = registered_tool_names.iter().cloned().collect();
                 let resolved_tools = resolve_effective_tools(
                     &entry.agent.default_tools(),
                     mode_configs.get(agent_type),
@@ -520,11 +519,7 @@ impl AgentRegistry {
         drop(map);
         if let Some(workspace_root) = workspace_root {
             if let Some(project_entries) = self.read_project_subagents().get(workspace_root) {
-                result.extend(
-                    project_entries
-                        .values()
-                        .map(AgentInfo::from_agent_entry),
-                );
+                result.extend(project_entries.values().map(AgentInfo::from_agent_entry));
             }
         }
         result

@@ -24,7 +24,10 @@ async fn openai_fixture_keeps_collecting_tool_args_across_usage_chunks() {
     assert_eq!(result.tool_calls[0].tool_name, "tool_a");
     assert_eq!(result.tool_calls[0].arguments, json!({ "a": 1 }));
     assert!(!result.tool_calls[0].is_error);
-    assert_eq!(result.usage.as_ref().map(|usage| usage.total_token_count), Some(7));
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(7)
+    );
 
     let early_detected = output.events.iter().any(|event| {
         matches!(
@@ -104,12 +107,7 @@ async fn openai_fixture_ignores_duplicate_empty_tool_chunk_between_real_tools() 
     let thinking_end_count = output
         .events
         .iter()
-        .filter(|event| {
-            matches!(
-                event,
-                AgenticEvent::ThinkingChunk { is_end: true, .. }
-            )
-        })
+        .filter(|event| matches!(event, AgenticEvent::ThinkingChunk { is_end: true, .. }))
         .count();
     assert_eq!(thinking_end_count, 1);
 

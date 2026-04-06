@@ -1,4 +1,4 @@
-﻿use crate::util::string::truncate_string_by_chars;
+use crate::util::string::truncate_string_by_chars;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -33,8 +33,8 @@ pub fn read_file(
         .checked_add(limit.saturating_sub(1))
         .ok_or_else(|| "Requested line range is too large".to_string())?;
 
-    let file = File::open(file_path)
-        .map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+    let file =
+        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
     let reader = BufReader::new(file);
 
     let mut total_lines = 0usize;
@@ -43,8 +43,7 @@ pub fn read_file(
     let mut hit_total_char_limit = false;
 
     for line_result in reader.lines() {
-        let line = line_result
-            .map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+        let line = line_result.map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
         total_lines += 1;
 
         if total_lines < start_line || total_lines > end_line_inclusive || hit_total_char_limit {

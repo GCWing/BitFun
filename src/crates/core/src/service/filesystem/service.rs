@@ -1,8 +1,11 @@
 use crate::infrastructure::{
-    FileInfo, FileOperationOptions, FileOperationService, FileReadResult, FileSearchResult,
-    FileTreeNode, FileTreeService, FileWriteResult,
+    FileContentSearchOptions, FileInfo, FileNameSearchOptions, FileOperationOptions,
+    FileOperationService, FileReadResult, FileSearchOutcome, FileSearchResult, FileTreeNode,
+    FileTreeService,
+    FileWriteResult,
 };
 use crate::util::errors::*;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use super::types::{DirectoryScanResult, DirectoryStats, FileSearchOptions, FileSystemConfig};
@@ -68,7 +71,8 @@ impl FileSystemService {
 
     /// Gets directory contents (shallow).
     pub async fn get_directory_contents(&self, path: &str) -> BitFunResult<Vec<FileTreeNode>> {
-        self.get_directory_contents_with_remote_hint(path, None).await
+        self.get_directory_contents_with_remote_hint(path, None)
+            .await
     }
 
     pub async fn get_directory_contents_with_remote_hint(
@@ -121,6 +125,92 @@ impl FileSystemService {
         }
 
         Ok(results)
+    }
+
+    pub async fn search_file_names(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileSearchOptions,
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> BitFunResult<FileSearchOutcome> {
+        let mut outcome = self
+            .file_tree_service
+            .search_file_names(
+                root_path,
+                pattern,
+                FileNameSearchOptions {
+                    case_sensitive: options.case_sensitive,
+                    use_regex: options.use_regex,
+                    whole_word: options.whole_word,
+                    max_results: options.max_results.unwrap_or(10_000),
+                    include_directories: options.include_directories,
+                    cancel_flag,
+                },
+            )
+            .await?;
+
+        if let Some(extensions) = &options.file_extensions {
+            outcome.results.retain(|result| {
+                if result.is_directory {
+                    true
+                } else {
+                    let path = std::path::Path::new(&result.path);
+                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                        extensions.contains(&ext.to_lowercase())
+                    } else {
+                        false
+                    }
+                }
+            });
+        }
+
+        if let Some(max_results) = options.max_results {
+            outcome.results.truncate(max_results);
+        }
+
+        Ok(outcome)
+    }
+
+    pub async fn search_file_contents(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileSearchOptions,
+        cancel_flag: Option<Arc<AtomicBool>>,
+    ) -> BitFunResult<FileSearchOutcome> {
+        let mut outcome = self
+            .file_tree_service
+            .search_file_contents(
+                root_path,
+                pattern,
+                FileContentSearchOptions {
+                    case_sensitive: options.case_sensitive,
+                    use_regex: options.use_regex,
+                    whole_word: options.whole_word,
+                    max_results: options.max_results.unwrap_or(10_000),
+                    max_file_size_bytes: 10 * 1024 * 1024,
+                    cancel_flag,
+                },
+            )
+            .await?;
+
+        if let Some(extensions) = &options.file_extensions {
+            outcome.results.retain(|result| {
+                let path = std::path::Path::new(&result.path);
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    extensions.contains(&ext.to_lowercase())
+                } else {
+                    false
+                }
+            });
+        }
+
+        if let Some(max_results) = options.max_results {
+            outcome.results.truncate(max_results);
+        }
+
+        Ok(outcome)
     }
 
     /// Reads a file.

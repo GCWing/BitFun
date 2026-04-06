@@ -39,12 +39,14 @@ pub mod insights;
 
 pub use agents::*;
 pub use coordination::*;
-pub use round_preempt::{DialogRoundPreemptSource, NoopDialogRoundPreemptSource, SessionRoundYieldFlags};
 pub use core::*;
 pub use events::{queue, router, types as event_types};
 pub use execution::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
+pub use round_preempt::{
+    DialogRoundPreemptSource, NoopDialogRoundPreemptSource, SessionRoundYieldFlags,
+};
 pub use session::*;
 pub use side_question::*;
 pub use workspace::{WorkspaceBackend, WorkspaceBinding};

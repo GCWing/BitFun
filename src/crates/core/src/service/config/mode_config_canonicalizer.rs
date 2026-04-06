@@ -302,12 +302,14 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
     {
         match config.get("disabled_user_skills") {
             Some(Value::Null) | None => Vec::new(),
-            Some(value) => serde_json::from_value::<Vec<String>>(value.clone()).map_err(|error| {
-                BitFunError::config(format!(
-                    "Invalid disabled_user_skills for mode '{}': {}",
-                    mode_id, error
-                ))
-            })?,
+            Some(value) => {
+                serde_json::from_value::<Vec<String>>(value.clone()).map_err(|error| {
+                    BitFunError::config(format!(
+                        "Invalid disabled_user_skills for mode '{}': {}",
+                        mode_id, error
+                    ))
+                })?
+            }
         }
     } else {
         current

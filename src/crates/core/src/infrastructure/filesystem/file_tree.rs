@@ -5,11 +5,12 @@
 use crate::util::errors::*;
 use log::warn;
 
-use grep_regex::RegexMatcherBuilder;
-use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkMatch};
 use ignore::WalkBuilder;
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -158,6 +159,64 @@ fn lock_search_results(
     }
 }
 
+fn cancellation_requested(cancel_flag: Option<&Arc<AtomicBool>>) -> bool {
+    cancel_flag
+        .map(|flag| flag.load(Ordering::Relaxed))
+        .unwrap_or(false)
+}
+
+#[derive(Debug, Clone)]
+pub struct FileNameSearchOptions {
+    pub case_sensitive: bool,
+    pub use_regex: bool,
+    pub whole_word: bool,
+    pub max_results: usize,
+    pub include_directories: bool,
+    pub cancel_flag: Option<Arc<AtomicBool>>,
+}
+
+impl Default for FileNameSearchOptions {
+    fn default() -> Self {
+        Self {
+            case_sensitive: false,
+            use_regex: false,
+            whole_word: false,
+            max_results: 10_000,
+            include_directories: true,
+            cancel_flag: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FileContentSearchOptions {
+    pub case_sensitive: bool,
+    pub use_regex: bool,
+    pub whole_word: bool,
+    pub max_results: usize,
+    pub max_file_size_bytes: u64,
+    pub cancel_flag: Option<Arc<AtomicBool>>,
+}
+
+impl Default for FileContentSearchOptions {
+    fn default() -> Self {
+        Self {
+            case_sensitive: false,
+            use_regex: false,
+            whole_word: false,
+            max_results: 10_000,
+            max_file_size_bytes: 10 * 1024 * 1024,
+            cancel_flag: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSearchOutcome {
+    pub results: Vec<FileSearchResult>,
+    pub truncated: bool,
+}
+
 impl Default for FileTreeService {
     fn default() -> Self {
         Self::new(FileTreeOptions::default())
@@ -206,7 +265,9 @@ impl FileTreeService {
     ) -> BitFunResult<(Vec<FileTreeNode>, FileTreeStatistics)> {
         // For remote workspaces, return simple directory listing with empty stats
         if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
-            let nodes = self.get_directory_contents_with_remote_hint(root_path, None).await
+            let nodes = self
+                .get_directory_contents_with_remote_hint(root_path, None)
+                .await
                 .map_err(BitFunError::service)?;
             let stats = FileTreeStatistics {
                 total_files: nodes.iter().filter(|n| !n.is_directory).count(),
@@ -389,20 +450,19 @@ impl FileTreeService {
                 .with_depth(depth)
                 .with_enhanced_info(is_symlink, permissions, mime_type, None);
 
-                if is_directory
-                    && (!is_symlink || self.options.follow_symlinks) {
-                        match self
-                            .build_tree_recursive(&entry_path, root_path, visited, depth + 1)
-                            .await
-                        {
-                            Ok(children) => {
-                                node = node.with_children(children);
-                            }
-                            Err(_) => {
-                                node = node.with_children(vec![]);
-                            }
+                if is_directory && (!is_symlink || self.options.follow_symlinks) {
+                    match self
+                        .build_tree_recursive(&entry_path, root_path, visited, depth + 1)
+                        .await
+                    {
+                        Ok(children) => {
+                            node = node.with_children(children);
+                        }
+                        Err(_) => {
+                            node = node.with_children(vec![]);
                         }
                     }
+                }
 
                 nodes.push(node);
             }
@@ -583,26 +643,25 @@ impl FileTreeService {
                 .with_depth(depth)
                 .with_enhanced_info(is_symlink, permissions, mime_type, None);
 
-                if is_directory
-                    && (!is_symlink || self.options.follow_symlinks) {
-                        match self
-                            .build_tree_recursive_with_stats(
-                                &entry_path,
-                                root_path,
-                                visited,
-                                depth + 1,
-                                stats,
-                            )
-                            .await
-                        {
-                            Ok(children) => {
-                                node = node.with_children(children);
-                            }
-                            Err(_) => {
-                                node = node.with_children(vec![]);
-                            }
+                if is_directory && (!is_symlink || self.options.follow_symlinks) {
+                    match self
+                        .build_tree_recursive_with_stats(
+                            &entry_path,
+                            root_path,
+                            visited,
+                            depth + 1,
+                            stats,
+                        )
+                        .await
+                    {
+                        Ok(children) => {
+                            node = node.with_children(children);
+                        }
+                        Err(_) => {
+                            node = node.with_children(vec![]);
                         }
                     }
+                }
 
                 nodes.push(node);
             }
@@ -637,7 +696,8 @@ impl FileTreeService {
     }
 
     pub async fn get_directory_contents(&self, path: &str) -> Result<Vec<FileTreeNode>, String> {
-        self.get_directory_contents_with_remote_hint(path, None).await
+        self.get_directory_contents_with_remote_hint(path, None)
+            .await
     }
 
     /// `preferred_remote_connection_id`: when set (e.g. from workspace/session), resolves SSH file ops
@@ -648,13 +708,16 @@ impl FileTreeService {
         preferred_remote_connection_id: Option<&str>,
     ) -> Result<Vec<FileTreeNode>, String> {
         // Check if this path belongs to any registered remote workspace
-        if let Some(entry) = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
-            path,
-            preferred_remote_connection_id,
-        )
-        .await
+        if let Some(entry) =
+            crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
+                path,
+                preferred_remote_connection_id,
+            )
+            .await
         {
-            if let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager() {
+            if let Some(manager) =
+                crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
+            {
                 if let Some(file_service) = manager.get_file_service().await {
                     match file_service.read_dir(&entry.connection_id, path).await {
                         Ok(entries) => {
@@ -816,15 +879,8 @@ impl FileTreeService {
         pattern: &str,
         search_content: bool,
     ) -> BitFunResult<Vec<FileSearchResult>> {
-        self.search_files_with_options(
-            root_path,
-            pattern,
-            search_content,
-            false, // case_sensitive
-            false, // regex
-            false, // whole_word
-        )
-        .await
+        self.search_files_with_options(root_path, pattern, search_content, false, false, false)
+            .await
     }
 
     pub async fn search_files_with_options(
@@ -836,197 +892,158 @@ impl FileTreeService {
         use_regex: bool,
         whole_word: bool,
     ) -> BitFunResult<Vec<FileSearchResult>> {
+        let filename_outcome = self
+            .search_file_names(
+                root_path,
+                pattern,
+                FileNameSearchOptions {
+                    case_sensitive,
+                    use_regex,
+                    whole_word,
+                    max_results: 10_000,
+                    include_directories: true,
+                    cancel_flag: None,
+                },
+            )
+            .await?;
+        let mut results = filename_outcome.results;
+
+        if search_content && !filename_outcome.truncated && results.len() < 10_000 {
+            let remaining = 10_000 - results.len();
+            let mut content_outcome = self
+                .search_file_contents(
+                    root_path,
+                    pattern,
+                    FileContentSearchOptions {
+                        case_sensitive,
+                        use_regex,
+                        whole_word,
+                        max_results: remaining,
+                        max_file_size_bytes: 10 * 1024 * 1024,
+                        cancel_flag: None,
+                    },
+                )
+                .await?;
+            results.append(&mut content_outcome.results);
+        }
+
+        Ok(results)
+    }
+
+    pub async fn search_file_names(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileNameSearchOptions,
+    ) -> BitFunResult<FileSearchOutcome> {
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
             return Err(BitFunError::service("Directory does not exist".to_string()));
         }
 
-        let max_results = 10000;
-
-        let filename_pattern = if use_regex {
-            pattern.to_string()
-        } else if whole_word {
-            format!(r"\b{}\b", regex::escape(pattern))
-        } else {
-            regex::escape(pattern)
-        };
-
+        let matcher = Arc::new(Self::compile_search_regex(
+            pattern,
+            options.case_sensitive,
+            options.use_regex,
+            options.whole_word,
+        )?);
         let results = Arc::new(Mutex::new(Vec::new()));
         let should_stop = Arc::new(AtomicBool::new(false));
+        let limit_reached = Arc::new(AtomicBool::new(false));
+        let cancel_flag = options.cancel_flag.clone();
+        let include_directories = options.include_directories;
+        let max_results = options.max_results.max(1);
 
-        let pattern = pattern.to_string();
-        let filename_pattern = Arc::new(filename_pattern);
-
-        let walker = WalkBuilder::new(&root_path_buf)
-            .hidden(false)
-            .ignore(true)
-            .git_ignore(true)
-            .git_global(false)
-            .git_exclude(false)
-            .threads(
-                std::thread::available_parallelism()
-                    .map(|count| count.get())
-                    .unwrap_or(1)
-                    .min(8),
-            )
-            .build_parallel();
+        let walker = Self::build_search_walker(&root_path_buf);
 
         walker.run(|| {
+            let matcher = Arc::clone(&matcher);
             let results = Arc::clone(&results);
             let should_stop = Arc::clone(&should_stop);
-            let pattern = pattern.clone();
-            let filename_pattern = Arc::clone(&filename_pattern);
+            let limit_reached = Arc::clone(&limit_reached);
             let root_path_buf = root_path_buf.clone();
+            let cancel_flag = cancel_flag.clone();
 
             Box::new(move |entry| {
-                if should_stop.load(Ordering::Relaxed) {
+                if should_stop.load(Ordering::Relaxed)
+                    || cancellation_requested(cancel_flag.as_ref())
+                {
+                    should_stop.store(true, Ordering::Relaxed);
                     return ignore::WalkState::Quit;
                 }
 
                 let entry = match entry {
-                    Ok(e) => e,
+                    Ok(entry) => entry,
                     Err(_) => return ignore::WalkState::Continue,
                 };
 
                 let path = entry.path();
-                let is_dir = path.is_dir();
-                let is_file = path.is_file();
-
                 if path == root_path_buf {
                     return ignore::WalkState::Continue;
                 }
 
                 let file_name = path
                     .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
+                    .map(|name| name.to_string_lossy().to_string())
                     .unwrap_or_default();
+                let file_type = entry.file_type();
 
-                if is_dir {
-                    let dir_matches = if case_sensitive {
-                        if use_regex || whole_word {
-                            regex::Regex::new(&filename_pattern)
-                                .map(|re| re.is_match(&file_name))
-                                .unwrap_or(false)
-                        } else {
-                            file_name.contains(&pattern)
-                        }
-                    } else {
-                        if use_regex || whole_word {
-                            regex::RegexBuilder::new(&filename_pattern)
-                                .case_insensitive(true)
-                                .build()
-                                .map(|re| re.is_match(&file_name))
-                                .unwrap_or(false)
-                        } else {
-                            file_name.to_lowercase().contains(&pattern.to_lowercase())
-                        }
-                    };
+                if file_type.map(|kind| kind.is_dir()).unwrap_or(false) {
+                    if Self::should_skip_directory_static(&file_name) {
+                        return ignore::WalkState::Skip;
+                    }
 
-                    if dir_matches {
-                        let mut results_guard = lock_search_results(&results);
-                        if results_guard.len() < max_results {
-                            results_guard.push(FileSearchResult {
+                    if include_directories
+                        && matcher.is_match(&file_name)
+                        && !Self::push_search_result(
+                            &results,
+                            &should_stop,
+                            &limit_reached,
+                            max_results,
+                            FileSearchResult {
                                 path: path.to_string_lossy().to_string(),
-                                name: file_name.clone(),
+                                name: file_name,
                                 is_directory: true,
                                 match_type: SearchMatchType::FileName,
                                 line_number: None,
                                 matched_content: None,
-                            });
-                        }
-
-                        if results_guard.len() >= max_results {
-                            should_stop.store(true, Ordering::Relaxed);
-                            return ignore::WalkState::Quit;
-                        }
-                    }
-
-                    return ignore::WalkState::Continue;
-                }
-
-                if !is_file {
-                    return ignore::WalkState::Continue;
-                }
-
-                if let Some(file_name) = path.file_name() {
-                    let file_name_str = file_name.to_string_lossy();
-                    if Self::should_skip_file_static(&file_name_str)
-                        || Self::is_binary_file_static(&file_name_str)
+                            },
+                        )
                     {
-                        return ignore::WalkState::Continue;
+                        return ignore::WalkState::Quit;
                     }
+
+                    return ignore::WalkState::Continue;
                 }
 
-                if let Ok(metadata) = path.metadata() {
-                    let max_size = 10 * 1024 * 1024;
-                    if metadata.len() > max_size {
-                        return ignore::WalkState::Continue;
-                    }
+                if !file_type.map(|kind| kind.is_file()).unwrap_or(false) {
+                    return ignore::WalkState::Continue;
                 }
 
-                let filename_matches = if case_sensitive {
-                    if use_regex || whole_word {
-                        regex::Regex::new(&filename_pattern)
-                            .map(|re| re.is_match(&file_name))
-                            .unwrap_or(false)
-                    } else {
-                        file_name.contains(&pattern)
-                    }
-                } else {
-                    if use_regex || whole_word {
-                        regex::RegexBuilder::new(&filename_pattern)
-                            .case_insensitive(true)
-                            .build()
-                            .map(|re| re.is_match(&file_name))
-                            .unwrap_or(false)
-                    } else {
-                        file_name.to_lowercase().contains(&pattern.to_lowercase())
-                    }
-                };
+                if Self::should_skip_file_static(&file_name)
+                    || Self::is_binary_file_static(&file_name)
+                {
+                    return ignore::WalkState::Continue;
+                }
 
-                if filename_matches {
-                    let mut results_guard = lock_search_results(&results);
-                    if results_guard.len() < max_results {
-                        results_guard.push(FileSearchResult {
+                if matcher.is_match(&file_name)
+                    && !Self::push_search_result(
+                        &results,
+                        &should_stop,
+                        &limit_reached,
+                        max_results,
+                        FileSearchResult {
                             path: path.to_string_lossy().to_string(),
-                            name: file_name.clone(),
+                            name: file_name,
                             is_directory: false,
                             match_type: SearchMatchType::FileName,
                             line_number: None,
                             matched_content: None,
-                        });
-                    }
-
-                    if results_guard.len() >= max_results {
-                        should_stop.store(true, Ordering::Relaxed);
-                        return ignore::WalkState::Quit;
-                    }
-                }
-
-                if search_content {
-                    let results_len = lock_search_results(&results).len();
-                    if results_len < max_results {
-                        if let Err(e) = Self::search_file_content_static(
-                            path,
-                            &file_name,
-                            &pattern,
-                            case_sensitive,
-                            use_regex,
-                            whole_word,
-                            Arc::clone(&results),
-                            max_results,
-                            Arc::clone(&should_stop),
-                        ) {
-                            warn!("Failed to search file content {}: {}", path.display(), e);
-                        }
-
-                        let results_len = lock_search_results(&results).len();
-                        if results_len >= max_results {
-                            should_stop.store(true, Ordering::Relaxed);
-                            return ignore::WalkState::Quit;
-                        }
-                    }
+                        },
+                    )
+                {
+                    return ignore::WalkState::Quit;
                 }
 
                 ignore::WalkState::Continue
@@ -1034,26 +1051,149 @@ impl FileTreeService {
         });
 
         let final_results = lock_search_results(&results).clone();
-
-        Ok(final_results)
+        Ok(FileSearchOutcome {
+            results: final_results,
+            truncated: limit_reached.load(Ordering::Relaxed),
+        })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn search_file_content_static(
-        path: &Path,
-        file_name: &str,
+    pub async fn search_file_contents(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileContentSearchOptions,
+    ) -> BitFunResult<FileSearchOutcome> {
+        let root_path_buf = PathBuf::from(root_path);
+
+        if !root_path_buf.exists() {
+            return Err(BitFunError::service("Directory does not exist".to_string()));
+        }
+
+        let matcher = Arc::new(Self::compile_search_regex(
+            pattern,
+            options.case_sensitive,
+            options.use_regex,
+            options.whole_word,
+        )?);
+        let results = Arc::new(Mutex::new(Vec::new()));
+        let should_stop = Arc::new(AtomicBool::new(false));
+        let limit_reached = Arc::new(AtomicBool::new(false));
+        let cancel_flag = options.cancel_flag.clone();
+        let max_results = options.max_results.max(1);
+        let max_file_size_bytes = options.max_file_size_bytes;
+
+        let walker = Self::build_search_walker(&root_path_buf);
+
+        walker.run(|| {
+            let matcher = Arc::clone(&matcher);
+            let results = Arc::clone(&results);
+            let should_stop = Arc::clone(&should_stop);
+            let limit_reached = Arc::clone(&limit_reached);
+            let root_path_buf = root_path_buf.clone();
+            let cancel_flag = cancel_flag.clone();
+
+            Box::new(move |entry| {
+                if should_stop.load(Ordering::Relaxed)
+                    || cancellation_requested(cancel_flag.as_ref())
+                {
+                    should_stop.store(true, Ordering::Relaxed);
+                    return ignore::WalkState::Quit;
+                }
+
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                let path = entry.path();
+                if path == root_path_buf {
+                    return ignore::WalkState::Continue;
+                }
+
+                let file_name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let file_type = entry.file_type();
+
+                if file_type.map(|kind| kind.is_dir()).unwrap_or(false) {
+                    return if Self::should_skip_directory_static(&file_name) {
+                        ignore::WalkState::Skip
+                    } else {
+                        ignore::WalkState::Continue
+                    };
+                }
+
+                if !file_type.map(|kind| kind.is_file()).unwrap_or(false) {
+                    return ignore::WalkState::Continue;
+                }
+
+                if Self::should_skip_file_static(&file_name)
+                    || Self::is_binary_file_static(&file_name)
+                {
+                    return ignore::WalkState::Continue;
+                }
+
+                if let Ok(metadata) = path.metadata() {
+                    if metadata.len() > max_file_size_bytes {
+                        return ignore::WalkState::Continue;
+                    }
+                }
+
+                if let Err(error) = Self::search_file_content_lines(
+                    path,
+                    &file_name,
+                    matcher.as_ref(),
+                    &results,
+                    max_results,
+                    &should_stop,
+                    &limit_reached,
+                    cancel_flag.as_ref(),
+                ) {
+                    warn!(
+                        "Failed to search file content {}: {}",
+                        path.display(),
+                        error
+                    );
+                }
+
+                if should_stop.load(Ordering::Relaxed) {
+                    ignore::WalkState::Quit
+                } else {
+                    ignore::WalkState::Continue
+                }
+            })
+        });
+
+        let final_results = lock_search_results(&results).clone();
+        Ok(FileSearchOutcome {
+            results: final_results,
+            truncated: limit_reached.load(Ordering::Relaxed),
+        })
+    }
+
+    fn build_search_walker(root_path: &Path) -> ignore::WalkParallel {
+        WalkBuilder::new(root_path)
+            .hidden(false)
+            .ignore(true)
+            .git_ignore(true)
+            .git_global(true)
+            .git_exclude(true)
+            .threads(
+                std::thread::available_parallelism()
+                    .map(|count| count.get())
+                    .unwrap_or(1)
+                    .min(8),
+            )
+            .build_parallel()
+    }
+
+    fn compile_search_regex(
         pattern: &str,
         case_sensitive: bool,
         use_regex: bool,
         whole_word: bool,
-        results: Arc<Mutex<Vec<FileSearchResult>>>,
-        max_results: usize,
-        should_stop: Arc<AtomicBool>,
-    ) -> BitFunResult<()> {
-        if should_stop.load(Ordering::Relaxed) {
-            return Ok(());
-        }
-
+    ) -> BitFunResult<Regex> {
         let search_pattern = if use_regex {
             pattern.to_string()
         } else if whole_word {
@@ -1062,45 +1202,115 @@ impl FileTreeService {
             regex::escape(pattern)
         };
 
-        let matcher = RegexMatcherBuilder::new()
+        RegexBuilder::new(&search_pattern)
             .case_insensitive(!case_sensitive)
-            .build(&search_pattern)
-            .map_err(|e| BitFunError::service(format!("Invalid regex pattern: {}", e)))?;
+            .build()
+            .map_err(|error| BitFunError::service(format!("Invalid regex pattern: {}", error)))
+    }
 
-        let mut searcher = SearcherBuilder::new().line_number(true).build();
+    fn push_search_result(
+        results: &Arc<Mutex<Vec<FileSearchResult>>>,
+        should_stop: &Arc<AtomicBool>,
+        limit_reached: &Arc<AtomicBool>,
+        max_results: usize,
+        result: FileSearchResult,
+    ) -> bool {
+        let mut results_guard = lock_search_results(results);
+        if results_guard.len() >= max_results {
+            should_stop.store(true, Ordering::Relaxed);
+            limit_reached.store(true, Ordering::Relaxed);
+            return false;
+        }
 
-        let mut sink = FileContentSinkThreadSafe {
-            path: path.to_path_buf(),
-            file_name: file_name.to_string(),
-            results,
-            max_results,
-            should_stop,
-        };
+        results_guard.push(result);
+        if results_guard.len() >= max_results {
+            should_stop.store(true, Ordering::Relaxed);
+            limit_reached.store(true, Ordering::Relaxed);
+            return false;
+        }
 
-        searcher
-            .search_path(&matcher, path, &mut sink)
-            .map_err(|e| BitFunError::service(format!("Search error: {}", e)))?;
+        true
+    }
+
+    fn search_file_content_lines(
+        path: &Path,
+        file_name: &str,
+        matcher: &Regex,
+        results: &Arc<Mutex<Vec<FileSearchResult>>>,
+        max_results: usize,
+        should_stop: &Arc<AtomicBool>,
+        limit_reached: &Arc<AtomicBool>,
+        cancel_flag: Option<&Arc<AtomicBool>>,
+    ) -> BitFunResult<()> {
+        if should_stop.load(Ordering::Relaxed) || cancellation_requested(cancel_flag) {
+            should_stop.store(true, Ordering::Relaxed);
+            return Ok(());
+        }
+
+        let file = File::open(path)
+            .map_err(|error| BitFunError::service(format!("Failed to open file: {}", error)))?;
+        let reader = BufReader::new(file);
+
+        for (index, line_result) in reader.split(b'\n').enumerate() {
+            if should_stop.load(Ordering::Relaxed) || cancellation_requested(cancel_flag) {
+                should_stop.store(true, Ordering::Relaxed);
+                return Ok(());
+            }
+
+            let line_bytes = line_result
+                .map_err(|error| BitFunError::service(format!("Failed to read file: {}", error)))?;
+            let line = String::from_utf8_lossy(&line_bytes)
+                .trim_end_matches('\r')
+                .to_string();
+
+            if !matcher.is_match(&line) {
+                continue;
+            }
+
+            if !Self::push_search_result(
+                results,
+                should_stop,
+                limit_reached,
+                max_results,
+                FileSearchResult {
+                    path: path.to_string_lossy().to_string(),
+                    name: file_name.to_string(),
+                    is_directory: false,
+                    match_type: SearchMatchType::Content,
+                    line_number: Some(index + 1),
+                    matched_content: Some(line),
+                },
+            ) {
+                return Ok(());
+            }
+        }
 
         Ok(())
     }
 
-    fn should_skip_file_static(file_name: &str) -> bool {
-        let skip_patterns = [
-            "node_modules",
-            ".git",
-            ".svn",
-            ".hg",
-            "target",
-            "build",
-            "dist",
-            "out",
-            ".DS_Store",
-            "Thumbs.db",
-        ];
+    fn should_skip_directory_static(file_name: &str) -> bool {
+        matches!(
+            file_name,
+            "node_modules"
+                | ".git"
+                | ".svn"
+                | ".hg"
+                | "target"
+                | "build"
+                | "dist"
+                | "out"
+                | ".next"
+                | ".nuxt"
+                | ".cache"
+                | "__pycache__"
+                | "coverage"
+                | ".idea"
+                | ".vscode"
+        )
+    }
 
-        skip_patterns
-            .iter()
-            .any(|pattern| file_name.contains(pattern))
+    fn should_skip_file_static(file_name: &str) -> bool {
+        matches!(file_name, ".DS_Store" | "Thumbs.db")
     }
 
     fn is_binary_file_static(file_name: &str) -> bool {
@@ -1116,50 +1326,6 @@ impl FileTreeService {
         binary_extensions
             .iter()
             .any(|ext| lower_name.ends_with(ext))
-    }
-}
-
-struct FileContentSinkThreadSafe {
-    path: PathBuf,
-    file_name: String,
-    results: Arc<Mutex<Vec<FileSearchResult>>>,
-    max_results: usize,
-    should_stop: Arc<AtomicBool>,
-}
-
-impl Sink for FileContentSinkThreadSafe {
-    type Error = std::io::Error;
-
-    fn matched(&mut self, _searcher: &Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
-        if self.should_stop.load(Ordering::Relaxed) {
-            return Ok(false);
-        }
-
-        let mut results = lock_search_results(&self.results);
-
-        if results.len() >= self.max_results {
-            self.should_stop.store(true, Ordering::Relaxed);
-            return Ok(false);
-        }
-
-        let line_number = mat.line_number().unwrap_or(0) as usize;
-        let matched_line = String::from_utf8_lossy(mat.bytes()).trim_end().to_string();
-
-        results.push(FileSearchResult {
-            path: self.path.to_string_lossy().to_string(),
-            name: self.file_name.clone(),
-            is_directory: false,
-            match_type: SearchMatchType::Content,
-            line_number: Some(line_number),
-            matched_content: Some(matched_line),
-        });
-
-        let should_continue = results.len() < self.max_results;
-        if !should_continue {
-            self.should_stop.store(true, Ordering::Relaxed);
-        }
-
-        Ok(should_continue)
     }
 }
 

@@ -69,18 +69,27 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const {
     query: searchQuery,
     setQuery: setSearchQuery,
+    searchMode,
+    setSearchMode,
     allResults: searchResults,
-    searchPhase,
     isSearching,
     error: searchError,
+    filenameLimit,
+    contentLimit,
+    filenameTruncated,
+    contentTruncated,
     searchOptions,
     setSearchOptions,
     clearSearch,
   } = useExplorerSearch({
     workspacePath,
-    enableContentSearch: true,
-    contentSearchDebounce: 150,
-    minSearchLength: 1,
+    initialMode: 'filenames',
+    filenameSearchDebounce: 200,
+    contentSearchDebounce: 300,
+    minFilenameLength: 1,
+    minContentLength: 2,
+    filenameMaxResults: 512,
+    contentMaxResults: 1000,
   });
 
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -97,6 +106,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   });
 
   const notification = useNotification();
+  const searchLimitNotice =
+    searchMode === 'content'
+      ? contentTruncated
+        ? t('search.limitReachedContent', { count: contentLimit })
+        : null
+      : filenameTruncated
+        ? t('search.limitReachedFiles', { count: filenameLimit })
+        : null;
 
   const {
     fileTree,
@@ -681,6 +698,20 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               loading={isSearching}
               suffixContent={
                 <div className="bitfun-files-panel__search-options">
+                  <div className="bitfun-files-panel__search-modes">
+                    <button
+                      className={`bitfun-files-panel__search-mode ${searchMode === 'filenames' ? 'active' : ''}`}
+                      onClick={() => setSearchMode('filenames')}
+                    >
+                      {t('search.modeFiles')}
+                    </button>
+                    <button
+                      className={`bitfun-files-panel__search-mode ${searchMode === 'content' ? 'active' : ''}`}
+                      onClick={() => setSearchMode('content')}
+                    >
+                      {t('search.modeContent')}
+                    </button>
+                  </div>
                   <Tooltip content={t('options.caseSensitive')}>
                     <button
                       className={`bitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
@@ -736,8 +767,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 <div className="bitfun-files-panel__search-status">
                   <Loader2 size={14} className="bitfun-files-panel__search-spinner" />
                   <span>
-                    {!searchPhase.filenameComplete ? t('status.searchingFilename') : t('status.searchingContent')}
+                    {searchMode === 'content'
+                      ? t('status.searchingContent')
+                      : t('status.searchingFilename')}
                   </span>
+                </div>
+              )}
+
+              {searchLimitNotice && (
+                <div className="bitfun-files-panel__search-limit-notice">
+                  <span>{searchLimitNotice}</span>
                 </div>
               )}
               

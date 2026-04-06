@@ -1,9 +1,13 @@
 {
   "title": "File Explorer",
   "search": {
-    "placeholder": "Search file names and content...",
+    "placeholder": "Search workspace...",
     "noResults": "No matching results found",
-    "enterKeyword": "Enter a keyword to start searching"
+    "enterKeyword": "Enter a keyword to start searching",
+    "modeFiles": "Files",
+    "modeContent": "Text",
+    "limitReachedFiles": "Showing the first {{count}} file matches. Refine the query to narrow the result set.",
+    "limitReachedContent": "Showing the first {{count}} content matches. Refine the query to narrow the result set."
   },
   "options": {
     "caseSensitive": "Case Sensitive (Aa)",

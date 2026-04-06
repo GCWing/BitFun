@@ -116,15 +116,23 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
     setQuery,
     allResults,
     searchPhase,
+    filenameLimit,
+    contentLimit,
+    filenameTruncated,
+    contentTruncated,
     isSearching,
     searchOptions,
     setSearchOptions,
     clearSearch,
   } = useExplorerSearch({
     workspacePath,
-    enableContentSearch: true,
-    contentSearchDebounce: 150, // 150ms debounce for content search
-    minSearchLength: 1,
+    initialMode: 'both',
+    filenameSearchDebounce: 200,
+    contentSearchDebounce: 300,
+    minFilenameLength: 1,
+    minContentLength: 2,
+    filenameMaxResults: 512,
+    contentMaxResults: 1000,
   });
 
   // Reset display count when results change
@@ -226,6 +234,16 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
 
   const hasMoreResults = allResults.length > displayCount;
   const remainingCount = allResults.length - displayCount;
+  const truncationMessages = useMemo(() => {
+    const messages: string[] = [];
+    if (filenameTruncated) {
+      messages.push(t('search.global.resultsTruncatedFiles', { count: filenameLimit }));
+    }
+    if (contentTruncated) {
+      messages.push(t('search.global.resultsTruncatedContent', { count: contentLimit }));
+    }
+    return messages;
+  }, [contentLimit, contentTruncated, filenameLimit, filenameTruncated, t]);
 
   // Load more results
   const handleLoadMore = useCallback(() => {
@@ -253,20 +271,27 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
       }
     >
       <div className="bitfun-global-search__results-header">
-        <span className="bitfun-global-search__results-count">
-          {allResults.length > 0 ? (
-            <>
-              {t('search.global.resultsFound', { count: allResults.length })}
-              {hasMoreResults && (
-                <span className="bitfun-global-search__results-showing">
-                  {t('search.global.resultsShowing', { count: displayCount })}
-                </span>
-              )}
-            </>
-          ) : (
-            isSearching ? '' : t('search.noResults')
-          )}
-        </span>
+        <div className="bitfun-global-search__results-summary">
+          <span className="bitfun-global-search__results-count">
+            {allResults.length > 0 ? (
+              <>
+                {t('search.global.resultsFound', { count: allResults.length })}
+                {hasMoreResults && (
+                  <span className="bitfun-global-search__results-showing">
+                    {t('search.global.resultsShowing', { count: displayCount })}
+                  </span>
+                )}
+              </>
+            ) : (
+              isSearching ? '' : t('search.noResults')
+            )}
+          </span>
+          {truncationMessages.map((message) => (
+            <span key={message} className="bitfun-global-search__results-limit">
+              {message}
+            </span>
+          ))}
+        </div>
         <SearchPhaseIndicator
           filenameComplete={searchPhase.filenameComplete}
           contentComplete={searchPhase.contentComplete}

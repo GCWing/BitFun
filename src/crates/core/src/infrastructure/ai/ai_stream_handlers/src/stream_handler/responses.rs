@@ -528,8 +528,8 @@ pub async fn handle_responses_stream(
 #[cfg(test)]
 mod tests {
     use super::{
-        super::stream_stats::StreamStats,
-        extract_api_error_message, handle_function_call_output_item_done, InProgressToolCall,
+        super::stream_stats::StreamStats, extract_api_error_message,
+        handle_function_call_output_item_done, InProgressToolCall,
     };
     use serde_json::json;
     use std::collections::HashMap;

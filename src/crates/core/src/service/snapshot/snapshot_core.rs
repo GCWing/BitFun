@@ -452,7 +452,8 @@ impl SnapshotCore {
         let first_op_for_file = session
             .all_operations_iter()
             .find(|op| op.file_path == file_path);
-        let file_created_in_session = matches!(first_op_for_file, Some(op) if op.before_snapshot_id.is_none());
+        let file_created_in_session =
+            matches!(first_op_for_file, Some(op) if op.before_snapshot_id.is_none());
 
         let load_first_before = || async {
             let first_before = session
@@ -856,8 +857,7 @@ impl SnapshotCore {
             return Ok(());
         };
         let path = self.session_file_path(session_id);
-        let data =
-            serde_json::to_string_pretty(session).map_err(SnapshotError::Serialization)?;
+        let data = serde_json::to_string_pretty(session).map_err(SnapshotError::Serialization)?;
         tokio::fs::write(path, data)
             .await
             .map_err(SnapshotError::Io)?;

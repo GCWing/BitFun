@@ -117,9 +117,9 @@ impl AIAnalysisService {
         let json_str = crate::util::extract_json_from_ai_response(response)
             .ok_or_else(|| AgentError::analysis_error("Cannot extract JSON from response"))?;
 
-        let value: Value = serde_json::from_str(&json_str)
-            .map_err(|e| AgentError::analysis_error(format!("Failed to parse AI response: {}", e)))?;
-
+        let value: Value = serde_json::from_str(&json_str).map_err(|e| {
+            AgentError::analysis_error(format!("Failed to parse AI response: {}", e))
+        })?;
 
         Ok(AICommitAnalysis {
             commit_type: self.parse_commit_type(value["type"].as_str().unwrap_or("chore"))?,
@@ -137,7 +137,6 @@ impl AIAnalysisService {
             confidence: value["confidence"].as_f64().unwrap_or(0.8) as f32,
         })
     }
-
 
     fn truncate_diff_if_needed(&self, diff: &str, max_chars: usize) -> String {
         if diff.len() <= max_chars {

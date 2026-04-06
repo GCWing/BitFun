@@ -31,14 +31,8 @@ const MAX_QUEUE_DEPTH: usize = 20;
 /// or was placed in the per-session queue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DialogSubmitOutcome {
-    Started {
-        session_id: String,
-        turn_id: String,
-    },
-    Queued {
-        session_id: String,
-        turn_id: String,
-    },
+    Started { session_id: String, turn_id: String },
+    Queued { session_id: String, turn_id: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -406,7 +400,11 @@ impl DialogScheduler {
         }
     }
 
-    async fn start_turn(&self, session_id: &str, queued_turn: &QueuedTurn) -> Result<String, String> {
+    async fn start_turn(
+        &self,
+        session_id: &str,
+        queued_turn: &QueuedTurn,
+    ) -> Result<String, String> {
         let res = match queued_turn
             .image_contexts
             .as_ref()

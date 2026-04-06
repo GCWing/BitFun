@@ -232,8 +232,7 @@ impl ConfigManager {
         from_version: &str,
         mut config: Value,
     ) -> BitFunResult<Value> {
-        let migrations: Vec<ConfigMigration> =
-            vec![("0.0.0", "1.0.0", migrate_0_0_0_to_1_0_0)];
+        let migrations: Vec<ConfigMigration> = vec![("0.0.0", "1.0.0", migrate_0_0_0_to_1_0_0)];
 
         let mut current_version = from_version.to_string();
 

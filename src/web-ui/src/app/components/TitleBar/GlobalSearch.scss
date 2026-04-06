@@ -193,11 +193,22 @@
     font-weight: 400;
   }
 
+  &__results-summary {
+    @include mix.flex-layout(column, flex-start, center, 2px);
+    min-width: 0;
+  }
+
   &__results-showing {
     color: var(--color-text-disabled);
     font-weight: 400;
     opacity: 0.8;
     margin-left: 4px;
+  }
+
+  &__results-limit {
+    font-size: 10px;
+    color: var(--color-accent-500);
+    line-height: 1.3;
   }
 
   // ============ Search phase indicator ============

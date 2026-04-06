@@ -64,8 +64,7 @@ pub struct DiffHunk {
 }
 
 /// Diff result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DiffResult {
     /// Hunk list
     pub hunks: Vec<DiffHunk>,
@@ -76,7 +75,6 @@ pub struct DiffResult {
     /// Total change count
     pub changes: usize,
 }
-
 
 /// Diff computation options
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

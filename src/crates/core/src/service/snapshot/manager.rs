@@ -417,7 +417,9 @@ impl Tool for WrappedTool {
     }
 
     fn render_tool_use_rejected_message(&self) -> String {
-        self.original_tool.render_tool_use_rejected_message().to_string()
+        self.original_tool
+            .render_tool_use_rejected_message()
+            .to_string()
     }
 
     fn render_tool_result_message(&self, output: &Value) -> String {

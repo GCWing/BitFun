@@ -32,9 +32,9 @@ impl EventSubscriber for CronEventSubscriber {
                     .handle_turn_completed(turn_id, *duration_ms)
                     .await
             }
-            AgenticEvent::DialogTurnFailed {
-                turn_id, error, ..
-            } => self.cron_service.handle_turn_failed(turn_id, error).await,
+            AgenticEvent::DialogTurnFailed { turn_id, error, .. } => {
+                self.cron_service.handle_turn_failed(turn_id, error).await
+            }
             AgenticEvent::DialogTurnCancelled { turn_id, .. } => {
                 self.cron_service.handle_turn_cancelled(turn_id).await
             }
