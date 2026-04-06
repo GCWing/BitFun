@@ -26,7 +26,17 @@ class FileSystemService implements IFileSystemService {
   }
 
   async searchFiles(_rootPath: string, _query: string): Promise<FileSystemNode[]> {
-    return [];
+    try {
+      const results = await workspaceAPI.searchFilenamesOnly(_rootPath, _query);
+      return results.map((result) => ({
+        path: result.path,
+        name: result.name,
+        isDirectory: result.isDirectory,
+      }));
+    } catch (error) {
+      log.error('Failed to search files', { rootPath: _rootPath, query: _query, error });
+      throw new Error(`Failed to search files: ${error}`);
+    }
   }
 
   async getDirectoryChildren(dirPath: string): Promise<FileSystemNode[]> {

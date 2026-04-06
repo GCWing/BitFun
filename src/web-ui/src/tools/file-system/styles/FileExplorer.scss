@@ -434,6 +434,31 @@ $_indent-width: 8px;
   position: relative;
 }
 
+.bitfun-file-explorer__load-more {
+  @include mixins.flex-layout(row, center, start, $size-gap-2);
+  width: calc(100% - #{$size-gap-2});
+  margin: 0 $size-gap-1;
+  min-height: $_node-height;
+  padding: $_node-padding-y $_node-padding-x;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: all $motion-base $easing-standard;
+
+  &:hover:not(:disabled) {
+    background: var(--element-bg-base);
+    color: var(--color-text-primary);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.8;
+  }
+}
+
 .bitfun-file-explorer__empty-message {
   @include mixins.flex-layout(row, center, center, 0);
   padding: $size-gap-8;

@@ -13,12 +13,15 @@ function nodeToFlatNode(
     parentPath,
     isDirectory: node.isDirectory,
     depth,
+    rowType: 'node',
     childrenLoaded,
     isLoading: false,
     size: node.size,
     extension: node.extension,
     lastModified: node.lastModified,
     isCompressed: node.isCompressed,
+    totalChildren: node.totalChildren,
+    loadedChildrenCount: node.loadedChildrenCount,
     originalNode: node,
   };
 }
@@ -26,6 +29,7 @@ function nodeToFlatNode(
 export function flattenFileTree(
   nodes: FileSystemNode[],
   expandedFolders: Set<string>,
+  loadingPaths: Set<string> = new Set(),
   parentPath: string | null = null,
   depth: number = 0
 ): FlatFileNode[] {
@@ -36,16 +40,37 @@ export function flattenFileTree(
     const hasChildren = node.children && node.children.length > 0;
     const childrenLoaded = node.isDirectory ? (node.children !== undefined) : true;
 
-    result.push(nodeToFlatNode(node, parentPath, depth, childrenLoaded));
+    result.push({
+      ...nodeToFlatNode(node, parentPath, depth, childrenLoaded),
+      isLoading: loadingPaths.has(node.path),
+    });
 
     if (node.isDirectory && isExpanded && hasChildren) {
       const childNodes = flattenFileTree(
         node.children!,
         expandedFolders,
+        loadingPaths,
         node.path,
         depth + 1
       );
       result.push(...childNodes);
+    }
+
+    if (node.isDirectory && isExpanded && node.hasMoreChildren) {
+      result.push({
+        path: `${node.path}::load-more`,
+        name: 'Load more',
+        parentPath: node.path,
+        isDirectory: false,
+        depth: depth + 1,
+        rowType: 'loadMore',
+        childrenLoaded: true,
+        isLoading: loadingPaths.has(node.path),
+        loadMoreForPath: node.path,
+        totalChildren: node.totalChildren,
+        loadedChildrenCount: node.loadedChildrenCount ?? node.children?.length ?? 0,
+        originalNode: node,
+      });
     }
   }
 

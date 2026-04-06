@@ -6,6 +6,9 @@ export interface FileSystemNode {
   children?: FileSystemNode[];
   extension?: string;
   lastModified?: Date;
+  hasMoreChildren?: boolean;
+  totalChildren?: number;
+  loadedChildrenCount?: number;
   
   isCompressed?: boolean;
   compressedPath?: string;
@@ -29,7 +32,9 @@ export interface FileExplorerProps {
   showLastModified?: boolean;
   
   expandedFolders?: Set<string>;
+  loadingPaths?: Set<string>;
   onNodeExpand?: (path: string, expanded: boolean) => void;
+  onLoadMore?: (path: string) => void;
   
   onFileDoubleClick?: (filePath: string) => void;
   onContextMenu?: (filePath: string, event: React.MouseEvent) => void;
@@ -63,8 +68,10 @@ export interface FileTreeProps {
   nodes: FileSystemNode[];
   selectedFile?: string;
   expandedFolders?: Set<string>;
+  loadingPaths?: Set<string>;
   onNodeSelect?: (node: FileSystemNode) => void;
   onNodeExpand?: (path: string, expanded: boolean) => void;
+  onLoadMore?: (path: string) => void;
   className?: string;
   level?: number;
   
@@ -84,8 +91,10 @@ export interface FileTreeNodeProps {
   level: number;
   isSelected?: boolean;
   isExpanded?: boolean;
+  loadingPaths?: Set<string>;
   onSelect?: (node: FileSystemNode) => void;
   onToggleExpand?: (path: string) => void;
+  onLoadMore?: (path: string) => void;
   className?: string;
   
   workspacePath?: string;
@@ -181,12 +190,16 @@ export interface FlatFileNode {
   parentPath: string | null;
   isDirectory: boolean;
   depth: number;
+  rowType?: 'node' | 'loadMore';
   childrenLoaded: boolean;
   isLoading?: boolean;
   size?: number;
   extension?: string;
   lastModified?: Date;
   isCompressed?: boolean;
+  loadMoreForPath?: string;
+  totalChildren?: number;
+  loadedChildrenCount?: number;
   originalNode?: FileSystemNode;
 }
 
@@ -197,12 +210,15 @@ export interface VirtualFileTreeProps {
   expandedFolders: Set<string>;
   onNodeSelect?: (node: FlatFileNode) => void;
   onToggleExpand?: (path: string) => void;
+  onLoadMore?: (path: string) => void;
   height?: number | string;
   className?: string;
   workspacePath?: string;
   renamingPath?: string | null;
   onRename?: (oldPath: string, newName: string) => void;
   onCancelRename?: () => void;
+  renderNodeContent?: (node: FileSystemNode, level: number) => React.ReactNode;
+  renderNodeActions?: (node: FileSystemNode) => React.ReactNode;
 }
 
 

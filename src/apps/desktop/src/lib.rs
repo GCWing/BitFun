@@ -147,7 +147,7 @@ pub async fn run() {
                 .level_for("portable_pty", log::LevelFilter::Info)
                 .level_for("russh", log::LevelFilter::Info)
                 .targets(log_targets)
-                .rotation_strategy(RotationStrategy::KeepSome(3))
+                .rotation_strategy(RotationStrategy::KeepSome(2)) // 1 active + 2 backups
                 .max_file_size(10 * 1024 * 1024)
                 .timezone_strategy(TimezoneStrategy::UseLocal)
                 .clear_format()
@@ -370,8 +370,11 @@ pub async fn run() {
             export_local_file_to_path,
             reveal_in_explorer,
             get_file_tree,
+            explorer_get_file_tree,
             get_directory_children,
+            explorer_get_children,
             get_directory_children_paginated,
+            explorer_get_children_paginated,
             search_files,
             delete_file,
             delete_directory,

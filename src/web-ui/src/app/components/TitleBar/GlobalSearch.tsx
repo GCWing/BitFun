@@ -16,8 +16,8 @@ import { createPortal } from 'react-dom';
 import { CaseSensitive, Regex, WholeWord, Loader2, MoreHorizontal } from 'lucide-react';
 import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
+import { useExplorerSearch } from '@/tools/file-explorer';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
-import { useFileSearch } from '@/hooks';
 import type { FileSearchResult } from '../../../infrastructure/api/service-api/tauri-commands';
 import './GlobalSearch.scss';
 // Initial result count and load-more batch size
@@ -120,7 +120,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
     searchOptions,
     setSearchOptions,
     clearSearch,
-  } = useFileSearch({
+  } = useExplorerSearch({
     workspacePath,
     enableContentSearch: true,
     contentSearchDebounce: 150, // 150ms debounce for content search

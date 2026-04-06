@@ -330,7 +330,6 @@ export const TOOL_CARD_COMPONENTS = {
   
   // Web tools
   'WebSearch': WebSearchCard,
-  'WebFetch': WebSearchCard,
   
   // Advanced tools
   'Task': TaskToolDisplay,

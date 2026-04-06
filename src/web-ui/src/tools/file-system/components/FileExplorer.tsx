@@ -8,6 +8,7 @@ import { getNewItemParentPath } from '../utils/getNewItemParentPath';
 import { i18nService, useI18n } from '@/infrastructure/i18n';
 import { expandedFoldersContains } from '@/shared/utils/pathUtils';
 import { IconButton } from '@/component-library';
+import { filterTreeByPredicate, filterTreeBySearch } from '@/tools/file-explorer';
 
 const VIRTUAL_SCROLL_THRESHOLD = 100;
 
@@ -128,7 +129,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onRename,
   onCancelRename,
   expandedFolders: externalExpandedFolders,
+  loadingPaths = new Set(),
   onNodeExpand: externalOnNodeExpand,
+  onLoadMore,
   workspacePath,
   onNewFile,
   onNewFolder,
@@ -140,13 +143,11 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   
   const expandedFolders = externalExpandedFolders || internalExpandedFolders;
 
-  const handleNodeSelect = useCallback((node: FileSystemNode) => {
-    if (onFileSelect) {
-      onFileSelect(node.path, node.name);
-    }
+  const emitFileSelect = useCallback((path: string, name: string) => {
+    onFileSelect?.(path, name);
   }, [onFileSelect]);
 
-  const handleNodeExpand = useCallback((path: string, expanded: boolean) => {
+  const setExpandedState = useCallback((path: string, expanded: boolean) => {
     if (externalOnNodeExpand) {
       externalOnNodeExpand(path, expanded);
     } else {
@@ -178,33 +179,15 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   }, [fileTree, searchQuery, fileFilter]);
 
   const flatNodes = useMemo(() => {
-    return flattenFileTree(filteredFileTree, expandedFolders);
-  }, [filteredFileTree, expandedFolders]);
+    return flattenFileTree(filteredFileTree, expandedFolders, loadingPaths);
+  }, [filteredFileTree, expandedFolders, loadingPaths]);
 
   const useVirtualScroll = flatNodes.length > VIRTUAL_SCROLL_THRESHOLD;
-
-  const handleVirtualNodeSelect = useCallback((node: FlatFileNode) => {
-    if (onFileSelect) {
-      onFileSelect(node.path, node.name);
-    }
-  }, [onFileSelect]);
-
-  const handleVirtualToggleExpand = useCallback((path: string) => {
+  
+  const toggleExpandedState = useCallback((path: string) => {
     const isCurrentlyExpanded = expandedFoldersContains(expandedFolders, path);
-    if (externalOnNodeExpand) {
-      externalOnNodeExpand(path, !isCurrentlyExpanded);
-    } else {
-      setInternalExpandedFolders(prev => {
-        const newSet = new Set(prev);
-        if (isCurrentlyExpanded) {
-          newSet.delete(path);
-        } else {
-          newSet.add(path);
-        }
-        return newSet;
-      });
-    }
-  }, [expandedFolders, externalOnNodeExpand]);
+    setExpandedState(path, !isCurrentlyExpanded);
+  }, [expandedFolders, setExpandedState]);
 
   const renderNodeContent = useCallback((node: FileSystemNode, _level: number) => {
     return (
@@ -411,21 +394,25 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           flatNodes={flatNodes}
           selectedFile={selectedFile}
           expandedFolders={expandedFolders}
-          onNodeSelect={handleVirtualNodeSelect}
-          onToggleExpand={handleVirtualToggleExpand}
+          onNodeSelect={(node: FlatFileNode) => emitFileSelect(node.path, node.name)}
+          onToggleExpand={toggleExpandedState}
+          onLoadMore={onLoadMore}
           className="bitfun-file-explorer__tree"
           workspacePath={workspacePath}
           renamingPath={renamingPath}
           onRename={onRename}
           onCancelRename={onCancelRename}
+          renderNodeContent={renderNodeContent}
         />
       ) : (
         <FileTree
           nodes={filteredFileTree}
           selectedFile={selectedFile}
           expandedFolders={expandedFolders}
-          onNodeSelect={handleNodeSelect}
-          onNodeExpand={handleNodeExpand}
+          loadingPaths={loadingPaths}
+          onNodeSelect={(node: FileSystemNode) => emitFileSelect(node.path, node.name)}
+          onNodeExpand={setExpandedState}
+          onLoadMore={onLoadMore}
           renderNodeContent={renderNodeContent}
           className="bitfun-file-explorer__tree"
           renamingPath={renamingPath}
@@ -437,54 +424,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     </div>
   );
 };
-
-function filterTreeBySearch(nodes: FileSystemNode[], query: string): FileSystemNode[] {
-  const result: FileSystemNode[] = [];
-
-  for (const node of nodes) {
-    if (node.name.toLowerCase().includes(query)) {
-      result.push(node);
-    } else if (node.isDirectory && node.children) {
-      const filteredChildren = filterTreeBySearch(node.children, query);
-      if (filteredChildren.length > 0) {
-        result.push({
-          ...node,
-          children: filteredChildren
-        });
-      }
-    }
-  }
-
-  return result;
-}
-
-function filterTreeByPredicate(nodes: FileSystemNode[], predicate: (node: FileSystemNode) => boolean): FileSystemNode[] {
-  const result: FileSystemNode[] = [];
-
-  for (const node of nodes) {
-    if (predicate(node)) {
-      if (node.isDirectory && node.children) {
-        const filteredChildren = filterTreeByPredicate(node.children, predicate);
-        result.push({
-          ...node,
-          children: filteredChildren
-        });
-      } else {
-        result.push(node);
-      }
-    } else if (node.isDirectory && node.children) {
-      const filteredChildren = filterTreeByPredicate(node.children, predicate);
-      if (filteredChildren.length > 0) {
-        result.push({
-          ...node,
-          children: filteredChildren
-        });
-      }
-    }
-  }
-
-  return result;
-}
 
 function formatFileSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB'];

@@ -12,9 +12,9 @@ import {
   useFileSystem,
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
+import { useExplorerSearch } from '@/tools/file-explorer';
 import { Search, IconButton, Tooltip } from '@/component-library';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
-import { useFileSearch } from '@/hooks';
 import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -76,7 +76,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     searchOptions,
     setSearchOptions,
     clearSearch,
-  } = useFileSearch({
+  } = useExplorerSearch({
     workspacePath,
     enableContentSearch: true,
     contentSearchDebounce: 150,
@@ -102,12 +102,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     fileTree,
     selectedFile,
     expandedFolders,
+    loadingPaths,
     loading,
     error,
     loadFileTree,
     selectFile,
     expandFolder,
     expandFolderLazy,
+    loadMoreFolder,
   } = useFileSystem({
     rootPath: workspacePath,
     autoLoad: true,
@@ -608,27 +610,37 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     loadFileTree(workspacePath || '', false);
   }, [loadFileTree, workspacePath]);
 
-  useEffect(() => {
-    if (!onExplorerToolbarApi) return;
-    if (!hideExplorerToolbar || !workspacePath || viewMode !== 'tree') {
-      onExplorerToolbarApi(null);
-      return;
+  const explorerToolbarApi = React.useMemo<FileExplorerToolbarHandlers | null>(() => {
+    if (!workspacePath || viewMode !== 'tree') {
+      return null;
     }
-    onExplorerToolbarApi({
+
+    return {
       onNewFile: handleExplorerToolbarNewFile,
       onNewFolder: handleExplorerToolbarNewFolder,
       onRefresh: handleExplorerToolbarRefresh,
-    });
-    return () => onExplorerToolbarApi(null);
+    };
   }, [
-    onExplorerToolbarApi,
-    hideExplorerToolbar,
     workspacePath,
     viewMode,
     handleExplorerToolbarNewFile,
     handleExplorerToolbarNewFolder,
     handleExplorerToolbarRefresh,
   ]);
+
+  useEffect(() => {
+    if (!onExplorerToolbarApi) return;
+    onExplorerToolbarApi(hideExplorerToolbar ? explorerToolbarApi : null);
+  }, [
+    onExplorerToolbarApi,
+    hideExplorerToolbar,
+    explorerToolbarApi,
+  ]);
+
+  useEffect(() => {
+    if (!onExplorerToolbarApi) return;
+    return () => onExplorerToolbarApi(null);
+  }, [onExplorerToolbarApi]);
 
   return (
     <div 
@@ -788,7 +800,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               fileTree={fileTree}
               selectedFile={selectedFile}
               expandedFolders={expandedFolders}
+              loadingPaths={loadingPaths}
               onNodeExpand={handleNodeExpandLazy}
+              onLoadMore={loadMoreFolder}
               onFileSelect={handleFileSelect}
               onFileDoubleClick={handleFileDoubleClick}
               className="bitfun-files-panel__explorer"

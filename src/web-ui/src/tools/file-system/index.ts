@@ -30,3 +30,4 @@ export {
 } from './utils/pathCompression';
 
 export { fileSystemService } from './services/FileSystemService';
+export { useExplorerController, useExplorerSnapshot } from '@/tools/file-explorer';

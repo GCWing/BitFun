@@ -159,3 +159,21 @@ export interface FileSearchResult {
   lineNumber?: number;
   matchedContent?: string;
 }
+
+export interface ExplorerNodeDto {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  size?: number | null;
+  extension?: string | null;
+  lastModified?: number | null;
+  children?: ExplorerNodeDto[];
+}
+
+export interface ExplorerChildrenPageDto {
+  children: ExplorerNodeDto[];
+  total: number;
+  hasMore: boolean;
+  offset: number;
+  limit: number;
+}

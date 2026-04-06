@@ -9,8 +9,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
   nodes,
   selectedFile,
   expandedFolders: externalExpandedFolders,
+  loadingPaths,
   onNodeSelect,
   onNodeExpand,
+  onLoadMore,
   className = '',
   level = 0,
   workspacePath,
@@ -59,8 +61,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
         isExpanded={expandedFoldersContains(expandedFolders, node.path)}
         selectedFile={selectedFile}
         expandedFolders={expandedFolders}
+        loadingPaths={loadingPaths}
         onSelect={onNodeSelect}
         onToggleExpand={handleNodeExpand}
+        onLoadMore={onLoadMore}
         renamingPath={renamingPath}
         onRename={onRename}
         onCancelRename={onCancelRename}

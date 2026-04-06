@@ -2,7 +2,9 @@
 
 use crate::api::app_state::AppState;
 use crate::api::dto::WorkspaceInfoDto;
-use bitfun_core::infrastructure::{file_watcher, FileOperationOptions, SearchMatchType};
+use bitfun_core::infrastructure::{
+    file_watcher, FileOperationOptions, FileTreeNode, SearchMatchType,
+};
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
 use bitfun_core::service::workspace::{
@@ -53,9 +55,7 @@ async fn lookup_remote_entry_for_path(
         .get_remote_workspace_async()
         .await
         .map(|w| w.connection_id);
-    let preferred: Option<String> = request_preferred
-        .map(|s| s.to_string())
-        .or(legacy);
+    let preferred: Option<String> = request_preferred.map(|s| s.to_string()).or(legacy);
     manager.lookup_connection(path, preferred.as_deref()).await
 }
 
@@ -203,6 +203,10 @@ pub struct GetDirectoryChildrenPaginatedRequest {
     #[serde(default)]
     pub remote_connection_id: Option<String>,
 }
+
+pub type ExplorerGetFileTreeRequest = GetFileTreeRequest;
+pub type ExplorerGetChildrenRequest = GetDirectoryChildrenRequest;
+pub type ExplorerGetChildrenPaginatedRequest = GetDirectoryChildrenPaginatedRequest;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -364,7 +368,10 @@ async fn apply_active_workspace_context(
     if workspace_info.workspace_kind == WorkspaceKind::Remote {
         if let Some(rw) = remote_workspace_from_info(workspace_info) {
             if let Err(e) = state.set_remote_workspace(rw).await {
-                warn!("Failed to sync remote workspace registry for active workspace: {}", e);
+                warn!(
+                    "Failed to sync remote workspace registry for active workspace: {}",
+                    e
+                );
             }
         }
     } else {
@@ -500,7 +507,9 @@ pub async fn test_ai_config_connection(
                             let merged = bitfun_core::util::types::ConnectionTestResult {
                                 success: false,
                                 response_time_ms,
-                                model_response: image_result.model_response.or(result.model_response),
+                                model_response: image_result
+                                    .model_response
+                                    .or(result.model_response),
                                 message_code: image_result.message_code,
                                 error_details: image_result.error_details,
                             };
@@ -809,7 +818,8 @@ pub async fn open_remote_workspace(
     let stable_workspace_id = remote_workspace_stable_id(&ssh_host, &remote_path);
 
     let display_name = remote_path
-        .split('/').rfind(|s| !s.is_empty())
+        .split('/')
+        .rfind(|s| !s.is_empty())
         .unwrap_or(remote_path.as_str())
         .to_string();
 
@@ -857,7 +867,10 @@ pub async fn open_remote_workspace(
                 }
             }
             if let Err(e) = state.workspace_service.manual_save().await {
-                warn!("Failed to save workspace data after opening remote workspace: {}", e);
+                warn!(
+                    "Failed to save workspace data after opening remote workspace: {}",
+                    e
+                );
             }
 
             // Register the remote mapping before applying workspace context so session storage path
@@ -1361,24 +1374,66 @@ pub async fn scan_workspace_info(
     .map_err(|e| format!("Failed to scan workspace info: {}", e))
 }
 
-#[tauri::command]
-pub async fn get_file_tree(
-    state: State<'_, AppState>,
-    request: GetFileTreeRequest,
+async fn ensure_directory_request_path(path: &str) -> Result<(), String> {
+    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+    use std::path::Path;
+
+    if is_remote_path(path).await {
+        return Ok(());
+    }
+
+    let path_buf = Path::new(path);
+    if !path_buf.exists() {
+        return Err("Directory does not exist".to_string());
+    }
+    if !path_buf.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+
+    Ok(())
+}
+
+fn file_tree_node_to_json(node: FileTreeNode) -> serde_json::Value {
+    let mut json = serde_json::json!({
+        "path": node.path,
+        "name": node.name,
+        "isDirectory": node.is_directory,
+        "size": node.size,
+        "extension": node.extension,
+        "lastModified": node.last_modified
+    });
+
+    if let Some(children) = node.children {
+        json["children"] =
+            serde_json::Value::Array(children.into_iter().map(file_tree_node_to_json).collect());
+    }
+
+    json
+}
+
+fn directory_nodes_to_json(nodes: Vec<FileTreeNode>) -> Vec<serde_json::Value> {
+    nodes
+        .into_iter()
+        .map(|node| {
+            serde_json::json!({
+                "path": node.path,
+                "name": node.name,
+                "isDirectory": node.is_directory,
+                "size": node.size,
+                "extension": node.extension,
+                "lastModified": node.last_modified
+            })
+        })
+        .collect()
+}
+
+async fn get_file_tree_response(
+    state: &State<'_, AppState>,
+    request: &GetFileTreeRequest,
 ) -> Result<serde_json::Value, String> {
     use std::path::Path;
-    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 
-    let is_remote = is_remote_path(&request.path).await;
-    if !is_remote {
-        let path_buf = Path::new(&request.path);
-        if !path_buf.exists() {
-            return Err("Directory does not exist".to_string());
-        }
-        if !path_buf.is_dir() {
-            return Err("Path is not a directory".to_string());
-        }
-    }
+    ensure_directory_request_path(&request.path).await?;
 
     let preferred = request.remote_connection_id.as_deref();
     let filesystem_service = &state.filesystem_service;
@@ -1387,27 +1442,6 @@ pub async fn get_file_tree(
         .await
     {
         Ok(nodes) => {
-            fn convert_node_to_json(
-                node: bitfun_core::infrastructure::FileTreeNode,
-            ) -> serde_json::Value {
-                let mut json = serde_json::json!({
-                    "path": node.path,
-                    "name": node.name,
-                    "isDirectory": node.is_directory,
-                    "size": node.size,
-                    "extension": node.extension,
-                    "lastModified": node.last_modified
-                });
-
-                if let Some(children) = node.children {
-                    json["children"] = serde_json::Value::Array(
-                        children.into_iter().map(convert_node_to_json).collect(),
-                    );
-                }
-
-                json
-            }
-
             let root_name = Path::new(&request.path)
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -1420,7 +1454,7 @@ pub async fn get_file_tree(
                 "size": null,
                 "extension": null,
                 "lastModified": null,
-                "children": nodes.into_iter().map(convert_node_to_json).collect::<Vec<_>>()
+                "children": nodes.into_iter().map(file_tree_node_to_json).collect::<Vec<_>>()
             });
 
             Ok(serde_json::json!([root_node]))
@@ -1432,24 +1466,11 @@ pub async fn get_file_tree(
     }
 }
 
-#[tauri::command]
-pub async fn get_directory_children(
-    state: State<'_, AppState>,
-    request: GetDirectoryChildrenRequest,
+async fn get_directory_children_response(
+    state: &State<'_, AppState>,
+    request: &GetDirectoryChildrenRequest,
 ) -> Result<serde_json::Value, String> {
-    use std::path::Path;
-    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-
-    let is_remote = is_remote_path(&request.path).await;
-    if !is_remote {
-        let path_buf = Path::new(&request.path);
-        if !path_buf.exists() {
-            return Err("Directory does not exist".to_string());
-        }
-        if !path_buf.is_dir() {
-            return Err("Path is not a directory".to_string());
-        }
-    }
+    ensure_directory_request_path(&request.path).await?;
 
     let preferred = request.remote_connection_id.as_deref();
     let filesystem_service = &state.filesystem_service;
@@ -1457,23 +1478,7 @@ pub async fn get_directory_children(
         .get_directory_contents_with_remote_hint(&request.path, preferred)
         .await
     {
-        Ok(nodes) => {
-            let json_nodes: Vec<serde_json::Value> = nodes
-                .into_iter()
-                .map(|node| {
-                    serde_json::json!({
-                        "path": node.path,
-                        "name": node.name,
-                        "isDirectory": node.is_directory,
-                        "size": node.size,
-                        "extension": node.extension,
-                        "lastModified": node.last_modified
-                    })
-                })
-                .collect();
-
-            Ok(serde_json::json!(json_nodes))
-        }
+        Ok(nodes) => Ok(serde_json::json!(directory_nodes_to_json(nodes))),
         Err(e) => {
             error!("Failed to get directory children: {}", e);
             Err(format!("Failed to get directory children: {}", e))
@@ -1481,27 +1486,14 @@ pub async fn get_directory_children(
     }
 }
 
-#[tauri::command]
-pub async fn get_directory_children_paginated(
-    state: State<'_, AppState>,
-    request: GetDirectoryChildrenPaginatedRequest,
+async fn get_directory_children_paginated_response(
+    state: &State<'_, AppState>,
+    request: &GetDirectoryChildrenPaginatedRequest,
 ) -> Result<serde_json::Value, String> {
-    use std::path::Path;
-    use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-
     let offset = request.offset.unwrap_or(0);
     let limit = request.limit.unwrap_or(100);
 
-    let is_remote = is_remote_path(&request.path).await;
-    if !is_remote {
-        let path_buf = Path::new(&request.path);
-        if !path_buf.exists() {
-            return Err("Directory does not exist".to_string());
-        }
-        if !path_buf.is_dir() {
-            return Err("Path is not a directory".to_string());
-        }
-    }
+    ensure_directory_request_path(&request.path).await?;
 
     let preferred = request.remote_connection_id.as_deref();
     let filesystem_service = &state.filesystem_service;
@@ -1513,22 +1505,9 @@ pub async fn get_directory_children_paginated(
             let total = nodes.len();
             let has_more = total > offset + limit;
             let page_nodes: Vec<_> = nodes.into_iter().skip(offset).take(limit).collect();
-            let json_nodes: Vec<serde_json::Value> = page_nodes
-                .into_iter()
-                .map(|node| {
-                    serde_json::json!({
-                        "path": node.path,
-                        "name": node.name,
-                        "isDirectory": node.is_directory,
-                        "size": node.size,
-                        "extension": node.extension,
-                        "lastModified": node.last_modified
-                    })
-                })
-                .collect();
 
             Ok(serde_json::json!({
-                "children": json_nodes,
+                "children": directory_nodes_to_json(page_nodes),
                 "total": total,
                 "hasMore": has_more,
                 "offset": offset,
@@ -1536,10 +1515,58 @@ pub async fn get_directory_children_paginated(
             }))
         }
         Err(e) => {
-            error!("Failed to get directory children: {}", e);
-            Err(format!("Failed to get directory children: {}", e))
+            error!("Failed to get paginated directory children: {}", e);
+            Err(format!("Failed to get paginated directory children: {}", e))
         }
     }
+}
+
+#[tauri::command]
+pub async fn get_file_tree(
+    state: State<'_, AppState>,
+    request: GetFileTreeRequest,
+) -> Result<serde_json::Value, String> {
+    get_file_tree_response(&state, &request).await
+}
+
+#[tauri::command]
+pub async fn explorer_get_file_tree(
+    state: State<'_, AppState>,
+    request: ExplorerGetFileTreeRequest,
+) -> Result<serde_json::Value, String> {
+    get_file_tree_response(&state, &request).await
+}
+
+#[tauri::command]
+pub async fn get_directory_children(
+    state: State<'_, AppState>,
+    request: GetDirectoryChildrenRequest,
+) -> Result<serde_json::Value, String> {
+    get_directory_children_response(&state, &request).await
+}
+
+#[tauri::command]
+pub async fn explorer_get_children(
+    state: State<'_, AppState>,
+    request: ExplorerGetChildrenRequest,
+) -> Result<serde_json::Value, String> {
+    get_directory_children_response(&state, &request).await
+}
+
+#[tauri::command]
+pub async fn get_directory_children_paginated(
+    state: State<'_, AppState>,
+    request: GetDirectoryChildrenPaginatedRequest,
+) -> Result<serde_json::Value, String> {
+    get_directory_children_paginated_response(&state, &request).await
+}
+
+#[tauri::command]
+pub async fn explorer_get_children_paginated(
+    state: State<'_, AppState>,
+    request: ExplorerGetChildrenPaginatedRequest,
+) -> Result<serde_json::Value, String> {
+    get_directory_children_paginated_response(&state, &request).await
 }
 
 #[tauri::command]
@@ -1554,12 +1581,15 @@ pub async fn read_file_content(
     )
     .await
     {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        let bytes = remote_fs.read_file(&entry.connection_id, &request.file_path).await
+        let bytes = remote_fs
+            .read_file(&entry.connection_id, &request.file_path)
+            .await
             .map_err(|e| format!("Failed to read remote file: {}", e))?;
-        return String::from_utf8(bytes)
-            .map_err(|e| format!("File is not valid UTF-8: {}", e));
+        return String::from_utf8(bytes).map_err(|e| format!("File is not valid UTF-8: {}", e));
     }
 
     match state.filesystem_service.read_file(&request.file_path).await {
@@ -1586,9 +1616,17 @@ pub async fn write_file_content(
     )
     .await
     {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs.write_file(&entry.connection_id, &request.file_path, request.content.as_bytes()).await
+        remote_fs
+            .write_file(
+                &entry.connection_id,
+                &request.file_path,
+                request.content.as_bytes(),
+            )
+            .await
             .map_err(|e| format!("Failed to write remote file: {}", e))?;
         return Ok(());
     }
@@ -1653,9 +1691,13 @@ pub async fn check_path_exists(
     request: CheckPathExistsRequest,
 ) -> Result<bool, String> {
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        return remote_fs.exists(&entry.connection_id, &request.path).await
+        return remote_fs
+            .exists(&entry.connection_id, &request.path)
+            .await
             .map_err(|e| format!("Failed to check remote path: {}", e));
     }
 
@@ -1671,7 +1713,9 @@ pub async fn get_file_metadata(
     use std::time::SystemTime;
 
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
 
         // Use SFTP stat for stable mtime/size. Returning `SystemTime::now()` as `modified` caused
@@ -1777,9 +1821,13 @@ pub async fn rename_file(
     request: RenameFileRequest,
 ) -> Result<(), String> {
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.old_path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs.rename(&entry.connection_id, &request.old_path, &request.new_path).await
+        remote_fs
+            .rename(&entry.connection_id, &request.old_path, &request.new_path)
+            .await
             .map_err(|e| format!("Failed to rename remote file: {}", e))?;
         return Ok(());
     }
@@ -1818,9 +1866,13 @@ pub async fn delete_file(
     request: DeleteFileRequest,
 ) -> Result<(), String> {
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs.remove_file(&entry.connection_id, &request.path).await
+        remote_fs
+            .remove_file(&entry.connection_id, &request.path)
+            .await
             .map_err(|e| format!("Failed to delete remote file: {}", e))?;
         return Ok(());
     }
@@ -1842,13 +1894,19 @@ pub async fn delete_directory(
     let recursive = request.recursive.unwrap_or(false);
 
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
         if recursive {
-            remote_fs.remove_dir_all(&entry.connection_id, &request.path).await
+            remote_fs
+                .remove_dir_all(&entry.connection_id, &request.path)
+                .await
                 .map_err(|e| format!("Failed to delete remote directory: {}", e))?;
         } else {
-            remote_fs.remove_dir_all(&entry.connection_id, &request.path).await
+            remote_fs
+                .remove_dir_all(&entry.connection_id, &request.path)
+                .await
                 .map_err(|e| format!("Failed to delete remote directory: {}", e))?;
         }
         return Ok(());
@@ -1869,9 +1927,13 @@ pub async fn create_file(
     request: CreateFileRequest,
 ) -> Result<(), String> {
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs.write_file(&entry.connection_id, &request.path, b"").await
+        remote_fs
+            .write_file(&entry.connection_id, &request.path, b"")
+            .await
             .map_err(|e| format!("Failed to create remote file: {}", e))?;
         return Ok(());
     }
@@ -1892,9 +1954,13 @@ pub async fn create_directory(
     request: CreateDirectoryRequest,
 ) -> Result<(), String> {
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs.create_dir_all(&entry.connection_id, &request.path).await
+        remote_fs
+            .create_dir_all(&entry.connection_id, &request.path)
+            .await
             .map_err(|e| format!("Failed to create remote directory: {}", e))?;
         return Ok(());
     }
@@ -1922,11 +1988,16 @@ pub async fn list_directory_files(
     use std::path::Path;
 
     if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state.get_remote_file_service_async().await
+        let remote_fs = state
+            .get_remote_file_service_async()
+            .await
             .map_err(|e| format!("Remote file service not available: {}", e))?;
-        let entries = remote_fs.read_dir(&entry.connection_id, &request.path).await
+        let entries = remote_fs
+            .read_dir(&entry.connection_id, &request.path)
+            .await
             .map_err(|e| format!("Failed to read remote directory: {}", e))?;
-        let mut files: Vec<String> = entries.into_iter()
+        let mut files: Vec<String> = entries
+            .into_iter()
             .filter(|e| !e.is_dir)
             .filter(|e| {
                 if let Some(ref extensions) = request.extensions {

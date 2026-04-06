@@ -3,6 +3,8 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
+  ExplorerChildrenPageDto,
+  ExplorerNodeDto,
   WorkspaceInfo,
   FileSearchResult
 } from './tauri-commands';
@@ -145,7 +147,7 @@ export class WorkspaceAPI {
   }
 
    
-  async getFileTree(path: string, maxDepth?: number): Promise<any[]> {
+  async getFileTree(path: string, maxDepth?: number): Promise<ExplorerNodeDto[]> {
     try {
       return await api.invoke('get_file_tree', { 
         request: { path, maxDepth } 
@@ -156,7 +158,7 @@ export class WorkspaceAPI {
   }
 
    
-  async getDirectoryChildren(path: string): Promise<any[]> {
+  async getDirectoryChildren(path: string): Promise<ExplorerNodeDto[]> {
     try {
       return await api.invoke('get_directory_children', { 
         request: { path } 
@@ -171,19 +173,47 @@ export class WorkspaceAPI {
     path: string, 
     offset: number = 0, 
     limit: number = 100
-  ): Promise<{
-    children: any[];
-    total: number;
-    hasMore: boolean;
-    offset: number;
-    limit: number;
-  }> {
+  ): Promise<ExplorerChildrenPageDto> {
     try {
       return await api.invoke('get_directory_children_paginated', { 
         request: { path, offset, limit } 
       });
     } catch (error) {
       throw createTauriCommandError('get_directory_children_paginated', error, { path, offset, limit });
+    }
+  }
+
+  async explorerGetFileTree(path: string, maxDepth?: number): Promise<ExplorerNodeDto[]> {
+    try {
+      return await api.invoke('explorer_get_file_tree', {
+        request: { path, maxDepth }
+      });
+    } catch (error) {
+      throw createTauriCommandError('explorer_get_file_tree', error, { path, maxDepth });
+    }
+  }
+
+  async explorerGetChildren(path: string): Promise<ExplorerNodeDto[]> {
+    try {
+      return await api.invoke('explorer_get_children', {
+        request: { path }
+      });
+    } catch (error) {
+      throw createTauriCommandError('explorer_get_children', error, { path });
+    }
+  }
+
+  async explorerGetChildrenPaginated(
+    path: string,
+    offset: number = 0,
+    limit: number = 100
+  ): Promise<ExplorerChildrenPageDto> {
+    try {
+      return await api.invoke('explorer_get_children_paginated', {
+        request: { path, offset, limit }
+      });
+    } catch (error) {
+      throw createTauriCommandError('explorer_get_children_paginated', error, { path, offset, limit });
     }
   }
 
