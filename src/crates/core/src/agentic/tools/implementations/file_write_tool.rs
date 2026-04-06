@@ -95,7 +95,6 @@ Usage:
             };
         }
 
-        let cwd_owned = context.and_then(|ctx| ctx.current_working_directory.clone());
         let root_owned = context.and_then(|ctx| {
             ctx.workspace
                 .as_ref()
@@ -103,7 +102,6 @@ Usage:
         });
         if let Err(err) = resolve_workspace_tool_path(
             file_path,
-            cwd_owned.as_deref(),
             root_owned.as_deref(),
             context.map(|c| c.is_remote()).unwrap_or(false),
         ) {

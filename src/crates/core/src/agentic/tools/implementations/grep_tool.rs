@@ -65,12 +65,10 @@ impl GrepTool {
     }
 
     fn display_base(context: &ToolUseContext) -> Option<String> {
-        context.current_working_directory.clone().or_else(|| {
-            context
-                .workspace
-                .as_ref()
-                .map(|workspace| workspace.root_path_string())
-        })
+        context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path_string())
     }
 
     fn relativize_result_text(result_text: &str, display_base: Option<&str>) -> String {

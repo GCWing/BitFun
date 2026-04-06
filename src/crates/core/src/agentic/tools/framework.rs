@@ -21,7 +21,6 @@ pub struct ToolUseContext {
     pub session_id: Option<String>,
     pub dialog_turn_id: Option<String>,
     pub workspace: Option<WorkspaceBinding>,
-    pub current_working_directory: Option<String>,
     pub safe_mode: Option<bool>,
     pub abort_controller: Option<String>,
     pub read_file_timestamps: HashMap<String, u64>,
@@ -42,15 +41,6 @@ pub struct ToolUseContext {
 impl ToolUseContext {
     pub fn workspace_root(&self) -> Option<&Path> {
         self.workspace.as_ref().map(|binding| binding.root_path())
-    }
-
-    pub fn current_working_directory(&self) -> Option<&Path> {
-        self.current_working_directory.as_deref().map(Path::new)
-    }
-
-    pub fn path_resolution_base(&self) -> Option<&Path> {
-        self.current_working_directory()
-            .or_else(|| self.workspace_root())
     }
 
     pub fn is_remote(&self) -> bool {
@@ -88,7 +78,6 @@ impl ToolUseContext {
             .map(|w| w.root_path_string());
         crate::agentic::tools::workspace_paths::resolve_workspace_tool_path(
             path,
-            self.current_working_directory.as_deref(),
             workspace_root_owned.as_deref(),
             self.is_remote(),
         )

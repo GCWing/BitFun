@@ -30,15 +30,14 @@ pub fn normalize_path(path: &str) -> String {
 
 pub fn resolve_path_with_workspace(
     path: &str,
-    current_working_directory: Option<&Path>,
     workspace_root: Option<&Path>,
 ) -> BitFunResult<String> {
     if Path::new(path).is_absolute() {
         Ok(normalize_path(path))
     } else {
-        let base_path = current_working_directory.or(workspace_root).ok_or_else(|| {
+        let base_path = workspace_root.ok_or_else(|| {
             BitFunError::tool(format!(
-                "A current working directory or workspace path is required to resolve relative path: {}",
+                "A workspace path is required to resolve relative path: {}",
                 path
             ))
         })?;
@@ -50,7 +49,7 @@ pub fn resolve_path_with_workspace(
 }
 
 pub fn resolve_path(path: &str) -> BitFunResult<String> {
-    resolve_path_with_workspace(path, None, None)
+    resolve_path_with_workspace(path, None)
 }
 
 /// POSIX absolute: after normalizing backslashes, path starts with `/`.
@@ -84,7 +83,6 @@ fn posix_normalize_components(path: &str) -> String {
 /// Resolve a path using POSIX rules (for remote SSH workspaces).
 pub fn posix_resolve_path_with_workspace(
     path: &str,
-    current_working_directory: Option<&str>,
     workspace_root: Option<&str>,
 ) -> BitFunResult<String> {
     let path = path.trim();
@@ -97,11 +95,10 @@ pub fn posix_resolve_path_with_workspace(
     let combined = if posix_style_path_is_absolute(&normalized_input) {
         normalized_input
     } else {
-        let base = current_working_directory
-            .or(workspace_root)
+        let base = workspace_root
             .ok_or_else(|| {
                 BitFunError::tool(format!(
-                    "A current working directory or workspace path is required to resolve relative path: {}",
+                    "A workspace path is required to resolve relative path: {}",
                     path
                 ))
             })?
@@ -117,18 +114,13 @@ pub fn posix_resolve_path_with_workspace(
 /// Unified resolver: POSIX semantics when the workspace is remote SSH; otherwise host `Path`.
 pub fn resolve_workspace_tool_path(
     path: &str,
-    current_working_directory: Option<&str>,
     workspace_root: Option<&str>,
     workspace_is_remote: bool,
 ) -> BitFunResult<String> {
     if workspace_is_remote {
-        posix_resolve_path_with_workspace(path, current_working_directory, workspace_root)
+        posix_resolve_path_with_workspace(path, workspace_root)
     } else {
-        resolve_path_with_workspace(
-            path,
-            current_working_directory.map(Path::new),
-            workspace_root.map(Path::new),
-        )
+        resolve_path_with_workspace(path, workspace_root.map(Path::new))
     }
 }
 
@@ -137,40 +129,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolves_relative_paths_from_current_working_directory_first() {
-        let resolved = resolve_path_with_workspace(
-            "src/main.rs",
-            Some(Path::new("/repo/crates/core")),
-            Some(Path::new("/repo")),
-        )
-        .expect("path should resolve");
-
-        assert_eq!(resolved, "/repo/crates/core/src/main.rs");
-    }
-
-    #[test]
-    fn falls_back_to_workspace_root_when_current_working_directory_missing() {
-        let resolved =
-            resolve_path_with_workspace("src/main.rs", None, Some(Path::new("/repo")))
-                .expect("path should resolve");
+    fn resolves_relative_paths_from_workspace_root() {
+        let resolved = resolve_path_with_workspace("src/main.rs", Some(Path::new("/repo")))
+            .expect("path should resolve");
 
         assert_eq!(resolved, "/repo/src/main.rs");
     }
 
     #[test]
     fn posix_absolute_starts_with_slash() {
-        let r = posix_resolve_path_with_workspace(
-            "/home/user/file.txt",
-            None,
-            Some("/should/not/matter"),
-        )
-        .unwrap();
+        let r =
+            posix_resolve_path_with_workspace("/home/user/file.txt", Some("/should/not/matter"))
+                .unwrap();
         assert_eq!(r, "/home/user/file.txt");
     }
 
     #[test]
     fn posix_relative_joins_workspace() {
-        let r = posix_resolve_path_with_workspace("src/main.rs", None, Some("/home/proj")).unwrap();
+        let r = posix_resolve_path_with_workspace("src/main.rs", Some("/home/proj")).unwrap();
         assert_eq!(r, "/home/proj/src/main.rs");
     }
 }

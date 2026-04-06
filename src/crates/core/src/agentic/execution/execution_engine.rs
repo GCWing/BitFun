@@ -1485,7 +1485,6 @@ impl ExecutionEngine {
             session_id: None,
             dialog_turn_id: None,
             workspace: workspace.cloned(),
-            current_working_directory: None,
             safe_mode: None,
             abort_controller: None,
             read_file_timestamps: Default::default(),

@@ -724,11 +724,6 @@ impl ToolPipeline {
             session_id: Some(task.context.session_id.clone()),
             dialog_turn_id: Some(task.context.dialog_turn_id.clone()),
             workspace: task.context.workspace.clone(),
-            current_working_directory: task
-                .context
-                .context_vars
-                .get("current_working_directory")
-                .cloned(),
             safe_mode: None,
             abort_controller: None,
             read_file_timestamps: Default::default(),

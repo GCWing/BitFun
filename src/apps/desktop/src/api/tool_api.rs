@@ -96,7 +96,6 @@ fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         dialog_turn_id: None,
         workspace: normalized_workspace_path
             .map(|path| WorkspaceBinding::new(None, PathBuf::from(path))),
-        current_working_directory: normalized_workspace_path.map(str::to_string),
         safe_mode: Some(false),
         abort_controller: None,
         read_file_timestamps: HashMap::new(),
