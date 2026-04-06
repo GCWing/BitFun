@@ -1,9 +1,19 @@
 /**
  * File operation tool card - refactored based on BaseToolCard
  * Supports Write/Edit/Delete file operations
+ *
+ * Height-stability contract:
+ * - Any state-driven height change must go through
+ *   `useToolCardHeightContract.applyExpandedState(...)`.
+ * - Any status/render-path change that removes expanded content without
+ *   toggling local expand state must dispatch
+ *   `flowchat:tool-card-collapse-intent` before the shrink happens.
+ * - If preview/result variants stop sharing roughly the same visual height in
+ *   the future, treat that as another shrink path and protect it explicitly
+ *   instead of relying on `VirtualMessageList` fallback compensation.
  */
 
-import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   XCircle,
@@ -62,7 +72,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const hasInitializedCompletionEffectRef = useRef(false);
   const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
   const previousStatusRef = useRef(status);
-  const { cardRootRef } = useToolCardHeightContract({
+  const lastStableExpandedHeightRef = useRef<number>(0);
+  const {
+    cardRootRef,
+    applyExpandedState: applyHeightContractExpandedState,
+  } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
   });
@@ -157,6 +171,30 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const toolDisplayInfo = getToolDisplayInfo();
 
+  const applyContentExpandedState = useCallback((
+    nextExpanded: boolean,
+    reason: 'manual' | 'auto',
+  ) => {
+    applyHeightContractExpandedState(
+      isContentExpanded,
+      nextExpanded,
+      setIsContentExpanded,
+      { reason },
+    );
+  }, [applyHeightContractExpandedState, isContentExpanded]);
+
+  const applyErrorExpandedState = useCallback((
+    nextExpanded: boolean,
+    reason: 'manual' | 'auto',
+  ) => {
+    applyHeightContractExpandedState(
+      isErrorExpanded,
+      nextExpanded,
+      setIsErrorExpanded,
+      { reason },
+    );
+  }, [applyHeightContractExpandedState, isErrorExpanded]);
+
   useEffect(() => {
     if (error) {
       log.error('File operation error', { filePath: currentFilePath, error });
@@ -167,13 +205,24 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   useEffect(() => {
     if (previousStatusRef.current !== status) {
       if (status === 'completed' && !isFailed) {
-        setIsContentExpanded(false);
+        applyContentExpandedState(false, 'auto');
       } else if (status !== 'completed') {
-        setIsContentExpanded(true);
+        applyContentExpandedState(true, 'auto');
       }
       previousStatusRef.current = status;
     }
-  }, [isFailed, status]);
+  }, [
+    applyContentExpandedState,
+    cardRootRef,
+    contentPreview,
+    currentFilePath,
+    isContentExpanded,
+    isFailed,
+    oldStringContent,
+    status,
+    toolId,
+    toolItem.toolName,
+  ]);
 
   const localDiffStats = useMemo(() => {
     if (status !== 'completed' || isFailed) return null;
@@ -252,6 +301,48 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     newStringContent,
     oldStringContent,
     status,
+    toolItem.toolName,
+  ]);
+
+  useLayoutEffect(() => {
+    const measuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
+    if (!isFailed && isContentExpanded && measuredHeight > 0) {
+      lastStableExpandedHeightRef.current = measuredHeight;
+    }
+  }, [cardRootRef, isContentExpanded, isFailed, previewVariant, status]);
+
+  useLayoutEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    const isNewFailure = previousStatus !== status && status === 'error';
+    if (!isNewFailure || !isContentExpanded) {
+      return;
+    }
+
+    const currentMeasuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
+    const lastStableExpandedHeight = lastStableExpandedHeightRef.current;
+    const estimatedShrinkHeight = Math.max(lastStableExpandedHeight, currentMeasuredHeight);
+
+    if (estimatedShrinkHeight <= currentMeasuredHeight + 0.5) {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+      detail: {
+        toolId: toolId ?? null,
+        toolName: toolItem.toolName,
+        cardHeight: estimatedShrinkHeight,
+        filePath: currentFilePath || null,
+        reason: 'auto',
+      },
+    }));
+    window.dispatchEvent(new CustomEvent('tool-card-toggle'));
+  }, [
+    cardRootRef,
+    currentFilePath,
+    isContentExpanded,
+    previewVariant,
+    status,
+    toolId,
     toolItem.toolName,
   ]);
 
@@ -334,7 +425,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
     
     if (isFailed) {
-      setIsErrorExpanded(prev => !prev);
+      applyErrorExpandedState(!isErrorExpanded, 'manual');
       return;
     }
 
@@ -350,7 +441,17 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     if (currentFilePath && onOpenInEditor) {
       onOpenInEditor(currentFilePath);
     }
-  }, [currentFilePath, onOpenInEditor, isFailed, sessionId, status, handleOpenInCodeEditor, toolItem.toolName]);
+  }, [
+    applyErrorExpandedState,
+    currentFilePath,
+    handleOpenInCodeEditor,
+    isErrorExpanded,
+    isFailed,
+    onOpenInEditor,
+    sessionId,
+    status,
+    toolItem.toolName,
+  ]);
 
   const handleOpenBaselineDiff = useCallback(async () => {
     if (!currentFilePath || !currentWorkspace || !sessionId) {
@@ -603,7 +704,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         }
         onAffordanceClick={
           hasExpandableContent
-            ? () => setIsContentExpanded(prev => !prev)
+            ? () => applyContentExpandedState(!isContentExpanded, 'manual')
             : undefined
         }
         action={actionText}
