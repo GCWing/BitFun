@@ -14,6 +14,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::fs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,6 +216,120 @@ impl Default for FileContentSearchOptions {
 pub struct FileSearchOutcome {
     pub results: Vec<FileSearchResult>,
     pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSearchResultGroup {
+    pub path: String,
+    pub name: String,
+    pub is_directory: bool,
+    pub file_name_match: Option<FileSearchResult>,
+    pub content_matches: Vec<FileSearchResult>,
+}
+
+pub trait FileSearchProgressSink: Send + Sync {
+    fn report(&self, result: FileSearchResultGroup);
+    fn flush(&self);
+}
+
+pub struct BatchedFileSearchProgressSink {
+    batch: Mutex<Vec<FileSearchResultGroup>>,
+    batch_size: usize,
+    flush_interval: Duration,
+    last_flush_at: Mutex<Instant>,
+    on_flush: Box<dyn Fn(Vec<FileSearchResultGroup>) + Send + Sync>,
+}
+
+impl BatchedFileSearchProgressSink {
+    pub fn new<F>(batch_size: usize, flush_interval: Duration, on_flush: F) -> Self
+    where
+        F: Fn(Vec<FileSearchResultGroup>) + Send + Sync + 'static,
+    {
+        Self {
+            batch: Mutex::new(Vec::new()),
+            batch_size: batch_size.max(1),
+            flush_interval,
+            last_flush_at: Mutex::new(Instant::now() - flush_interval),
+            on_flush: Box::new(on_flush),
+        }
+    }
+
+    fn drain_batch(&self) -> Vec<FileSearchResultGroup> {
+        match self.batch.lock() {
+            Ok(mut guard) => std::mem::take(&mut *guard),
+            Err(poisoned) => {
+                warn!("File search progress batch mutex was poisoned, recovering lock");
+                let mut guard = poisoned.into_inner();
+                std::mem::take(&mut *guard)
+            }
+        }
+    }
+
+    fn elapsed_since_last_flush(&self) -> Duration {
+        match self.last_flush_at.lock() {
+            Ok(guard) => guard.elapsed(),
+            Err(poisoned) => {
+                warn!("File search progress flush timer mutex was poisoned, recovering lock");
+                poisoned.into_inner().elapsed()
+            }
+        }
+    }
+
+    fn mark_flushed(&self) {
+        match self.last_flush_at.lock() {
+            Ok(mut guard) => {
+                *guard = Instant::now();
+            }
+            Err(poisoned) => {
+                warn!("File search progress flush timer mutex was poisoned, recovering lock");
+                let mut guard = poisoned.into_inner();
+                *guard = Instant::now();
+            }
+        }
+    }
+
+    fn flush_internal(&self, force: bool) {
+        let should_flush = force || self.elapsed_since_last_flush() >= self.flush_interval;
+        if !should_flush {
+            return;
+        }
+
+        let batch = self.drain_batch();
+        if batch.is_empty() {
+            return;
+        }
+
+        (self.on_flush)(batch);
+        self.mark_flushed();
+    }
+}
+
+impl FileSearchProgressSink for BatchedFileSearchProgressSink {
+    fn report(&self, result: FileSearchResultGroup) {
+        let should_flush_now = match self.batch.lock() {
+            Ok(mut guard) => {
+                guard.push(result);
+                guard.len() >= self.batch_size
+            }
+            Err(poisoned) => {
+                warn!("File search progress batch mutex was poisoned, recovering lock");
+                let mut guard = poisoned.into_inner();
+                guard.push(result);
+                guard.len() >= self.batch_size
+            }
+        };
+
+        if should_flush_now {
+            self.flush_internal(true);
+            return;
+        }
+
+        self.flush_internal(false);
+    }
+
+    fn flush(&self) {
+        self.flush_internal(true);
+    }
 }
 
 impl Default for FileTreeService {
@@ -936,6 +1051,17 @@ impl FileTreeService {
         pattern: &str,
         options: FileNameSearchOptions,
     ) -> BitFunResult<FileSearchOutcome> {
+        self.search_file_names_with_progress(root_path, pattern, options, None)
+            .await
+    }
+
+    pub async fn search_file_names_with_progress(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileNameSearchOptions,
+        progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
+    ) -> BitFunResult<FileSearchOutcome> {
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
@@ -954,6 +1080,7 @@ impl FileTreeService {
         let cancel_flag = options.cancel_flag.clone();
         let include_directories = options.include_directories;
         let max_results = options.max_results.max(1);
+        let progress_sink_for_walker = progress_sink.clone();
 
         let walker = Self::build_search_walker(&root_path_buf);
 
@@ -964,6 +1091,7 @@ impl FileTreeService {
             let limit_reached = Arc::clone(&limit_reached);
             let root_path_buf = root_path_buf.clone();
             let cancel_flag = cancel_flag.clone();
+            let progress_sink = progress_sink_for_walker.clone();
 
             Box::new(move |entry| {
                 if should_stop.load(Ordering::Relaxed)
@@ -996,19 +1124,20 @@ impl FileTreeService {
 
                     if include_directories
                         && matcher.is_match(&file_name)
-                        && !Self::push_search_result(
+                        && !Self::push_search_result_group(
                             &results,
                             &should_stop,
                             &limit_reached,
                             max_results,
-                            FileSearchResult {
+                            progress_sink.as_ref(),
+                            vec![FileSearchResult {
                                 path: path.to_string_lossy().to_string(),
                                 name: file_name,
                                 is_directory: true,
                                 match_type: SearchMatchType::FileName,
                                 line_number: None,
                                 matched_content: None,
-                            },
+                            }],
                         )
                     {
                         return ignore::WalkState::Quit;
@@ -1028,19 +1157,20 @@ impl FileTreeService {
                 }
 
                 if matcher.is_match(&file_name)
-                    && !Self::push_search_result(
+                    && !Self::push_search_result_group(
                         &results,
                         &should_stop,
                         &limit_reached,
                         max_results,
-                        FileSearchResult {
+                        progress_sink.as_ref(),
+                        vec![FileSearchResult {
                             path: path.to_string_lossy().to_string(),
                             name: file_name,
                             is_directory: false,
                             match_type: SearchMatchType::FileName,
                             line_number: None,
                             matched_content: None,
-                        },
+                        }],
                     )
                 {
                     return ignore::WalkState::Quit;
@@ -1049,6 +1179,10 @@ impl FileTreeService {
                 ignore::WalkState::Continue
             })
         });
+
+        if let Some(progress_sink) = progress_sink {
+            progress_sink.flush();
+        }
 
         let final_results = lock_search_results(&results).clone();
         Ok(FileSearchOutcome {
@@ -1062,6 +1196,17 @@ impl FileTreeService {
         root_path: &str,
         pattern: &str,
         options: FileContentSearchOptions,
+    ) -> BitFunResult<FileSearchOutcome> {
+        self.search_file_contents_with_progress(root_path, pattern, options, None)
+            .await
+    }
+
+    pub async fn search_file_contents_with_progress(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileContentSearchOptions,
+        progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
     ) -> BitFunResult<FileSearchOutcome> {
         let root_path_buf = PathBuf::from(root_path);
 
@@ -1081,6 +1226,7 @@ impl FileTreeService {
         let cancel_flag = options.cancel_flag.clone();
         let max_results = options.max_results.max(1);
         let max_file_size_bytes = options.max_file_size_bytes;
+        let progress_sink_for_walker = progress_sink.clone();
 
         let walker = Self::build_search_walker(&root_path_buf);
 
@@ -1091,6 +1237,7 @@ impl FileTreeService {
             let limit_reached = Arc::clone(&limit_reached);
             let root_path_buf = root_path_buf.clone();
             let cancel_flag = cancel_flag.clone();
+            let progress_sink = progress_sink_for_walker.clone();
 
             Box::new(move |entry| {
                 if should_stop.load(Ordering::Relaxed)
@@ -1149,6 +1296,7 @@ impl FileTreeService {
                     &should_stop,
                     &limit_reached,
                     cancel_flag.as_ref(),
+                    progress_sink.as_ref(),
                 ) {
                     warn!(
                         "Failed to search file content {}: {}",
@@ -1164,6 +1312,10 @@ impl FileTreeService {
                 }
             })
         });
+
+        if let Some(progress_sink) = progress_sink {
+            progress_sink.flush();
+        }
 
         let final_results = lock_search_results(&results).clone();
         Ok(FileSearchOutcome {
@@ -1208,13 +1360,39 @@ impl FileTreeService {
             .map_err(|error| BitFunError::service(format!("Invalid regex pattern: {}", error)))
     }
 
-    fn push_search_result(
+    fn build_search_result_group(results: Vec<FileSearchResult>) -> Option<FileSearchResultGroup> {
+        let first = results.first()?.clone();
+        let file_name_match = results
+            .iter()
+            .find(|result| matches!(result.match_type, SearchMatchType::FileName))
+            .cloned();
+        let content_matches = results
+            .iter()
+            .filter(|result| matches!(result.match_type, SearchMatchType::Content))
+            .cloned()
+            .collect();
+
+        Some(FileSearchResultGroup {
+            path: first.path,
+            name: first.name,
+            is_directory: first.is_directory,
+            file_name_match,
+            content_matches,
+        })
+    }
+
+    fn push_search_result_group(
         results: &Arc<Mutex<Vec<FileSearchResult>>>,
         should_stop: &Arc<AtomicBool>,
         limit_reached: &Arc<AtomicBool>,
         max_results: usize,
-        result: FileSearchResult,
+        progress_sink: Option<&Arc<dyn FileSearchProgressSink>>,
+        group_results: Vec<FileSearchResult>,
     ) -> bool {
+        if group_results.is_empty() {
+            return true;
+        }
+
         let mut results_guard = lock_search_results(results);
         if results_guard.len() >= max_results {
             should_stop.store(true, Ordering::Relaxed);
@@ -1222,14 +1400,38 @@ impl FileTreeService {
             return false;
         }
 
-        results_guard.push(result);
-        if results_guard.len() >= max_results {
+        let remaining_capacity = max_results.saturating_sub(results_guard.len());
+        if remaining_capacity == 0 {
             should_stop.store(true, Ordering::Relaxed);
             limit_reached.store(true, Ordering::Relaxed);
             return false;
         }
 
-        true
+        let accepted_results = if group_results.len() > remaining_capacity {
+            limit_reached.store(true, Ordering::Relaxed);
+            group_results
+                .into_iter()
+                .take(remaining_capacity)
+                .collect::<Vec<_>>()
+        } else {
+            group_results
+        };
+
+        results_guard.extend(accepted_results.iter().cloned());
+        if results_guard.len() >= max_results {
+            should_stop.store(true, Ordering::Relaxed);
+            limit_reached.store(true, Ordering::Relaxed);
+        }
+
+        drop(results_guard);
+        if let (Some(progress_sink), Some(group)) = (
+            progress_sink,
+            Self::build_search_result_group(accepted_results),
+        ) {
+            progress_sink.report(group);
+        }
+
+        !should_stop.load(Ordering::Relaxed)
     }
 
     fn search_file_content_lines(
@@ -1241,6 +1443,7 @@ impl FileTreeService {
         should_stop: &Arc<AtomicBool>,
         limit_reached: &Arc<AtomicBool>,
         cancel_flag: Option<&Arc<AtomicBool>>,
+        progress_sink: Option<&Arc<dyn FileSearchProgressSink>>,
     ) -> BitFunResult<()> {
         if should_stop.load(Ordering::Relaxed) || cancellation_requested(cancel_flag) {
             should_stop.store(true, Ordering::Relaxed);
@@ -1250,6 +1453,7 @@ impl FileTreeService {
         let file = File::open(path)
             .map_err(|error| BitFunError::service(format!("Failed to open file: {}", error)))?;
         let reader = BufReader::new(file);
+        let mut matched_results = Vec::new();
 
         for (index, line_result) in reader.split(b'\n').enumerate() {
             if should_stop.load(Ordering::Relaxed) || cancellation_requested(cancel_flag) {
@@ -1267,22 +1471,29 @@ impl FileTreeService {
                 continue;
             }
 
-            if !Self::push_search_result(
-                results,
-                should_stop,
-                limit_reached,
-                max_results,
-                FileSearchResult {
-                    path: path.to_string_lossy().to_string(),
-                    name: file_name.to_string(),
-                    is_directory: false,
-                    match_type: SearchMatchType::Content,
-                    line_number: Some(index + 1),
-                    matched_content: Some(line),
-                },
-            ) {
-                return Ok(());
+            matched_results.push(FileSearchResult {
+                path: path.to_string_lossy().to_string(),
+                name: file_name.to_string(),
+                is_directory: false,
+                match_type: SearchMatchType::Content,
+                line_number: Some(index + 1),
+                matched_content: Some(line),
+            });
+
+            if matched_results.len() >= max_results {
+                break;
             }
+        }
+
+        if !Self::push_search_result_group(
+            results,
+            should_stop,
+            limit_reached,
+            max_results,
+            progress_sink,
+            matched_results,
+        ) {
+            return Ok(());
         }
 
         Ok(())

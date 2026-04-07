@@ -378,6 +378,8 @@ pub async fn run() {
             search_files,
             search_filenames,
             search_file_contents,
+            start_search_filenames_stream,
+            start_search_file_contents_stream,
             cancel_search,
             delete_file,
             delete_directory,

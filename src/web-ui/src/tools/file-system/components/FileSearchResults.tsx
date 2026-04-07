@@ -1,6 +1,9 @@
 import React, { useMemo, useState, useCallback, startTransition, memo, useEffect, useRef } from 'react';
 import { File, FileText, Folder, ChevronRight, ChevronDown } from 'lucide-react';
-import type { FileSearchResult } from '@/infrastructure/api/service-api/tauri-commands';
+import type {
+  FileSearchResult,
+  FileSearchResultGroup,
+} from '@/infrastructure/api/service-api/tauri-commands';
 import { useI18n } from '@/infrastructure/i18n';
 import './FileSearchResults.scss';
 
@@ -8,18 +11,10 @@ const INITIAL_DISPLAY_COUNT = 50;
 const LOAD_MORE_COUNT = 50;
 
 interface FileSearchResultsProps {
-  results: FileSearchResult[];
+  results: FileSearchResultGroup[];
   searchQuery: string;
   onFileSelect: (filePath: string, fileName: string) => void;
   className?: string;
-}
-
-interface GroupedResult {
-  path: string;
-  name: string;
-  isDirectory: boolean;
-  fileNameMatch?: FileSearchResult;
-  contentMatches: FileSearchResult[];
 }
 
 function truncateLine(line: string, query: string, maxLength: number = 200): string {
@@ -124,7 +119,7 @@ const MatchItem = memo<MatchItemProps>(({ match, groupPath, groupName, searchQue
 MatchItem.displayName = 'MatchItem';
 
 interface FileGroupProps {
-  group: GroupedResult;
+  group: FileSearchResultGroup;
   isExpanded: boolean;
   searchQuery: string;
   onToggleExpand: (path: string) => void;
@@ -220,50 +215,34 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   const pendingAutoLoadRef = useRef(false);
   const [manualExpandState, setManualExpandState] = useState<Map<string, boolean>>(new Map());
 
-  const groupedResults = useMemo(() => {
-    const groups = new Map<string, FileSearchResult[]>();
-    
-    for (const result of results) {
-      const key = result.path;
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push(result);
-    }
-    
-    return Array.from(groups.entries()).map(([path, items]) => {
-      const fileNameMatch = items.find(item => item.matchType === 'fileName');
-      const contentMatches = items.filter(item => item.matchType === 'content');
-      
-      return {
-        path,
-        name: items[0].name,
-        isDirectory: items[0].isDirectory,
-        fileNameMatch,
-        contentMatches
-      };
-    });
-  }, [results]);
-
   const prevResultsRef = useRef(results);
+  const prevSearchQueryRef = useRef(searchQuery);
   
   useEffect(() => {
-    if (prevResultsRef.current !== results) {
+    const queryChanged = prevSearchQueryRef.current !== searchQuery;
+    const resultsRestarted = results.length < prevResultsRef.current.length;
+
+    if (queryChanged || resultsRestarted) {
       prevResultsRef.current = results;
+      prevSearchQueryRef.current = searchQuery;
       startTransition(() => {
         setDisplayCount(INITIAL_DISPLAY_COUNT);
         setManualExpandState(new Map());
       });
+      return;
     }
-  }, [results]);
+
+    prevResultsRef.current = results;
+    prevSearchQueryRef.current = searchQuery;
+  }, [results, searchQuery]);
 
   const visibleGroups = useMemo(() => {
-    return groupedResults.slice(0, displayCount);
-  }, [groupedResults, displayCount]);
+    return results.slice(0, displayCount);
+  }, [results, displayCount]);
 
-  const hasMore = displayCount < groupedResults.length;
+  const hasMore = displayCount < results.length;
 
-  const shouldDefaultExpand = groupedResults.length <= 100;
+  const shouldDefaultExpand = results.length <= 100;
   
   const isExpanded = useCallback((path: string): boolean => {
     if (manualExpandState.has(path)) {
@@ -284,9 +263,9 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   const handleLoadMore = useCallback(() => {
     pendingAutoLoadRef.current = true;
     startTransition(() => {
-      setDisplayCount(prev => Math.min(prev + LOAD_MORE_COUNT, groupedResults.length));
+      setDisplayCount(prev => Math.min(prev + LOAD_MORE_COUNT, results.length));
     });
-  }, [groupedResults.length]);
+  }, [results.length]);
 
   useEffect(() => {
     pendingAutoLoadRef.current = false;
@@ -345,11 +324,17 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
     );
   }
 
+  const totalMatches = useMemo(() => {
+    return results.reduce((count, group) => {
+      return count + (group.fileNameMatch ? 1 : 0) + group.contentMatches.length;
+    }, 0);
+  }, [results]);
+
   return (
     <div className={`bitfun-search-results ${className}`}>
       <div className="bitfun-search-results__header">
         <span className="bitfun-search-results__count">
-          {t('search.resultsSummary', { files: groupedResults.length, matches: results.length })}
+          {t('search.resultsSummary', { files: results.length, matches: totalMatches })}
           {hasMore && <span className="bitfun-search-results__showing">{t('search.resultsShowing', { count: displayCount })}</span>}
         </span>
       </div>

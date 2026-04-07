@@ -12,7 +12,8 @@ pub use file_operations::{
     FileReadResult, FileWriteResult,
 };
 pub use file_tree::{
-    FileContentSearchOptions, FileNameSearchOptions, FileSearchOutcome, FileSearchResult,
+    BatchedFileSearchProgressSink, FileContentSearchOptions, FileNameSearchOptions,
+    FileSearchOutcome, FileSearchProgressSink, FileSearchResult, FileSearchResultGroup,
     FileTreeNode, FileTreeOptions, FileTreeService, FileTreeStatistics, SearchMatchType,
 };
 pub use file_watcher::initialize_file_watcher;

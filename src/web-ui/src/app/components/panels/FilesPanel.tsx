@@ -71,7 +71,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     setQuery: setSearchQuery,
     searchMode,
     setSearchMode,
-    allResults: searchResults,
+    allGroups: searchResults,
     isSearching,
     error: searchError,
     filenameLimit,

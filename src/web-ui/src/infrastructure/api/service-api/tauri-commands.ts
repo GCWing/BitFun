@@ -197,6 +197,41 @@ export interface FileSearchResponse {
   truncated: boolean;
 }
 
+export interface FileSearchResultGroup {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  fileNameMatch?: FileSearchResult;
+  contentMatches: FileSearchResult[];
+}
+
+export type FileSearchStreamKind = 'filenames' | 'content';
+
+export interface FileSearchStreamStartResponse {
+  searchId: string;
+  limit: number;
+}
+
+export interface FileSearchProgressEvent {
+  searchId: string;
+  searchKind: FileSearchStreamKind;
+  results: FileSearchResultGroup[];
+}
+
+export interface FileSearchCompleteEvent {
+  searchId: string;
+  searchKind: FileSearchStreamKind;
+  limit: number;
+  truncated: boolean;
+  totalResults: number;
+}
+
+export interface FileSearchErrorEvent {
+  searchId: string;
+  searchKind: FileSearchStreamKind;
+  error: string;
+}
+
 export interface ExplorerNodeDto {
   path: string;
   name: string;

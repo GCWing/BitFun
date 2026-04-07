@@ -1838,21 +1838,6 @@ $_section-header-height: 24px;
 .bitfun-nav-panel__brand-search {
   width: 100%;
   min-width: 0;
-
-  // Legacy GlobalSearch overrides kept for reference but no longer rendered.
-  // Trigger button styles live in NavSearchDialog.scss.
-
-  .bitfun-global-search--nav-panel .bitfun-global-search__option {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    padding: 0;
-
-    svg {
-      width: 11px;
-      height: 11px;
-    }
-  }
 }
 
 // ── Top action strip ─────────────────────────────

@@ -3,7 +3,8 @@
 use crate::api::app_state::AppState;
 use crate::api::dto::WorkspaceInfoDto;
 use bitfun_core::infrastructure::{
-    file_watcher, FileOperationOptions, FileTreeNode, SearchMatchType,
+    file_watcher, BatchedFileSearchProgressSink, FileOperationOptions, FileSearchResult,
+    FileSearchResultGroup, FileTreeNode, SearchMatchType,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
@@ -14,8 +15,9 @@ use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, MutexGuard};
-use tauri::{AppHandle, State};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter, State};
 
 fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::RemoteWorkspace> {
     if info.workspace_kind != WorkspaceKind::Remote {
@@ -99,25 +101,214 @@ fn unregister_search(state: &State<'_, AppState>, search_id: Option<&str>) {
     lock_active_searches(state).remove(search_id);
 }
 
-fn serialize_search_results(
-    results: Vec<bitfun_core::infrastructure::FileSearchResult>,
-) -> Vec<serde_json::Value> {
+fn unregister_search_registry(
+    active_searches: &Arc<Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>>,
+    search_id: Option<&str>,
+) {
+    let Some(search_id) = search_id.filter(|value| !value.is_empty()) else {
+        return;
+    };
+
+    match active_searches.lock() {
+        Ok(mut guard) => {
+            guard.remove(search_id);
+        }
+        Err(poisoned) => {
+            warn!("Active search registry mutex was poisoned, recovering lock");
+            poisoned.into_inner().remove(search_id);
+        }
+    }
+}
+
+fn serialize_search_result(result: &FileSearchResult) -> serde_json::Value {
+    serde_json::json!({
+        "path": result.path,
+        "name": result.name,
+        "isDirectory": result.is_directory,
+        "matchType": match result.match_type {
+            SearchMatchType::FileName => "fileName",
+            SearchMatchType::Content => "content",
+        },
+        "lineNumber": result.line_number,
+        "matchedContent": result.matched_content,
+    })
+}
+
+fn serialize_search_results(results: Vec<FileSearchResult>) -> Vec<serde_json::Value> {
     results
         .into_iter()
-        .map(|result| {
-            serde_json::json!({
-                "path": result.path,
-                "name": result.name,
-                "isDirectory": result.is_directory,
-                "matchType": match result.match_type {
-                    SearchMatchType::FileName => "fileName",
-                    SearchMatchType::Content => "content",
-                },
-                "lineNumber": result.line_number,
-                "matchedContent": result.matched_content,
-            })
-        })
+        .map(|result| serialize_search_result(&result))
         .collect::<Vec<_>>()
+}
+
+fn serialize_search_result_group(result: &FileSearchResultGroup) -> serde_json::Value {
+    serde_json::json!({
+        "path": result.path,
+        "name": result.name,
+        "isDirectory": result.is_directory,
+        "fileNameMatch": result.file_name_match.as_ref().map(serialize_search_result),
+        "contentMatches": result.content_matches.iter().map(serialize_search_result).collect::<Vec<_>>(),
+    })
+}
+
+fn serialize_search_result_groups(results: Vec<FileSearchResultGroup>) -> Vec<serde_json::Value> {
+    results
+        .iter()
+        .map(serialize_search_result_group)
+        .collect::<Vec<_>>()
+}
+
+fn count_search_result_groups(results: &[FileSearchResult]) -> usize {
+    let mut paths = std::collections::HashSet::new();
+    for result in results {
+        paths.insert(result.path.as_str());
+    }
+    paths.len()
+}
+
+const FILE_SEARCH_PROGRESS_EVENT: &str = "file-search://progress";
+const FILE_SEARCH_COMPLETE_EVENT: &str = "file-search://complete";
+const FILE_SEARCH_ERROR_EVENT: &str = "file-search://error";
+const FILE_SEARCH_BATCH_SIZE: usize = 32;
+const FILE_SEARCH_FLUSH_INTERVAL_MS: u64 = 40;
+
+#[derive(Debug, Clone, Copy)]
+enum SearchStreamKind {
+    Filenames,
+    Content,
+}
+
+impl SearchStreamKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Filenames => "filenames",
+            Self::Content => "content",
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchStreamStartResponse {
+    search_id: String,
+    limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchProgressEvent {
+    search_id: String,
+    search_kind: &'static str,
+    results: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchCompleteEvent {
+    search_id: String,
+    search_kind: &'static str,
+    limit: usize,
+    truncated: bool,
+    total_results: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchErrorEvent {
+    search_id: String,
+    search_kind: &'static str,
+    error: String,
+}
+
+fn generate_search_id(prefix: &str) -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("{}-{}", prefix, millis)
+}
+
+fn ensure_search_id(search_id: Option<String>, prefix: &str) -> String {
+    search_id
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| generate_search_id(prefix))
+}
+
+fn emit_search_progress(
+    app_handle: &AppHandle,
+    search_id: &str,
+    search_kind: SearchStreamKind,
+    results: Vec<FileSearchResultGroup>,
+) {
+    if results.is_empty() {
+        return;
+    }
+
+    if let Err(error) = app_handle.emit(
+        FILE_SEARCH_PROGRESS_EVENT,
+        SearchProgressEvent {
+            search_id: search_id.to_string(),
+            search_kind: search_kind.as_str(),
+            results: serialize_search_result_groups(results),
+        },
+    ) {
+        warn!(
+            "Failed to emit search progress event: search_id={}, search_kind={}, error={}",
+            search_id,
+            search_kind.as_str(),
+            error
+        );
+    }
+}
+
+fn emit_search_complete(
+    app_handle: &AppHandle,
+    search_id: &str,
+    search_kind: SearchStreamKind,
+    limit: usize,
+    truncated: bool,
+    total_results: usize,
+) {
+    if let Err(error) = app_handle.emit(
+        FILE_SEARCH_COMPLETE_EVENT,
+        SearchCompleteEvent {
+            search_id: search_id.to_string(),
+            search_kind: search_kind.as_str(),
+            limit,
+            truncated,
+            total_results,
+        },
+    ) {
+        warn!(
+            "Failed to emit search completion event: search_id={}, search_kind={}, error={}",
+            search_id,
+            search_kind.as_str(),
+            error
+        );
+    }
+}
+
+fn emit_search_error(
+    app_handle: &AppHandle,
+    search_id: &str,
+    search_kind: SearchStreamKind,
+    error_message: &str,
+) {
+    if let Err(error) = app_handle.emit(
+        FILE_SEARCH_ERROR_EVENT,
+        SearchErrorEvent {
+            search_id: search_id.to_string(),
+            search_kind: search_kind.as_str(),
+            error: error_message.to_string(),
+        },
+    ) {
+        warn!(
+            "Failed to emit search error event: search_id={}, search_kind={}, error={}",
+            search_id,
+            search_kind.as_str(),
+            error
+        );
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -2449,6 +2640,193 @@ pub async fn search_file_contents(
             Err(format!("Failed to search file contents: {}", error))
         }
     }
+}
+
+#[tauri::command]
+pub async fn start_search_filenames_stream(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    request: SearchFilenamesRequest,
+) -> Result<serde_json::Value, String> {
+    use bitfun_core::service::filesystem::FileSearchOptions;
+
+    let search_id = ensure_search_id(request.search_id.clone(), "filenames-stream");
+    let cancel_flag = register_search(&state, Some(&search_id));
+    let limit = resolve_search_limit(request.max_results, DEFAULT_FILENAME_SEARCH_RESULTS);
+    let options = FileSearchOptions {
+        include_content: false,
+        case_sensitive: request.case_sensitive,
+        use_regex: request.use_regex,
+        whole_word: request.whole_word,
+        max_results: Some(limit),
+        file_extensions: None,
+        include_directories: request.include_directories,
+    };
+
+    let filesystem_service = state.filesystem_service.clone();
+    let active_searches = state.active_searches.clone();
+    let root_path = request.root_path.clone();
+    let pattern = request.pattern.clone();
+    let response_search_id = search_id.clone();
+    let progress_search_id = search_id.clone();
+    let progress_app_handle = app_handle.clone();
+    let progress_sink = Arc::new(BatchedFileSearchProgressSink::new(
+        FILE_SEARCH_BATCH_SIZE,
+        Duration::from_millis(FILE_SEARCH_FLUSH_INTERVAL_MS),
+        move |results| {
+            emit_search_progress(
+                &progress_app_handle,
+                &progress_search_id,
+                SearchStreamKind::Filenames,
+                results,
+            );
+        },
+    ));
+
+    tokio::spawn(async move {
+        let result = filesystem_service
+            .search_file_names_with_progress(
+                &root_path,
+                &pattern,
+                options,
+                cancel_flag,
+                Some(progress_sink),
+            )
+            .await;
+
+        unregister_search_registry(&active_searches, Some(&search_id));
+
+        match result {
+            Ok(outcome) => {
+                info!(
+                    "Filename search stream completed: root_path={}, pattern={}, results_count={}, limit={}, truncated={}",
+                    root_path,
+                    pattern,
+                    outcome.results.len(),
+                    limit,
+                    outcome.truncated
+                );
+                emit_search_complete(
+                    &app_handle,
+                    &search_id,
+                    SearchStreamKind::Filenames,
+                    limit,
+                    outcome.truncated,
+                    count_search_result_groups(&outcome.results),
+                );
+            }
+            Err(error) => {
+                let message = format!("Failed to search filenames: {}", error);
+                error!(
+                    "Filename search stream failed: root_path={}, pattern={}, error={}",
+                    root_path, pattern, error
+                );
+                emit_search_error(
+                    &app_handle,
+                    &search_id,
+                    SearchStreamKind::Filenames,
+                    &message,
+                );
+            }
+        }
+    });
+
+    Ok(serde_json::to_value(SearchStreamStartResponse {
+        search_id: response_search_id,
+        limit,
+    })
+    .unwrap_or_else(|_| serde_json::json!({ "searchId": "", "limit": limit })))
+}
+
+#[tauri::command]
+pub async fn start_search_file_contents_stream(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    request: SearchFileContentsRequest,
+) -> Result<serde_json::Value, String> {
+    use bitfun_core::service::filesystem::FileSearchOptions;
+
+    let search_id = ensure_search_id(request.search_id.clone(), "content-stream");
+    let cancel_flag = register_search(&state, Some(&search_id));
+    let limit = resolve_search_limit(request.max_results, DEFAULT_CONTENT_SEARCH_RESULTS);
+    let options = FileSearchOptions {
+        include_content: true,
+        case_sensitive: request.case_sensitive,
+        use_regex: request.use_regex,
+        whole_word: request.whole_word,
+        max_results: Some(limit),
+        file_extensions: None,
+        include_directories: false,
+    };
+
+    let filesystem_service = state.filesystem_service.clone();
+    let active_searches = state.active_searches.clone();
+    let root_path = request.root_path.clone();
+    let pattern = request.pattern.clone();
+    let response_search_id = search_id.clone();
+    let progress_search_id = search_id.clone();
+    let progress_app_handle = app_handle.clone();
+    let progress_sink = Arc::new(BatchedFileSearchProgressSink::new(
+        FILE_SEARCH_BATCH_SIZE,
+        Duration::from_millis(FILE_SEARCH_FLUSH_INTERVAL_MS),
+        move |results| {
+            emit_search_progress(
+                &progress_app_handle,
+                &progress_search_id,
+                SearchStreamKind::Content,
+                results,
+            );
+        },
+    ));
+
+    tokio::spawn(async move {
+        let result = filesystem_service
+            .search_file_contents_with_progress(
+                &root_path,
+                &pattern,
+                options,
+                cancel_flag,
+                Some(progress_sink),
+            )
+            .await;
+
+        unregister_search_registry(&active_searches, Some(&search_id));
+
+        match result {
+            Ok(outcome) => {
+                info!(
+                    "Content search stream completed: root_path={}, pattern={}, results_count={}, limit={}, truncated={}",
+                    root_path,
+                    pattern,
+                    outcome.results.len(),
+                    limit,
+                    outcome.truncated
+                );
+                emit_search_complete(
+                    &app_handle,
+                    &search_id,
+                    SearchStreamKind::Content,
+                    limit,
+                    outcome.truncated,
+                    count_search_result_groups(&outcome.results),
+                );
+            }
+            Err(error) => {
+                let message = format!("Failed to search file contents: {}", error);
+                error!(
+                    "Content search stream failed: root_path={}, pattern={}, error={}",
+                    root_path, pattern, error
+                );
+                emit_search_error(&app_handle, &search_id, SearchStreamKind::Content, &message);
+            }
+        }
+    });
+
+    Ok(serde_json::to_value(SearchStreamStartResponse {
+        search_id: response_search_id,
+        limit,
+    })
+    .unwrap_or_else(|_| serde_json::json!({ "searchId": "", "limit": limit })))
 }
 
 #[tauri::command]

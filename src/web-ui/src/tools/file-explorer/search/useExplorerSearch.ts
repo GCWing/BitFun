@@ -8,7 +8,10 @@ import {
   type SetStateAction,
 } from 'react';
 import { workspaceAPI } from '@/infrastructure/api';
-import type { FileSearchResult } from '@/infrastructure/api/service-api/tauri-commands';
+import type {
+  FileSearchResult,
+  FileSearchResultGroup,
+} from '@/infrastructure/api/service-api/tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('useExplorerSearch');
@@ -45,6 +48,9 @@ export interface UseExplorerSearchResult {
   triggerSearch: (query: string) => void;
   searchMode: ExplorerSearchMode;
   setSearchMode: Dispatch<SetStateAction<ExplorerSearchMode>>;
+  filenameGroups: FileSearchResultGroup[];
+  contentGroups: FileSearchResultGroup[];
+  allGroups: FileSearchResultGroup[];
   filenameResults: FileSearchResult[];
   contentResults: FileSearchResult[];
   allResults: FileSearchResult[];
@@ -83,6 +89,74 @@ function buildSearchingPhase(
   };
 }
 
+function flattenSearchGroups(groups: FileSearchResultGroup[]): FileSearchResult[] {
+  const flattened: FileSearchResult[] = [];
+
+  for (const group of groups) {
+    if (group.fileNameMatch) {
+      flattened.push(group.fileNameMatch);
+    }
+    if (group.contentMatches.length > 0) {
+      flattened.push(...group.contentMatches);
+    }
+  }
+
+  return flattened;
+}
+
+function mergeSearchGroups(
+  previous: FileSearchResultGroup[],
+  nextBatch: FileSearchResultGroup[]
+): FileSearchResultGroup[] {
+  if (nextBatch.length === 0) {
+    return previous;
+  }
+
+  if (previous.length === 0) {
+    return nextBatch;
+  }
+
+  const merged = new Map<string, FileSearchResultGroup>();
+
+  for (const group of previous) {
+    merged.set(group.path, {
+      ...group,
+      contentMatches: [...group.contentMatches],
+    });
+  }
+
+  for (const group of nextBatch) {
+    const existing = merged.get(group.path);
+    if (!existing) {
+      merged.set(group.path, {
+        ...group,
+        contentMatches: [...group.contentMatches],
+      });
+      continue;
+    }
+
+    merged.set(group.path, {
+      ...existing,
+      name: group.name,
+      isDirectory: group.isDirectory,
+      fileNameMatch: group.fileNameMatch ?? existing.fileNameMatch,
+      contentMatches:
+        group.contentMatches.length > 0
+          ? [...existing.contentMatches, ...group.contentMatches]
+          : existing.contentMatches,
+    });
+  }
+
+  return Array.from(merged.values());
+}
+
+function combineSearchGroups(
+  filenameGroups: FileSearchResultGroup[],
+  contentGroups: FileSearchResultGroup[]
+): FileSearchResultGroup[] {
+  return mergeSearchGroups(filenameGroups, contentGroups);
+}
+
 export function useExplorerSearch(
   options: UseExplorerSearchOptions = {}
 ): UseExplorerSearchResult {
@@ -99,8 +173,8 @@ export function useExplorerSearch(
 
   const [query, setQueryState] = useState('');
   const [searchMode, setSearchMode] = useState<ExplorerSearchMode>(initialMode);
-  const [filenameResults, setFilenameResults] = useState<FileSearchResult[]>([]);
-  const [contentResults, setContentResults] = useState<FileSearchResult[]>([]);
+  const [filenameGroups, setFilenameGroups] = useState<FileSearchResultGroup[]>([]);
+  const [contentGroups, setContentGroups] = useState<FileSearchResultGroup[]>([]);
   const [searchPhase, setSearchPhase] = useState<ExplorerSearchPhase>(() => buildIdlePhase(initialMode));
   const [filenameLimit, setFilenameLimit] = useState(filenameMaxResults);
   const [contentLimit, setContentLimit] = useState(contentMaxResults);
@@ -152,8 +226,8 @@ export function useExplorerSearch(
     cancelAllSearches();
     searchRunIdRef.current += 1;
     setQueryState('');
-    setFilenameResults([]);
-    setContentResults([]);
+    setFilenameGroups([]);
+    setContentGroups([]);
     setFilenameLimit(filenameMaxResults);
     setContentLimit(contentMaxResults);
     setFilenameTruncated(false);
@@ -170,17 +244,27 @@ export function useExplorerSearch(
 
       const controller = new AbortController();
       filenameAbortController.current = controller;
+      const searchId = nextSearchId('filenames');
 
       try {
-        const response = await workspaceAPI.searchFilenamesOnlyDetailed(
+        const response = await workspaceAPI.searchFilenamesOnlyStreamDetailed(
           workspacePath,
           searchQuery,
           searchOptions.caseSensitive,
           searchOptions.useRegex,
           searchOptions.wholeWord,
-          nextSearchId('filenames'),
+          searchId,
           filenameMaxResults,
           true,
+          {
+            onProgress: (event) => {
+              if (runId !== searchRunIdRef.current) {
+                return;
+              }
+
+              setFilenameGroups((prev) => mergeSearchGroups(prev, event.results));
+            },
+          },
           controller.signal
         );
 
@@ -188,7 +272,6 @@ export function useExplorerSearch(
           return;
         }
 
-        setFilenameResults(response.results);
         setFilenameLimit(response.limit);
         setFilenameTruncated(response.truncated);
         setSearchPhase((prev) => {
@@ -230,16 +313,26 @@ export function useExplorerSearch(
 
       const controller = new AbortController();
       contentAbortController.current = controller;
+      const searchId = nextSearchId('content');
 
       try {
-        const response = await workspaceAPI.searchContentOnlyDetailed(
+        const response = await workspaceAPI.searchContentOnlyStreamDetailed(
           workspacePath,
           searchQuery,
           searchOptions.caseSensitive,
           searchOptions.useRegex,
           searchOptions.wholeWord,
-          nextSearchId('content'),
+          searchId,
           contentMaxResults,
+          {
+            onProgress: (event) => {
+              if (runId !== searchRunIdRef.current) {
+                return;
+              }
+
+              setContentGroups((prev) => mergeSearchGroups(prev, event.results));
+            },
+          },
           controller.signal
         );
 
@@ -247,7 +340,6 @@ export function useExplorerSearch(
           return;
         }
 
-        setContentResults(response.results);
         setContentLimit(response.limit);
         setContentTruncated(response.truncated);
         setSearchPhase((prev) => {
@@ -299,8 +391,8 @@ export function useExplorerSearch(
       searchMode !== 'filenames' && trimmedQuery.length >= minContentLength;
 
     if (!workspacePath || (!shouldRunFilename && !shouldRunContent)) {
-      setFilenameResults([]);
-      setContentResults([]);
+      setFilenameGroups([]);
+      setContentGroups([]);
       setFilenameLimit(filenameMaxResults);
       setContentLimit(contentMaxResults);
       setFilenameTruncated(false);
@@ -312,23 +404,21 @@ export function useExplorerSearch(
 
     const runId = ++searchRunIdRef.current;
     setError(null);
+    setFilenameGroups([]);
+    setContentGroups([]);
     setFilenameLimit(filenameMaxResults);
     setContentLimit(contentMaxResults);
     setFilenameTruncated(false);
     setContentTruncated(false);
     setSearchPhase(buildSearchingPhase(searchMode, shouldRunFilename, shouldRunContent));
 
-    if (!shouldRunFilename) {
-      setFilenameResults([]);
-    } else {
+    if (shouldRunFilename) {
       filenameTimer.current = setTimeout(() => {
         void executeFilenameSearch(trimmedQuery, runId);
       }, filenameSearchDebounce);
     }
 
-    if (!shouldRunContent) {
-      setContentResults([]);
-    } else {
+    if (shouldRunContent) {
       contentTimer.current = setTimeout(() => {
         void executeContentSearch(trimmedQuery, runId);
       }, contentSearchDebounce);
@@ -359,6 +449,9 @@ export function useExplorerSearch(
   }, [cancelAllSearches]);
 
   const allResults = useMemo(() => {
+    const filenameResults = flattenSearchGroups(filenameGroups);
+    const contentResults = flattenSearchGroups(contentGroups);
+
     switch (searchMode) {
       case 'filenames':
         return filenameResults;
@@ -367,7 +460,28 @@ export function useExplorerSearch(
       default:
         return [...filenameResults, ...contentResults];
     }
-  }, [contentResults, filenameResults, searchMode]);
+  }, [contentGroups, filenameGroups, searchMode]);
+
+  const filenameResults = useMemo(
+    () => flattenSearchGroups(filenameGroups),
+    [filenameGroups]
+  );
+
+  const contentResults = useMemo(
+    () => flattenSearchGroups(contentGroups),
+    [contentGroups]
+  );
+
+  const allGroups = useMemo(() => {
+    switch (searchMode) {
+      case 'filenames':
+        return filenameGroups;
+      case 'content':
+        return contentGroups;
+      default:
+        return combineSearchGroups(filenameGroups, contentGroups);
+    }
+  }, [contentGroups, filenameGroups, searchMode]);
 
   return {
     query,
@@ -375,6 +489,9 @@ export function useExplorerSearch(
     triggerSearch,
     searchMode,
     setSearchMode,
+    filenameGroups,
+    contentGroups,
+    allGroups,
     filenameResults,
     contentResults,
     allResults,

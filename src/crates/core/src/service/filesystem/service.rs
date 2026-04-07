@@ -1,8 +1,7 @@
 use crate::infrastructure::{
     FileContentSearchOptions, FileInfo, FileNameSearchOptions, FileOperationOptions,
-    FileOperationService, FileReadResult, FileSearchOutcome, FileSearchResult, FileTreeNode,
-    FileTreeService,
-    FileWriteResult,
+    FileOperationService, FileReadResult, FileSearchOutcome, FileSearchProgressSink,
+    FileSearchResult, FileTreeNode, FileTreeService, FileWriteResult,
 };
 use crate::util::errors::*;
 use std::sync::atomic::AtomicBool;
@@ -134,9 +133,21 @@ impl FileSystemService {
         options: FileSearchOptions,
         cancel_flag: Option<Arc<AtomicBool>>,
     ) -> BitFunResult<FileSearchOutcome> {
+        self.search_file_names_with_progress(root_path, pattern, options, cancel_flag, None)
+            .await
+    }
+
+    pub async fn search_file_names_with_progress(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileSearchOptions,
+        cancel_flag: Option<Arc<AtomicBool>>,
+        progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
+    ) -> BitFunResult<FileSearchOutcome> {
         let mut outcome = self
             .file_tree_service
-            .search_file_names(
+            .search_file_names_with_progress(
                 root_path,
                 pattern,
                 FileNameSearchOptions {
@@ -147,6 +158,7 @@ impl FileSystemService {
                     include_directories: options.include_directories,
                     cancel_flag,
                 },
+                progress_sink,
             )
             .await?;
 
@@ -179,9 +191,21 @@ impl FileSystemService {
         options: FileSearchOptions,
         cancel_flag: Option<Arc<AtomicBool>>,
     ) -> BitFunResult<FileSearchOutcome> {
+        self.search_file_contents_with_progress(root_path, pattern, options, cancel_flag, None)
+            .await
+    }
+
+    pub async fn search_file_contents_with_progress(
+        &self,
+        root_path: &str,
+        pattern: &str,
+        options: FileSearchOptions,
+        cancel_flag: Option<Arc<AtomicBool>>,
+        progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
+    ) -> BitFunResult<FileSearchOutcome> {
         let mut outcome = self
             .file_tree_service
-            .search_file_contents(
+            .search_file_contents_with_progress(
                 root_path,
                 pattern,
                 FileContentSearchOptions {
@@ -192,6 +216,7 @@ impl FileSystemService {
                     max_file_size_bytes: 10 * 1024 * 1024,
                     cancel_flag,
                 },
+                progress_sink,
             )
             .await?;
 

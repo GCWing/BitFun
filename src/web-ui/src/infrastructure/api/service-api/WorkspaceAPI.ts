@@ -7,11 +7,51 @@ import type {
   ExplorerNodeDto,
   WorkspaceInfo,
   FileSearchResponse,
-  FileSearchResult
+  FileSearchResult,
+  FileSearchCompleteEvent,
+  FileSearchErrorEvent,
+  FileSearchProgressEvent,
+  FileSearchResultGroup,
+  FileSearchStreamKind,
+  FileSearchStreamStartResponse,
 } from './tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('WorkspaceAPI');
+
+const FILE_SEARCH_PROGRESS_EVENT = 'file-search://progress';
+const FILE_SEARCH_COMPLETE_EVENT = 'file-search://complete';
+const FILE_SEARCH_ERROR_EVENT = 'file-search://error';
+
+interface FileSearchStreamCallbacks {
+  onProgress?: (event: FileSearchProgressEvent) => void;
+}
+
+function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResultGroup[] {
+  const groups = new Map<string, FileSearchResultGroup>();
+
+  for (const result of results) {
+    const existing = groups.get(result.path);
+    if (existing) {
+      if (result.matchType === 'fileName') {
+        existing.fileNameMatch = result;
+      } else {
+        existing.contentMatches.push(result);
+      }
+      continue;
+    }
+
+    groups.set(result.path, {
+      path: result.path,
+      name: result.name,
+      isDirectory: result.isDirectory,
+      fileNameMatch: result.matchType === 'fileName' ? result : undefined,
+      contentMatches: result.matchType === 'content' ? [result] : [],
+    });
+  }
+
+  return Array.from(groups.values());
+}
 
 export class WorkspaceAPI {
    
@@ -275,6 +315,128 @@ export class WorkspaceAPI {
     ]);
   }
 
+  private supportsSearchStreamEvents(): boolean {
+    return typeof window !== 'undefined' && '__TAURI__' in window;
+  }
+
+  private async runSearchStream(
+    commandName: 'start_search_filenames_stream' | 'start_search_file_contents_stream',
+    searchKind: FileSearchStreamKind,
+    request: {
+      rootPath: string;
+      pattern: string;
+      searchId: string;
+      caseSensitive: boolean;
+      useRegex: boolean;
+      wholeWord: boolean;
+      maxResults?: number;
+      includeDirectories?: boolean;
+    },
+    callbacks: FileSearchStreamCallbacks = {},
+    signal?: AbortSignal
+  ): Promise<FileSearchCompleteEvent> {
+    if (!this.supportsSearchStreamEvents()) {
+      throw new Error(`Search streaming is unavailable for ${searchKind} searches outside Tauri`);
+    }
+
+    if (signal?.aborted) {
+      await this.cancelSearch(request.searchId);
+      throw new DOMException(`${commandName} aborted`, 'AbortError');
+    }
+
+    const { listen } = await import('@tauri-apps/api/event');
+
+    return await new Promise<FileSearchCompleteEvent>((resolve, reject) => {
+      let settled = false;
+
+      const cleanupCallbacks: Array<() => void> = [];
+      const cleanup = () => {
+        while (cleanupCallbacks.length > 0) {
+          const callback = cleanupCallbacks.pop();
+          try {
+            callback?.();
+          } catch (error) {
+            log.warn('Failed to cleanup search stream listener', {
+              searchId: request.searchId,
+              searchKind,
+              error,
+            });
+          }
+        }
+      };
+
+      const settleResolve = (event: FileSearchCompleteEvent) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(event);
+      };
+
+      const settleReject = (error: unknown) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      const handleAbort = () => {
+        void this.cancelSearch(request.searchId);
+        settleReject(new DOMException(`${commandName} aborted`, 'AbortError'));
+      };
+
+      if (signal) {
+        signal.addEventListener('abort', handleAbort, { once: true });
+        cleanupCallbacks.push(() => {
+          signal.removeEventListener('abort', handleAbort);
+        });
+      }
+
+      void (async () => {
+        cleanupCallbacks.push(await listen<FileSearchProgressEvent>(FILE_SEARCH_PROGRESS_EVENT, (tauriEvent) => {
+          const event = tauriEvent.payload;
+          if (event.searchId !== request.searchId || event.searchKind !== searchKind) {
+            return;
+          }
+
+          callbacks.onProgress?.(event);
+        }));
+
+        cleanupCallbacks.push(await listen<FileSearchCompleteEvent>(FILE_SEARCH_COMPLETE_EVENT, (tauriEvent) => {
+          const event = tauriEvent.payload;
+          if (event.searchId !== request.searchId || event.searchKind !== searchKind) {
+            return;
+          }
+
+          settleResolve(event);
+        }));
+
+        cleanupCallbacks.push(await listen<FileSearchErrorEvent>(FILE_SEARCH_ERROR_EVENT, (tauriEvent) => {
+          const event = tauriEvent.payload;
+          if (event.searchId !== request.searchId || event.searchKind !== searchKind) {
+            return;
+          }
+
+          settleReject(new Error(event.error));
+        }));
+
+        await api.invoke<FileSearchStreamStartResponse>(commandName, { request });
+      })().catch((error) => {
+        settleReject(
+          createTauriCommandError(commandName, error, {
+            rootPath: request.rootPath,
+            pattern: request.pattern,
+            searchId: request.searchId,
+            searchKind,
+          })
+        );
+      });
+    });
+  }
+
   async searchFiles(
     rootPath: string, 
     pattern: string, 
@@ -396,6 +558,70 @@ export class WorkspaceAPI {
     }
   }
 
+  async searchFilenamesOnlyStreamDetailed(
+    rootPath: string,
+    pattern: string,
+    caseSensitive: boolean = false,
+    useRegex: boolean = false,
+    wholeWord: boolean = false,
+    searchIdOrSignal?: string | AbortSignal,
+    maxResults?: number,
+    includeDirectories: boolean = true,
+    callbacks: FileSearchStreamCallbacks = {},
+    signal?: AbortSignal
+  ): Promise<FileSearchCompleteEvent> {
+    const effectiveSignal = searchIdOrSignal instanceof AbortSignal ? searchIdOrSignal : signal;
+    const effectiveSearchId =
+      typeof searchIdOrSignal === 'string' ? searchIdOrSignal : this.createSearchId('filenames');
+
+    if (!this.supportsSearchStreamEvents()) {
+      const response = await this.searchFilenamesOnlyDetailed(
+        rootPath,
+        pattern,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        effectiveSearchId,
+        maxResults,
+        includeDirectories,
+        effectiveSignal
+      );
+      const groupedResults = groupSearchResultsByFile(response.results);
+      const event: FileSearchCompleteEvent = {
+        searchId: effectiveSearchId,
+        searchKind: 'filenames',
+        limit: response.limit,
+        truncated: response.truncated,
+        totalResults: groupedResults.length,
+      };
+      if (groupedResults.length > 0) {
+        callbacks.onProgress?.({
+          searchId: effectiveSearchId,
+          searchKind: 'filenames',
+          results: groupedResults,
+        });
+      }
+      return event;
+    }
+
+    return await this.runSearchStream(
+      'start_search_filenames_stream',
+      'filenames',
+      {
+        rootPath,
+        pattern,
+        searchId: effectiveSearchId,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        maxResults,
+        includeDirectories,
+      },
+      callbacks,
+      effectiveSignal
+    );
+  }
+
   async searchContentOnly(
     rootPath: string, 
     pattern: string, 
@@ -462,6 +688,67 @@ export class WorkspaceAPI {
         maxResults,
       });
     }
+  }
+
+  async searchContentOnlyStreamDetailed(
+    rootPath: string,
+    pattern: string,
+    caseSensitive: boolean = false,
+    useRegex: boolean = false,
+    wholeWord: boolean = false,
+    searchIdOrSignal?: string | AbortSignal,
+    maxResults?: number,
+    callbacks: FileSearchStreamCallbacks = {},
+    signal?: AbortSignal
+  ): Promise<FileSearchCompleteEvent> {
+    const effectiveSignal = searchIdOrSignal instanceof AbortSignal ? searchIdOrSignal : signal;
+    const effectiveSearchId =
+      typeof searchIdOrSignal === 'string' ? searchIdOrSignal : this.createSearchId('content');
+
+    if (!this.supportsSearchStreamEvents()) {
+      const response = await this.searchContentOnlyDetailed(
+        rootPath,
+        pattern,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        effectiveSearchId,
+        maxResults,
+        effectiveSignal
+      );
+      const groupedResults = groupSearchResultsByFile(response.results);
+      const event: FileSearchCompleteEvent = {
+        searchId: effectiveSearchId,
+        searchKind: 'content',
+        limit: response.limit,
+        truncated: response.truncated,
+        totalResults: groupedResults.length,
+      };
+      if (groupedResults.length > 0) {
+        callbacks.onProgress?.({
+          searchId: effectiveSearchId,
+          searchKind: 'content',
+          results: groupedResults,
+        });
+      }
+      return event;
+    }
+
+    return await this.runSearchStream(
+      'start_search_file_contents_stream',
+      'content',
+      {
+        rootPath,
+        pattern,
+        searchId: effectiveSearchId,
+        caseSensitive,
+        useRegex,
+        wholeWord,
+        maxResults,
+      },
+      callbacks,
+      effectiveSignal
+    );
   }
 
    
