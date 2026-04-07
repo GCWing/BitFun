@@ -15,7 +15,9 @@
 .bitfun-files-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   background: var(--color-bg-primary);
   container-type: inline-size;
   container-name: files-panel;
@@ -82,10 +84,13 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
     overflow: hidden;
   }
 
   &__search-results {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -204,7 +209,10 @@
   }
 
   &__main-content {
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-height: 0;
     overflow: hidden;
     transition: box-shadow $motion-base $easing-standard, background $motion-base $easing-standard;
 

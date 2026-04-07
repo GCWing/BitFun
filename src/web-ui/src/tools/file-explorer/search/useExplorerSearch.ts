@@ -93,7 +93,7 @@ export function useExplorerSearch(
     contentSearchDebounce = 300,
     minFilenameLength = 1,
     minContentLength = 2,
-    filenameMaxResults = 512,
+    filenameMaxResults = 500,
     contentMaxResults = 1000,
   } = options;
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, startTransition, memo, useEffect, useRef } from 'react';
-import { File, FileText, Folder, ChevronRight, ChevronDown, MoreHorizontal } from 'lucide-react';
+import { File, FileText, Folder, ChevronRight, ChevronDown } from 'lucide-react';
 import type { FileSearchResult } from '@/infrastructure/api/service-api/tauri-commands';
 import { useI18n } from '@/infrastructure/i18n';
 import './FileSearchResults.scss';
@@ -216,7 +216,8 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
 }) => {
   const { t } = useI18n('tools');
   const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
-  
+  const listRef = useRef<HTMLDivElement>(null);
+  const pendingAutoLoadRef = useRef(false);
   const [manualExpandState, setManualExpandState] = useState<Map<string, boolean>>(new Map());
 
   const groupedResults = useMemo(() => {
@@ -261,7 +262,6 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   }, [groupedResults, displayCount]);
 
   const hasMore = displayCount < groupedResults.length;
-  const remainingCount = groupedResults.length - displayCount;
 
   const shouldDefaultExpand = groupedResults.length <= 100;
   
@@ -282,10 +282,39 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   }, [shouldDefaultExpand]);
 
   const handleLoadMore = useCallback(() => {
+    pendingAutoLoadRef.current = true;
     startTransition(() => {
-      setDisplayCount(prev => prev + LOAD_MORE_COUNT);
+      setDisplayCount(prev => Math.min(prev + LOAD_MORE_COUNT, groupedResults.length));
     });
-  }, []);
+  }, [groupedResults.length]);
+
+  useEffect(() => {
+    pendingAutoLoadRef.current = false;
+  }, [displayCount]);
+
+  const maybeAutoLoadMore = useCallback(() => {
+    if (!hasMore || pendingAutoLoadRef.current) {
+      return;
+    }
+
+    const listElement = listRef.current;
+    if (!listElement) {
+      return;
+    }
+
+    const distanceToBottom =
+      listElement.scrollHeight - listElement.scrollTop - listElement.clientHeight;
+    const shouldLoadMore =
+      distanceToBottom <= 32 || listElement.scrollHeight <= listElement.clientHeight + 1;
+
+    if (shouldLoadMore) {
+      handleLoadMore();
+    }
+  }, [handleLoadMore, hasMore]);
+
+  useEffect(() => {
+    maybeAutoLoadMore();
+  }, [maybeAutoLoadMore, visibleGroups.length]);
 
   const handleFileClick = useCallback((path: string, name: string) => {
     onFileSelect(path, name);
@@ -325,7 +354,11 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
         </span>
       </div>
 
-      <div className="bitfun-search-results__list">
+      <div
+        ref={listRef}
+        className="bitfun-search-results__list"
+        onScroll={maybeAutoLoadMore}
+      >
         {visibleGroups.map((group, index) => (
           <FileGroup
             key={`${group.path}-${index}`}
@@ -338,19 +371,6 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
           />
         ))}
       </div>
-
-      {hasMore && (
-        <div 
-          className="bitfun-search-results__load-more"
-          onClick={handleLoadMore}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && handleLoadMore()}
-        >
-          <MoreHorizontal size={12} />
-          <span>{t('search.loadMore', { count: remainingCount })}</span>
-        </div>
-      )}
     </div>
   );
 };

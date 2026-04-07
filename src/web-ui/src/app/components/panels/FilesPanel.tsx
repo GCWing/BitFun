@@ -88,7 +88,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     contentSearchDebounce: 300,
     minFilenameLength: 1,
     minContentLength: 2,
-    filenameMaxResults: 512,
+    filenameMaxResults: 500,
     contentMaxResults: 1000,
   });
 
