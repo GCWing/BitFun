@@ -37,6 +37,7 @@ import '@/tools/file-system/styles/FileExplorer.scss';
 import './FilesPanel.scss';
 
 const log = createLogger('FilesPanel');
+const FOCUS_REFRESH_THROTTLE_MS = 1000;
 
 interface FilesPanelProps {
   workspacePath?: string;
@@ -63,6 +64,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const { t } = useTranslation('panels/files');
   
   const panelRef = useRef<HTMLDivElement>(null);
+  const lastFocusRefreshAtRef = useRef<number>(0);
   const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
   
@@ -310,6 +312,29 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     loadFileTree(undefined, true);
   }, [loadFileTree]);
 
+  const triggerFocusCompensatingRefresh = useCallback((reason: 'windowFocus' | 'visibilityVisible') => {
+    if (!workspacePath || viewMode !== 'tree') {
+      return;
+    }
+
+    const panelEl = panelRef.current;
+    if (!panelEl || panelEl.getClientRects().length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastFocusRefreshAtRef.current < FOCUS_REFRESH_THROTTLE_MS) {
+      return;
+    }
+
+    lastFocusRefreshAtRef.current = now;
+    log.debug('Compensating file tree refresh after focus/visibility', {
+      reason,
+      workspacePath,
+    });
+    void loadFileTree(undefined, true);
+  }, [workspacePath, viewMode, loadFileTree]);
+
   const handleNavigateToPath = useCallback((data: { path: string; scrollIntoView?: boolean }) => {
     if (!data.path || !workspacePath) {
       return;
@@ -494,6 +519,30 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       globalEventBus.off('file-explorer:navigate', handleNavigateToPath);
     };
   }, [handleOpenFile, handleNewFile, handleNewFolder, handleStartRename, handleDelete, handleReveal, handleFileDownload, handlePasteFromContextMenu, handleFileTreeRefresh, handleNavigateToPath]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleWindowFocus = () => {
+      triggerFocusCompensatingRefresh('windowFocus');
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        triggerFocusCompensatingRefresh('visibilityVisible');
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [triggerFocusCompensatingRefresh]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('__TAURI__' in window) || !workspacePath) {
