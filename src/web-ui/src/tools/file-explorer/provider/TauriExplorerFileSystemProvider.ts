@@ -71,6 +71,73 @@ function normalizeForCompare(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
+interface BackendWatchRef {
+  count: number;
+  rootPath: string;
+  started: boolean;
+}
+
+const backendWatchRefs = new Map<string, BackendWatchRef>();
+
+function toBackendWatchKey(path: string): string {
+  const normalized = normalizeForCompare(path);
+  const isWindowsLike = /^[a-zA-Z]:/.test(normalized) || normalized.startsWith('//');
+  return isWindowsLike ? normalized.toLowerCase() : normalized;
+}
+
+function retainBackendWatch(rootPath: string): string {
+  const key = toBackendWatchKey(rootPath);
+  const existing = backendWatchRefs.get(key);
+  if (existing) {
+    existing.count += 1;
+    return key;
+  }
+
+  backendWatchRefs.set(key, {
+    count: 1,
+    rootPath,
+    started: false,
+  });
+
+  void workspaceAPI
+    .startFileWatch(rootPath, true)
+    .then(() => {
+      const current = backendWatchRefs.get(key);
+      if (!current) {
+        void workspaceAPI.stopFileWatch(rootPath).catch(() => {});
+        return;
+      }
+
+      current.started = true;
+    })
+    .catch((error) => {
+      log.warn('Failed to register backend file watch', { rootPath, error });
+    });
+
+  return key;
+}
+
+function releaseBackendWatch(key: string): void {
+  const existing = backendWatchRefs.get(key);
+  if (!existing) {
+    return;
+  }
+
+  existing.count -= 1;
+  if (existing.count > 0) {
+    return;
+  }
+
+  backendWatchRefs.delete(key);
+  if (!existing.started) {
+    return;
+  }
+
+  void workspaceAPI.stopFileWatch(existing.rootPath).catch((error) => {
+    log.warn('Failed to unregister backend file watch', { rootPath: existing.rootPath, error });
+  });
+}
+
 function mapEventKind(kind: string): FileSystemChangeEvent['type'] {
   switch (kind) {
     case 'create':
@@ -100,6 +167,7 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
     let unlisten: UnlistenFn | null = null;
     let active = true;
     const normalizedRoot = normalizeForCompare(rootPath);
+    const backendWatchKey = retainBackendWatch(rootPath);
 
     const start = async () => {
       try {
@@ -142,6 +210,7 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
       if (unlisten) {
         unlisten();
       }
+      releaseBackendWatch(backendWatchKey);
     };
   }
 }

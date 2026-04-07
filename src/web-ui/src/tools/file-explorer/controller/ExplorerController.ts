@@ -364,13 +364,13 @@ export class ExplorerController {
 
   private handleFileChange(event: FileSystemChangeEvent): void {
     const parentPath = dirnameAbsolutePath(event.path);
+    const changedDirectory = this.model.getNode(event.path);
 
     if (parentPath) {
       this.pendingRefreshPaths.add(parentPath);
       this.model.markDirectoryStale(parentPath);
     }
 
-    const changedDirectory = this.model.getNode(event.path);
     if (changedDirectory?.kind === 'directory') {
       this.pendingRefreshPaths.add(event.path);
       this.model.markDirectoryStale(event.path);
@@ -420,10 +420,9 @@ export class ExplorerController {
     const expandedFolders = this.model.getExpandedFolders();
 
     for (const directory of refreshTargets) {
-      if (
-        pathsEquivalentFs(directory, rootPath) ||
-        expandedFoldersContains(expandedFolders, directory)
-      ) {
+      const isRootEquivalent = pathsEquivalentFs(directory, rootPath);
+      const isExpanded = expandedFoldersContains(expandedFolders, directory);
+      if (isRootEquivalent || isExpanded) {
         directoriesToRefresh.add(directory);
       }
     }
