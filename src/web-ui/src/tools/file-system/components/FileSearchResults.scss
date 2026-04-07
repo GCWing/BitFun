@@ -76,18 +76,28 @@ $_icon-size: 16px;
   &-main {
     @include mixins.flex-layout(row, center, start, $size-gap-2);
     flex: 1;
+    width: 100%;
     min-width: 0;
     padding: $_node-padding-y $_node-padding-x;
     cursor: pointer;
     min-height: $_node-height;
+    border: none;
     border-radius: $size-radius-sm;
     background: transparent;
     transition: all $motion-base $easing-standard;
     color: var(--color-text-secondary);
+    text-align: left;
+    font: inherit;
+    appearance: none;
 
     &:hover {
       background: var(--element-bg-base);
       color: var(--color-text-primary);
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--color-accent-500);
+      outline-offset: 1px;
     }
   }
 
@@ -125,12 +135,14 @@ $_icon-size: 16px;
     flex-shrink: 0;
     padding: 2px 6px;
     min-height: 20px;
+    border: none;
     border-radius: 10px;
     background: var(--git-color-branch-bg);
     color: var(--git-color-branch);
     cursor: pointer;
     transition: all $motion-base $easing-standard;
     user-select: none;
+    appearance: none;
 
     &:hover {
       background: $git-color-branch-bg-hover;
@@ -138,6 +150,11 @@ $_icon-size: 16px;
 
     &:active {
       transform: scale(0.95);
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--color-accent-500);
+      outline-offset: 1px;
     }
 
     svg {
@@ -160,14 +177,19 @@ $_icon-size: 16px;
 
 .bitfun-search-results__match {
   @include mixins.flex-layout(row, flex-start, start, $size-gap-2);
+  width: calc(100% - #{$size-gap-2});
   padding: $size-gap-1 $size-gap-2;
   margin: 0 $size-gap-1;
   cursor: pointer;
   transition: all $motion-base $easing-standard;
+  border: none;
   border-radius: $size-radius-sm;
   min-height: 24px;
   background: transparent;
   position: relative;
+  text-align: left;
+  font: inherit;
+  appearance: none;
 
   &::before {
     content: '';
@@ -191,6 +213,11 @@ $_icon-size: 16px;
 
   &:active {
     background: var(--element-bg-soft);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--color-accent-500);
+    outline-offset: 1px;
   }
 
   &-line {

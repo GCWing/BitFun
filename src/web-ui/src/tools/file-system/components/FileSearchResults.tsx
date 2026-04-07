@@ -5,6 +5,14 @@ import type {
   FileSearchResultGroup,
 } from '@/infrastructure/api/service-api/tauri-commands';
 import { useI18n } from '@/infrastructure/i18n';
+import { i18nService } from '@/infrastructure/i18n';
+import { notificationService } from '@/shared/notification-system';
+import { useContextMenuStore } from '@/shared/context-menu-system';
+import { ContextType } from '@/shared/context-menu-system/types/context.types';
+import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
+import { useContextStore } from '@/shared/stores/contextStore';
+import type { DirectoryContext, FileContext } from '@/shared/types/context';
+import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import './FileSearchResults.scss';
 
 const INITIAL_DISPLAY_COUNT = 50;
@@ -14,7 +22,64 @@ interface FileSearchResultsProps {
   results: FileSearchResultGroup[];
   searchQuery: string;
   onFileSelect: (filePath: string, fileName: string) => void;
+  workspacePath?: string;
   className?: string;
+}
+
+interface SearchResultTarget {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+}
+
+function newContextId(prefix: string): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function getRelativePath(fullPath: string, workspacePath?: string): string | undefined {
+  if (!workspacePath) {
+    return undefined;
+  }
+
+  const normalizedWorkspace = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalizedPath = fullPath.replace(/\\/g, '/');
+
+  if (!normalizedPath.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
+    return undefined;
+  }
+
+  return normalizedPath.slice(normalizedWorkspace.length).replace(/^\//, '');
+}
+
+function createFileMentionContext(
+  target: SearchResultTarget,
+  workspacePath?: string,
+): FileContext | DirectoryContext {
+  const timestamp = Date.now();
+
+  if (target.isDirectory) {
+    return {
+      id: newContextId('dir'),
+      type: 'directory',
+      directoryPath: target.path,
+      directoryName: target.name,
+      recursive: true,
+      timestamp,
+    };
+  }
+
+  return {
+    id: newContextId('file'),
+    type: 'file',
+    filePath: target.path,
+    fileName: target.name,
+    relativePath: getRelativePath(target.path, workspacePath),
+    timestamp,
+  };
 }
 
 function truncateLine(line: string, query: string, maxLength: number = 200): string {
@@ -84,22 +149,22 @@ HighlightedText.displayName = 'HighlightedText';
 
 interface MatchItemProps {
   match: FileSearchResult;
-  groupPath: string;
-  groupName: string;
+  target: SearchResultTarget;
   searchQuery: string;
-  onLineClick: (path: string, name: string, lineNumber?: number) => void;
+  onLineClick: (target: SearchResultTarget, lineNumber?: number) => void;
 }
 
-const MatchItem = memo<MatchItemProps>(({ match, groupPath, groupName, searchQuery, onLineClick }) => {
+const MatchItem = memo<MatchItemProps>(({ match, target, searchQuery, onLineClick }) => {
   const truncatedContent = useMemo(
     () => truncateLine(match.matchedContent || '', searchQuery),
     [match.matchedContent, searchQuery]
   );
 
   return (
-    <div
+    <button
+      type="button"
       className="bitfun-search-results__match"
-      onClick={() => onLineClick(groupPath, groupName, match.lineNumber)}
+      onClick={() => onLineClick(target, match.lineNumber)}
     >
       <span className="bitfun-search-results__match-line">
         {match.lineNumber}
@@ -112,7 +177,7 @@ const MatchItem = memo<MatchItemProps>(({ match, groupPath, groupName, searchQue
           <HighlightedText text={truncatedContent} query={searchQuery} />
         </code>
       </span>
-    </div>
+    </button>
   );
 });
 
@@ -123,8 +188,9 @@ interface FileGroupProps {
   isExpanded: boolean;
   searchQuery: string;
   onToggleExpand: (path: string) => void;
-  onFileClick: (path: string, name: string) => void;
-  onLineClick: (path: string, name: string, lineNumber?: number) => void;
+  onFileClick: (target: SearchResultTarget) => void;
+  onFileContextMenu: (event: React.MouseEvent<HTMLElement>, target: SearchResultTarget) => void;
+  onLineClick: (target: SearchResultTarget, lineNumber?: number) => void;
 }
 
 const FileGroup = memo<FileGroupProps>(({ 
@@ -133,17 +199,25 @@ const FileGroup = memo<FileGroupProps>(({
   searchQuery, 
   onToggleExpand, 
   onFileClick, 
+  onFileContextMenu,
   onLineClick 
 }) => {
   const { t } = useI18n('tools');
   const hasContentMatches = group.contentMatches.length > 0;
+  const target = useMemo<SearchResultTarget>(() => ({
+    path: group.path,
+    name: group.name,
+    isDirectory: group.isDirectory,
+  }), [group.isDirectory, group.name, group.path]);
 
   return (
     <div className="bitfun-search-results__group">
       <div className="bitfun-search-results__file">
-        <div 
+        <button
+          type="button"
           className="bitfun-search-results__file-main"
-          onClick={() => onFileClick(group.path, group.name)}
+          onClick={() => onFileClick(target)}
+          onContextMenu={(event) => onFileContextMenu(event, target)}
         >
           <span className="bitfun-search-results__file-icon">
             {group.isDirectory ? (
@@ -160,10 +234,11 @@ const FileGroup = memo<FileGroupProps>(({
               {group.path}
             </span>
           </span>
-        </div>
+        </button>
 
         {hasContentMatches && (
-          <span 
+          <button
+            type="button"
             className="bitfun-search-results__file-toggle"
             onClick={(e) => {
               e.stopPropagation();
@@ -179,7 +254,7 @@ const FileGroup = memo<FileGroupProps>(({
             <span className="bitfun-search-results__file-toggle-count">
               {group.contentMatches.length}
             </span>
-          </span>
+          </button>
         )}
       </div>
 
@@ -189,8 +264,7 @@ const FileGroup = memo<FileGroupProps>(({
             <MatchItem
               key={`${group.path}-${matchIndex}`}
               match={match}
-              groupPath={group.path}
-              groupName={group.name}
+              target={target}
               searchQuery={searchQuery}
               onLineClick={onLineClick}
             />
@@ -207,6 +281,7 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   results,
   searchQuery,
   onFileSelect,
+  workspacePath,
   className = ''
 }) => {
   const { t } = useI18n('tools');
@@ -214,6 +289,8 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const pendingAutoLoadRef = useRef(false);
   const [manualExpandState, setManualExpandState] = useState<Map<string, boolean>>(new Map());
+  const showMenu = useContextMenuStore((state) => state.showMenu);
+  const addContext = useContextStore((state) => state.addContext);
 
   const prevResultsRef = useRef(results);
   const prevSearchQueryRef = useRef(searchQuery);
@@ -241,6 +318,11 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   }, [results, displayCount]);
 
   const hasMore = displayCount < results.length;
+  const totalMatches = useMemo(() => {
+    return results.reduce((count, group) => {
+      return count + (group.fileNameMatch ? 1 : 0) + group.contentMatches.length;
+    }, 0);
+  }, [results]);
 
   const shouldDefaultExpand = results.length <= 100;
   
@@ -295,18 +377,95 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
     maybeAutoLoadMore();
   }, [maybeAutoLoadMore, visibleGroups.length]);
 
-  const handleFileClick = useCallback((path: string, name: string) => {
-    onFileSelect(path, name);
-  }, [onFileSelect]);
-
-  const handleLineClick = useCallback(async (path: string, name: string, lineNumber?: number) => {
-    if (lineNumber) {
-      const { editorJumpService } = await import('@/shared/services/EditorJumpService');
-      await editorJumpService.jumpToFile(path, lineNumber, 1);
-    } else {
-      onFileSelect(path, name);
+  const openResultTarget = useCallback((target: SearchResultTarget, lineNumber?: number) => {
+    if (target.isDirectory) {
+      return;
     }
-  }, [onFileSelect]);
+
+    openFileInBestTarget({
+      filePath: target.path,
+      fileName: target.name,
+      workspacePath,
+      ...(lineNumber ? { jumpToLine: lineNumber, jumpToColumn: 1 } : {}),
+    }, { source: 'project-nav' });
+  }, [workspacePath]);
+
+  const handleFileClick = useCallback((target: SearchResultTarget) => {
+    onFileSelect(target.path, target.name);
+    openResultTarget(target);
+  }, [onFileSelect, openResultTarget]);
+
+  const handleLineClick = useCallback((target: SearchResultTarget, lineNumber?: number) => {
+    onFileSelect(target.path, target.name);
+
+    if (lineNumber) {
+      openResultTarget(target, lineNumber);
+    } else {
+      openResultTarget(target);
+    }
+  }, [onFileSelect, openResultTarget]);
+
+  const handleCopyPath = useCallback(async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      notificationService.success(i18nService.t('common:contextMenu.status.copyPathSuccess'), {
+        duration: 2000,
+      });
+    } catch (error) {
+      notificationService.error(
+        error instanceof Error
+          ? error.message
+          : i18nService.t('errors:contextMenu.copyPathFailed'),
+      );
+    }
+  }, []);
+
+  const handleAddToChat = useCallback((target: SearchResultTarget) => {
+    const context = createFileMentionContext(target, workspacePath);
+    addContext(context);
+    window.dispatchEvent(new CustomEvent('insert-context-tag', { detail: { context } }));
+  }, [addContext, workspacePath]);
+
+  const handleFileContextMenu = useCallback((
+    event: React.MouseEvent<HTMLElement>,
+    target: SearchResultTarget,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const items: MenuItem[] = [
+      {
+        id: `search-result-copy-path:${target.path}`,
+        label: i18nService.t('common:file.copyPath'),
+        icon: 'Copy',
+        onClick: async () => {
+          await handleCopyPath(target.path);
+        },
+      },
+      {
+        id: `search-result-add-to-chat:${target.path}`,
+        label: i18nService.t('common:editor.addToChat'),
+        icon: 'MessageSquarePlus',
+        onClick: () => {
+          handleAddToChat(target);
+        },
+      },
+    ];
+
+    showMenu(
+      { x: event.clientX, y: event.clientY },
+      items,
+      {
+        type: ContextType.CUSTOM,
+        customType: 'file-search-result',
+        data: target,
+        event,
+        targetElement: event.currentTarget,
+        position: { x: event.clientX, y: event.clientY },
+        timestamp: Date.now(),
+      },
+    );
+  }, [handleAddToChat, handleCopyPath, showMenu]);
 
   if (results.length === 0) {
     return (
@@ -323,12 +482,6 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
       </div>
     );
   }
-
-  const totalMatches = useMemo(() => {
-    return results.reduce((count, group) => {
-      return count + (group.fileNameMatch ? 1 : 0) + group.contentMatches.length;
-    }, 0);
-  }, [results]);
 
   return (
     <div className={`bitfun-search-results ${className}`}>
@@ -352,6 +505,7 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
             searchQuery={searchQuery}
             onToggleExpand={toggleExpanded}
             onFileClick={handleFileClick}
+            onFileContextMenu={handleFileContextMenu}
             onLineClick={handleLineClick}
           />
         ))}

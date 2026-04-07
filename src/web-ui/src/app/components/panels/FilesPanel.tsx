@@ -687,6 +687,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     onFileDoubleClick?.(filePath);
   }, [onFileDoubleClick]);
 
+  const handleSearchResultSelect = useCallback((filePath: string, fileName: string) => {
+    selectFile(filePath);
+    onFileSelect?.(filePath, fileName);
+  }, [selectFile, onFileSelect]);
+
   const handleClearSearch = useCallback(() => {
     clearSearch();
   }, [clearSearch]);
@@ -887,7 +892,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 <FileSearchResults
                   results={searchResults}
                   searchQuery={searchQuery}
-                  onFileSelect={handleFileSelect}
+                  onFileSelect={handleSearchResultSelect}
+                  workspacePath={workspacePath}
                   className="bitfun-files-panel__search-results"
                 />
               ) : (
