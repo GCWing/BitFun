@@ -333,7 +333,11 @@
     "clickToViewDiff": "点击查看 Diff",
     "review": {
       "displayMessage": "审查修改的文件：\n{{files}}",
+      "displayMessageFiltered": "审查过滤后的文件：\n{{files}}\n\n已跳过 {{skipped}} 个命中排除规则的文件。",
+      "filteredNotice": "本次将分析 {{included}} 个文件，并跳过 {{skipped}} 个命中排除规则的文件，例如锁文件、生成物或二进制资源。",
+      "noEligibleFiles": "排除命中规则的文件后，本次会话里没有可审查文件。",
       "prompt": "请审查本次会话中修改的以下文件：\n\n{{files}}",
+      "promptFiltered": "请审查本次会话中修改的以下文件：\n\n{{files}}\n\n请不要审查另外 {{skipped}} 个已跳过的文件，因为它们命中了锁文件、生成物或二进制文件的排除规则。",
       "threadTitle": "代码审查"
     }
   },

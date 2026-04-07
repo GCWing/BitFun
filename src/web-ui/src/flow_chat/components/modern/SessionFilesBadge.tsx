@@ -11,12 +11,62 @@ import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
 import { snapshotAPI } from '../../../infrastructure/api';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
 import { diffService } from '../../../tools/editor/services';
+import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from '../../services/BtwThreadService';
 import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
+
+const REVIEW_EXCLUDED_EXTENSIONS = new Set([
+  '.7z', '.avi', '.avif', '.bin', '.bmp', '.class', '.dll', '.doc', '.docx', '.eot', '.exe',
+  '.gif', '.gz', '.ico', '.jar', '.jpeg', '.jpg', '.lock', '.map', '.min.js', '.min.css',
+  '.mov', '.mp3', '.mp4', '.otf', '.pdf', '.png', '.rar', '.so', '.svg', '.tar', '.tgz',
+  '.tiff', '.ttf', '.wav', '.webm', '.webp', '.woff', '.woff2', '.xz', '.zip',
+]);
+
+const REVIEW_EXCLUDED_FILENAMES = new Set([
+  'bun.lock', 'bun.lockb', 'Cargo.lock', 'composer.lock', 'Gemfile.lock', 'package-lock.json',
+  'pnpm-lock.yaml', 'poetry.lock', 'Podfile.lock', 'yarn.lock',
+]);
+
+const REVIEW_EXCLUDED_PATH_SEGMENTS = new Set([
+  '.cache', '.next', '.nuxt', '.output', '.parcel-cache', '.svelte-kit', '.turbo',
+  'build', 'coverage', 'dist', 'node_modules', 'out', 'target',
+]);
+
+function shouldReviewFile(filePath: string): boolean {
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  const segments = normalizedPath
+    .split('/')
+    .map(segment => segment.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (segments.some(segment => REVIEW_EXCLUDED_PATH_SEGMENTS.has(segment))) {
+    return false;
+  }
+
+  const fileName = normalizedPath.split('/').pop()?.trim() || normalizedPath;
+  const lowerFileName = fileName.toLowerCase();
+
+  if (REVIEW_EXCLUDED_FILENAMES.has(fileName) || REVIEW_EXCLUDED_FILENAMES.has(lowerFileName)) {
+    return false;
+  }
+
+  if (lowerFileName.endsWith('.min.js') || lowerFileName.endsWith('.min.css')) {
+    return false;
+  }
+
+  const extMatch = lowerFileName.match(/(\.[^.]+)$/);
+  const extension = extMatch?.[1];
+
+  if (extension && REVIEW_EXCLUDED_EXTENSIONS.has(extension)) {
+    return false;
+  }
+
+  return true;
+}
 
 export interface SessionFilesBadgeProps {
   /** Session ID. */
@@ -281,10 +331,48 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     if (!sessionId || fileStats.size === 0) return;
 
     const filePaths = Array.from(fileStats.keys());
-    const fileList = filePaths.map(p => `- ${p}`).join('\n');
+    const reviewableFilePaths = filePaths.filter(shouldReviewFile);
+    const skippedCount = filePaths.length - reviewableFilePaths.length;
 
-    const displayMessage = t('sessionFilesBadge.review.displayMessage', { files: fileList });
-    const reviewMessage = t('sessionFilesBadge.review.prompt', { files: fileList });
+    if (reviewableFilePaths.length === 0) {
+      notificationService.warning(
+        t('sessionFilesBadge.review.noEligibleFiles', {
+          defaultValue: 'No reviewable files remain after excluded files were filtered out.',
+        }),
+        { duration: 3500 }
+      );
+      return;
+    }
+
+    if (skippedCount > 0) {
+      notificationService.info(
+        t('sessionFilesBadge.review.filteredNotice', {
+          included: reviewableFilePaths.length,
+          skipped: skippedCount,
+          defaultValue:
+            'Review will analyze {{included}} files and skip {{skipped}} excluded files such as lock, generated, or binary assets.',
+        }),
+        { duration: 3500 }
+      );
+    }
+
+    const fileList = reviewableFilePaths.map(p => `- ${p}`).join('\n');
+    const displayMessage = skippedCount > 0
+      ? t('sessionFilesBadge.review.displayMessageFiltered', {
+          files: fileList,
+          skipped: skippedCount,
+          defaultValue:
+            'Review filtered files:\n{{files}}\n\nSkipped {{skipped}} excluded files.',
+        })
+      : t('sessionFilesBadge.review.displayMessage', { files: fileList });
+    const reviewMessage = skippedCount > 0
+      ? t('sessionFilesBadge.review.promptFiltered', {
+          files: fileList,
+          skipped: skippedCount,
+          defaultValue:
+            'Please review the following modified files in this session:\n\n{{files}}\n\nDo not review the {{skipped}} skipped files because they matched the excluded lock, generated, or binary file rules.',
+        })
+      : t('sessionFilesBadge.review.prompt', { files: fileList });
 
     try {
       const { FlowChatManager } = await import('../../services/FlowChatManager');
@@ -318,9 +406,14 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
       setIsExpanded(false);
     } catch (error) {
-      log.error('Failed to send review request', { sessionId, fileCount: fileStats.size, error });
+      log.error('Failed to send review request', {
+        sessionId,
+        fileCount: reviewableFilePaths.length,
+        skippedCount,
+        error,
+      });
     }
-  }, [fileStats, sessionId, t]);
+  }, [fileStats, sessionId, t, currentWorkspace?.rootPath]);
 
   const getOperationIcon = (operationType: 'write' | 'edit' | 'delete') => {
     switch (operationType) {
