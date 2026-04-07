@@ -201,6 +201,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
             type="button"
             className="new-project-dialog__btn new-project-dialog__btn--cancel"
             variant="ghost"
+            size="small"
             onClick={handleCancel}
             disabled={isCreating}
           >
@@ -211,6 +212,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
             type="button"
             className="new-project-dialog__btn new-project-dialog__btn--confirm"
             variant="primary"
+            size="small"
             onClick={handleConfirm}
             disabled={isCreating}
             isLoading={isCreating}

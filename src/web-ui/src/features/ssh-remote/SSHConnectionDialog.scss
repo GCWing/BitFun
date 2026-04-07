@@ -229,12 +229,24 @@
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: 8px;
     flex-shrink: 0;
     margin-top: 0;
-    padding: 12px 16px 10px;
+    padding: 8px 16px;
     border-top: 1px solid var(--border-subtle);
     background: var(--color-bg-primary);
+
+    .btn.btn-sm {
+      height: 28px;
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    .btn-loading-icon {
+      width: 13px;
+      height: 13px;
+    }
   }
 
   &__spinner {

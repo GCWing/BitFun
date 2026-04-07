@@ -611,11 +611,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
                 }}
               />
               <div className="remote-file-browser__dialog-actions">
-                <Button variant="secondary" onClick={() => setRenameEntry(null)}>
+                <Button variant="secondary" size="small" onClick={() => setRenameEntry(null)}>
                   {t('actions.cancel')}
                 </Button>
                 <Button
                   variant="primary"
+                  size="small"
                   onClick={handleRename}
                   disabled={!renameValue.trim() || renameValue.trim() === renameEntry.name}
                 >
@@ -654,11 +655,12 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
             )}
           </div>
           <div className="remote-file-browser__footer-actions">
-            <Button variant="secondary" onClick={onCancel}>
+            <Button variant="secondary" size="small" onClick={onCancel}>
               {t('actions.cancel')}
             </Button>
             <Button
               variant="primary"
+              size="small"
               onClick={openSelectedWorkspace}
               disabled={false}
             >

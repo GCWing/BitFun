@@ -2,6 +2,7 @@
  * New Project Dialog Styles
  */
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 // ==================== Dialog Container ====================
 
@@ -26,19 +27,14 @@
   &__icon-wrapper {
     position: relative;
     z-index: 1;
-    width: 56px;
-    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(34, 197, 94, 0.1);
-    border: 1px solid rgba(34, 197, 94, 0.2);
-    border-radius: 14px;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
     animation: new-project-icon-enter 0.4s ease-out;
-    
+
     svg {
-      color: #4ADE80;
+      color: var(--color-primary);
     }
   }
 
@@ -214,8 +210,8 @@
       }
       
       &:focus {
-        border-color: rgba(99, 102, 241, 0.4);
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+        border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 10%, transparent);
         outline: none;
       }
       
@@ -233,8 +229,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: rgba(99, 102, 241, 0.04);
-    border: 1px solid rgba(99, 102, 241, 0.1);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 16%, transparent);
     border-radius: 8px;
     animation: new-project-preview-enter 0.3s ease-out;
   }
@@ -252,18 +248,14 @@
 
   &__preview-icon {
     flex-shrink: 0;
-    width: 28px;
-    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(99, 102, 241, 0.1);
-    border-radius: 6px;
-    
+
     svg {
       width: 14px;
       height: 14px;
-      color: var(--color-accent-400);
+      color: var(--color-accent-500);
     }
   }
 
@@ -330,18 +322,28 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    padding: 10px 16px;
+    padding: 8px 16px;
     border-top: 1px solid var(--border-subtle);
     background: transparent;
+
+    .btn.btn-sm {
+      height: 28px;
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    .btn-loading-icon {
+      width: 13px;
+      height: 13px;
+    }
   }
 
   &__btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    padding: 6px 14px;
-    font-size: 11px;
+    gap: 4px;
     font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
@@ -360,13 +362,16 @@
     }
     
     &--confirm {
-      background: rgba(34, 197, 94, 0.12);
-      border: 1px solid rgba(34, 197, 94, 0.25);
-      color: #4ADE80;
-      
+      @include btn-primary.btn-primary-surface-default;
+      border: 1px solid color-mix(in srgb, var(--color-accent-500) 32%, transparent);
+
       &:hover:not(:disabled) {
-        background: rgba(34, 197, 94, 0.18);
-        border-color: rgba(34, 197, 94, 0.35);
+        @include btn-primary.btn-primary-surface-hover;
+        border-color: color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+      }
+
+      &:active:not(:disabled) {
+        @include btn-primary.btn-primary-surface-active;
       }
     }
     
@@ -388,8 +393,8 @@
   &__btn-spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid rgba(74, 222, 128, 0.3);
-    border-top-color: #4ADE80;
+    border: 2px solid color-mix(in srgb, var(--color-accent-500) 28%, transparent);
+    border-top-color: var(--color-accent-500);
     border-radius: 50%;
     animation: new-project-spin 0.8s linear infinite;
   }
@@ -414,7 +419,7 @@
     }
     
     &__footer {
-      padding: 14px 16px;
+      padding: 10px 16px;
     }
     
     &__path-selector {

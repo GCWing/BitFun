@@ -93,9 +93,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 36px;
+    min-height: 30px;
     min-width: 0;
-    padding: $size-gap-2 $size-gap-3;
+    padding: $size-gap-1 $size-gap-3;
     font-size: var(--font-size-sm);
     font-family: var(--font-sans, var(--font-family-sans));
     background: transparent;

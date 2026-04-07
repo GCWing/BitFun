@@ -667,6 +667,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           <div className="ssh-connection-dialog__actions">
             <Button
               variant="secondary"
+              size="small"
               onClick={onClose}
               disabled={isConnecting || status === 'connecting'}
             >
@@ -674,17 +675,18 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             </Button>
             <Button
               variant="primary"
+              size="small"
               onClick={handleConnect}
               disabled={isConnecting || status === 'connecting' || !formData.host.trim() || !formData.username.trim()}
             >
               {(isConnecting || status === 'connecting') ? (
                 <>
-                  <Loader2 size={16} className="ssh-connection-dialog__spinner" />
+                  <Loader2 size={14} className="ssh-connection-dialog__spinner" />
                   {t('ssh.remote.connecting')}
                 </>
               ) : (
                 <>
-                  <Plus size={16} />
+                  <Plus size={14} />
                   {t('ssh.remote.connect')}
                 </>
               )}

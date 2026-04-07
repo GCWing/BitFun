@@ -62,8 +62,20 @@
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: 8px;
     margin-top: 8px;
+
+    .btn.btn-sm {
+      height: 28px;
+      min-height: 28px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    .btn-loading-icon {
+      width: 13px;
+      height: 13px;
+    }
   }
 
   &__spinner {

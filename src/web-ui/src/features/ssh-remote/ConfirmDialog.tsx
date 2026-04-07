@@ -55,11 +55,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         )}
         <p className="ssh-remote-confirm-dialog__message">{message}</p>
         <div className="ssh-remote-confirm-dialog__actions">
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" size="small" onClick={onCancel}>
             {cancelText || t('actions.cancel')}
           </Button>
           <Button
             variant={destructive ? 'danger' : 'primary'}
+            size="small"
             onClick={handleConfirm}
           >
             {confirmText || t('actions.confirm')}
