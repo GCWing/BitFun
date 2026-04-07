@@ -36,6 +36,8 @@
     "reusedExistingModel": "已使用当前服务商下已有同名模型配置（未新增重复项）",
     "noModelsSelected": "请先选择模型",
     "removeModel": "移除模型",
+    "expandModelSettings": "展开「{{name}}」的详细设置",
+    "collapseModelSettings": "收起「{{name}}」的详细设置",
     "urlHint": "已预填官方 API 地址，如使用代理或私有部署可修改",
     "formatHint": "已根据提供商自动选择，通常无需修改"
   },
@@ -151,6 +153,8 @@
   "thinking": {
     "enable": "启用思考",
     "enableHint": "需要模型支持思考模式",
+    "summaryOn": "思考开",
+    "summaryOff": "思考关",
     "optionEnabled": "启用",
     "optionDisabled": "禁用",
     "preserve": "保留历史思考",

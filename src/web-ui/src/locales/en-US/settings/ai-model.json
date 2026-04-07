@@ -36,6 +36,8 @@
     "reusedExistingModel": "Using the existing model entry for this provider (no duplicate was added)",
     "noModelsSelected": "Select a model first",
     "removeModel": "Remove model",
+    "expandModelSettings": "Expand settings for {{name}}",
+    "collapseModelSettings": "Collapse settings for {{name}}",
     "urlHint": "Official API URL pre-filled, modify if using proxy or private deployment",
     "formatHint": "Automatically selected based on provider, usually no need to change"
   },
@@ -151,6 +153,8 @@
   "thinking": {
     "enable": "Enable Thinking",
     "enableHint": "Requires model to support thinking mode",
+    "summaryOn": "thinking on",
+    "summaryOff": "thinking off",
     "optionEnabled": "Enabled",
     "optionDisabled": "Disabled",
     "preserve": "Preserve Historical Thinking",

@@ -819,11 +819,28 @@
       max-width: 100%;
       border: none;
       border-radius: 0;
-      padding: $size-gap-5 $size-gap-6 0;
+      /* No horizontal padding here — footer bar must span full modal content width; inset lives on scrollable only. */
+      padding: $size-gap-5 0 0;
       margin: 0;
       display: flex;
       flex-direction: column;
       gap: $size-gap-6;
+
+      /* Modal: same fr ratio on every two-column row (uniform). Controls a bit wider than native wide 2/8. */
+      .bitfun-ai-model-config__edit-section {
+        .bitfun-config-page-row--multiline:not(.bitfun-config-page-row--wide) {
+          grid-template-columns: 1fr !important;
+        }
+
+        .bitfun-config-page-row:not(.bitfun-config-page-row--multiline),
+        .bitfun-config-page-row--multiline.bitfun-config-page-row--wide {
+          grid-template-columns: minmax(0, 2fr) minmax(0, 11fr) !important;
+        }
+
+        .bitfun-config-page-row--multiline.bitfun-config-page-row--wide {
+          gap: $size-gap-4;
+        }
+      }
     }
   }
 
@@ -1165,26 +1182,81 @@
     flex-direction: column;
     gap: $size-gap-2;
     padding: $size-gap-3;
-    border: none;
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-sm;
     background: var(--element-bg-subtle);
+    transition: border-color $motion-base $easing-standard;
   }
 
   &__selected-model-head {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: $size-gap-2;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 2px 0;
+
+    &--toggleable {
+      cursor: pointer;
+      user-select: none;
+
+      &:focus-visible {
+        outline: 2px solid var(--color-accent-500);
+        outline-offset: 2px;
+      }
+    }
 
     .bitfun-icon-button--small {
       width: 24px;
       height: 24px;
       margin-top: -1px;
+      flex-shrink: 0;
 
       svg {
         width: 14px;
         height: 14px;
       }
+    }
+  }
+
+  &__selected-model-head-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    width: 100%;
+    min-width: 0;
+  }
+
+  &__selected-model-head-top {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-2;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  &__selected-model-head-bottom {
+    width: 100%;
+    min-width: 0;
+    margin-top: 2px;
+    padding-left: calc(20px + #{$size-gap-2});
+    box-sizing: border-box;
+  }
+
+  &__selected-model-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    transition: transform $motion-base $easing-standard;
+
+    svg {
+      width: 14px;
+      height: 14px;
     }
   }
 
@@ -1198,10 +1270,21 @@
     word-break: break-word;
   }
 
+  &__selected-model-summary {
+    display: block;
+    font-size: var(--font-size-2xs);
+    color: var(--color-text-muted);
+    white-space: normal;
+    line-height: 1.35;
+    font-family: $font-family-sans;
+  }
+
   &__selected-model-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: $size-gap-2;
+    padding-top: $size-gap-2;
+    border-top: 1px dashed var(--border-subtle);
 
     .select__trigger,
     .bitfun-number-input__container {
@@ -1319,6 +1402,35 @@
     padding-top: $size-gap-4;
     padding-bottom: $size-gap-4;
     border-top: 1px dashed var(--border-medium);
+  }
+
+  &__form--modal {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  &__form-scrollable {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-left: $size-gap-6;
+    padding-right: calc(#{$size-gap-6} + 4px);
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  &__form-actions--sticky {
+    flex-shrink: 0;
+    background: var(--color-bg-scene);
+    padding: $size-gap-3 $size-gap-6;
+    border-top: 1px solid var(--border-medium);
+    display: flex;
+    justify-content: flex-end;
+    gap: $size-gap-3;
   }
 
   
