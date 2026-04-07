@@ -4,7 +4,7 @@ export type ExplorerNodeId = string;
 
 export type ExplorerNodeKind = 'file' | 'directory';
 
-export type ExplorerChildrenState = 'unresolved' | 'loading' | 'resolved' | 'error';
+export type ExplorerChildrenState = 'unresolved' | 'refreshing' | 'resolved' | 'error';
 
 export interface ExplorerNodeRecord {
   id: ExplorerNodeId;
@@ -17,8 +17,7 @@ export interface ExplorerNodeRecord {
   lastModified?: Date;
   childIds: ExplorerNodeId[];
   childrenState: ExplorerChildrenState;
-  hasMoreChildren: boolean;
-  totalChildren: number;
+  stale: boolean;
   errorMessage?: string;
   isRoot: boolean;
 }
@@ -29,7 +28,6 @@ export interface ExplorerSnapshot {
   selectedFile?: string;
   expandedFolders: Set<string>;
   loading: boolean;
-  silentRefreshing: boolean;
   error?: string;
   loadingPaths: Set<string>;
   options: FileSystemOptions;
@@ -39,28 +37,14 @@ export interface ExplorerControllerConfig extends FileSystemOptions {
   rootPath?: string;
   autoLoad?: boolean;
   enableAutoWatch?: boolean;
-  enableLazyLoad?: boolean;
-  pollingIntervalMs?: number;
 }
 
 export interface ExplorerChildrenRequest {
   path: string;
-  offset?: number;
-  limit?: number;
   options?: FileSystemOptions;
 }
 
-export interface ExplorerChildrenPage {
-  children: FileSystemNode[];
-  total: number;
-  hasMore: boolean;
-  offset: number;
-  limit: number;
-}
-
 export interface ExplorerFileSystemProvider {
-  getFileTree(rootPath: string, options?: FileSystemOptions): Promise<FileSystemNode[]>;
   getChildren(request: ExplorerChildrenRequest): Promise<FileSystemNode[]>;
-  getChildrenPage(request: ExplorerChildrenRequest): Promise<ExplorerChildrenPage>;
   watch(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void;
 }

@@ -1,9 +1,9 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { workspaceAPI } from '@/infrastructure/api';
-import type { ExplorerChildrenPageDto, ExplorerNodeDto } from '@/infrastructure/api/service-api/tauri-commands';
+import type { ExplorerNodeDto } from '@/infrastructure/api/service-api/tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 import type { FileSystemChangeEvent, FileSystemNode, FileSystemOptions } from '@/tools/file-system/types';
-import type { ExplorerChildrenPage, ExplorerChildrenRequest, ExplorerFileSystemProvider } from '../types/explorer';
+import type { ExplorerChildrenRequest, ExplorerFileSystemProvider } from '../types/explorer';
 
 const log = createLogger('TauriExplorerProvider');
 
@@ -29,10 +29,6 @@ function transformRawNode(rawNode: ExplorerNodeDto): FileSystemNode {
   }
 
   return node;
-}
-
-function transformRawTree(rawNodes: ExplorerNodeDto[]): FileSystemNode[] {
-  return rawNodes.map(node => transformRawNode(node));
 }
 
 function sortNodes(
@@ -65,7 +61,7 @@ function sortNodes(
     return sortOrder === 'desc' ? -comparison : comparison;
   });
 
-  return sortedNodes.map(node => ({
+  return sortedNodes.map((node) => ({
     ...node,
     children: node.children ? sortNodes(node.children, sortBy, sortOrder) : undefined,
   }));
@@ -91,11 +87,6 @@ function mapEventKind(kind: string): FileSystemChangeEvent['type'] {
 }
 
 export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvider {
-  async getFileTree(rootPath: string, options: FileSystemOptions = {}): Promise<FileSystemNode[]> {
-    const rawTree = await workspaceAPI.explorerGetFileTree(rootPath, options.maxDepth);
-    return sortNodes(transformRawTree(rawTree), options.sortBy, options.sortOrder);
-  }
-
   async getChildren(request: ExplorerChildrenRequest): Promise<FileSystemNode[]> {
     const rawChildren = await workspaceAPI.explorerGetChildren(request.path);
     return sortNodes(
@@ -103,27 +94,6 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
       request.options?.sortBy,
       request.options?.sortOrder
     );
-  }
-
-  async getChildrenPage(request: ExplorerChildrenRequest): Promise<ExplorerChildrenPage> {
-    const offset = request.offset ?? 0;
-    const limit = request.limit ?? 100;
-    const result: ExplorerChildrenPageDto = await workspaceAPI.explorerGetChildrenPaginated(
-      request.path,
-      offset,
-      limit
-    );
-    return {
-      children: sortNodes(
-        result.children.map((node) => transformRawNode(node)),
-        request.options?.sortBy,
-        request.options?.sortOrder
-      ),
-      total: result.total,
-      hasMore: result.hasMore,
-      offset: result.offset,
-      limit: result.limit,
-    };
   }
 
   watch(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void {

@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useRef, forwardRef } from 'react';
-import { Loader2 } from 'lucide-react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { VirtualFileTreeProps, FlatFileNode, FileSystemNode } from '../types';
 import { useI18n } from '@/infrastructure/i18n';
@@ -66,57 +65,14 @@ const VirtualFileRow = React.memo<VirtualFileRowProps>(({
 
 VirtualFileRow.displayName = 'VirtualFileRow';
 
-interface VirtualLoadMoreRowProps {
-  node: FlatFileNode;
-  onLoadMore: (path: string) => void;
-}
-
-const VirtualLoadMoreRow = React.memo<VirtualLoadMoreRowProps>(({ node, onLoadMore }) => {
-  const { t } = useI18n('tools');
-  const targetPath = node.loadMoreForPath;
-  const loaded = node.loadedChildrenCount ?? 0;
-  const total = node.totalChildren ?? loaded;
-
-  if (!targetPath) {
-    return null;
-  }
-
-  return (
-    <div className="bitfun-file-explorer__node">
-      <button
-        type="button"
-        className="bitfun-file-explorer__load-more"
-        style={{ paddingLeft: `${node.depth * 20 + 16}px` }}
-        onClick={() => onLoadMore(targetPath)}
-        disabled={node.isLoading}
-      >
-        {node.isLoading ? (
-          <Loader2 size={14} className="bitfun-file-explorer__loading-icon" />
-        ) : null}
-        <span>
-          {t('fileTree.loadMore', {
-            loaded,
-            total,
-            defaultValue: `Load more (${loaded}/${total})`,
-          })}
-        </span>
-      </button>
-    </div>
-  );
-});
-
-VirtualLoadMoreRow.displayName = 'VirtualLoadMoreRow';
-
 export const VirtualFileTree = forwardRef<VirtuosoHandle, VirtualFileTreeProps>(({
   flatNodes,
   selectedFile,
   expandedFolders,
   onNodeSelect,
   onToggleExpand,
-  onLoadMore,
   height = '100%',
   className = '',
-  workspacePath,
   renamingPath,
   onRename,
   onCancelRename,
@@ -137,10 +93,6 @@ export const VirtualFileTree = forwardRef<VirtuosoHandle, VirtualFileTreeProps>(
   }, [onToggleExpand]);
 
   const itemContent = useCallback((_index: number, node: FlatFileNode) => {
-    if (node.rowType === 'loadMore' && onLoadMore && node.loadMoreForPath) {
-      return <VirtualLoadMoreRow node={node} onLoadMore={onLoadMore} />;
-    }
-
     const isSelected = selectedFile === node.path;
     const isExpanded = expandedFoldersContains(expandedFolders, node.path);
 
@@ -158,7 +110,7 @@ export const VirtualFileTree = forwardRef<VirtuosoHandle, VirtualFileTreeProps>(
         renderActions={renderNodeActions}
       />
     );
-  }, [selectedFile, expandedFolders, handleNodeSelect, handleToggleExpand, onLoadMore, workspacePath, renamingPath, onRename, onCancelRename, renderNodeContent, renderNodeActions]);
+  }, [selectedFile, expandedFolders, handleNodeSelect, handleToggleExpand, renamingPath, onRename, onCancelRename, renderNodeContent, renderNodeActions]);
 
   if (flatNodes.length === 0) {
     return (

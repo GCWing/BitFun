@@ -8,7 +8,6 @@ const EMPTY_SNAPSHOT: ExplorerSnapshot = {
   selectedFile: undefined,
   expandedFolders: new Set(),
   loading: false,
-  silentRefreshing: false,
   error: undefined,
   loadingPaths: new Set(),
   options: {

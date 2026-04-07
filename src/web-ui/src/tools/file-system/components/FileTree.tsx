@@ -12,7 +12,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
   loadingPaths,
   onNodeSelect,
   onNodeExpand,
-  onLoadMore,
   className = '',
   level = 0,
   workspacePath,
@@ -64,7 +63,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
         loadingPaths={loadingPaths}
         onSelect={onNodeSelect}
         onToggleExpand={handleNodeExpand}
-        onLoadMore={onLoadMore}
         renamingPath={renamingPath}
         onRename={onRename}
         onCancelRename={onCancelRename}

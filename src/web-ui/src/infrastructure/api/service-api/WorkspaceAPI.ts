@@ -224,16 +224,6 @@ export class WorkspaceAPI {
     }
   }
 
-  async explorerGetFileTree(path: string, maxDepth?: number): Promise<ExplorerNodeDto[]> {
-    try {
-      return await api.invoke('explorer_get_file_tree', {
-        request: { path, maxDepth }
-      });
-    } catch (error) {
-      throw createTauriCommandError('explorer_get_file_tree', error, { path, maxDepth });
-    }
-  }
-
   async explorerGetChildren(path: string): Promise<ExplorerNodeDto[]> {
     try {
       return await api.invoke('explorer_get_children', {
@@ -241,20 +231,6 @@ export class WorkspaceAPI {
       });
     } catch (error) {
       throw createTauriCommandError('explorer_get_children', error, { path });
-    }
-  }
-
-  async explorerGetChildrenPaginated(
-    path: string,
-    offset: number = 0,
-    limit: number = 100
-  ): Promise<ExplorerChildrenPageDto> {
-    try {
-      return await api.invoke('explorer_get_children_paginated', {
-        request: { path, offset, limit }
-      });
-    } catch (error) {
-      throw createTauriCommandError('explorer_get_children_paginated', error, { path, offset, limit });
     }
   }
 

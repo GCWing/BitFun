@@ -126,14 +126,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     selectFile,
     expandFolder,
     expandFolderLazy,
-    loadMoreFolder,
   } = useFileSystem({
     rootPath: workspacePath,
     autoLoad: true,
     enablePathCompression: true,
     showHiddenFiles: false,
     enableAutoWatch: true,
-    enableLazyLoad: true
   });
   const handleNodeExpandLazy = useCallback((path: string) => {
     expandFolderLazy(path);
@@ -819,7 +817,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
             </div>
           )
         ) : (
-          loading ? (
+          loading && fileTree.length === 0 ? (
             <div className="bitfun-files-panel__loading">
               <CubeLoading size="medium" text={t('status.loadingFileTree')} />
             </div>
@@ -841,7 +839,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               expandedFolders={expandedFolders}
               loadingPaths={loadingPaths}
               onNodeExpand={handleNodeExpandLazy}
-              onLoadMore={loadMoreFolder}
               onFileSelect={handleFileSelect}
               onFileDoubleClick={handleFileDoubleClick}
               className="bitfun-files-panel__explorer"

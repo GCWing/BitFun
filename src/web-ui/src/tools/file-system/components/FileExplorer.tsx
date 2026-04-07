@@ -131,7 +131,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   expandedFolders: externalExpandedFolders,
   loadingPaths = new Set(),
   onNodeExpand: externalOnNodeExpand,
-  onLoadMore,
   workspacePath,
   onNewFile,
   onNewFolder,
@@ -396,7 +395,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           expandedFolders={expandedFolders}
           onNodeSelect={(node: FlatFileNode) => emitFileSelect(node.path, node.name)}
           onToggleExpand={toggleExpandedState}
-          onLoadMore={onLoadMore}
           className="bitfun-file-explorer__tree"
           workspacePath={workspacePath}
           renamingPath={renamingPath}
@@ -412,7 +410,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           loadingPaths={loadingPaths}
           onNodeSelect={(node: FileSystemNode) => emitFileSelect(node.path, node.name)}
           onNodeExpand={setExpandedState}
-          onLoadMore={onLoadMore}
           renderNodeContent={renderNodeContent}
           className="bitfun-file-explorer__tree"
           renamingPath={renamingPath}

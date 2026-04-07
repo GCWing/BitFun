@@ -1,3 +1,7 @@
+import {
+  expandedFoldersAddEquivalent,
+  expandedFoldersDeleteEquivalent,
+} from '@/shared/utils/pathUtils';
 import type { FileSystemNode, FileSystemOptions } from '@/tools/file-system/types';
 import type { ExplorerControllerConfig, ExplorerNodeRecord, ExplorerSnapshot } from '../types/explorer';
 
@@ -18,12 +22,30 @@ function cloneOptions(options: FileSystemOptions): FileSystemOptions {
   };
 }
 
+function createDirectoryRecord(
+  path: string,
+  name: string,
+  parentId: string | null,
+  isRoot: boolean
+): ExplorerNodeRecord {
+  return {
+    id: path,
+    path,
+    name,
+    parentId,
+    kind: 'directory',
+    childIds: [],
+    childrenState: 'unresolved',
+    stale: false,
+    isRoot,
+  };
+}
+
 function createNodeRecord(
   node: FileSystemNode,
   parentId: string | null,
   isRoot: boolean,
-  childIds: string[],
-  childrenState: ExplorerNodeRecord['childrenState']
+  existing?: ExplorerNodeRecord
 ): ExplorerNodeRecord {
   return {
     id: node.path,
@@ -34,10 +56,12 @@ function createNodeRecord(
     size: node.size,
     extension: node.extension,
     lastModified: node.lastModified,
-    childIds,
-    childrenState,
-    hasMoreChildren: node.hasMoreChildren ?? false,
-    totalChildren: node.totalChildren ?? childIds.length,
+    childIds: node.children?.map((child) => child.path) ?? (existing?.childIds ?? []),
+    childrenState: node.isDirectory
+      ? (node.children ? 'resolved' : existing?.childrenState ?? 'unresolved')
+      : 'resolved',
+    stale: node.isDirectory ? (existing?.stale ?? false) : false,
+    errorMessage: existing?.errorMessage,
     isRoot,
   };
 }
@@ -50,7 +74,6 @@ export class ExplorerModel {
   private readonly loadingPaths = new Set<string>();
   private selectedFile?: string;
   private loading = false;
-  private silentRefreshing = false;
   private error?: string;
   private options: FileSystemOptions = cloneOptions(DEFAULT_OPTIONS);
 
@@ -66,27 +89,21 @@ export class ExplorerModel {
     this.loadingPaths.clear();
     this.selectedFile = undefined;
     this.loading = false;
-    this.silentRefreshing = false;
     this.error = undefined;
-  }
 
-  setRootPath(rootPath?: string): void {
-    this.rootPath = rootPath;
-  }
-
-  setLoading(loading: boolean, silentRefreshing = false): void {
-    this.loading = loading;
-    this.silentRefreshing = silentRefreshing;
-    if (!loading && !silentRefreshing) {
-      this.loadingPaths.clear();
+    if (rootPath) {
+      this.bootstrapRoot(rootPath);
     }
+  }
+
+  setLoading(loading: boolean): void {
+    this.loading = loading;
   }
 
   setError(error?: string): void {
     this.error = error;
     if (error) {
       this.loading = false;
-      this.silentRefreshing = false;
     }
   }
 
@@ -94,119 +111,106 @@ export class ExplorerModel {
     this.error = undefined;
   }
 
-  replaceTree(rootNodes: FileSystemNode[]): void {
-    this.nodes.clear();
-    this.roots.length = 0;
+  select(filePath?: string): void {
+    this.selectedFile = filePath;
+  }
 
-    for (const rootNode of rootNodes) {
-      this.insertSubtree(rootNode, null, true);
-      this.roots.push(rootNode.path);
-      this.expandedFolders.add(rootNode.path);
+  expand(path: string, expanded = true): void {
+    if (expanded) {
+      this.replaceExpandedFolders(expandedFoldersAddEquivalent(this.expandedFolders, path));
+      return;
     }
 
-    this.loading = false;
-    this.silentRefreshing = false;
-    this.error = undefined;
+    this.replaceExpandedFolders(expandedFoldersDeleteEquivalent(this.expandedFolders, path));
   }
 
-  replaceRootChildren(
-    rootPath: string,
-    children: FileSystemNode[],
-    totalChildren = children.length,
-    hasMoreChildren = false
-  ): void {
-    const rootNode: FileSystemNode = {
-      path: rootPath,
-      name: rootPath.split(/[/\\]/).filter(Boolean).pop() || rootPath,
-      isDirectory: true,
-      children,
-      totalChildren,
-      hasMoreChildren,
-      loadedChildrenCount: children.length,
-    };
+  ensureRoot(rootPath: string): void {
+    if (this.rootPath !== rootPath) {
+      this.reset(rootPath);
+      return;
+    }
 
-    this.replaceTree([rootNode]);
+    if (!this.nodes.has(rootPath)) {
+      this.bootstrapRoot(rootPath);
+    }
   }
 
-  setDirectoryLoading(path: string, loading: boolean): void {
-    if (loading) {
+  setDirectoryRefreshing(path: string, refreshing: boolean): void {
+    const node = this.nodes.get(path);
+    if (!node || node.kind !== 'directory') {
+      return;
+    }
+
+    if (refreshing) {
       this.loadingPaths.add(path);
-      this.expandedFolders.add(path);
-      const existing = this.nodes.get(path);
-      if (existing && existing.kind === 'directory') {
-        existing.childrenState = 'loading';
-      }
+      node.childrenState = 'refreshing';
+      node.stale = false;
+      node.errorMessage = undefined;
       return;
     }
 
     this.loadingPaths.delete(path);
-    const existing = this.nodes.get(path);
-    if (existing && existing.kind === 'directory' && existing.childrenState === 'loading') {
-      existing.childrenState = 'resolved';
+    if (node.childrenState === 'refreshing') {
+      node.childrenState = 'resolved';
     }
   }
 
-  upsertChildren(
-    parentPath: string,
-    children: FileSystemNode[],
-    options: {
-      append?: boolean;
-      totalChildren?: number;
-      hasMoreChildren?: boolean;
-    } = {}
-  ): void {
+  markDirectoryStale(path: string): void {
+    const node = this.nodes.get(path);
+    if (!node || node.kind !== 'directory') {
+      return;
+    }
+
+    node.stale = true;
+    if (node.childrenState === 'resolved') {
+      node.errorMessage = undefined;
+    }
+  }
+
+  markVisibleSubtreeStale(rootPath: string): void {
+    this.markDirectoryStale(rootPath);
+
+    for (const path of this.expandedFolders) {
+      if (path === rootPath) {
+        continue;
+      }
+      const node = this.nodes.get(path);
+      if (node?.kind === 'directory') {
+        node.stale = true;
+      }
+    }
+  }
+
+  upsertChildren(parentPath: string, children: FileSystemNode[]): void {
     const parent = this.nodes.get(parentPath);
     if (!parent || parent.kind !== 'directory') {
       return;
     }
 
-    const append = options.append ?? false;
-    const previousChildIds = append ? new Set<string>() : new Set(parent.childIds);
-    const nextChildIds: string[] = append ? [...parent.childIds] : [];
-    const existingChildIds = new Set(nextChildIds);
+    const previousChildIds = new Set(parent.childIds);
+    const nextChildIds: string[] = [];
 
     for (const child of children) {
       const existing = this.nodes.get(child.path);
-      const nextRecord = createNodeRecord(
-        child,
-        parentPath,
-        false,
-        existing?.kind === 'directory' ? existing.childIds : [],
-        child.isDirectory
-          ? existing?.childrenState ?? (child.children ? 'resolved' : 'unresolved')
-          : 'resolved'
-      );
-
-      if (child.children) {
-        nextRecord.childrenState = 'resolved';
-      }
-
+      const nextRecord = createNodeRecord(child, parentPath, false, existing);
       this.nodes.set(child.path, nextRecord);
-      if (!existingChildIds.has(child.path)) {
-        nextChildIds.push(child.path);
-        existingChildIds.add(child.path);
-      }
+      nextChildIds.push(child.path);
       previousChildIds.delete(child.path);
 
       if (child.children) {
-        this.upsertChildren(child.path, child.children, {
-          append: false,
-          totalChildren: child.totalChildren,
-          hasMoreChildren: child.hasMoreChildren,
-        });
+        this.upsertChildren(child.path, child.children);
       }
     }
 
     for (const removedChildId of previousChildIds) {
       this.removeSubtree(removedChildId);
-      this.expandedFolders.delete(removedChildId);
+      this.replaceExpandedFolders(expandedFoldersDeleteEquivalent(this.expandedFolders, removedChildId));
       this.loadingPaths.delete(removedChildId);
     }
 
     parent.childIds = nextChildIds;
     parent.childrenState = 'resolved';
-    parent.totalChildren = options.totalChildren ?? nextChildIds.length;
-    parent.hasMoreChildren = options.hasMoreChildren ?? false;
+    parent.stale = false;
     parent.errorMessage = undefined;
     this.loadingPaths.delete(parentPath);
   }
@@ -218,21 +222,9 @@ export class ExplorerModel {
     }
 
     node.childrenState = 'error';
+    node.stale = true;
     node.errorMessage = message;
     this.loadingPaths.delete(path);
-  }
-
-  expand(path: string, expanded = true): void {
-    if (expanded) {
-      this.expandedFolders.add(path);
-      return;
-    }
-
-    this.expandedFolders.delete(path);
-  }
-
-  select(filePath?: string): void {
-    this.selectedFile = filePath;
   }
 
   getNode(path: string): ExplorerNodeRecord | undefined {
@@ -250,29 +242,19 @@ export class ExplorerModel {
       selectedFile: this.selectedFile,
       expandedFolders: new Set(this.expandedFolders),
       loading: this.loading,
-      silentRefreshing: this.silentRefreshing,
       error: this.error,
       loadingPaths: new Set(this.loadingPaths),
       options: cloneOptions(this.options),
     };
   }
 
-  private insertSubtree(node: FileSystemNode, parentId: string | null, isRoot: boolean): string {
-    const childIds = (node.children ?? []).map(child => child.path);
-    const record = createNodeRecord(
-      node,
-      parentId,
-      isRoot,
-      childIds,
-      node.isDirectory ? (node.children ? 'resolved' : 'unresolved') : 'resolved'
-    );
-    this.nodes.set(node.path, record);
-
-    for (const child of node.children ?? []) {
-      this.insertSubtree(child, node.path, false);
-    }
-
-    return node.path;
+  private bootstrapRoot(rootPath: string): void {
+    const rootName = rootPath.split(/[/\\]/).filter(Boolean).pop() || rootPath;
+    const rootRecord = createDirectoryRecord(rootPath, rootName, null, true);
+    this.nodes.set(rootPath, rootRecord);
+    this.roots.length = 0;
+    this.roots.push(rootPath);
+    this.replaceExpandedFolders(expandedFoldersAddEquivalent(this.expandedFolders, rootPath));
   }
 
   private removeSubtree(nodeId: string): void {
@@ -288,9 +270,14 @@ export class ExplorerModel {
     this.nodes.delete(nodeId);
   }
 
+  private replaceExpandedFolders(next: Set<string>): void {
+    this.expandedFolders.clear();
+    next.forEach((value) => this.expandedFolders.add(value));
+  }
+
   private projectTree(): FileSystemNode[] {
     return this.roots
-      .map(rootId => this.projectNode(rootId))
+      .map((rootId) => this.projectNode(rootId))
       .filter((node): node is FileSystemNode => node !== undefined);
   }
 
@@ -307,14 +294,11 @@ export class ExplorerModel {
       size: record.size,
       extension: record.extension,
       lastModified: record.lastModified,
-      hasMoreChildren: record.kind === 'directory' ? record.hasMoreChildren : undefined,
-      totalChildren: record.kind === 'directory' ? record.totalChildren : undefined,
-      loadedChildrenCount: record.kind === 'directory' ? record.childIds.length : undefined,
     };
 
     if (record.kind === 'directory' && record.childIds.length > 0) {
       node.children = record.childIds
-        .map(childId => this.projectNode(childId))
+        .map((childId) => this.projectNode(childId))
         .filter((child): child is FileSystemNode => child !== undefined);
     }
 

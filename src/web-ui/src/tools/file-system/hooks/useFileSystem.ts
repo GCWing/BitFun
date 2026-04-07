@@ -7,7 +7,6 @@ export interface UseFileSystemOptions extends FileSystemOptions {
   rootPath?: string;
   autoLoad?: boolean;
   enableAutoWatch?: boolean;
-  enableLazyLoad?: boolean;
 }
 
 export interface UseFileSystemReturn {
@@ -16,17 +15,13 @@ export interface UseFileSystemReturn {
   expandedFolders: Set<string>;
   loading: boolean;
   error?: string;
-  silentRefreshing?: boolean;
   loadingPaths: Set<string>;
   loadFileTree: (path?: string, silent?: boolean) => Promise<void>;
-  loadFileTreeLazy: (path?: string, silent?: boolean) => Promise<void>;
   selectFile: (filePath: string) => void;
   expandFolder: (folderPath: string, expanded?: boolean) => void;
   expandFolderLazy: (folderPath: string) => Promise<void>;
-  loadMoreFolder: (folderPath: string) => Promise<void>;
   searchFiles: (query: string) => Promise<FileSystemNode[]>;
   refreshFileTree: () => Promise<void>;
-  setFileTree: (tree: FileSystemNode[]) => void;
   updateOptions: (options: Partial<FileSystemOptions>) => void;
 }
 
@@ -41,7 +36,6 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     rootPath: options.rootPath,
     autoLoad: options.autoLoad ?? true,
     enableAutoWatch: options.enableAutoWatch ?? true,
-    enableLazyLoad: options.enableLazyLoad ?? true,
     enablePathCompression: optionOverrides.enablePathCompression ?? options.enablePathCompression ?? true,
     showHiddenFiles: optionOverrides.showHiddenFiles ?? options.showHiddenFiles ?? false,
     sortBy: optionOverrides.sortBy ?? options.sortBy ?? 'name',
@@ -52,7 +46,6 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     options.rootPath,
     options.autoLoad,
     options.enableAutoWatch,
-    options.enableLazyLoad,
     options.enablePathCompression,
     options.showHiddenFiles,
     options.sortBy,
@@ -68,10 +61,6 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     return controller.loadFileTree(path, silent);
   }, [controller]);
 
-  const loadFileTreeLazy = useCallback((path?: string, silent = false) => {
-    return controller.loadFileTreeLazy(path, silent);
-  }, [controller]);
-
   const selectFile = useCallback((filePath: string) => {
     controller.selectFile(filePath);
   }, [controller]);
@@ -82,10 +71,6 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
 
   const expandFolderLazy = useCallback((folderPath: string) => {
     return controller.expandFolderLazy(folderPath);
-  }, [controller]);
-
-  const loadMoreFolder = useCallback((folderPath: string) => {
-    return controller.loadMoreFolder(folderPath);
   }, [controller]);
 
   const refreshFileTree = useCallback(() => {
@@ -106,10 +91,6 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     }));
   }, [controllerConfig.rootPath]);
 
-  const setFileTree = useCallback((_tree: FileSystemNode[]) => {
-    controller.replaceTree(_tree);
-  }, [controller]);
-
   const updateOptions = useCallback((nextOptions: Partial<FileSystemOptions>) => {
     setOptionOverrides(prev => ({
       ...prev,
@@ -124,17 +105,13 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     expandedFolders: snapshot.expandedFolders,
     loading: snapshot.loading,
     error: snapshot.error,
-    silentRefreshing: snapshot.silentRefreshing,
     loadingPaths: snapshot.loadingPaths,
     loadFileTree,
-    loadFileTreeLazy,
     selectFile,
     expandFolder,
     expandFolderLazy,
-    loadMoreFolder,
     searchFiles,
     refreshFileTree,
-    setFileTree,
     updateOptions,
   };
 }

@@ -11,7 +11,6 @@ export {
 } from './search/useExplorerSearch';
 export { filterTreeByPredicate, filterTreeBySearch } from './search/treeFilter';
 export type {
-  ExplorerChildrenPage,
   ExplorerChildrenRequest,
   ExplorerControllerConfig,
   ExplorerFileSystemProvider,

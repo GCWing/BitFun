@@ -13,15 +13,12 @@ function nodeToFlatNode(
     parentPath,
     isDirectory: node.isDirectory,
     depth,
-    rowType: 'node',
     childrenLoaded,
     isLoading: false,
     size: node.size,
     extension: node.extension,
     lastModified: node.lastModified,
     isCompressed: node.isCompressed,
-    totalChildren: node.totalChildren,
-    loadedChildrenCount: node.loadedChildrenCount,
     originalNode: node,
   };
 }
@@ -56,22 +53,6 @@ export function flattenFileTree(
       result.push(...childNodes);
     }
 
-    if (node.isDirectory && isExpanded && node.hasMoreChildren) {
-      result.push({
-        path: `${node.path}::load-more`,
-        name: 'Load more',
-        parentPath: node.path,
-        isDirectory: false,
-        depth: depth + 1,
-        rowType: 'loadMore',
-        childrenLoaded: true,
-        isLoading: loadingPaths.has(node.path),
-        loadMoreForPath: node.path,
-        totalChildren: node.totalChildren,
-        loadedChildrenCount: node.loadedChildrenCount ?? node.children?.length ?? 0,
-        originalNode: node,
-      });
-    }
   }
 
   return result;

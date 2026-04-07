@@ -8,8 +8,6 @@ import { tauriExplorerFileSystemProvider } from '../provider/TauriExplorerFileSy
 import type { ExplorerControllerConfig, ExplorerFileSystemProvider, ExplorerSnapshot } from '../types/explorer';
 
 const log = createLogger('ExplorerController');
-const DEFAULT_POLL_INTERVAL_MS = 1000;
-const DIRECTORY_PAGE_SIZE = 200;
 
 function cloneConfig(config: ExplorerControllerConfig): ExplorerControllerConfig {
   return {
@@ -73,10 +71,16 @@ function sortNodes(
     return sortOrder === 'desc' ? -comparison : comparison;
   });
 
-  return sortedNodes.map(node => ({
+  return sortedNodes.map((node) => ({
     ...node,
     children: node.children ? sortNodes(node.children, sortBy, sortOrder) : undefined,
   }));
+}
+
+function comparePathDepth(left: string, right: string): number {
+  const leftDepth = left.split(/[/\\]/).filter(Boolean).length;
+  const rightDepth = right.split(/[/\\]/).filter(Boolean).length;
+  return leftDepth - rightDepth;
 }
 
 export class ExplorerController {
@@ -87,8 +91,6 @@ export class ExplorerController {
   private config: ExplorerControllerConfig = {
     autoLoad: true,
     enableAutoWatch: true,
-    enableLazyLoad: true,
-    pollingIntervalMs: DEFAULT_POLL_INTERVAL_MS,
     enablePathCompression: true,
     showHiddenFiles: false,
     sortBy: 'name',
@@ -97,7 +99,6 @@ export class ExplorerController {
   };
   private lastAppliedConfig: ExplorerControllerConfig | null = null;
   private unwatch?: () => void;
-  private pollId?: number;
   private pendingRefreshTimer?: ReturnType<typeof setTimeout>;
   private pendingRefreshPaths = new Set<string>();
   private generation = 0;
@@ -136,11 +137,11 @@ export class ExplorerController {
       this.resetForRoot(nextConfig.rootPath);
       this.lastAppliedConfig = cloneConfig(nextConfig);
       this.emit();
-      if (nextConfig.autoLoad && nextConfig.rootPath) {
-        if (nextConfig.enableLazyLoad) {
-          await this.loadRootLazy(nextConfig.rootPath, false);
-        } else {
-          await this.loadRootTree(nextConfig.rootPath, false);
+
+      if (nextConfig.rootPath) {
+        this.syncWatchers();
+        if (nextConfig.autoLoad) {
+          await this.initializeRoot(nextConfig.rootPath);
         }
       }
       return;
@@ -148,11 +149,7 @@ export class ExplorerController {
 
     if (nextConfig.rootPath && optionsChanged && this.model.getSnapshot().fileTree.length > 0) {
       this.lastAppliedConfig = cloneConfig(nextConfig);
-      if (nextConfig.enableLazyLoad) {
-        await this.loadRootLazy(nextConfig.rootPath, true);
-      } else {
-        await this.loadRootTree(nextConfig.rootPath, true);
-      }
+      await this.refreshExplorer(true);
       return;
     }
 
@@ -165,15 +162,19 @@ export class ExplorerController {
     if (!targetPath) {
       return;
     }
-    await this.loadRootTree(targetPath, silent);
-  }
 
-  async loadFileTreeLazy(path?: string, silent = false): Promise<void> {
-    const targetPath = path ?? this.config.rootPath;
-    if (!targetPath) {
+    if (!pathsEquivalentFs(targetPath, this.config.rootPath ?? '')) {
+      await this.configure({ ...this.config, rootPath: targetPath });
       return;
     }
-    await this.loadRootLazy(targetPath, silent);
+
+    const root = this.model.getNode(targetPath);
+    if (!root || root.childrenState === 'unresolved') {
+      await this.initializeRoot(targetPath);
+      return;
+    }
+
+    await this.refreshExplorer(true, silent);
   }
 
   selectFile(filePath: string): void {
@@ -181,30 +182,25 @@ export class ExplorerController {
     this.emit();
   }
 
-  replaceTree(fileTree: FileSystemNode[]): void {
-    this.model.replaceTree(fileTree);
-    this.emit();
-  }
-
   expandFolder(folderPath: string, expanded?: boolean): void {
     const currentExpanded = expandedFoldersContains(this.model.getExpandedFolders(), folderPath);
     const nextExpanded = expanded ?? !currentExpanded;
 
-    if (nextExpanded && this.config.enableLazyLoad) {
-      const node = this.model.getNode(folderPath);
-      const needsLazyLoad =
-        node?.kind === 'directory' &&
-        node.childrenState !== 'resolved' &&
-        node.childrenState !== 'loading';
-
-      if (needsLazyLoad) {
-        void this.expandFolderLazy(folderPath);
-        return;
-      }
-    }
-
     this.model.expand(folderPath, nextExpanded);
     this.emit();
+
+    if (!nextExpanded) {
+      return;
+    }
+
+    const node = this.model.getNode(folderPath);
+    const needsResolve =
+      node?.kind === 'directory' &&
+      (node.childrenState === 'unresolved' || node.childrenState === 'error' || node.stale);
+
+    if (needsResolve) {
+      void this.resolveDirectory(folderPath, true);
+    }
   }
 
   async expandFolderLazy(folderPath: string): Promise<void> {
@@ -216,60 +212,8 @@ export class ExplorerController {
     }
 
     this.model.expand(folderPath, true);
-    const node = this.model.getNode(folderPath);
-    const alreadyResolved = node?.childrenState === 'resolved';
     this.emit();
-
-    if (alreadyResolved) {
-      return;
-    }
-
-    this.model.setDirectoryLoading(folderPath, true);
-    this.emit();
-
-    try {
-      const page = await this.loadDirectoryChildren(folderPath);
-      this.model.upsertChildren(folderPath, page.children, {
-        append: false,
-        totalChildren: page.total,
-        hasMoreChildren: page.hasMore,
-      });
-      this.emit();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.model.markDirectoryError(folderPath, message);
-      this.emit();
-      log.error('Failed to expand directory lazily', { folderPath, error });
-    }
-  }
-
-  async loadMoreFolder(folderPath: string): Promise<void> {
-    const node = this.model.getNode(folderPath);
-    if (!node || node.kind !== 'directory' || !node.hasMoreChildren) {
-      return;
-    }
-
-    if (this.model.getSnapshot().loadingPaths.has(folderPath)) {
-      return;
-    }
-
-    this.model.setDirectoryLoading(folderPath, true);
-    this.emit();
-
-    try {
-      const page = await this.loadDirectoryChildrenPage(folderPath, node.childIds.length);
-      this.model.upsertChildren(folderPath, page.children, {
-        append: true,
-        totalChildren: page.total,
-        hasMoreChildren: page.hasMore,
-      });
-      this.emit();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.model.markDirectoryError(folderPath, message);
-      this.emit();
-      log.error('Failed to load more explorer children', { folderPath, error });
-    }
+    await this.resolveDirectory(folderPath, true);
   }
 
   dispose(): void {
@@ -282,166 +226,161 @@ export class ExplorerController {
     this.listeners.clear();
   }
 
-  private async loadRootTree(rootPath: string, silent: boolean): Promise<void> {
-    const generation = ++this.generation;
-    this.model.setRootPath(rootPath);
+  private async initializeRoot(rootPath: string): Promise<void> {
+    if (!this.config.rootPath || !pathsEquivalentFs(rootPath, this.config.rootPath)) {
+      return;
+    }
+
+    const expectedGeneration = this.generation;
+    this.model.ensureRoot(rootPath);
     this.model.clearTransientErrors();
-    this.model.setLoading(true, silent);
+    this.model.setLoading(true);
     this.emit();
 
     try {
-      const tree = await this.provider.getFileTree(rootPath, this.config);
-      if (!this.isGenerationCurrent(generation, rootPath)) {
+      await this.resolveDirectory(rootPath, true, expectedGeneration, rootPath);
+      if (!this.isGenerationCurrent(expectedGeneration, rootPath)) {
         return;
       }
-
-      this.model.replaceTree(tree);
-      this.syncWatchers();
+      this.model.setLoading(false);
       this.emit();
-
-      if (silent) {
-        globalEventBus.emit('file-tree:silent-refresh-completed', {
-          path: rootPath,
-          fileTree: tree,
-        });
-      }
     } catch (error) {
-      if (!this.isGenerationCurrent(generation, rootPath)) {
+      if (!this.isGenerationCurrent(expectedGeneration, rootPath)) {
         return;
       }
 
       const message = error instanceof Error ? error.message : String(error);
       this.model.setError(message);
       this.emit();
-      log.error('Failed to load explorer tree', { rootPath, error });
+      log.error('Failed to initialize explorer root', { rootPath, error });
     }
   }
 
-  private async loadRootLazy(rootPath: string, silent: boolean): Promise<void> {
-    const generation = ++this.generation;
-    this.model.setRootPath(rootPath);
+  private async refreshExplorer(includeExpandedSubtree: boolean, silent = true): Promise<void> {
+    const rootPath = this.config.rootPath;
+    if (!rootPath) {
+      return;
+    }
+
+    const expectedGeneration = this.generation;
     this.model.clearTransientErrors();
-    this.model.setLoading(true, silent);
+    this.model.markVisibleSubtreeStale(rootPath);
     this.emit();
 
-    try {
-      const page = await this.loadDirectoryChildren(rootPath);
-      if (!this.isGenerationCurrent(generation, rootPath)) {
+    const directoriesToRefresh = this.getDirectoriesToRefresh(rootPath, includeExpandedSubtree);
+    for (const directory of directoriesToRefresh) {
+      if (!this.isGenerationCurrent(expectedGeneration, rootPath)) {
         return;
       }
-
-      this.model.replaceRootChildren(
-        rootPath,
-        page.children,
-        page.total,
-        page.hasMore
-      );
-      this.syncWatchers();
-      this.emit();
-
-      if (silent) {
-        globalEventBus.emit('file-tree:silent-refresh-completed', {
-          path: rootPath,
-          fileTree: this.model.getSnapshot().fileTree,
-        });
-      }
-    } catch (error) {
-      if (!this.isGenerationCurrent(generation, rootPath)) {
-        return;
-      }
-
-      const message = error instanceof Error ? error.message : String(error);
-      this.model.setError(message);
-      this.emit();
-      log.error('Failed to load root children lazily', { rootPath, error });
+      await this.resolveDirectory(directory, true, expectedGeneration, rootPath);
     }
-  }
 
-  private async refreshDirectory(path: string): Promise<void> {
-    try {
-      const node = this.model.getNode(path);
-      const targetCount =
-        node?.kind === 'directory' && node.childIds.length > 0
-          ? node.childIds.length
-          : DIRECTORY_PAGE_SIZE;
-      const page = await this.loadDirectoryChildren(path, targetCount);
-
-      this.model.upsertChildren(path, page.children, {
-        append: false,
-        totalChildren: page.total,
-        hasMoreChildren: page.hasMore,
+    if (silent) {
+      globalEventBus.emit('file-tree:silent-refresh-completed', {
+        path: rootPath,
+        fileTree: this.model.getSnapshot().fileTree,
       });
-      this.emit();
-    } catch (error) {
-      log.warn('Failed to refresh explorer directory', { path, error });
     }
   }
 
-  private async loadDirectoryChildren(
-    path: string,
-    targetCount: number = DIRECTORY_PAGE_SIZE
-  ): Promise<{
-    children: FileSystemNode[];
-    total: number;
-    hasMore: boolean;
-  }> {
-    const allChildren: FileSystemNode[] = [];
-    let offset = 0;
-    let total = 0;
+  private getDirectoriesToRefresh(rootPath: string, includeExpandedSubtree: boolean): string[] {
+    if (!includeExpandedSubtree) {
+      return [rootPath];
+    }
 
-    while (allChildren.length < targetCount) {
-      const page = await this.loadDirectoryChildrenPage(path, offset);
-      allChildren.push(...page.children);
-      total = page.total;
-
-      if (!page.hasMore || page.children.length === 0) {
-        break;
+    const directories = new Set<string>([rootPath]);
+    for (const expandedPath of this.model.getExpandedFolders()) {
+      if (pathsEquivalentFs(expandedPath, rootPath)) {
+        continue;
       }
 
-      offset = page.offset + page.limit;
+      const node = this.model.getNode(expandedPath);
+      if (node?.kind === 'directory') {
+        directories.add(expandedPath);
+      }
     }
 
-    return {
-      children: sortNodes(
-        allChildren.slice(0, targetCount),
-        this.config.sortBy ?? 'name',
-        this.config.sortOrder ?? 'asc'
-      ),
-      total,
-      hasMore: total > Math.min(allChildren.length, targetCount),
-    };
+    return Array.from(directories).sort(comparePathDepth);
   }
 
-  private async loadDirectoryChildrenPage(
+  private async resolveDirectory(
     path: string,
-    offset: number
-  ): Promise<{
-    children: FileSystemNode[];
-    total: number;
-    hasMore: boolean;
-    offset: number;
-    limit: number;
-  }> {
-    return this.provider.getChildrenPage({
-      path,
-      offset,
-      limit: DIRECTORY_PAGE_SIZE,
-      options: this.config,
-    });
+    forceRefresh = false,
+    expectedGeneration = this.generation,
+    expectedRootPath = this.config.rootPath ?? ''
+  ): Promise<void> {
+    const node = this.model.getNode(path);
+    if (!node || node.kind !== 'directory') {
+      return;
+    }
+
+    if (node.childrenState === 'refreshing') {
+      return;
+    }
+
+    const shouldResolve =
+      forceRefresh ||
+      node.childrenState === 'unresolved' ||
+      node.childrenState === 'error' ||
+      node.stale;
+
+    if (!shouldResolve) {
+      return;
+    }
+
+    this.model.setDirectoryRefreshing(path, true);
+    this.emit();
+
+    try {
+      const children = await this.provider.getChildren({
+        path,
+        options: this.config,
+      });
+
+      if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
+        return;
+      }
+
+      this.model.upsertChildren(
+        path,
+        sortNodes(children, this.config.sortBy ?? 'name', this.config.sortOrder ?? 'asc')
+      );
+      this.emit();
+    } catch (error) {
+      if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      this.model.markDirectoryError(path, message);
+      if (pathsEquivalentFs(path, this.config.rootPath ?? '')) {
+        this.model.setError(message);
+      }
+      this.emit();
+      log.error('Failed to resolve explorer directory', { path, error });
+      throw error;
+    }
   }
 
   private handleFileChange(event: FileSystemChangeEvent): void {
     const parentPath = dirnameAbsolutePath(event.path);
 
-    this.pendingRefreshPaths.add(event.path);
     if (parentPath) {
       this.pendingRefreshPaths.add(parentPath);
+      this.model.markDirectoryStale(parentPath);
     }
+
+    const changedDirectory = this.model.getNode(event.path);
+    if (changedDirectory?.kind === 'directory') {
+      this.pendingRefreshPaths.add(event.path);
+      this.model.markDirectoryStale(event.path);
+    }
+
     if (event.oldPath) {
       const oldParent = dirnameAbsolutePath(event.oldPath);
-      this.pendingRefreshPaths.add(event.oldPath);
       if (oldParent) {
         this.pendingRefreshPaths.add(oldParent);
+        this.model.markDirectoryStale(oldParent);
       }
     }
 
@@ -458,90 +397,65 @@ export class ExplorerController {
     }
 
     this.pendingRefreshTimer = setTimeout(() => {
-      const rootPath = this.config.rootPath;
-      if (!rootPath) {
-        return;
-      }
-
-      const refreshTargets = Array.from(this.pendingRefreshPaths);
-      this.pendingRefreshPaths.clear();
-
-      if (!this.config.enableLazyLoad) {
-        void this.loadRootTree(rootPath, true);
-        return;
-      }
-
-      const expandedFolders = this.model.getExpandedFolders();
-      const directoriesToRefresh = new Set<string>();
-
-      for (const target of refreshTargets) {
-        const node = this.model.getNode(target);
-        if (node?.kind === 'directory') {
-          directoriesToRefresh.add(target);
-        }
-
-        const dirPath = dirnameAbsolutePath(target);
-        if (dirPath && (dirPath === rootPath || expandedFoldersContains(expandedFolders, dirPath))) {
-          directoriesToRefresh.add(dirPath);
-        }
-      }
-
-      if (directoriesToRefresh.size === 0) {
-        directoriesToRefresh.add(rootPath);
-      }
-
-      for (const directory of directoriesToRefresh) {
-        void this.refreshDirectory(directory);
-      }
+      void this.flushPendingRefreshes();
     }, 200);
+
+    this.emit();
+  }
+
+  private async flushPendingRefreshes(): Promise<void> {
+    const rootPath = this.config.rootPath;
+    if (!rootPath) {
+      return;
+    }
+
+    const refreshTargets = Array.from(this.pendingRefreshPaths);
+    this.pendingRefreshPaths.clear();
+
+    if (refreshTargets.length === 0) {
+      return;
+    }
+
+    const directoriesToRefresh = new Set<string>();
+    const expandedFolders = this.model.getExpandedFolders();
+
+    for (const directory of refreshTargets) {
+      if (
+        pathsEquivalentFs(directory, rootPath) ||
+        expandedFoldersContains(expandedFolders, directory)
+      ) {
+        directoriesToRefresh.add(directory);
+      }
+    }
+
+    if (directoriesToRefresh.size === 0) {
+      return;
+    }
+
+    for (const directory of Array.from(directoriesToRefresh).sort(comparePathDepth)) {
+      await this.resolveDirectory(directory, true);
+    }
   }
 
   private syncWatchers(): void {
     this.stopWatchers();
 
     const rootPath = this.config.rootPath;
-    if (!rootPath) {
+    if (!rootPath || !this.config.enableAutoWatch) {
       return;
     }
 
-    if (this.config.enableAutoWatch) {
-      this.unwatch = this.provider.watch(rootPath, (event) => this.handleFileChange(event));
-    }
-
-    const pollingIntervalMs = this.config.pollingIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    this.pollId = window.setInterval(() => {
-      const currentRoot = this.config.rootPath;
-      if (!currentRoot) {
-        return;
-      }
-
-      if (!this.config.enableLazyLoad) {
-        void this.loadRootTree(currentRoot, true);
-        return;
-      }
-
-      void this.refreshDirectory(currentRoot);
-      for (const expandedPath of this.model.getExpandedFolders()) {
-        if (pathsEquivalentFs(expandedPath, currentRoot)) {
-          continue;
-        }
-        void this.refreshDirectory(expandedPath);
-      }
-    }, pollingIntervalMs);
+    this.unwatch = this.provider.watch(rootPath, (event) => this.handleFileChange(event));
   }
 
   private stopWatchers(): void {
     this.unwatch?.();
     this.unwatch = undefined;
-
-    if (this.pollId !== undefined) {
-      window.clearInterval(this.pollId);
-      this.pollId = undefined;
-    }
   }
 
   private resetForRoot(rootPath?: string): void {
     this.stopWatchers();
+    this.generation += 1;
     this.model.reset(rootPath);
   }
 
@@ -558,6 +472,6 @@ export class ExplorerController {
   }
 
   private isGenerationCurrent(generation: number, rootPath: string): boolean {
-    return generation === this.generation && this.config.rootPath === rootPath;
+    return generation === this.generation && pathsEquivalentFs(this.config.rootPath ?? '', rootPath);
   }
 }

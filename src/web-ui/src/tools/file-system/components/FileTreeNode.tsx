@@ -1,9 +1,7 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
 import { FileTreeNodeProps } from '../types';
 import { expandedFoldersContains } from '@/shared/utils/pathUtils';
 import { FileTreeItem, getPathDepth } from './FileTreeItem';
-import { useI18n } from '@/infrastructure/i18n';
 
 interface ExtendedFileTreeNodeProps extends FileTreeNodeProps {
   selectedFile?: string;
@@ -20,7 +18,6 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
   loadingPaths,
   onSelect,
   onToggleExpand,
-  onLoadMore,
   className = '',
   workspacePath,
   renamingPath,
@@ -29,7 +26,6 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
   renderContent,
   renderActions
 }) => {
-  const { t } = useI18n('tools');
   const indentDepth = getPathDepth(node.path, workspacePath);
 
   return (
@@ -66,7 +62,6 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
               loadingPaths={loadingPaths}
               onSelect={onSelect}
               onToggleExpand={onToggleExpand}
-              onLoadMore={onLoadMore}
               workspacePath={workspacePath}
               renamingPath={renamingPath}
               onRename={onRename}
@@ -75,34 +70,10 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
               renderActions={renderActions}
             />
           ))}
-          {node.hasMoreChildren && onLoadMore && (
-            <button
-              type="button"
-              className="bitfun-file-explorer__load-more"
-              style={{ paddingLeft: `${indentPxForLoadMore(indentDepth + 1)}px` }}
-              onClick={() => onLoadMore(node.path)}
-              disabled={loadingPaths?.has(node.path)}
-            >
-              {loadingPaths?.has(node.path) ? (
-                <Loader2 size={14} className="bitfun-file-explorer__loading-icon" />
-              ) : null}
-              <span>
-                {t('fileTree.loadMore', {
-                  loaded: node.loadedChildrenCount ?? node.children?.length ?? 0,
-                  total: node.totalChildren ?? node.children?.length ?? 0,
-                  defaultValue: `Load more (${node.loadedChildrenCount ?? node.children?.length ?? 0}/${node.totalChildren ?? node.children?.length ?? 0})`,
-                })}
-              </span>
-            </button>
-          )}
         </div>
       )}
     </div>
   );
 };
-
-function indentPxForLoadMore(depth: number): number {
-  return (Math.max(depth, 1) - 1) * 20 + 40;
-}
 
 export default FileTreeNode;
