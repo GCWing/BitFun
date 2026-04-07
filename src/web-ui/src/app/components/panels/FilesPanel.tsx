@@ -23,8 +23,15 @@ import { InputDialog, CubeLoading } from '@/component-library';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
-import { basenamePath, dirnameAbsolutePath, normalizeLocalPathForRename, replaceBasename } from '@/shared/utils/pathUtils';
+import {
+  basenamePath,
+  dirnameAbsolutePath,
+  normalizeLocalPathForRename,
+  pathsEquivalentFs,
+  replaceBasename,
+} from '@/shared/utils/pathUtils';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isRemoteWorkspace } from '@/shared/types';
 import {
   downloadWorkspaceFileToDisk,
@@ -38,6 +45,7 @@ import './FilesPanel.scss';
 
 const log = createLogger('FilesPanel');
 const FOCUS_REFRESH_THROTTLE_MS = 1000;
+const REMOTE_REFRESH_POLL_MS = 15000;
 
 interface FilesPanelProps {
   workspacePath?: string;
@@ -62,11 +70,18 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   onExplorerToolbarApi,
 }) => {
   const { t } = useTranslation('panels/files');
+  const { workspace: currentWorkspace } = useCurrentWorkspace();
   
   const panelRef = useRef<HTMLDivElement>(null);
   const lastFocusRefreshAtRef = useRef<number>(0);
   const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
+  const isRemoteCurrentWorkspace = Boolean(
+    workspacePath
+    && currentWorkspace
+    && pathsEquivalentFs(currentWorkspace.rootPath, workspacePath)
+    && isRemoteWorkspace(currentWorkspace)
+  );
   
   const {
     query: searchQuery,
@@ -133,7 +148,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     autoLoad: true,
     enablePathCompression: true,
     showHiddenFiles: false,
-    enableAutoWatch: true,
+    // Local filesystem watchers are unavailable for remote SSH workspaces.
+    enableAutoWatch: !isRemoteCurrentWorkspace,
   });
   const handleNodeExpandLazy = useCallback((path: string) => {
     expandFolderLazy(path);
@@ -543,6 +559,34 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [triggerFocusCompensatingRefresh]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (!isRemoteCurrentWorkspace || !workspacePath || viewMode !== 'tree') {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const panelEl = panelRef.current;
+      if (!panelEl || panelEl.getClientRects().length === 0) {
+        return;
+      }
+
+      log.debug('Polling remote file tree refresh', { workspacePath });
+      void loadFileTree(undefined, true);
+    }, REMOTE_REFRESH_POLL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isRemoteCurrentWorkspace, workspacePath, viewMode, loadFileTree]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('__TAURI__' in window) || !workspacePath) {
