@@ -163,7 +163,7 @@ export function useExplorerSearch(
   const {
     workspacePath,
     initialMode = 'filenames',
-    filenameSearchDebounce = 200,
+    filenameSearchDebounce = 300,
     contentSearchDebounce = 300,
     minFilenameLength = 1,
     minContentLength = 2,

@@ -7,13 +7,18 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { File, Folder, Loader2, Search, ChevronRight, ChevronLeft } from 'lucide-react';
 import { workspaceAPI } from '@/infrastructure/api';
-import type { FileSearchResult } from '@/infrastructure/api/service-api/tauri-commands';
+import type {
+  ExplorerNodeDto,
+  FileSearchResult,
+} from '@/infrastructure/api/service-api/tauri-commands';
 import type { FileContext, DirectoryContext } from '@/shared/types/context';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './FileMentionPicker.scss';
 
 const log = createLogger('FileMentionPicker');
+const FILE_MENTION_SEARCH_DEBOUNCE_MS = 300;
+const FILE_MENTION_MAX_RESULTS = 30;
 
 export interface FileMentionPickerProps {
   /** Whether the picker is open. */
@@ -56,8 +61,12 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const [pathHistory, setPathHistory] = useState<string[]>([]); // Back navigation stack
   const containerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const searchDebounceTimerRef = useRef<number | null>(null);
   const selectedItemHistoryRef = useRef<string[]>([]); // Selected path when entering a directory
   const targetSelectedPathRef = useRef<string | null>(null); // Target selection when returning
+  const directoryLoadRequestIdRef = useRef(0);
+  const searchRequestIdRef = useRef(0);
+  const skipNextPathLoadRef = useRef(false);
 
   const getRelativePath = useCallback((fullPath: string): string => {
     if (!workspacePath) return fullPath;
@@ -75,21 +84,20 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       return;
     }
 
+    const requestId = ++directoryLoadRequestIdRef.current;
     setIsLoading(true);
+
     try {
       const targetPath = dirPath || workspacePath;
-      const fileTree = await workspaceAPI.getFileTree(targetPath, 1);
-      
-      const rootNode = fileTree?.[0];
-      const children = rootNode?.children || [];
+      const children = await workspaceAPI.getDirectoryChildren(targetPath);
       
       const items: FileItem[] = children
-        .filter((entry: any) => {
+        .filter((entry: ExplorerNodeDto) => {
           const name = entry.name || '';
           return !name.startsWith('.') && 
                  !['node_modules', 'target', 'dist', 'build', '__pycache__'].includes(name);
         })
-        .map((entry: any) => ({
+        .map((entry: ExplorerNodeDto) => ({
           path: entry.path,
           name: entry.name,
           isDirectory: entry.isDirectory || false,
@@ -102,6 +110,10 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         return a.name.localeCompare(b.name);
       });
 
+      if (requestId !== directoryLoadRequestIdRef.current) {
+        return;
+      }
+
       setCurrentFiles(items);
       
       if (targetSelectedPath) {
@@ -112,9 +124,13 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       }
     } catch (err) {
       log.error('Failed to load directory', err);
-      setCurrentFiles([]);
+      if (requestId === directoryLoadRequestIdRef.current) {
+        setCurrentFiles([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === directoryLoadRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [workspacePath, getRelativePath]);
 
@@ -139,8 +155,12 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
 
   useEffect(() => {
     if (isOpen && workspacePath) {
+      skipNextPathLoadRef.current = true;
       setCurrentPath('');
       setPathHistory([]);
+      setCurrentFiles([]);
+      setResults([]);
+      setSelectedIndex(0);
       selectedItemHistoryRef.current = [];
       targetSelectedPathRef.current = null;
       loadDirectory('', null);
@@ -148,39 +168,43 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [isOpen, workspacePath, loadDirectory]);
 
   useEffect(() => {
-    if (isOpen) {
-      const targetPath = targetSelectedPathRef.current;
-      targetSelectedPathRef.current = null;
-      loadDirectory(currentPath, targetPath);
+    if (!isOpen || searchQuery.trim()) {
+      return;
     }
-  }, [currentPath, isOpen, loadDirectory]);
 
-  const searchFiles = useCallback(async (query: string) => {
+    if (skipNextPathLoadRef.current) {
+      skipNextPathLoadRef.current = false;
+      return;
+    }
+
+    const targetPath = targetSelectedPathRef.current;
+    targetSelectedPathRef.current = null;
+    loadDirectory(currentPath, targetPath);
+  }, [currentPath, isOpen, loadDirectory, searchQuery]);
+
+  const searchFiles = useCallback(async (
+    query: string,
+    controller: AbortController,
+    requestId: number,
+  ) => {
     if (!workspacePath) {
       setResults([]);
       return;
     }
 
-    if (!query.trim()) {
-      setResults([]);
-      setSelectedIndex(0);
-      return;
-    }
-
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
-
-    setIsLoading(true);
-
     try {
       const searchResults = await workspaceAPI.searchFilenamesOnly(
         workspacePath,
-        query.trim(),
+        query,
         false, // caseSensitive
         false, // useRegex
         false, // wholeWord
-        abortControllerRef.current.signal
+        controller.signal
       );
+
+      if (requestId !== searchRequestIdRef.current || controller.signal.aborted) {
+        return;
+      }
 
       const items: FileItem[] = searchResults.map((result: FileSearchResult) => ({
         path: result.path,
@@ -195,23 +219,66 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         return a.name.localeCompare(b.name);
       });
 
-      setResults(items.slice(0, 30));
+      setResults(items.slice(0, FILE_MENTION_MAX_RESULTS));
       setSelectedIndex(0);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return;
       }
       log.error('Search failed', err);
-      setResults([]);
+      if (requestId === searchRequestIdRef.current) {
+        setResults([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === searchRequestIdRef.current && abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        setIsLoading(false);
+      }
     }
   }, [workspacePath, getRelativePath]);
 
   useEffect(() => {
-    if (isOpen) {
-      searchFiles(searchQuery);
+    if (!isOpen) {
+      return;
     }
+
+    if (searchDebounceTimerRef.current !== null) {
+      window.clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
+    }
+
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      searchRequestIdRef.current += 1;
+      setResults([]);
+      setSelectedIndex(0);
+      setIsLoading(false);
+      return;
+    }
+
+    const requestId = ++searchRequestIdRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setIsLoading(true);
+
+    searchDebounceTimerRef.current = window.setTimeout(() => {
+      searchDebounceTimerRef.current = null;
+      void searchFiles(trimmedQuery, controller, requestId);
+    }, FILE_MENTION_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (searchDebounceTimerRef.current !== null) {
+        window.clearTimeout(searchDebounceTimerRef.current);
+        searchDebounceTimerRef.current = null;
+      }
+      controller.abort();
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+    };
   }, [isOpen, searchQuery, searchFiles]);
 
   const isSearchMode = searchQuery.trim().length > 0;
@@ -224,6 +291,9 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
 
   useEffect(() => {
     return () => {
+      if (searchDebounceTimerRef.current !== null) {
+        window.clearTimeout(searchDebounceTimerRef.current);
+      }
       abortControllerRef.current?.abort();
     };
   }, []);

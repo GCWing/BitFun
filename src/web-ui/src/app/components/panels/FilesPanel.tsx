@@ -86,7 +86,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   } = useExplorerSearch({
     workspacePath,
     initialMode: 'filenames',
-    filenameSearchDebounce: 200,
+    filenameSearchDebounce: 300,
     contentSearchDebounce: 300,
     minFilenameLength: 1,
     minContentLength: 2,
