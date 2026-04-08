@@ -1,6 +1,11 @@
 use crate::agentic::insights::cancellation;
 use crate::agentic::insights::collector::InsightsCollector;
+use crate::agentic::insights::facet_cache;
 use crate::agentic::insights::html::generate_html;
+use crate::agentic::insights::prompt_context::{
+    aggregate_stats_json_for_prompt, friction_block, summaries_block, user_instructions_block,
+};
+use crate::agentic::insights::session_paths::collect_effective_session_storage_roots;
 use crate::agentic::insights::types::*;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::infrastructure::ai::AIClient;
@@ -8,7 +13,6 @@ use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 use crate::service::config::AppConfig;
-use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message;
 use log::{debug, info, warn};
@@ -353,6 +357,10 @@ impl InsightsService {
         transcript: &SessionTranscript,
         lang_instruction: &str,
     ) -> BitFunResult<SessionFacet> {
+        if let Ok(Some(cached)) = facet_cache::try_load_cached_facet(transcript).await {
+            return Ok(cached);
+        }
+
         let session_info = format!(
             "Session: {}\nAgent: {}\nName: {}\nDate: {}\nDuration: {} min\n\n{}",
             transcript.session_id,
@@ -380,7 +388,7 @@ impl InsightsService {
             BitFunError::Deserialization(format!("Failed to parse facet JSON: {}", e))
         })?;
 
-        Ok(SessionFacet {
+        let facet = SessionFacet {
             session_id: transcript.session_id.clone(),
             underlying_goal: value["underlying_goal"]
                 .as_str()
@@ -426,7 +434,11 @@ impl InsightsService {
                         .collect()
                 })
                 .unwrap_or_default(),
-        })
+        };
+
+        let _ = facet_cache::save_cached_facet(transcript, &facet).await;
+
+        Ok(facet)
     }
 
     // ============ Stage 4a: Parallel Analysis ============
@@ -436,10 +448,9 @@ impl InsightsService {
         aggregate: &InsightsAggregate,
         lang_instruction: &str,
     ) -> (InsightsSuggestions, Vec<ProjectArea>, WinsFrictionResult, InteractionStyleResult, HorizonResult, Option<FunEnding>) {
-        let aggregate_json =
-            serde_json::to_string_pretty(aggregate).unwrap_or_else(|_| "{}".to_string());
-        let summaries_text = format!("- {}", aggregate.session_summaries.join("\n- "));
-        let friction_text = format!("- {}", aggregate.friction_details.join("\n- "));
+        let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
+        let summaries_text = summaries_block(aggregate);
+        let friction_text = friction_block(aggregate);
 
         let semaphore = Arc::new(Semaphore::new(3));
 
@@ -540,7 +551,10 @@ impl InsightsService {
             "Wins",
             || async {
                 Self::analyze_wins(
-                    ai_client, &aggregate_json, &summaries_text, lang_instruction,
+                    ai_client,
+                    &aggregate_stats_json_for_prompt(aggregate),
+                    &summaries_block(aggregate),
+                    lang_instruction,
                 ).await
             },
             WinsResult::default,
@@ -551,7 +565,11 @@ impl InsightsService {
             "Friction",
             || async {
                 Self::analyze_friction(
-                    ai_client, &aggregate_json, &summaries_text, &friction_text, lang_instruction,
+                    ai_client,
+                    &aggregate_stats_json_for_prompt(aggregate),
+                    &summaries_block(aggregate),
+                    &friction_block(aggregate),
+                    lang_instruction,
                 ).await
             },
             FrictionResult::default,
@@ -569,7 +587,10 @@ impl InsightsService {
             "Interaction Style",
             || async {
                 Self::analyze_interaction_style(
-                    ai_client, &aggregate_json, &summaries_text, lang_instruction,
+                    ai_client,
+                    &aggregate_stats_json_for_prompt(aggregate),
+                    &summaries_block(aggregate),
+                    lang_instruction,
                 ).await
             },
             InteractionStyleResult::default,
@@ -580,7 +601,11 @@ impl InsightsService {
             "Horizon",
             || async {
                 Self::generate_horizon(
-                    ai_client, &aggregate_json, &summaries_text, &friction_text, lang_instruction,
+                    ai_client,
+                    &aggregate_stats_json_for_prompt(aggregate),
+                    &summaries_block(aggregate),
+                    &friction_block(aggregate),
+                    lang_instruction,
                 ).await
             },
             HorizonResult::default,
@@ -591,7 +616,10 @@ impl InsightsService {
             "Fun Ending",
             || async {
                 Self::generate_fun_ending(
-                    ai_client, &aggregate_json, &summaries_text, lang_instruction,
+                    ai_client,
+                    &aggregate_stats_json_for_prompt(aggregate),
+                    &summaries_block(aggregate),
+                    lang_instruction,
                 ).await
             },
             || None,
@@ -657,8 +685,7 @@ impl InsightsService {
         interaction: &InteractionStyleResult,
         lang_instruction: &str,
     ) -> AtAGlance {
-        let aggregate_json =
-            serde_json::to_string_pretty(aggregate).unwrap_or_else(|_| "{}".to_string());
+        let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
 
         let areas_text = areas
             .iter()
@@ -698,22 +725,17 @@ impl InsightsService {
         aggregate: &InsightsAggregate,
         lang_instruction: &str,
     ) -> BitFunResult<InsightsSuggestions> {
-        let aggregate_json =
-            serde_json::to_string_pretty(aggregate).unwrap_or_else(|_| "{}".to_string());
-        let summaries = aggregate.session_summaries.join("\n- ");
-        let friction_details = aggregate.friction_details.join("\n- ");
-        let user_instructions = if aggregate.user_instructions.is_empty() {
-            "None captured".to_string()
-        } else {
-            aggregate.user_instructions.join("\n- ")
-        };
+        let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
+        let summaries = summaries_block(aggregate);
+        let friction_details = friction_block(aggregate);
+        let user_instructions = user_instructions_block(aggregate);
 
         let prompt = format!(
             "{}{}",
             SUGGESTIONS_PROMPT_TEMPLATE
                 .replace("{aggregate_json}", &aggregate_json)
-                .replace("{summaries}", &format!("- {}", summaries))
-                .replace("{friction_details}", &format!("- {}", friction_details))
+                .replace("{summaries}", &summaries)
+                .replace("{friction_details}", &friction_details)
                 .replace("{user_instructions}", &user_instructions),
             lang_instruction
         );
@@ -822,15 +844,14 @@ impl InsightsService {
         aggregate: &InsightsAggregate,
         lang_instruction: &str,
     ) -> BitFunResult<Vec<ProjectArea>> {
-        let aggregate_json =
-            serde_json::to_string_pretty(aggregate).unwrap_or_else(|_| "{}".to_string());
-        let summaries = aggregate.session_summaries.join("\n- ");
+        let aggregate_json = aggregate_stats_json_for_prompt(aggregate);
+        let summaries = summaries_block(aggregate);
 
         let prompt = format!(
             "{}{}",
             AREAS_PROMPT_TEMPLATE
                 .replace("{aggregate_json}", &aggregate_json)
-                .replace("{summaries}", &format!("- {}", summaries)),
+                .replace("{summaries}", &summaries),
             lang_instruction
         );
 
@@ -1304,16 +1325,10 @@ impl InsightsService {
         let pm = PersistenceManager::new(path_manager)?;
         let cutoff = SystemTime::now() - std::time::Duration::from_secs(days as u64 * 86400);
 
-        if let Some(ws_service) = get_global_workspace_service() {
-            let workspaces = ws_service.list_workspaces().await;
-            for ws in workspaces {
-                if !ws.root_path.join(".bitfun").join("sessions").exists() {
-                    continue;
-                }
-                if let Ok(sessions) = pm.list_sessions(&ws.root_path).await {
-                    if sessions.iter().any(|s| s.last_activity_at >= cutoff) {
-                        return Ok(true);
-                    }
+        for ws_path in collect_effective_session_storage_roots().await {
+            if let Ok(sessions) = pm.list_sessions(&ws_path).await {
+                if sessions.iter().any(|s| s.last_activity_at >= cutoff) {
+                    return Ok(true);
                 }
             }
         }

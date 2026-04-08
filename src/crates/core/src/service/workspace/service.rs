@@ -454,6 +454,12 @@ impl WorkspaceService {
             .collect()
     }
 
+    /// All tracked workspaces with full metadata (insights, maintenance, etc.).
+    pub async fn list_workspace_infos(&self) -> Vec<WorkspaceInfo> {
+        let manager = self.manager.read().await;
+        manager.get_workspaces().values().cloned().collect()
+    }
+
     /// `metadata["sshHost"]` for a remote workspace matching `connection_id` and normalized remote root.
     ///
     /// Used when session APIs receive `remote_connection_id` but the client omitted `remote_ssh_host`:

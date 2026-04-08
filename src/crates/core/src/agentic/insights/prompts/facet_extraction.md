@@ -25,6 +25,8 @@ CRITICAL GUIDELINES:
 
 4. If very short or just warmup, use warmup_minimal for goal_category
 
+5. **languages_used**: Optional. The insights report's language chart is computed from edited file paths (Edit/Write tool), not from this field; you may still list languages you infer for context.
+
 SESSION:
 {session_transcript}
 

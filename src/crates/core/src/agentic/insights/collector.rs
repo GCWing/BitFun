@@ -1,14 +1,14 @@
 use crate::agentic::core::{Message, MessageContent, MessageRole, ToolCall, ToolResult};
+use crate::agentic::insights::session_paths::collect_effective_session_storage_roots;
 use crate::agentic::insights::types::*;
 use crate::agentic::persistence::PersistenceManager;
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::session::{DialogTurnData, TurnStatus};
-use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::BitFunResult;
 use chrono::{DateTime, Utc};
 use log::{debug, warn};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const MAX_TRANSCRIPT_CHARS: usize = 16000;
@@ -27,7 +27,7 @@ impl InsightsCollector {
         let pm = PersistenceManager::new(path_manager)?;
         let cutoff = SystemTime::now() - Duration::from_secs(days as u64 * 86400);
 
-        let workspace_paths = Self::collect_workspace_paths().await;
+        let workspace_paths = collect_effective_session_storage_roots().await;
 
         let mut transcripts = Vec::new();
         let mut base_stats = BaseStats::default();
@@ -91,6 +91,11 @@ impl InsightsCollector {
                 let mut transcript =
                     Self::build_transcript(&summary.session_id, &session, &messages);
                 transcript.workspace_path = Some(ws_path.to_string_lossy().to_string());
+                transcript.last_activity_unix_secs = summary
+                    .last_activity_at
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
                 Self::accumulate_stats(&mut base_stats, &session, &messages);
                 accumulate_code_stats_from_turns(&mut base_stats, &turns);
                 transcripts.push(transcript);
@@ -123,22 +128,6 @@ impl InsightsCollector {
         );
 
         Ok((base_stats, transcripts))
-    }
-
-    /// Collect all known workspace paths that have session data
-    async fn collect_workspace_paths() -> Vec<PathBuf> {
-        let mut paths = Vec::new();
-
-        if let Some(ws_service) = get_global_workspace_service() {
-            let workspaces = ws_service.list_workspaces().await;
-            for ws in workspaces {
-                if ws.root_path.join(".bitfun").join("sessions").exists() {
-                    paths.push(ws.root_path);
-                }
-            }
-        }
-
-        paths
     }
 
     /// Load messages for a session, trying sources in priority order:
@@ -231,6 +220,7 @@ impl InsightsCollector {
             agent_type: session.agent_type.clone(),
             session_name: session.session_name.clone(),
             workspace_path: None,
+            last_activity_unix_secs: 0,
             duration_minutes,
             message_count: messages.len() as u32,
             turn_count: session.dialog_turn_ids.len() as u32,
@@ -335,7 +325,6 @@ impl InsightsCollector {
         let mut satisfaction: HashMap<String, u32> = HashMap::new();
         let mut friction: HashMap<String, u32> = HashMap::new();
         let mut success: HashMap<String, u32> = HashMap::new();
-        let mut languages: HashMap<String, u32> = HashMap::new();
         let mut session_types: HashMap<String, u32> = HashMap::new();
         let mut session_summaries = Vec::new();
         let mut friction_details = Vec::new();
@@ -356,9 +345,6 @@ impl InsightsCollector {
                 *success
                     .entry(facet.primary_success.clone())
                     .or_insert(0) += 1;
-            }
-            for lang in &facet.languages_used {
-                *languages.entry(lang.clone()).or_insert(0) += 1;
             }
             *session_types
                 .entry(facet.session_type.clone())
@@ -403,6 +389,8 @@ impl InsightsCollector {
         } else {
             base_stats.total_messages as f32
         };
+
+        let languages = base_stats.languages_by_files.clone();
 
         InsightsAggregate {
             sessions: base_stats.total_sessions,
@@ -661,6 +649,9 @@ fn compute_days_covered(range: &DateRange) -> u32 {
 /// newlines in `old_string`/`new_string`.
 ///
 /// For Write tool: counts newlines in the written content as lines added.
+///
+/// Per session, each distinct file path touched by Edit/Write contributes once to `languages_by_files`
+/// according to [`language_name_for_path`].
 fn accumulate_code_stats_from_turns(base_stats: &mut BaseStats, turns: &[DialogTurnData]) {
     let mut modified_files: HashSet<String> = HashSet::new();
 
@@ -726,5 +717,58 @@ fn accumulate_code_stats_from_turns(base_stats: &mut BaseStats, turns: &[DialogT
         }
     }
 
+    for path in &modified_files {
+        if let Some(lang) = language_name_for_path(path) {
+            *base_stats
+                .languages_by_files
+                .entry(lang.to_string())
+                .or_insert(0) += 1;
+        }
+    }
+
     base_stats.total_files_modified += modified_files.len();
+}
+
+/// Infer a language label from a file path (extension or well-known filename).
+fn language_name_for_path(path: &str) -> Option<&'static str> {
+    let p = Path::new(path);
+    if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+        match name.to_ascii_lowercase().as_str() {
+            "dockerfile" | "containerfile" => return Some("Dockerfile"),
+            "makefile" | "gnumakefile" => return Some("Makefile"),
+            "cargo.toml" | "cargo.lock" => return Some("Rust"),
+            _ => {}
+        }
+    }
+    let ext = p.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "ts" | "tsx" => "TypeScript",
+        "js" | "jsx" | "mjs" | "cjs" => "JavaScript",
+        "py" | "pyi" | "pyw" => "Python",
+        "rs" => "Rust",
+        "go" => "Go",
+        "java" => "Java",
+        "kt" | "kts" => "Kotlin",
+        "swift" => "Swift",
+        "cs" => "C#",
+        "cpp" | "cc" | "cxx" | "hpp" => "C/C++",
+        "c" | "h" => "C/C++",
+        "rb" => "Ruby",
+        "php" => "PHP",
+        "vue" => "Vue",
+        "svelte" => "Svelte",
+        "md" | "mdx" => "Markdown",
+        "json" | "jsonc" => "JSON",
+        "yaml" | "yml" => "YAML",
+        "toml" => "TOML",
+        "xml" => "XML",
+        "html" | "htm" => "HTML",
+        "css" | "scss" | "sass" | "less" => "CSS",
+        "sh" | "bash" | "zsh" | "fish" => "Shell",
+        "ps1" => "PowerShell",
+        "sql" => "SQL",
+        "gradle" => "Gradle",
+        "properties" => "Properties",
+        _ => return None,
+    })
 }

@@ -10,6 +10,9 @@ pub struct SessionTranscript {
     pub agent_type: String,
     pub session_name: String,
     pub workspace_path: Option<String>,
+    /// For facet cache fingerprinting (`SessionSummary.last_activity_at`).
+    #[serde(default)]
+    pub last_activity_unix_secs: u64,
     pub duration_minutes: u64,
     pub message_count: u32,
     pub turn_count: u32,
@@ -48,6 +51,9 @@ pub struct BaseStats {
     pub total_lines_removed: usize,
     #[serde(default)]
     pub total_files_modified: usize,
+    /// Language labels inferred from edited file paths (Edit/Write); drives aggregate `languages`.
+    #[serde(default)]
+    pub languages_by_files: HashMap<String, u32>,
 }
 
 // ============ Stage 2: Facet Extraction (AI) ============
@@ -67,6 +73,7 @@ pub struct SessionFacet {
     pub friction_detail: String,
     pub primary_success: String,
     pub brief_summary: String,
+    /// Optional; not used for report language charts (those use file-extension stats from Edit/Write).
     #[serde(default)]
     pub languages_used: Vec<String>,
     #[serde(default)]
@@ -95,6 +102,7 @@ pub struct InsightsAggregate {
     pub satisfaction: HashMap<String, u32>,
     pub friction: HashMap<String, u32>,
     pub success: HashMap<String, u32>,
+    /// Counts by language label from edited file paths (Edit/Write), not from facet extraction.
     pub languages: HashMap<String, u32>,
     pub session_summaries: Vec<String>,
     pub friction_details: Vec<String>,
