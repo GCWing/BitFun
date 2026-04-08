@@ -2,16 +2,16 @@ use std::sync::Arc;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use std::time::Duration;
 
-use serde_json::Value;
-use tauri::Webview;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use crate::runtime::script;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 use crate::runtime::BridgeError;
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-use tokio::sync::oneshot;
 use crate::server::response::WebDriverErrorResponse;
 use crate::server::AppState;
+use serde_json::Value;
+use tauri::Webview;
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+use tokio::sync::oneshot;
 
 #[cfg(target_os = "macos")]
 mod macos;

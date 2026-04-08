@@ -176,10 +176,7 @@ pub(super) fn parse_cursor_format(
                     Some(value) => match parse_legacy_type(value) {
                         Some(parsed) => Some(parsed),
                         None => {
-                            warn!(
-                                "Unsupported MCP type for server '{}': {}",
-                                server_id, value
-                            );
+                            warn!("Unsupported MCP type for server '{}': {}", server_id, value);
                             continue;
                         }
                     },

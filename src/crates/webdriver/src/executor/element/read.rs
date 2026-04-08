@@ -76,7 +76,10 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_text(&self, element_id: &str) -> Result<Value, WebDriverErrorResponse> {
+    pub async fn get_element_text(
+        &self,
+        element_id: &str,
+    ) -> Result<Value, WebDriverErrorResponse> {
         api::element::exec_element_value(
             self.state.clone(),
             &self.session.id,
@@ -112,7 +115,10 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_name(&self, element_id: &str) -> Result<Value, WebDriverErrorResponse> {
+    pub async fn get_element_name(
+        &self,
+        element_id: &str,
+    ) -> Result<Value, WebDriverErrorResponse> {
         api::element::exec_element_value(
             self.state.clone(),
             &self.session.id,
@@ -122,7 +128,10 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn get_element_rect(&self, element_id: &str) -> Result<Value, WebDriverErrorResponse> {
+    pub async fn get_element_rect(
+        &self,
+        element_id: &str,
+    ) -> Result<Value, WebDriverErrorResponse> {
         api::element::exec_element_value(
             self.state.clone(),
             &self.session.id,

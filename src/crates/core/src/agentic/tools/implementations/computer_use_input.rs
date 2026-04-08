@@ -63,13 +63,15 @@ pub fn parse_screenshot_crop_half_extent_native(input: &Value) -> BitFunResult<O
         None => Ok(None),
         Some(v) if v.is_null() => Ok(None),
         Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| BitFunError::tool("screenshot_crop_half_extent_native must be a non-negative integer.".to_string()))?;
-            Ok(Some(
-                u32::try_from(n)
-                    .map_err(|_| BitFunError::tool("screenshot_crop_half_extent_native is too large.".to_string()))?,
-            ))
+            let n = v.as_u64().ok_or_else(|| {
+                BitFunError::tool(
+                    "screenshot_crop_half_extent_native must be a non-negative integer."
+                        .to_string(),
+                )
+            })?;
+            Ok(Some(u32::try_from(n).map_err(|_| {
+                BitFunError::tool("screenshot_crop_half_extent_native is too large.".to_string())
+            })?))
         }
     }
 }

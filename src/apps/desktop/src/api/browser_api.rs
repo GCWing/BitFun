@@ -57,4 +57,3 @@ pub async fn browser_get_url(
         Err(_) => Err("url unavailable (webview URL is nil)".to_string()),
     }
 }
-

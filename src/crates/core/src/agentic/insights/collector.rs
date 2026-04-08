@@ -67,26 +67,27 @@ impl InsightsCollector {
                     .await
                     .unwrap_or_default();
 
-                let messages =
-                    match Self::load_session_messages_with_turns(
-                        &pm, ws_path, &summary.session_id, &turns,
-                    ).await {
-                        Ok(m) if !m.is_empty() => m,
-                        Ok(_) => {
-                            debug!(
-                                "Skipping session {}: no messages found",
-                                summary.session_id
-                            );
-                            continue;
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Skipping session {}: load messages failed: {}",
-                                summary.session_id, e
-                            );
-                            continue;
-                        }
-                    };
+                let messages = match Self::load_session_messages_with_turns(
+                    &pm,
+                    ws_path,
+                    &summary.session_id,
+                    &turns,
+                )
+                .await
+                {
+                    Ok(m) if !m.is_empty() => m,
+                    Ok(_) => {
+                        debug!("Skipping session {}: no messages found", summary.session_id);
+                        continue;
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Skipping session {}: load messages failed: {}",
+                            summary.session_id, e
+                        );
+                        continue;
+                    }
+                };
 
                 let mut transcript =
                     Self::build_transcript(&summary.session_id, &session, &messages);
@@ -115,8 +116,7 @@ impl InsightsCollector {
         if !base_stats.response_times_raw.is_empty() {
             base_stats.response_time_buckets =
                 bucket_response_times(&base_stats.response_times_raw);
-            let (median, avg) =
-                compute_response_time_stats(&base_stats.response_times_raw);
+            let (median, avg) = compute_response_time_stats(&base_stats.response_times_raw);
             base_stats.median_response_time_secs = Some(median);
             base_stats.avg_response_time_secs = Some(avg);
         }
@@ -139,9 +139,9 @@ impl InsightsCollector {
         session_id: &str,
         turns: &[DialogTurnData],
     ) -> BitFunResult<Vec<Message>> {
-        if let Ok(Some((_turn_index, messages))) =
-            pm.load_latest_turn_context_snapshot(workspace_path, session_id)
-                .await
+        if let Ok(Some((_turn_index, messages))) = pm
+            .load_latest_turn_context_snapshot(workspace_path, session_id)
+            .await
         {
             if !messages.is_empty() {
                 return Ok(messages);
@@ -272,10 +272,7 @@ impl InsightsCollector {
                     ..
                 } => {
                     if *is_error {
-                        *base_stats
-                            .tool_errors
-                            .entry(tool_name.clone())
-                            .or_insert(0) += 1;
+                        *base_stats.tool_errors.entry(tool_name.clone()).or_insert(0) += 1;
                     }
                 }
                 _ => {}
@@ -342,13 +339,9 @@ impl InsightsCollector {
                 *friction.entry(k.clone()).or_insert(0) += v;
             }
             if !facet.primary_success.is_empty() && facet.primary_success != "none" {
-                *success
-                    .entry(facet.primary_success.clone())
-                    .or_insert(0) += 1;
+                *success.entry(facet.primary_success.clone()).or_insert(0) += 1;
             }
-            *session_types
-                .entry(facet.session_type.clone())
-                .or_insert(0) += 1;
+            *session_types.entry(facet.session_type.clone()).or_insert(0) += 1;
 
             if !facet.brief_summary.is_empty() {
                 session_summaries.push(facet.brief_summary.clone());
@@ -363,24 +356,23 @@ impl InsightsCollector {
             }
         }
 
-        let mut top_tools: Vec<(String, u32)> = base_stats.tool_usage.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut top_tools: Vec<(String, u32)> = base_stats
+            .tool_usage
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
         top_tools.sort_by(|a, b| b.1.cmp(&a.1));
         top_tools.truncate(15);
 
-        let mut top_goals: Vec<(String, u32)> = goals.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut top_goals: Vec<(String, u32)> =
+            goals.iter().map(|(k, v)| (k.clone(), *v)).collect();
         top_goals.sort_by(|a, b| b.1.cmp(&a.1));
         top_goals.truncate(10);
 
         let hours = base_stats.total_duration_minutes as f32 / 60.0;
         let date_range = DateRange {
-            start: base_stats
-                .first_session_at
-                .clone()
-                .unwrap_or_default(),
-            end: base_stats
-                .last_session_at
-                .clone()
-                .unwrap_or_default(),
+            start: base_stats.first_session_at.clone().unwrap_or_default(),
+            end: base_stats.last_session_at.clone().unwrap_or_default(),
         };
 
         let days_covered = compute_days_covered(&date_range);
@@ -469,8 +461,7 @@ fn rebuild_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
             };
 
             if !tool_calls.is_empty() {
-                let mut msg =
-                    Message::assistant_with_tools(assistant_text.clone(), tool_calls);
+                let mut msg = Message::assistant_with_tools(assistant_text.clone(), tool_calls);
                 msg.timestamp = round_ts;
                 messages.push(msg);
             } else if !assistant_text.trim().is_empty() {
@@ -629,7 +620,9 @@ fn compute_response_time_stats(raw: &[f64]) -> (f64, f64) {
 
 fn compute_days_covered(range: &DateRange) -> u32 {
     let parse = |s: &str| -> Option<DateTime<Utc>> {
-        DateTime::parse_from_rfc3339(s).ok().map(|d| d.with_timezone(&Utc))
+        DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|d| d.with_timezone(&Utc))
     };
 
     match (parse(&range.start), parse(&range.end)) {

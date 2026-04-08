@@ -66,11 +66,11 @@ pub async fn send_text(
         .send_alert_text(&request.text)
         .await
         .map_err(|error| {
-        if error.error == "javascript error" {
-            WebDriverErrorResponse::no_such_alert("No prompt is currently open")
-        } else {
-            error
-        }
-    })?;
+            if error.error == "javascript error" {
+                WebDriverErrorResponse::no_such_alert("No prompt is currently open")
+            } else {
+                error
+            }
+        })?;
     Ok(WebDriverResponse::null())
 }

@@ -1,4 +1,4 @@
-﻿//! Room management for the relay server.
+//! Room management for the relay server.
 //!
 //! Each room holds a single desktop participant connected via WebSocket.
 //! Mobile clients interact through HTTP requests that the relay bridges
@@ -178,11 +178,7 @@ impl RoomManager {
     pub fn on_disconnect(&self, conn_id: ConnId) {
         if let Some((_, room_id)) = self.conn_to_room.remove(&conn_id) {
             let should_remove = if let Some(mut room) = self.rooms.get_mut(&room_id) {
-                if room
-                    .desktop
-                    .as_ref()
-                    .is_some_and(|d| d.conn_id == conn_id)
-                {
+                if room.desktop.as_ref().is_some_and(|d| d.conn_id == conn_id) {
                     info!("Desktop disconnected from room {room_id}");
                     room.desktop = None;
                 }
@@ -200,10 +196,7 @@ impl RoomManager {
     pub fn heartbeat(&self, conn_id: ConnId) -> bool {
         if let Some(room_id) = self.conn_to_room.get(&conn_id) {
             if let Some(mut room) = self.rooms.get_mut(room_id.value()) {
-                let is_match = room
-                    .desktop
-                    .as_ref()
-                    .is_some_and(|d| d.conn_id == conn_id);
+                let is_match = room.desktop.as_ref().is_some_and(|d| d.conn_id == conn_id);
                 if is_match {
                     let now = Utc::now().timestamp();
                     room.last_activity = now;
@@ -243,9 +236,7 @@ impl RoomManager {
     }
 
     pub fn has_desktop(&self, room_id: &str) -> bool {
-        self.rooms
-            .get(room_id)
-            .is_some_and(|r| r.desktop.is_some())
+        self.rooms.get(room_id).is_some_and(|r| r.desktop.is_some())
     }
 
     pub fn room_count(&self) -> usize {

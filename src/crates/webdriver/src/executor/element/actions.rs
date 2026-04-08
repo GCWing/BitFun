@@ -48,9 +48,12 @@ impl BridgeExecutor {
         &self,
         element_id: &str,
     ) -> Result<String, WebDriverErrorResponse> {
-        let metadata =
-            api::element::exec_screenshot_metadata(self.state.clone(), &self.session.id, element_id)
-                .await?;
+        let metadata = api::element::exec_screenshot_metadata(
+            self.state.clone(),
+            &self.session.id,
+            element_id,
+        )
+        .await?;
         let metadata: ElementScreenshotMetadata =
             serde_json::from_value(metadata).map_err(|error| {
                 WebDriverErrorResponse::unknown_error(format!(

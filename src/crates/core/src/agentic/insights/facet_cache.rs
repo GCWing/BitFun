@@ -34,10 +34,15 @@ fn cache_file_path(session_id: &str) -> BitFunResult<std::path::PathBuf> {
         .chars()
         .map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c })
         .collect::<String>();
-    Ok(pm.user_data_dir().join(CACHE_SUBDIR).join(format!("{safe}.json")))
+    Ok(pm
+        .user_data_dir()
+        .join(CACHE_SUBDIR)
+        .join(format!("{safe}.json")))
 }
 
-pub async fn try_load_cached_facet(transcript: &SessionTranscript) -> BitFunResult<Option<SessionFacet>> {
+pub async fn try_load_cached_facet(
+    transcript: &SessionTranscript,
+) -> BitFunResult<Option<SessionFacet>> {
     let path = match cache_file_path(&transcript.session_id) {
         Ok(p) => p,
         Err(_) => return Ok(None),
@@ -57,7 +62,10 @@ pub async fn try_load_cached_facet(transcript: &SessionTranscript) -> BitFunResu
     Ok(Some(parsed.facet))
 }
 
-pub async fn save_cached_facet(transcript: &SessionTranscript, facet: &SessionFacet) -> BitFunResult<()> {
+pub async fn save_cached_facet(
+    transcript: &SessionTranscript,
+    facet: &SessionFacet,
+) -> BitFunResult<()> {
     let path = cache_file_path(&transcript.session_id)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;

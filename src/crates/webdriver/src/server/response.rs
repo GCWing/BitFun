@@ -106,7 +106,12 @@ impl WebDriverErrorResponse {
     }
 
     pub fn unknown_error(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "unknown error", message, None)
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unknown error",
+            message,
+            None,
+        )
     }
 
     pub fn invalid_argument(message: impl Into<String>) -> Self {

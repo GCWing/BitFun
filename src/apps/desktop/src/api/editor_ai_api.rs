@@ -72,7 +72,10 @@ pub async fn editor_ai_cancel(
         return Err("requestId is required".to_string());
     }
 
-    state.side_question_runtime.cancel(&request.request_id).await;
+    state
+        .side_question_runtime
+        .cancel(&request.request_id)
+        .await;
     Ok(())
 }
 

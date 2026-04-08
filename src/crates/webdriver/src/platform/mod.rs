@@ -1,5 +1,5 @@
-pub(crate) mod evaluator;
 mod capture;
+pub(crate) mod evaluator;
 mod image;
 mod types;
 

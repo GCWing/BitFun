@@ -15,8 +15,8 @@ mod tools;
 use super::connection::{MCPConnection, MCPConnectionEvent, MCPConnectionPool};
 use super::{MCPServerConfig, MCPServerRegistry, MCPServerStatus};
 use crate::infrastructure::events::event_system::{get_global_event_system, BackendEvent};
-use crate::service::mcp::auth::MCPRemoteOAuthSessionSnapshot;
 use crate::service::mcp::adapter::MCPToolAdapter;
+use crate::service::mcp::auth::MCPRemoteOAuthSessionSnapshot;
 use crate::service::mcp::config::MCPConfigService;
 use crate::service::mcp::protocol::{MCPError, MCPPrompt, MCPResource};
 use crate::service::runtime::{RuntimeManager, RuntimeSource};
@@ -29,7 +29,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tokio::task::JoinHandle;
 
 /// Reconnect policy for unhealthy MCP servers.

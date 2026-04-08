@@ -139,7 +139,8 @@ impl HtmlLabels {
     pub fn zh() -> Self {
         HtmlLabels {
             title: "BitFun 洞察",
-            subtitle_template: "{msgs} 条消息，{sessions} 个会话（{analyzed} 个已分析）| {start} 至 {end}",
+            subtitle_template:
+                "{msgs} 条消息，{sessions} 个会话（{analyzed} 个已分析）| {start} 至 {end}",
             at_a_glance: "概览",
             whats_working: "做得好的：",
             whats_hindering: "遇到的阻碍：",
@@ -204,12 +205,19 @@ impl HtmlLabels {
 pub fn generate_html(report: &InsightsReport, locale: &str) -> String {
     let l = HtmlLabels::for_locale(locale);
 
-    let subtitle = l.subtitle_template
+    let subtitle = l
+        .subtitle_template
         .replace("{msgs}", &report.total_messages.to_string())
         .replace("{sessions}", &report.total_sessions.to_string())
         .replace("{analyzed}", &report.analyzed_sessions.to_string())
-        .replace("{start}", &report.date_range.start[..10.min(report.date_range.start.len())])
-        .replace("{end}", &report.date_range.end[..10.min(report.date_range.end.len())]);
+        .replace(
+            "{start}",
+            &report.date_range.start[..10.min(report.date_range.start.len())],
+        )
+        .replace(
+            "{end}",
+            &report.date_range.end[..10.min(report.date_range.end.len())],
+        );
 
     let at_a_glance = render_at_a_glance(&report.at_a_glance, &l);
     let nav_toc = render_nav_toc(&l);
@@ -392,8 +400,7 @@ fn render_stats_row(report: &InsightsReport, l: &HtmlLabels) -> String {
         _ => String::new(),
     };
 
-    let code_stats = if report.stats.total_lines_added > 0 || report.stats.total_lines_removed > 0
-    {
+    let code_stats = if report.stats.total_lines_added > 0 || report.stats.total_lines_removed > 0 {
         format!(
             r#"  <div class="stat"><div class="stat-value">+{}/-{}</div><div class="stat-label">{}</div></div>
   <div class="stat"><div class="stat-value">{}</div><div class="stat-label">{}</div></div>"#,
@@ -452,7 +459,10 @@ fn format_number(n: usize) -> String {
 
 fn render_project_areas(areas: &[ProjectArea], l: &HtmlLabels) -> String {
     if areas.is_empty() {
-        return format!(r#"<div class="empty">{}</div>"#, html_escape(l.no_project_areas));
+        return format!(
+            r#"<div class="empty">{}</div>"#,
+            html_escape(l.no_project_areas)
+        );
     }
 
     let items: Vec<String> = areas
@@ -474,10 +484,7 @@ fn render_project_areas(areas: &[ProjectArea], l: &HtmlLabels) -> String {
         })
         .collect();
 
-    format!(
-        r#"<div class="project-areas">{}</div>"#,
-        items.join("\n")
-    )
+    format!(r#"<div class="project-areas">{}</div>"#, items.join("\n"))
 }
 
 // ============ Charts split by section ============
@@ -486,12 +493,20 @@ fn render_basic_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
     let goals_chart = render_bar_chart(l.chart_goals, &stats.top_goals, "#2563eb", 6);
     let tools_chart = render_bar_chart(l.chart_tools, &stats.top_tools, "#0891b2", 6);
 
-    let mut lang_items: Vec<(String, u32)> = stats.languages.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut lang_items: Vec<(String, u32)> = stats
+        .languages
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     lang_items.sort_by(|a, b| b.1.cmp(&a.1));
     lang_items.truncate(6);
     let lang_chart = render_bar_chart(l.chart_languages, &lang_items, "#10b981", 6);
 
-    let mut type_items: Vec<(String, u32)> = stats.session_types.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut type_items: Vec<(String, u32)> = stats
+        .session_types
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     type_items.sort_by(|a, b| b.1.cmp(&a.1));
     type_items.truncate(6);
     let types_chart = render_bar_chart(l.chart_session_types, &type_items, "#8b5cf6", 6);
@@ -505,20 +520,29 @@ fn render_usage_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
     let mut html = String::new();
 
     if !stats.response_time_buckets.is_empty() {
-        let response_time_chart = render_response_time_chart(&stats.response_time_buckets, stats, l);
+        let response_time_chart =
+            render_response_time_chart(&stats.response_time_buckets, stats, l);
         html.push_str(&response_time_chart);
     }
 
     let time_of_day_chart = render_time_of_day_chart(&stats.hour_counts, l);
 
-    let mut tool_error_items: Vec<(String, u32)> = stats.tool_errors.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut tool_error_items: Vec<(String, u32)> = stats
+        .tool_errors
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     tool_error_items.sort_by(|a, b| b.1.cmp(&a.1));
     tool_error_items.truncate(6);
     let tool_errors_chart = render_bar_chart(l.chart_tool_errors, &tool_error_items, "#dc2626", 6);
 
     let mut agent_types_chart = String::new();
     if !stats.agent_types.is_empty() {
-        let mut agent_type_items: Vec<(String, u32)> = stats.agent_types.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        let mut agent_type_items: Vec<(String, u32)> = stats
+            .agent_types
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect();
         agent_type_items.sort_by(|a, b| b.1.cmp(&a.1));
         agent_type_items.truncate(6);
         agent_types_chart = render_bar_chart(l.chart_agent_types, &agent_type_items, "#f97316", 6);
@@ -540,12 +564,17 @@ fn render_outcome_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         return String::new();
     }
 
-    let mut success_items: Vec<(String, u32)> = stats.success.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut success_items: Vec<(String, u32)> =
+        stats.success.iter().map(|(k, v)| (k.clone(), *v)).collect();
     success_items.sort_by(|a, b| b.1.cmp(&a.1));
     success_items.truncate(6);
     let success_chart = render_bar_chart(l.chart_what_helped, &success_items, "#16a34a", 6);
 
-    let mut outcome_items: Vec<(String, u32)> = stats.outcomes.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut outcome_items: Vec<(String, u32)> = stats
+        .outcomes
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     outcome_items.sort_by(|a, b| b.1.cmp(&a.1));
     outcome_items.truncate(6);
     let outcomes_chart = render_bar_chart(l.chart_outcomes, &outcome_items, "#8b5cf6", 6);
@@ -561,15 +590,24 @@ fn render_friction_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
         return String::new();
     }
 
-    let mut friction_items: Vec<(String, u32)> = stats.friction.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut friction_items: Vec<(String, u32)> = stats
+        .friction
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     friction_items.sort_by(|a, b| b.1.cmp(&a.1));
     friction_items.truncate(6);
     let friction_chart = render_bar_chart(l.chart_friction_types, &friction_items, "#dc2626", 6);
 
-    let mut satisfaction_items: Vec<(String, u32)> = stats.satisfaction.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let mut satisfaction_items: Vec<(String, u32)> = stats
+        .satisfaction
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
     satisfaction_items.sort_by(|a, b| b.1.cmp(&a.1));
     satisfaction_items.truncate(6);
-    let satisfaction_chart = render_bar_chart(l.chart_satisfaction, &satisfaction_items, "#eab308", 6);
+    let satisfaction_chart =
+        render_bar_chart(l.chart_satisfaction, &satisfaction_items, "#eab308", 6);
 
     wrap_charts_row(&friction_chart, &satisfaction_chart)
 }
@@ -581,20 +619,36 @@ fn render_friction_charts(stats: &InsightsStats, l: &HtmlLabels) -> String {
 fn wrap_charts_row(card_a: &str, card_b: &str) -> String {
     match (card_a.is_empty(), card_b.is_empty()) {
         (true, true) => String::new(),
-        (false, true) => format!(r#"<div class="charts-row charts-row-single">{}</div>"#, card_a),
-        (true, false) => format!(r#"<div class="charts-row charts-row-single">{}</div>"#, card_b),
+        (false, true) => format!(
+            r#"<div class="charts-row charts-row-single">{}</div>"#,
+            card_a
+        ),
+        (true, false) => format!(
+            r#"<div class="charts-row charts-row-single">{}</div>"#,
+            card_b
+        ),
         (false, false) => format!(r#"<div class="charts-row">{}{}</div>"#, card_a, card_b),
     }
 }
 
 // ============ Chart helpers ============
 
-fn render_response_time_chart(buckets: &std::collections::HashMap<String, u32>, stats: &InsightsStats, l: &HtmlLabels) -> String {
+fn render_response_time_chart(
+    buckets: &std::collections::HashMap<String, u32>,
+    stats: &InsightsStats,
+    l: &HtmlLabels,
+) -> String {
     let bucket_order = ["2-10s", "10-30s", "30s-1m", "1-2m", "2-5m", "5-15m", ">15m"];
     let ordered_items: Vec<(String, u32)> = bucket_order
         .iter()
         .filter_map(|&label| {
-            buckets.get(label).and_then(|&v| if v > 0 { Some((label.to_string(), v)) } else { None })
+            buckets.get(label).and_then(|&v| {
+                if v > 0 {
+                    Some((label.to_string(), v))
+                } else {
+                    None
+                }
+            })
         })
         .collect();
 
@@ -611,25 +665,37 @@ fn render_response_time_chart(buckets: &std::collections::HashMap<String, u32>, 
         )
     }).collect();
 
-    let footer = match (stats.median_response_time_secs, stats.avg_response_time_secs) {
+    let footer = match (
+        stats.median_response_time_secs,
+        stats.avg_response_time_secs,
+    ) {
         (Some(median), Some(avg)) => format!(
             r#"<div style="font-size:12px;color:#64748b;margin-top:8px">{}: {:.1}s &bull; {}: {:.1}s</div>"#,
-            html_escape(l.median_label), median, html_escape(l.average_label), avg,
+            html_escape(l.median_label),
+            median,
+            html_escape(l.average_label),
+            avg,
         ),
         _ => String::new(),
     };
 
     format!(
         r#"<div class="chart-card" style="margin:24px 0"><div class="chart-title">{}</div>{}{}</div>"#,
-        html_escape(l.chart_response_time), bars, footer,
+        html_escape(l.chart_response_time),
+        bars,
+        footer,
     )
 }
 
-fn render_time_of_day_chart(hour_counts: &std::collections::HashMap<u32, u32>, l: &HtmlLabels) -> String {
+fn render_time_of_day_chart(
+    hour_counts: &std::collections::HashMap<u32, u32>,
+    l: &HtmlLabels,
+) -> String {
     if hour_counts.is_empty() {
         return format!(
             r#"<div class="chart-card"><div class="chart-title">{}</div><div class="empty">{}</div></div>"#,
-            html_escape(l.chart_time_of_day), html_escape(l.no_data),
+            html_escape(l.chart_time_of_day),
+            html_escape(l.no_data),
         );
     }
 
@@ -709,7 +775,10 @@ fn render_bar_chart(title: &str, items: &[(String, u32)], color: &str, max_items
 
 fn render_interaction_style(style: &InteractionStyle, l: &HtmlLabels) -> String {
     if style.narrative.is_empty() && style.key_patterns.is_empty() {
-        return format!(r#"<div class="empty">{}</div>"#, html_escape(l.no_interaction_style));
+        return format!(
+            r#"<div class="empty">{}</div>"#,
+            html_escape(l.no_interaction_style)
+        );
     }
 
     let patterns_html = if style.key_patterns.is_empty() {
@@ -959,10 +1028,7 @@ fn render_horizon(intro: &str, workflows: &[HorizonWorkflow], l: &HtmlLabels) ->
     let intro_html = if intro.is_empty() {
         String::new()
     } else {
-        format!(
-            r#"<p class="section-intro">{}</p>"#,
-            markdown_inline(intro)
-        )
+        format!(r#"<p class="section-intro">{}</p>"#, markdown_inline(intro))
     };
 
     let items: Vec<String> = workflows
@@ -981,7 +1047,11 @@ fn render_horizon(intro: &str, workflows: &[HorizonWorkflow], l: &HtmlLabels) ->
                 String::new()
             } else {
                 let escaped = html_escape(&h.copyable_prompt);
-                let js_escaped = h.copyable_prompt.replace('\\', "\\\\").replace('\'', "\\'").replace('\n', "\\n");
+                let js_escaped = h
+                    .copyable_prompt
+                    .replace('\\', "\\\\")
+                    .replace('\'', "\\'")
+                    .replace('\n', "\\n");
                 format!(
                     r#"<div class="horizon-prompt">
   <div class="prompt-label">{try_prompt}</div>
@@ -1085,10 +1155,9 @@ fn find_closing_double_star(chars: &[char], start: usize) -> Option<usize> {
     let len = chars.len();
     let mut i = start;
     while i + 1 < len {
-        if chars[i] == '*' && chars[i + 1] == '*'
-            && i > start {
-                return Some(i);
-            }
+        if chars[i] == '*' && chars[i + 1] == '*' && i > start {
+            return Some(i);
+        }
         i += 1;
     }
     None
@@ -1098,11 +1167,9 @@ fn find_closing_single_star(chars: &[char], start: usize) -> Option<usize> {
     let len = chars.len();
     let mut i = start;
     while i < len {
-        if chars[i] == '*'
-            && (i + 1 >= len || chars[i + 1] != '*')
-                && i > start {
-                    return Some(i);
-                }
+        if chars[i] == '*' && (i + 1 >= len || chars[i + 1] != '*') && i > start {
+            return Some(i);
+        }
         i += 1;
     }
     None

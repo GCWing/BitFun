@@ -48,12 +48,7 @@ impl ComputerUseOptimizer {
     }
 
     /// Record an action in history
-    pub fn record_action(
-        &mut self,
-        action_type: String,
-        action_params: String,
-        success: bool,
-    ) {
+    pub fn record_action(&mut self, action_type: String, action_params: String, success: bool) {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -157,12 +152,21 @@ impl ComputerUseOptimizer {
     }
 
     fn check_pattern_repetition(&self, pattern_len: usize) -> Option<LoopDetectionResult> {
-        let recent: Vec<_> = self.action_history.iter().rev().take(LOOP_DETECTION_WINDOW).collect();
+        let recent: Vec<_> = self
+            .action_history
+            .iter()
+            .rev()
+            .take(LOOP_DETECTION_WINDOW)
+            .collect();
         if recent.len() < pattern_len * MAX_LOOP_REPETITIONS {
             return None;
         }
 
-        let pattern: Vec<_> = recent.iter().take(pattern_len).map(|r| &r.action_type).collect();
+        let pattern: Vec<_> = recent
+            .iter()
+            .take(pattern_len)
+            .map(|r| &r.action_type)
+            .collect();
         let mut reps = 1;
 
         for chunk in recent.chunks(pattern_len).skip(1) {
@@ -200,7 +204,10 @@ impl ComputerUseOptimizer {
 
         // Check if last 6 actions had same screenshot hash (no visual change)
         if let Some(first_hash) = recent[0].screenshot_hash {
-            recent.iter().skip(1).all(|r| r.screenshot_hash == Some(first_hash))
+            recent
+                .iter()
+                .skip(1)
+                .all(|r| r.screenshot_hash == Some(first_hash))
         } else {
             false
         }
@@ -214,13 +221,14 @@ impl ComputerUseOptimizer {
         }
 
         let mouse_actions = ["click", "mouse_move", "scroll", "drag", "pointer_move_rel"];
-        let has_keyboard = recent.iter().any(|r| 
-            r.action_type == "key_chord" || r.action_type == "type_text"
-        );
-        
-        let mouse_count = recent.iter().filter(|r| 
-            mouse_actions.contains(&r.action_type.as_str())
-        ).count();
+        let has_keyboard = recent
+            .iter()
+            .any(|r| r.action_type == "key_chord" || r.action_type == "type_text");
+
+        let mouse_count = recent
+            .iter()
+            .filter(|r| mouse_actions.contains(&r.action_type.as_str()))
+            .count();
 
         // If 8+ of last 10 actions are mouse and no keyboard usage
         !has_keyboard && mouse_count >= 8
@@ -300,7 +308,11 @@ impl ComputerUseOptimizer {
         }
 
         // Many screenshots + mouse moves, but no clicks/keyboard/move_to_text
-        screenshot_count >= 3 && mouse_move_count >= 2 && !has_click && !has_keyboard && !has_move_to_text
+        screenshot_count >= 3
+            && mouse_move_count >= 2
+            && !has_click
+            && !has_keyboard
+            && !has_move_to_text
     }
 
     /// Get action history for backtracking

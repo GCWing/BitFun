@@ -91,7 +91,8 @@ impl MCPConfigService {
 
         if config_value
             .get("mcpServers")
-            .and_then(|v| v.as_object()).is_none()
+            .and_then(|v| v.as_object())
+            .is_none()
         {
             let error_msg = "'mcpServers' field must be an object";
             error!("{}", error_msg);

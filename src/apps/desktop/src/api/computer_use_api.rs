@@ -88,13 +88,11 @@ pub async fn computer_use_open_system_settings(
     #[cfg(target_os = "linux")]
     {
         let _ = request;
-        return Err("Open system settings: use your desktop environment privacy settings.".to_string());
+        return Err(
+            "Open system settings: use your desktop environment privacy settings.".to_string(),
+        );
     }
-    #[cfg(not(any(
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "linux"
-    )))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = request;
         Err("Unsupported platform.".to_string())

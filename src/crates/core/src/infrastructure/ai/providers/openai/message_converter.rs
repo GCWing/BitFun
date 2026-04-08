@@ -284,7 +284,7 @@ impl OpenAIMessageConverter {
             } else {
                 error!(
                     "[OpenAI] Message content is empty and violates API spec: role={}, has_tool_calls={}", 
-                    msg.role, 
+                    msg.role,
                     has_tool_calls
                 );
 

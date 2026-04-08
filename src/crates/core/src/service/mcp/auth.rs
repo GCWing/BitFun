@@ -4,11 +4,9 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use rand::RngCore;
-use rmcp::transport::auth::{
-    AuthorizationManager, CredentialStore, OAuthState, StoredCredentials,
-};
+use rmcp::transport::auth::{AuthorizationManager, CredentialStore, OAuthState, StoredCredentials};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -117,10 +115,8 @@ impl MCPRemoteOAuthCredentialVault {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(
-                &self.key_path,
-                std::fs::Permissions::from_mode(0o600),
-            );
+            let _ =
+                std::fs::set_permissions(&self.key_path, std::fs::Permissions::from_mode(0o600));
         }
 
         Ok(key)
@@ -222,10 +218,8 @@ impl MCPRemoteOAuthCredentialVault {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(
-                &self.vault_path,
-                std::fs::Permissions::from_mode(0o600),
-            );
+            let _ =
+                std::fs::set_permissions(&self.vault_path, std::fs::Permissions::from_mode(0o600));
         }
 
         Ok(())
@@ -390,7 +384,12 @@ pub async fn prepare_remote_oauth_authorization(
             ))
         })?
         .port();
-    let redirect_uri = format!("http://{}:{}{}", host, port, normalize_callback_path(&oauth));
+    let redirect_uri = format!(
+        "http://{}:{}{}",
+        host,
+        port,
+        normalize_callback_path(&oauth)
+    );
 
     let scopes = oauth.scopes.iter().map(String::as_str).collect::<Vec<_>>();
     let mut state = OAuthState::new(server_url, None)
@@ -420,7 +419,10 @@ pub async fn prepare_remote_oauth_authorization(
         }
     }
 
-    let authorization_url = state.get_authorization_url().await.map_err(map_auth_error)?;
+    let authorization_url = state
+        .get_authorization_url()
+        .await
+        .map_err(map_auth_error)?;
 
     Ok(PreparedMCPRemoteOAuthAuthorization {
         state,

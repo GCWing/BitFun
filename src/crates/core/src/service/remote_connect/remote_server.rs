@@ -969,9 +969,16 @@ pub enum TrackerEvent {
         duration_ms: Option<u64>,
         success: bool,
     },
-    TurnCompleted { turn_id: String },
-    TurnFailed { turn_id: String, error: String },
-    TurnCancelled { turn_id: String },
+    TurnCompleted {
+        turn_id: String,
+    },
+    TurnFailed {
+        turn_id: String,
+        error: String,
+    },
+    TurnCancelled {
+        turn_id: String,
+    },
 }
 
 /// Tracks the real-time state of a session for polling by the mobile client.
@@ -1269,10 +1276,10 @@ impl RemoteSessionStateTracker {
                 self.bump_version();
                 let _ = self.event_tx.send(TrackerEvent::TextChunk(text.clone()));
             }
-            AE::ThinkingChunk { content, is_end, .. } => {
-                let clean = content
-                    .replace("</thinking>", "")
-                    .replace("<thinking>", "");
+            AE::ThinkingChunk {
+                content, is_end, ..
+            } => {
+                let clean = content.replace("</thinking>", "").replace("<thinking>", "");
                 let subagent_marker = if is_subagent { Some(true) } else { None };
                 let mut s = self.state.write().unwrap();
                 if !is_subagent {
@@ -1695,8 +1702,8 @@ impl RemoteExecutionDispatcher {
         // start.  When BashTool eventually calls get_or_create, the binding already
         // exists and the 30-second readiness wait is skipped entirely.
         {
-            use terminal_core::{TerminalApi, TerminalBindingOptions};
             use terminal_core::session::SessionSource;
+            use terminal_core::{TerminalApi, TerminalBindingOptions};
             let sid = session_id.to_string();
             let binding_workspace_for_terminal = binding_workspace.clone();
             tokio::spawn(async move {
@@ -2406,7 +2413,9 @@ impl RemoteServer {
                         assistant_id: w.assistant_id.clone(),
                     })
                     .collect();
-                RemoteResponse::AssistantList { assistants: entries }
+                RemoteResponse::AssistantList {
+                    assistants: entries,
+                }
             }
             RemoteCommand::SetAssistant { path } => {
                 let ws_service = match get_global_workspace_service() {
@@ -2550,14 +2559,15 @@ impl RemoteServer {
                 let agent = resolve_agent_type(agent_type.as_deref());
                 let is_claw = agent == "Claw";
 
-                let session_name = custom_name
-                    .as_deref()
-                    .filter(|n| !n.is_empty())
-                    .unwrap_or(match agent {
-                        "Cowork" => "Remote Cowork Session",
-                        "Claw" => "Remote Claw Session",
-                        _ => "Remote Code Session",
-                    });
+                let session_name =
+                    custom_name
+                        .as_deref()
+                        .filter(|n| !n.is_empty())
+                        .unwrap_or(match agent {
+                            "Cowork" => "Remote Cowork Session",
+                            "Claw" => "Remote Claw Session",
+                            _ => "Remote Code Session",
+                        });
 
                 let binding_ws_str = if is_claw {
                     // For Claw sessions, get or create default assistant workspace
@@ -2573,7 +2583,9 @@ impl RemoteServer {
                     };
 
                     let workspaces = ws_service.get_assistant_workspaces().await;
-                    if let Some(default_ws) = workspaces.into_iter().find(|w| w.assistant_id.is_none()) {
+                    if let Some(default_ws) =
+                        workspaces.into_iter().find(|w| w.assistant_id.is_none())
+                    {
                         Some(default_ws.root_path.to_string_lossy().to_string())
                     } else {
                         match ws_service.create_assistant_workspace(None).await {

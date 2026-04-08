@@ -30,20 +30,27 @@ fn should_skip_dir_in_prompt_preview(name: &str) -> bool {
 /// Remote file service using SFTP protocol
 #[derive(Clone)]
 pub struct RemoteFileService {
-    manager: Arc<tokio::sync::RwLock<Option<crate::service::remote_ssh::manager::SSHConnectionManager>>>,
+    manager:
+        Arc<tokio::sync::RwLock<Option<crate::service::remote_ssh::manager::SSHConnectionManager>>>,
 }
 
 impl RemoteFileService {
     pub fn new(
-        manager: Arc<tokio::sync::RwLock<Option<crate::service::remote_ssh::manager::SSHConnectionManager>>>,
+        manager: Arc<
+            tokio::sync::RwLock<Option<crate::service::remote_ssh::manager::SSHConnectionManager>>,
+        >,
     ) -> Self {
         Self { manager }
     }
 
     /// Get the SSH manager
-    async fn get_manager(&self, _connection_id: &str) -> anyhow::Result<crate::service::remote_ssh::manager::SSHConnectionManager> {
+    async fn get_manager(
+        &self,
+        _connection_id: &str,
+    ) -> anyhow::Result<crate::service::remote_ssh::manager::SSHConnectionManager> {
         let guard = self.manager.read().await;
-        guard.as_ref()
+        guard
+            .as_ref()
             .cloned()
             .ok_or_else(|| anyhow!("SSH manager not initialized"))
     }
@@ -55,7 +62,12 @@ impl RemoteFileService {
     }
 
     /// Write content to a remote file via SFTP
-    pub async fn write_file(&self, connection_id: &str, path: &str, content: &[u8]) -> anyhow::Result<()> {
+    pub async fn write_file(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+    ) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
         manager.sftp_write(connection_id, path, content).await
     }
@@ -83,7 +95,11 @@ impl RemoteFileService {
     }
 
     /// Read directory contents via SFTP
-    pub async fn read_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<Vec<RemoteDirEntry>> {
+    pub async fn read_dir(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Vec<RemoteDirEntry>> {
         let manager = self.get_manager(connection_id).await?;
         let path_resolved = manager.resolve_sftp_path(connection_id, path).await?;
         let mut entries = manager.sftp_read_dir(connection_id, path).await?;
@@ -166,12 +182,10 @@ impl RemoteFileService {
                 true
             }
         });
-        entries.sort_by(|a, b| {
-            match (a.is_dir, b.is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.cmp(&b.name),
-            }
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.cmp(&b.name),
         });
         entries.truncate(MAX_ENTRIES);
 
@@ -247,7 +261,9 @@ impl RemoteFileService {
                     &entry.path,
                     current_depth + 1,
                     max_depth,
-                )).await {
+                ))
+                .await
+                {
                     Ok(child) => children.push(child),
                     Err(_) => {
                         children.push(RemoteTreeNode {
@@ -326,7 +342,11 @@ impl RemoteFileService {
     }
 
     /// Get file metadata via SFTP
-    pub async fn stat(&self, connection_id: &str, path: &str) -> anyhow::Result<Option<RemoteFileEntry>> {
+    pub async fn stat(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<Option<RemoteFileEntry>> {
         let manager = self.get_manager(connection_id).await?;
 
         match manager.sftp_stat(connection_id, path).await {
@@ -368,13 +388,13 @@ fn format_permissions(mode: Option<u32>) -> String {
     };
 
     let file_type = match mode & 0o170000 {
-        0o040000 => 'd',  // directory
-        0o120000 => 'l',  // symbolic link
-        0o060000 => 'b',  // block device
-        0o020000 => 'c',  // character device
-        0o010000 => 'p',  // FIFO
-        0o140000 => 's',  // socket
-        _ => '-',          // regular file
+        0o040000 => 'd', // directory
+        0o120000 => 'l', // symbolic link
+        0o060000 => 'b', // block device
+        0o020000 => 'c', // character device
+        0o010000 => 'p', // FIFO
+        0o140000 => 's', // socket
+        _ => '-',        // regular file
     };
 
     let perms = [
@@ -389,7 +409,8 @@ fn format_permissions(mode: Option<u32>) -> String {
         (mode & 0o001 != 0, 'x'),
     ];
 
-    let perm_str: String = perms.iter()
+    let perm_str: String = perms
+        .iter()
         .map(|(set, c)| if *set { *c } else { '-' })
         .collect();
 

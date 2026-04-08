@@ -51,9 +51,7 @@ pub struct SSHConnectionConfig {
 #[serde(tag = "type")]
 pub enum SSHAuthMethod {
     /// Password authentication
-    Password {
-        password: String,
-    },
+    Password { password: String },
     /// Private key authentication
     PrivateKey {
         /// Path to private key file on local machine

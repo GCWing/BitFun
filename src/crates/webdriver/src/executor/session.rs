@@ -13,10 +13,7 @@ impl BridgeExecutor {
         Ok(cookies.iter().map(to_webdriver_cookie).collect())
     }
 
-    pub async fn get_cookie(
-        &self,
-        name: &str,
-    ) -> Result<Option<Cookie>, WebDriverErrorResponse> {
+    pub async fn get_cookie(&self, name: &str) -> Result<Option<Cookie>, WebDriverErrorResponse> {
         let cookies = self.get_all_cookies().await?;
         Ok(cookies.into_iter().find(|cookie| cookie.name == name))
     }
@@ -48,9 +45,7 @@ impl BridgeExecutor {
 
         for cookie in cookies.into_iter().filter(|cookie| cookie.name() == name) {
             window.delete_cookie(cookie).map_err(|error| {
-                WebDriverErrorResponse::unknown_error(format!(
-                    "Failed to delete cookie: {error}"
-                ))
+                WebDriverErrorResponse::unknown_error(format!("Failed to delete cookie: {error}"))
             })?;
         }
 
@@ -65,9 +60,7 @@ impl BridgeExecutor {
 
         for cookie in cookies {
             window.delete_cookie(cookie).map_err(|error| {
-                WebDriverErrorResponse::unknown_error(format!(
-                    "Failed to delete cookie: {error}"
-                ))
+                WebDriverErrorResponse::unknown_error(format!("Failed to delete cookie: {error}"))
             })?;
         }
 

@@ -253,5 +253,4 @@ impl ImageAnalyzer {
             analysis_time_ms: 0,
         }
     }
-
 }

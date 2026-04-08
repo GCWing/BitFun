@@ -100,9 +100,9 @@ impl GitTool {
         args: Option<&str>,
         context: &ToolUseContext,
     ) -> BitFunResult<Value> {
-        let shell = context
-            .ws_shell()
-            .ok_or_else(|| BitFunError::tool("Remote Git requires workspace shell (SSH)".to_string()))?;
+        let shell = context.ws_shell().ok_or_else(|| {
+            BitFunError::tool("Remote Git requires workspace shell (SSH)".to_string())
+        })?;
 
         let args_str = args.unwrap_or("").trim();
         let cmd = if args_str.is_empty() {
@@ -427,13 +427,15 @@ impl GitTool {
 
         // Extract branch name
         let branch_name = args_str
-            .split_whitespace().rfind(|s| !s.starts_with('-'))
+            .split_whitespace()
+            .rfind(|s| !s.starts_with('-'))
             .ok_or_else(|| BitFunError::tool("Branch name is required".to_string()))?;
 
         let result = if create_branch {
             // Create and switch to new branch
             let start_point = args_str
-                .split_whitespace().rfind(|s| !s.starts_with('-') && *s != branch_name);
+                .split_whitespace()
+                .rfind(|s| !s.starts_with('-') && *s != branch_name);
             GitService::create_branch(repo_path, branch_name, start_point).await
         } else {
             // Switch to existing branch
@@ -489,7 +491,8 @@ impl GitTool {
             // Delete branch
             let force = args_str.contains("-D");
             let branch_name = args_str
-                .split_whitespace().find(|s| !s.starts_with('-'))
+                .split_whitespace()
+                .find(|s| !s.starts_with('-'))
                 .ok_or_else(|| {
                     BitFunError::tool("Branch name is required for deletion".to_string())
                 })?;

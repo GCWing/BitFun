@@ -4,12 +4,12 @@
 
 use tauri::State;
 
-use bitfun_core::service::remote_ssh::{
-    SSHAuthMethod, SSHConnectionConfig, SSHConnectionResult, SavedConnection, RemoteTreeNode,
-    SSHConfigLookupResult, SSHConfigEntry, ServerInfo,
-};
 use crate::api::app_state::SSHServiceError;
 use crate::AppState;
+use bitfun_core::service::remote_ssh::{
+    RemoteTreeNode, SSHAuthMethod, SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig,
+    SSHConnectionResult, SavedConnection, ServerInfo,
+};
 
 impl From<SSHServiceError> for String {
     fn from(e: SSHServiceError) -> Self {
@@ -25,9 +25,18 @@ pub async fn ssh_list_saved_connections(
 ) -> Result<Vec<SavedConnection>, String> {
     let manager = state.get_ssh_manager_async().await?;
     let connections = manager.get_saved_connections().await;
-    log::info!("ssh_list_saved_connections returning {} connections", connections.len());
+    log::info!(
+        "ssh_list_saved_connections returning {} connections",
+        connections.len()
+    );
     for conn in &connections {
-        log::info!("  - id={}, name={}, host={}:{}", conn.id, conn.name, conn.host, conn.port);
+        log::info!(
+            "  - id={}, name={}, host={}:{}",
+            conn.id,
+            conn.name,
+            conn.host,
+            conn.port
+        );
     }
     Ok(connections)
 }
@@ -37,10 +46,17 @@ pub async fn ssh_save_connection(
     state: State<'_, AppState>,
     config: SSHConnectionConfig,
 ) -> Result<(), String> {
-    log::info!("ssh_save_connection called: id={}, host={}, port={}, username={}",
-        config.id, config.host, config.port, config.username);
+    log::info!(
+        "ssh_save_connection called: id={}, host={}, port={}, username={}",
+        config.id,
+        config.host,
+        config.port,
+        config.username
+    );
     let manager = state.get_ssh_manager_async().await?;
-    manager.save_connection(&config).await
+    manager
+        .save_connection(&config)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -50,7 +66,9 @@ pub async fn ssh_delete_connection(
     connection_id: String,
 ) -> Result<(), String> {
     let manager = state.get_ssh_manager_async().await?;
-    manager.delete_saved_connection(&connection_id).await
+    manager
+        .delete_saved_connection(&connection_id)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -68,8 +86,13 @@ pub async fn ssh_connect(
     state: State<'_, AppState>,
     mut config: SSHConnectionConfig,
 ) -> Result<SSHConnectionResult, String> {
-    log::info!("ssh_connect called: id={}, host={}, port={}, username={}",
-        config.id, config.host, config.port, config.username);
+    log::info!(
+        "ssh_connect called: id={}, host={}, port={}, username={}",
+        config.id,
+        config.host,
+        config.port,
+        config.username
+    );
 
     let manager = match state.get_ssh_manager_async().await {
         Ok(m) => {
@@ -90,7 +113,8 @@ pub async fn ssh_connect(
                 }
                 Ok(None) => {
                     return Err(
-                        "SSH password is required (no saved password for this connection)".to_string(),
+                        "SSH password is required (no saved password for this connection)"
+                            .to_string(),
                     );
                 }
                 Err(e) => return Err(e.to_string()),
@@ -101,15 +125,17 @@ pub async fn ssh_connect(
     // First save the connection config so it persists across restarts
     log::info!("ssh_connect: about to save connection config");
     if let Err(e) = manager.save_connection(&config).await {
-        log::warn!("ssh_connect: Failed to save connection config before connect: {}", e);
+        log::warn!(
+            "ssh_connect: Failed to save connection config before connect: {}",
+            e
+        );
         // Continue anyway - connection might still work
     } else {
         log::info!("ssh_connect: Connection config saved successfully");
     }
 
     log::info!("ssh_connect: about to establish connection");
-    let result = manager.connect(config).await
-        .map_err(|e| e.to_string());
+    let result = manager.connect(config).await.map_err(|e| e.to_string());
     log::info!("ssh_connect result: {:?}", result);
     result
 }
@@ -120,14 +146,14 @@ pub async fn ssh_disconnect(
     connection_id: String,
 ) -> Result<(), String> {
     let manager = state.get_ssh_manager_async().await?;
-    manager.disconnect(&connection_id).await
+    manager
+        .disconnect(&connection_id)
+        .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn ssh_disconnect_all(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn ssh_disconnect_all(state: State<'_, AppState>) -> Result<(), String> {
     let manager = state.get_ssh_manager_async().await?;
     manager.disconnect_all().await;
     Ok(())
@@ -140,7 +166,11 @@ pub async fn ssh_is_connected(
 ) -> Result<bool, String> {
     let manager = state.get_ssh_manager_async().await?;
     let is_connected = manager.is_connected(&connection_id).await;
-    log::info!("ssh_is_connected: connection_id={}, is_connected={}", connection_id, is_connected);
+    log::info!(
+        "ssh_is_connected: connection_id={}, is_connected={}",
+        connection_id,
+        is_connected
+    );
     Ok(is_connected)
 }
 
@@ -179,7 +209,9 @@ pub async fn remote_read_file(
     path: String,
 ) -> Result<String, String> {
     let remote_fs = state.get_remote_file_service_async().await?;
-    let bytes = remote_fs.read_file(&connection_id, &path).await
+    let bytes = remote_fs
+        .read_file(&connection_id, &path)
+        .await
         .map_err(|e| e.to_string())?;
     String::from_utf8(bytes).map_err(|e| e.to_string())
 }
@@ -192,7 +224,9 @@ pub async fn remote_write_file(
     content: String,
 ) -> Result<(), String> {
     let remote_fs = state.get_remote_file_service_async().await?;
-    remote_fs.write_file(&connection_id, &path, content.as_bytes()).await
+    remote_fs
+        .write_file(&connection_id, &path, content.as_bytes())
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -203,7 +237,9 @@ pub async fn remote_exists(
     path: String,
 ) -> Result<bool, String> {
     let remote_fs = state.get_remote_file_service_async().await?;
-    remote_fs.exists(&connection_id, &path).await
+    remote_fs
+        .exists(&connection_id, &path)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -214,7 +250,9 @@ pub async fn remote_read_dir(
     path: String,
 ) -> Result<Vec<bitfun_core::service::remote_ssh::RemoteDirEntry>, String> {
     let remote_fs = state.get_remote_file_service_async().await?;
-    remote_fs.read_dir(&connection_id, &path).await
+    remote_fs
+        .read_dir(&connection_id, &path)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -226,7 +264,9 @@ pub async fn remote_get_tree(
     depth: Option<u32>,
 ) -> Result<RemoteTreeNode, String> {
     let remote_fs = state.get_remote_file_service_async().await?;
-    remote_fs.build_tree(&connection_id, &path, depth).await
+    remote_fs
+        .build_tree(&connection_id, &path, depth)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -282,7 +322,9 @@ pub async fn remote_rename(
     new_path: String,
 ) -> Result<(), String> {
     let remote_fs = state.get_remote_file_service_async().await?;
-    remote_fs.rename(&connection_id, &old_path, &new_path).await
+    remote_fs
+        .rename(&connection_id, &old_path, &new_path)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -321,11 +363,10 @@ pub async fn remote_upload_from_local_path(
     local_path: String,
     remote_path: String,
 ) -> Result<(), String> {
-    let bytes = tokio::task::spawn_blocking(move || {
-        std::fs::read(&local_path).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+    let bytes =
+        tokio::task::spawn_blocking(move || std::fs::read(&local_path).map_err(|e| e.to_string()))
+            .await
+            .map_err(|e| e.to_string())??;
 
     let remote_fs = state.get_remote_file_service_async().await?;
     remote_fs
@@ -341,7 +382,9 @@ pub async fn remote_execute(
     command: String,
 ) -> Result<(String, String, i32), String> {
     let manager = state.get_ssh_manager_async().await?;
-    manager.execute_command(&connection_id, &command).await
+    manager
+        .execute_command(&connection_id, &command)
+        .await
         .map_err(|e| e.to_string())
 }
 
@@ -364,7 +407,9 @@ pub async fn remote_open_workspace(
 
     // Verify remote path exists
     let remote_fs = state.get_remote_file_service_async().await?;
-    let exists = remote_fs.exists(&connection_id, &remote_path).await
+    let exists = remote_fs
+        .exists(&connection_id, &remote_path)
+        .await
         .map_err(|e| e.to_string())?;
 
     if !exists {
@@ -388,17 +433,21 @@ pub async fn remote_open_workspace(
         ssh_host,
     };
 
-    state.set_remote_workspace(workspace).await
+    state
+        .set_remote_workspace(workspace)
+        .await
         .map_err(|e| e.to_string())?;
 
-    log::info!("Opened remote workspace: {} on connection {}", remote_path, connection_id);
+    log::info!(
+        "Opened remote workspace: {} on connection {}",
+        remote_path,
+        connection_id
+    );
     Ok(())
 }
 
 #[tauri::command]
-pub async fn remote_close_workspace(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn remote_close_workspace(state: State<'_, AppState>) -> Result<(), String> {
     state.clear_remote_workspace().await;
     log::info!("Closed remote workspace");
     Ok(())

@@ -58,10 +58,10 @@ impl MermaidInteractiveTool {
         if !starts_with_valid {
             return (false, Some(format!(
                 "Mermaid code must start with a valid diagram type. Supported diagram types: graph, flowchart, sequenceDiagram, classDiagram, stateDiagram, erDiagram, gantt, pie, journey, timeline, mindmap, etc.\nCurrent code start: {}",
-                if trimmed.len() > 50 { 
+                if trimmed.len() > 50 {
                     format!("{}...", &trimmed[..50]) 
-                } else { 
-                    trimmed.to_string() 
+                } else {
+                    trimmed.to_string()
                 }
             )));
         }

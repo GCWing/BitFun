@@ -15,15 +15,13 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 
 use super::command_router::{
     complete_im_bot_pairing, current_bot_language, execute_forwarded_turn, handle_command,
-    parse_command, welcome_message, BotAction, BotActionStyle,
-    BotChatState, BotInteractionHandler, BotInteractiveRequest, BotLanguage, BotMessageSender,
-    HandleResult,
+    parse_command, welcome_message, BotAction, BotActionStyle, BotChatState, BotInteractionHandler,
+    BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 
-type FeishuWsStream = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type FeishuWsStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 type FeishuWsWrite = futures::stream::SplitSink<FeishuWsStream, WsMessage>;
 type SharedFeishuWsWrite = Arc<RwLock<FeishuWsWrite>>;
 
@@ -1559,7 +1557,9 @@ impl FeishuBot {
                     })
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
-                let result = execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
+                let result =
+                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
+                        .await;
                 if !result.display_text.is_empty() {
                     if let Err(err) = bot.send_message(&cid, &result.display_text).await {
                         warn!("Failed to send Feishu final message to {cid}: {err}");

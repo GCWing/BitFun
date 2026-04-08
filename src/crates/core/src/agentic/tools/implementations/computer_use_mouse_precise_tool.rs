@@ -1,8 +1,8 @@
 //! Absolute pointer positioning for Computer use.
 
 use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
-use crate::agentic::tools::implementations::computer_use_tool::computer_use_execute_mouse_precise;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::implementations::computer_use_tool::computer_use_execute_mouse_precise;
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -82,7 +82,11 @@ impl Tool for ComputerUseMousePreciseTool {
         ai.computer_use_enabled
     }
 
-    async fn call_impl(&self, input: &Value, context: &ToolUseContext) -> BitFunResult<Vec<ToolResult>> {
+    async fn call_impl(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
         if context.is_remote() {
             return Err(BitFunError::tool(
                 "ComputerUseMousePrecise cannot run while the session workspace is remote (SSH)."
@@ -90,7 +94,9 @@ impl Tool for ComputerUseMousePreciseTool {
             ));
         }
         let host = context.computer_use_host.as_ref().ok_or_else(|| {
-            BitFunError::tool("Computer use is only available in the BitFun desktop app.".to_string())
+            BitFunError::tool(
+                "Computer use is only available in the BitFun desktop app.".to_string(),
+            )
         })?;
 
         computer_use_execute_mouse_precise(host.as_ref(), input).await

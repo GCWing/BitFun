@@ -31,7 +31,6 @@ pub struct ProjectInfo {
     pub total_files: usize,
 }
 
-
 /// Project type detector.
 pub struct ProjectDetector;
 

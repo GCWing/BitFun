@@ -851,10 +851,7 @@ impl GitService {
     }
 
     /// Gets commit statistics.
-    fn get_commit_stats(
-        _repo: &Repository,
-        _commit: &Commit,
-    ) -> Result<CommitStats, GitError> {
+    fn get_commit_stats(_repo: &Repository, _commit: &Commit) -> Result<CommitStats, GitError> {
         Ok((None, None, None))
     }
 

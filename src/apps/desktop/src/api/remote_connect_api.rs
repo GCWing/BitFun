@@ -586,7 +586,10 @@ pub async fn remote_connect_get_bot_verbose_mode() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn remote_connect_set_bot_verbose_mode(verbose: bool) -> Result<(), String> {
-    log::info!("remote_connect_set_bot_verbose_mode called with verbose={}", verbose);
+    log::info!(
+        "remote_connect_set_bot_verbose_mode called with verbose={}",
+        verbose
+    );
     let mut data = bot::load_bot_persistence();
     data.verbose_mode = verbose;
     bot::save_bot_persistence(&data);

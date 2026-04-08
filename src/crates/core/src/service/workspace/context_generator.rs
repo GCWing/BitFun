@@ -552,13 +552,14 @@ impl WorkspaceContextGenerator {
                             in_package = false;
                         }
 
-                        if in_package && line.contains('=')
+                        if in_package
+                            && line.contains('=')
                             && (line.starts_with("name")
                                 || line.starts_with("description")
                                 || line.starts_with("version"))
-                            {
-                                info.push_str(&format!("{}\n", line));
-                            }
+                        {
+                            info.push_str(&format!("{}\n", line));
+                        }
                     }
 
                     if !info.is_empty() {

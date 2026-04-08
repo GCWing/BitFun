@@ -74,16 +74,17 @@ pub const COMPUTER_USE_POINT_CROP_HALF_MAX: u32 = 250;
 #[inline]
 pub fn clamp_point_crop_half_extent(requested: Option<u32>) -> u32 {
     let v = requested.unwrap_or(COMPUTER_USE_POINT_CROP_HALF_DEFAULT);
-    v.clamp(COMPUTER_USE_POINT_CROP_HALF_MIN, COMPUTER_USE_POINT_CROP_HALF_MAX)
+    v.clamp(
+        COMPUTER_USE_POINT_CROP_HALF_MIN,
+        COMPUTER_USE_POINT_CROP_HALF_MAX,
+    )
 }
 
 /// Suggest a tighter half-extent from AX **native** bounds size (smaller controls → smaller JPEG).
 #[inline]
 pub fn suggested_point_crop_half_extent_from_native_bounds(native_w: u32, native_h: u32) -> u32 {
     let max_edge = native_w.max(native_h).max(1);
-    let half = max_edge
-        .saturating_div(2)
-        .saturating_add(32);
+    let half = max_edge.saturating_div(2).saturating_add(32);
     clamp_point_crop_half_extent(Some(half))
 }
 
@@ -382,13 +383,17 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     /// Press a mouse button and hold it at the current pointer position.
     /// `button`: "left" | "right" | "middle"
     async fn mouse_down(&self, _button: &str) -> BitFunResult<()> {
-        Err(BitFunError::tool("mouse_down is not supported on this host.".to_string()))
+        Err(BitFunError::tool(
+            "mouse_down is not supported on this host.".to_string(),
+        ))
     }
 
     /// Release a mouse button at the current pointer position.
     /// `button`: "left" | "right" | "middle"
     async fn mouse_up(&self, _button: &str) -> BitFunResult<()> {
-        Err(BitFunError::tool("mouse_up is not supported on this host.".to_string()))
+        Err(BitFunError::tool(
+            "mouse_up is not supported on this host.".to_string(),
+        ))
     }
 
     async fn scroll(&self, delta_x: i32, delta_y: i32) -> BitFunResult<()>;
@@ -523,12 +528,14 @@ pub struct SomElement {
     pub bounds_height: f64,
 }
 
-
 /// Whether the latest screenshot JPEG was the full display, a point crop, or a quadrant-drill region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComputerUseScreenshotRefinement {
     FullDisplay,
-    RegionAroundPoint { center_x: u32, center_y: u32 },
+    RegionAroundPoint {
+        center_x: u32,
+        center_y: u32,
+    },
     /// Partial-screen view from hierarchical quadrant navigation.
     QuadrantNavigation {
         x0: u32,

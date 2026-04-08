@@ -45,8 +45,6 @@ fn get_version(executable: &std::path::Path) -> Result<String, std::io::Error> {
         let v = String::from_utf8_lossy(&out.stdout);
         Ok(v.trim().to_string())
     } else {
-        Err(std::io::Error::other(
-            "version check failed",
-        ))
+        Err(std::io::Error::other("version check failed"))
     }
 }

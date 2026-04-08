@@ -1,4 +1,4 @@
-﻿//! WebSocket handler for the relay server.
+//! WebSocket handler for the relay server.
 //!
 //! Only desktop clients connect via WebSocket. Mobile clients use HTTP.
 //! The relay bridges HTTP requests to the desktop via WebSocket using
@@ -82,10 +82,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let write_task = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
-            if !msg.text.is_empty()
-                && ws_sender.send(Message::Text(msg.text)).await.is_err() {
-                    break;
-                }
+            if !msg.text.is_empty() && ws_sender.send(Message::Text(msg.text)).await.is_err() {
+                break;
+            }
         }
     });
 

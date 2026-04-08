@@ -4,21 +4,21 @@
 
 use crate::service::remote_ssh::password_vault::SSHPasswordVault;
 use crate::service::remote_ssh::types::{
-    SavedConnection, ServerInfo, SSHConnectionConfig, SSHConnectionResult, SSHAuthMethod,
-    SSHConfigEntry, SSHConfigLookupResult,
+    SSHAuthMethod, SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionResult,
+    SavedConnection, ServerInfo,
 };
 use anyhow::{anyhow, Context};
+use async_trait::async_trait;
 use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh_keys::key::PublicKey;
 use russh_keys::PublicKeyBase64;
 use russh_sftp::client::fs::ReadDir;
 use russh_sftp::client::SftpSession;
+#[cfg(feature = "ssh_config")]
+use ssh_config::SSHConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpStream;
-use async_trait::async_trait;
-#[cfg(feature = "ssh_config")]
-use ssh_config::SSHConfig;
 
 /// OpenSSH keyword matching is case-insensitive, but `ssh_config` stores keys as written in the file
 /// (e.g. `HostName` vs `Hostname`). Resolve by ASCII case-insensitive compare.
@@ -177,11 +177,19 @@ impl Handler for SSHHandler {
                 log::debug!("Server key matches expected key for {}:{}", host, port);
                 return Ok(true);
             }
-            log::warn!("Server key mismatch for {}:{}. Expected fingerprint: {}, got: {}",
-                host, port, expected.fingerprint(), server_fingerprint);
+            log::warn!(
+                "Server key mismatch for {}:{}. Expected fingerprint: {}, got: {}",
+                host,
+                port,
+                expected.fingerprint(),
+                server_fingerprint
+            );
             return Err(HandlerError(format!(
                 "Host key mismatch for {}:{}: expected {}, got {}",
-                host, port, expected.fingerprint(), server_fingerprint
+                host,
+                port,
+                expected.fingerprint(),
+                server_fingerprint
             )));
         }
 
@@ -200,7 +208,10 @@ impl Handler for SSHHandler {
                     } else {
                         log::warn!(
                             "Host key changed for {}:{}. Expected: {}, got: {}",
-                            host, port, stored_fingerprint, server_fingerprint
+                            host,
+                            port,
+                            stored_fingerprint,
+                            server_fingerprint
                         );
                         return Err(HandlerError(format!(
                             "Host key changed for {}:{} — stored fingerprint {} does not match server fingerprint {}. \
@@ -220,7 +231,9 @@ impl Handler for SSHHandler {
                 log::debug!("Server key verified via callback for {}:{}", host, port);
                 return Ok(true);
             }
-            return Err(HandlerError("Host key rejected by verify callback".to_string()));
+            return Err(HandlerError(
+                "Host key rejected by verify callback".to_string(),
+            ));
         }
 
         // 4. First time connection - accept the key (like standard SSH client's StrictHostKeyChecking=accept-new)
@@ -249,7 +262,12 @@ impl Handler for SSHHandler {
                 format!("Connection closed with error: {}", e)
             }
         };
-        log::warn!("SSH disconnected ({}:{}): {}", self.host.as_deref().unwrap_or("?"), self.port.unwrap_or(22), msg);
+        log::warn!(
+            "SSH disconnected ({}:{}): {}",
+            self.host.as_deref().unwrap_or("?"),
+            self.port.unwrap_or(22),
+            msg
+        );
         if let Ok(mut guard) = self.disconnect_reason.lock() {
             *guard = Some(msg);
         }
@@ -271,7 +289,8 @@ pub struct SSHConnectionManager {
     known_hosts: Arc<tokio::sync::RwLock<HashMap<String, KnownHostEntry>>>,
     known_hosts_path: std::path::PathBuf,
     /// Remote workspace persistence (multiple workspaces)
-    remote_workspaces: Arc<tokio::sync::RwLock<Vec<crate::service::remote_ssh::types::RemoteWorkspace>>>,
+    remote_workspaces:
+        Arc<tokio::sync::RwLock<Vec<crate::service::remote_ssh::types::RemoteWorkspace>>>,
     remote_workspace_path: std::path::PathBuf,
     password_vault: std::sync::Arc<SSHPasswordVault>,
 }
@@ -302,8 +321,8 @@ impl SSHConnectionManager {
         }
 
         let content = tokio::fs::read_to_string(&self.known_hosts_path).await?;
-        let entries: Vec<KnownHostEntry> = serde_json::from_str(&content)
-            .context("Failed to parse known hosts")?;
+        let entries: Vec<KnownHostEntry> =
+            serde_json::from_str(&content).context("Failed to parse known hosts")?;
 
         let mut guard = self.known_hosts.write().await;
         for entry in entries {
@@ -329,13 +348,23 @@ impl SSHConnectionManager {
     }
 
     /// Add a known host
-    pub async fn add_known_host(&self, host: String, port: u16, key: &PublicKey) -> anyhow::Result<()> {
+    pub async fn add_known_host(
+        &self,
+        host: String,
+        port: u16,
+        key: &PublicKey,
+    ) -> anyhow::Result<()> {
         let entry = KnownHostEntry {
             host: host.clone(),
             port,
             key_type: format!("{:?}", key.name()),
             fingerprint: key.fingerprint(),
-            public_key: key.public_key_bytes().to_vec().iter().map(|b| format!("{:02x}", b)).collect(),
+            public_key: key
+                .public_key_bytes()
+                .to_vec()
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect(),
         };
 
         let key = format!("{}:{}", host, port);
@@ -391,8 +420,10 @@ impl SSHConnectionManager {
             serde_json::from_str(&content)
                 .or_else(|_| {
                     // Legacy: single workspace object
-                    serde_json::from_str::<crate::service::remote_ssh::types::RemoteWorkspace>(&content)
-                        .map(|ws| vec![ws])
+                    serde_json::from_str::<crate::service::remote_ssh::types::RemoteWorkspace>(
+                        &content,
+                    )
+                    .map(|ws| vec![ws])
                 })
                 .context("Failed to parse remote workspace(s)")?;
 
@@ -425,7 +456,10 @@ impl SSHConnectionManager {
     }
 
     /// Add/update a persisted remote workspace (key = `connection_id` + `remote_path`).
-    pub async fn set_remote_workspace(&self, mut workspace: crate::service::remote_ssh::types::RemoteWorkspace) -> anyhow::Result<()> {
+    pub async fn set_remote_workspace(
+        &self,
+        mut workspace: crate::service::remote_ssh::types::RemoteWorkspace,
+    ) -> anyhow::Result<()> {
         workspace.remote_path =
             crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
                 &workspace.remote_path,
@@ -446,18 +480,28 @@ impl SSHConnectionManager {
     }
 
     /// Get all persisted remote workspaces
-    pub async fn get_remote_workspaces(&self) -> Vec<crate::service::remote_ssh::types::RemoteWorkspace> {
+    pub async fn get_remote_workspaces(
+        &self,
+    ) -> Vec<crate::service::remote_ssh::types::RemoteWorkspace> {
         self.remote_workspaces.read().await.clone()
     }
 
     /// Get first persisted remote workspace (legacy compat)
-    pub async fn get_remote_workspace(&self) -> Option<crate::service::remote_ssh::types::RemoteWorkspace> {
+    pub async fn get_remote_workspace(
+        &self,
+    ) -> Option<crate::service::remote_ssh::types::RemoteWorkspace> {
         self.remote_workspaces.read().await.first().cloned()
     }
 
     /// Remove a specific remote workspace by **connection** + **remote path** (not path alone).
-    pub async fn remove_remote_workspace(&self, connection_id: &str, remote_path: &str) -> anyhow::Result<()> {
-        let rp = crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(remote_path);
+    pub async fn remove_remote_workspace(
+        &self,
+        connection_id: &str,
+        remote_path: &str,
+    ) -> anyhow::Result<()> {
+        let rp = crate::service::remote_ssh::workspace_state::normalize_remote_workspace_path(
+            remote_path,
+        );
         {
             let mut guard = self.remote_workspaces.write().await;
             guard.retain(|w| {
@@ -494,14 +538,20 @@ impl SSHConnectionManager {
 
         if !ssh_config_path.exists() {
             log::debug!("SSH config not found at {:?}", ssh_config_path);
-            return SSHConfigLookupResult { found: false, config: None };
+            return SSHConfigLookupResult {
+                found: false,
+                config: None,
+            };
         }
 
         let config_content = match tokio::fs::read_to_string(&ssh_config_path).await {
             Ok(c) => c,
             Err(e) => {
                 log::warn!("Failed to read SSH config: {:?}", e);
-                return SSHConfigLookupResult { found: false, config: None };
+                return SSHConfigLookupResult {
+                    found: false,
+                    config: None,
+                };
             }
         };
 
@@ -509,7 +559,10 @@ impl SSHConnectionManager {
             Ok(c) => c,
             Err(e) => {
                 log::warn!("Failed to parse SSH config: {:?}", e);
-                return SSHConfigLookupResult { found: false, config: None };
+                return SSHConfigLookupResult {
+                    found: false,
+                    config: None,
+                };
             }
         };
 
@@ -518,18 +571,24 @@ impl SSHConnectionManager {
 
         if host_settings.is_empty() {
             log::debug!("No SSH config found for host: {}", host);
-            return SSHConfigLookupResult { found: false, config: None };
+            return SSHConfigLookupResult {
+                found: false,
+                config: None,
+            };
         }
 
-        log::debug!("Found SSH config for host: {} with {} settings", host, host_settings.len());
+        log::debug!(
+            "Found SSH config for host: {} with {} settings",
+            host,
+            host_settings.len()
+        );
 
         // Canonical OpenSSH names; lookup is case-insensitive (see ssh_cfg_get).
         let hostname = ssh_cfg_get(&host_settings, "HostName").map(|s| s.to_string());
         let user = ssh_cfg_get(&host_settings, "User").map(|s| s.to_string());
-        let port = ssh_cfg_get(&host_settings, "Port")
-            .and_then(|s| s.parse::<u16>().ok());
-        let identity_file = ssh_cfg_get(&host_settings, "IdentityFile")
-            .map(|f| shellexpand::tilde(f).to_string());
+        let port = ssh_cfg_get(&host_settings, "Port").and_then(|s| s.parse::<u16>().ok());
+        let identity_file =
+            ssh_cfg_get(&host_settings, "IdentityFile").map(|f| shellexpand::tilde(f).to_string());
 
         let has_proxy_command = ssh_cfg_has(&host_settings, "ProxyCommand");
 
@@ -548,7 +607,10 @@ impl SSHConnectionManager {
 
     #[cfg(not(feature = "ssh_config"))]
     pub async fn get_ssh_config(&self, _host: &str) -> SSHConfigLookupResult {
-        SSHConfigLookupResult { found: false, config: None }
+        SSHConfigLookupResult {
+            found: false,
+            config: None,
+        }
     }
 
     /// List all hosts defined in ~/.ssh/config
@@ -607,8 +669,7 @@ impl SSHConnectionManager {
 
                 let hostname = ssh_cfg_get(&settings, "HostName").map(|s| s.to_string());
                 let user = ssh_cfg_get(&settings, "User").map(|s| s.to_string());
-                let port = ssh_cfg_get(&settings, "Port")
-                    .and_then(|s| s.parse::<u16>().ok());
+                let port = ssh_cfg_get(&settings, "Port").and_then(|s| s.parse::<u16>().ok());
 
                 hosts.push(SSHConfigEntry {
                     host: alias.to_string(),
@@ -632,7 +693,11 @@ impl SSHConnectionManager {
 
     /// Load saved connections from disk
     pub async fn load_saved_connections(&self) -> anyhow::Result<()> {
-        log::info!("load_saved_connections: config_path={:?}, exists={}", self.config_path, self.config_path.exists());
+        log::info!(
+            "load_saved_connections: config_path={:?}, exists={}",
+            self.config_path,
+            self.config_path.exists()
+        );
 
         if !self.config_path.exists() {
             return Ok(());
@@ -640,8 +705,8 @@ impl SSHConnectionManager {
 
         let content = tokio::fs::read_to_string(&self.config_path).await?;
         log::info!("load_saved_connections: content={}", content);
-        let saved: Vec<SavedConnection> = serde_json::from_str(&content)
-            .context("Failed to parse saved SSH connections")?;
+        let saved: Vec<SavedConnection> =
+            serde_json::from_str(&content).context("Failed to parse saved SSH connections")?;
 
         let mut guard = self.saved_connections.write().await;
         *guard = saved;
@@ -663,7 +728,11 @@ impl SSHConnectionManager {
         }
 
         tokio::fs::write(&self.config_path, content).await?;
-        log::info!("save_connections: saved {} connections to {:?}", guard.len(), self.config_path);
+        log::info!(
+            "save_connections: saved {} connections to {:?}",
+            guard.len(),
+            self.config_path
+        );
         Ok(())
     }
 
@@ -694,7 +763,9 @@ impl SSHConnectionManager {
         // Remove existing entry with same id OR same host+port+username (dedup)
         guard.retain(|c| {
             c.id != config.id
-                && !(c.host == config.host && c.port == config.port && c.username == config.username)
+                && !(c.host == config.host
+                    && c.port == config.port
+                    && c.username == config.username)
         });
 
         // Add new entry
@@ -705,7 +776,9 @@ impl SSHConnectionManager {
             port: config.port,
             username: config.username.clone(),
             auth_type: match &config.auth {
-                SSHAuthMethod::Password { .. } => crate::service::remote_ssh::types::SavedAuthType::Password,
+                SSHAuthMethod::Password { .. } => {
+                    crate::service::remote_ssh::types::SavedAuthType::Password
+                }
                 SSHAuthMethod::PrivateKey { key_path, .. } => {
                     crate::service::remote_ssh::types::SavedAuthType::PrivateKey {
                         key_path: key_path.clone(),
@@ -736,7 +809,10 @@ impl SSHConnectionManager {
     }
 
     /// Decrypt stored password for password-based saved connections (auto-reconnect).
-    pub async fn load_stored_password(&self, connection_id: &str) -> anyhow::Result<Option<String>> {
+    pub async fn load_stored_password(
+        &self,
+        connection_id: &str,
+    ) -> anyhow::Result<Option<String>> {
         self.password_vault.load(connection_id).await
     }
 
@@ -765,7 +841,10 @@ impl SSHConnectionManager {
     /// # Arguments
     /// * `config` - SSH connection configuration
     /// * `timeout_secs` - Connection timeout in seconds (default: 30)
-    pub async fn connect(&self, config: SSHConnectionConfig) -> anyhow::Result<SSHConnectionResult> {
+    pub async fn connect(
+        &self,
+        config: SSHConnectionConfig,
+    ) -> anyhow::Result<SSHConnectionResult> {
         self.connect_with_timeout(config, 30).await
     }
 
@@ -789,8 +868,15 @@ impl SSHConnectionManager {
         // Create SSH transport config
         let key_pair = match &config.auth {
             SSHAuthMethod::Password { .. } => None,
-            SSHAuthMethod::PrivateKey { key_path, passphrase } => {
-                log::info!("Attempting private key auth with key_path: {}, passphrase provided: {}", key_path, passphrase.is_some());
+            SSHAuthMethod::PrivateKey {
+                key_path,
+                passphrase,
+            } => {
+                log::info!(
+                    "Attempting private key auth with key_path: {}, passphrase provided: {}",
+                    key_path,
+                    passphrase.is_some()
+                );
                 // Try to read the specified key file
                 let expanded = shellexpand::tilde(key_path);
                 log::info!("Expanded key path: {}", expanded);
@@ -801,12 +887,22 @@ impl SSHConnectionManager {
                     }
                     Err(e) => {
                         // If specified key fails, try default ~/.ssh/id_rsa
-                        log::warn!("Failed to read private key at '{}': {}, trying default ~/.ssh/id_rsa", expanded, e);
+                        log::warn!(
+                            "Failed to read private key at '{}': {}, trying default ~/.ssh/id_rsa",
+                            expanded,
+                            e
+                        );
                         if let Ok(home) = std::env::var("HOME") {
                             let default_key = format!("{}/.ssh/id_rsa", home);
                             log::info!("Trying default key at: {}", default_key);
-                            std::fs::read_to_string(&default_key)
-                                .map_err(|e| anyhow!("Failed to read private key '{}' and default key '{}': {}", key_path, default_key, e))?
+                            std::fs::read_to_string(&default_key).map_err(|e| {
+                                anyhow!(
+                                    "Failed to read private key '{}' and default key '{}': {}",
+                                    key_path,
+                                    default_key,
+                                    e
+                                )
+                            })?
                         } else {
                             return Err(anyhow!("Failed to read private key '{}': {}, and could not determine home directory", key_path, e));
                         }
@@ -836,8 +932,8 @@ impl SSHConnectionManager {
                     russh::kex::CURVE25519_PRE_RFC_8731,
                     russh::kex::DH_G16_SHA512,
                     russh::kex::DH_G14_SHA256,
-                    russh::kex::DH_G14_SHA1,  // legacy servers
-                    russh::kex::DH_G1_SHA1,   // very old servers
+                    russh::kex::DH_G14_SHA1, // legacy servers
+                    russh::kex::DH_G1_SHA1,  // very old servers
                     russh::kex::EXTENSION_SUPPORT_AS_CLIENT,
                     russh::kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
                 ]),
@@ -848,7 +944,7 @@ impl SSHConnectionManager {
                     russh_keys::key::ECDSA_SHA2_NISTP521,
                     russh_keys::key::RSA_SHA2_256,
                     russh_keys::key::RSA_SHA2_512,
-                    russh_keys::key::SSH_RSA,  // legacy servers that only advertise ssh-rsa
+                    russh_keys::key::SSH_RSA, // legacy servers that only advertise ssh-rsa
                 ]),
                 ..russh::Preferred::DEFAULT
             },
@@ -904,14 +1000,24 @@ impl SSHConnectionManager {
         let auth_success: bool = match &config.auth {
             SSHAuthMethod::Password { password } => {
                 log::debug!("Using password authentication");
-                handle.authenticate_password(&config.username, password.clone()).await
+                handle
+                    .authenticate_password(&config.username, password.clone())
+                    .await
                     .map_err(|e| anyhow!("Password authentication failed: {:?}", e))?
             }
-            SSHAuthMethod::PrivateKey { key_path, passphrase: _ } => {
+            SSHAuthMethod::PrivateKey {
+                key_path,
+                passphrase: _,
+            } => {
                 log::info!("Using public key authentication with key: {}", key_path);
                 if let Some(ref key) = key_pair {
-                    log::info!("Attempting to authenticate user '{}' with public key", config.username);
-                    let result = handle.authenticate_publickey(&config.username, Arc::new(key.clone())).await;
+                    log::info!(
+                        "Attempting to authenticate user '{}' with public key",
+                        config.username
+                    );
+                    let result = handle
+                        .authenticate_publickey(&config.username, Arc::new(key.clone()))
+                        .await;
                     log::info!("Public key auth result: {:?}", result);
                     match result {
                         Ok(true) => {
@@ -919,7 +1025,10 @@ impl SSHConnectionManager {
                             true
                         }
                         Ok(false) => {
-                            log::warn!("Public key authentication rejected by server for user '{}'", config.username);
+                            log::warn!(
+                                "Public key authentication rejected by server for user '{}'",
+                                config.username
+                            );
                             false
                         }
                         Err(e) => {
@@ -935,7 +1044,10 @@ impl SSHConnectionManager {
 
         if !auth_success {
             log::warn!("Authentication returned false for user {}", config.username);
-            return Err(anyhow!("Authentication failed for user {}", config.username));
+            return Err(anyhow!(
+                "Authentication failed for user {}",
+                config.username
+            ));
         }
         log::info!("Authentication successful for user {}", config.username);
 
@@ -985,9 +1097,10 @@ impl SSHConnectionManager {
 
     /// Get server information (partial lines allowed so we can still fill `home_dir` via [`Self::probe_remote_home_dir`]).
     async fn get_server_info_internal(handle: &Handle<SSHHandler>) -> Option<ServerInfo> {
-        let (stdout, _stderr, exit_status) = Self::execute_command_internal(handle, "uname -s && hostname && echo $HOME")
-            .await
-            .ok()?;
+        let (stdout, _stderr, exit_status) =
+            Self::execute_command_internal(handle, "uname -s && hostname && echo $HOME")
+                .await
+                .ok()?;
 
         if exit_status != 0 {
             return None;
@@ -1050,7 +1163,9 @@ impl SSHConnectionManager {
                 Some(russh::ChannelMsg::ExtendedData { ref data, .. }) => {
                     stderr.push_str(&String::from_utf8_lossy(data));
                 }
-                Some(russh::ChannelMsg::ExitStatus { exit_status: status }) => {
+                Some(russh::ChannelMsg::ExitStatus {
+                    exit_status: status,
+                }) => {
                     exit_status = status as i32;
                 }
                 Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) => {
@@ -1159,7 +1274,11 @@ impl SSHConnectionManager {
     // ============================================================================
 
     /// Expand leading `~` using the remote user's home from [`ServerInfo`] (SFTP paths are not shell-expanded).
-    pub async fn resolve_sftp_path(&self, connection_id: &str, path: &str) -> anyhow::Result<String> {
+    pub async fn resolve_sftp_path(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<String> {
         let path = path.trim();
         if path.is_empty() {
             return Err(anyhow!("Empty remote path"));
@@ -1215,12 +1334,17 @@ impl SSHConnectionManager {
         };
 
         // Open a channel and request SFTP subsystem
-        let channel = handle.channel_open_session().await
+        let channel = handle
+            .channel_open_session()
+            .await
             .map_err(|e| anyhow!("Failed to open channel for SFTP: {}", e))?;
-        channel.request_subsystem(true, "sftp").await
+        channel
+            .request_subsystem(true, "sftp")
+            .await
             .map_err(|e| anyhow!("Failed to request SFTP subsystem: {}", e))?;
 
-        let sftp = SftpSession::new(channel.into_stream()).await
+        let sftp = SftpSession::new(channel.into_stream())
+            .await
             .map_err(|e| anyhow!("Failed to create SFTP session: {}", e))?;
 
         let sftp = Arc::new(sftp);
@@ -1241,29 +1365,41 @@ impl SSHConnectionManager {
     pub async fn sftp_read(&self, connection_id: &str, path: &str) -> anyhow::Result<Vec<u8>> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        let mut file = sftp.open(&path).await
+        let mut file = sftp
+            .open(&path)
+            .await
             .map_err(|e| anyhow!("Failed to open remote file '{}': {}", path, e))?;
 
         let mut buffer = Vec::new();
         use tokio::io::AsyncReadExt;
-        file.read_to_end(&mut buffer).await
+        file.read_to_end(&mut buffer)
+            .await
             .map_err(|e| anyhow!("Failed to read remote file '{}': {}", path, e))?;
 
         Ok(buffer)
     }
 
     /// Write a file via SFTP
-    pub async fn sftp_write(&self, connection_id: &str, path: &str, content: &[u8]) -> anyhow::Result<()> {
+    pub async fn sftp_write(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+    ) -> anyhow::Result<()> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        let mut file = sftp.create(&path).await
+        let mut file = sftp
+            .create(&path)
+            .await
             .map_err(|e| anyhow!("Failed to create remote file '{}': {}", path, e))?;
 
         use tokio::io::AsyncWriteExt;
-        file.write_all(content).await
+        file.write_all(content)
+            .await
             .map_err(|e| anyhow!("Failed to write remote file '{}': {}", path, e))?;
 
-        file.flush().await
+        file.flush()
+            .await
             .map_err(|e| anyhow!("Failed to flush remote file '{}': {}", path, e))?;
 
         Ok(())
@@ -1273,7 +1409,9 @@ impl SSHConnectionManager {
     pub async fn sftp_read_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<ReadDir> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        let entries = sftp.read_dir(&path).await
+        let entries = sftp
+            .read_dir(&path)
+            .await
             .map_err(|e| anyhow!("Failed to read directory '{}': {}", path, e))?;
         Ok(entries)
     }
@@ -1282,7 +1420,8 @@ impl SSHConnectionManager {
     pub async fn sftp_mkdir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.create_dir(&path).await
+        sftp.create_dir(&path)
+            .await
             .map_err(|e| anyhow!("Failed to create directory '{}': {}", path, e))?;
         Ok(())
     }
@@ -1300,7 +1439,9 @@ impl SSHConnectionManager {
         }
 
         // Try to create
-        sftp.as_ref().create_dir(&path).await
+        sftp.as_ref()
+            .create_dir(&path)
+            .await
             .map_err(|e| anyhow!("Failed to create directory '{}': {}", path, e))?;
         Ok(())
     }
@@ -1309,7 +1450,8 @@ impl SSHConnectionManager {
     pub async fn sftp_remove(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.remove_file(&path).await
+        sftp.remove_file(&path)
+            .await
             .map_err(|e| anyhow!("Failed to remove file '{}': {}", path, e))?;
         Ok(())
     }
@@ -1318,17 +1460,24 @@ impl SSHConnectionManager {
     pub async fn sftp_rmdir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.remove_dir(&path).await
+        sftp.remove_dir(&path)
+            .await
             .map_err(|e| anyhow!("Failed to remove directory '{}': {}", path, e))?;
         Ok(())
     }
 
     /// Rename/move via SFTP
-    pub async fn sftp_rename(&self, connection_id: &str, old_path: &str, new_path: &str) -> anyhow::Result<()> {
+    pub async fn sftp_rename(
+        &self,
+        connection_id: &str,
+        old_path: &str,
+        new_path: &str,
+    ) -> anyhow::Result<()> {
         let old_path = self.resolve_sftp_path(connection_id, old_path).await?;
         let new_path = self.resolve_sftp_path(connection_id, new_path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.rename(&old_path, &new_path).await
+        sftp.rename(&old_path, &new_path)
+            .await
             .map_err(|e| anyhow!("Failed to rename '{}' to '{}': {}", old_path, new_path, e))?;
         Ok(())
     }
@@ -1337,15 +1486,23 @@ impl SSHConnectionManager {
     pub async fn sftp_exists(&self, connection_id: &str, path: &str) -> anyhow::Result<bool> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.as_ref().try_exists(&path).await
+        sftp.as_ref()
+            .try_exists(&path)
+            .await
             .map_err(|e| anyhow!("Failed to check if '{}' exists: {}", path, e))
     }
 
     /// Get file metadata via SFTP
-    pub async fn sftp_stat(&self, connection_id: &str, path: &str) -> anyhow::Result<russh_sftp::client::fs::Metadata> {
+    pub async fn sftp_stat(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<russh_sftp::client::fs::Metadata> {
         let path = self.resolve_sftp_path(connection_id, path).await?;
         let sftp = self.get_sftp(connection_id).await?;
-        sftp.as_ref().metadata(&path).await
+        sftp.as_ref()
+            .metadata(&path)
+            .await
             .map_err(|e| anyhow!("Failed to stat '{}': {}", path, e))
     }
 
@@ -1366,23 +1523,22 @@ impl SSHConnectionManager {
             .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
 
         // Open a session channel
-        let channel = conn.handle.channel_open_session().await
+        let channel = conn
+            .handle
+            .channel_open_session()
+            .await
             .map_err(|e| anyhow!("Failed to open channel: {}", e))?;
 
         // Request PTY — `false` = don't wait for reply (reply handled in reader loop)
-        channel.request_pty(
-            false,
-            "xterm-256color",
-            cols,
-            rows,
-            0,
-            0,
-            &[],
-        ).await
+        channel
+            .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
+            .await
             .map_err(|e| anyhow!("Failed to request PTY: {}", e))?;
 
         // Start shell — `false` = don't wait for reply
-        channel.request_shell(false).await
+        channel
+            .request_shell(false)
+            .await
             .map_err(|e| anyhow!("Failed to start shell: {}", e))?;
 
         Ok(PTYSession {
@@ -1401,7 +1557,10 @@ impl SSHConnectionManager {
         // Return a fingerprint based on connection info
         // Note: Actual server key fingerprint requires access to the SSH transport layer
         // For security verification, the server key is verified during connection via SSHHandler
-        let fingerprint = format!("{}:{}:{}", conn.config.host, conn.config.port, conn.config.username);
+        let fingerprint = format!(
+            "{}:{}:{}",
+            conn.config.host, conn.config.port, conn.config.username
+        );
         Ok(fingerprint)
     }
 }
@@ -1429,7 +1588,9 @@ impl PTYSession {
     /// Write data to PTY
     pub async fn write(&self, data: &[u8]) -> anyhow::Result<()> {
         let channel = self.channel.lock().await;
-        channel.data(data).await
+        channel
+            .data(data)
+            .await
             .map_err(|e| anyhow!("Failed to write to PTY: {}", e))?;
         Ok(())
     }
@@ -1438,7 +1599,9 @@ impl PTYSession {
     pub async fn resize(&self, cols: u32, rows: u32) -> anyhow::Result<()> {
         let channel = self.channel.lock().await;
         // Use default pixel dimensions (80x24 characters)
-        channel.window_change(cols, rows, 0, 0).await
+        channel
+            .window_change(cols, rows, 0, 0)
+            .await
             .map_err(|e| anyhow!("Failed to resize PTY: {}", e))?;
         Ok(())
     }
@@ -1451,7 +1614,9 @@ impl PTYSession {
         loop {
             match channel.wait().await {
                 Some(russh::ChannelMsg::Data { data }) => return Ok(Some(data.to_vec())),
-                Some(russh::ChannelMsg::ExtendedData { data, .. }) => return Ok(Some(data.to_vec())),
+                Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
+                    return Ok(Some(data.to_vec()))
+                }
                 Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) => return Ok(None),
                 Some(russh::ChannelMsg::ExitStatus { .. }) => return Ok(None),
                 Some(_) => {
@@ -1466,9 +1631,13 @@ impl PTYSession {
     /// Close PTY session
     pub async fn close(self) -> anyhow::Result<()> {
         let channel = self.channel.lock().await;
-        channel.eof().await
+        channel
+            .eof()
+            .await
             .map_err(|e| anyhow!("Failed to close PTY: {}", e))?;
-        channel.close().await
+        channel
+            .close()
+            .await
             .map_err(|e| anyhow!("Failed to close channel: {}", e))?;
         Ok(())
     }
@@ -1495,8 +1664,8 @@ pub struct PortForward {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PortForwardDirection {
-    Local,  // -L: forward local port to remote
-    Remote, // -R: forward remote port to local
+    Local,   // -L: forward local port to remote
+    Remote,  // -R: forward remote port to local
     Dynamic, // -D: dynamic SOCKS proxy
 }
 
@@ -1555,8 +1724,12 @@ impl PortForwardManager {
         let mut guard = self.forwards.write().await;
         guard.insert(id.clone(), forward);
 
-        log::info!("[TODO] Local port forward registered: localhost:{} -> {}:{}",
-            local_port, remote_host, remote_port);
+        log::info!(
+            "[TODO] Local port forward registered: localhost:{} -> {}:{}",
+            local_port,
+            remote_host,
+            remote_port
+        );
         log::warn!("Port forwarding is not fully implemented - connections will not be forwarded");
 
         Ok(id)
@@ -1592,8 +1765,12 @@ impl PortForwardManager {
         let mut guard = self.forwards.write().await;
         guard.insert(id.clone(), forward);
 
-        log::info!("Started remote port forward (placeholder): *:{} -> {}:{}",
-            remote_port, local_host, local_port);
+        log::info!(
+            "Started remote port forward (placeholder): *:{} -> {}:{}",
+            remote_port,
+            local_host,
+            local_port
+        );
 
         // TODO: Implement actual SSH reverse port forwarding
         log::warn!("Remote port forwarding is not fully implemented - data will not be forwarded");
@@ -1605,7 +1782,8 @@ impl PortForwardManager {
     pub async fn stop_forward(&self, forward_id: &str) -> anyhow::Result<()> {
         let mut guard = self.forwards.write().await;
         if let Some(forward) = guard.remove(forward_id) {
-            log::info!("Stopped port forward: {} ({}:{} -> {}:{})",
+            log::info!(
+                "Stopped port forward: {} ({}:{} -> {}:{})",
                 forward.id,
                 match forward.direction {
                     PortForwardDirection::Local => "local",
@@ -1614,7 +1792,8 @@ impl PortForwardManager {
                 },
                 forward.local_port,
                 forward.remote_host,
-                forward.remote_port);
+                forward.remote_port
+            );
         }
         Ok(())
     }

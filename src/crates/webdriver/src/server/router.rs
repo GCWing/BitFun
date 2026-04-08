@@ -176,10 +176,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/session/:session_id/execute/async",
             post(handlers::script::execute_async),
         )
-        .route(
-            "/session/:session_id/print",
-            post(handlers::print::print),
-        )
+        .route("/session/:session_id/print", post(handlers::print::print))
         .route(
             "/session/:session_id/actions",
             post(handlers::actions::perform).delete(handlers::actions::release),

@@ -1,14 +1,9 @@
-use crate::agentic::tools::computer_use_host::{
-    ComputerScreenshot, ComputerUseInteractionState,
-};
+use crate::agentic::tools::computer_use_host::{ComputerScreenshot, ComputerUseInteractionState};
 use serde_json::{json, Value};
 
 pub fn append_interaction_state(body: &mut Value, interaction: &ComputerUseInteractionState) {
     if let Value::Object(map) = body {
-        map.insert(
-            "interaction_state".to_string(),
-            json!(interaction),
-        );
+        map.insert("interaction_state".to_string(), json!(interaction));
     }
 }
 
@@ -46,7 +41,7 @@ pub fn build_screenshot_body(
 mod tests {
     use super::*;
     use crate::agentic::tools::computer_use_host::{
-        ComputerUseInteractionScreenshotKind, ComputerUseImageContentRect,
+        ComputerUseImageContentRect, ComputerUseInteractionScreenshotKind,
     };
 
     #[test]

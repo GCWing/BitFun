@@ -39,11 +39,7 @@ impl BridgeExecutor {
         &self,
         element_id: &str,
     ) -> Result<(), WebDriverErrorResponse> {
-        api::element::exec_validate_frame_element(
-            self.state.clone(),
-            &self.session.id,
-            element_id,
-        )
-        .await
+        api::element::exec_validate_frame_element(self.state.clone(), &self.session.id, element_id)
+            .await
     }
 }

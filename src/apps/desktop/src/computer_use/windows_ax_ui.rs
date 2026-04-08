@@ -6,9 +6,13 @@ use bitfun_core::agentic::tools::computer_use_host::{
 };
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use std::collections::VecDeque;
-use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
-use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker};
 use windows::Win32::Foundation::POINT;
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+};
+use windows::Win32::UI::Accessibility::{
+    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
+};
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
 fn bstr_to_string(b: windows_core::BSTR) -> String {
@@ -44,7 +48,9 @@ fn localized_control_type_string(elem: &IUIAutomationElement) -> String {
 }
 
 /// Foreground window root, then UIA RawViewWalker BFS.
-pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<UiElementLocateResult> {
+pub fn locate_ui_element_center(
+    query: &UiElementLocateQuery,
+) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(query)?;
     let max_depth = query.max_depth.unwrap_or(48).clamp(1, 200);
     let max_nodes = 12_000usize;
@@ -71,10 +77,7 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
 
     let root = unsafe {
         automation.ElementFromHandle(hwnd).map_err(|e| {
-            BitFunError::tool(format!(
-                "UI Automation ElementFromHandle failed: {}.",
-                e
-            ))
+            BitFunError::tool(format!("UI Automation ElementFromHandle failed: {}.", e))
         })?
     };
 
@@ -106,11 +109,18 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
         visited += 1;
         if visited > max_nodes {
             return Err(BitFunError::tool(
-                "UI Automation search limit reached; narrow title/role/identifier filters.".to_string(),
+                "UI Automation search limit reached; narrow title/role/identifier filters."
+                    .to_string(),
             ));
         }
 
-        let name = unsafe { cur.el.CurrentName().ok().map(bstr_to_string).unwrap_or_default() };
+        let name = unsafe {
+            cur.el
+                .CurrentName()
+                .ok()
+                .map(bstr_to_string)
+                .unwrap_or_default()
+        };
         let ident = unsafe {
             cur.el
                 .CurrentAutomationId()
@@ -163,14 +173,16 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
 }
 
 /// Hit-test UIA at global screen coordinates (OCR `move_to_text` disambiguation).
-pub fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> BitFunResult<Option<OcrAccessibilityHit>> {
+pub fn accessibility_hit_at_global_point(
+    gx: f64,
+    gy: f64,
+) -> BitFunResult<Option<OcrAccessibilityHit>> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
     let automation: IUIAutomation = unsafe {
-        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).map_err(|e| {
-            BitFunError::tool(format!("UI Automation (CoCreateInstance): {}.", e))
-        })?
+        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+            .map_err(|e| BitFunError::tool(format!("UI Automation (CoCreateInstance): {}.", e)))?
     };
     let pt = POINT {
         x: gx.round() as i32,
@@ -181,7 +193,12 @@ pub fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> BitFunResult<Optio
         Ok(e) => e,
         Err(_) => return Ok(None),
     };
-    let name = unsafe { elem.CurrentName().ok().map(bstr_to_string).unwrap_or_default() };
+    let name = unsafe {
+        elem.CurrentName()
+            .ok()
+            .map(bstr_to_string)
+            .unwrap_or_default()
+    };
     let ident = unsafe {
         elem.CurrentAutomationId()
             .ok()
@@ -193,7 +210,13 @@ pub fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> BitFunResult<Optio
         unsafe { walker.GetParentElement(&elem) }
             .ok()
             .and_then(|parent| {
-                let pn = unsafe { parent.CurrentName().ok().map(bstr_to_string).unwrap_or_default() };
+                let pn = unsafe {
+                    parent
+                        .CurrentName()
+                        .ok()
+                        .map(bstr_to_string)
+                        .unwrap_or_default()
+                };
                 let pr = localized_control_type_string(&parent);
                 let s = format!("{}: {}", pr, pn);
                 if s == ": " || s.trim().is_empty() {

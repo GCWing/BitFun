@@ -45,10 +45,10 @@ impl RetryStrategy {
 /// Compare two screenshot hashes to detect visual changes
 pub fn detect_visual_change(hash_before: u64, hash_after: u64) -> VerificationResult {
     let changed = hash_before != hash_after;
-    
+
     // Simple change detection based on hash difference
     let change_pct = if changed { 100.0 } else { 0.0 };
-    
+
     VerificationResult {
         verified: changed,
         visual_change_detected: changed,
@@ -64,24 +64,29 @@ pub fn detect_visual_change(hash_before: u64, hash_after: u64) -> VerificationRe
 /// Determine if an action should be retried based on error type
 pub fn should_retry_action(error: &BitFunError, action_type: &str) -> bool {
     let error_msg = error.to_string().to_lowercase();
-    
+
     // Retry on transient errors
-    if error_msg.contains("timeout") 
-        || error_msg.contains("not found") 
+    if error_msg.contains("timeout")
+        || error_msg.contains("not found")
         || error_msg.contains("element moved")
-        || error_msg.contains("stale") {
+        || error_msg.contains("stale")
+    {
         return true;
     }
-    
+
     // Don't retry on permission or configuration errors
-    if error_msg.contains("permission") 
+    if error_msg.contains("permission")
         || error_msg.contains("not enabled")
-        || error_msg.contains("not available") {
+        || error_msg.contains("not available")
+    {
         return false;
     }
-    
+
     // Retry click/locate actions by default
-    matches!(action_type, "click" | "click_element" | "click_label" | "locate")
+    matches!(
+        action_type,
+        "click" | "click_element" | "click_label" | "locate"
+    )
 }
 
 /// Generate retry suggestion based on failure context

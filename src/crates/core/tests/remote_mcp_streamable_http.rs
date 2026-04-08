@@ -76,9 +76,7 @@ async fn post_handler(
                 state.saw_roots_capability.store(true, Ordering::SeqCst);
             }
             if capabilities.get("sampling").is_some() {
-                state
-                    .saw_sampling_capability
-                    .store(true, Ordering::SeqCst);
+                state.saw_sampling_capability.store(true, Ordering::SeqCst);
             }
             if capabilities.get("elicitation").is_some() {
                 state
@@ -189,14 +187,9 @@ async fn remote_mcp_streamable_http_accepts_202_and_delivers_response_via_sse() 
     });
 
     let url = format!("http://{addr}/mcp");
-    let connection = MCPConnection::new_remote(
-        "test-server",
-        url,
-        Default::default(),
-        false,
-    )
-    .await
-    .expect("remote connection should be created");
+    let connection = MCPConnection::new_remote("test-server", url, Default::default(), false)
+        .await
+        .expect("remote connection should be created");
 
     connection
         .initialize("BitFunTest", "0.0.0")

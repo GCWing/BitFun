@@ -14,8 +14,7 @@ pub use filesystem::{
     file_watcher, get_path_manager_arc, initialize_file_watcher, try_get_path_manager_arc,
     BatchedFileSearchProgressSink, FileContentSearchOptions, FileInfo, FileNameSearchOptions,
     FileOperationOptions, FileOperationService, FileReadResult, FileSearchOutcome,
-    FileSearchProgressSink, FileSearchResult, FileSearchResultGroup, FileTreeNode,
-    FileTreeOptions, FileTreeService, FileTreeStatistics, FileWriteResult, PathManager,
-    SearchMatchType,
+    FileSearchProgressSink, FileSearchResult, FileSearchResultGroup, FileTreeNode, FileTreeOptions,
+    FileTreeService, FileTreeStatistics, FileWriteResult, PathManager, SearchMatchType,
 };
 // pub use storage::{};

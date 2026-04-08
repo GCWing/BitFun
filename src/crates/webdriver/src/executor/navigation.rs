@@ -81,7 +81,8 @@ impl BridgeExecutor {
                 &self.session.id,
                 api::navigation::ready_state(),
             )
-            .await {
+            .await
+            {
                 Ok(Value::String(ready_state)) if ready_state == "complete" => return Ok(()),
                 Ok(_) => {}
                 Err(error) if should_retry_page_load(&error) => {}

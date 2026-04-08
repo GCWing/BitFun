@@ -4,10 +4,10 @@
 
 use crate::computer_use::ui_locate_common;
 use atspi::connection::P2P;
-use atspi::AccessibilityConnection;
-use atspi::CoordType;
 use atspi::proxy::accessible::AccessibleProxy;
 use atspi::proxy::proxy_ext::ProxyExt;
+use atspi::AccessibilityConnection;
+use atspi::CoordType;
 use bitfun_core::agentic::tools::computer_use_host::{UiElementLocateQuery, UiElementLocateResult};
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use std::collections::VecDeque;
@@ -29,7 +29,9 @@ async fn role_match_string(acc: &AccessibleProxy<'_>) -> String {
 }
 
 /// Registry application roots → BFS until first match with non-empty screen extents.
-pub async fn locate_ui_element_center(query: UiElementLocateQuery) -> BitFunResult<UiElementLocateResult> {
+pub async fn locate_ui_element_center(
+    query: UiElementLocateQuery,
+) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(&query)?;
     let max_depth = query.max_depth.unwrap_or(48).clamp(1, 200);
     let max_nodes = 12_000usize;

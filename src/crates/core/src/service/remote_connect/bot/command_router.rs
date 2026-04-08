@@ -366,7 +366,8 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
         Some(s) => s,
         None => {
             return if language.is_chinese() {
-                "自动准备未能完成：工作区服务不可用。请稍后在 BitFun 桌面端打开工作区后再试。".to_string()
+                "自动准备未能完成：工作区服务不可用。请稍后在 BitFun 桌面端打开工作区后再试。"
+                    .to_string()
             } else {
                 "Auto-setup incomplete: workspace service unavailable. Open a workspace in BitFun Desktop and try again."
                     .to_string()
@@ -380,7 +381,9 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
             Ok(w) => assistants.push(w),
             Err(e) => {
                 return if language.is_chinese() {
-                    format!("自动准备未能完成：无法创建助理工作区（{e}）。请使用 /switch_assistant。")
+                    format!(
+                        "自动准备未能完成：无法创建助理工作区（{e}）。请使用 /switch_assistant。"
+                    )
                 } else {
                     format!(
                         "Auto-setup incomplete: could not create assistant workspace ({e}). Use /switch_assistant."
@@ -464,9 +467,7 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
         state.current_session_id = Some(m.session_id.clone());
         let name = m.session_name.as_str();
         return if language.is_chinese() {
-            format!(
-                "已为你进入助理模式，并恢复最近会话「{name}」。直接发送消息即可继续对话。"
-            )
+            format!("已为你进入助理模式，并恢复最近会话「{name}」。直接发送消息即可继续对话。")
         } else {
             format!(
                 "Assistant mode is on; resumed your latest session \"{name}\". Send a message to continue."
@@ -1190,7 +1191,8 @@ async fn handle_switch_assistant(state: &mut BotChatState) -> HandleResult {
             reply: if language.is_chinese() {
                 "未找到助理。请先在 BitFun Desktop 中创建助理。".to_string()
             } else {
-                "No assistants found. Please create an assistant in BitFun Desktop first.".to_string()
+                "No assistants found. Please create an assistant in BitFun Desktop first."
+                    .to_string()
             },
             actions: assistant_mode_actions(language),
             forward_to_session: None,
@@ -1303,7 +1305,8 @@ async fn handle_resume_session(state: &mut BotChatState, page: usize) -> HandleR
     if all_meta.is_empty() {
         let reply = if language.is_chinese() {
             if state.display_mode == BotDisplayMode::Pro {
-                "当前工作区没有会话。请使用 /new_code_session 或 /new_cowork_session 创建一个。".to_string()
+                "当前工作区没有会话。请使用 /new_code_session 或 /new_cowork_session 创建一个。"
+                    .to_string()
             } else {
                 "当前工作区没有会话。请使用 /new_claw_session 创建一个。".to_string()
             }
@@ -1311,7 +1314,8 @@ async fn handle_resume_session(state: &mut BotChatState, page: usize) -> HandleR
             if state.display_mode == BotDisplayMode::Pro {
                 "No sessions found in this workspace. Use /new_code_session or /new_cowork_session to create one.".to_string()
             } else {
-                "No sessions found in this workspace. Use /new_claw_session to create one.".to_string()
+                "No sessions found in this workspace. Use /new_claw_session to create one."
+                    .to_string()
             }
         };
         return HandleResult {
@@ -1764,7 +1768,8 @@ async fn select_workspace(state: &mut BotChatState, path: &str, name: &str) -> H
             info!("Bot switched workspace to: {path}");
 
             let session_count = count_workspace_sessions(path).await;
-            let reply = build_workspace_switched_reply(language, name, session_count, state.display_mode);
+            let reply =
+                build_workspace_switched_reply(language, name, session_count, state.display_mode);
             let actions = if session_count > 0 {
                 session_entry_actions(language, state.display_mode)
             } else {
@@ -1826,7 +1831,10 @@ async fn select_assistant(state: &mut BotChatState, path: &str, name: &str) -> H
             let reply = if language.is_chinese() {
                 format!("已切换到助理：{}\n\n会话数：{}", name, session_count)
             } else {
-                format!("Switched to assistant: {}\n\nSessions: {}", name, session_count)
+                format!(
+                    "Switched to assistant: {}\n\nSessions: {}",
+                    name, session_count
+                )
             };
             let actions = if session_count > 0 {
                 session_entry_actions(language, state.display_mode)
@@ -1879,15 +1887,26 @@ fn build_workspace_switched_reply(
 ) -> String {
     let is_pro = display_mode == BotDisplayMode::Pro;
     let mode_label = if is_pro {
-        if language.is_chinese() { "专业模式" } else { "Expert Mode" }
+        if language.is_chinese() {
+            "专业模式"
+        } else {
+            "Expert Mode"
+        }
     } else {
-        if language.is_chinese() { "助理模式" } else { "Assistant Mode" }
+        if language.is_chinese() {
+            "助理模式"
+        } else {
+            "Assistant Mode"
+        }
     };
 
     let mut reply = if language.is_chinese() {
         format!("已切换到工作区：{}\n当前模式：{}\n\n", name, mode_label)
     } else {
-        format!("Switched to workspace: {}\nCurrent mode: {}\n\n", name, mode_label)
+        format!(
+            "Switched to workspace: {}\nCurrent mode: {}\n\n",
+            name, mode_label
+        )
     };
 
     if session_count > 0 {
@@ -1915,14 +1934,14 @@ fn build_workspace_switched_reply(
                 "/resume_session - 恢复已有会话\n\
                  /new_code_session - 开始新的编码会话\n\
                  /new_cowork_session - 开始新的协作会话\n\
-                 /assistant - 切换到助理模式"
+                 /assistant - 切换到助理模式",
             );
         } else {
             reply.push_str(
                 "/resume_session - Resume an existing session\n\
                  /new_code_session - Start a new coding session\n\
                  /new_cowork_session - Start a new cowork session\n\
-                 /assistant - Switch to Assistant mode"
+                 /assistant - Switch to Assistant mode",
             );
         }
     } else {
@@ -1930,13 +1949,13 @@ fn build_workspace_switched_reply(
             reply.push_str(
                 "/resume_session - 恢复已有会话\n\
                  /new_claw_session - 开始新的助理会话\n\
-                 /pro - 切换到专业模式"
+                 /pro - 切换到专业模式",
             );
         } else {
             reply.push_str(
                 "/resume_session - Resume an existing session\n\
                  /new_claw_session - Start a new claw session\n\
-                 /pro - Switch to Expert mode"
+                 /pro - Switch to Expert mode",
             );
         }
     }
@@ -1970,10 +1989,7 @@ async fn select_session(
             "{}: {user_text}\n\n",
             if language.is_chinese() { "你" } else { "You" }
         ));
-        reply.push_str(&format!(
-            "{}: {assistant_text}\n\n",
-            "AI"
-        ));
+        reply.push_str(&format!("{}: {assistant_text}\n\n", "AI"));
         reply.push_str(if language.is_chinese() {
             "你可以继续对话。"
         } else {
@@ -2877,12 +2893,21 @@ mod parse_command_tests {
 
     #[test]
     fn numeric_menu_with_trailing_dot() {
-        assert!(matches!(parse_command("1."), BotCommand::NumberSelection(1)));
-        assert!(matches!(parse_command("2。"), BotCommand::NumberSelection(2)));
+        assert!(matches!(
+            parse_command("1."),
+            BotCommand::NumberSelection(1)
+        ));
+        assert!(matches!(
+            parse_command("2。"),
+            BotCommand::NumberSelection(2)
+        ));
     }
 
     #[test]
     fn fullwidth_digit_one() {
-        assert!(matches!(parse_command("１"), BotCommand::NumberSelection(1)));
+        assert!(matches!(
+            parse_command("１"),
+            BotCommand::NumberSelection(1)
+        ));
     }
 }

@@ -58,10 +58,8 @@ impl SSHPasswordVault {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(
-                &self.key_path,
-                std::fs::Permissions::from_mode(0o600),
-            );
+            let _ =
+                std::fs::set_permissions(&self.key_path, std::fs::Permissions::from_mode(0o600));
         }
         Ok(key)
     }
@@ -117,10 +115,8 @@ impl SSHPasswordVault {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(
-                &self.vault_path,
-                std::fs::Permissions::from_mode(0o600),
-            );
+            let _ =
+                std::fs::set_permissions(&self.vault_path, std::fs::Permissions::from_mode(0o600));
         }
         Ok(())
     }
@@ -164,17 +160,15 @@ impl SSHPasswordVault {
         if !self.vault_path.exists() {
             return Ok(());
         }
-        let s = tokio::fs::read_to_string(&self.vault_path).await.unwrap_or_default();
+        let s = tokio::fs::read_to_string(&self.vault_path)
+            .await
+            .unwrap_or_default();
         let mut file: VaultFile = serde_json::from_str(&s).unwrap_or_default();
         file.entries.remove(connection_id);
         if file.entries.is_empty() {
             let _ = tokio::fs::remove_file(&self.vault_path).await;
         } else {
-            tokio::fs::write(
-                &self.vault_path,
-                serde_json::to_string_pretty(&file)?,
-            )
-            .await?;
+            tokio::fs::write(&self.vault_path, serde_json::to_string_pretty(&file)?).await?;
         }
         Ok(())
     }

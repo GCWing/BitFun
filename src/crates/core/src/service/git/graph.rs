@@ -252,9 +252,7 @@ fn collect_refs(repo: &Repository) -> Result<HashMap<String, Vec<GraphRef>>, git
         if let Some(oid) = reference.target() {
             let hash = oid.to_string();
             let is_current = current_branch.as_ref().is_some_and(|cb| cb == name);
-            let is_head = head
-                .as_ref()
-                .and_then(|h| h.target()) == Some(oid);
+            let is_head = head.as_ref().and_then(|h| h.target()) == Some(oid);
 
             let graph_ref = GraphRef {
                 name: name.to_string(),
@@ -263,10 +261,7 @@ fn collect_refs(repo: &Repository) -> Result<HashMap<String, Vec<GraphRef>>, git
                 is_head,
             };
 
-            refs_map
-                .entry(hash)
-                .or_default()
-                .push(graph_ref);
+            refs_map.entry(hash).or_default().push(graph_ref);
         }
     }
 

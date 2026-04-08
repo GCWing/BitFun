@@ -28,8 +28,8 @@ pub async fn get_shadow_root(
         .get_shadow_root(&element_id)
         .await
         .map_err(|_| {
-        WebDriverErrorResponse::no_such_shadow_root("Element does not have a shadow root")
-    })?;
+            WebDriverErrorResponse::no_such_shadow_root("Element does not have a shadow root")
+        })?;
 
     if value.is_null() {
         return Err(WebDriverErrorResponse::no_such_shadow_root(

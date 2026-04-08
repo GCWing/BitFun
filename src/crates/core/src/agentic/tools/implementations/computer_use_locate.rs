@@ -4,8 +4,8 @@ use crate::agentic::tools::computer_use_capability::computer_use_desktop_availab
 use crate::agentic::tools::computer_use_host::{
     suggested_point_crop_half_extent_from_native_bounds, UiElementLocateQuery,
 };
-use crate::agentic::tools::implementations::computer_use_tool::computer_use_augment_result_json;
 use crate::agentic::tools::framework::{ToolResult, ToolUseContext};
+use crate::agentic::tools::implementations::computer_use_tool::computer_use_augment_result_json;
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{json, Value};

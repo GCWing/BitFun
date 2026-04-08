@@ -17,8 +17,13 @@ pub use command_router::{BotChatState, ForwardRequest, ForwardedTurnResult, Hand
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "bot_type", rename_all = "snake_case")]
 pub enum BotConfig {
-    Feishu { app_id: String, app_secret: String },
-    Telegram { bot_token: String },
+    Feishu {
+        app_id: String,
+        app_secret: String,
+    },
+    Telegram {
+        bot_token: String,
+    },
     Weixin {
         ilink_token: String,
         base_url: String,
@@ -384,8 +389,7 @@ pub fn extract_computer_file_paths(
         let end = rest
             .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '(' | ')' | '"' | '\''))
             .unwrap_or(rest.len());
-        let raw_suffix =
-            rest[..end].trim_end_matches(['.', ',', ';', ':', ')', ']']);
+        let raw_suffix = rest[..end].trim_end_matches(['.', ',', ';', ':', ')', ']']);
         if !raw_suffix.is_empty() {
             push_if_existing_file(&format!("{PREFIX}{raw_suffix}"), &mut paths, workspace_root);
         }
@@ -436,8 +440,7 @@ pub fn extract_downloadable_file_paths(
                     c.is_whitespace() || matches!(c, '<' | '>' | '(' | ')' | '"' | '\'')
                 })
                 .unwrap_or(rest.len());
-            let raw_suffix = rest[..end]
-                .trim_end_matches(['.', ',', ';', ':', ')', ']']);
+            let raw_suffix = rest[..end].trim_end_matches(['.', ',', ';', ':', ')', ']']);
             if !raw_suffix.is_empty() {
                 let resolve_input = if prefix == "computer://" {
                     format!("{prefix}{raw_suffix}")
@@ -469,9 +472,10 @@ pub fn extract_downloadable_file_paths(
                     && !href.starts_with("tel:")
                     && !href.starts_with('#')
                     && !href.starts_with("//")
-                    && is_downloadable_by_extension(href) {
-                        push_if_existing_file(href, &mut paths, workspace_root);
-                    }
+                    && is_downloadable_by_extension(href)
+                {
+                    push_if_existing_file(href, &mut paths, workspace_root);
+                }
                 i = href_start + rel_end + 1;
             } else {
                 i += 2;

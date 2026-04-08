@@ -28,7 +28,7 @@ impl BridgeExecutor {
                 strategy.as_str(),
                 value,
             )
-                .await?;
+            .await?;
 
             if !result.is_empty() || Instant::now() >= deadline {
                 return Ok(result);

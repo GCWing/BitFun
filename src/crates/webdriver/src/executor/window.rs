@@ -86,9 +86,13 @@ impl BridgeExecutor {
     }
 
     pub async fn fullscreen_window(&self) -> Result<WindowRect, WebDriverErrorResponse> {
-        self.webview_window()?.set_fullscreen(true).map_err(|error| {
-            WebDriverErrorResponse::unknown_error(format!("Failed to fullscreen window: {error}"))
-        })?;
+        self.webview_window()?
+            .set_fullscreen(true)
+            .map_err(|error| {
+                WebDriverErrorResponse::unknown_error(format!(
+                    "Failed to fullscreen window: {error}"
+                ))
+            })?;
         tokio::time::sleep(Duration::from_millis(100)).await;
         self.get_window_rect().await
     }

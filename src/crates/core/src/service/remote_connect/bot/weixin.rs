@@ -4,9 +4,9 @@
 //! `@tencent-weixin/openclaw-weixin`. Login is QR-based; after login the same 6-digit
 //! pairing flow as Telegram/Feishu binds the Weixin user to this desktop.
 
-use anyhow::{anyhow, Result};
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes128;
+use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use log::{debug, error, info, warn};
 use rand::Rng;
@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::command_router::{
@@ -95,10 +95,7 @@ fn build_cdn_download_url(cdn_base: &str, encrypted_query_param: &str) -> String
 
 fn decrypt_aes_128_ecb_pkcs7(ciphertext: &[u8], key: &[u8; 16]) -> Result<Vec<u8>> {
     if ciphertext.is_empty() || !ciphertext.len().is_multiple_of(16) {
-        return Err(anyhow!(
-            "invalid ciphertext length {}",
-            ciphertext.len()
-        ));
+        return Err(anyhow!("invalid ciphertext length {}", ciphertext.len()));
     }
     let cipher = Aes128::new_from_slice(key).expect("AES-128 key len");
     let mut out = Vec::with_capacity(ciphertext.len());
@@ -152,9 +149,7 @@ fn sniff_image_mime(bytes: &[u8]) -> &'static str {
     if bytes.len() >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff {
         return "image/jpeg";
     }
-    if bytes.len() >= 8
-        && bytes[..8] == [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-    {
+    if bytes.len() >= 8 && bytes[..8] == [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] {
         return "image/png";
     }
     if bytes.len() >= 6
@@ -231,15 +226,17 @@ fn ensure_trailing_slash(url: &str) -> String {
 
 fn sync_buf_path(bot_account_id: &str) -> PathBuf {
     let base = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
-    base
-        .join(".bitfun")
+    base.join(".bitfun")
         .join("weixin")
         .join(format!("{bot_account_id}_get_updates_buf.txt"))
 }
 
 fn load_sync_buf(bot_account_id: &str) -> String {
     let p = sync_buf_path(bot_account_id);
-    std::fs::read_to_string(&p).unwrap_or_default().trim().to_string()
+    std::fs::read_to_string(&p)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 fn save_sync_buf(bot_account_id: &str, buf: &str) {
@@ -688,9 +685,11 @@ impl WeixinBot {
         );
         h.insert(
             HeaderName::from_static("x-wechat-uin"),
-            HeaderValue::from_str(&random_wechat_uin_header()).unwrap_or(HeaderValue::from_static("MA==")),
+            HeaderValue::from_str(&random_wechat_uin_header())
+                .unwrap_or(HeaderValue::from_static("MA==")),
         );
-        if let Ok(v) = HeaderValue::from_str(&format!("Bearer {}", self.config.ilink_token.trim())) {
+        if let Ok(v) = HeaderValue::from_str(&format!("Bearer {}", self.config.ilink_token.trim()))
+        {
             h.insert(HeaderName::from_static("authorization"), v);
         }
         h
@@ -740,20 +739,21 @@ impl WeixinBot {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| anyhow!("image: missing encrypt_query_param"))?;
 
-        let key: Option<[u8; 16]> =
-            if let Some(hex_s) = img["aeskey"].as_str().filter(|s| !s.is_empty()) {
-                let bytes = hex::decode(hex_s.trim()).map_err(|e| anyhow!("image aeskey hex: {e}"))?;
-                if bytes.len() != 16 {
-                    return Err(anyhow!("image aeskey must decode to 16 bytes"));
-                }
-                let mut k = [0u8; 16];
-                k.copy_from_slice(&bytes);
-                Some(k)
-            } else if let Some(b64) = img["media"]["aes_key"].as_str().filter(|s| !s.is_empty()) {
-                Some(parse_weixin_cdn_aes_key(b64)?)
-            } else {
-                None
-            };
+        let key: Option<[u8; 16]> = if let Some(hex_s) =
+            img["aeskey"].as_str().filter(|s| !s.is_empty())
+        {
+            let bytes = hex::decode(hex_s.trim()).map_err(|e| anyhow!("image aeskey hex: {e}"))?;
+            if bytes.len() != 16 {
+                return Err(anyhow!("image aeskey must decode to 16 bytes"));
+            }
+            let mut k = [0u8; 16];
+            k.copy_from_slice(&bytes);
+            Some(k)
+        } else if let Some(b64) = img["media"]["aes_key"].as_str().filter(|s| !s.is_empty()) {
+            Some(parse_weixin_cdn_aes_key(b64)?)
+        } else {
+            None
+        };
 
         let enc = self.fetch_weixin_cdn_bytes(param).await?;
         match key {
@@ -763,7 +763,10 @@ impl WeixinBot {
     }
 
     /// Collect up to [`MAX_INBOUND_IMAGES`] images from `item_list` as Feishu-style `ImageAttachment` data URLs.
-    async fn inbound_image_attachments_from_message(&self, msg: &Value) -> (Vec<ImageAttachment>, usize) {
+    async fn inbound_image_attachments_from_message(
+        &self,
+        msg: &Value,
+    ) -> (Vec<ImageAttachment>, usize) {
         const MAX_BYTES: usize = 1024 * 1024;
         let Some(items) = msg["item_list"].as_array() else {
             return (vec![], 0);
@@ -861,11 +864,7 @@ impl WeixinBot {
             .ok_or_else(|| anyhow!("getuploadurl: missing upload_param"))
     }
 
-    async fn post_weixin_cdn_upload(
-        &self,
-        cdn_url: &str,
-        ciphertext: &[u8],
-    ) -> Result<String> {
+    async fn post_weixin_cdn_upload(&self, cdn_url: &str, ciphertext: &[u8]) -> Result<String> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
             .build()?;
@@ -906,9 +905,8 @@ impl WeixinBot {
                 .and_then(|h| h.to_str().ok())
                 .map(|s| s.to_string())
                 .filter(|s| !s.is_empty());
-            return download_param.ok_or_else(|| {
-                anyhow!("CDN response missing x-encrypted-param header")
-            });
+            return download_param
+                .ok_or_else(|| anyhow!("CDN response missing x-encrypted-param header"));
         }
         Err(last_err.unwrap_or_else(|| anyhow!("CDN upload failed")))
     }
@@ -949,7 +947,8 @@ impl WeixinBot {
             "weixin CDN upload: media_type={media_type} rawsize={rawsize} cipher_len={}",
             ciphertext.len()
         );
-        let download_encrypted_query_param = self.post_weixin_cdn_upload(&cdn_url, &ciphertext).await?;
+        let download_encrypted_query_param =
+            self.post_weixin_cdn_upload(&cdn_url, &ciphertext).await?;
 
         Ok(UploadedMediaInfo {
             download_encrypted_query_param,
@@ -1004,7 +1003,8 @@ impl WeixinBot {
         raw_path: &str,
         workspace_root: Option<&std::path::Path>,
     ) -> Result<()> {
-        let content = super::read_workspace_file(raw_path, MAX_WEIXIN_FILE_BYTES, workspace_root).await?;
+        let content =
+            super::read_workspace_file(raw_path, MAX_WEIXIN_FILE_BYTES, workspace_root).await?;
         let mime = super::detect_mime_type(std::path::Path::new(&content.name));
 
         let token = {
@@ -1065,7 +1065,8 @@ impl WeixinBot {
             })
         };
 
-        self.send_message_with_items(peer_id, &token, vec![item]).await?;
+        self.send_message_with_items(peer_id, &token, vec![item])
+            .await?;
         info!("Weixin file sent to peer={peer_id} name={}", content.name);
         Ok(())
     }
@@ -1131,7 +1132,11 @@ impl WeixinBot {
                         let _ = self
                             .send_text(
                                 peer_id,
-                                &Self::send_file_failed_message(language, &file_name, &e.to_string()),
+                                &Self::send_file_failed_message(
+                                    language,
+                                    &file_name,
+                                    &e.to_string(),
+                                ),
                             )
                             .await;
                     }
@@ -1166,7 +1171,12 @@ impl WeixinBot {
         Ok(v)
     }
 
-    async fn send_message_raw(&self, to_user_id: &str, context_token: &str, text: &str) -> Result<()> {
+    async fn send_message_raw(
+        &self,
+        to_user_id: &str,
+        context_token: &str,
+        text: &str,
+    ) -> Result<()> {
         let client_id = format!("bitfun-wx-{}", uuid::Uuid::new_v4());
         let item_list = if text.is_empty() {
             None
@@ -1441,7 +1451,9 @@ impl WeixinBot {
 
             let ret = resp["ret"].as_i64().unwrap_or(0);
             let errcode = resp["errcode"].as_i64().unwrap_or(0);
-            if (ret != 0 && ret != SESSION_EXPIRED_ERRCODE) || (errcode != 0 && errcode != SESSION_EXPIRED_ERRCODE) {
+            if (ret != 0 && ret != SESSION_EXPIRED_ERRCODE)
+                || (errcode != 0 && errcode != SESSION_EXPIRED_ERRCODE)
+            {
                 if errcode == SESSION_EXPIRED_ERRCODE || ret == SESSION_EXPIRED_ERRCODE {
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
@@ -1461,12 +1473,11 @@ impl WeixinBot {
                     if !Self::is_user_message(msg) {
                         continue;
                     }
-                    let Some(peer) = Self::peer_id(msg) else { continue };
+                    let Some(peer) = Self::peer_id(msg) else {
+                        continue;
+                    };
                     if let Some(ct) = Self::context_token(msg) {
-                        self.context_tokens
-                            .write()
-                            .await
-                            .insert(peer.clone(), ct);
+                        self.context_tokens.write().await.insert(peer.clone(), ct);
                     }
                     let text = Self::body_from_message(msg).trim().to_string();
                     let language = current_bot_language().await;
@@ -1487,8 +1498,7 @@ impl WeixinBot {
                                 .insert(peer.clone(), state.clone());
                             self.persist_chat_state(&peer, &state).await;
 
-                            let footer =
-                                Self::format_actions_footer(language, &result.actions);
+                            let footer = Self::format_actions_footer(language, &result.actions);
                             let _ = self
                                 .send_text(&peer, &format!("{}{}", result.reply, footer))
                                 .await;
@@ -1550,7 +1560,9 @@ impl WeixinBot {
 
             let ret = resp["ret"].as_i64().unwrap_or(0);
             let errcode = resp["errcode"].as_i64().unwrap_or(0);
-            if (ret != 0 && ret != SESSION_EXPIRED_ERRCODE) || (errcode != 0 && errcode != SESSION_EXPIRED_ERRCODE) {
+            if (ret != 0 && ret != SESSION_EXPIRED_ERRCODE)
+                || (errcode != 0 && errcode != SESSION_EXPIRED_ERRCODE)
+            {
                 if errcode == SESSION_EXPIRED_ERRCODE || ret == SESSION_EXPIRED_ERRCODE {
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
@@ -1564,18 +1576,19 @@ impl WeixinBot {
                 save_sync_buf(&self.config.bot_account_id, &buf);
             }
 
-            let Some(msgs) = resp["msgs"].as_array() else { continue };
+            let Some(msgs) = resp["msgs"].as_array() else {
+                continue;
+            };
 
             for msg in msgs {
                 if !Self::is_user_message(msg) {
                     continue;
                 }
-                let Some(peer) = Self::peer_id(msg) else { continue };
+                let Some(peer) = Self::peer_id(msg) else {
+                    continue;
+                };
                 if let Some(ct) = Self::context_token(msg) {
-                    self.context_tokens
-                        .write()
-                        .await
-                        .insert(peer.clone(), ct);
+                    self.context_tokens.write().await.insert(peer.clone(), ct);
                 }
                 let msg_value = msg.clone();
                 let bot = self.clone();
@@ -1641,8 +1654,7 @@ impl WeixinBot {
                     let result = complete_im_bot_pairing(state).await;
                     self.persist_chat_state(&peer_id, state).await;
                     drop(states);
-                    let footer =
-                        Self::format_actions_footer(language, &result.actions);
+                    let footer = Self::format_actions_footer(language, &result.actions);
                     let _ = self
                         .send_text(&peer_id, &format!("{}{}", result.reply, footer))
                         .await;
@@ -1691,15 +1703,16 @@ impl WeixinBot {
             tokio::spawn(async move {
                 let interaction_bot = bot.clone();
                 let peer_c = peer.clone();
-                let handler: BotInteractionHandler = Arc::new(move |interaction: BotInteractiveRequest| {
-                    let interaction_bot = interaction_bot.clone();
-                    let peer_i = peer_c.clone();
-                    Box::pin(async move {
-                        interaction_bot
-                            .deliver_interaction(peer_i, interaction)
-                            .await;
-                    })
-                });
+                let handler: BotInteractionHandler =
+                    Arc::new(move |interaction: BotInteractiveRequest| {
+                        let interaction_bot = interaction_bot.clone();
+                        let peer_i = peer_c.clone();
+                        Box::pin(async move {
+                            interaction_bot
+                                .deliver_interaction(peer_i, interaction)
+                                .await;
+                        })
+                    });
                 let msg_bot = bot.clone();
                 let peer_m = peer.clone();
                 let sender: BotMessageSender = Arc::new(move |t: String| {
@@ -1711,7 +1724,8 @@ impl WeixinBot {
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
                 let turn_result =
-                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
+                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
+                        .await;
                 if !turn_result.display_text.is_empty() {
                     let _ = bot.send_text(&peer, &turn_result.display_text).await;
                 }

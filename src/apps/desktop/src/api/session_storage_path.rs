@@ -9,7 +9,9 @@ pub async fn desktop_effective_session_storage_path(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> std::path::PathBuf {
-    let conn = remote_connection_id.map(str::trim).filter(|s| !s.is_empty());
+    let conn = remote_connection_id
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     let host_from_request = remote_ssh_host
         .map(str::trim)
         .filter(|s| !s.is_empty())

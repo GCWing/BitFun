@@ -13,8 +13,8 @@ use tokio::sync::RwLock;
 
 use super::command_router::{
     complete_im_bot_pairing, current_bot_language, execute_forwarded_turn, handle_command,
-    parse_command, welcome_message, BotAction, BotChatState,
-    BotInteractionHandler, BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
+    parse_command, welcome_message, BotAction, BotChatState, BotInteractionHandler,
+    BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 use crate::service::remote_connect::remote_server::ImageAttachment;
@@ -704,7 +704,9 @@ impl TelegramBot {
                     })
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
-                let result = execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode).await;
+                let result =
+                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
+                        .await;
                 if !result.display_text.is_empty() {
                     bot.send_message(chat_id, &result.display_text).await.ok();
                 }

@@ -96,27 +96,23 @@ fn ensure_message_handler<R: Runtime>(webview: &Webview<R>) -> Result<(), WebDri
 
     let registration_result = std::sync::Arc::new(std::sync::Mutex::new(Ok::<(), String>(())));
     let registration_result_slot = registration_result.clone();
-    let result = webview.with_webview(move |platform_webview| {
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    let result = webview.with_webview(move |platform_webview| unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
-            let outcome = match platform_webview.controller().CoreWebView2() {
-                Ok(webview2) => register_message_handler(&webview2).map_err(|error| error.message),
-                Err(error) => Err(format!("Failed to access CoreWebView2: {error:?}")),
-            };
+        let outcome = match platform_webview.controller().CoreWebView2() {
+            Ok(webview2) => register_message_handler(&webview2).map_err(|error| error.message),
+            Err(error) => Err(format!("Failed to access CoreWebView2: {error:?}")),
+        };
 
-            if let Ok(mut guard) = registration_result_slot.lock() {
-                *guard = outcome;
-            }
+        if let Ok(mut guard) = registration_result_slot.lock() {
+            *guard = outcome;
         }
     });
 
     match result {
         Ok(()) => {
             let outcome = registration_result.lock().map_err(|_| {
-                WebDriverErrorResponse::unknown_error(
-                    "Failed to read WebView2 registration result",
-                )
+                WebDriverErrorResponse::unknown_error("Failed to read WebView2 registration result")
             })?;
             if let Err(error) = &*outcome {
                 return Err(WebDriverErrorResponse::unknown_error(error.clone()));
@@ -174,9 +170,7 @@ impl ICoreWebView2WebMessageReceivedEventHandler_Impl for WebMessageReceivedHand
     }
 }
 
-unsafe fn register_message_handler(
-    webview: &ICoreWebView2,
-) -> Result<(), WebDriverErrorResponse> {
+unsafe fn register_message_handler(webview: &ICoreWebView2) -> Result<(), WebDriverErrorResponse> {
     let handler: ICoreWebView2WebMessageReceivedEventHandler = WebMessageReceivedHandler.into();
     let mut token = std::mem::zeroed();
     webview

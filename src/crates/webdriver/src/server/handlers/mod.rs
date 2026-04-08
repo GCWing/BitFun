@@ -16,9 +16,9 @@ pub mod logs;
 pub mod navigation;
 pub mod print;
 pub mod screenshot;
-pub mod shadow;
 pub mod script;
 pub mod session;
+pub mod shadow;
 pub mod timeouts;
 pub mod window;
 

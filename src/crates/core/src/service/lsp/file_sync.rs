@@ -341,10 +341,7 @@ impl LspFileSync {
             let workspace = managers.keys().find(|ws| path.starts_with(ws));
 
             if let Some(ws) = workspace {
-                grouped
-                    .entry(ws.clone())
-                    .or_default()
-                    .push(path);
+                grouped.entry(ws.clone()).or_default().push(path);
             }
         }
 

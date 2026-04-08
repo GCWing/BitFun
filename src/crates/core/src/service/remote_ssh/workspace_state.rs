@@ -64,7 +64,8 @@ pub fn workspace_session_identity(
         });
     }
 
-    let local_root = normalize_local_workspace_root_for_stable_id(Path::new(workspace_path)).ok()?;
+    let local_root =
+        normalize_local_workspace_root_for_stable_id(Path::new(workspace_path)).ok()?;
     Some(WorkspaceSessionIdentity {
         hostname: LOCAL_WORKSPACE_SSH_HOST.to_string(),
         workspace_path: local_root,
@@ -88,7 +89,9 @@ pub async fn resolve_workspace_session_identity(
             return workspace_session_identity(workspace_path, Some(connection_id), Some(host));
         }
 
-        if let Some(entry) = lookup_remote_connection_with_hint(workspace_path, Some(connection_id)).await {
+        if let Some(entry) =
+            lookup_remote_connection_with_hint(workspace_path, Some(connection_id)).await
+        {
             return Some(WorkspaceSessionIdentity {
                 hostname: entry.ssh_host,
                 workspace_path: entry.remote_root,
@@ -264,7 +267,10 @@ pub fn remote_workspace_stable_id(ssh_host: &str, remote_root_norm: &str) -> Str
 /// legacy per-connection tree (it is not the same layout as `remote_ssh/{host}/.../sessions`).
 /// This returns a dedicated stub under `~/.bitfun/remote_ssh/_unresolved/.../sessions` that is
 /// usually absent, so session listing is empty until host can be resolved.
-pub fn unresolved_remote_session_storage_dir(connection_id: &str, workspace_path_norm: &str) -> PathBuf {
+pub fn unresolved_remote_session_storage_dir(
+    connection_id: &str,
+    workspace_path_norm: &str,
+) -> PathBuf {
     let mut hasher = Sha256::new();
     hasher.update(b"unresolved_remote_session\x01");
     hasher.update(connection_id.trim().as_bytes());
@@ -387,9 +393,7 @@ impl RemoteWorkspaceStateManager {
         let remote_root = normalize_remote_workspace_path(&remote_path);
         let ssh_host = ssh_host.trim().to_string();
         let mut guard = self.registrations.write().await;
-        guard.retain(|r| {
-            !(r.connection_id == connection_id && r.remote_root == remote_root)
-        });
+        guard.retain(|r| !(r.connection_id == connection_id && r.remote_root == remote_root));
         guard.push(RegisteredRemoteWorkspace {
             connection_id,
             remote_root,
@@ -494,13 +498,8 @@ impl RemoteWorkspaceStateManager {
         remote_path: String,
         connection_name: String,
     ) {
-        self.register_remote_workspace(
-            remote_path,
-            connection_id,
-            connection_name,
-            String::new(),
-        )
-        .await;
+        self.register_remote_workspace(remote_path, connection_id, connection_name, String::new())
+            .await;
     }
 
     /// **Compat** — old code calls `deactivate_remote_workspace`.
@@ -553,7 +552,11 @@ impl RemoteWorkspaceStateManager {
     // ── Session storage ────────────────────────────────────────────
 
     /// Local mirror directory for persisted sessions (`~/.bitfun/remote_ssh/.../sessions`).
-    pub fn get_remote_session_mirror_path(&self, ssh_host: &str, remote_root_norm: &str) -> PathBuf {
+    pub fn get_remote_session_mirror_path(
+        &self,
+        ssh_host: &str,
+        remote_root_norm: &str,
+    ) -> PathBuf {
         remote_workspace_session_mirror_dir(ssh_host, remote_root_norm)
     }
 
@@ -566,7 +569,9 @@ impl RemoteWorkspaceStateManager {
         remote_connection_id: Option<&str>,
         remote_ssh_host: Option<&str>,
     ) -> PathBuf {
-        let remote_id = remote_connection_id.map(str::trim).filter(|s| !s.is_empty());
+        let remote_id = remote_connection_id
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
         if remote_id.is_none() {
             return PathBuf::from(workspace_path);
         }
@@ -574,10 +579,7 @@ impl RemoteWorkspaceStateManager {
         if let Some(host) = remote_ssh_host.map(str::trim).filter(|s| !s.is_empty()) {
             return remote_workspace_session_mirror_dir(host, &path_norm);
         }
-        if let Some(entry) = self
-            .lookup_connection(workspace_path, remote_id)
-            .await
-        {
+        if let Some(entry) = self.lookup_connection(workspace_path, remote_id).await {
             if !entry.ssh_host.trim().is_empty() {
                 return remote_workspace_session_mirror_dir(&entry.ssh_host, &entry.remote_root);
             }
@@ -615,16 +617,16 @@ pub async fn get_effective_session_path(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> std::path::PathBuf {
-    if let Some(identity) = resolve_workspace_session_identity(
-        workspace_path,
-        remote_connection_id,
-        remote_ssh_host,
-    )
-    .await
+    if let Some(identity) =
+        resolve_workspace_session_identity(workspace_path, remote_connection_id, remote_ssh_host)
+            .await
     {
         if identity.hostname == "_unresolved" {
             if let Some(connection_id) = identity.remote_connection_id.as_deref() {
-                return unresolved_remote_session_storage_dir(connection_id, &identity.workspace_path);
+                return unresolved_remote_session_storage_dir(
+                    connection_id,
+                    &identity.workspace_path,
+                );
             }
         }
         return identity.session_storage_path();
@@ -681,8 +683,13 @@ mod tests {
             .to_string_lossy()
             .to_string();
         let m = super::RemoteWorkspaceStateManager::new();
-        m.register_remote_workspace("/".to_string(), "conn".to_string(), "S".to_string(), "h1".to_string())
-            .await;
+        m.register_remote_workspace(
+            "/".to_string(),
+            "conn".to_string(),
+            "S".to_string(),
+            "h1".to_string(),
+        )
+        .await;
         assert!(
             m.lookup_connection(&assistant_path, None).await.is_none(),
             "assistant workspace must not bind to SSH when remote_connection_id is omitted"
@@ -712,10 +719,12 @@ mod tests {
             "host-b".to_string(),
         )
         .await;
-        m.set_active_connection_hint(Some("conn-a".to_string())).await;
+        m.set_active_connection_hint(Some("conn-a".to_string()))
+            .await;
         let a = m.lookup_connection("/tmp", None).await.unwrap();
         assert_eq!(a.connection_id, "conn-a");
-        m.set_active_connection_hint(Some("conn-b".to_string())).await;
+        m.set_active_connection_hint(Some("conn-b".to_string()))
+            .await;
         let b = m.lookup_connection("/tmp", None).await.unwrap();
         assert_eq!(b.connection_id, "conn-b");
     }
@@ -723,10 +732,20 @@ mod tests {
     #[tokio::test]
     async fn preferred_connection_wins_over_hint() {
         let m = super::RemoteWorkspaceStateManager::new();
-        m.register_remote_workspace("/".to_string(), "c1".to_string(), "A".to_string(), "h1".to_string())
-            .await;
-        m.register_remote_workspace("/".to_string(), "c2".to_string(), "B".to_string(), "h1".to_string())
-            .await;
+        m.register_remote_workspace(
+            "/".to_string(),
+            "c1".to_string(),
+            "A".to_string(),
+            "h1".to_string(),
+        )
+        .await;
+        m.register_remote_workspace(
+            "/".to_string(),
+            "c2".to_string(),
+            "B".to_string(),
+            "h1".to_string(),
+        )
+        .await;
         m.set_active_connection_hint(Some("c1".to_string())).await;
         let x = m.lookup_connection("/x", Some("c2")).await.unwrap();
         assert_eq!(x.connection_id, "c2");

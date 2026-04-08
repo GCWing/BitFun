@@ -120,7 +120,9 @@ unsafe fn ax_value_to_size(v: CFTypeRef) -> Option<CGSize> {
     Some(sz)
 }
 
-unsafe fn read_role_title_id(elem: AXUIElementRef) -> (Option<String>, Option<String>, Option<String>) {
+unsafe fn read_role_title_id(
+    elem: AXUIElementRef,
+) -> (Option<String>, Option<String>, Option<String>) {
     let role = ax_copy_attr(elem, "AXRole").and_then(|v| {
         let s = cfstring_to_string(v);
         ax_release(v);
@@ -193,7 +195,10 @@ impl CandidateMatch {
 
         // Off-screen penalty
         if !ui_locate_common::is_element_on_screen(
-            self.gx, self.gy, self.bounds_width, self.bounds_height,
+            self.gx,
+            self.gy,
+            self.bounds_width,
+            self.bounds_height,
         ) {
             score -= 5000;
         }
@@ -214,7 +219,10 @@ impl CandidateMatch {
         // Bonus for elements in focused/active contexts
         if let Some(ref pd) = self.parent_desc {
             let pd_lower = pd.to_lowercase();
-            if pd_lower.contains("sheet") || pd_lower.contains("dialog") || pd_lower.contains("popover") {
+            if pd_lower.contains("sheet")
+                || pd_lower.contains("dialog")
+                || pd_lower.contains("popover")
+            {
                 score += 200; // Prefer elements in modal dialogs / sheets
             }
         }
@@ -246,8 +254,13 @@ impl CandidateMatch {
         let parent_str = self.parent_desc.as_deref().unwrap_or("?");
         format!(
             "role={} title={:?} at ({:.0},{:.0}) size={:.0}x{:.0} parent=[{}]",
-            self.role, title_str, self.gx, self.gy,
-            self.bounds_width, self.bounds_height, parent_str
+            self.role,
+            title_str,
+            self.gx,
+            self.gy,
+            self.bounds_width,
+            self.bounds_height,
+            parent_str
         )
     }
 }
@@ -276,31 +289,45 @@ const MAX_CANDIDATES: usize = 10;
 
 /// Search the **frontmost** app's accessibility tree (BFS) for elements matching filters.
 /// Collects all matches, filters invisible/off-screen ones, ranks by relevance, returns the best.
-pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<UiElementLocateResult> {
+pub fn locate_ui_element_center(
+    query: &UiElementLocateQuery,
+) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(query)?;
     let max_depth = query.max_depth.unwrap_or(48).clamp(1, 200);
     let pid = frontmost_pid()?;
     let root = unsafe { AXUIElementCreateApplication(pid) };
     if root.is_null() {
-        return Err(BitFunError::tool("AXUIElementCreateApplication returned null.".to_string()));
+        return Err(BitFunError::tool(
+            "AXUIElementCreateApplication returned null.".to_string(),
+        ));
     }
     let mut bfs_queue = VecDeque::new();
-    bfs_queue.push_back(Queued { ax: root, depth: 0, parent_desc: None });
+    bfs_queue.push_back(Queued {
+        ax: root,
+        depth: 0,
+        parent_desc: None,
+    });
     let mut visited = 0usize;
     let max_nodes = 12_000usize;
     let mut candidates: Vec<CandidateMatch> = Vec::new();
 
     while let Some(cur) = bfs_queue.pop_front() {
         if cur.depth > max_depth {
-            unsafe { ax_release(cur.ax as CFTypeRef); }
+            unsafe {
+                ax_release(cur.ax as CFTypeRef);
+            }
             continue;
         }
         visited += 1;
         if visited > max_nodes {
-            unsafe { ax_release(cur.ax as CFTypeRef); }
+            unsafe {
+                ax_release(cur.ax as CFTypeRef);
+            }
             // Drain remaining queue
             while let Some(c) = bfs_queue.pop_front() {
-                unsafe { ax_release(c.ax as CFTypeRef); }
+                unsafe {
+                    ax_release(c.ax as CFTypeRef);
+                }
             }
             break;
         }
@@ -315,8 +342,12 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
             if let Some((gx, gy, bl, bt, bw, bh)) = unsafe { element_frame_global(cur.ax) } {
                 let is_visible = !unsafe { is_ax_hidden(cur.ax) };
                 candidates.push(CandidateMatch {
-                    gx, gy,
-                    bounds_left: bl, bounds_top: bt, bounds_width: bw, bounds_height: bh,
+                    gx,
+                    gy,
+                    bounds_left: bl,
+                    bounds_top: bt,
+                    bounds_width: bw,
+                    bounds_height: bh,
                     role: role_s.clone().unwrap_or_default(),
                     title: title_s.clone(),
                     identifier: id_s.clone(),
@@ -326,9 +357,13 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
                 });
                 // Stop collecting after MAX_CANDIDATES to avoid excessive work
                 if candidates.len() >= MAX_CANDIDATES {
-                    unsafe { ax_release(cur.ax as CFTypeRef); }
+                    unsafe {
+                        ax_release(cur.ax as CFTypeRef);
+                    }
                     while let Some(c) = bfs_queue.pop_front() {
-                        unsafe { ax_release(c.ax as CFTypeRef); }
+                        unsafe {
+                            ax_release(c.ax as CFTypeRef);
+                        }
                     }
                     break;
                 }
@@ -340,7 +375,9 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
 
         let children_ref = unsafe { ax_copy_attr(cur.ax, "AXChildren") };
         let next_depth = cur.depth + 1;
-        unsafe { ax_release(cur.ax as CFTypeRef); }
+        unsafe {
+            ax_release(cur.ax as CFTypeRef);
+        }
 
         let Some(ch) = children_ref else {
             continue;
@@ -349,9 +386,13 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
             let arr = CFArray::<*const c_void>::wrap_under_create_rule(ch as CFArrayRef);
             let n = arr.len();
             for i in 0..n {
-                let Some(child_ref) = arr.get(i) else { continue; };
+                let Some(child_ref) = arr.get(i) else {
+                    continue;
+                };
                 let child = *child_ref;
-                if child.is_null() { continue; }
+                if child.is_null() {
+                    continue;
+                }
                 let retained = CFRetain(child as CFTypeRef) as AXUIElementRef;
                 if !retained.is_null() {
                     bfs_queue.push_back(Queued {
@@ -393,15 +434,20 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
     let best = &candidates[0];
 
     // Build "other matches" summaries for the model to see alternatives
-    let other_matches: Vec<String> = candidates.iter()
+    let other_matches: Vec<String> = candidates
+        .iter()
         .skip(1)
         .take(4)
         .map(|c| c.short_description())
         .collect();
 
     ui_locate_common::ok_result_with_context(
-        best.gx, best.gy,
-        best.bounds_left, best.bounds_top, best.bounds_width, best.bounds_height,
+        best.gx,
+        best.gy,
+        best.bounds_left,
+        best.bounds_top,
+        best.bounds_width,
+        best.bounds_height,
         best.role.clone(),
         best.title.clone(),
         best.identifier.clone(),
@@ -411,19 +457,36 @@ pub fn locate_ui_element_center(query: &UiElementLocateQuery) -> BitFunResult<Ui
     )
 }
 
-
 /// Roles considered "interactive" for Set-of-Mark labeling.
 const SOM_INTERACTIVE_ROLES: &[&str] = &[
-    "AXButton", "AXTextField", "AXTextArea", "AXCheckBox",
-    "AXRadioButton", "AXPopUpButton", "AXComboBox", "AXSlider",
-    "AXLink", "AXMenuItem", "AXMenuBarItem", "AXTab",
-    "AXDisclosureTriangle", "AXIncrementor", "AXColorWell",
-    "AXToolbarButton", "AXToggle", "AXSwitch", "AXSegmentedControl",
-    "AXCell", "AXImage", "AXStaticText",
+    "AXButton",
+    "AXTextField",
+    "AXTextArea",
+    "AXCheckBox",
+    "AXRadioButton",
+    "AXPopUpButton",
+    "AXComboBox",
+    "AXSlider",
+    "AXLink",
+    "AXMenuItem",
+    "AXMenuBarItem",
+    "AXTab",
+    "AXDisclosureTriangle",
+    "AXIncrementor",
+    "AXColorWell",
+    "AXToolbarButton",
+    "AXToggle",
+    "AXSwitch",
+    "AXSegmentedControl",
+    "AXCell",
+    "AXImage",
+    "AXStaticText",
 ];
 
 fn is_interactive_role(role: &str) -> bool {
-    SOM_INTERACTIVE_ROLES.iter().any(|r| role.contains(r) || r.contains(role))
+    SOM_INTERACTIVE_ROLES
+        .iter()
+        .any(|r| role.contains(r) || r.contains(role))
 }
 
 /// Enumerate all visible interactive elements in the frontmost app's AX tree.
@@ -452,14 +515,20 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> Vec<SomElement> {
 
     while let Some(cur) = queue.pop_front() {
         if cur.depth > max_depth || results.len() >= max_elements {
-            unsafe { ax_release(cur.ax as CFTypeRef); }
+            unsafe {
+                ax_release(cur.ax as CFTypeRef);
+            }
             continue;
         }
         visited += 1;
         if visited > max_nodes {
-            unsafe { ax_release(cur.ax as CFTypeRef); }
+            unsafe {
+                ax_release(cur.ax as CFTypeRef);
+            }
             while let Some(c) = queue.pop_front() {
-                unsafe { ax_release(c.ax as CFTypeRef); }
+                unsafe {
+                    ax_release(c.ax as CFTypeRef);
+                }
             }
             break;
         }
@@ -490,9 +559,13 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> Vec<SomElement> {
                                 bounds_height: bh,
                             });
                             if results.len() >= max_elements {
-                                unsafe { ax_release(cur.ax as CFTypeRef); }
+                                unsafe {
+                                    ax_release(cur.ax as CFTypeRef);
+                                }
                                 while let Some(c) = queue.pop_front() {
-                                    unsafe { ax_release(c.ax as CFTypeRef); }
+                                    unsafe {
+                                        ax_release(c.ax as CFTypeRef);
+                                    }
                                 }
                                 break;
                             }
@@ -505,19 +578,30 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> Vec<SomElement> {
         // Enqueue children
         let children_ref = unsafe { ax_copy_attr(cur.ax, "AXChildren") };
         let next_depth = cur.depth + 1;
-        unsafe { ax_release(cur.ax as CFTypeRef); }
+        unsafe {
+            ax_release(cur.ax as CFTypeRef);
+        }
 
-        let Some(ch) = children_ref else { continue; };
+        let Some(ch) = children_ref else {
+            continue;
+        };
         unsafe {
             let arr = CFArray::<*const c_void>::wrap_under_create_rule(ch as CFArrayRef);
             let n = arr.len();
             for i in 0..n {
-                let Some(child_ref) = arr.get(i) else { continue; };
+                let Some(child_ref) = arr.get(i) else {
+                    continue;
+                };
                 let child = *child_ref;
-                if child.is_null() { continue; }
+                if child.is_null() {
+                    continue;
+                }
                 let retained = CFRetain(child as CFTypeRef) as AXUIElementRef;
                 if !retained.is_null() {
-                    queue.push_back(BfsItem { ax: retained, depth: next_depth });
+                    queue.push_back(BfsItem {
+                        ax: retained,
+                        depth: next_depth,
+                    });
                 }
             }
         }
@@ -591,7 +675,8 @@ pub fn frontmost_window_bounds_global() -> BitFunResult<(i32, i32, u32, u32)> {
         ax_release(app as CFTypeRef);
         let Some(win) = win else {
             return Err(BitFunError::tool(
-                "No AX window for foreground app (try AXFocusedWindow / AXMainWindow / AXWindows).".to_string(),
+                "No AX window for foreground app (try AXFocusedWindow / AXMainWindow / AXWindows)."
+                    .to_string(),
             ));
         };
         let frame = element_frame_global(win).ok_or_else(|| {

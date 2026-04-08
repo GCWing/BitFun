@@ -3,8 +3,8 @@ mod mouse;
 mod perform;
 mod pointer_source;
 mod release;
-mod wheel_source;
 mod wheel;
+mod wheel_source;
 
 pub(super) fn script() -> String {
     format!(
