@@ -75,9 +75,20 @@
 
   // ==================== Search Bar ====================
   &__search {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
     padding: $size-gap-2;
     border-bottom: 1px solid $border-base;
     flex-shrink: 0;
+  }
+
+  &__search-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    min-width: 0;
   }
 
   &__search-content {
@@ -128,16 +139,13 @@
     align-items: center;
     gap: $size-gap-1;
     flex-shrink: 0;
-    margin-left: $size-gap-1;
   }
 
   &__search-modes {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    padding-right: $size-gap-1;
-    margin-right: $size-gap-1;
-    border-right: 1px solid $border-base;
+    min-width: 0;
   }
 
   &__search-mode {
@@ -379,6 +387,10 @@
       padding: 4px 6px;
     }
 
+    &__search-toolbar {
+      gap: 4px;
+    }
+
     &__search-options {
       display: none;
     }
@@ -435,10 +447,12 @@
       padding: $size-gap-3 $size-gap-4;
     }
 
+    &__search-toolbar {
+      gap: $size-gap-3;
+    }
+
     &__search-options {
       gap: 4px;
-      margin-left: $size-gap-2;
-      padding-right: $size-gap-2;
     }
 
     &__search-option {

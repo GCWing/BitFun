@@ -131,6 +131,9 @@ fn serialize_search_result(result: &FileSearchResult) -> serde_json::Value {
         },
         "lineNumber": result.line_number,
         "matchedContent": result.matched_content,
+        "previewBefore": result.preview_before,
+        "previewInside": result.preview_inside,
+        "previewAfter": result.preview_after,
     })
 }
 

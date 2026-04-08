@@ -105,7 +105,15 @@ $_icon-size: 16px;
     @include mixins.flex-layout(row, center, center, 0);
     flex-shrink: 0;
     min-width: $_icon-size;
-    color: $git-color-branch;
+    width: 20px;
+    height: 20px;
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+
+    &--directory {
+      background: $color-warning-bg;
+      color: $color-warning;
+    }
   }
 
   &-info {
@@ -171,15 +179,16 @@ $_icon-size: 16px;
 
 .bitfun-search-results__matches {
   margin-top: $size-gap-1;
-  padding-left: calc($_icon-size + $size-gap-2 + $size-gap-1);
+  margin-left: $size-gap-1;
+  margin-right: $size-gap-1;
   margin-bottom: $size-gap-1;
 }
 
 .bitfun-search-results__match {
-  @include mixins.flex-layout(row, flex-start, start, $size-gap-2);
-  width: calc(100% - #{$size-gap-2});
+  @include mixins.flex-layout(row, center, start, 0);
+  width: 100%;
   padding: $size-gap-1 $size-gap-2;
-  margin: 0 $size-gap-1;
+  margin: 0;
   cursor: pointer;
   transition: all $motion-base $easing-standard;
   border: none;
@@ -191,24 +200,8 @@ $_icon-size: 16px;
   font: inherit;
   appearance: none;
 
-  &::before {
-    content: '';
-    position: absolute;
-    left: -12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 8px;
-    height: 1px;
-    background: $border-base;
-    opacity: 0.5;
-  }
-
   &:hover {
     background: var(--element-bg-base);
-
-    &::before {
-      opacity: 0;
-    }
   }
 
   &:active {
@@ -219,18 +212,6 @@ $_icon-size: 16px;
     outline: 1px solid var(--color-accent-500);
     outline-offset: 1px;
   }
-
-  &-line {
-    flex-shrink: 0;
-    width: 40px;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    font-family: $font-family-mono;
-    opacity: 0.6;
-    text-align: right;
-    user-select: none;
-  }
-
   &-content {
     flex: 1;
     min-width: 0;
@@ -240,9 +221,10 @@ $_icon-size: 16px;
       font-size: var(--font-size-xs);
       font-family: $font-family-mono;
       color: var(--color-text-secondary);
-      white-space: pre-wrap;
-      word-break: break-word;
-      line-height: 1.6;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.5;
     }
   }
 }

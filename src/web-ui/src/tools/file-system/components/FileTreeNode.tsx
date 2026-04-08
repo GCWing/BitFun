@@ -1,7 +1,8 @@
 import React from 'react';
 import { FileTreeNodeProps } from '../types';
 import { expandedFoldersContains } from '@/shared/utils/pathUtils';
-import { FileTreeItem, getPathDepth } from './FileTreeItem';
+import { FileTreeItem } from './FileTreeItem';
+import { getPathDepth } from './fileTreeDepth';
 
 interface ExtendedFileTreeNodeProps extends FileTreeNodeProps {
   selectedFile?: string;

@@ -1137,6 +1137,9 @@ impl FileTreeService {
                                 match_type: SearchMatchType::FileName,
                                 line_number: None,
                                 matched_content: None,
+                                preview_before: None,
+                                preview_inside: None,
+                                preview_after: None,
                             }],
                         )
                     {
@@ -1170,6 +1173,9 @@ impl FileTreeService {
                             match_type: SearchMatchType::FileName,
                             line_number: None,
                             matched_content: None,
+                            preview_before: None,
+                            preview_inside: None,
+                            preview_after: None,
                         }],
                     )
                 {
@@ -1360,6 +1366,70 @@ impl FileTreeService {
             .map_err(|error| BitFunError::service(format!("Invalid regex pattern: {}", error)))
     }
 
+    fn take_first_chars(text: &str, max_chars: usize) -> String {
+        if max_chars == 0 {
+            return String::new();
+        }
+
+        let mut end_index = text.len();
+        let mut char_count = 0;
+        for (byte_index, _) in text.char_indices() {
+            if char_count == max_chars {
+                end_index = byte_index;
+                break;
+            }
+            char_count += 1;
+        }
+
+        text[..end_index].to_string()
+    }
+
+    fn left_truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
+        let total_chars = text.chars().count();
+        if total_chars <= max_chars {
+            return text.to_string();
+        }
+
+        if max_chars <= 1 {
+            return "…".to_string();
+        }
+
+        let keep_chars = max_chars - 1;
+        let start_index = text
+            .char_indices()
+            .nth(total_chars.saturating_sub(keep_chars))
+            .map(|(index, _)| index)
+            .unwrap_or(0);
+
+        format!("…{}", &text[start_index..])
+    }
+
+    fn build_content_match_preview(
+        line: &str,
+        matcher: &Regex,
+    ) -> (Option<String>, Option<String>, Option<String>) {
+        const MAX_PREVIEW_CHARS: usize = 250;
+        const MAX_PREVIEW_BEFORE_CHARS: usize = 26;
+
+        let Some(found_match) = matcher.find(line) else {
+            return (None, None, None);
+        };
+
+        let full_before = &line[..found_match.start()];
+        let before = Self::left_truncate_with_ellipsis(full_before, MAX_PREVIEW_BEFORE_CHARS);
+
+        let mut chars_remaining = MAX_PREVIEW_CHARS.saturating_sub(before.chars().count());
+        let mut inside = Self::take_first_chars(found_match.as_str(), chars_remaining);
+        chars_remaining = chars_remaining.saturating_sub(inside.chars().count());
+        let after = Self::take_first_chars(&line[found_match.end()..], chars_remaining);
+
+        if inside.is_empty() {
+            inside = found_match.as_str().to_string();
+        }
+
+        (Some(before), Some(inside), Some(after))
+    }
+
     fn build_search_result_group(results: Vec<FileSearchResult>) -> Option<FileSearchResultGroup> {
         let first = results.first()?.clone();
         let file_name_match = results
@@ -1471,6 +1541,9 @@ impl FileTreeService {
                 continue;
             }
 
+            let (preview_before, preview_inside, preview_after) =
+                Self::build_content_match_preview(&line, matcher);
+
             matched_results.push(FileSearchResult {
                 path: path.to_string_lossy().to_string(),
                 name: file_name.to_string(),
@@ -1478,6 +1551,9 @@ impl FileTreeService {
                 match_type: SearchMatchType::Content,
                 line_number: Some(index + 1),
                 matched_content: Some(line),
+                preview_before,
+                preview_inside,
+                preview_after,
             });
 
             if matched_results.len() >= max_results {
@@ -1548,6 +1624,9 @@ pub struct FileSearchResult {
     pub match_type: SearchMatchType,
     pub line_number: Option<usize>,
     pub matched_content: Option<String>,
+    pub preview_before: Option<String>,
+    pub preview_inside: Option<String>,
+    pub preview_after: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

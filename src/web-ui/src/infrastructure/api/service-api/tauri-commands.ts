@@ -189,6 +189,9 @@ export interface FileSearchResult {
   matchType: SearchMatchType;
   lineNumber?: number;
   matchedContent?: string;
+  previewBefore?: string;
+  previewInside?: string;
+  previewAfter?: string;
 }
 
 export interface FileSearchResponse {

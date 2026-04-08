@@ -32,6 +32,12 @@ interface SearchResultTarget {
   isDirectory: boolean;
 }
 
+interface MatchPreviewSegments {
+  before: string;
+  inside: string;
+  after: string;
+}
+
 function newContextId(prefix: string): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -82,31 +88,85 @@ function createFileMentionContext(
   };
 }
 
-function truncateLine(line: string, query: string, maxLength: number = 200): string {
-  if (!line || line.length <= maxLength) {
-    return line;
+function buildFallbackMatchPreview(
+  line: string,
+  query: string,
+  maxLength: number = 96
+): MatchPreviewSegments {
+  if (!line) {
+    return { before: '', inside: '', after: '' };
   }
-  
-  const lowerLine = line.toLowerCase();
-  const lowerQuery = query.toLowerCase();
+
+  const normalizedLine = line.replace(/\t/g, '  ');
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    const truncated =
+      normalizedLine.length <= maxLength
+        ? normalizedLine
+        : `${normalizedLine.slice(0, maxLength - 1)}…`;
+    return { before: '', inside: '', after: truncated };
+  }
+
+  const lowerLine = normalizedLine.toLowerCase();
+  const lowerQuery = trimmedQuery.toLowerCase();
   const matchIndex = lowerLine.indexOf(lowerQuery);
-  
+
   if (matchIndex === -1) {
-    return line.substring(0, maxLength) + '...';
+    const truncated =
+      normalizedLine.length <= maxLength
+        ? normalizedLine
+        : `${normalizedLine.slice(0, maxLength - 1)}…`;
+    return { before: '', inside: '', after: truncated };
   }
-  
-  const beforeChars = 60;
-  const afterChars = 60;
-  
-  const start = Math.max(0, matchIndex - beforeChars);
-  const end = Math.min(line.length, matchIndex + query.length + afterChars);
-  
-  let result = '';
-  if (start > 0) result += '...';
-  result += line.substring(start, end);
-  if (end < line.length) result += '...';
-  
-  return result;
+
+  const contextWindow = Math.max(12, Math.floor((maxLength - trimmedQuery.length) / 2));
+  let start = Math.max(0, matchIndex - contextWindow);
+  let end = Math.min(
+    normalizedLine.length,
+    matchIndex + trimmedQuery.length + contextWindow
+  );
+
+  const visibleLength = end - start;
+  if (visibleLength < maxLength) {
+    const remaining = maxLength - visibleLength;
+    const expandLeft = Math.min(start, Math.floor(remaining / 2));
+    const expandRight = Math.min(
+      normalizedLine.length - end,
+      remaining - expandLeft
+    );
+    start -= expandLeft;
+    end += expandRight;
+  }
+
+  const snippet = normalizedLine.slice(start, end);
+  const relativeMatchStart = matchIndex - start;
+  const relativeMatchEnd = relativeMatchStart + trimmedQuery.length;
+
+  return {
+    before: `${start > 0 ? '…' : ''}${snippet.slice(0, relativeMatchStart)}`,
+    inside: snippet.slice(relativeMatchStart, relativeMatchEnd),
+    after: `${snippet.slice(relativeMatchEnd)}${end < normalizedLine.length ? '…' : ''}`,
+  };
+}
+
+function resolveMatchPreview(
+  match: FileSearchResult,
+  searchQuery: string
+): MatchPreviewSegments {
+  if (
+    match.previewInside !== undefined
+    || match.previewBefore !== undefined
+    || match.previewAfter !== undefined
+  ) {
+    return {
+      before: match.previewBefore ?? '',
+      inside: match.previewInside ?? '',
+      after: match.previewAfter ?? '',
+    };
+  }
+
+  return buildFallbackMatchPreview(match.matchedContent || '', searchQuery);
 }
 
 interface HighlightedTextProps {
@@ -155,9 +215,12 @@ interface MatchItemProps {
 }
 
 const MatchItem = memo<MatchItemProps>(({ match, target, searchQuery, onLineClick }) => {
-  const truncatedContent = useMemo(
-    () => truncateLine(match.matchedContent || '', searchQuery),
-    [match.matchedContent, searchQuery]
+  const preview = useMemo(
+    () => resolveMatchPreview(match, searchQuery),
+    [
+      match,
+      searchQuery,
+    ]
   );
 
   return (
@@ -166,15 +229,22 @@ const MatchItem = memo<MatchItemProps>(({ match, target, searchQuery, onLineClic
       className="bitfun-search-results__match"
       onClick={() => onLineClick(target, match.lineNumber)}
     >
-      <span className="bitfun-search-results__match-line">
-        {match.lineNumber}
-      </span>
       <span 
         className="bitfun-search-results__match-content"
         title={match.matchedContent || ''}
       >
         <code>
-          <HighlightedText text={truncatedContent} query={searchQuery} />
+          {preview.before && (
+            <span className="bitfun-search-results__match-before">{preview.before}</span>
+          )}
+          {preview.inside ? (
+            <mark className="bitfun-search-results__highlight bitfun-search-results__match-highlight">
+              {preview.inside}
+            </mark>
+          ) : null}
+          {preview.after && (
+            <span className="bitfun-search-results__match-after">{preview.after}</span>
+          )}
         </code>
       </span>
     </button>
@@ -219,7 +289,11 @@ const FileGroup = memo<FileGroupProps>(({
           onClick={() => onFileClick(target)}
           onContextMenu={(event) => onFileContextMenu(event, target)}
         >
-          <span className="bitfun-search-results__file-icon">
+          <span
+            className={`bitfun-search-results__file-icon${
+              group.isDirectory ? ' bitfun-search-results__file-icon--directory' : ''
+            }`}
+          >
             {group.isDirectory ? (
               <Folder size={16} />
             ) : (

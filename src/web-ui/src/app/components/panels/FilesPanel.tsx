@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
+import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List } from 'lucide-react';
 import {
   FileExplorer,
   getNewItemParentPath,
@@ -100,7 +100,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     clearSearch,
   } = useExplorerSearch({
     workspacePath,
-    initialMode: 'filenames',
+    initialMode: 'content',
     filenameSearchDebounce: 300,
     contentSearchDebounce: 300,
     minFilenameLength: 1,
@@ -792,49 +792,54 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               clearable
               size="small"
               loading={isSearching}
-              suffixContent={
-                <div className="bitfun-files-panel__search-options">
-                  <div className="bitfun-files-panel__search-modes">
-                    <button
-                      className={`bitfun-files-panel__search-mode ${searchMode === 'filenames' ? 'active' : ''}`}
-                      onClick={() => setSearchMode('filenames')}
-                    >
-                      {t('search.modeFiles')}
-                    </button>
-                    <button
-                      className={`bitfun-files-panel__search-mode ${searchMode === 'content' ? 'active' : ''}`}
-                      onClick={() => setSearchMode('content')}
-                    >
-                      {t('search.modeContent')}
-                    </button>
-                  </div>
-                  <Tooltip content={t('options.caseSensitive')}>
-                    <button
-                      className={`bitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
-                    >
-                      <CaseSensitive size={14} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip content={t('options.wholeWord')}>
-                    <button
-                      className={`bitfun-files-panel__search-option ${searchOptions.wholeWord ? 'active' : ''}`}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, wholeWord: !prev.wholeWord }))}
-                    >
-                      <WholeWord size={14} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip content={t('options.useRegex')}>
-                    <button
-                      className={`bitfun-files-panel__search-option ${searchOptions.useRegex ? 'active' : ''}`}
-                      onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
-                    >
-                      <Regex size={14} />
-                    </button>
-                  </Tooltip>
-                </div>
-              }
             />
+            <div className="bitfun-files-panel__search-toolbar">
+              <div className="bitfun-files-panel__search-modes">
+                <button
+                  type="button"
+                  className={`bitfun-files-panel__search-mode ${searchMode === 'content' ? 'active' : ''}`}
+                  onClick={() => setSearchMode('content')}
+                >
+                  {t('search.modeContent')}
+                </button>
+                <button
+                  type="button"
+                  className={`bitfun-files-panel__search-mode ${searchMode === 'filenames' ? 'active' : ''}`}
+                  onClick={() => setSearchMode('filenames')}
+                >
+                  {t('search.modeFiles')}
+                </button>
+              </div>
+              <div className="bitfun-files-panel__search-options">
+                <Tooltip content={t('options.caseSensitive')}>
+                  <button
+                    type="button"
+                    className={`bitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
+                    onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
+                  >
+                    <CaseSensitive size={14} />
+                  </button>
+                </Tooltip>
+                <Tooltip content={t('options.wholeWord')}>
+                  <button
+                    type="button"
+                    className={`bitfun-files-panel__search-option ${searchOptions.wholeWord ? 'active' : ''}`}
+                    onClick={() => setSearchOptions(prev => ({ ...prev, wholeWord: !prev.wholeWord }))}
+                  >
+                    <WholeWord size={14} />
+                  </button>
+                </Tooltip>
+                <Tooltip content={t('options.useRegex')}>
+                  <button
+                    type="button"
+                    className={`bitfun-files-panel__search-option ${searchOptions.useRegex ? 'active' : ''}`}
+                    onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
+                  >
+                    <Regex size={14} />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
           </div>
         )}
 
@@ -859,17 +864,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         ) : viewMode === 'search' ? (
           searchQuery ? (
             <div className="bitfun-files-panel__search-content">
-              {isSearching && (
-                <div className="bitfun-files-panel__search-status">
-                  <Loader2 size={14} className="bitfun-files-panel__search-spinner" />
-                  <span>
-                    {searchMode === 'content'
-                      ? t('status.searchingContent')
-                      : t('status.searchingFilename')}
-                  </span>
-                </div>
-              )}
-
               {searchLimitNotice && (
                 <div className="bitfun-files-panel__search-limit-notice">
                   <span>{searchLimitNotice}</span>

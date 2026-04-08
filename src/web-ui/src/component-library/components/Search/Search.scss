@@ -60,7 +60,17 @@
   &__loading-icon {
     display: block;
     color: var(--color-accent-500);
-    animation: search-spin 1s linear infinite;
+    animation: search-spin 0.85s linear infinite;
+    transform-origin: center;
+    will-change: transform;
+  }
+
+  &__loading-track {
+    opacity: 0.2;
+  }
+
+  &__loading-arc {
+    opacity: 1;
   }
 
   &__input {
