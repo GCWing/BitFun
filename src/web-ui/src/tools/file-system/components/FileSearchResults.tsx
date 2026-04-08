@@ -10,8 +10,7 @@ import { notificationService } from '@/shared/notification-system';
 import { useContextMenuStore } from '@/shared/context-menu-system';
 import { ContextType } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
-import { useContextStore } from '@/shared/stores/contextStore';
-import type { DirectoryContext, FileContext } from '@/shared/types/context';
+import { addFileMentionToChat, type FileMentionTarget } from '@/shared/utils/chatContext';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import './FileSearchResults.scss';
 
@@ -26,66 +25,12 @@ interface FileSearchResultsProps {
   className?: string;
 }
 
-interface SearchResultTarget {
-  path: string;
-  name: string;
-  isDirectory: boolean;
-}
+interface SearchResultTarget extends FileMentionTarget {}
 
 interface MatchPreviewSegments {
   before: string;
   inside: string;
   after: string;
-}
-
-function newContextId(prefix: string): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function getRelativePath(fullPath: string, workspacePath?: string): string | undefined {
-  if (!workspacePath) {
-    return undefined;
-  }
-
-  const normalizedWorkspace = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '');
-  const normalizedPath = fullPath.replace(/\\/g, '/');
-
-  if (!normalizedPath.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
-    return undefined;
-  }
-
-  return normalizedPath.slice(normalizedWorkspace.length).replace(/^\//, '');
-}
-
-function createFileMentionContext(
-  target: SearchResultTarget,
-  workspacePath?: string,
-): FileContext | DirectoryContext {
-  const timestamp = Date.now();
-
-  if (target.isDirectory) {
-    return {
-      id: newContextId('dir'),
-      type: 'directory',
-      directoryPath: target.path,
-      directoryName: target.name,
-      recursive: true,
-      timestamp,
-    };
-  }
-
-  return {
-    id: newContextId('file'),
-    type: 'file',
-    filePath: target.path,
-    fileName: target.name,
-    relativePath: getRelativePath(target.path, workspacePath),
-    timestamp,
-  };
 }
 
 function buildFallbackMatchPreview(
@@ -364,7 +309,6 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   const pendingAutoLoadRef = useRef(false);
   const [manualExpandState, setManualExpandState] = useState<Map<string, boolean>>(new Map());
   const showMenu = useContextMenuStore((state) => state.showMenu);
-  const addContext = useContextStore((state) => state.addContext);
 
   const prevResultsRef = useRef(results);
   const prevSearchQueryRef = useRef(searchQuery);
@@ -495,10 +439,8 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   }, []);
 
   const handleAddToChat = useCallback((target: SearchResultTarget) => {
-    const context = createFileMentionContext(target, workspacePath);
-    addContext(context);
-    window.dispatchEvent(new CustomEvent('insert-context-tag', { detail: { context } }));
-  }, [addContext, workspacePath]);
+    addFileMentionToChat(target, workspacePath);
+  }, [workspacePath]);
 
   const handleFileContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,

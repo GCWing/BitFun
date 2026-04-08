@@ -690,7 +690,7 @@
     "quickFix": "Quick Fix...",
     "goToSymbol": "Go to Symbol...",
     "highlightAllOccurrences": "Highlight All Occurrences",
-    "addToChat": "Add to Chat Context"
+    "addToChat": "Add to Chat"
   },
   "document": {
     "delete": "Delete Document"

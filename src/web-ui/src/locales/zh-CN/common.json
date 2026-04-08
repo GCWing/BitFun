@@ -690,7 +690,7 @@
     "quickFix": "快速修复...",
     "goToSymbol": "转到符号...",
     "highlightAllOccurrences": "高亮所有出现位置",
-    "addToChat": "添加到聊天上下文"
+    "addToChat": "添加到聊天"
   },
   "document": {
     "delete": "删除文档"

@@ -8,6 +8,7 @@ import { globalEventBus } from '../../../infrastructure/event-bus';
 import { i18nService } from '../../../infrastructure/i18n';
 import { workspaceManager } from '../../../infrastructure/services/business/workspaceManager';
 import { isRemoteWorkspace } from '../../../shared/types';
+import { addFileMentionToChat } from '@/shared/utils/chatContext';
 
 export class FileExplorerMenuProvider implements IMenuProvider {
   readonly id = 'file-explorer';
@@ -200,7 +201,23 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
     
     items.push({
-      id: 'file-separator-2',
+      id: 'file-add-to-chat',
+      label: i18nService.t('common:editor.addToChat'),
+      icon: 'MessageSquarePlus',
+      onClick: () => {
+        addFileMentionToChat(
+          {
+            path: fileContext.filePath,
+            name: fileContext.fileName,
+            isDirectory,
+          },
+          fileContext.workspacePath,
+        );
+      }
+    });
+
+    items.push({
+      id: 'file-separator-chat',
       label: '',
       separator: true
     });
