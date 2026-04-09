@@ -422,7 +422,8 @@ impl RemoteWorkspaceStateManager {
         // Assistant sessions use client-local paths under ~/.bitfun/personal_assistant.
         // A registered remote root of `/` matches every absolute path; without an explicit
         // `remote_connection_id`, those paths must not be treated as SSH workspaces.
-        let is_local_assistant_path = get_path_manager_arc().is_local_assistant_workspace_path(path);
+        let is_local_assistant_path =
+            get_path_manager_arc().is_local_assistant_workspace_path(path);
         if is_local_assistant_path {
             let preferred_connection_id = preferred_connection_id?;
             let guard = self.registrations.read().await;

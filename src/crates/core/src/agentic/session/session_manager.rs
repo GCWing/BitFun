@@ -668,7 +668,9 @@ impl SessionManager {
                     "Session evicted from memory, restoring for model update: session_id={}",
                     session_id
                 );
-                let _ = self.restore_session(&workspace_path.clone(), session_id).await;
+                let _ = self
+                    .restore_session(&workspace_path.clone(), session_id)
+                    .await;
             }
         }
 

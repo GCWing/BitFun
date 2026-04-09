@@ -133,7 +133,10 @@ mod tests {
         let resolved = resolve_path_with_workspace("src/main.rs", Some(Path::new("/repo")))
             .expect("path should resolve");
 
-        assert_eq!(PathBuf::from(resolved), Path::new("/repo").join("src/main.rs"));
+        assert_eq!(
+            PathBuf::from(resolved),
+            Path::new("/repo").join("src/main.rs")
+        );
     }
 
     #[test]

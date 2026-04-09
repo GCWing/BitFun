@@ -27,7 +27,7 @@
     "noPresetModels": "暂无可用模型，请获取模型列表或手动输入模型名",
     "backToSelection": "返回选择提供商",
     "selectModel": "选择模型",
-    "multiSelectHint": "支持多选；选中后可分别设置每个模型的上下文窗口、最大输出 Tokens 和思考开关",
+    "multiSelectHint": "支持多选；选中后可分别设置每个模型的上下文窗口、最大输出 Tokens 和推理配置",
     "searchOrInputModel": "搜索或输入模型名称...",
     "inputModelName": "输入自定义模型名称...",
     "useCustomModel": "按 Enter 使用",
@@ -152,15 +152,23 @@
   },
   "thinking": {
     "enable": "启用思考",
+    "mode": "推理模式",
     "enableHint": "需要模型支持思考模式",
     "summaryOn": "思考开",
     "summaryOff": "思考关",
+    "summaryDefault": "API 默认",
+    "summaryEnabled": "显式启用",
+    "summaryDisabled": "显式禁用",
+    "summaryAdaptive": "自适应",
+    "budgetTokens": "Claude 思考预算",
+    "optionDefault": "API 默认",
     "optionEnabled": "启用",
-    "optionDisabled": "禁用"
+    "optionDisabled": "禁用",
+    "optionAdaptive": "自适应"
   },
   "reasoningEffort": {
     "label": "推理深度",
-    "hint": "控制模型推理深度，仅适用于 Responses API（如 GPT-5）",
+    "hint": "控制 provider 支持的推理强度，适用于 Responses API 与支持自适应推理的 Claude 模型",
     "placeholder": "使用 API 默认值"
   },
   "details": {

@@ -646,9 +646,8 @@ mod tests {
 
         assert_eq!(paths.len(), 1);
         assert!(std::path::Path::new(&paths[0]).is_absolute());
-        assert!(std::path::Path::new(&paths[0]).ends_with(
-            std::path::Path::new("artifacts").join("report.pptx")
-        ));
+        assert!(std::path::Path::new(&paths[0])
+            .ends_with(std::path::Path::new("artifacts").join("report.pptx")));
         assert!(std::path::Path::new(&paths[0]).exists());
         let _ = std::fs::remove_dir_all(base);
     }

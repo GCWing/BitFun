@@ -1719,6 +1719,14 @@ function getModelDisplayName(model: RemoteModelConfig | null): string {
   return model.model_name || model.name || '';
 }
 
+function isReasoningEnabled(model: RemoteModelConfig | null): boolean {
+  if (!model) return false;
+  if (model.reasoning_mode) {
+    return model.reasoning_mode === 'enabled' || model.reasoning_mode === 'adaptive';
+  }
+  return !!model.enable_thinking_process;
+}
+
 function getSelectedModelInfo(
   selectedModelId: string,
   catalog: RemoteModelCatalog | null,
@@ -1747,7 +1755,7 @@ function getSelectedModelInfo(
         ? (selectedModelId === 'primary' ? t('chat.modelPrimary') : t('chat.modelFast'))
         : t('chat.modelAuto'),
       meta: buildModelProviderMeta(resolved) || t('chat.modelAutoDesc'),
-      enableThinking: !!resolved?.enable_thinking_process,
+      enableThinking: isReasoningEnabled(resolved),
       reasoningEffort: resolved?.reasoning_effort,
     };
   }
@@ -1764,7 +1772,7 @@ function getSelectedModelInfo(
   return {
     label: getModelDisplayName(resolved),
     meta: buildModelProviderMeta(resolved),
-    enableThinking: resolved.enable_thinking_process,
+    enableThinking: isReasoningEnabled(resolved),
     reasoningEffort: resolved.reasoning_effort,
   };
 }
@@ -1914,7 +1922,7 @@ const ModelSelectorPill: React.FC<{
                       <span className="chat-model-selector__option-name-text">
                         {getModelDisplayName(model)}
                       </span>
-                      {model.enable_thinking_process && (
+                      {isReasoningEnabled(model) && (
                         <SparklesIcon className="chat-model-selector__option-thinking" size={10} />
                       )}
                     </span>

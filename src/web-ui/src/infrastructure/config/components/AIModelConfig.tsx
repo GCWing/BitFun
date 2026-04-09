@@ -6,10 +6,12 @@ import {
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
   ModelCategory,
-  ModelCapability
+  ModelCapability,
+  ReasoningMode
 } from '../types';
 import { configManager } from '../services/ConfigManager';
 import { PROVIDER_TEMPLATES, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
+import { DEFAULT_REASONING_MODE, getEffectiveReasoningMode, supportsAnthropicAdaptive, supportsAnthropicReasoning, supportsAnthropicThinkingBudget, supportsResponsesReasoning } from '../utils/reasoning';
 import { aiApi, systemAPI } from '@/infrastructure/api';
 import { useNotification } from '@/shared/notification-system';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem } from './common';
@@ -32,7 +34,9 @@ interface SelectedModelDraft {
   category: ModelCategory;
   contextWindow: number;
   maxTokens: number;
-  enableThinking: boolean;
+  reasoningMode: ReasoningMode;
+  reasoningEffort?: string;
+  thinkingBudgetTokens?: number;
 }
 
 interface ProviderGroup {
@@ -42,7 +46,7 @@ interface ProviderGroup {
 }
 
 function isResponsesProvider(provider?: string): boolean {
-  return provider === 'response' || provider === 'responses';
+  return supportsResponsesReasoning(provider);
 }
 
 function createModelDraft(
@@ -59,7 +63,39 @@ function createModelDraft(
     category: overrides?.category ?? baseConfig?.category ?? 'general_chat',
     contextWindow: overrides?.contextWindow ?? baseConfig?.context_window ?? 128000,
     maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens ?? 8192,
-    enableThinking: overrides?.enableThinking ?? baseConfig?.enable_thinking_process ?? false,
+    reasoningMode: overrides?.reasoningMode ?? getEffectiveReasoningMode(baseConfig),
+    reasoningEffort: overrides?.reasoningEffort ?? baseConfig?.reasoning_effort,
+    thinkingBudgetTokens: overrides?.thinkingBudgetTokens ?? baseConfig?.thinking_budget_tokens,
+  };
+}
+
+function normalizeDraftReasoningForProvider(
+  draft: SelectedModelDraft,
+  provider?: string
+): SelectedModelDraft {
+  let reasoningMode = draft.reasoningMode;
+
+  if (supportsResponsesReasoning(provider)) {
+    reasoningMode = DEFAULT_REASONING_MODE;
+  } else if (!supportsAnthropicReasoning(provider) && reasoningMode === 'adaptive') {
+    reasoningMode = 'enabled';
+  } else if (supportsAnthropicReasoning(provider)
+    && reasoningMode === 'adaptive'
+    && !supportsAnthropicAdaptive(draft.modelName)) {
+    reasoningMode = 'enabled';
+  }
+
+  const keepReasoningEffort = supportsResponsesReasoning(provider)
+    || (supportsAnthropicReasoning(provider) && reasoningMode === 'adaptive');
+  const keepThinkingBudget = supportsAnthropicReasoning(provider)
+    && reasoningMode === 'enabled'
+    && supportsAnthropicThinkingBudget(draft.modelName);
+
+  return {
+    ...draft,
+    reasoningMode,
+    reasoningEffort: keepReasoningEffort ? draft.reasoningEffort : undefined,
+    thinkingBudgetTokens: keepThinkingBudget ? draft.thinkingBudgetTokens : undefined,
   };
 }
 
@@ -257,8 +293,10 @@ const AIModelConfig: React.FC = () => {
     [requestFormatOptions]
   );
 
-  const reasoningEffortOptions = useMemo(
+  const responsesReasoningEffortOptions = useMemo(
     () => [
+      { label: 'None', value: 'none' },
+      { label: 'Minimal', value: 'minimal' },
       { label: 'Low', value: 'low' },
       { label: 'Medium', value: 'medium' },
       { label: 'High', value: 'high' },
@@ -267,13 +305,32 @@ const AIModelConfig: React.FC = () => {
     []
   );
 
-  const thinkingModeOptions = useMemo(
+  const anthropicReasoningEffortOptions = useMemo(
     () => [
+      { label: 'Low', value: 'low' },
+      { label: 'Medium', value: 'medium' },
+      { label: 'High', value: 'high' },
+      { label: 'Max', value: 'max' },
+    ],
+    []
+  );
+
+  const buildReasoningModeOptions = useCallback((provider?: string, modelName?: string, currentMode?: ReasoningMode): SelectOption[] => {
+    const options: SelectOption[] = [
+      { label: t('thinking.optionDefault'), value: DEFAULT_REASONING_MODE },
       { label: t('thinking.optionEnabled'), value: 'enabled' },
       { label: t('thinking.optionDisabled'), value: 'disabled' },
-    ],
-    [t]
-  );
+    ];
+
+    if (
+      supportsAnthropicReasoning(provider)
+      && (supportsAnthropicAdaptive(modelName) || currentMode === 'adaptive')
+    ) {
+      options.push({ label: t('thinking.optionAdaptive'), value: 'adaptive' });
+    }
+
+    return options;
+  }, [t]);
 
   const categoryOptions = useMemo<SelectOption[]>(
     () => [
@@ -362,7 +419,9 @@ const AIModelConfig: React.FC = () => {
       configId: config.id,
       contextWindow: config.context_window || 128000,
       maxTokens: config.max_tokens || 8192,
-      enableThinking: config.enable_thinking_process ?? false,
+      reasoningMode: getEffectiveReasoningMode(config),
+      reasoningEffort: config.reasoning_effort,
+      thinkingBudgetTokens: config.thinking_budget_tokens,
     }))
   );
 
@@ -545,7 +604,6 @@ const AIModelConfig: React.FC = () => {
       base_url: resolvedBaseUrl,
       request_url: config.request_url || resolveRequestUrl(resolvedBaseUrl, resolvedProvider, resolvedModelName),
       model_name: resolvedModelName,
-      description: config.description,
       context_window: config.context_window || 128000,
       max_tokens: config.max_tokens || 8192,
       temperature: config.temperature,
@@ -555,9 +613,10 @@ const AIModelConfig: React.FC = () => {
       capabilities: config.capabilities || ['text_chat'],
       recommended_for: config.recommended_for || [],
       metadata: config.metadata || {},
-      enable_thinking_process: config.enable_thinking_process ?? false,
+      reasoning_mode: config.reasoning_mode ?? getEffectiveReasoningMode(config),
       inline_think_in_text: config.inline_think_in_text ?? false,
       reasoning_effort: config.reasoning_effort,
+      thinking_budget_tokens: config.thinking_budget_tokens,
       custom_headers: config.custom_headers,
       custom_headers_mode: config.custom_headers_mode,
       skip_ssl_verify: config.skip_ssl_verify ?? false,
@@ -687,7 +746,7 @@ const AIModelConfig: React.FC = () => {
         : (defaultModel ? [createModelDraft(defaultModel, {
             context_window: 128000,
             max_tokens: 8192,
-            enable_thinking_process: false,
+            reasoning_mode: DEFAULT_REASONING_MODE,
           })] : [])
     );
     setShowAdvancedSettings(false);
@@ -741,16 +800,13 @@ const AIModelConfig: React.FC = () => {
       model_name: '',
       provider: config.provider,
       enabled: true,
-      description: config.description,
       context_window: config.context_window || 128000,
       max_tokens: config.max_tokens || 8192,
       category: config.category || 'general_chat',
       capabilities: config.capabilities || getCapabilitiesByCategory(config.category || 'general_chat'),
       recommended_for: config.recommended_for || [],
       metadata: config.metadata || {},
-      enable_thinking_process: config.enable_thinking_process ?? false,
       inline_think_in_text: config.inline_think_in_text ?? false,
-      reasoning_effort: config.reasoning_effort,
       custom_headers: config.custom_headers,
       custom_headers_mode: config.custom_headers_mode,
       skip_ssl_verify: config.skip_ssl_verify ?? false,
@@ -776,7 +832,9 @@ const AIModelConfig: React.FC = () => {
       createModelDraft(config.model_name, config, {
         contextWindow: config.context_window || 128000,
         maxTokens: config.max_tokens || 8192,
-        enableThinking: config.enable_thinking_process ?? false,
+        reasoningMode: getEffectiveReasoningMode(config),
+        reasoningEffort: config.reasoning_effort,
+        thinkingBudgetTokens: config.thinking_budget_tokens,
       })
     ]);
     
@@ -831,16 +889,16 @@ const AIModelConfig: React.FC = () => {
           model_name: draft.modelName,
           provider: editingConfig.provider || 'openai',
           enabled: editingConfig.enabled ?? true,
-          description: editingConfig.description,
           context_window: draft.contextWindow,
           max_tokens: draft.maxTokens,
           category: draft.category,
           capabilities: getCapabilitiesByCategory(draft.category),
           recommended_for: editingConfig.recommended_for || [],
           metadata: editingConfig.metadata,
-          enable_thinking_process: draft.enableThinking,
+          reasoning_mode: draft.reasoningMode,
           inline_think_in_text: editingConfig.inline_think_in_text ?? false,
-          reasoning_effort: editingConfig.reasoning_effort,
+          reasoning_effort: draft.reasoningEffort,
+          thinking_budget_tokens: draft.thinkingBudgetTokens,
           custom_headers: editingConfig.custom_headers,
           custom_headers_mode: editingConfig.custom_headers_mode,
           skip_ssl_verify: editingConfig.skip_ssl_verify ?? false,
@@ -1261,6 +1319,43 @@ const AIModelConfig: React.FC = () => {
       </button>
     );
 
+    const formatReasoningSummary = (draft: SelectedModelDraft) => {
+      const parts: string[] = [];
+
+      switch (draft.reasoningMode) {
+        case 'enabled':
+          parts.push(t('thinking.summaryEnabled'));
+          break;
+        case 'disabled':
+          parts.push(t('thinking.summaryDisabled'));
+          break;
+        case 'adaptive':
+          parts.push(t('thinking.summaryAdaptive'));
+          break;
+        default:
+          parts.push(t('thinking.summaryDefault'));
+          break;
+      }
+
+      if (draft.reasoningEffort) {
+        parts.push(draft.reasoningEffort);
+      }
+
+      return parts.join(' · ');
+    };
+
+    const getDraftReasoningEffortOptions = (provider?: string) => {
+      if (supportsResponsesReasoning(provider)) {
+        return responsesReasoningEffortOptions;
+      }
+
+      if (supportsAnthropicReasoning(provider)) {
+        return anthropicReasoningEffortOptions;
+      }
+
+      return [];
+    };
+
     const renderSelectedModelRows = () => {
       if (selectedModelDrafts.length === 0) {
         return (
@@ -1277,6 +1372,19 @@ const AIModelConfig: React.FC = () => {
             const categoryLabel = categoryCompactLabels[draft.category] ?? draft.category;
             const canToggleExpand = selectedModelDrafts.length > 1;
             const modelDisplayName = draft.modelName;
+            const reasoningModeOptions = buildReasoningModeOptions(editingConfig.provider, draft.modelName, draft.reasoningMode);
+            const reasoningEffortOptions = getDraftReasoningEffortOptions(editingConfig.provider);
+            const showReasoningModeControl = !supportsResponsesReasoning(editingConfig.provider);
+            const showReasoningEffortControl = reasoningEffortOptions.length > 0
+              && (
+                supportsResponsesReasoning(editingConfig.provider)
+                || (supportsAnthropicReasoning(editingConfig.provider) && draft.reasoningMode === 'adaptive')
+              );
+            const showThinkingBudgetControl = supportsAnthropicReasoning(editingConfig.provider)
+              && draft.reasoningMode === 'enabled'
+              && supportsAnthropicThinkingBudget(draft.modelName);
+            const displayedThinkingBudget = draft.thinkingBudgetTokens
+              ?? Math.min(Math.floor(draft.maxTokens * 0.75), 10000);
 
             return (
               <div key={draft.key} className="bitfun-ai-model-config__selected-model-row">
@@ -1332,7 +1440,7 @@ const AIModelConfig: React.FC = () => {
                         {' · '}
                         {formatTokenCountShort(draft.maxTokens)} out
                         {' · '}
-                        {draft.enableThinking ? t('thinking.summaryOn') : t('thinking.summaryOff')}
+                        {formatReasoningSummary(draft)}
                       </span>
                     </div>
                   )}
@@ -1386,15 +1494,43 @@ const AIModelConfig: React.FC = () => {
                         disableWheel
                       />
                     </div>
-                    <div className="bitfun-ai-model-config__selected-model-field">
-                      <span>{t('thinking.enable')}</span>
-                      <Select
-                        value={draft.enableThinking ? 'enabled' : 'disabled'}
-                        onChange={(value) => updateModelDraft(draft.modelName, { enableThinking: value === 'enabled' })}
-                        options={thinkingModeOptions}
-                        size="small"
-                      />
-                    </div>
+                    {showReasoningModeControl && (
+                      <div className="bitfun-ai-model-config__selected-model-field">
+                        <span>{t('thinking.mode')}</span>
+                        <Select
+                          value={draft.reasoningMode}
+                          onChange={(value) => updateModelDraft(draft.modelName, { reasoningMode: value as ReasoningMode })}
+                          options={reasoningModeOptions}
+                          size="small"
+                        />
+                      </div>
+                    )}
+                    {showReasoningEffortControl && (
+                      <div className="bitfun-ai-model-config__selected-model-field">
+                        <span>{t('reasoningEffort.label')}</span>
+                        <Select
+                          value={draft.reasoningEffort || ''}
+                          onChange={(value) => updateModelDraft(draft.modelName, { reasoningEffort: (value as string) || undefined })}
+                          placeholder={t('reasoningEffort.placeholder')}
+                          options={reasoningEffortOptions}
+                          size="small"
+                        />
+                      </div>
+                    )}
+                    {showThinkingBudgetControl && (
+                      <div className="bitfun-ai-model-config__selected-model-field">
+                        <span>{t('thinking.budgetTokens')}</span>
+                        <NumberInput
+                          value={displayedThinkingBudget}
+                          onChange={(value) => updateModelDraft(draft.modelName, { thinkingBudgetTokens: value || undefined })}
+                          min={1024}
+                          max={50000}
+                          step={1024}
+                          size="small"
+                          disableWheel
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1483,11 +1619,15 @@ const AIModelConfig: React.FC = () => {
                   <Select
                     value={editingConfig.provider || 'openai'}
                     onChange={(value) => {
+                      const provider = value as string;
                       resetRemoteModelDiscovery();
+                      setSelectedModelDrafts(prevDrafts =>
+                        prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, provider))
+                      );
                       setEditingConfig(prev => ({
                         ...prev,
-                        provider: value as string,
-                        request_url: resolveRequestUrl(prev?.base_url || '', value as string, prev?.model_name || '')
+                        provider,
+                        request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || '')
                       }));
                     }}
                     placeholder={t('form.providerPlaceholder')}
@@ -1542,11 +1682,6 @@ const AIModelConfig: React.FC = () => {
                     {renderSelectedModelRows()}
                   </div>
                 </ConfigPageRow>
-                {isResponsesProvider(editingConfig.provider) && (
-                  <ConfigPageRow label={t('reasoningEffort.label')} description={t('reasoningEffort.hint')} align="center">
-                    <Select value={editingConfig.reasoning_effort || ''} onChange={(v) => setEditingConfig(prev => ({ ...prev, reasoning_effort: (v as string) || undefined }))} placeholder={t('reasoningEffort.placeholder')} options={reasoningEffortOptions} size="small" />
-                  </ConfigPageRow>
-                )}
               </>
             ) : (
               <>
@@ -1602,12 +1737,14 @@ const AIModelConfig: React.FC = () => {
                       <Select value={editingConfig.provider || 'openai'} onChange={(value) => {
                         const provider = value as string;
                         resetRemoteModelDiscovery();
+                        setSelectedModelDrafts(prevDrafts =>
+                          prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, provider))
+                        );
                         setEditingConfig(prev => ({
                           ...prev,
                           provider,
                           request_url: resolveRequestUrl(prev?.base_url || '', provider, prev?.model_name || ''),
                           inline_think_in_text: provider === 'openai' ? (prev?.inline_think_in_text ?? false) : false,
-                          reasoning_effort: isResponsesProvider(provider) ? (prev?.reasoning_effort || 'medium') : undefined,
                         }));
                       }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="small" />
                     </ConfigPageRow>
@@ -1664,14 +1801,6 @@ const AIModelConfig: React.FC = () => {
                     )}
                     {renderSelectedModelRows()}
                   </div>
-                </ConfigPageRow>
-                {isResponsesProvider(editingConfig.provider) && (
-                  <ConfigPageRow label={t('reasoningEffort.label')} description={t('reasoningEffort.hint')} align="center">
-                    <Select value={editingConfig.reasoning_effort || ''} onChange={(v) => setEditingConfig(prev => ({ ...prev, reasoning_effort: (v as string) || undefined }))} placeholder={t('reasoningEffort.placeholder')} options={reasoningEffortOptions} size="small" />
-                  </ConfigPageRow>
-                )}
-                <ConfigPageRow label={t('form.description')} multiline>
-                  <Textarea value={editingConfig.description || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, description: e.target.value }))} placeholder={t('form.descriptionPlaceholder')} rows={2} />
                 </ConfigPageRow>
               </>
             )}
@@ -1817,14 +1946,6 @@ const AIModelConfig: React.FC = () => {
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
-            {config.description && (
-              <div className="bitfun-ai-model-config__details-item bitfun-ai-model-config__details-item--wide">
-                <span className="bitfun-ai-model-config__details-label">{t('details.description')}</span>
-                <span className="bitfun-ai-model-config__details-value bitfun-ai-model-config__details-value--text">
-                  {config.description}
-                </span>
               </div>
             )}
           </div>

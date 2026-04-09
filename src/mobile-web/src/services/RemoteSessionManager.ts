@@ -53,7 +53,8 @@ export interface RemoteModelConfig {
   context_window?: number;
   enabled: boolean;
   capabilities: string[];
-  enable_thinking_process: boolean;
+  enable_thinking_process?: boolean;
+  reasoning_mode?: 'default' | 'enabled' | 'disabled' | 'adaptive';
   reasoning_effort?: string;
 }
 

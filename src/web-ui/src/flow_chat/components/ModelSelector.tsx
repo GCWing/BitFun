@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
+import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig } from '@/infrastructure/config/types';
 import { Tooltip } from '@/component-library';
@@ -223,7 +224,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         providerName: getProviderDisplayName(model),
         provider: model.provider,
         contextWindow: model.context_window,
-        enableThinking: model.enable_thinking_process,
+        enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(model)),
         reasoningEffort: model.reasoning_effort,
       };
     }
@@ -238,7 +239,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       providerName: getProviderDisplayName(model),
       provider: model.provider,
       contextWindow: model.context_window,
-      enableThinking: model.enable_thinking_process,
+      enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(model)),
       reasoningEffort: model.reasoning_effort,
     };
   }, [getCurrentModelId, allModels, defaultModels, t]);
@@ -258,7 +259,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         providerName: getProviderDisplayName(m),
         provider: m.provider,
         contextWindow: m.context_window,
-        enableThinking: m.enable_thinking_process,
+        enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(m)),
         reasoningEffort: m.reasoning_effort,
       }));
   }, [allModels]);

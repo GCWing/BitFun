@@ -74,6 +74,12 @@ export type ModelCategory =
   | 'general_chat'
   | 'multimodal';
 
+export type ReasoningMode =
+  | 'default'
+  | 'enabled'
+  | 'disabled'
+  | 'adaptive';
+
 export interface ModelMetadata {
   category: ModelCategory;
   capabilities: ModelCapability[];
@@ -102,7 +108,6 @@ export interface AIModelConfig {
   /** Computed actual request URL, derived from base_url + provider format. Stored on save. */
   request_url?: string;
   model_name: string;
-  description?: string;
   context_window?: number;
   max_tokens?: number;
   temperature?: number;
@@ -120,11 +125,13 @@ export interface AIModelConfig {
   capabilities: ModelCapability[];
   recommended_for?: string[];
   metadata?: Record<string, any>;
-  enable_thinking_process?: boolean;
+  reasoning_mode?: ReasoningMode;
   /** Parse `<think>...</think>` text chunks into streaming reasoning content. */
   inline_think_in_text?: boolean;
-  /** Reasoning effort for OpenAI Responses API ("low" | "medium" | "high" | "xhigh") */
+  /** Provider-specific reasoning effort. */
   reasoning_effort?: string;
+  /** Optional Anthropic manual thinking token budget. */
+  thinking_budget_tokens?: number;
 }
 
 export interface ProxyConfig {

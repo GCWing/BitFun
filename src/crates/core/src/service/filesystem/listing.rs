@@ -26,7 +26,10 @@ struct TreeEntry {
     modified_time: SystemTime,
 }
 
-pub fn list_directory_entries(dir_path: &str, limit: usize) -> BitFunResult<Vec<DirectoryListingEntry>> {
+pub fn list_directory_entries(
+    dir_path: &str,
+    limit: usize,
+) -> BitFunResult<Vec<DirectoryListingEntry>> {
     let path = Path::new(dir_path);
     if !path.exists() {
         return Err(BitFunError::service(format!(
@@ -239,7 +242,10 @@ pub fn format_directory_listing(entries: &[DirectoryListingEntry], dir_path: &st
                         "/".to_string()
                     }
                 } else if parts_for_parent.len() > 1 {
-                    format!("{}/", parts_for_parent[..parts_for_parent.len() - 1].join("/"))
+                    format!(
+                        "{}/",
+                        parts_for_parent[..parts_for_parent.len() - 1].join("/")
+                    )
                 } else {
                     "/".to_string()
                 };

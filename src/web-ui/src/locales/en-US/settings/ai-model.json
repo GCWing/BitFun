@@ -27,7 +27,7 @@
     "noPresetModels": "No models available. Fetch the model list or enter a model name manually",
     "backToSelection": "Back to provider selection",
     "selectModel": "Select model",
-    "multiSelectHint": "Supports multi-select. After selection, configure context window, max output tokens, and thinking per model.",
+    "multiSelectHint": "Supports multi-select. After selection, configure context window, max output tokens, and reasoning per model.",
     "searchOrInputModel": "Search or enter model name...",
     "inputModelName": "Enter model name...",
     "useCustomModel": "Press Enter to use",
@@ -152,15 +152,23 @@
   },
   "thinking": {
     "enable": "Enable Thinking",
+    "mode": "Reasoning Mode",
     "enableHint": "Requires model to support thinking mode",
     "summaryOn": "thinking on",
     "summaryOff": "thinking off",
+    "summaryDefault": "API default",
+    "summaryEnabled": "explicit enable",
+    "summaryDisabled": "explicit disable",
+    "summaryAdaptive": "adaptive",
+    "budgetTokens": "Claude Thinking Budget",
+    "optionDefault": "API Default",
     "optionEnabled": "Enabled",
-    "optionDisabled": "Disabled"
+    "optionDisabled": "Disabled",
+    "optionAdaptive": "Adaptive"
   },
   "reasoningEffort": {
     "label": "Reasoning Effort",
-    "hint": "Controls model reasoning depth, only for Responses API (e.g. GPT-5)",
+    "hint": "Controls provider-specific reasoning depth for Responses API and supported Claude adaptive reasoning models",
     "placeholder": "Use API default"
   },
   "details": {

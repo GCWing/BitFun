@@ -366,6 +366,22 @@ pub enum ModelCategory {
     SpeechRecognition,
 }
 
+/// Provider-agnostic reasoning mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum ReasoningMode {
+    /// Omit provider-specific reasoning fields and use the upstream API default behavior.
+    #[default]
+    Default,
+    /// Explicitly enable reasoning / thinking output when the provider supports it.
+    Enabled,
+    /// Explicitly disable reasoning / thinking output when the provider supports it.
+    Disabled,
+    /// Use provider-native adaptive reasoning when supported.
+    Adaptive,
+}
+
 /// Default model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -803,7 +819,7 @@ impl Default for SubAgentConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, from = "AIModelConfigCompat")]
 pub struct AIModelConfig {
     pub id: String,
     pub name: String,
@@ -836,9 +852,17 @@ pub struct AIModelConfig {
     /// Additional metadata (JSON, for extensibility).
     pub metadata: Option<serde_json::Value>,
 
-    /// Whether to display the thinking process (for hybrid/thinking models such as o1).
-    #[serde(default)]
+    /// Compatibility-only input field for older saved configs.
+    ///
+    /// New code should use `reasoning_mode`. This field is deserialized for migration and
+    /// compatibility, then omitted from future saves. When `reasoning_mode` is absent, `true`
+    /// maps to `enabled` and `false` maps to `default`.
+    #[serde(default, skip_serializing)]
     pub enable_thinking_process: bool,
+
+    /// Provider-agnostic reasoning mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_mode: Option<ReasoningMode>,
 
     /// Whether to parse OpenAI-compatible text chunks containing `<think>...</think>` into
     /// streaming reasoning content.
@@ -858,14 +882,106 @@ pub struct AIModelConfig {
     #[serde(default)]
     pub skip_ssl_verify: bool,
 
-    /// Reasoning effort level for OpenAI Responses API (o-series / GPT-5+).
-    /// Valid values: "low", "medium", "high", "xhigh". None = use API default.
+    /// Reasoning effort level for providers that support explicit effort controls.
+    /// Valid values are provider-specific. None = use API default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+
+    /// Optional Anthropic manual thinking token budget.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking_budget_tokens: Option<u32>,
 
     /// Custom request body (JSON string, used to override default request body fields).
     #[serde(default)]
     pub custom_request_body: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct AIModelConfigCompat {
+    id: String,
+    name: String,
+    provider: String,
+    model_name: String,
+    base_url: String,
+    request_url: Option<String>,
+    api_key: String,
+    context_window: Option<u32>,
+    max_tokens: Option<u32>,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
+    frequency_penalty: Option<f64>,
+    presence_penalty: Option<f64>,
+    enabled: bool,
+    category: ModelCategory,
+    capabilities: Vec<ModelCapability>,
+    recommended_for: Vec<String>,
+    metadata: Option<serde_json::Value>,
+    enable_thinking_process: Option<bool>,
+    reasoning_mode: Option<ReasoningMode>,
+    inline_think_in_text: bool,
+    custom_headers: Option<std::collections::HashMap<String, String>>,
+    custom_headers_mode: Option<String>,
+    skip_ssl_verify: bool,
+    reasoning_effort: Option<String>,
+    thinking_budget_tokens: Option<u32>,
+    custom_request_body: Option<String>,
+}
+
+impl From<AIModelConfigCompat> for AIModelConfig {
+    fn from(value: AIModelConfigCompat) -> Self {
+        let reasoning_mode = value.reasoning_mode.or_else(|| {
+            value.enable_thinking_process.map(|enabled| {
+                if enabled {
+                    ReasoningMode::Enabled
+                } else {
+                    ReasoningMode::Default
+                }
+            })
+        });
+
+        Self {
+            id: value.id,
+            name: value.name,
+            provider: value.provider,
+            model_name: value.model_name,
+            base_url: value.base_url,
+            request_url: value.request_url,
+            api_key: value.api_key,
+            context_window: value.context_window,
+            max_tokens: value.max_tokens,
+            temperature: value.temperature,
+            top_p: value.top_p,
+            frequency_penalty: value.frequency_penalty,
+            presence_penalty: value.presence_penalty,
+            enabled: value.enabled,
+            category: value.category,
+            capabilities: value.capabilities,
+            recommended_for: value.recommended_for,
+            metadata: value.metadata,
+            enable_thinking_process: value.enable_thinking_process.unwrap_or(false),
+            reasoning_mode,
+            inline_think_in_text: value.inline_think_in_text,
+            custom_headers: value.custom_headers,
+            custom_headers_mode: value.custom_headers_mode,
+            skip_ssl_verify: value.skip_ssl_verify,
+            reasoning_effort: value.reasoning_effort,
+            thinking_budget_tokens: value.thinking_budget_tokens,
+            custom_request_body: value.custom_request_body,
+        }
+    }
+}
+
+impl AIModelConfig {
+    pub fn effective_reasoning_mode(&self) -> ReasoningMode {
+        self.reasoning_mode.unwrap_or({
+            if self.enable_thinking_process {
+                ReasoningMode::Enabled
+            } else {
+                ReasoningMode::Default
+            }
+        })
+    }
 }
 
 /// Proxy configuration.
@@ -1250,11 +1366,13 @@ impl Default for AIModelConfig {
             recommended_for: vec![],
             metadata: None,
             enable_thinking_process: false,
+            reasoning_mode: None,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
             reasoning_effort: None,
+            thinking_budget_tokens: None,
             custom_request_body: None,
         }
     }
@@ -1421,5 +1539,69 @@ impl AIModelConfig {
         if self.capabilities.is_empty() {
             self.capabilities = self.default_capabilities_for_category();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AIModelConfig, ReasoningMode};
+
+    #[test]
+    fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
+        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "model_1",
+            "name": "Provider",
+            "provider": "openai",
+            "model_name": "test-model",
+            "base_url": "https://example.com/v1",
+            "api_key": "key",
+            "enabled": true,
+            "enable_thinking_process": true
+        }))
+        .expect("legacy config should deserialize");
+
+        assert_eq!(config.reasoning_mode, Some(ReasoningMode::Enabled));
+        assert!(config.enable_thinking_process);
+    }
+
+    #[test]
+    fn deserializes_compatibility_false_thinking_flag_into_default_reasoning_mode() {
+        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "model_1",
+            "name": "Provider",
+            "provider": "openai",
+            "model_name": "test-model",
+            "base_url": "https://example.com/v1",
+            "api_key": "key",
+            "enabled": true,
+            "enable_thinking_process": false
+        }))
+        .expect("legacy config should deserialize");
+
+        assert_eq!(config.reasoning_mode, Some(ReasoningMode::Default));
+        assert!(!config.enable_thinking_process);
+    }
+
+    #[test]
+    fn serialization_omits_compatibility_thinking_flag() {
+        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "model_1",
+            "name": "Provider",
+            "provider": "openai",
+            "model_name": "test-model",
+            "base_url": "https://example.com/v1",
+            "api_key": "key",
+            "enabled": true,
+            "enable_thinking_process": true
+        }))
+        .expect("legacy config should deserialize");
+
+        let value = serde_json::to_value(&config).expect("config should serialize");
+
+        assert!(value.get("enable_thinking_process").is_none());
+        assert_eq!(
+            value.get("reasoning_mode").and_then(|v| v.as_str()),
+            Some("enabled")
+        );
     }
 }

@@ -10,6 +10,7 @@ import { Select, CubeLoading, type SelectOption } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
 import { configManager } from '../services/ConfigManager';
 import { getProviderDisplayName } from '../services/modelConfigs';
+import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '../utils/reasoning';
 import type {
   AIModelConfig,
   DefaultModels,
@@ -112,7 +113,7 @@ export const DefaultModelConfig: React.FC = () => {
     label: model.model_name,
     value: model.id!,
     meta: buildModelMeta(model),
-    enableThinking: model.enable_thinking_process,
+    enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(model)),
   }), [buildModelMeta]);
 
   const renderModelOption = useCallback((option: SelectOption) => {

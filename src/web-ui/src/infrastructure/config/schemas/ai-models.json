@@ -323,13 +323,49 @@
                       {
                         "type": "select",
                         "dataType": "string",
+                        "key": "reasoning_mode",
+                        "title": "推理模式 (Reasoning Mode)",
+                        "description": "控制是否省略、显式启用、显式禁用或使用 provider 原生自适应推理",
+                        "default": "default",
+                        "ui": {
+                          "options": [
+                            {
+                              "value": "default",
+                              "label": "API Default - 不传推理字段"
+                            },
+                            {
+                              "value": "enabled",
+                              "label": "Enabled - 显式开启"
+                            },
+                            {
+                              "value": "disabled",
+                              "label": "Disabled - 显式关闭"
+                            },
+                            {
+                              "value": "adaptive",
+                              "label": "Adaptive - 使用 provider 自适应推理"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "select",
+                        "dataType": "string",
                         "key": "reasoning_effort",
                         "title": "推理深度 (Reasoning Effort)",
-                        "description": "控制模型的推理深度，仅适用于 OpenAI Responses API 格式的模型（如 GPT-5）",
+                        "description": "控制 provider 支持的推理强度，适用于 Responses API 与支持自适应推理的 Claude 模型",
                         "ui": {
                           "placeholder": "使用 API 默认值",
                           "allowClear": true,
                           "options": [
+                            {
+                              "value": "none",
+                              "label": "None - 不使用额外推理"
+                            },
+                            {
+                              "value": "minimal",
+                              "label": "Minimal - 最轻量推理"
+                            },
                             {
                               "value": "low",
                               "label": "Low - 快速响应，轻度推理"
@@ -345,14 +381,24 @@
                             {
                               "value": "xhigh",
                               "label": "Extra High - 最大推理深度"
+                            },
+                            {
+                              "value": "max",
+                              "label": "Max - Claude 自适应推理最大强度"
                             }
                           ]
-                        },
-                        "conditional": {
-                          "when": "provider",
-                          "operator": "in",
-                          "value": ["responses"],
-                          "show": true
+                        }
+                      },
+                      {
+                        "type": "number",
+                        "dataType": "number",
+                        "key": "thinking_budget_tokens",
+                        "title": "思考预算 Tokens",
+                        "description": "Anthropic 手动思考模式下的可选预算；留空时使用默认预算",
+                        "ui": {
+                          "min": 1024,
+                          "max": 50000,
+                          "step": 1024
                         }
                       },
                       {

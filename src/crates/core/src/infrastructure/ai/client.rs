@@ -6,6 +6,7 @@ use crate::infrastructure::ai::providers::anthropic::AnthropicMessageConverter;
 use crate::infrastructure::ai::providers::gemini::GeminiMessageConverter;
 use crate::infrastructure::ai::providers::openai::OpenAIMessageConverter;
 use crate::infrastructure::ai::tool_call_accumulator::{PendingToolCall, ToolCallBoundary};
+use crate::service::config::types::ReasoningMode;
 use crate::service::config::ProxyConfig;
 use crate::util::types::*;
 use ai_stream_handlers::{
@@ -400,6 +401,12 @@ impl AIClient {
         url.contains("dashscope.aliyuncs.com")
     }
 
+    /// Whether the URL is SiliconFlow's OpenAI-compatible endpoint.
+    /// SiliconFlow uses the same `enable_thinking` boolean switch as DashScope.
+    fn is_siliconflow_url(url: &str) -> bool {
+        url.contains("api.siliconflow.cn")
+    }
+
     /// Whether the URL is MiniMax API.
     /// MiniMax (api.minimaxi.com) uses `reasoning_split=true` to enable streamed thinking content
     /// delivered via `delta.reasoning_details` rather than the standard `reasoning_content` field.
@@ -407,52 +414,133 @@ impl AIClient {
         url.contains("api.minimaxi.com")
     }
 
-    /// Apply thinking-related fields onto the request body (mutates `request_body`).
-    ///
-    /// * `enable` - whether thinking process is enabled
-    /// * `url` - request URL
-    /// * `model_name` - model name (e.g. for Claude budget_tokens in Anthropic format)
-    /// * `api_format` - "openai" or "anthropic"
-    /// * `max_tokens` - optional max_tokens (for Anthropic Claude budget_tokens)
-    fn apply_thinking_fields(
+    fn anthropic_supports_adaptive_reasoning(model_name: &str) -> bool {
+        matches!(
+            model_name,
+            name if name.starts_with("claude-opus-4-6")
+                || name.starts_with("claude-sonnet-4-6")
+                || name.starts_with("claude-mythos")
+        )
+    }
+
+    fn anthropic_supports_thinking_budget(model_name: &str) -> bool {
+        model_name.starts_with("claude")
+    }
+
+    fn default_anthropic_budget_tokens(max_tokens: Option<u32>) -> Option<u32> {
+        max_tokens.map(|value| 10_000u32.min(value.saturating_mul(3) / 4))
+    }
+
+    fn apply_openai_compatible_reasoning_fields(
         request_body: &mut serde_json::Value,
-        enable: bool,
+        mode: ReasoningMode,
         url: &str,
-        model_name: &str,
-        api_format: &str,
-        max_tokens: Option<u32>,
     ) {
-        if Self::is_dashscope_url(url) && api_format.eq_ignore_ascii_case("openai") {
-            request_body["enable_thinking"] = serde_json::json!(enable);
+        let normalized_mode = if mode == ReasoningMode::Adaptive {
+            ReasoningMode::Enabled
+        } else {
+            mode
+        };
+
+        if Self::is_dashscope_url(url) || Self::is_siliconflow_url(url) {
+            if normalized_mode != ReasoningMode::Default {
+                request_body["enable_thinking"] =
+                    serde_json::json!(normalized_mode == ReasoningMode::Enabled);
+            }
             return;
         }
-        if Self::is_minimax_url(url) && api_format.eq_ignore_ascii_case("openai") {
-            if enable {
+
+        if Self::is_minimax_url(url) {
+            if normalized_mode == ReasoningMode::Enabled {
                 request_body["reasoning_split"] = serde_json::json!(true);
             }
             return;
         }
-        let thinking_value = if enable {
-            if api_format.eq_ignore_ascii_case("anthropic") && model_name.starts_with("claude") {
-                let mut obj = serde_json::map::Map::new();
-                obj.insert(
-                    "type".to_string(),
-                    serde_json::Value::String("enabled".to_string()),
-                );
-                if let Some(m) = max_tokens {
-                    obj.insert(
-                        "budget_tokens".to_string(),
-                        serde_json::json!(10000u32.min(m * 3 / 4)),
+
+        match normalized_mode {
+            ReasoningMode::Default => {}
+            ReasoningMode::Enabled => {
+                request_body["thinking"] = serde_json::json!({ "type": "enabled" });
+            }
+            ReasoningMode::Disabled => {
+                request_body["thinking"] = serde_json::json!({ "type": "disabled" });
+            }
+            ReasoningMode::Adaptive => unreachable!("adaptive mode is normalized above"),
+        }
+    }
+
+    fn apply_anthropic_reasoning_fields(
+        request_body: &mut serde_json::Value,
+        mode: ReasoningMode,
+        model_name: &str,
+        max_tokens: Option<u32>,
+        reasoning_effort: Option<&str>,
+        thinking_budget_tokens: Option<u32>,
+    ) {
+        match mode {
+            ReasoningMode::Default => {}
+            ReasoningMode::Disabled => {
+                request_body["thinking"] = serde_json::json!({ "type": "disabled" });
+            }
+            ReasoningMode::Enabled => {
+                let mut thinking = serde_json::json!({ "type": "enabled" });
+                if Self::anthropic_supports_thinking_budget(model_name) {
+                    if let Some(budget_tokens) = thinking_budget_tokens
+                        .or_else(|| Self::default_anthropic_budget_tokens(max_tokens))
+                    {
+                        thinking["budget_tokens"] = serde_json::json!(budget_tokens);
+                    }
+                }
+                request_body["thinking"] = thinking;
+            }
+            ReasoningMode::Adaptive => {
+                if Self::anthropic_supports_adaptive_reasoning(model_name) {
+                    request_body["thinking"] = serde_json::json!({ "type": "adaptive" });
+                    if let Some(effort) = reasoning_effort.filter(|value| !value.trim().is_empty())
+                    {
+                        request_body["output_config"] = serde_json::json!({
+                            "effort": effort
+                        });
+                    }
+                } else {
+                    warn!(
+                        target: "ai::anthropic_stream_request",
+                        "Model {} does not advertise Anthropic adaptive reasoning support; falling back to manual thinking",
+                        model_name
+                    );
+                    Self::apply_anthropic_reasoning_fields(
+                        request_body,
+                        ReasoningMode::Enabled,
+                        model_name,
+                        max_tokens,
+                        None,
+                        thinking_budget_tokens,
                     );
                 }
-                serde_json::Value::Object(obj)
-            } else {
-                serde_json::json!({ "type": "enabled" })
             }
-        } else {
-            serde_json::json!({ "type": "disabled" })
-        };
-        request_body["thinking"] = thinking_value;
+        }
+
+        if mode != ReasoningMode::Adaptive
+            && reasoning_effort.is_some_and(|value| !value.trim().is_empty())
+        {
+            warn!(
+                target: "ai::anthropic_stream_request",
+                "Ignoring reasoning_effort for Anthropic model {} because effort currently applies only to adaptive reasoning mode",
+                model_name
+            );
+        }
+    }
+
+    fn apply_gemini_reasoning_fields(request_body: &mut serde_json::Value, mode: ReasoningMode) {
+        if matches!(mode, ReasoningMode::Enabled | ReasoningMode::Adaptive) {
+            Self::insert_gemini_generation_field(
+                request_body,
+                "thinkingConfig",
+                serde_json::json!({
+                    "includeThoughts": true,
+                }),
+            );
+        }
     }
 
     /// Whether to append the `tool_stream` request field.
@@ -829,13 +917,10 @@ impl AIClient {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
-        Self::apply_thinking_fields(
+        Self::apply_openai_compatible_reasoning_fields(
             &mut request_body,
-            self.config.enable_thinking_process,
+            self.config.reasoning_mode,
             url,
-            &model_name,
-            "openai",
-            self.config.max_tokens,
         );
 
         if let Some(max_tokens) = self.config.max_tokens {
@@ -911,10 +996,23 @@ impl AIClient {
             request_body["max_output_tokens"] = serde_json::json!(max_tokens);
         }
 
-        if let Some(ref effort) = self.config.reasoning_effort {
+        let responses_effort = self
+            .config
+            .reasoning_effort
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                if self.config.reasoning_mode == ReasoningMode::Disabled {
+                    Some("none".to_string())
+                } else {
+                    None
+                }
+            });
+
+        if let Some(effort) = responses_effort {
             request_body["reasoning"] = serde_json::json!({
-                "effort": effort,
-                "summary": "auto"
+                "effort": effort
             });
         }
 
@@ -984,13 +1082,13 @@ impl AIClient {
             request_body["tool_stream"] = serde_json::Value::Bool(true);
         }
 
-        Self::apply_thinking_fields(
+        Self::apply_anthropic_reasoning_fields(
             &mut request_body,
-            self.config.enable_thinking_process,
-            url,
+            self.config.reasoning_mode,
             &model_name,
-            "anthropic",
             Some(max_tokens),
+            self.config.reasoning_effort.as_deref(),
+            self.config.thinking_budget_tokens,
         );
 
         if let Some(system) = system_message {
@@ -1065,15 +1163,7 @@ impl AIClient {
             );
         }
 
-        if self.config.enable_thinking_process {
-            Self::insert_gemini_generation_field(
-                &mut request_body,
-                "thinkingConfig",
-                serde_json::json!({
-                    "includeThoughts": true,
-                }),
-            );
-        }
+        Self::apply_gemini_reasoning_fields(&mut request_body, self.config.reasoning_mode);
 
         if let Some(tools) = gemini_tools {
             let tool_names = tools
@@ -2121,6 +2211,7 @@ impl AIClient {
 mod tests {
     use super::AIClient;
     use crate::infrastructure::ai::providers::gemini::GeminiMessageConverter;
+    use crate::service::config::types::ReasoningMode;
     use crate::util::types::{AIConfig, ToolDefinition};
     use serde_json::json;
 
@@ -2136,12 +2227,13 @@ mod tests {
             max_tokens: Some(8192),
             temperature: None,
             top_p: None,
-            enable_thinking_process: false,
+            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
             reasoning_effort: None,
+            thinking_budget_tokens: None,
             custom_request_body,
         })
     }
@@ -2159,12 +2251,13 @@ mod tests {
             max_tokens: Some(8192),
             temperature: None,
             top_p: None,
-            enable_thinking_process: false,
+            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
             reasoning_effort: None,
+            thinking_budget_tokens: None,
             custom_request_body: None,
         });
 
@@ -2187,12 +2280,13 @@ mod tests {
             max_tokens: Some(8192),
             temperature: None,
             top_p: None,
-            enable_thinking_process: false,
+            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
             reasoning_effort: None,
+            thinking_budget_tokens: None,
             custom_request_body: None,
         });
 
@@ -2216,12 +2310,13 @@ mod tests {
             max_tokens: Some(4096),
             temperature: Some(0.2),
             top_p: Some(0.8),
-            enable_thinking_process: true,
+            reasoning_mode: ReasoningMode::Enabled,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
             reasoning_effort: None,
+            thinking_budget_tokens: None,
             custom_request_body: None,
         });
 
@@ -2294,12 +2389,13 @@ mod tests {
             max_tokens: Some(4096),
             temperature: None,
             top_p: None,
-            enable_thinking_process: false,
+            reasoning_mode: ReasoningMode::Default,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
             reasoning_effort: None,
+            thinking_budget_tokens: None,
             custom_request_body: None,
         });
 
@@ -2326,6 +2422,143 @@ mod tests {
 
         assert_eq!(request_body["tools"][0]["googleSearch"], json!({}));
         assert!(request_body.get("toolConfig").is_none());
+    }
+
+    #[test]
+    fn build_openai_request_body_uses_generic_thinking_object_when_enabled() {
+        let client = AIClient::new(AIConfig {
+            name: "openai-compatible".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            request_url: "https://example.com/v1/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "test-model".to_string(),
+            format: "openai".to_string(),
+            context_window: 128000,
+            max_tokens: Some(4096),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+        });
+
+        let request_body = client.build_openai_request_body(
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert!(request_body.get("enable_thinking").is_none());
+        assert!(request_body.get("reasoning_split").is_none());
+    }
+
+    #[test]
+    fn build_openai_request_body_uses_enable_thinking_for_siliconflow() {
+        let client = AIClient::new(AIConfig {
+            name: "siliconflow".to_string(),
+            base_url: "https://api.siliconflow.cn/v1".to_string(),
+            request_url: "https://api.siliconflow.cn/v1/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "Qwen/Qwen3-Coder-480B-A35B-Instruct".to_string(),
+            format: "openai".to_string(),
+            context_window: 128000,
+            max_tokens: Some(4096),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+        });
+
+        let request_body = client.build_openai_request_body(
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["enable_thinking"], true);
+        assert!(request_body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn build_responses_request_body_maps_disabled_mode_to_none_effort() {
+        let client = AIClient::new(AIConfig {
+            name: "responses".to_string(),
+            base_url: "https://api.openai.com/v1".to_string(),
+            request_url: "https://api.openai.com/v1/responses".to_string(),
+            api_key: "test-key".to_string(),
+            model: "gpt-5".to_string(),
+            format: "responses".to_string(),
+            context_window: 128000,
+            max_tokens: Some(4096),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Disabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+        });
+
+        let request_body = client.build_responses_request_body(
+            Some("Be concise".to_string()),
+            vec![json!({ "role": "user", "content": [{ "type": "input_text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["reasoning"]["effort"], "none");
+    }
+
+    #[test]
+    fn build_anthropic_request_body_uses_adaptive_reasoning_and_effort() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Adaptive,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("high".to_string()),
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+        });
+
+        let request_body = client.build_anthropic_request_body(
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "adaptive");
+        assert_eq!(request_body["output_config"]["effort"], "high");
     }
 
     #[test]

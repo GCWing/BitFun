@@ -144,7 +144,11 @@ pub struct RemoteModelConfig {
     pub capabilities: Vec<String>,
     pub enable_thinking_process: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_budget_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -173,22 +177,26 @@ async fn load_remote_model_catalog(
         .map_err(|e| format!("Failed to load global config: {e}"))?;
     let ai_config: AIConfig = global_config.ai;
 
-    let models: Vec<RemoteModelConfig> = ai_config
-        .models
-        .into_iter()
-        .map(|model| RemoteModelConfig {
-            id: model.id,
-            name: model.name,
-            provider: model.provider,
-            base_url: model.base_url,
-            model_name: model.model_name,
-            context_window: model.context_window,
-            enabled: model.enabled,
-            capabilities: model
-                .capabilities
-                .into_iter()
-                .map(|capability| {
-                    match capability {
+    let models: Vec<RemoteModelConfig> =
+        ai_config
+            .models
+            .into_iter()
+            .map(|model| {
+                let reasoning_mode = model.effective_reasoning_mode();
+
+                RemoteModelConfig {
+                    id: model.id,
+                    name: model.name,
+                    provider: model.provider,
+                    base_url: model.base_url,
+                    model_name: model.model_name,
+                    context_window: model.context_window,
+                    enabled: model.enabled,
+                    capabilities: model
+                        .capabilities
+                        .into_iter()
+                        .map(|capability| {
+                            match capability {
                         crate::service::config::types::ModelCapability::TextChat => "text_chat",
                         crate::service::config::types::ModelCapability::ImageUnderstanding => {
                             "image_understanding"
@@ -209,12 +217,23 @@ async fn load_remote_model_catalog(
                         }
                     }
                     .to_string()
-                })
-                .collect(),
-            enable_thinking_process: model.enable_thinking_process,
-            reasoning_effort: model.reasoning_effort,
-        })
-        .collect();
+                        })
+                        .collect(),
+                    enable_thinking_process: model.enable_thinking_process,
+                    reasoning_mode: Some(
+                        match reasoning_mode {
+                            crate::service::config::types::ReasoningMode::Default => "default",
+                            crate::service::config::types::ReasoningMode::Enabled => "enabled",
+                            crate::service::config::types::ReasoningMode::Disabled => "disabled",
+                            crate::service::config::types::ReasoningMode::Adaptive => "adaptive",
+                        }
+                        .to_string(),
+                    ),
+                    reasoning_effort: model.reasoning_effort,
+                    thinking_budget_tokens: model.thinking_budget_tokens,
+                }
+            })
+            .collect();
 
     let session_model_id = if let Some(session_id) = session_id {
         resolve_session_model_id(session_id).await
