@@ -88,6 +88,22 @@ pub async fn run() {
         return;
     }
 
+    // Initialize global I18nService so bot/remote-connect language is always in sync.
+    {
+        use bitfun_core::service::config::get_global_config_service;
+        use bitfun_core::service::i18n::initialize_global_i18n_service;
+        match get_global_config_service().await {
+            Ok(config_service) => {
+                if let Err(e) = initialize_global_i18n_service(Some(config_service)).await {
+                    log::error!("Failed to initialize global I18nService: {}", e);
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to get config service for I18nService init: {}", e);
+            }
+        }
+    }
+
     let startup_log_level = resolve_runtime_log_level(log_config.level).await;
 
     if let Err(e) = AIClientFactory::initialize_global().await {

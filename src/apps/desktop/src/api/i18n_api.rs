@@ -1,7 +1,8 @@
 //! I18n API
 
 use crate::api::app_state::AppState;
-use log::{error, info};
+use bitfun_core::service::i18n::{get_global_i18n_service, LocaleId};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
@@ -60,6 +61,20 @@ pub async fn i18n_set_language(
     {
         Ok(_) => {
             info!("Language set to: {}", request.language);
+
+            // Sync the in-memory I18nService so bot/remote-connect responses
+            // use the newly selected language without requiring an app restart.
+            if let Some(locale_id) = LocaleId::from_str(&request.language) {
+                if let Some(i18n_service) = get_global_i18n_service().await {
+                    if let Err(e) = i18n_service.set_locale(locale_id).await {
+                        warn!(
+                            "Failed to sync I18nService locale after language change: language={}, error={}",
+                            request.language, e
+                        );
+                    }
+                }
+            }
+
             #[cfg(target_os = "macos")]
             {
                 let has_workspace = state.workspace_path.read().await.is_some();
