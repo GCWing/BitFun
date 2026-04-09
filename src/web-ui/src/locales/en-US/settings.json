@@ -324,9 +324,7 @@
     "modelNameHint": "GLM-ASR uses glm-asr, other speech models use their corresponding model names",
     "thinking": {
       "enable": "Enable Thinking",
-      "enableHint": "Requires model to support thinking mode",
-      "preserve": "Preserve Historical Thinking",
-      "preserveHint": "When enabled, preserves thinking content from previous conversation turns (requires model to support Preserved Thinking)"
+      "enableHint": "Requires model to support thinking mode"
     },
     "details": {
       "basicInfo": "Basic Information",

@@ -1184,7 +1184,6 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
     model_map.insert("recommended_for".to_string(), Value::Array(Vec::new()));
     model_map.insert("metadata".to_string(), Value::Null);
     model_map.insert("enable_thinking_process".to_string(), Value::Bool(false));
-    model_map.insert("support_preserved_thinking".to_string(), Value::Bool(false));
     model_map.insert("inline_think_in_text".to_string(), Value::Bool(false));
 
     if let Some(skip_ssl_verify) = model.skip_ssl_verify {

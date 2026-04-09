@@ -324,9 +324,7 @@
     "modelNameHint": "智谱 GLM-ASR 使用 glm-asr，其他语音模型填写对应的模型名称",
     "thinking": {
       "enable": "启用思考",
-      "enableHint": "需要模型支持思考模式",
-      "preserve": "保留历史思考",
-      "preserveHint": "开启后将保留之前对话轮的思考内容（需模型支持 Preserved Thinking）"
+      "enableHint": "需要模型支持思考模式"
     },
     "details": {
       "basicInfo": "基本信息",

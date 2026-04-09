@@ -156,9 +156,7 @@
     "summaryOn": "thinking on",
     "summaryOff": "thinking off",
     "optionEnabled": "Enabled",
-    "optionDisabled": "Disabled",
-    "preserve": "Preserve Historical Thinking",
-    "preserveHint": "When enabled, preserves thinking content from past conversations"
+    "optionDisabled": "Disabled"
   },
   "reasoningEffort": {
     "label": "Reasoning Effort",

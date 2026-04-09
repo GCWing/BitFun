@@ -156,9 +156,7 @@
     "summaryOn": "思考开",
     "summaryOff": "思考关",
     "optionEnabled": "启用",
-    "optionDisabled": "禁用",
-    "preserve": "保留历史思考",
-    "preserveHint": "开启后将保留历史对话的思考内容"
+    "optionDisabled": "禁用"
   },
   "reasoningEffort": {
     "label": "推理深度",

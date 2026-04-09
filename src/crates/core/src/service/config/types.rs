@@ -840,11 +840,6 @@ pub struct AIModelConfig {
     #[serde(default)]
     pub enable_thinking_process: bool,
 
-    /// Whether preserved thinking is supported (Preserved Thinking).
-    /// If false, `reasoning_content` from previous turns is ignored when sending messages.
-    #[serde(default)]
-    pub support_preserved_thinking: bool,
-
     /// Whether to parse OpenAI-compatible text chunks containing `<think>...</think>` into
     /// streaming reasoning content.
     #[serde(default)]
@@ -1255,7 +1250,6 @@ impl Default for AIModelConfig {
             recommended_for: vec![],
             metadata: None,
             enable_thinking_process: false,
-            support_preserved_thinking: false,
             inline_think_in_text: false,
             custom_headers: None,
             custom_headers_mode: None,

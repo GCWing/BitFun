@@ -1,75 +1,71 @@
 use super::{CompressedTodoItem, CompressedTodoSnapshot, Message, MessageContent, MessageRole};
+use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
-use log::warn;
+use crate::util::types::ToolDefinition;
 pub struct MessageHelper;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RequestReasoningTokenPolicy {
+    FullHistory,
+    LatestTurnOnly,
+    SkipAll,
+}
+
 impl MessageHelper {
-    pub fn compute_keep_thinking_flags(
-        messages: &mut [Message],
-        enable_thinking: bool,
-        support_preserved_thinking: bool,
-    ) {
-        if messages.is_empty() {
-            return;
-        }
-        if !enable_thinking {
-            messages.iter_mut().for_each(|m| {
-                if m.metadata.keep_thinking {
-                    m.metadata.keep_thinking = false;
-                    m.metadata.tokens = None;
-                }
-            });
-        } else if support_preserved_thinking {
-            messages.iter_mut().for_each(|m| {
-                if !m.metadata.keep_thinking {
-                    m.metadata.keep_thinking = true;
-                    m.metadata.tokens = None;
-                }
-            });
-        } else {
-            let last_message_turn_id = messages.last().and_then(|m| m.metadata.turn_id.clone());
-            if let Some(last_turn_id) = last_message_turn_id {
-                messages.iter_mut().for_each(|m| {
-                    let keep_thinking = m
-                        .metadata
-                        .turn_id
-                        .as_ref()
-                        .is_some_and(|cur_turn_id| cur_turn_id == &last_turn_id);
-                    if m.metadata.keep_thinking != keep_thinking {
-                        m.metadata.keep_thinking = keep_thinking;
-                        m.metadata.tokens = None;
-                    }
-                })
-            } else {
-                // Find the last actual user-turn boundary from back to front.
-                let last_user_message_index =
-                    messages.iter().rposition(|m| m.is_actual_user_message());
-                if let Some(last_user_message_index) = last_user_message_index {
-                    // Messages from the last user message onwards are messages for this turn
-                    messages.iter_mut().enumerate().for_each(|(index, m)| {
-                        let keep_thinking = index >= last_user_message_index;
-                        if m.metadata.keep_thinking != keep_thinking {
-                            m.metadata.keep_thinking = keep_thinking;
-                            m.metadata.tokens = None;
-                        }
-                    })
-                } else {
-                    // No user message found, should not reach here in practice
-                    warn!("compute_keep_thinking_flags: no user message found");
-
-                    messages.iter_mut().for_each(|m| {
-                        if m.metadata.keep_thinking {
-                            m.metadata.keep_thinking = false;
-                            m.metadata.tokens = None;
-                        }
-                    });
-                }
-            }
-        }
-    }
-
     pub fn convert_messages(messages: &[Message]) -> Vec<AIMessage> {
         messages.iter().map(AIMessage::from).collect()
+    }
+
+    pub fn estimate_request_tokens(
+        messages: &[Message],
+        tools: Option<&[ToolDefinition]>,
+        reasoning_policy: RequestReasoningTokenPolicy,
+    ) -> usize {
+        let reasoning_frontier_start = match reasoning_policy {
+            RequestReasoningTokenPolicy::FullHistory => Some(0),
+            RequestReasoningTokenPolicy::LatestTurnOnly => {
+                Some(Self::find_reasoning_frontier_start(messages))
+            }
+            RequestReasoningTokenPolicy::SkipAll => None,
+        };
+
+        let mut total = messages
+            .iter()
+            .enumerate()
+            .map(|(index, message)| {
+                let include_reasoning =
+                    reasoning_frontier_start.is_some_and(|frontier_start| index >= frontier_start);
+                message.estimate_tokens_with_reasoning(include_reasoning)
+            })
+            .sum::<usize>();
+
+        total += 3;
+
+        if let Some(tool_defs) = tools {
+            total += TokenCounter::estimate_tool_definitions_tokens(tool_defs);
+        }
+
+        total
+    }
+
+    fn find_reasoning_frontier_start(messages: &[Message]) -> usize {
+        if messages.is_empty() {
+            return 0;
+        }
+
+        if let Some(last_turn_id) = messages.last().and_then(|m| m.metadata.turn_id.as_deref()) {
+            if let Some(frontier_start) = messages
+                .iter()
+                .position(|m| m.metadata.turn_id.as_deref() == Some(last_turn_id))
+            {
+                return frontier_start;
+            }
+        }
+
+        messages
+            .iter()
+            .rposition(Message::is_actual_user_message)
+            .unwrap_or(messages.len().saturating_sub(1))
     }
 
     pub fn group_messages_by_turns(mut messages: Vec<Message>) -> Vec<Vec<Message>> {
@@ -192,5 +188,91 @@ impl MessageHelper {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MessageHelper, RequestReasoningTokenPolicy};
+    use crate::agentic::core::Message;
+    use crate::util::token_counter::TokenCounter;
+
+    #[test]
+    fn latest_turn_reasoning_policy_uses_turn_id_boundary() {
+        let messages = vec![
+            Message::user("old user".to_string()).with_turn_id("turn-1".to_string()),
+            Message::assistant_with_reasoning(
+                Some("old reasoning".to_string()),
+                "old answer".to_string(),
+                Vec::new(),
+            )
+            .with_turn_id("turn-1".to_string()),
+            Message::user("new user".to_string()).with_turn_id("turn-2".to_string()),
+            Message::assistant_with_reasoning(
+                Some("new reasoning".to_string()),
+                "new answer".to_string(),
+                Vec::new(),
+            )
+            .with_turn_id("turn-2".to_string()),
+        ];
+
+        let full = MessageHelper::estimate_request_tokens(
+            &messages,
+            None,
+            RequestReasoningTokenPolicy::FullHistory,
+        );
+        let latest = MessageHelper::estimate_request_tokens(
+            &messages,
+            None,
+            RequestReasoningTokenPolicy::LatestTurnOnly,
+        );
+        let skip_all = MessageHelper::estimate_request_tokens(
+            &messages,
+            None,
+            RequestReasoningTokenPolicy::SkipAll,
+        );
+
+        assert_eq!(
+            full - latest,
+            TokenCounter::estimate_tokens("old reasoning")
+        );
+        assert_eq!(
+            latest - skip_all,
+            TokenCounter::estimate_tokens("new reasoning")
+        );
+    }
+
+    #[test]
+    fn latest_turn_reasoning_policy_falls_back_to_last_actual_user_message() {
+        let messages = vec![
+            Message::user("old user".to_string()),
+            Message::assistant_with_reasoning(
+                Some("old reasoning".to_string()),
+                "old answer".to_string(),
+                Vec::new(),
+            ),
+            Message::user("new user".to_string()),
+            Message::assistant_with_reasoning(
+                Some("new reasoning".to_string()),
+                "new answer".to_string(),
+                Vec::new(),
+            ),
+        ];
+
+        let latest = MessageHelper::estimate_request_tokens(
+            &messages,
+            None,
+            RequestReasoningTokenPolicy::LatestTurnOnly,
+        );
+        let skip_all = MessageHelper::estimate_request_tokens(
+            &messages,
+            None,
+            RequestReasoningTokenPolicy::SkipAll,
+        );
+
+        assert_eq!(
+            latest - skip_all,
+            TokenCounter::estimate_tokens("new reasoning")
+        );
     }
 }

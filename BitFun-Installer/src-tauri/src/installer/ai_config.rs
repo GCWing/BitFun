@@ -48,7 +48,6 @@ pub fn ai_config_from_installer_model(m: &ModelConfig) -> Result<AIConfig, Strin
         temperature: None,
         top_p: None,
         enable_thinking_process: false,
-        support_preserved_thinking: false,
         inline_think_in_text: false,
         custom_headers: m.custom_headers.clone(),
         custom_headers_mode: m.custom_headers_mode.clone(),

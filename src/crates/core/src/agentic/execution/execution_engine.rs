@@ -5,7 +5,10 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::{get_agent_registry, PromptBuilderContext, RemoteExecutionHints};
-use crate::agentic::core::{Message, MessageContent, MessageHelper, MessageSemanticKind, Session};
+use crate::agentic::core::{
+    Message, MessageContent, MessageHelper, MessageSemanticKind, RequestReasoningTokenPolicy,
+    Session,
+};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
@@ -81,17 +84,14 @@ impl ExecutionEngine {
     }
 
     fn estimate_request_tokens_internal(
-        messages: &mut [Message],
+        messages: &[Message],
         tools: Option<&[ToolDefinition]>,
     ) -> usize {
-        let mut total: usize = messages.iter_mut().map(|m| m.get_tokens()).sum();
-        total += 3;
-
-        if let Some(tool_defs) = tools {
-            total += TokenCounter::estimate_tool_definitions_tokens(tool_defs);
-        }
-
-        total
+        MessageHelper::estimate_request_tokens(
+            messages,
+            tools,
+            RequestReasoningTokenPolicy::LatestTurnOnly,
+        )
     }
 
     /// Emergency truncation: drop oldest API rounds (assistant+tool pairs)
@@ -152,7 +152,10 @@ impl ExecutionEngine {
         let tool_tokens = tools
             .map(TokenCounter::estimate_tool_definitions_tokens)
             .unwrap_or(0);
-        let preserved_tokens: usize = preserved.iter().map(|m| m.estimate_tokens()).sum::<usize>()
+        let preserved_tokens: usize = preserved
+            .iter()
+            .map(|m| m.estimate_tokens_with_reasoning(true))
+            .sum::<usize>()
             + tool_tokens
             + 3;
 
@@ -161,11 +164,14 @@ impl ExecutionEngine {
             + rounds
                 .iter()
                 .flat_map(|r| r.iter())
-                .map(|m| m.estimate_tokens())
+                .map(|m| m.estimate_tokens_with_reasoning(true))
                 .sum::<usize>();
 
         while total_tokens > context_window && kept_start < rounds.len() {
-            let round_tokens: usize = rounds[kept_start].iter().map(|m| m.estimate_tokens()).sum();
+            let round_tokens: usize = rounds[kept_start]
+                .iter()
+                .map(|m| m.estimate_tokens_with_reasoning(true))
+                .sum();
             total_tokens -= round_tokens;
             kept_start += 1;
         }
@@ -1003,9 +1009,6 @@ impl ExecutionEngine {
             }
         };
 
-        // Get configuration for whether to support preserving historical thinking content
-        let enable_thinking = ai_client.config.enable_thinking_process;
-        let support_preserved_thinking = ai_client.config.support_preserved_thinking;
         let model_context_window = ai_client.config.context_window as usize;
         let session_max_tokens = session.config.max_context_tokens;
         let context_window = model_context_window.min(session_max_tokens);
@@ -1228,15 +1231,9 @@ impl ExecutionEngine {
                 break;
             }
 
-            MessageHelper::compute_keep_thinking_flags(
-                &mut messages,
-                enable_thinking,
-                support_preserved_thinking,
-            );
-
             // Check and compress before sending AI request
             let mut current_tokens =
-                Self::estimate_request_tokens_internal(&mut messages, tool_definitions.as_deref());
+                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             debug!(
                 "Round {} token usage before send: {} / {} tokens ({:.1}%)",
                 round_index,
@@ -1347,7 +1344,7 @@ impl ExecutionEngine {
             // L2: Emergency truncation — if tokens still exceed context_window
             // after all compression layers, drop oldest API rounds until we fit.
             let post_compress_tokens = Self::estimate_request_tokens_internal(
-                &mut messages,
+                &messages,
                 tool_definitions.as_deref(),
             );
             if post_compress_tokens > context_window {
@@ -1361,7 +1358,7 @@ impl ExecutionEngine {
                     tool_definitions.as_deref(),
                 );
                 let after_truncate = Self::estimate_request_tokens_internal(
-                    &mut messages,
+                    &messages,
                     tool_definitions.as_deref(),
                 );
                 info!(

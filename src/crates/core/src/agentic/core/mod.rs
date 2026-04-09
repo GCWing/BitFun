@@ -15,7 +15,7 @@ pub use message::{
     CompressedToolCall, CompressionEntry, CompressionPayload, Message, MessageContent, MessageRole,
     MessageSemanticKind, ToolCall, ToolResult,
 };
-pub use messages_helper::MessageHelper;
+pub use messages_helper::{MessageHelper, RequestReasoningTokenPolicy};
 pub use model_round::ModelRound;
 pub use prompt_markup::{
     has_prompt_markup, is_system_reminder_only, render_system_reminder, render_user_query,

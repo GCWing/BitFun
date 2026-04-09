@@ -82,7 +82,6 @@ pub struct AIConfig {
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
     pub enable_thinking_process: bool,
-    pub support_preserved_thinking: bool,
     pub inline_think_in_text: bool,
     pub custom_headers: Option<std::collections::HashMap<String, String>>,
     /// "replace" (default) or "merge" (defaults first, then custom)

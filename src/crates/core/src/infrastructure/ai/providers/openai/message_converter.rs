@@ -309,6 +309,10 @@ impl OpenAIMessageConverter {
 
         if let Some(reasoning) = msg.reasoning_content {
             if !reasoning.is_empty() {
+                // Official OpenAI Chat Completions may ignore replayed reasoning_content, but
+                // many OpenAI-compatible providers require it to continue interleaved thinking.
+                // Replaying it here is therefore the compatibility default; at worst this only
+                // adds transport cost for providers that ignore the field.
                 openai_msg["reasoning_content"] = Value::String(reasoning);
             }
         }
