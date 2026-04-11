@@ -103,6 +103,9 @@ impl SseLogCollector {
     }
 }
 
+/// Placeholder name for tool calls whose name was not received before the stream terminated.
+const UNKNOWN_TOOL_PLACEHOLDER: &str = "unknown_tool";
+
 /// Stream processing result
 #[derive(Debug, Clone)]
 pub struct StreamResult {
@@ -117,6 +120,9 @@ pub struct StreamResult {
     pub provider_metadata: Option<Value>,
     /// Whether this stream produced any user-visible output (text/thinking/tool events)
     pub has_effective_output: bool,
+    /// When set, the stream terminated abnormally but was recovered with partial output.
+    /// Contains a human-readable reason (e.g. "Stream processing error: ..." or "Stream data timeout ...").
+    pub partial_recovery_reason: Option<String>,
 }
 
 /// Stream processing error with output diagnostics.
@@ -160,6 +166,7 @@ struct StreamContext {
     thinking_chunks_count: usize,
     thinking_completed_sent: bool,
     has_effective_output: bool,
+    partial_recovery_reason: Option<String>,
 }
 
 impl StreamContext {
@@ -187,6 +194,7 @@ impl StreamContext {
             thinking_chunks_count: 0,
             thinking_completed_sent: false,
             has_effective_output: false,
+            partial_recovery_reason: None,
         }
     }
 
@@ -199,14 +207,12 @@ impl StreamContext {
             usage: self.usage,
             provider_metadata: self.provider_metadata,
             has_effective_output: self.has_effective_output,
+            partial_recovery_reason: self.partial_recovery_reason,
         }
     }
 
-    fn can_recover_as_partial_text_result(&self) -> bool {
+    fn can_recover_as_partial_result(&self) -> bool {
         self.has_effective_output
-            && !self.full_text.is_empty()
-            && self.tool_calls.is_empty()
-            && !self.pending_tool_call.has_pending()
     }
 
     fn finalize_pending_tool_call(
@@ -214,9 +220,19 @@ impl StreamContext {
         boundary: ToolCallBoundary,
     ) -> Option<FinalizedToolCall> {
         let finalized = self.pending_tool_call.finalize(boundary)?;
+        let tool_name = if finalized.tool_name.is_empty() {
+            UNKNOWN_TOOL_PLACEHOLDER.to_string()
+        } else {
+            finalized.tool_name.clone()
+        };
+        let tool_id = if finalized.tool_id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            finalized.tool_id.clone()
+        };
         self.tool_calls.push(ToolCall {
-            tool_id: finalized.tool_id.clone(),
-            tool_name: finalized.tool_name.clone(),
+            tool_id,
+            tool_name,
             arguments: finalized.arguments.clone(),
             is_error: finalized.is_error,
         });
@@ -679,9 +695,11 @@ impl StreamProcessor {
                         Ok(Some(Err(e))) => {
                             let error_msg = format!("Stream processing error: {}", e);
                             error!("{}", error_msg);
-                            if ctx.can_recover_as_partial_text_result() {
+                            if ctx.can_recover_as_partial_result() {
                                 flush_sse_on_error(&sse_collector, &error_msg).await;
                                 self.send_thinking_end_if_needed(&mut ctx).await;
+                                ctx.force_finish_pending_tool_call();
+                                ctx.partial_recovery_reason = Some(error_msg.clone());
                                 self.log_stream_result(&ctx);
                                 break;
                             }
@@ -698,6 +716,13 @@ impl StreamProcessor {
                             error!("Stream data timeout ({} seconds), forcing termination", chunk_timeout.as_secs());
                             // log SSE for timeout errors
                             flush_sse_on_error(&sse_collector, &error_msg).await;
+                            if ctx.can_recover_as_partial_result() {
+                                self.send_thinking_end_if_needed(&mut ctx).await;
+                                ctx.force_finish_pending_tool_call();
+                                ctx.partial_recovery_reason = Some(error_msg.clone());
+                                self.log_stream_result(&ctx);
+                                break;
+                            }
                             self.graceful_shutdown_from_ctx(&mut ctx, error_msg.clone()).await;
                             return Err(StreamProcessError::new(
                                 BitFunError::AIClient(error_msg),

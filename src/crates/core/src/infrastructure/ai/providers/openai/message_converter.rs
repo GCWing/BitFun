@@ -83,7 +83,13 @@ impl OpenAIMessageConverter {
 
     fn convert_tool_message_to_responses_item(msg: Message) -> Option<Value> {
         let call_id = msg.tool_call_id?;
+        let is_error = msg.is_error.unwrap_or(false);
         let text = msg.content.unwrap_or_default();
+        let text = if is_error && !text.starts_with("[TOOL ERROR]") {
+            format!("[TOOL ERROR] {}", text)
+        } else {
+            text
+        };
 
         // Responses API: `output` may be a string or a list of input_text / input_image / input_file
         // (see OpenAI FunctionCallOutput schema).
@@ -199,7 +205,16 @@ impl OpenAIMessageConverter {
         }
     }
 
-    fn convert_single_message(msg: Message) -> Value {
+    fn convert_single_message(mut msg: Message) -> Value {
+        // Prefix tool error content so the model can distinguish failures from normal results.
+        if msg.role == "tool" && msg.is_error.unwrap_or(false) {
+            if let Some(ref content) = msg.content {
+                if !content.starts_with("[TOOL ERROR]") {
+                    msg.content = Some(format!("[TOOL ERROR] {}", content));
+                }
+            }
+        }
+
         // Chat Completions: multimodal tool message (e.g. GPT-4o vision + tools) — image parts + text.
         if msg.role == "tool" {
             if let Some(ref attachments) = msg.tool_image_attachments {
@@ -374,6 +389,7 @@ mod tests {
                 tool_calls: None,
                 tool_call_id: Some("call_1".to_string()),
                 name: Some("get_weather".to_string()),
+                is_error: None,
                 tool_image_attachments: None,
             },
         ];
@@ -412,6 +428,7 @@ mod tests {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            is_error: None,
             tool_image_attachments: None,
         }];
 
@@ -432,6 +449,7 @@ mod tests {
             tool_calls: None,
             tool_call_id: Some("call_cu_1".to_string()),
             name: Some("computer_use".to_string()),
+            is_error: None,
             tool_image_attachments: Some(vec![ToolImageAttachment {
                 mime_type: "image/jpeg".to_string(),
                 data_base64: "AAA".to_string(),
@@ -462,6 +480,7 @@ mod tests {
             tool_calls: None,
             tool_call_id: Some("call_1".to_string()),
             name: Some("computer_use".to_string()),
+            is_error: None,
             tool_image_attachments: Some(vec![ToolImageAttachment {
                 mime_type: "image/jpeg".to_string(),
                 data_base64: "YmFi".to_string(),

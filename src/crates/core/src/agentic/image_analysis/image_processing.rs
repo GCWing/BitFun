@@ -272,6 +272,7 @@ pub fn build_multimodal_message(
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            is_error: None,
             tool_image_attachments: None,
         }
     } else if provider_lower.contains("gemini") || provider_lower.contains("google") {
@@ -293,6 +294,7 @@ pub fn build_multimodal_message(
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            is_error: None,
             tool_image_attachments: None,
         }
     } else {
@@ -316,6 +318,7 @@ pub fn build_multimodal_message(
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            is_error: None,
             tool_image_attachments: None,
         }
     };
@@ -432,6 +435,7 @@ pub fn build_multimodal_message_with_images(
         tool_calls: None,
         tool_call_id: None,
         name: None,
+        is_error: None,
         tool_image_attachments: None,
     }])
 }

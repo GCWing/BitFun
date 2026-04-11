@@ -216,6 +216,17 @@ impl RoundExecutor {
         };
 
         // Model returned successfully (output to AI log file)
+        if let Some(ref reason) = stream_result.partial_recovery_reason {
+            warn!(
+                "Stream recovered with partial output: session_id={}, round_id={}, reason={}, text_len={}, tool_calls={}",
+                context.session_id,
+                round_id,
+                reason,
+                stream_result.full_text.len(),
+                stream_result.tool_calls.len()
+            );
+        }
+
         let tool_names: Vec<&str> = stream_result
             .tool_calls
             .iter()

@@ -196,6 +196,7 @@ impl From<Message> for AIMessage {
                     tool_calls: None,
                     tool_call_id: None,
                     name: None,
+                    is_error: None,
                     tool_image_attachments: None,
                 }
             }
@@ -229,6 +230,7 @@ impl From<Message> for AIMessage {
                     tool_calls: None,
                     tool_call_id: None,
                     name: None,
+                    is_error: None,
                     tool_image_attachments: None,
                 }
             }
@@ -285,6 +287,7 @@ impl From<Message> for AIMessage {
                     tool_calls: converted_tool_calls,
                     tool_call_id: None,
                     name: None,
+                    is_error: None,
                     tool_image_attachments: None,
                 }
             }
@@ -293,8 +296,8 @@ impl From<Message> for AIMessage {
                 tool_name,
                 result,
                 result_for_assistant,
+                is_error,
                 image_attachments,
-                ..
             } => {
                 // Tool messages must include tool_call_id
                 // Prefer result_for_assistant (text specifically for AI), if None or empty then use result (data field)
@@ -321,6 +324,7 @@ impl From<Message> for AIMessage {
                     tool_calls: None,
                     tool_call_id: Some(tool_id),
                     name: Some(tool_name),
+                    is_error: Some(is_error),
                     tool_image_attachments: image_attachments.clone(),
                 }
             }

@@ -102,7 +102,17 @@ impl GeminiMessageConverter {
                         continue;
                     }
 
-                    let response = Self::parse_tool_response(msg.content.as_deref());
+                    let is_error = msg.is_error.unwrap_or(false);
+                    let response = if is_error {
+                        let error_text = msg
+                            .content
+                            .as_deref()
+                            .filter(|s| !s.trim().is_empty())
+                            .unwrap_or("Tool execution failed");
+                        json!({ "error": error_text })
+                    } else {
+                        Self::parse_tool_response(msg.content.as_deref())
+                    };
                     let parts = vec![json!({
                         "functionResponse": {
                             "name": tool_name,
@@ -664,6 +674,7 @@ mod tests {
                 }]),
                 tool_call_id: None,
                 name: None,
+                is_error: None,
                 tool_image_attachments: None,
             },
             Message {
@@ -674,6 +685,7 @@ mod tests {
                 tool_calls: None,
                 tool_call_id: Some("call_1".to_string()),
                 name: Some("get_weather".to_string()),
+                is_error: None,
                 tool_image_attachments: None,
             },
         ];
@@ -717,6 +729,7 @@ mod tests {
             }]),
             tool_call_id: None,
             name: None,
+            is_error: None,
             tool_image_attachments: None,
         }];
 
@@ -754,6 +767,7 @@ mod tests {
             tool_calls: None,
             tool_call_id: None,
             name: None,
+            is_error: None,
             tool_image_attachments: None,
         }];
 

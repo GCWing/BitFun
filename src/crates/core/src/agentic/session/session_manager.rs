@@ -1696,6 +1696,7 @@ impl SessionManager {
                 tool_calls: None,
                 tool_call_id: None,
                 name: None,
+                is_error: None,
                 tool_image_attachments: None,
             },
             Message {
@@ -1706,6 +1707,7 @@ impl SessionManager {
                 tool_calls: None,
                 tool_call_id: None,
                 name: None,
+                is_error: None,
                 tool_image_attachments: None,
             },
         ];

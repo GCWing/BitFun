@@ -177,6 +177,7 @@ impl AnthropicMessageConverter {
         let tool_call_id = msg.tool_call_id.unwrap_or_default();
         let text = msg.content.unwrap_or_default();
 
+        let is_error = msg.is_error.unwrap_or(false);
         let tool_content: Value =
             if let Some(attachments) = msg.tool_image_attachments.filter(|a| !a.is_empty()) {
                 let mut blocks: Vec<Value> = attachments
@@ -198,13 +199,18 @@ impl AnthropicMessageConverter {
                 json!(text)
             };
 
+        let mut tool_result = json!({
+            "type": "tool_result",
+            "tool_use_id": tool_call_id,
+            "content": tool_content,
+        });
+        if is_error {
+            tool_result["is_error"] = json!(true);
+        }
+
         json!({
             "role": "user",
-            "content": [{
-                "type": "tool_result",
-                "tool_use_id": tool_call_id,
-                "content": tool_content
-            }]
+            "content": [tool_result]
         })
     }
 
