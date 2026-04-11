@@ -224,9 +224,31 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         modelRound.items.forEach((item: any) => {
           if (item.type === 'text' && item.content?.trim()) {
             roundContent.push(item.content.trim());
+          } else if (item.type === 'thinking' && item.content?.trim()) {
+            roundContent.push(`[Thinking]\n${item.content.trim()}`);
           } else if (item.type === 'tool' && item.toolCall) {
             const toolName = item.toolName || t('copyOutput.unknownTool');
-            roundContent.push(t('modelRound.toolCallLabel', { name: toolName }));
+            let toolContent = t('modelRound.toolCallLabel', { name: toolName }) + '\n';
+            
+            if (item.toolCall.input) {
+              const inputStr = typeof item.toolCall.input === 'string'
+                ? item.toolCall.input
+                : JSON.stringify(item.toolCall.input, null, 2);
+              toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
+            }
+            
+            if (item.toolResult) {
+              if (item.toolResult.error) {
+                toolContent += `\n[Error]\n${item.toolResult.error}\n`;
+              } else if (item.toolResult.result !== undefined) {
+                const resultStr = typeof item.toolResult.result === 'string'
+                  ? item.toolResult.result
+                  : JSON.stringify(item.toolResult.result, null, 2);
+                toolContent += `\n[Result]\n\`\`\`\n${resultStr}\n\`\`\`\n`;
+              }
+            }
+            
+            roundContent.push(toolContent.trim());
           }
         });
         

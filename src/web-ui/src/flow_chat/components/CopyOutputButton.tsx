@@ -6,7 +6,7 @@
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, Edit } from 'lucide-react';
-import type { DialogTurn, FlowTextItem, FlowToolItem } from '../types/flow-chat';
+import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../types/flow-chat';
 import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
 import { Tooltip } from '@/component-library';
 import { i18nService } from '@/infrastructure/i18n';
@@ -39,12 +39,37 @@ export const CopyOutputButton: React.FC<CopyOutputButtonProps> = ({
           if (textItem.content.trim()) {
             contentParts.push(textItem.content.trim());
           }
+        } else if (item.type === 'thinking') {
+          const thinkingItem = item as FlowThinkingItem;
+          if (thinkingItem.content.trim()) {
+            contentParts.push(`[Thinking]\n${thinkingItem.content.trim()}`);
+          }
         } else if (item.type === 'tool') {
           const toolItem = item as FlowToolItem;
           
           if (toolItem.toolCall) {
             const toolName = toolItem.toolName || t('copyOutput.unknownTool');
-            contentParts.push(t('copyOutput.toolCall', { name: toolName }));
+            let toolContent = t('copyOutput.toolCall', { name: toolName }) + '\n';
+            
+            if (toolItem.toolCall.input) {
+              const inputStr = typeof toolItem.toolCall.input === 'string'
+                ? toolItem.toolCall.input
+                : JSON.stringify(toolItem.toolCall.input, null, 2);
+              toolContent += `\n[Input]\n\`\`\`json\n${inputStr}\n\`\`\`\n`;
+            }
+            
+            if (toolItem.toolResult) {
+              if (toolItem.toolResult.error) {
+                toolContent += `\n[Error]\n${toolItem.toolResult.error}\n`;
+              } else if (toolItem.toolResult.result !== undefined) {
+                const resultStr = typeof toolItem.toolResult.result === 'string'
+                  ? toolItem.toolResult.result
+                  : JSON.stringify(toolItem.toolResult.result, null, 2);
+                toolContent += `\n[Result]\n\`\`\`\n${resultStr}\n\`\`\`\n`;
+              }
+            }
+            
+            contentParts.push(toolContent.trim());
           }
         }
       });

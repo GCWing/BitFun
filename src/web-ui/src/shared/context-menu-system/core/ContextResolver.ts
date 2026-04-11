@@ -389,6 +389,12 @@ export class ContextResolver {
       'text-block'
     ]);
 
+    const dialogTurn = this.findClosestByClass(base.targetElement, [
+      'flow-chat-dialog-turn',
+      'dialog-turn',
+      'virtual-item-wrapper'
+    ]);
+
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim() || undefined;
 
@@ -404,7 +410,8 @@ export class ContextResolver {
       type: contextType,
       selectedText,
       toolCard: toolCard ? this.extractElementData(toolCard) : undefined,
-      textBlock: textBlock ? this.extractElementData(textBlock) : undefined
+      textBlock: textBlock ? this.extractElementData(textBlock) : undefined,
+      dialogTurn: dialogTurn || undefined
     };
   }
 
