@@ -21,6 +21,12 @@ use tokio::sync::{oneshot, RwLock as TokioRwLock};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
+/// A batch of tool tasks to execute together.
+struct ToolBatch {
+    task_ids: Vec<String>,
+    is_concurrent: bool,
+}
+
 /// Convert framework::ToolResult to core::ToolResult
 ///
 /// Ensure always has result_for_assistant, avoid tool message content being empty
@@ -227,7 +233,12 @@ impl ToolPipeline {
         self.computer_use_host.clone()
     }
 
-    /// Execute multiple tool calls
+    /// Execute multiple tool calls using partitioned mixed scheduling.
+    ///
+    /// Consecutive concurrency-safe calls are grouped into a single batch and
+    /// run in parallel; each non-safe call forms its own batch and runs serially.
+    /// Batches are executed in order so that write-after-read dependencies are
+    /// respected while reads still benefit from parallelism.
     pub async fn execute_tools(
         &self,
         tool_calls: Vec<ToolCall>,
@@ -240,44 +251,92 @@ impl ToolPipeline {
 
         info!("Executing tools: count={}", tool_calls.len());
 
-        // Check if all requested tools are concurrency safe
-        let all_concurrency_safe = {
+        // Determine concurrency safety for each tool call
+        let concurrency_flags: Vec<bool> = {
             let registry = self.tool_registry.read().await;
-            tool_calls.iter().all(|tc| {
-                registry
-                    .get_tool(&tc.tool_name)
-                    .map(|tool| tool.is_concurrency_safe(Some(&tc.arguments)))
-                    .unwrap_or(false) // If the tool does not exist, it is considered unsafe
-            })
+            tool_calls
+                .iter()
+                .map(|tc| {
+                    registry
+                        .get_tool(&tc.tool_name)
+                        .map(|tool| tool.is_concurrency_safe(Some(&tc.arguments)))
+                        .unwrap_or(false)
+                })
+                .collect()
         };
 
         // Create tasks for all tool calls
-        let mut tasks = Vec::new();
+        let mut task_ids = Vec::with_capacity(tool_calls.len());
         for tool_call in tool_calls {
             let task = ToolTask::new(tool_call, context.clone(), options.clone());
             let tool_id = self.state_manager.create_task(task).await;
-            tasks.push(tool_id);
+            task_ids.push(tool_id);
         }
 
-        // Execute tasks: only when allow_parallel is true and all tools are concurrency safe
-        let should_parallel = options.allow_parallel && all_concurrency_safe;
-        if !all_concurrency_safe && options.allow_parallel {
-            debug!("Non-concurrency-safe tools detected, switching to sequential execution");
+        if !options.allow_parallel {
+            debug!("Parallel execution disabled by options, running all tools sequentially");
+            return self.execute_sequential(task_ids).await;
         }
 
-        let results = if should_parallel {
-            self.execute_parallel(tasks).await
-        } else {
-            self.execute_sequential(tasks).await
-        };
+        // Partition into batches of consecutive same-safety tool calls
+        let batches = Self::partition_tool_batches(&task_ids, &concurrency_flags);
 
-        match results {
-            Ok(results) => Ok(results),
-            Err(e) => {
-                error!("Tool execution failed: error={}", e);
-                Err(e)
+        if batches.len() == 1 {
+            let batch = &batches[0];
+            if batch.is_concurrent {
+                return self.execute_parallel(batch.task_ids.clone()).await;
+            } else {
+                return self.execute_sequential(batch.task_ids.clone()).await;
             }
         }
+
+        debug!(
+            "Partitioned {} tools into {} batches for mixed execution",
+            task_ids.len(),
+            batches.len()
+        );
+
+        let mut all_results = Vec::with_capacity(task_ids.len());
+        for (batch_idx, batch) in batches.into_iter().enumerate() {
+            debug!(
+                "Executing batch {}: {} tool(s), concurrent={}",
+                batch_idx,
+                batch.task_ids.len(),
+                batch.is_concurrent
+            );
+            let batch_results = if batch.is_concurrent {
+                self.execute_parallel(batch.task_ids).await?
+            } else {
+                self.execute_sequential(batch.task_ids).await?
+            };
+            all_results.extend(batch_results);
+        }
+
+        Ok(all_results)
+    }
+
+    /// Partition task IDs into batches where consecutive concurrency-safe tasks
+    /// are grouped together (parallel batch) and each non-safe task forms its
+    /// own batch (serial batch).
+    fn partition_tool_batches(task_ids: &[String], flags: &[bool]) -> Vec<ToolBatch> {
+        let mut batches: Vec<ToolBatch> = Vec::new();
+
+        for (id, &is_safe) in task_ids.iter().zip(flags.iter()) {
+            if is_safe {
+                if let Some(last) = batches.last_mut() {
+                    if last.is_concurrent {
+                        last.task_ids.push(id.clone());
+                        continue;
+                    }
+                }
+            }
+            batches.push(ToolBatch {
+                task_ids: vec![id.clone()],
+                is_concurrent: is_safe,
+            });
+        }
+
+        batches
     }
 
     /// Execute tools in parallel
@@ -300,28 +359,32 @@ impl ToolPipeline {
                 Err(e) => {
                     error!("Tool execution failed: error={}", e);
 
-                    // Get task information from state manager
-                    if let Some(task) = self.state_manager.get_task(&task_ids[idx]) {
-                        // Create error result to return to model
-                        let error_result = ToolExecutionResult {
-                            tool_id: task.tool_call.tool_id.clone(),
-                            tool_name: task.tool_call.tool_name.clone(),
-                            result: ModelToolResult {
-                                tool_id: task.tool_call.tool_id.clone(),
-                                tool_name: task.tool_call.tool_name.clone(),
-                                result: serde_json::json!({
-                                    "error": e.to_string(),
-                                    "message": format!("Tool execution failed: {}", e)
-                                }),
-                                result_for_assistant: Some(format!("Tool execution failed: {}", e)),
-                                is_error: true,
-                                duration_ms: None,
-                                image_attachments: None,
-                            },
-                            execution_time_ms: 0,
+                    let task_id = &task_ids[idx];
+                    let (tool_id, tool_name) =
+                        if let Some(task) = self.state_manager.get_task(task_id) {
+                            (task.tool_call.tool_id.clone(), task.tool_call.tool_name.clone())
+                        } else {
+                            warn!("Task not found in state manager: {}", task_id);
+                            (task_id.clone(), "unknown".to_string())
                         };
-                        all_results.push(error_result);
-                    }
+                    let error_result = ToolExecutionResult {
+                        tool_id: tool_id.clone(),
+                        tool_name: tool_name.clone(),
+                        result: ModelToolResult {
+                            tool_id,
+                            tool_name,
+                            result: serde_json::json!({
+                                "error": e.to_string(),
+                                "message": format!("Tool execution failed: {}", e)
+                            }),
+                            result_for_assistant: Some(format!("Tool execution failed: {}", e)),
+                            is_error: true,
+                            duration_ms: None,
+                            image_attachments: None,
+                        },
+                        execution_time_ms: 0,
+                    };
+                    all_results.push(error_result);
                 }
             }
         }
@@ -342,28 +405,31 @@ impl ToolPipeline {
                 Err(e) => {
                     error!("Tool execution failed: error={}", e);
 
-                    // Get task information from state manager
-                    if let Some(task) = self.state_manager.get_task(&task_id) {
-                        // Create error result to return to model
-                        let error_result = ToolExecutionResult {
-                            tool_id: task.tool_call.tool_id.clone(),
-                            tool_name: task.tool_call.tool_name.clone(),
-                            result: ModelToolResult {
-                                tool_id: task.tool_call.tool_id.clone(),
-                                tool_name: task.tool_call.tool_name.clone(),
-                                result: serde_json::json!({
-                                    "error": e.to_string(),
-                                    "message": format!("Tool execution failed: {}", e)
-                                }),
-                                result_for_assistant: Some(format!("Tool execution failed: {}", e)),
-                                is_error: true,
-                                duration_ms: None,
-                                image_attachments: None,
-                            },
-                            execution_time_ms: 0,
+                    let (tool_id, tool_name) =
+                        if let Some(task) = self.state_manager.get_task(&task_id) {
+                            (task.tool_call.tool_id.clone(), task.tool_call.tool_name.clone())
+                        } else {
+                            warn!("Task not found in state manager: {}", task_id);
+                            (task_id.clone(), "unknown".to_string())
                         };
-                        results.push(error_result);
-                    }
+                    let error_result = ToolExecutionResult {
+                        tool_id: tool_id.clone(),
+                        tool_name: tool_name.clone(),
+                        result: ModelToolResult {
+                            tool_id,
+                            tool_name,
+                            result: serde_json::json!({
+                                "error": e.to_string(),
+                                "message": format!("Tool execution failed: {}", e)
+                            }),
+                            result_for_assistant: Some(format!("Tool execution failed: {}", e)),
+                            is_error: true,
+                            duration_ms: None,
+                            image_attachments: None,
+                        },
+                        execution_time_ms: 0,
+                    };
+                    results.push(error_result);
                 }
             }
         }

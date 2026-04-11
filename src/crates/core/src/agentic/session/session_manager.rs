@@ -1830,6 +1830,7 @@ impl SessionManager {
         let timeout = self.config.session_idle_timeout;
         let persistence = self.persistence_manager.clone();
         let enable_persistence = self.config.enable_persistence;
+        let context_store = self.context_store.clone();
 
         tokio::spawn(async move {
             let mut ticker = time::interval(Duration::from_secs(60));
@@ -1863,6 +1864,7 @@ impl SessionManager {
                         }
                     }
 
+                    context_store.delete_session(&session_id);
                     sessions.remove(&session_id);
                 }
             }

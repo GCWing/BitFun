@@ -94,6 +94,96 @@ impl ExecutionEngine {
         total
     }
 
+    /// Emergency truncation: drop oldest API rounds (assistant+tool pairs)
+    /// from the front of the message list until estimated tokens fit within
+    /// `context_window`.  System messages and the first user message are
+    /// always preserved.
+    fn emergency_truncate_messages(
+        messages: Vec<Message>,
+        context_window: usize,
+        tools: Option<&[ToolDefinition]>,
+    ) -> Vec<Message> {
+        use crate::agentic::core::MessageRole;
+
+        // Separate preserved head (system + first user) from droppable body.
+        let mut preserved: Vec<Message> = Vec::new();
+        let mut droppable: Vec<Message> = Vec::new();
+        let mut seen_first_user = false;
+
+        for msg in messages {
+            if !seen_first_user {
+                let is_user = msg.role == MessageRole::User;
+                preserved.push(msg);
+                if is_user {
+                    seen_first_user = true;
+                }
+            } else {
+                droppable.push(msg);
+            }
+        }
+
+        if droppable.is_empty() {
+            return preserved;
+        }
+
+        // Group droppable messages into API rounds.
+        // An API round starts with an Assistant message and includes all
+        // following Tool messages until the next Assistant or User message.
+        let mut rounds: Vec<Vec<Message>> = Vec::new();
+        for msg in droppable {
+            match msg.role {
+                MessageRole::Assistant => {
+                    rounds.push(vec![msg]);
+                }
+                MessageRole::Tool => {
+                    if let Some(last_round) = rounds.last_mut() {
+                        last_round.push(msg);
+                    } else {
+                        rounds.push(vec![msg]);
+                    }
+                }
+                _ => {
+                    rounds.push(vec![msg]);
+                }
+            }
+        }
+
+        // Drop rounds from the front until we fit.
+        let tool_tokens = tools
+            .map(TokenCounter::estimate_tool_definitions_tokens)
+            .unwrap_or(0);
+        let preserved_tokens: usize = preserved.iter().map(|m| m.estimate_tokens()).sum::<usize>()
+            + tool_tokens
+            + 3;
+
+        let mut kept_start = 0;
+        let mut total_tokens = preserved_tokens
+            + rounds
+                .iter()
+                .flat_map(|r| r.iter())
+                .map(|m| m.estimate_tokens())
+                .sum::<usize>();
+
+        while total_tokens > context_window && kept_start < rounds.len() {
+            let round_tokens: usize = rounds[kept_start].iter().map(|m| m.estimate_tokens()).sum();
+            total_tokens -= round_tokens;
+            kept_start += 1;
+        }
+
+        if kept_start > 0 {
+            warn!(
+                "Emergency truncation dropped {} API round(s) from context head",
+                kept_start
+            );
+        }
+
+        let mut result = preserved;
+        for round in rounds.into_iter().skip(kept_start) {
+            result.extend(round);
+        }
+        result
+    }
+
     fn is_redacted_image_context(image: &ImageContextData) -> bool {
         let missing_path = image
             .image_path
@@ -916,7 +1006,15 @@ impl ExecutionEngine {
         // Get configuration for whether to support preserving historical thinking content
         let enable_thinking = ai_client.config.enable_thinking_process;
         let support_preserved_thinking = ai_client.config.support_preserved_thinking;
-        let context_window = ai_client.config.context_window as usize;
+        let model_context_window = ai_client.config.context_window as usize;
+        let session_max_tokens = session.config.max_context_tokens;
+        let context_window = model_context_window.min(session_max_tokens);
+        if model_context_window != session_max_tokens {
+            debug!(
+                "Context window: model={}, session_config={}, effective={}",
+                model_context_window, session_max_tokens, context_window
+            );
+        }
 
         // 3. Get System Prompt from current Agent
         debug!(
@@ -1019,6 +1117,8 @@ impl ExecutionEngine {
         let mut round_index = 0;
         let mut total_tools = 0;
         let mut last_assistant_message = Message::assistant("".to_string());
+        let mut consecutive_compression_failures: u32 = 0;
+        const MAX_CONSECUTIVE_COMPRESSION_FAILURES: u32 = 3;
 
         // Save the last token usage statistics
         let mut last_usage: Option<crate::util::types::ai::GeminiUsage> = None;
@@ -1076,6 +1176,8 @@ impl ExecutionEngine {
 
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
+        let microcompact_config =
+            crate::agentic::session::compression::microcompact::MicrocompactConfig::default();
 
         let mut execution_context_vars = context.context.clone();
         execution_context_vars.insert(
@@ -1133,7 +1235,7 @@ impl ExecutionEngine {
             );
 
             // Check and compress before sending AI request
-            let current_tokens =
+            let mut current_tokens =
                 Self::estimate_request_tokens_internal(&mut messages, tool_definitions.as_deref());
             debug!(
                 "Round {} token usage before send: {} / {} tokens ({:.1}%)",
@@ -1143,9 +1245,40 @@ impl ExecutionEngine {
                 (current_tokens as f32 / context_window as f32) * 100.0
             );
 
+            // L0: Microcompact — clear old compactable tool results before
+            // considering full compression.  This is a cheap, local-only
+            // operation that can free significant tokens.
+            let token_usage_ratio = current_tokens as f32 / context_window as f32;
+            if enable_context_compression && token_usage_ratio >= microcompact_config.trigger_ratio {
+                if let Some(mc_result) =
+                    crate::agentic::session::compression::microcompact::microcompact_messages(
+                        &mut messages,
+                        &microcompact_config,
+                    )
+                {
+                    current_tokens = Self::estimate_request_tokens_internal(
+                        &mut messages,
+                        tool_definitions.as_deref(),
+                    );
+                    debug!(
+                        "Round {} after microcompact: cleared={}, kept={}, tokens now {} ({:.1}%)",
+                        round_index,
+                        mc_result.tools_cleared,
+                        mc_result.tools_kept,
+                        current_tokens,
+                        (current_tokens as f32 / context_window as f32) * 100.0
+                    );
+                }
+            }
+
             let token_usage_ratio = current_tokens as f32 / context_window as f32;
             let should_compress =
                 enable_context_compression && token_usage_ratio >= compression_threshold;
+
+            // Circuit breaker: skip full compression if it has failed too many
+            // consecutive times.  Microcompact and emergency truncation still run.
+            let circuit_breaker_open =
+                consecutive_compression_failures >= MAX_CONSECUTIVE_COMPRESSION_FAILURES;
 
             if !should_compress {
                 debug!(
@@ -1153,6 +1286,11 @@ impl ExecutionEngine {
                     context.session_id,
                     token_usage_ratio * 100.0,
                     compression_threshold * 100.0
+                );
+            } else if circuit_breaker_open {
+                warn!(
+                    "Compression circuit breaker open ({} consecutive failures), skipping full compression for round {}",
+                    consecutive_compression_failures, round_index
                 );
             } else {
                 info!(
@@ -1187,17 +1325,49 @@ impl ExecutionEngine {
                         );
 
                         messages = compressed_messages;
+                        consecutive_compression_failures = 0;
                     }
                     Ok(None) => {
                         debug!("All turns need to be kept, no compression performed");
+                        consecutive_compression_failures = 0;
                     }
                     Err(e) => {
+                        consecutive_compression_failures += 1;
                         error!(
-                            "Round {} compression failed: {}, continuing with uncompressed context",
-                            round_index, e
+                            "Round {} compression failed ({}/{}): {}, continuing with uncompressed context",
+                            round_index,
+                            consecutive_compression_failures,
+                            MAX_CONSECUTIVE_COMPRESSION_FAILURES,
+                            e
                         );
                     }
                 }
+            }
+
+            // L2: Emergency truncation — if tokens still exceed context_window
+            // after all compression layers, drop oldest API rounds until we fit.
+            let post_compress_tokens = Self::estimate_request_tokens_internal(
+                &mut messages,
+                tool_definitions.as_deref(),
+            );
+            if post_compress_tokens > context_window {
+                warn!(
+                    "Round {} tokens ({}) still exceed context_window ({}) after compression, performing emergency truncation",
+                    round_index, post_compress_tokens, context_window
+                );
+                messages = Self::emergency_truncate_messages(
+                    messages,
+                    context_window,
+                    tool_definitions.as_deref(),
+                );
+                let after_truncate = Self::estimate_request_tokens_internal(
+                    &mut messages,
+                    tool_definitions.as_deref(),
+                );
+                info!(
+                    "Emergency truncation complete: tokens {} -> {}",
+                    post_compress_tokens, after_truncate
+                );
             }
 
             // Create round context

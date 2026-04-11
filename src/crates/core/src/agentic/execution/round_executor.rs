@@ -416,10 +416,47 @@ impl RoundExecutor {
                 ..ToolExecutionOptions::default()
             };
 
-            // Execute tools
-            let execution_results = tool_pipeline
+            // Execute tools — convert pipeline-level Err into per-tool error results
+            // so the model always receives a tool_result for every tool_call.
+            let execution_results = match tool_pipeline
                 .execute_tools(stream_result.tool_calls.clone(), tool_context, tool_options)
-                .await?;
+                .await
+            {
+                Ok(results) => results,
+                Err(e) => {
+                    error!(
+                        "Tool pipeline execution failed, generating error results for all {} tool calls: {}",
+                        stream_result.tool_calls.len(),
+                        e
+                    );
+                    stream_result
+                        .tool_calls
+                        .iter()
+                        .map(|tc| {
+                            crate::agentic::tools::pipeline::ToolExecutionResult {
+                                tool_id: tc.tool_id.clone(),
+                                tool_name: tc.tool_name.clone(),
+                                result: crate::agentic::core::ToolResult {
+                                    tool_id: tc.tool_id.clone(),
+                                    tool_name: tc.tool_name.clone(),
+                                    result: serde_json::json!({
+                                        "error": e.to_string(),
+                                        "message": format!("Tool pipeline execution failed: {}", e)
+                                    }),
+                                    result_for_assistant: Some(format!(
+                                        "Tool execution failed: {}",
+                                        e
+                                    )),
+                                    is_error: true,
+                                    duration_ms: None,
+                                    image_attachments: None,
+                                },
+                                execution_time_ms: 0,
+                            }
+                        })
+                        .collect()
+                }
+            };
 
             // Convert to ToolResult
             execution_results.into_iter().map(|r| r.result).collect()

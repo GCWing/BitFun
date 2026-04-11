@@ -506,7 +506,7 @@ impl Message {
         50 + tiles * 200
     }
 
-    fn estimate_tokens(&self) -> usize {
+    pub fn estimate_tokens(&self) -> usize {
         let mut total = 0usize;
         total += 4;
 
