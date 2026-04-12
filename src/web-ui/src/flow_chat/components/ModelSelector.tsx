@@ -318,10 +318,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const currentModelId = getCurrentModelId();
 
-  const providerText = currentModel?.providerName ?? t('modelSelector.autoModelDesc');
-  const tooltipContent = currentTokens > 0 && maxTokens > 0
-    ? `${providerText} · ${formatTokenCount(currentTokens)}/${formatTokenCount(maxTokens)} (${tokenPercentage}%)`
-    : providerText;
+  const fallbackTooltip = t('modelSelector.autoModelDesc');
+  const baseTooltip = getModelTooltipText(currentModel, fallbackTooltip);
+  const tooltipContent =
+    currentTokens > 0 && maxTokens > 0
+      ? `${baseTooltip} · ${formatTokenCount(currentTokens)}/${formatTokenCount(maxTokens)} (${tokenPercentage}%)`
+      : baseTooltip;
 
   return (
     <div
