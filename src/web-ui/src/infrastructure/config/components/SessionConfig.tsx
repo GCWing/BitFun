@@ -520,11 +520,6 @@ const SessionConfig: React.FC = () => {
                   />
                 </div>
               </ConfigPageRow>
-              {computerUseNote ? (
-                <ConfigPageRow label={t('computerUse.platformNote')} align="start">
-                  <span className="bitfun-func-agent-config__hint">{computerUseNote}</span>
-                </ConfigPageRow>
-              ) : null}
               <ConfigPageRow
                 label={t('computerUse.accessibility')}
                 description={t('computerUse.accessibilityDesc')}
