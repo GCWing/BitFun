@@ -839,8 +839,6 @@ pub struct AIModelConfig {
     pub max_tokens: Option<u32>,
     pub temperature: Option<f64>,
     pub top_p: Option<f64>,
-    pub frequency_penalty: Option<f64>,
-    pub presence_penalty: Option<f64>,
     pub enabled: bool,
     /// Model category (primary category used for UI filtering).
     pub category: ModelCategory,
@@ -894,6 +892,11 @@ pub struct AIModelConfig {
     /// Custom request body (JSON string, used to override default request body fields).
     #[serde(default)]
     pub custom_request_body: Option<String>,
+
+    /// Custom request body mode: "merge" (default) or "trim" (keep only essential runtime
+    /// fields, then apply custom JSON).
+    #[serde(default)]
+    pub custom_request_body_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -910,8 +913,6 @@ struct AIModelConfigCompat {
     max_tokens: Option<u32>,
     temperature: Option<f64>,
     top_p: Option<f64>,
-    frequency_penalty: Option<f64>,
-    presence_penalty: Option<f64>,
     enabled: bool,
     category: ModelCategory,
     capabilities: Vec<ModelCapability>,
@@ -926,6 +927,7 @@ struct AIModelConfigCompat {
     reasoning_effort: Option<String>,
     thinking_budget_tokens: Option<u32>,
     custom_request_body: Option<String>,
+    custom_request_body_mode: Option<String>,
 }
 
 impl From<AIModelConfigCompat> for AIModelConfig {
@@ -952,8 +954,6 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             max_tokens: value.max_tokens,
             temperature: value.temperature,
             top_p: value.top_p,
-            frequency_penalty: value.frequency_penalty,
-            presence_penalty: value.presence_penalty,
             enabled: value.enabled,
             category: value.category,
             capabilities: value.capabilities,
@@ -968,6 +968,7 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             reasoning_effort: value.reasoning_effort,
             thinking_budget_tokens: value.thinking_budget_tokens,
             custom_request_body: value.custom_request_body,
+            custom_request_body_mode: value.custom_request_body_mode,
         }
     }
 }
@@ -1358,8 +1359,6 @@ impl Default for AIModelConfig {
             max_tokens: None,
             temperature: None,
             top_p: None,
-            frequency_penalty: None,
-            presence_penalty: None,
             enabled: false,
             category: ModelCategory::GeneralChat,
             capabilities: vec![],
@@ -1374,6 +1373,7 @@ impl Default for AIModelConfig {
             reasoning_effort: None,
             thinking_budget_tokens: None,
             custom_request_body: None,
+            custom_request_body_mode: None,
         }
     }
 }

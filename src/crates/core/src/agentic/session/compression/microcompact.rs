@@ -220,10 +220,7 @@ mod tests {
 
     #[test]
     fn no_op_when_within_keep_window() {
-        let mut messages = vec![
-            make_tool_result("Read", "a"),
-            make_tool_result("Grep", "b"),
-        ];
+        let mut messages = vec![make_tool_result("Read", "a"), make_tool_result("Grep", "b")];
 
         let config = MicrocompactConfig {
             keep_recent: 5,

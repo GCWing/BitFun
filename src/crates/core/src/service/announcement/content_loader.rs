@@ -16,7 +16,7 @@
 
 use super::types::{
     AnnouncementCard, CardSource, CardType, CompletionAction, ModalConfig, ModalPage, ModalSize,
-    PageLayout, TriggerCondition, TriggerRule, ToastConfig,
+    PageLayout, ToastConfig, TriggerCondition, TriggerRule,
 };
 
 include!(concat!(env!("OUT_DIR"), "/embedded_announcements.rs"));
@@ -58,7 +58,9 @@ fn split_front_matter(src: &str) -> Option<(&str, &str)> {
     }
     let after_open = &src[3..];
     // Skip optional newline immediately after opening `---`
-    let after_open = after_open.trim_start_matches('\n').trim_start_matches("\r\n");
+    let after_open = after_open
+        .trim_start_matches('\n')
+        .trim_start_matches("\r\n");
     let close = after_open.find("\n---")?;
     let fm = &after_open[..close];
     let body = &after_open[close + 4..]; // skip "\n---"
@@ -92,7 +94,11 @@ fn parse_tip_front_matter(fm: &str) -> Option<TipFrontMatter> {
     if id.is_empty() {
         return None;
     }
-    Some(TipFrontMatter { id, nth_open, auto_dismiss_secs })
+    Some(TipFrontMatter {
+        id,
+        nth_open,
+        auto_dismiss_secs,
+    })
 }
 
 fn parse_feature_front_matter(fm: &str) -> Option<FeatureFrontMatter> {

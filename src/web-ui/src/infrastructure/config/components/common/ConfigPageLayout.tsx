@@ -90,7 +90,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
 
 export interface ConfigPageRowProps {
   label: React.ReactNode;
-  description?: string;
+  description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   align?: 'start' | 'center';

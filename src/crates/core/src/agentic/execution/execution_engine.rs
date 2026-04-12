@@ -1246,7 +1246,8 @@ impl ExecutionEngine {
             // considering full compression.  This is a cheap, local-only
             // operation that can free significant tokens.
             let token_usage_ratio = current_tokens as f32 / context_window as f32;
-            if enable_context_compression && token_usage_ratio >= microcompact_config.trigger_ratio {
+            if enable_context_compression && token_usage_ratio >= microcompact_config.trigger_ratio
+            {
                 if let Some(mc_result) =
                     crate::agentic::session::compression::microcompact::microcompact_messages(
                         &mut messages,
@@ -1343,10 +1344,8 @@ impl ExecutionEngine {
 
             // L2: Emergency truncation — if tokens still exceed context_window
             // after all compression layers, drop oldest API rounds until we fit.
-            let post_compress_tokens = Self::estimate_request_tokens_internal(
-                &messages,
-                tool_definitions.as_deref(),
-            );
+            let post_compress_tokens =
+                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             if post_compress_tokens > context_window {
                 warn!(
                     "Round {} tokens ({}) still exceed context_window ({}) after compression, performing emergency truncation",
@@ -1357,10 +1356,8 @@ impl ExecutionEngine {
                     context_window,
                     tool_definitions.as_deref(),
                 );
-                let after_truncate = Self::estimate_request_tokens_internal(
-                    &messages,
-                    tool_definitions.as_deref(),
-                );
+                let after_truncate =
+                    Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
                 info!(
                     "Emergency truncation complete: tokens {} -> {}",
                     post_compress_tokens, after_truncate

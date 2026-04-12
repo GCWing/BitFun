@@ -98,6 +98,7 @@ export const CATEGORY_ICONS: Record<ModelCategory, string> = {
 };
 
 export type CustomHeadersMode = 'replace' | 'merge';
+export type CustomRequestBodyMode = 'merge' | 'trim';
 
 export interface AIModelConfig {
   id?: string;
@@ -112,14 +113,13 @@ export interface AIModelConfig {
   max_tokens?: number;
   temperature?: number;
   top_p?: number;
-  frequency_penalty?: number;
-  presence_penalty?: number;
   enabled: boolean;
   is_default?: boolean;
   custom_headers?: Record<string, string>;
   custom_headers_mode?: CustomHeadersMode;
   skip_ssl_verify?: boolean;
   custom_request_body?: string;
+  custom_request_body_mode?: CustomRequestBodyMode;
   timeout?: number;
   category: ModelCategory;
   capabilities: ModelCapability[];

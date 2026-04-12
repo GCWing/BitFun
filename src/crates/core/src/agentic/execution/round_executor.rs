@@ -432,27 +432,22 @@ impl RoundExecutor {
                     stream_result
                         .tool_calls
                         .iter()
-                        .map(|tc| {
-                            crate::agentic::tools::pipeline::ToolExecutionResult {
+                        .map(|tc| crate::agentic::tools::pipeline::ToolExecutionResult {
+                            tool_id: tc.tool_id.clone(),
+                            tool_name: tc.tool_name.clone(),
+                            result: crate::agentic::core::ToolResult {
                                 tool_id: tc.tool_id.clone(),
                                 tool_name: tc.tool_name.clone(),
-                                result: crate::agentic::core::ToolResult {
-                                    tool_id: tc.tool_id.clone(),
-                                    tool_name: tc.tool_name.clone(),
-                                    result: serde_json::json!({
-                                        "error": e.to_string(),
-                                        "message": format!("Tool pipeline execution failed: {}", e)
-                                    }),
-                                    result_for_assistant: Some(format!(
-                                        "Tool execution failed: {}",
-                                        e
-                                    )),
-                                    is_error: true,
-                                    duration_ms: None,
-                                    image_attachments: None,
-                                },
-                                execution_time_ms: 0,
-                            }
+                                result: serde_json::json!({
+                                    "error": e.to_string(),
+                                    "message": format!("Tool pipeline execution failed: {}", e)
+                                }),
+                                result_for_assistant: Some(format!("Tool execution failed: {}", e)),
+                                is_error: true,
+                                duration_ms: None,
+                                image_attachments: None,
+                            },
+                            execution_time_ms: 0,
                         })
                         .collect()
                 }

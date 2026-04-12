@@ -104,8 +104,8 @@ impl RemoteFetcher {
     async fn load_disk_cache(&self) -> Vec<AnnouncementCard> {
         match fs::read_to_string(&self.cache_file).await {
             Ok(content) => {
-                let cards = serde_json::from_str::<Vec<AnnouncementCard>>(&content)
-                    .unwrap_or_default();
+                let cards =
+                    serde_json::from_str::<Vec<AnnouncementCard>>(&content).unwrap_or_default();
                 let mut lock = self.cached.write().await;
                 *lock = cards.clone();
                 cards
@@ -117,11 +117,10 @@ impl RemoteFetcher {
     async fn remote_url() -> Option<String> {
         use crate::service::config::get_global_config_service;
         match get_global_config_service().await {
-            Ok(svc) => {
-                svc.get_config::<String>(Some("announcements.remote_url"))
-                    .await
-                    .ok()
-            }
+            Ok(svc) => svc
+                .get_config::<String>(Some("announcements.remote_url"))
+                .await
+                .ok(),
             Err(_) => None,
         }
     }

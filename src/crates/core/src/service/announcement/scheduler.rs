@@ -4,8 +4,8 @@
 //! It updates the persistent state, merges all card sources and returns the
 //! ordered list of cards that should be presented in this session.
 
-use super::remote::RemoteFetcher;
 use super::registry::local_cards;
+use super::remote::RemoteFetcher;
 use super::state_store::AnnouncementStateStore;
 use super::tips_pool::builtin_tips;
 use super::types::{AnnouncementCard, AnnouncementState, TriggerCondition};

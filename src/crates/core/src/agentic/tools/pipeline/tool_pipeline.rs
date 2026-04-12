@@ -362,7 +362,10 @@ impl ToolPipeline {
                     let task_id = &task_ids[idx];
                     let (tool_id, tool_name) =
                         if let Some(task) = self.state_manager.get_task(task_id) {
-                            (task.tool_call.tool_id.clone(), task.tool_call.tool_name.clone())
+                            (
+                                task.tool_call.tool_id.clone(),
+                                task.tool_call.tool_name.clone(),
+                            )
                         } else {
                             warn!("Task not found in state manager: {}", task_id);
                             (task_id.clone(), "unknown".to_string())
@@ -407,7 +410,10 @@ impl ToolPipeline {
 
                     let (tool_id, tool_name) =
                         if let Some(task) = self.state_manager.get_task(&task_id) {
-                            (task.tool_call.tool_id.clone(), task.tool_call.tool_name.clone())
+                            (
+                                task.tool_call.tool_id.clone(),
+                                task.tool_call.tool_name.clone(),
+                            )
                         } else {
                             warn!("Task not found in state manager: {}", task_id);
                             (task_id.clone(), "unknown".to_string())

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
-import { Button, Switch, Select, IconButton, NumberInput, Card, Checkbox, Modal, Input, Textarea, type SelectOption } from '@/component-library';
+import { Plus, SquarePen, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
   ProxyConfig, 
@@ -348,6 +348,26 @@ const AIModelConfig: React.FC = () => {
     [t]
   );
 
+  const getCustomRequestBodyTrimHint = useCallback((provider?: string): string => {
+    switch (provider) {
+      case 'responses':
+        return t('advancedSettings.customRequestBody.trimHintResponses');
+      case 'anthropic':
+        return t('advancedSettings.customRequestBody.trimHintAnthropic');
+      case 'gemini':
+        return t('advancedSettings.customRequestBody.trimHintGemini');
+      case 'openai':
+      default:
+        return t('advancedSettings.customRequestBody.trimHintOpenAI');
+    }
+  }, [t]);
+
+  const getCustomRequestBodyModeHint = useCallback((provider?: string, mode?: string | null): string => {
+    return mode === 'trim'
+      ? getCustomRequestBodyTrimHint(provider)
+      : t('advancedSettings.customRequestBody.modeMergeHint');
+  }, [getCustomRequestBodyTrimHint, t]);
+
   
   const loadConfig = useCallback(async () => {
     try {
@@ -620,7 +640,8 @@ const AIModelConfig: React.FC = () => {
       custom_headers: config.custom_headers,
       custom_headers_mode: config.custom_headers_mode,
       skip_ssl_verify: config.skip_ssl_verify ?? false,
-      custom_request_body: config.custom_request_body
+      custom_request_body: config.custom_request_body,
+      custom_request_body_mode: config.custom_request_body_mode,
     };
   };
 
@@ -634,6 +655,7 @@ const AIModelConfig: React.FC = () => {
     custom_headers_mode: config.custom_headers_mode || null,
     custom_headers: config.custom_headers || null,
     custom_request_body: config.custom_request_body || null,
+    custom_request_body_mode: config.custom_request_body_mode || null,
   });
 
   const fetchRemoteModels = async (config: Partial<AIModelConfigType> | null) => {
@@ -811,11 +833,13 @@ const AIModelConfig: React.FC = () => {
       custom_headers_mode: config.custom_headers_mode,
       skip_ssl_verify: config.skip_ssl_verify ?? false,
       custom_request_body: config.custom_request_body,
+      custom_request_body_mode: config.custom_request_body_mode,
     });
     setSelectedModelDrafts(createDraftsFromConfigs(configuredProviderModels));
     setShowAdvancedSettings(
       !!config.inline_think_in_text ||
       !!config.skip_ssl_verify ||
+      config.custom_request_body_mode === 'trim' ||
       (!!config.custom_request_body && config.custom_request_body.trim() !== '') ||
       (!!config.custom_headers && Object.keys(config.custom_headers).length > 0)
     );
@@ -843,6 +867,7 @@ const AIModelConfig: React.FC = () => {
     setShowAdvancedSettings(
       hasCustomHeaders ||
       hasCustomBody ||
+      config.custom_request_body_mode === 'trim' ||
       !!config.skip_ssl_verify ||
       !!config.inline_think_in_text
     );
@@ -902,7 +927,8 @@ const AIModelConfig: React.FC = () => {
           custom_headers: editingConfig.custom_headers,
           custom_headers_mode: editingConfig.custom_headers_mode,
           skip_ssl_verify: editingConfig.skip_ssl_verify ?? false,
-          custom_request_body: editingConfig.custom_request_body
+          custom_request_body: editingConfig.custom_request_body,
+          custom_request_body_mode: editingConfig.custom_request_body_mode,
         };
       });
 
@@ -1817,7 +1843,12 @@ const AIModelConfig: React.FC = () => {
             {showAdvancedSettings && (
               <>
                 {editingConfig.provider === 'openai' && (
-                  <ConfigPageRow label={t('advancedSettings.inlineThinkInText.label')} description={t('advancedSettings.inlineThinkInText.hint')} align="center">
+                  <ConfigPageRow
+                    label={t('advancedSettings.inlineThinkInText.label')}
+                    description={t('advancedSettings.inlineThinkInText.hint')}
+                    align="center"
+                    className="bitfun-ai-model-config__toggle-row"
+                  >
                     <Switch
                       checked={editingConfig.inline_think_in_text ?? false}
                       onChange={(e) => setEditingConfig(prev => ({ ...prev, inline_think_in_text: e.target.checked }))}
@@ -1825,33 +1856,81 @@ const AIModelConfig: React.FC = () => {
                     />
                   </ConfigPageRow>
                 )}
-                <ConfigPageRow label={t('advancedSettings.skipSslVerify.label')} align="center">
-                  <div className="bitfun-ai-model-config__row-control--stack">
-                    <Checkbox label={t('advancedSettings.skipSslVerify.label')} checked={editingConfig.skip_ssl_verify || false} onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))} />
-                    {editingConfig.skip_ssl_verify && (
-                      <div className="bitfun-ai-model-config__warning">
-                        <AlertTriangle size={16} />
-                        <span>{t('advancedSettings.skipSslVerify.warning')}</span>
-                      </div>
-                    )}
-                  </div>
+                <ConfigPageRow
+                  label={t('advancedSettings.skipSslVerify.label')}
+                  description={editingConfig.skip_ssl_verify ? (
+                    <span className="bitfun-ai-model-config__warning-inline">
+                      <AlertTriangle size={14} />
+                      <span>{t('advancedSettings.skipSslVerify.warning')}</span>
+                    </span>
+                  ) : undefined}
+                  align="center"
+                  className="bitfun-ai-model-config__toggle-row"
+                >
+                  <Switch
+                    checked={editingConfig.skip_ssl_verify || false}
+                    onChange={(e) => setEditingConfig(prev => ({ ...prev, skip_ssl_verify: e.target.checked }))}
+                    size="small"
+                  />
                 </ConfigPageRow>
-                <ConfigPageRow label={t('advancedSettings.customHeaders.label')} description={t('advancedSettings.customHeaders.hint')} multiline>
+                <ConfigPageRow
+                  label={(
+                    <span className="bitfun-ai-model-config__inline-header">
+                      <span className="bitfun-ai-model-config__inline-header-main">
+                        <span>{t('advancedSettings.customHeaders.label')}</span>
+                        <Tooltip
+                          content={(
+                            <span className="bitfun-ai-model-config__header-tooltip">
+                              <span>{t('advancedSettings.customHeaders.hint')}</span>
+                              <span>
+                                {(editingConfig.custom_headers_mode || 'merge') === 'replace'
+                                  ? t('advancedSettings.customHeaders.modeReplaceHint')
+                                  : t('advancedSettings.customHeaders.modeMergeHint')}
+                              </span>
+                            </span>
+                          )}
+                          placement="top"
+                        >
+                          <span
+                            className="bitfun-ai-model-config__inline-header-info"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t('advancedSettings.customHeaders.hint')}
+                          >
+                            <Info size={14} />
+                          </span>
+                        </Tooltip>
+                      </span>
+                      <span className="bitfun-ai-model-config__inline-header-actions">
+                        <Tooltip content={t('advancedSettings.customHeaders.modeMergeHint')} placement="top">
+                          <Button
+                            type="button"
+                            variant={(editingConfig.custom_headers_mode || 'merge') === 'merge' ? 'primary' : 'ghost'}
+                            size="small"
+                            className="bitfun-ai-model-config__mode-button"
+                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))}
+                          >
+                            {t('advancedSettings.customHeaders.modeMerge')}
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content={t('advancedSettings.customHeaders.modeReplaceHint')} placement="top">
+                          <Button
+                            type="button"
+                            variant={editingConfig.custom_headers_mode === 'replace' ? 'primary' : 'ghost'}
+                            size="small"
+                            className="bitfun-ai-model-config__mode-button"
+                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))}
+                          >
+                            {t('advancedSettings.customHeaders.modeReplace')}
+                          </Button>
+                        </Tooltip>
+                      </span>
+                    </span>
+                  )}
+                  multiline
+                  className="bitfun-ai-model-config__custom-headers-row"
+                >
                   <div className="bitfun-ai-model-config__row-control--stack">
-                    <div className="bitfun-ai-model-config__header-mode">
-                      <label>{t('advancedSettings.customHeaders.modeLabel')}</label>
-                      <div>
-                        <label className="bitfun-ai-model-config__radio-label">
-                          <input type="radio" name="custom_headers_mode" value="merge" checked={(editingConfig.custom_headers_mode || 'merge') === 'merge'} onChange={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'merge' }))} />
-                          <span>{t('advancedSettings.customHeaders.modeMerge')}</span>
-                        </label>
-                        <label className="bitfun-ai-model-config__radio-label">
-                          <input type="radio" name="custom_headers_mode" value="replace" checked={editingConfig.custom_headers_mode === 'replace'} onChange={() => setEditingConfig(prev => ({ ...prev, custom_headers_mode: 'replace' }))} />
-                          <span>{t('advancedSettings.customHeaders.modeReplace')}</span>
-                        </label>
-                      </div>
-                      <small>{editingConfig.custom_headers_mode === 'replace' ? t('advancedSettings.customHeaders.modeReplaceHint') : t('advancedSettings.customHeaders.modeMergeHint')}</small>
-                    </div>
                     <div className="bitfun-ai-model-config__custom-headers">
                       {Object.entries(editingConfig.custom_headers || {}).map(([key, value], index) => (
                         <div key={index} className="bitfun-ai-model-config__header-row">
@@ -1860,11 +1939,63 @@ const AIModelConfig: React.FC = () => {
                           <IconButton variant="ghost" size="small" onClick={() => { const nh = { ...editingConfig.custom_headers }; delete nh[key]; setEditingConfig(prev => ({ ...prev, custom_headers: Object.keys(nh).length > 0 ? nh : undefined })); }} tooltip={t('actions.delete')}><X size={14} /></IconButton>
                         </div>
                       ))}
-                      <Button variant="secondary" size="small" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-ai-model-config__add-header-btn"><Plus size={14} />{t('advancedSettings.customHeaders.addHeader')}</Button>
+                      <Button type="button" variant="secondary" size="small" onClick={() => setEditingConfig(prev => ({ ...prev, custom_headers: { ...prev?.custom_headers, '': '' } }))} className="bitfun-ai-model-config__add-header-btn"><Plus size={14} />{t('advancedSettings.customHeaders.addHeader')}</Button>
                     </div>
                   </div>
                 </ConfigPageRow>
-                <ConfigPageRow label={t('advancedSettings.customRequestBody.label')} description={t('advancedSettings.customRequestBody.hint')} multiline>
+                <ConfigPageRow
+                  label={(
+                    <span className="bitfun-ai-model-config__inline-header">
+                      <span className="bitfun-ai-model-config__inline-header-main">
+                        <span>{t('advancedSettings.customRequestBody.label')}</span>
+                        <Tooltip
+                          content={(
+                            <span className="bitfun-ai-model-config__header-tooltip">
+                              <span>{t('advancedSettings.customRequestBody.hint')}</span>
+                              <span>{getCustomRequestBodyModeHint(editingConfig.provider, editingConfig.custom_request_body_mode)}</span>
+                            </span>
+                          )}
+                          placement="top"
+                        >
+                          <span
+                            className="bitfun-ai-model-config__inline-header-info"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={t('advancedSettings.customRequestBody.hint')}
+                          >
+                            <Info size={14} />
+                          </span>
+                        </Tooltip>
+                      </span>
+                      <span className="bitfun-ai-model-config__inline-header-actions">
+                        <Tooltip content={t('advancedSettings.customRequestBody.modeMergeHint')} placement="top">
+                          <Button
+                            type="button"
+                            variant={(editingConfig.custom_request_body_mode || 'merge') === 'merge' ? 'primary' : 'ghost'}
+                            size="small"
+                            className="bitfun-ai-model-config__mode-button"
+                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'merge' }))}
+                          >
+                            {t('advancedSettings.customRequestBody.modeMerge')}
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content={getCustomRequestBodyTrimHint(editingConfig.provider)} placement="top">
+                          <Button
+                            type="button"
+                            variant={editingConfig.custom_request_body_mode === 'trim' ? 'primary' : 'ghost'}
+                            size="small"
+                            className="bitfun-ai-model-config__mode-button"
+                            onClick={() => setEditingConfig(prev => ({ ...prev, custom_request_body_mode: 'trim' }))}
+                          >
+                            {t('advancedSettings.customRequestBody.modeTrim')}
+                          </Button>
+                        </Tooltip>
+                      </span>
+                    </span>
+                  )}
+                  multiline
+                  className="bitfun-ai-model-config__custom-request-body-row"
+                >
                   <div className="bitfun-ai-model-config__row-control--stack">
                     <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--font-family-mono)', fontSize: '13px' }} />
                     {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {

@@ -26,10 +26,11 @@ impl AnnouncementStateStore {
     pub async fn load(&self) -> BitFunResult<AnnouncementState> {
         match fs::read_to_string(&self.state_file).await {
             Ok(content) => {
-                let state = serde_json::from_str::<AnnouncementState>(&content).unwrap_or_else(|e| {
-                    warn!("Failed to parse announcement state, using default: {}", e);
-                    AnnouncementState::default()
-                });
+                let state =
+                    serde_json::from_str::<AnnouncementState>(&content).unwrap_or_else(|e| {
+                        warn!("Failed to parse announcement state, using default: {}", e);
+                        AnnouncementState::default()
+                    });
                 debug!("Loaded announcement state from {:?}", self.state_file);
                 Ok(state)
             }

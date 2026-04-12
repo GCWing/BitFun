@@ -92,6 +92,8 @@ pub struct AIConfig {
     pub thinking_budget_tokens: Option<u32>,
     /// Custom JSON overriding default request body fields
     pub custom_request_body: Option<serde_json::Value>,
+    /// "merge" (default) or "trim" (keep only essential runtime fields, then apply custom JSON)
+    pub custom_request_body_mode: Option<String>,
 }
 
 impl TryFrom<AIModelConfig> for AIConfig {
@@ -143,6 +145,7 @@ impl TryFrom<AIModelConfig> for AIConfig {
             reasoning_effort: other.reasoning_effort,
             thinking_budget_tokens: other.thinking_budget_tokens,
             custom_request_body,
+            custom_request_body_mode: other.custom_request_body_mode,
         })
     }
 }
@@ -234,8 +237,6 @@ mod tests {
             max_tokens: Some(4096),
             temperature: None,
             top_p: None,
-            frequency_penalty: None,
-            presence_penalty: None,
             enabled: true,
             category: ModelCategory::GeneralChat,
             capabilities: vec![],
@@ -250,6 +251,7 @@ mod tests {
             reasoning_effort: None,
             thinking_budget_tokens: None,
             custom_request_body: None,
+            custom_request_body_mode: None,
         }
     }
 

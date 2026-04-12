@@ -988,22 +988,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let session_max_tokens = session.config.max_context_tokens;
 
         // Unify context_window: min(model capability, session config)
-        let model_context_window = match crate::infrastructure::ai::get_global_ai_client_factory()
-            .await
-        {
-            Ok(factory) => {
-                let model_id = session
-                    .config
-                    .model_id
-                    .as_deref()
-                    .unwrap_or("default");
-                match factory.get_client_resolved(model_id).await {
-                    Ok(client) => Some(client.config.context_window as usize),
-                    Err(_) => None,
+        let model_context_window =
+            match crate::infrastructure::ai::get_global_ai_client_factory().await {
+                Ok(factory) => {
+                    let model_id = session.config.model_id.as_deref().unwrap_or("default");
+                    match factory.get_client_resolved(model_id).await {
+                        Ok(client) => Some(client.config.context_window as usize),
+                        Err(_) => None,
+                    }
                 }
-            }
-            Err(_) => None,
-        };
+                Err(_) => None,
+            };
         let context_window = match model_context_window {
             Some(mcw) => mcw.min(session_max_tokens),
             None => session_max_tokens,

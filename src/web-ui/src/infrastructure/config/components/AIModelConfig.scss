@@ -258,6 +258,18 @@
     width: 100%;
   }
 
+  &__warning-inline {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: $size-gap-2;
+    color: var(--color-warning);
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+  }
+
   &__json-status {
     font-size: var(--font-size-xs);
 
@@ -832,7 +844,12 @@
           grid-template-columns: 1fr !important;
         }
 
-        .bitfun-config-page-row:not(.bitfun-config-page-row--multiline),
+        .bitfun-config-page-row.bitfun-ai-model-config__toggle-row {
+          grid-template-columns: minmax(0, 1fr) auto !important;
+          gap: $size-gap-3;
+        }
+
+        .bitfun-config-page-row:not(.bitfun-config-page-row--multiline):not(.bitfun-ai-model-config__toggle-row),
         .bitfun-config-page-row--multiline.bitfun-config-page-row--wide {
           grid-template-columns: minmax(0, 2fr) minmax(0, 11fr) !important;
         }
@@ -847,6 +864,11 @@
   &__edit-section {
     .bitfun-config-page-row {
       padding: $size-gap-3 $size-gap-4;
+    }
+
+    .bitfun-config-page-row.bitfun-ai-model-config__toggle-row {
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      gap: $size-gap-3;
     }
 
     .bitfun-config-page-row--multiline.bitfun-config-page-row--wide {
@@ -878,6 +900,12 @@
         flex: 0 0 auto;
         margin-left: auto;
       }
+    }
+
+    .bitfun-ai-model-config__toggle-row .bitfun-config-page-row__control {
+      width: auto;
+      min-width: auto;
+      justify-self: end;
     }
 
     .bitfun-config-page-row--multiline .bitfun-config-page-row__control {
@@ -1464,75 +1492,59 @@
   
 
   
-  &__radio-label {
+  &__inline-header {
     display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  &__inline-header-main {
+    display: inline-flex;
     align-items: center;
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    padding: $size-gap-2 $size-gap-3;
-    border-radius: $size-radius-sm;
-    border: 1px solid transparent;
-    background: transparent;
-    transition: all $motion-base $easing-standard;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
 
-    input[type="radio"] {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-      accent-color: var(--color-accent-500);
-      cursor: pointer;
-    }
+  &__inline-header-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    cursor: help;
+    transition: color $motion-base $easing-standard, background-color $motion-base $easing-standard;
 
-    span {
-      margin-left: $size-gap-2;
-    }
-
-    &:hover {
+    &:hover,
+    &:focus-visible {
       color: var(--color-text-primary);
       background: var(--element-bg-subtle);
-    }
-
-    
-    &:has(input[type="radio"]:checked) {
-      color: var(--color-accent-500);
-      background: var(--color-accent-100);
-      border-color: var(--color-accent-500);
-      font-weight: $font-weight-medium;
+      outline: none;
     }
   }
 
-  
-  &__header-mode {
-    padding: $size-gap-4;
-    background: var(--element-bg-subtle);
-    border-radius: $size-radius-sm;
-    margin-bottom: $size-gap-3;
-    border: 1px solid var(--border-base);
+  &__inline-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
 
-    > label {
-      font-size: var(--font-size-xs) !important;
-      color: var(--color-text-secondary) !important;
-      margin-bottom: $size-gap-3;
-      display: block;
-      font-weight: $font-weight-medium;
-    }
+  &__mode-button {
+    min-width: 56px;
+  }
 
-    > div {
-      display: flex;
-      gap: $size-gap-3;
-      flex-wrap: wrap;
-    }
-
-    > small {
-      display: block;
-      color: var(--color-text-muted);
-      font-size: 11px;
-      margin-top: $size-gap-3;
-      line-height: 1.4;
-      padding-top: $size-gap-2;
-      border-top: 1px dashed var(--border-base);
-    }
+  &__header-tooltip {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    max-width: 320px;
+    line-height: 1.5;
   }
 
   &__warning {
