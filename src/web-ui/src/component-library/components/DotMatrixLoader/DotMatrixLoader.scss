@@ -1,0 +1,93 @@
+@use 'sass:list';
+@use 'sass:math';
+
+/**
+ * 3×3 choreographed dot matrix (shared with flow chat processing / task subagent panel).
+ */
+
+$matrix-dim: 0.18;
+$matrix-lit: 1;
+
+@function matrix-cell-opacity($cell, $pattern) {
+  @each $c in $pattern {
+    @if $c == $cell {
+      @return $matrix-lit;
+    }
+  }
+  @return $matrix-dim;
+}
+
+$matrix-patterns: (
+  (0 1 2 3 5 6 7 8),
+  (0 2 6 8),
+  (1 3 4 5 7),
+  (0 2 4 6 8),
+  (0 3 6 2 5 8),
+  (0 1 2 6 7 8),
+  (0 1 2 4 7),
+  (0 1 2 3 5 6 7 8)
+);
+
+$matrix-phase-count: list.length($matrix-patterns);
+$matrix-period: 3.2s;
+$matrix-step: math.div(100%, $matrix-phase-count);
+$matrix-epsilon: 0.0001%;
+
+.dot-matrix-loader {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, var(--dm-cell, 6px));
+  grid-template-rows: repeat(3, var(--dm-cell, 6px));
+  gap: var(--dm-gap, 2px);
+  width: calc(3 * var(--dm-cell, 6px) + 2 * var(--dm-gap, 2px));
+  height: calc(3 * var(--dm-cell, 6px) + 2 * var(--dm-gap, 2px));
+  color: var(--text-secondary, rgba(107, 114, 128, 0.85));
+
+  &--small {
+    --dm-cell: 4px;
+    --dm-gap: 1px;
+  }
+
+  &--medium {
+    --dm-cell: 6px;
+    --dm-gap: 2px;
+  }
+}
+
+.dot-matrix-loader__dot {
+  width: var(--dm-cell, 6px);
+  height: var(--dm-cell, 6px);
+  border-radius: 1px;
+  background-color: currentColor;
+  animation-duration: $matrix-period;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: opacity;
+}
+
+@for $cell from 0 through 8 {
+  @keyframes dot-matrix-choreo-#{$cell} {
+    @for $pi from 1 through $matrix-phase-count {
+      $pat: list.nth($matrix-patterns, $pi);
+      $op: matrix-cell-opacity($cell, $pat);
+      $t0: ($pi - 1) * $matrix-step;
+      $t1: if(
+        $pi == $matrix-phase-count,
+        100% - $matrix-epsilon,
+        $pi * $matrix-step - $matrix-epsilon
+      );
+      #{$t0},
+      #{$t1} {
+        opacity: $op;
+      }
+    }
+    $loop-pat: list.nth($matrix-patterns, 1);
+    100% {
+      opacity: matrix-cell-opacity($cell, $loop-pat);
+    }
+  }
+
+  .dot-matrix-loader__dot:nth-child(#{$cell + 1}) {
+    animation-name: dot-matrix-choreo-#{$cell};
+  }
+}

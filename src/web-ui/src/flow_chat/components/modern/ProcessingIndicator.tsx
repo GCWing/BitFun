@@ -1,12 +1,13 @@
 /**
  * Processing indicator.
- * Shows pulsing dots while the session is processing.
- * After 1s of continuous processing, shows a rotating fun hint text on the left.
+ * After 1s of continuous processing, shows a 3×3 Rubik-style dot matrix and
+ * rotating fun hint text together (matrix on the left).
  * reserveSpace keeps layout height even when hidden.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DotMatrixLoader } from '@/component-library';
 import './ProcessingIndicator.scss';
 
 interface ProcessingIndicatorProps {
@@ -64,9 +65,12 @@ export const ProcessingIndicator: React.FC<ProcessingIndicatorProps> = ({ visibl
         style={visible ? undefined : { visibility: 'hidden' as const }}
       >
         {showHint && hints.length > 0 && (
-          <span key={hintIndex} className="processing-indicator__hint">
-            {hints[hintIndex]}
-          </span>
+          <>
+            <DotMatrixLoader size="medium" />
+            <span key={hintIndex} className="processing-indicator__hint">
+              {hints[hintIndex]}
+            </span>
+          </>
         )}
       </div>
     </div>

@@ -15,7 +15,7 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
-import { Tooltip, CubeLoading } from '@/component-library';
+import { Tooltip, DotMatrixLoader } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './TaskDetailPanel.scss';
 
@@ -241,7 +241,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         )}
         {isRunning && (
           <span className="task-detail-panel__header-loading">
-            <CubeLoading size="small" />
+            <DotMatrixLoader size="small" />
           </span>
         )}
         {isFailed && (
@@ -270,7 +270,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
 
         {isRunning && subagentItems.length === 0 && (
           <div className="task-detail-panel__loading">
-            <CubeLoading size="medium" />
+            <DotMatrixLoader size="medium" />
             <span>{t('toolCards.taskDetailPanel.status.running')}</span>
           </div>
         )}
