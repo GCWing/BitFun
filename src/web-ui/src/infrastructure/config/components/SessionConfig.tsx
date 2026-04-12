@@ -62,7 +62,6 @@ const SessionConfig: React.FC = () => {
   const [computerUseEnabled, setComputerUseEnabled] = useState(false);
   const [computerUseAccess, setComputerUseAccess] = useState(false);
   const [computerUseScreen, setComputerUseScreen] = useState(false);
-  const [computerUseNote, setComputerUseNote] = useState<string | null>(null);
   const [computerUseBusy, setComputerUseBusy] = useState(false);
 
   // ── Debug mode config state ──────────────────────────────────────────────
@@ -80,7 +79,6 @@ const SessionConfig: React.FC = () => {
       setComputerUseEnabled(s.computerUseEnabled);
       setComputerUseAccess(s.accessibilityGranted);
       setComputerUseScreen(s.screenCaptureGranted);
-      setComputerUseNote(s.platformNote ?? null);
       return true;
     } catch (error) {
       log.error('computer_use_get_status failed', error);
