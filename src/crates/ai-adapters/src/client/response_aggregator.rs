@@ -47,6 +47,7 @@ pub(crate) async fn aggregate_stream_response(
                         id,
                         name,
                         arguments,
+                        arguments_is_snapshot,
                     } = tool_call;
 
                     if let Some(tool_call_id) = id {
@@ -85,7 +86,11 @@ pub(crate) async fn aggregate_stream_response(
 
                     if let Some(tool_call_arguments) = arguments {
                         if pending_tool_call.has_pending() {
-                            pending_tool_call.append_arguments(&tool_call_arguments);
+                            if arguments_is_snapshot {
+                                pending_tool_call.replace_arguments(&tool_call_arguments);
+                            } else {
+                                pending_tool_call.append_arguments(&tool_call_arguments);
+                            }
                         }
                     }
                 }

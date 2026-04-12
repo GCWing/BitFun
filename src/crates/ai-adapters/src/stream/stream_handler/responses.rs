@@ -126,6 +126,7 @@ fn handle_function_call_output_item_done(
                     id,
                     name,
                     arguments: Some(delta),
+                    arguments_is_snapshot: false,
                 }),
                 ..Default::default()
             };
@@ -318,6 +319,7 @@ pub async fn handle_responses_stream(
                         id,
                         name,
                         arguments: Some(delta),
+                        arguments_is_snapshot: false,
                     }),
                     ..Default::default()
                 };
@@ -388,6 +390,7 @@ pub async fn handle_responses_stream(
                                                 id,
                                                 name,
                                                 arguments: Some(delta),
+                                                arguments_is_snapshot: false,
                                             },
                                         ),
                                         ..Default::default()

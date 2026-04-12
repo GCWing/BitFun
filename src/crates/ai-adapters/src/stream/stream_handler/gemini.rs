@@ -200,6 +200,7 @@ mod tests {
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{\"city\":".to_string()),
+            arguments_is_snapshot: false,
         };
         state.assign_id(&mut first);
 
@@ -207,6 +208,7 @@ mod tests {
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("\"Paris\"}".to_string()),
+            arguments_is_snapshot: false,
         };
         state.assign_id(&mut second);
 
@@ -225,6 +227,7 @@ mod tests {
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
+            arguments_is_snapshot: false,
         };
         state.assign_id(&mut first);
         state.on_non_tool_response();
@@ -233,6 +236,7 @@ mod tests {
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
+            arguments_is_snapshot: false,
         };
         state.assign_id(&mut second);
 
@@ -252,11 +256,13 @@ mod tests {
             id: None,
             name: Some("grep".to_string()),
             arguments: Some("{}".to_string()),
+            arguments_is_snapshot: false,
         };
         let mut second = UnifiedToolCall {
             id: None,
             name: Some("read".to_string()),
             arguments: Some("{}".to_string()),
+            arguments_is_snapshot: false,
         };
 
         first_state.assign_id(&mut first);

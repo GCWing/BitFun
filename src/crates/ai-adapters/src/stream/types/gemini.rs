@@ -363,6 +363,7 @@ impl GeminiSSEData {
                             id: None,
                             name: function_call.name,
                             arguments: serde_json::to_string(&arguments).ok(),
+                            arguments_is_snapshot: false,
                         }),
                         usage: usage.take(),
                         finish_reason: finish_reason.take(),

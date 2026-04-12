@@ -6,6 +6,8 @@ pub struct UnifiedToolCall {
     pub id: Option<String>,
     pub name: Option<String>,
     pub arguments: Option<String>,
+    #[serde(default)]
+    pub arguments_is_snapshot: bool,
 }
 
 /// Unified AI response format

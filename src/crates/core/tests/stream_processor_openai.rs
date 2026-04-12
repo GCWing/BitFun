@@ -179,3 +179,195 @@ async fn openai_fixture_parses_inline_think_tags_into_reasoning_content() {
         .collect();
     assert_eq!(text_chunks, vec!["Final answer."]);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_reattaches_id_only_prelude_to_following_payload_chunk() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/tool_id_prelude_then_payload_without_id.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert_eq!(result.tool_calls.len(), 1);
+    assert_eq!(result.tool_calls[0].tool_id, "call_1");
+    assert_eq!(result.tool_calls[0].tool_name, "tool_a");
+    assert_eq!(result.tool_calls[0].arguments, json!({ "city": "Beijing" }));
+    assert!(!result.tool_calls[0].is_error);
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(9)
+    );
+
+    let early_detected = output.events.iter().any(|event| {
+        matches!(
+            event,
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
+                ..
+            } if tool_id == "call_1" && tool_name == "tool_a"
+        )
+    });
+    assert!(early_detected, "expected reattached tool id to trigger early detection");
+
+    let partial_params: Vec<&str> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::ParamsPartial { params, .. },
+                ..
+            } => Some(params.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(partial_params, vec!["{\"city\":\"Beijing\"}"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_replaces_snapshot_tool_args_after_stop_reason_chunk() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/tool_args_snapshot_stop_reason.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert_eq!(result.tool_calls.len(), 1);
+    assert_eq!(result.tool_calls[0].tool_id, "call_1");
+    assert_eq!(result.tool_calls[0].tool_name, "tool_a");
+    assert_eq!(result.tool_calls[0].arguments, json!({ "city": "Beijing" }));
+    assert!(!result.tool_calls[0].is_error);
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(9)
+    );
+
+    let partial_params: Vec<&str> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::ParamsPartial { params, .. },
+                ..
+            } => Some(params.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(partial_params, vec!["{\"city\":\"Bei", "{\"city\":\"Beijing\"}"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_filters_unseen_id_only_orphan_tool_chunk() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/tool_id_only_orphan_filtered.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert!(result.full_thinking.is_empty());
+    assert!(result.full_text.is_empty());
+    assert!(result.tool_calls.is_empty());
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(9)
+    );
+
+    let tool_events = output.events.iter().any(|event| {
+        matches!(
+            event,
+            AgenticEvent::ToolEvent {
+                tool_event:
+                    ToolEventData::EarlyDetected { .. } | ToolEventData::ParamsPartial { .. },
+                ..
+            }
+        )
+    });
+    assert!(
+        !tool_events,
+        "id-only orphan chunk should not emit any tool lifecycle events"
+    );
+
+    let failed_or_cancelled = output.events.iter().any(|event| {
+        matches!(
+            event,
+            AgenticEvent::DialogTurnFailed { .. } | AgenticEvent::DialogTurnCancelled { .. }
+        )
+    });
+    assert!(
+        !failed_or_cancelled,
+        "filtered orphan chunk should still complete the stream normally"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_filters_orphan_id_only_block_when_it_shares_chunk_with_first_tool_tail() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/two_tools_first_final_chunk_contains_orphan_id_only.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert_eq!(result.tool_calls.len(), 2);
+
+    assert_eq!(result.tool_calls[0].tool_id, "call_1");
+    assert_eq!(result.tool_calls[0].tool_name, "tool_one");
+    assert_eq!(result.tool_calls[0].arguments, json!({ "x": 1 }));
+    assert!(!result.tool_calls[0].is_error);
+
+    assert_eq!(result.tool_calls[1].tool_id, "call_2");
+    assert_eq!(result.tool_calls[1].tool_name, "tool_two");
+    assert_eq!(result.tool_calls[1].arguments, json!({ "y": 2 }));
+    assert!(!result.tool_calls[1].is_error);
+
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(11)
+    );
+
+    let early_detected_ids: Vec<&str> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                ..
+            } => Some(tool_id.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(early_detected_ids, vec!["call_1", "call_2"]);
+
+    let partial_params: Vec<(&str, &str)> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event:
+                    ToolEventData::ParamsPartial {
+                        tool_id, params, ..
+                    },
+                ..
+            } => Some((tool_id.as_str(), params.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        partial_params,
+        vec![
+            ("call_1", "{\"x\":"),
+            ("call_1", "1}"),
+            ("call_2", "{\"y\":2}"),
+        ]
+    );
+}

@@ -87,6 +87,7 @@ pub fn parse_responses_output_item(item_value: Value) -> Option<UnifiedResponse>
                     .get("arguments")
                     .and_then(Value::as_str)
                     .map(ToString::to_string),
+                arguments_is_snapshot: false,
             }),
             usage: None,
             finish_reason: None,

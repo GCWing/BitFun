@@ -117,6 +117,7 @@ impl From<ContentBlockStart> for UnifiedResponse {
                 id: Some(id),
                 name: Some(name),
                 arguments: None,
+                arguments_is_snapshot: false,
             };
             result.tool_call = Some(tool_call);
         }
@@ -160,6 +161,7 @@ impl TryFrom<ContentBlockDelta> for UnifiedResponse {
                     id: None,
                     name: None,
                     arguments: Some(partial_json),
+                    arguments_is_snapshot: false,
                 };
                 result.tool_call = Some(tool_call);
             }

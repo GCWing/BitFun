@@ -1,5 +1,5 @@
 use super::stream_stats::StreamStats;
-use crate::stream::types::openai::OpenAISSEData;
+use crate::stream::types::openai::{OpenAISSEData, OpenAIToolCallArgumentsNormalizer};
 use crate::stream::types::unified::{UnifiedResponse, UnifiedTokenUsage};
 use anyhow::{anyhow, Result};
 use eventsource_stream::Eventsource;
@@ -20,10 +20,13 @@ const INLINE_THINK_CLOSE_TAG: &str = "</think>";
 #[derive(Debug, Default)]
 struct OpenAIToolCallFilter {
     seen_tool_call_ids: HashSet<String>,
+    pending_tool_call_id: Option<String>,
 }
 
 impl OpenAIToolCallFilter {
     fn normalize_response(&mut self, mut response: UnifiedResponse) -> Option<UnifiedResponse> {
+        self.resolve_pending_tool_call_id(&mut response);
+
         let Some(tool_call) = response.tool_call.as_ref() else {
             return Some(response);
         };
@@ -44,12 +47,20 @@ impl OpenAIToolCallFilter {
 
         if let Some(tool_id) = tool_id {
             let seen_before = self.seen_tool_call_ids.contains(&tool_id);
-            self.seen_tool_call_ids.insert(tool_id);
+            self.seen_tool_call_ids.insert(tool_id.clone());
 
-            // OpenAI-compatible providers may emit a trailing chunk that only repeats an
-            // already-seen tool id after the arguments have completed. It carries no new
-            // information and should not reopen a fresh tool-call buffer downstream.
-            if seen_before && !has_name && !has_arguments {
+            // Some OpenAI-compatible providers emit "id only" tool-call chunks.
+            // They can be either:
+            // 1. a harmless trailing/orphan chunk that should be dropped, or
+            // 2. a prelude chunk where later deltas carry the actual name/arguments.
+            //
+            // For (2), keep the id around and reattach it to the next meaningful tool-call
+            // delta when that delta omits the id. For (1), stripping this chunk is safe
+            // because it carries no semantic payload on its own.
+            if !has_name && !has_arguments {
+                if !seen_before {
+                    self.pending_tool_call_id = Some(tool_id);
+                }
                 response.tool_call = None;
                 return Self::keep_if_non_empty(response);
             }
@@ -59,6 +70,41 @@ impl OpenAIToolCallFilter {
         }
 
         Some(response)
+    }
+
+    fn resolve_pending_tool_call_id(&mut self, response: &mut UnifiedResponse) {
+        let Some(pending_tool_call_id) = self.pending_tool_call_id.clone() else {
+            return;
+        };
+
+        let Some(tool_call) = response.tool_call.as_mut() else {
+            self.pending_tool_call_id = None;
+            return;
+        };
+
+        let has_name = tool_call
+            .name
+            .as_ref()
+            .is_some_and(|value| !value.is_empty());
+        let has_arguments = tool_call
+            .arguments
+            .as_ref()
+            .is_some_and(|value| !value.is_empty());
+        let has_payload = has_name || has_arguments;
+
+        match tool_call.id.as_ref() {
+            Some(id) if !id.is_empty() && id == &pending_tool_call_id => {
+                self.pending_tool_call_id = None;
+            }
+            Some(id) if !id.is_empty() => {
+                self.pending_tool_call_id = None;
+            }
+            _ if has_payload => {
+                tool_call.id = Some(pending_tool_call_id);
+                self.pending_tool_call_id = None;
+            }
+            _ => {}
+        }
     }
 
     fn keep_if_non_empty(response: UnifiedResponse) -> Option<UnifiedResponse> {
@@ -323,6 +369,7 @@ impl OpenAIInlineThinkParser {
 
 #[derive(Debug)]
 struct OpenAIResponseNormalizer {
+    tool_arguments_normalizer: OpenAIToolCallArgumentsNormalizer,
     tool_call_filter: OpenAIToolCallFilter,
     inline_think_parser: OpenAIInlineThinkParser,
 }
@@ -330,9 +377,14 @@ struct OpenAIResponseNormalizer {
 impl OpenAIResponseNormalizer {
     fn new(inline_think_in_text: bool) -> Self {
         Self {
+            tool_arguments_normalizer: OpenAIToolCallArgumentsNormalizer::default(),
             tool_call_filter: OpenAIToolCallFilter::default(),
             inline_think_parser: OpenAIInlineThinkParser::new(inline_think_in_text),
         }
+    }
+
+    fn normalize_sse_data(&mut self, sse_data: &mut OpenAISSEData) {
+        sse_data.normalize_tool_call_arguments(&mut self.tool_arguments_normalizer);
     }
 
     fn normalize_response(&mut self, response: UnifiedResponse) -> Vec<UnifiedResponse> {
@@ -481,7 +533,7 @@ pub async fn handle_openai_stream(
         }
 
         stats.increment("chunk:chat_completion");
-        let sse_data: OpenAISSEData = match serde_json::from_value(event_json) {
+        let mut sse_data: OpenAISSEData = match serde_json::from_value(event_json) {
             Ok(event) => event,
             Err(e) => {
                 let error_msg = format!("SSE data schema error: {}, data: {}", e, &raw);
@@ -501,6 +553,8 @@ pub async fn handle_openai_stream(
                 tool_call_count
             );
         }
+
+        normalizer.normalize_sse_data(&mut sse_data);
 
         let has_empty_choices = sse_data.is_choices_empty();
         let unified_responses = sse_data.into_unified_responses();
@@ -549,7 +603,20 @@ mod tests {
         longest_suffix_prefix_len, InlineThinkActivation, InlineThinkMode, OpenAIInlineThinkParser,
         OpenAIToolCallFilter,
     };
+    use crate::stream::types::openai::OpenAISSEData;
     use crate::stream::types::unified::{UnifiedResponse, UnifiedToolCall};
+
+    fn normalize_raw_with_filter(
+        filter: &mut OpenAIToolCallFilter,
+        raw: &str,
+    ) -> Vec<UnifiedResponse> {
+        let sse_data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        sse_data
+            .into_unified_responses()
+            .into_iter()
+            .filter_map(|response| filter.normalize_response(response))
+            .collect()
+    }
 
     #[test]
     fn weak_filter_accepts_chat_completion_chunk() {
@@ -616,6 +683,7 @@ mod tests {
                 id: Some("call_1".to_string()),
                 name: Some("read_file".to_string()),
                 arguments: Some("{\"path\":\"a.txt\"}".to_string()),
+                arguments_is_snapshot: false,
             }),
             ..Default::default()
         };
@@ -624,6 +692,7 @@ mod tests {
                 id: Some("call_1".to_string()),
                 name: None,
                 arguments: Some(String::new()),
+                arguments_is_snapshot: false,
             }),
             ..Default::default()
         };
@@ -641,6 +710,7 @@ mod tests {
                 id: Some("call_1".to_string()),
                 name: Some("read_file".to_string()),
                 arguments: Some("{\"path\":\"a.txt\"}".to_string()),
+                arguments_is_snapshot: false,
             }),
             ..Default::default()
         };
@@ -649,6 +719,7 @@ mod tests {
                 id: Some("call_1".to_string()),
                 name: None,
                 arguments: None,
+                arguments_is_snapshot: false,
             }),
             finish_reason: Some("tool_calls".to_string()),
             ..Default::default()
@@ -660,6 +731,157 @@ mod tests {
             .expect("finish_reason should be preserved");
         assert!(normalized.tool_call.is_none());
         assert_eq!(normalized.finish_reason.as_deref(), Some("tool_calls"));
+    }
+
+    #[test]
+    fn strips_unseen_id_only_tool_call_but_keeps_finish_reason() {
+        let mut filter = OpenAIToolCallFilter::default();
+
+        let orphan = UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                id: Some("call_orphan".to_string()),
+                name: None,
+                arguments: None,
+                arguments_is_snapshot: false,
+            }),
+            finish_reason: Some("tool_calls".to_string()),
+            ..Default::default()
+        };
+
+        let normalized = filter
+            .normalize_response(orphan)
+            .expect("finish_reason should be preserved");
+        assert!(normalized.tool_call.is_none());
+        assert_eq!(normalized.finish_reason.as_deref(), Some("tool_calls"));
+    }
+
+    #[test]
+    fn reattaches_pending_id_to_following_payload_chunk() {
+        let mut filter = OpenAIToolCallFilter::default();
+
+        let prelude = UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                id: Some("call_1".to_string()),
+                name: None,
+                arguments: None,
+                arguments_is_snapshot: false,
+            }),
+            ..Default::default()
+        };
+        let payload = UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                id: None,
+                name: Some("read_file".to_string()),
+                arguments: Some("{\"path\":\"a.txt\"}".to_string()),
+                arguments_is_snapshot: false,
+            }),
+            ..Default::default()
+        };
+
+        assert!(filter.normalize_response(prelude).is_none());
+        let normalized = filter
+            .normalize_response(payload)
+            .expect("payload chunk should be kept");
+        let tool_call = normalized.tool_call.expect("tool call should exist");
+        assert_eq!(tool_call.id.as_deref(), Some("call_1"));
+        assert_eq!(tool_call.name.as_deref(), Some("read_file"));
+        assert_eq!(tool_call.arguments.as_deref(), Some("{\"path\":\"a.txt\"}"));
+    }
+
+    #[test]
+    fn drops_orphan_id_only_tool_call_when_it_shares_sse_with_normal_final_tool_chunk() {
+        let mut filter = OpenAIToolCallFilter::default();
+
+        let responses = normalize_raw_with_filter(
+            &mut filter,
+            r#"{
+                "id": "chatcmpl_test",
+                "created": 123,
+                "model": "gpt-test",
+                "choices": [{
+                    "index": 0,
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "read_file",
+                                    "arguments": "{\"path\":\"a.txt\"}"
+                                }
+                            },
+                            {
+                                "index": 1,
+                                "id": "call_orphan",
+                                "type": "function",
+                                "function": {}
+                            }
+                        ]
+                    },
+                    "finish_reason": "tool_calls"
+                }]
+            }"#,
+        );
+
+        assert_eq!(responses.len(), 1);
+        let tool_call = responses[0].tool_call.as_ref().expect("tool call should exist");
+        assert_eq!(tool_call.id.as_deref(), Some("call_1"));
+        assert_eq!(tool_call.name.as_deref(), Some("read_file"));
+        assert_eq!(tool_call.arguments.as_deref(), Some("{\"path\":\"a.txt\"}"));
+        assert_eq!(responses[0].finish_reason.as_deref(), Some("tool_calls"));
+    }
+
+    #[test]
+    fn drops_orphan_id_only_tool_call_when_it_shares_sse_with_redundant_empty_tail() {
+        let mut filter = OpenAIToolCallFilter::default();
+
+        assert!(
+            filter
+                .normalize_response(UnifiedResponse {
+                    tool_call: Some(UnifiedToolCall {
+                        id: Some("call_1".to_string()),
+                        name: Some("read_file".to_string()),
+                        arguments: Some("{\"path\":\"a.txt\"}".to_string()),
+                        arguments_is_snapshot: false,
+                    }),
+                    ..Default::default()
+                })
+                .is_some()
+        );
+
+        let responses = normalize_raw_with_filter(
+            &mut filter,
+            r#"{
+                "id": "chatcmpl_test",
+                "created": 123,
+                "model": "gpt-test",
+                "choices": [{
+                    "index": 0,
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {}
+                            },
+                            {
+                                "index": 1,
+                                "id": "call_orphan",
+                                "type": "function",
+                                "function": {}
+                            }
+                        ]
+                    },
+                    "finish_reason": "tool_calls"
+                }]
+            }"#,
+        );
+
+        assert_eq!(responses.len(), 1);
+        assert!(responses[0].tool_call.is_none());
+        assert_eq!(responses[0].finish_reason.as_deref(), Some("tool_calls"));
     }
 
     #[test]

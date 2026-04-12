@@ -451,6 +451,7 @@ impl StreamProcessor {
             id,
             name,
             arguments,
+            arguments_is_snapshot,
         } = tool_call;
 
         // Handle tool ID and name
@@ -495,7 +496,11 @@ impl StreamProcessor {
             // have a pending tool call; otherwise treat this as an orphaned delta and ignore it.
             if ctx.pending_tool_call.has_pending() {
                 ctx.has_effective_output = true;
-                ctx.pending_tool_call.append_arguments(&tool_call_arguments);
+                if arguments_is_snapshot {
+                    ctx.pending_tool_call.replace_arguments(&tool_call_arguments);
+                } else {
+                    ctx.pending_tool_call.append_arguments(&tool_call_arguments);
+                }
 
                 // Send partial parameters event
                 let _ = self
@@ -848,6 +853,7 @@ mod tests {
                     id: Some("call_1".to_string()),
                     name: Some("tool_a".to_string()),
                     arguments: Some("{\"a\":".to_string()),
+                    arguments_is_snapshot: false,
                 }),
                 usage: Some(sample_usage(5)),
                 ..Default::default()
@@ -857,6 +863,7 @@ mod tests {
                     id: None,
                     name: None,
                     arguments: Some("1}".to_string()),
+                    arguments_is_snapshot: false,
                 }),
                 usage: Some(sample_usage(7)),
                 ..Default::default()
@@ -893,6 +900,7 @@ mod tests {
                 id: Some("call_1".to_string()),
                 name: Some("tool_a".to_string()),
                 arguments: Some("{\"a\":1}".to_string()),
+                arguments_is_snapshot: false,
             }),
             usage: Some(sample_usage(9)),
             finish_reason: Some("tool_calls".to_string()),
@@ -926,6 +934,7 @@ mod tests {
                 id: Some("call_1".to_string()),
                 name: Some("tool_a".to_string()),
                 arguments: Some("{\"a\":1}}".to_string()),
+                arguments_is_snapshot: false,
             }),
             finish_reason: Some("tool_calls".to_string()),
             ..Default::default()
@@ -949,6 +958,52 @@ mod tests {
         assert_eq!(result.tool_calls[0].tool_id, "call_1");
         assert_eq!(result.tool_calls[0].tool_name, "tool_a");
         assert_eq!(result.tool_calls[0].arguments, json!({"a": 1}));
+        assert!(!result.tool_calls[0].is_error);
+    }
+
+    #[tokio::test]
+    async fn replaces_tool_args_when_snapshot_chunk_arrives() {
+        let processor = build_processor();
+        let stream = iter(vec![
+            Ok(UnifiedResponse {
+                tool_call: Some(UnifiedToolCall {
+                    id: Some("call_1".to_string()),
+                    name: Some("tool_a".to_string()),
+                    arguments: Some("{\"city\":\"Bei".to_string()),
+                    arguments_is_snapshot: false,
+                }),
+                ..Default::default()
+            }),
+            Ok(UnifiedResponse {
+                tool_call: Some(UnifiedToolCall {
+                    id: None,
+                    name: None,
+                    arguments: Some("{\"city\":\"Beijing\"}".to_string()),
+                    arguments_is_snapshot: true,
+                }),
+                finish_reason: Some("tool_calls".to_string()),
+                ..Default::default()
+            }),
+        ])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                None,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.tool_calls.len(), 1);
+        assert_eq!(result.tool_calls[0].tool_id, "call_1");
+        assert_eq!(result.tool_calls[0].tool_name, "tool_a");
+        assert_eq!(result.tool_calls[0].arguments, json!({"city": "Beijing"}));
         assert!(!result.tool_calls[0].is_error);
     }
 }
