@@ -580,7 +580,8 @@
     "errors": {
       "markdownEditorMissingPath": "Cannot load Markdown editor: missing file path or initial content",
       "planViewerMissingPath": "Cannot load Plan viewer: missing file path",
-      "terminalMissingSessionId": "Cannot load terminal: missing session ID"
+      "terminalMissingSessionId": "Cannot load terminal: missing session ID",
+      "gitPanelRemoved": "Git integration has been removed from this build."
     },
     "placeholder": {
       "architectureLayerViewer": "Architecture layer viewer is under development...",

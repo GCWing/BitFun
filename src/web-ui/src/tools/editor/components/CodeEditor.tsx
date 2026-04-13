@@ -16,8 +16,6 @@ import {
   BitFunDarkTheme,
   BitFunDarkThemeMetadata 
 } from '../themes';
-import { useMonacoLsp } from '@/tools/lsp/hooks/useMonacoLsp';
-import { lspExtensionRegistry } from '@/tools/lsp/services/LspExtensionRegistry';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
@@ -75,8 +73,6 @@ export interface CodeEditorProps {
   onContentChange?: (content: string, hasChanges: boolean) => void;
   /** Save callback */
   onSave?: (content: string) => void;
-  /** Enable LSP support */
-  enableLsp?: boolean;
   /** Jump to line number (deprecated, use jumpToRange) */
   jumpToLine?: number;
   /** Jump to column (deprecated, use jumpToRange) */
@@ -144,7 +140,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   className = '',
   onContentChange,
   onSave,
-  enableLsp = true,
   jumpToLine,
   jumpToColumn,
   jumpToRange,
@@ -203,9 +198,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const [detectedLanguage, setDetectedLanguage] = useState(() => {
     return fileName ? detectLanguageFromFileName(fileName) : language;
   });
-  const [lspReady, setLspReady] = useState(false);
   const [monacoReady, setMonacoReady] = useState(false);
-  const [editorInstance, setEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const [editorConfig, setEditorConfig] = useState<Partial<EditorConfigType>>({
     font_size: 14,
     font_family: "'Fira Code', Consolas, 'Courier New', monospace",
@@ -535,14 +528,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     };
   }, [filePath, largeFileMode, shouldBlockLargeFileExpansionClick]);
 
-  useMonacoLsp(
-    editorInstance,
-    detectedLanguage,
-    filePath,
-    enableLsp && lspReady && monacoReady && !largeFileMode,
-    workspacePath
-  );
-
   useEffect(() => {
     if (!containerRef.current) {
       return;
@@ -665,12 +650,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           },
 
           hover: (() => {
-            // Only enable hover for languages with actual hover providers:
-            // - Languages supported by our LSP plugins
-            // - Languages with useful built-in Monaco hover (TS/JS)
             const monacoHoverLanguages = ['typescript','javascript','typescriptreact','javascriptreact'];
-            const hasHoverSupport = lspExtensionRegistry.isFileSupported(filePath)
-              || monacoHoverLanguages.includes(detectedLanguage);
+            const hasHoverSupport = monacoHoverLanguages.includes(detectedLanguage);
             return {
               enabled: hasHoverSupport,
               delay: 100,
@@ -722,7 +703,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
         editor = monaco.editor.create(container, editorOptions);
         editorRef.current = editor;
-        setEditorInstance(editor);
         const editTarget = createMonacoEditTarget(editor);
         const unbindEditTarget = activeEditTargetService.bindTarget(editTarget);
         const focusDisposable = editor.onDidFocusEditorText(() => {
@@ -746,16 +726,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         
         (container as any).__monacoEditor = editor;
         
-        if (model) {
-          const { lspDocumentService } = await import('@/tools/lsp/services/LspDocumentService');
-          lspDocumentService.associateEditor(model.uri.toString(), editor);
-        }
-        
-        const hasContent = model && model.getValue().length > 0;
         setMonacoReady(true);
-        if (hasContent) {
-          setLspReady(true);
-        }
         const applyOptionsFromConfig = (c: Partial<EditorConfigType>) => {
           const fs = c.font_size ?? 14;
           editor!.updateOptions({
@@ -928,8 +899,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         });
 
-        setMonacoReady(true);
-        
         import('@/shared/services/EditorJumpService').then(({ editorJumpService }) => {
           editorJumpService.registerEditor(filePath, editor);
         }).catch(err => {
@@ -942,10 +911,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           log.error('Failed to load EditorReadyManager', err);
         });
         
-        if (!loadingRef.current && contentRef.current) {
-          setLspReady(true);
-        }
-
       } catch (error) {
         log.error('Failed to initialize editor', error);
         setError(tRef.current('editor.codeEditor.initFailedWithMessage', { message: String(error) }));
@@ -970,15 +935,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       
       if (editorRef.current) {
-        if (modelRef.current) {
-          import('@/tools/lsp/services/LspDocumentService').then(({ lspDocumentService }) => {
-            lspDocumentService.disassociateEditor(modelRef.current!.uri.toString());
-          });
-        }
-        
         editorRef.current.dispose();
         editorRef.current = null;
-        setEditorInstance(null);
       }
 
       if (container) {
@@ -1006,12 +964,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       applyExternalContentToModel(pendingModelContentRef.current);
     }
   }, [monacoReady, applyExternalContentToModel]);
-
-  useEffect(() => {
-    if (content && !lspReady) {
-      setLspReady(true);
-    }
-  }, [content, lspReady]);
 
   useEffect(() => {
     if (modelRef.current && monacoReady) {
@@ -1767,61 +1719,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       
       if (isMatch) {
         try {
-          const position = editor.getPosition();
-          if (!position) {
-            return;
-          }
-          
-          const model = editor.getModel();
-          if (!model) {
-            return;
-          }
-          
-          const { GlobalAdapterRegistry } = await import('@/tools/lsp/services/MonacoLspAdapter');
-          const modelUri = model.uri.toString();
-          const adapter = GlobalAdapterRegistry.get(modelUri);
-          
-          if (!adapter) {
-            editor.trigger('keyboard', 'editor.action.revealDefinition', null);
-            return;
-          }
-          
-          const definition = await adapter.provideDefinition(model, position);
-          
-          if (!definition) {
-            return;
-          }
-          
-          const definitionUri = definition.uri.toString();
-          const currentUri = model.uri.toString();
-          
-          // Determine if it's a cross-file jump
-          if (definitionUri !== currentUri) {
-            // Cross-file jump: use unified file tab manager
-            const targetLine = definition.range.startLineNumber;
-            const targetColumn = definition.range.startColumn;
-            
-            // Use unified file tab manager to open file
-            const { fileTabManager } = await import('@/shared/services/FileTabManager');
-            fileTabManager.openFileAndJump(
-              definitionUri,
-              targetLine,
-              targetColumn,
-              { workspacePath }
-            );
-          } else {
-            // Same-file jump: use Monaco default behavior
-            editor.setPosition({
-              lineNumber: definition.range.startLineNumber,
-              column: definition.range.startColumn
-            });
-            editor.revealPositionInCenter({
-              lineNumber: definition.range.startLineNumber,
-              column: definition.range.startColumn
-            });
-            editor.focus();
-          }
-          
+          editor.trigger('keyboard', 'editor.action.revealDefinition', null);
         } catch (error) {
           log.error('Goto definition failed', error);
         }
@@ -2053,7 +1951,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const newLanguage = detectLanguageFromFileName(fileName);
     if (newLanguage !== detectedLanguage) {
       setDetectedLanguage(newLanguage);
-      setLspReady(false);
     }
   }, [fileName, detectedLanguage, detectLanguageFromFileName]);
 
@@ -2158,11 +2055,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         tabSize={editorConfig.tab_size || 2}
         insertSpaces={editorConfig.insert_spaces !== false}
         isReadOnly={readOnly}
-        lspStatus={
-          enableLsp && lspExtensionRegistry.isFileSupported(filePath)
-            ? (lspReady ? 'connected' : 'connecting')
-            : undefined
-        }
         onPositionClick={(e) => openStatusBarPopover('position', e)}
         onIndentClick={(e) => openStatusBarPopover('indent', e)}
         onEncodingClick={(e) => openStatusBarPopover('encoding', e)}

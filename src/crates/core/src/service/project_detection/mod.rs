@@ -432,36 +432,4 @@ impl ProjectDetector {
         }
         .to_string()
     }
-
-    /// Returns whether the server should be pre-started (based on project size).
-    pub fn should_prestart(info: &ProjectInfo) -> Vec<String> {
-        let mut languages_to_start = Vec::new();
-
-        match info.total_files {
-            0..=100 => {
-                languages_to_start.extend(info.languages.clone());
-                debug!(
-                    "Small project detected ({} files), will prestart all languages",
-                    info.total_files
-                );
-            }
-            101..=1000 => {
-                if let Some(primary) = &info.primary_language {
-                    languages_to_start.push(primary.clone());
-                    debug!(
-                        "Medium project detected ({} files), will prestart primary language: {}",
-                        info.total_files, primary
-                    );
-                }
-            }
-            _ => {
-                debug!(
-                    "Large project detected ({} files), will use on-demand loading",
-                    info.total_files
-                );
-            }
-        }
-
-        languages_to_start
-    }
 }

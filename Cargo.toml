@@ -80,9 +80,6 @@ zip = "0.6" # plugin load
 flate2 = "1.0"
 toml = "0.8"
 
-# Git
-git2 = { version = "0.18", default-features = false, features = ["https", "vendored-libgit2"] }
-
 # Terminal
 portable-pty = "0.8"
 vte = "0.15.0"

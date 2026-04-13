@@ -9,7 +9,7 @@
  *     registers the window event listener, so no events are missed.
  */
 
-export type TabQueueMode = 'project' | 'agent' | 'git';
+export type TabQueueMode = 'project' | 'agent';
 
 export interface PendingTabDetail {
   type: string;

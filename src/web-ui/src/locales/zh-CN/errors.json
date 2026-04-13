@@ -57,13 +57,6 @@
     "initializeFailedTitle": "AI client initialization failed",
     "configRequired": "Model configuration is required"
   },
-  "aiRules": {
-    "loadFailed": "Failed to load AI rules",
-    "createFailed": "Failed to create rule",
-    "updateFailed": "Failed to update rule",
-    "deleteFailed": "Failed to delete rule",
-    "toggleFailed": "Failed to toggle rule status"
-  },
   "terminal": {
     "createError": "创建终端失败",
     "executeError": "执行命令失败",

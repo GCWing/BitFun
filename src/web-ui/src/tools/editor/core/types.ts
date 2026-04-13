@@ -6,7 +6,7 @@ import type * as monaco from 'monaco-editor';
 import type { EditorPresetName, EditorConfigPartial } from '../config/types';
 
 export interface MonacoEditorCoreProps {
-  /** File path for Model management and LSP */
+  /** File path for Model management */
   filePath: string;
   workspacePath?: string;
   language?: string;
@@ -20,7 +20,6 @@ export interface MonacoEditorCoreProps {
   theme?: string;
   
   // Features
-  enableLsp?: boolean;
   showLineNumbers?: boolean;
   showMinimap?: boolean;
   
@@ -66,8 +65,6 @@ export interface MonacoDiffCoreProps {
   ignoreTrimWhitespace?: boolean;
   
   // Features
-  /** LSP for modified only */
-  enableLsp?: boolean;
   showMinimap?: boolean;
   
   // Event callbacks

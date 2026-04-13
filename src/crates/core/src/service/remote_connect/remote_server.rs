@@ -1951,11 +1951,7 @@ impl RemoteServer {
         ) = if let Some(ws_service) = get_global_workspace_service() {
             if let Some(ws) = ws_service.get_current_workspace().await {
                 let p = ws.root_path.clone();
-                let branch = git2::Repository::open(&p).ok().and_then(|repo| {
-                    repo.head()
-                        .ok()
-                        .and_then(|h| h.shorthand().map(String::from))
-                });
+                let branch = None::<String>;
                 let kind_str = match ws.workspace_kind {
                     WorkspaceKind::Normal => "normal",
                     WorkspaceKind::Assistant => "assistant",
@@ -2320,11 +2316,7 @@ impl RemoteServer {
                 if let Some(ws_service) = get_global_workspace_service() {
                     if let Some(ws) = ws_service.get_current_workspace().await {
                         let p = ws.root_path.clone();
-                        let branch = git2::Repository::open(&p).ok().and_then(|repo| {
-                            repo.head()
-                                .ok()
-                                .and_then(|h| h.shorthand().map(String::from))
-                        });
+                        let branch = None::<String>;
                         let kind_str = match ws.workspace_kind {
                             WorkspaceKind::Normal => "normal",
                             WorkspaceKind::Assistant => "assistant",

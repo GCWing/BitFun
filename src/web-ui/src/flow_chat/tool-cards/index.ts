@@ -24,7 +24,6 @@ import { ContextCompressionDisplay } from './ContextCompressionDisplay';
 import { MCPToolDisplay } from './MCPToolDisplay';
 import { SkillDisplay } from './SkillDisplay';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
-import { GitToolDisplay } from './GitToolDisplay';
 import { GetFileDiffDisplay } from './GetFileDiffDisplay';
 import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
@@ -220,18 +219,6 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#7aa6ff'
   },
 
-  // Git version control tool
-  'Git': {
-    toolName: 'Git',
-    displayName: 'Git',
-    icon: 'GIT',
-    requiresConfirmation: false, // Read-only needs no confirmation; writes are backend-controlled.
-    resultDisplayType: 'detailed',
-    description: 'Run Git commands',
-    displayMode: 'compact',
-    primaryColor: '#f97316' // Orange, Git brand color
-  },
-
   // GetFileDiff tool
   'GetFileDiff': {
     toolName: 'GetFileDiff',
@@ -239,7 +226,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     icon: 'DIFF',
     requiresConfirmation: false, // Read-only tool.
     resultDisplayType: 'detailed',
-    description: 'Get file diffs (Baseline/Git/Full)',
+    description: 'Get file diffs (baseline snapshot or full file)',
     displayMode: 'compact',
     primaryColor: '#8b5cf6' // Purple
   },
@@ -351,9 +338,6 @@ export const TOOL_CARD_COMPONENTS = {
 
   // /btw marker
   'BtwMarker': BtwMarkerCard,
-
-  // Git version control
-  'Git': GitToolDisplay,
 
   // GetFileDiff tool
   'GetFileDiff': GetFileDiffDisplay,

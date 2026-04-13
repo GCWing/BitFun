@@ -5,74 +5,12 @@ import type {
   DetectionContext, 
   FileDetectionResult,
   LanguagePlugin,
-  LspConfig 
 } from '../types';
 import { languageRegistry } from './LanguageRegistry';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('LanguageDetector');
 
-// ============================================================================
-
-// ============================================================================
-
- 
-const LSP_CONFIG_MAP: Record<string, LspConfig> = {
-  typescript: {
-    serverId: 'typescript-language-server',
-    enabled: true,
-  },
-  javascript: {
-    serverId: 'typescript-language-server',
-    enabled: true,
-  },
-  python: {
-    serverId: 'pylsp',
-    enabled: true,
-  },
-  rust: {
-    serverId: 'rust-analyzer',
-    enabled: true,
-  },
-  go: {
-    serverId: 'gopls',
-    enabled: true,
-  },
-  java: {
-    serverId: 'jdtls',
-    enabled: true,
-  },
-  html: {
-    serverId: 'vscode-html-language-server',
-    enabled: true,
-  },
-  css: {
-    serverId: 'vscode-css-language-server',
-    enabled: true,
-  },
-  json: {
-    serverId: 'vscode-json-language-server',
-    enabled: true,
-  },
-  yaml: {
-    serverId: 'yaml-language-server',
-    enabled: true,
-  },
-  vue: {
-    serverId: 'vue-language-server',
-    enabled: true,
-  },
-  svelte: {
-    serverId: 'svelte-language-server',
-    enabled: true,
-  },
-};
-
-// ============================================================================
-
-// ============================================================================
-
- 
 class LanguageDetector {
   private static instance: LanguageDetector;
   
@@ -260,17 +198,6 @@ class LanguageDetector {
    
   public getColor(filePathOrName: string): string | undefined {
     return this.detectFile(filePathOrName).language.color;
-  }
-  
-   
-  public hasLspSupport(filePathOrName: string): boolean {
-    const lang = this.detectFile(filePathOrName).language;
-    return !!lang.lspId && !!LSP_CONFIG_MAP[lang.id];
-  }
-  
-   
-  public getLspConfig(languageId: string): LspConfig | undefined {
-    return LSP_CONFIG_MAP[languageId];
   }
   
    

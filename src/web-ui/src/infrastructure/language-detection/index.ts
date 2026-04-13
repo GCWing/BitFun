@@ -26,9 +26,6 @@ export type {
   LanguagePlugin,
   ProjectDetectionPlugin,
   
-  // LSP
-  LspConfig,
-  
   // Events
   LanguageDetectionEvent,
 } from './types';
@@ -39,7 +36,6 @@ export {
   getMonacoLanguage,
   getFileIconType,
   getFileColor,
-  hasLspSupport,
   getPrismLanguage,
   getPrismLanguageFromAlias,
   getEditorType,

@@ -132,9 +132,6 @@ impl ToolRegistry {
         // Log tool
         self.register_tool(Arc::new(LogTool::new()));
 
-        // Git version control tool
-        self.register_tool(Arc::new(GitTool::new()));
-
         // CreatePlan tool
         self.register_tool(Arc::new(CreatePlanTool::new()));
 

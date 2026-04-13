@@ -189,6 +189,5 @@ The system automatically tracks your action history. If `loop_warning` appears i
 {ENV_INFO}
 {PERSONA}
 {AGENT_MEMORY}
-{RULES}
 {MEMORIES}
 {PROJECT_CONTEXT_FILES:exclude=review}

@@ -1,6 +1,5 @@
 //! Workspace manager.
 
-use crate::service::git::GitService;
 use crate::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
     local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
@@ -420,27 +419,8 @@ impl WorkspaceInfo {
         self.worktree = Self::resolve_worktree_info(&self.root_path).await;
     }
 
-    async fn resolve_worktree_info(workspace_root: &Path) -> Option<WorkspaceWorktreeInfo> {
-        let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
-        let worktrees = match GitService::list_worktrees(workspace_root).await {
-            Ok(worktrees) => worktrees,
-            Err(_) => return None,
-        };
-
-        let main_repo_path = worktrees
-            .iter()
-            .find(|worktree| worktree.is_main)
-            .map(|worktree| worktree.path.clone())?;
-
-        worktrees
-            .into_iter()
-            .find(|worktree| worktree.path == normalized_workspace_path)
-            .map(|worktree| WorkspaceWorktreeInfo {
-                path: worktree.path,
-                branch: worktree.branch,
-                main_repo_path: main_repo_path.clone(),
-                is_main: worktree.is_main,
-            })
+    async fn resolve_worktree_info(_workspace_root: &Path) -> Option<WorkspaceWorktreeInfo> {
+        None
     }
 
     /// Detects the workspace type.

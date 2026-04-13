@@ -9,7 +9,6 @@ export type SceneTabId =
   | 'welcome'
   | 'session'
   | 'terminal'
-  | 'git'
   | 'settings'
   | 'file-viewer'
   | 'profile'

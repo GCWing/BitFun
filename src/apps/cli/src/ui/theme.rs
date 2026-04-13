@@ -81,7 +81,6 @@ pub fn tool_icon(tool_name: &str) -> (&'static str, Color) {
         "FileEditTool" => ("[E]", Color::Rgb(251, 191, 36)),
         "FileDeleteTool" => ("[D]", Color::Rgb(239, 68, 68)),
         "BashTool" | "ShellTool" => ("[!]", Color::Rgb(147, 51, 234)),
-        "GitTool" => ("[G]", Color::Rgb(249, 115, 22)),
         "SearchTool" => ("[S]", Color::Rgb(59, 130, 246)),
         "AnalysisTool" => ("[A]", Color::Rgb(236, 72, 153)),
         _ => ("[T]", Color::Rgb(156, 163, 175)),

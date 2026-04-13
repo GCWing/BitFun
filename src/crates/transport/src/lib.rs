@@ -14,8 +14,8 @@ pub use adapters::{CliEvent, CliTransportAdapter, WebSocketTransportAdapter};
 pub use emitter::TransportEmitter;
 pub use event_bus::{EventBus, EventPriority};
 pub use events::{
-    AgenticEventPayload, BackendEventPayload, FileWatchEventPayload, LspEventPayload,
-    ProfileEventPayload, SnapshotEventPayload, UnifiedEvent,
+    AgenticEventPayload, BackendEventPayload, FileWatchEventPayload, ProfileEventPayload,
+    SnapshotEventPayload, UnifiedEvent,
 };
 pub use traits::{StreamEvent, TextChunk, ToolEventPayload, ToolEventType, TransportAdapter};
 

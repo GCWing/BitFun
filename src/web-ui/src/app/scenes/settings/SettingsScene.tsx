@@ -11,7 +11,7 @@ import { useSettingsStore } from './settingsStore';
 import './SettingsScene.scss';
 import AIModelConfig from '../../../infrastructure/config/components/AIModelConfig';
 import SessionConfig from '../../../infrastructure/config/components/SessionConfig';
-import AIRulesMemoryConfig from '../../../infrastructure/config/components/AIRulesMemoryConfig';
+import AIMemoryConfig from '../../../infrastructure/config/components/AIMemoryConfig';
 import McpToolsConfig from '../../../infrastructure/config/components/McpToolsConfig';
 import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
 import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig';
@@ -39,7 +39,7 @@ const SettingsScene: React.FC = () => {
     case 'basics':           Content = BasicsConfig;         break;
     case 'models':           Content = AIModelConfig;        break;
     case 'session-config':   Content = SessionConfig;        break;
-    case 'ai-context':       Content = AIRulesMemoryConfig; break;
+    case 'ai-context':       Content = AIMemoryConfig; break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'editor':           Content = EditorConfig;         break;
   }

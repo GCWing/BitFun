@@ -2,10 +2,8 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
-use crate::service::ai_rules::get_global_ai_rules_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use log::debug;
 use serde_json::{json, Value};
 use std::path::Path;
 use tool_runtime::fs::read_file::read_file;
@@ -329,21 +327,6 @@ Usage:
             .map_err(BitFunError::tool)?
         };
 
-        let file_rules = match get_global_ai_rules_service().await {
-            Ok(rules_service) => {
-                rules_service
-                    .get_rules_for_file_with_workspace(&resolved_path, context.workspace_root())
-                    .await
-            }
-            Err(e) => {
-                debug!("Failed to get AIRulesService: {}", e);
-                crate::service::ai_rules::FileRulesResult {
-                    matched_count: 0,
-                    formatted_content: None,
-                }
-            }
-        };
-
         let mut result_for_assistant = format!(
             "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",
             read_file_result.start_line,
@@ -352,11 +335,6 @@ Usage:
             read_file_result.total_lines,
             read_file_result.content
         );
-
-        if let Some(rules_content) = &file_rules.formatted_content {
-            result_for_assistant.push_str("\n\n");
-            result_for_assistant.push_str(rules_content);
-        }
 
         if read_file_result.hit_total_char_limit {
             result_for_assistant.push_str("\n\n[Output truncated after reaching the Read tool size limit. Request a narrower range with start_line and limit.]");
@@ -379,7 +357,6 @@ Usage:
                 "start_line": read_file_result.start_line,
                 "size": read_file_result.content.len(),
                 "hit_total_char_limit": read_file_result.hit_total_char_limit,
-                "matched_rules_count": file_rules.matched_count
             }),
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,

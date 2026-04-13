@@ -25,24 +25,19 @@ use tauri::Manager;
 // Re-export API
 pub use api::*;
 
-use api::ai_rules_api::*;
 use api::clipboard_file_api::*;
 use api::commands::*;
 use api::computer_use_api::*;
 use api::config_api::*;
 use api::cron_api::*;
 use api::diff_api::*;
-use api::git_agent_api::*;
-use api::git_api::*;
 use api::i18n_api::*;
-use api::lsp_api::*;
-use api::lsp_workspace_api::*;
 use api::mcp_api::*;
+use api::project_detection_api::*;
 use api::runtime_api::*;
 use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
-use api::startchat_agent_api::*;
 use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
@@ -110,7 +105,7 @@ pub async fn run() {
         return;
     }
 
-    let (coordinator, scheduler, event_queue, event_router, ai_client_factory, token_usage_service) =
+    let (coordinator, scheduler, event_queue, event_router, token_usage_service) =
         match init_agentic_system().await {
             Ok(state) => state,
             Err(e) => {
@@ -118,11 +113,6 @@ pub async fn run() {
                 return;
             }
         };
-
-    if let Err(e) = init_function_agents(ai_client_factory.clone()).await {
-        log::error!("Failed to initialize function agents: {}", e);
-        return;
-    }
 
     let app_state = match AppState::new_async(token_usage_service).await {
         Ok(state) => state,
@@ -424,39 +414,6 @@ pub async fn run() {
             validate_skill_path,
             add_skill,
             delete_skill,
-            git_is_repository,
-            git_get_repository,
-            git_get_status,
-            git_get_branches,
-            git_get_enhanced_branches,
-            git_get_commits,
-            git_add_files,
-            git_commit,
-            git_push,
-            git_pull,
-            git_checkout_branch,
-            git_create_branch,
-            git_delete_branch,
-            git_get_diff,
-            git_reset_files,
-            git_reset_to_commit,
-            git_get_file_content,
-            git_get_graph,
-            git_cherry_pick,
-            git_cherry_pick_abort,
-            git_cherry_pick_continue,
-            git_list_worktrees,
-            git_add_worktree,
-            git_remove_worktree,
-            generate_commit_message,
-            quick_commit_message,
-            save_git_repo_history,
-            load_git_repo_history,
-            preview_commit_message,
-            analyze_work_state,
-            quick_analyze_work_state,
-            generate_greeting_only,
-            get_work_state_summary,
             compute_diff,
             apply_patch,
             save_merged_diff_content,
@@ -490,15 +447,6 @@ pub async fn run() {
             cleanup_storage_with_policy,
             get_storage_statistics,
             initialize_project_storage,
-            get_ai_rules,
-            get_ai_rule,
-            create_ai_rule,
-            update_ai_rule,
-            delete_ai_rule,
-            get_ai_rules_stats,
-            build_ai_rules_system_prompt,
-            reload_ai_rules,
-            toggle_ai_rule,
             // Session persistence API
             list_persisted_sessions,
             load_session_turns,
@@ -551,49 +499,7 @@ pub async fn run() {
             api::mcp_api::start_mcp_remote_oauth,
             api::mcp_api::get_mcp_remote_oauth_session,
             api::mcp_api::cancel_mcp_remote_oauth,
-            lsp_initialize,
-            lsp_start_server_for_file,
-            lsp_stop_server,
-            lsp_stop_all_servers,
-            lsp_did_open,
-            lsp_did_change,
-            lsp_did_save,
-            lsp_did_close,
-            lsp_get_completions,
-            lsp_get_hover,
-            lsp_goto_definition,
-            lsp_find_references,
-            lsp_format_document,
-            lsp_install_plugin,
-            lsp_uninstall_plugin,
-            lsp_list_plugins,
-            lsp_get_plugin,
-            lsp_get_server_capabilities,
-            lsp_get_supported_extensions,
-            lsp_open_workspace,
-            lsp_close_workspace,
-            lsp_open_document,
-            lsp_change_document,
-            lsp_save_document,
-            lsp_close_document,
-            lsp_get_completions_workspace,
-            lsp_get_hover_workspace,
-            lsp_goto_definition_workspace,
-            lsp_find_references_workspace,
-            lsp_get_code_actions_workspace,
-            lsp_format_document_workspace,
-            lsp_get_inlay_hints_workspace,
-            lsp_rename_workspace,
-            lsp_get_document_highlight_workspace,
-            lsp_get_document_symbols_workspace,
-            lsp_get_semantic_tokens_workspace,
-            lsp_get_semantic_tokens_range_workspace,
-            lsp_get_server_state,
-            lsp_get_all_server_states,
-            lsp_stop_server_workspace,
-            lsp_list_workspaces,
-            lsp_detect_project,
-            lsp_prestart_server,
+            detect_project,
             reload_global_config,
             get_global_config_status,
             subscribe_config_updates,
@@ -738,12 +644,9 @@ async fn init_agentic_system() -> anyhow::Result<(
     Arc<bitfun_core::agentic::coordination::DialogScheduler>,
     Arc<bitfun_core::agentic::events::EventQueue>,
     Arc<bitfun_core::agentic::events::EventRouter>,
-    Arc<AIClientFactory>,
     Arc<bitfun_core::service::token_usage::TokenUsageService>,
 )> {
     use bitfun_core::agentic::*;
-
-    let ai_client_factory = AIClientFactory::get_global().await?;
 
     let event_queue = Arc::new(events::EventQueue::new(Default::default()));
     let event_router = Arc::new(events::EventRouter::new());
@@ -835,21 +738,8 @@ async fn init_agentic_system() -> anyhow::Result<(
         scheduler,
         event_queue,
         event_router,
-        ai_client_factory,
         token_usage_service,
     ))
-}
-
-async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow::Result<()> {
-    let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
-    let _ = bitfun_core::function_agents::startchat_func_agent::StartchatFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
-    Ok(())
 }
 
 fn init_mcp_servers(app_handle: tauri::AppHandle) {
@@ -957,10 +847,6 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
                 "Failed to initialize workspace identity watch service: {}",
                 e
             );
-        }
-
-        if let Err(e) = service::lsp::initialize_global_lsp_manager().await {
-            log::error!("Failed to initialize LSP manager: {}", e);
         }
 
         let event_system = infrastructure::events::get_global_event_system();

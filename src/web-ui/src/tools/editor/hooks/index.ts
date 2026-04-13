@@ -9,4 +9,3 @@ export {
   useSimpleEditorOptions,
   useDiffEditorOptions,
 } from './useEditorOptions';
-export { useLspInitialization } from './useLspIntegration';

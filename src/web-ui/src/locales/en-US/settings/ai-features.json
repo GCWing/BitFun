@@ -43,9 +43,9 @@
       "displayName": "Git Functions",
       "description": "Commit messages, code review"
     },
-    "startchat-func-agent": {
-      "displayName": "Session Start",
-      "description": "Work status analysis, welcome messages"
+    "session-title-func-agent": {
+      "displayName": "Session titles",
+      "description": "Auto-generated conversation titles"
     }
   },
   "loading": {

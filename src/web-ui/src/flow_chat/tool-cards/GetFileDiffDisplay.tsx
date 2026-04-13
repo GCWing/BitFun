@@ -17,12 +17,11 @@ const log = createLogger('GetFileDiffDisplay');
 
 interface GetFileDiffResult {
   file_path?: string;
-  diff_type?: 'baseline' | 'git' | 'full';
+  diff_type?: 'baseline' | 'full';
   diff_format?: string;
   diff_content?: string;
   original_content?: string;
   modified_content?: string;
-  git_ref?: string;
   stats?: {
     additions?: number;
     deletions?: number;
@@ -96,7 +95,6 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
     
     const typeMap: Record<string, string> = {
       'baseline': 'Baseline',
-      'git': 'Git HEAD',
       'full': 'Full'
     };
     

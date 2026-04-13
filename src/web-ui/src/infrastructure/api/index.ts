@@ -23,10 +23,6 @@ import { snapshotAPI } from './service-api/SnapshotAPI';
 import { globalAPI } from './service-api/GlobalAPI';
 import { contextAPI } from './service-api/ContextAPI';
 import { cronAPI } from './service-api/CronAPI';
-import { gitAPI } from './service-api/GitAPI';
-import { gitAgentAPI } from './service-api/GitAgentAPI';
-import { gitRepoHistoryAPI, type GitRepoHistory } from './service-api/GitRepoHistoryAPI';
-import { startchatAgentAPI } from './service-api/StartchatAgentAPI';
 import { sessionAPI } from './service-api/SessionAPI';
 import { i18nAPI } from './service-api/I18nAPI';
 import { btwAPI } from './service-api/BtwAPI';
@@ -34,10 +30,7 @@ import { editorAiAPI } from './service-api/EditorAiAPI';
 import { insightsApi } from './insightsApi';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, gitAPI, gitAgentAPI, gitRepoHistoryAPI, startchatAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, insightsApi };
-
-// Export types
-export type { GitRepoHistory };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, insightsApi };
 
 // BitFun API collection: a single access point for all API modules.
 export const bitfunAPI = {
@@ -53,10 +46,6 @@ export const bitfunAPI = {
   global: globalAPI,
   context: contextAPI,
   cron: cronAPI,
-  git: gitAPI,
-  gitAgent: gitAgentAPI,
-  gitRepoHistory: gitRepoHistoryAPI,
-  startchatAgent: startchatAgentAPI,
   session: sessionAPI,
   i18n: i18nAPI,
   btw: btwAPI,

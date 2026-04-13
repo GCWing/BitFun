@@ -52,7 +52,7 @@ export class PanelController implements IdeController {
     
     const mode = options?.mode || 'agent';
     const eventName =
-      mode === 'project' ? 'project-create-tab' : mode === 'git' ? 'git-create-tab' : 'agent-create-tab';
+      mode === 'project' ? 'project-create-tab' : 'agent-create-tab';
 
     
     const tabDetail = this.buildTabDetail(panelType, panelConfig || {}, options);

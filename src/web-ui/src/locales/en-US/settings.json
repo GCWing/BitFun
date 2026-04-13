@@ -11,7 +11,7 @@
       "basics": "Language, theme, logging, terminal shell, and launch at login.",
       "models": "AI models, API keys, providers, and proxy.",
       "sessionConfig": "Session behavior, tools, and timeouts.",
-      "aiContext": "Rules and memory for AI context.",
+      "aiContext": "AI memory and context.",
       "mcpTools": "MCP servers and tool integrations.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
@@ -26,9 +26,7 @@
       "basics": "Basics",
       "models": "Models",
       "sessionConfig": "Session Config",
-      "aiRules": "Rules",
-      "aiMemory": "Memory",
-      "aiContext": "Rules & Memory",
+      "aiContext": "Memory",
       "skills": "Skills",
       "mcpTools": "MCP",
       "agents": "Agents",
@@ -165,8 +163,7 @@
       "app": "Global",
       "canvas": "Editor Canvas",
       "chat": "Agent Session",
-      "filetree": "File Tree",
-      "git": "Git"
+      "filetree": "File Tree"
     },
     "shortcuts": {
       "panel": {
@@ -180,7 +177,6 @@
         "focusMerged": "Switch scene",
         "focusMergedHint": "Record Alt (or your chosen modifiers) + any digit 1–3 once; keys 1–3 map to scenes left to right.",
         "openSession": "Open Agent Session",
-        "openGit": "Open Git",
         "openSettings": "Open Settings",
         "openTerminal": "Open Terminal"
       },
@@ -214,14 +210,6 @@
         "newFile": "New File",
         "newFolder": "New Folder",
         "collapseAll": "Collapse All"
-      },
-      "git": {
-        "commit": "Commit",
-        "refresh": "Refresh Status",
-        "stageAll": "Stage All Changes",
-        "unstageAll": "Unstage All Changes",
-        "push": "Push",
-        "pull": "Pull"
       }
     }
   },
@@ -407,19 +395,6 @@
     "semanticSearchDesc": "Semantic-based code search",
     "autoFix": "Auto Fix",
     "autoFixDesc": "Automatically fix code errors and warnings"
-  },
-  "aiRules": {
-    "title": "Rules",
-    "subtitle": "Configure AI behavior rules and constraints",
-    "addRule": "Add Rule",
-    "editRule": "Edit Rule",
-    "deleteRule": "Delete Rule",
-    "ruleName": "Rule Name",
-    "ruleContent": "Rule Content",
-    "priority": "Priority",
-    "enabled": "Enabled",
-    "noRules": "No rules",
-    "noRulesHint": "Add rules to constrain AI behavior"
   },
   "aiMemory": {
     "title": "Memory",

@@ -9,7 +9,6 @@ export const config = createEmbeddedConfig(
     '../specs/l1-file-tree.spec.ts',
     '../specs/l1-editor.spec.ts',
     '../specs/l1-terminal.spec.ts',
-    '../specs/l1-git-panel.spec.ts',
     '../specs/l1-settings.spec.ts',
     '../specs/l1-session.spec.ts',
     '../specs/l1-dialog.spec.ts',

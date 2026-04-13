@@ -135,17 +135,6 @@ pub(super) fn sanitize_tool_arguments(
             copy_field(object, &mut result, "recursive");
             result
         }
-        "Git" => {
-            let mut result = Map::new();
-            copy_field(object, &mut result, "operation");
-            copy_field(object, &mut result, "working_directory");
-            if let Some(args) = object.get("args") {
-                if let Some(value) = sanitize_generic_value(args, options) {
-                    result.insert("args".to_string(), value);
-                }
-            }
-            result
-        }
         "Bash" => {
             let mut result = Map::new();
             insert_sanitize_text(object, &mut result, "command", options.tool_command_chars);

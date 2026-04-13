@@ -105,8 +105,6 @@ pub struct AppSessionConfig {
 pub struct AIExperienceConfig {
     /// Whether to enable automatic AI-generated summaries for session titles.
     pub enable_session_title_generation: bool,
-    /// Whether to enable AI analysis of work status on the FlowChat welcome page.
-    pub enable_welcome_panel_ai_analysis: bool,
     /// Whether to enable visual mode.
     pub enable_visual_mode: bool,
     /// Whether to show the pixel Agent companion in the collapsed chat input.
@@ -398,7 +396,7 @@ pub struct AIConfig {
     /// agent_type -> model_id
     pub agent_models: HashMap<String, String>,
 
-    /// Model mapping for functional agents (e.g. startchat-func-agent, session-title-func-agent).
+    /// Model mapping for functional agents (e.g. session-title-func-agent, compression).
     /// func_agent_name -> model_id
     #[serde(default)]
     pub func_agent_models: HashMap<String, String>,
@@ -1107,7 +1105,6 @@ impl Default for AIExperienceConfig {
     fn default() -> Self {
         Self {
             enable_session_title_generation: true,
-            enable_welcome_panel_ai_analysis: false,
             enable_visual_mode: false,
             enable_agent_companion: false,
         }

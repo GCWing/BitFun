@@ -405,7 +405,7 @@ impl MiniAppManager {
         Ok(app)
     }
 
-    /// Import a MiniApp from a directory (e.g. miniapps/git-graph). Copies meta, source, package.json, storage into a new app id and recompiles.
+    /// Import a MiniApp from a directory (e.g. miniapps/my-app). Copies meta, source, package.json, storage into a new app id and recompiles.
     pub async fn import_from_path(
         &self,
         source_path: PathBuf,

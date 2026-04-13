@@ -238,7 +238,7 @@ class ProjectDetector {
       fileCount: Record<string, number>;
       projectTypes: string[];
       totalFiles: number;
-    }>('lsp_detect_project', {
+    }>('detect_project', {
       request: { workspacePath },
     });
     

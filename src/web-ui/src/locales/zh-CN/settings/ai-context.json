@@ -1,6 +1,6 @@
 {
-  "title": "规则 & 记忆",
-  "subtitle": "管理 AI 行为规则与上下文记忆",
+  "title": "记忆",
+  "subtitle": "管理 AI 上下文记忆",
   "scope": {
     "user": "用户级",
     "project": "工程级"

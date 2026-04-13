@@ -10,7 +10,6 @@ import {
 } from '../themes';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
-import { useMonacoLsp } from '@/tools/lsp/hooks/useMonacoLsp';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { Tooltip, CubeLoading } from '@/component-library';
 import { useNotification } from '@/shared/notification-system';
@@ -56,8 +55,6 @@ export interface DiffEditorProps {
   onSave?: (content: string) => void;
   /** Reveal line in modified editor (1-based) */
   revealLine?: number;
-  /** Enable LSP (only for modified editor) */
-  enableLsp?: boolean;
   /** Show +/- indicators before lines (default true) */
   renderIndicators?: boolean;
 }
@@ -66,7 +63,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   originalContent,
   modifiedContent,
   filePath,
-  workspacePath,
+  workspacePath: _workspacePath,
   repositoryPath: _repositoryPath,
   language: propLanguage,
   readOnly = false,
@@ -79,7 +76,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   onRejectChange: _onRejectChange,
   enableCustomToolbar = false,
   revealLine,
-  enableLsp = true,
   renderIndicators = true,
   onSave
 }) => {
@@ -107,7 +103,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   const changeListenerRef = useRef<monaco.IDisposable | null>(null);
   const contentChangeListenerRef = useRef<monaco.IDisposable | null>(null);
   const isUnmountedRef = useRef(false);
-  const [modifiedEditorInstance, setModifiedEditorInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const onSaveRef = useRef(onSave);
   const originalContentRuntimeRef = useRef(originalContent);
   const modifiedContentRuntimeRef = useRef(modifiedContent);
@@ -140,14 +135,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   }, [propLanguage]);
 
   const detectedLanguage = useMemo(() => detectLanguage(filePath), [filePath, detectLanguage]);
-
-  useMonacoLsp(
-    modifiedEditorInstance,
-    detectedLanguage,
-    filePath || '',
-    Boolean(enableLsp && modifiedEditorInstance && filePath),
-    workspacePath
-  );
 
   useEffect(() => {
     const loadEditorConfig = async () => {
@@ -283,7 +270,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           modified: modifiedModel
         });
 
-        setModifiedEditorInstance(editor.getModifiedEditor());
         setDiffEditor(editor);
         
         // Force set background color immediately to avoid white flash
@@ -397,7 +383,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
 
       originalModelRef.current = null;
       modifiedModelRef.current = null;
-      setModifiedEditorInstance(null);
     };
   }, [filePath, detectedLanguage, renderSideBySide, readOnly, showMinimap]);
 

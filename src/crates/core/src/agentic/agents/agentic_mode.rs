@@ -29,7 +29,6 @@ impl AgenticMode {
                 "MermaidInteractive".to_string(),
                 "Skill".to_string(),
                 "AskUserQuestion".to_string(),
-                "Git".to_string(),
                 "TerminalControl".to_string(),
                 "ComputerUse".to_string(),
             ],

@@ -186,7 +186,6 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           theme={theme}
           showLineNumbers={lineNumbers !== 'off'}
           showMinimap={minimap}
-          enableLsp={false}
           onContentChange={handleContentChange}
           onEditorReady={handleEditorReady}
         />

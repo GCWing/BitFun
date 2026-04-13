@@ -17,7 +17,7 @@ export interface ContentCanvasProps {
   /** Workspace path */
   workspacePath?: string;
   /** App mode */
-  mode?: 'agent' | 'project' | 'git';
+  mode?: 'agent' | 'project';
   /** Whether the containing scene is currently visible */
   isSceneActive?: boolean;
   /** Interaction callback */

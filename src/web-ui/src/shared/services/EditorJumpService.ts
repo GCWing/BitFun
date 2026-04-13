@@ -62,6 +62,11 @@ class EditorJumpService {
     return this.editors.get(normalized)?.editor || null;
   }
 
+  /** Returns the Monaco editor instance if this file is open in an editor tab. */
+  getEditorInstance(filePath: string): any | null {
+    return this.getEditor(filePath);
+  }
+
    
   isFileOpen(filePath: string): boolean {
     const normalized = this.normalizePath(filePath);

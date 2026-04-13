@@ -517,6 +517,5 @@ BitFun can use its computer to create artifacts for substantial, high-quality co
 
 {ENV_INFO}
 {PROJECT_LAYOUT}
-{RULES}
 {MEMORIES}
 {PROJECT_CONTEXT_FILES:exclude=review}

@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect } from 'react';
-import { useCanvasStore, useAgentCanvasStore, useProjectCanvasStore, useGitCanvasStore } from '../stores';
+import { useCanvasStore, useAgentCanvasStore, useProjectCanvasStore } from '../stores';
 import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types';
 import { TAB_EVENTS } from '../types';
 import { useI18n } from '@/infrastructure/i18n';
@@ -17,7 +17,7 @@ import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
 import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
 interface UseTabLifecycleOptions {
   /** App mode / target canvas */
-  mode?: 'agent' | 'project' | 'git';
+  mode?: 'agent' | 'project';
 }
 
 interface UseTabLifecycleReturn {
@@ -47,11 +47,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
   const { mode = 'agent' } = options;
   const { t } = useI18n('components');
   const canvasStoreApi =
-    mode === 'project'
-      ? useProjectCanvasStore
-      : mode === 'git'
-        ? useGitCanvasStore
-        : useAgentCanvasStore;
+    mode === 'project' ? useProjectCanvasStore : useAgentCanvasStore;
   
   const {
     addTab,
@@ -187,9 +183,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for left-panel terminal close events to sync right-panel tabs.
    */
   useEffect(() => {
-    const store = mode === 'project' ? useProjectCanvasStore 
-                : mode === 'git' ? useGitCanvasStore 
-                : useAgentCanvasStore;
+    const store = mode === 'project' ? useProjectCanvasStore : useAgentCanvasStore;
     
     const handleTerminalSessionDestroyed = (event: CustomEvent<{ sessionId: string }>) => {
       const { sessionId } = event.detail ?? {};
@@ -207,9 +201,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for left-panel terminal rename events to sync right-panel tabs.
    */
   useEffect(() => {
-    const store = mode === 'project' ? useProjectCanvasStore 
-                : mode === 'git' ? useGitCanvasStore 
-                : useAgentCanvasStore;
+    const store = mode === 'project' ? useProjectCanvasStore : useAgentCanvasStore;
     
     const handleTerminalSessionRenamed = (event: CustomEvent<{ sessionId: string; newName: string }>) => {
       const { sessionId, newName } = event.detail ?? {};
@@ -230,9 +222,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
     const eventName =
       mode === 'project'
         ? TAB_EVENTS.PROJECT_CREATE_TAB
-        : mode === 'git'
-          ? TAB_EVENTS.GIT_CREATE_TAB
-          : TAB_EVENTS.AGENT_CREATE_TAB;
+        : TAB_EVENTS.AGENT_CREATE_TAB;
 
     const handleCreateTab = (event: CustomEvent<CreateTabEventDetail>) => {
       const {
@@ -293,7 +283,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
 
     // Drain any tab events that were enqueued before this listener was
     // registered (happens when the scene was just mounted for the first time).
-    const pendingMode = mode === 'project' ? 'project' : mode === 'git' ? 'git' : 'agent';
+    const pendingMode = mode === 'project' ? 'project' : 'agent';
     const pending = drainPendingTabs(pendingMode);
     pending.forEach(detail => handleCreateTab({ detail } as CustomEvent<CreateTabEventDetail>));
     

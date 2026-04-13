@@ -44,9 +44,6 @@ export interface Language {
   prismId?: string;
   
    
-  lspId?: string;
-  
-   
   textmateScope?: string;
   
    
@@ -249,25 +246,6 @@ export interface LanguagePlugin {
   
    
   detect?(context: DetectionContext): FileDetectionResult | null;
-}
-
-// ============================================================================
-
-// ============================================================================
-
- 
-export interface LspConfig {
-   
-  serverId: string;
-  
-   
-  enabled: boolean;
-  
-   
-  initOptions?: Record<string, unknown>;
-  
-   
-  workspaceConfig?: Record<string, unknown>;
 }
 
 // ============================================================================

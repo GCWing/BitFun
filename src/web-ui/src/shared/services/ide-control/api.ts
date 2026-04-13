@@ -235,7 +235,6 @@ export const ideControl = {
  
 export const quickActions = {
    
-  openGitPanel: () => window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'git' } })),
 
    
    
@@ -260,18 +259,6 @@ export const quickActions = {
    
   openPlanner: () => ideControl.panel.open('planner'),
 
-   
-
-   
-  openGitDiff: (filePath?: string, diffType?: string) =>
-    ideControl.panel.open('git-diff', {
-      config: {
-        file_path: filePath,
-        diff_type: diffType || 'staged',
-      },
-    }),
-
-   
   openFileExplorer: () => ideControl.panel.open('file-viewer'),
 };
 

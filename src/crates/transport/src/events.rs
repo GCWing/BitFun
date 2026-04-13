@@ -10,9 +10,6 @@ pub enum UnifiedEvent {
     /// Agentic system event
     Agentic(AgenticEventPayload),
 
-    /// LSP event
-    Lsp(LspEventPayload),
-
     /// File watch event
     FileWatch(FileWatchEventPayload),
 
@@ -31,14 +28,6 @@ pub enum UnifiedEvent {
 pub struct AgenticEventPayload {
     pub session_id: String,
     pub turn_id: Option<String>,
-    pub event_data: serde_json::Value,
-}
-
-/// LSP event payload
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LspEventPayload {
-    pub workspace_path: String,
-    pub language: Option<String>,
     pub event_data: serde_json::Value,
 }
 

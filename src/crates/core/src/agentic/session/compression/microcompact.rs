@@ -28,7 +28,6 @@ fn default_compactable_tools() -> HashSet<&'static str> {
         "Write",
         "LS",
         "Delete",
-        "Git",
         "GetFileDiff",
     ]
     .into_iter()

@@ -1,6 +1,6 @@
 {
-  "title": "Rules & Memory",
-  "subtitle": "Manage AI behavior rules and context memory",
+  "title": "Memory",
+  "subtitle": "Manage AI context memory",
   "scope": {
     "user": "User",
     "project": "Project"

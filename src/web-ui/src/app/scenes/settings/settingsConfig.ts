@@ -121,7 +121,7 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         id: 'ai-context',
         labelKey: 'configCenter.tabs.aiContext',
         descriptionKey: 'configCenter.tabDescriptions.aiContext',
-        keywords: ['rules', 'memory', 'context', 'rag', 'knowledge'],
+        keywords: ['memory', 'context', 'rag', 'knowledge'],
       },
       {
         id: 'mcp-tools',

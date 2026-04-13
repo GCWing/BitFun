@@ -125,20 +125,8 @@ class EditorReadyManager {
 
   private async getExistingEditor(filePath: string): Promise<any> {
     try {
-      const { GlobalAdapterRegistry } = await import('@/tools/lsp/services/MonacoLspAdapter');
-      const { pathToUri } = await import('@/shared/utils/pathUtils');
-      const uri = pathToUri(filePath);
-      
-      const adapter = GlobalAdapterRegistry.get(uri);
-      
-      if (adapter) {
-        const editor = adapter.getActiveEditor();
-        if (editor) {
-          return editor;
-        }
-      }
-      
-      return null;
+      const { editorJumpService } = await import('@/shared/services/EditorJumpService');
+      return editorJumpService.getEditorInstance(filePath);
     } catch (error) {
       log.warn('Failed to find existing editor', { filePath, error });
       return null;

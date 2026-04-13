@@ -11,7 +11,7 @@
       "basics": "语言、主题、日志、终端 Shell 与开机启动。",
       "models": "AI 模型、API 密钥、供应商与代理。",
       "sessionConfig": "会话行为、工具与超时。",
-      "aiContext": "规则与记忆等 AI 上下文。",
+      "aiContext": "AI 记忆与上下文。",
       "mcpTools": "MCP 服务器与工具集成。",
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
@@ -26,9 +26,7 @@
       "basics": "基础",
       "models": "模型",
       "sessionConfig": "会话配置",
-      "aiRules": "规则",
-      "aiMemory": "记忆",
-      "aiContext": "规则 & 记忆",
+      "aiContext": "记忆",
       "skills": "技能",
       "mcpTools": "MCP",
       "agents": "智能体",
@@ -165,8 +163,7 @@
       "app": "全局",
       "canvas": "编辑器画布",
       "chat": "Agent 会话",
-      "filetree": "文件树",
-      "git": "Git"
+      "filetree": "文件树"
     },
     "shortcuts": {
       "panel": {
@@ -180,7 +177,6 @@
         "focusMerged": "切换场景",
         "focusMergedHint": "录制一次修饰键 + 任意数字 1–3；数字 1–3 对应从左到右的场景。",
         "openSession": "打开 Agent 会话",
-        "openGit": "打开 Git",
         "openSettings": "打开设置",
         "openTerminal": "打开终端"
       },
@@ -214,14 +210,6 @@
         "newFile": "新建文件",
         "newFolder": "新建文件夹",
         "collapseAll": "折叠所有目录"
-      },
-      "git": {
-        "commit": "提交",
-        "refresh": "刷新状态",
-        "stageAll": "暂存所有更改",
-        "unstageAll": "取消暂存所有更改",
-        "push": "推送",
-        "pull": "拉取"
       }
     }
   },
@@ -407,19 +395,6 @@
     "semanticSearchDesc": "基于语义理解的代码搜索",
     "autoFix": "自动修复",
     "autoFixDesc": "自动修复代码错误和警告"
-  },
-  "aiRules": {
-    "title": "规则",
-    "subtitle": "配置 AI 行为规则和约束",
-    "addRule": "添加规则",
-    "editRule": "编辑规则",
-    "deleteRule": "删除规则",
-    "ruleName": "规则名称",
-    "ruleContent": "规则内容",
-    "priority": "优先级",
-    "enabled": "启用",
-    "noRules": "暂无规则",
-    "noRulesHint": "添加规则来约束 AI 的行为"
   },
   "aiMemory": {
     "title": "记忆",

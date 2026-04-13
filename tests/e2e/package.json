@@ -24,7 +24,6 @@
     "test:l1:file-tree": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-file-tree.spec.ts\"",
     "test:l1:editor": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-editor.spec.ts\"",
     "test:l1:terminal": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-terminal.spec.ts\"",
-    "test:l1:git-panel": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-git-panel.spec.ts\"",
     "test:l1:settings": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-settings.spec.ts\"",
     "test:l1:session": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-session.spec.ts\"",
     "test:l1:mermaid-export": "wdio run ./config/wdio.conf.ts --spec \"./specs/l1-mermaid-export.spec.ts\"",

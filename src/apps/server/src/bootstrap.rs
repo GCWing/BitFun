@@ -5,7 +5,7 @@
 use bitfun_core::agentic::*;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
-use bitfun_core::service::{ai_rules, config, filesystem, mcp, token_usage, workspace};
+use bitfun_core::service::{config, filesystem, mcp, token_usage, workspace};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -16,7 +16,6 @@ pub struct ServerAppState {
     pub workspace_path: Arc<RwLock<Option<std::path::PathBuf>>>,
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
-    pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub token_usage_service: Arc<token_usage::TokenUsageService>,
@@ -118,21 +117,10 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
     event_router.subscribe_internal("cron_jobs".to_string(), cron_subscriber);
     cron_service.start();
 
-    // Function agents
-    let _ = bitfun_core::function_agents::git_func_agent::GitFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-    let _ = bitfun_core::function_agents::startchat_func_agent::StartchatFunctionAgent::new(
-        ai_client_factory.clone(),
-    );
-
     // 4. Services
     let workspace_service = Arc::new(workspace::WorkspaceService::new().await?);
     workspace::set_global_workspace_service(workspace_service.clone());
     let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
-
-    ai_rules::initialize_global_ai_rules_service().await?;
-    let ai_rules_service = ai_rules::get_global_ai_rules_service().await?;
 
     let agent_registry = agents::get_agent_registry();
 
@@ -172,10 +160,6 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
                     log::warn!("Failed to initialize snapshot system: {}", e);
                 }
 
-                if let Err(e) = ai_rules_service.set_workspace(info.root_path.clone()).await {
-                    log::warn!("Failed to set AI rules workspace: {}", e);
-                }
-
                 Some(info.root_path)
             }
             Err(e) => {
@@ -191,18 +175,12 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
             .map(|w| w.root_path)
     };
 
-    // LSP
-    if let Err(e) = bitfun_core::service::lsp::initialize_global_lsp_manager().await {
-        log::error!("Failed to initialize LSP manager: {}", e);
-    }
-
     let state = Arc::new(ServerAppState {
         ai_client_factory,
         workspace_service,
         workspace_path: Arc::new(RwLock::new(initial_workspace_path)),
         config_service,
         filesystem_service,
-        ai_rules_service,
         agent_registry,
         mcp_service,
         token_usage_service,

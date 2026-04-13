@@ -34,7 +34,6 @@ impl CoworkMode {
                 "Delete".to_string(),
                 // Utilities
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
                 "Bash".to_string(),
                 "TerminalControl".to_string(),
                 "WebSearch".to_string(),

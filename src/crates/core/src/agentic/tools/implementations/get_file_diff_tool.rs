@@ -2,13 +2,11 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
-use crate::service::git::git_service::GitService;
-use crate::service::git::git_types::GitDiffParams;
-use crate::service::git::git_utils::get_repository_root;
 use crate::service::snapshot::manager::get_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use log::{debug, warn};
+use log::debug;
+use log::warn;
 use serde_json::{json, Value};
 use similar::ChangeTag;
 use similar::TextDiff;
@@ -19,8 +17,7 @@ use std::path::Path;
 ///
 /// Priority order:
 /// 1. Baseline snapshot diff (if exists)
-/// 2. Git HEAD diff (if git repository)
-/// 3. Return full file content
+/// 2. Return full file content
 pub struct GetFileDiffTool;
 
 impl Default for GetFileDiffTool {
@@ -112,149 +109,6 @@ impl GetFileDiffTool {
         None
     }
 
-    /// Try to get diff from git
-    async fn try_git_diff(&self, file_path: &Path) -> Option<BitFunResult<Value>> {
-        // Get directory containing the file
-        let file_dir = file_path.parent()?;
-
-        // Check if it's a git repository
-        let is_repo = match GitService::is_repository(file_dir).await {
-            Ok(repo) => repo,
-            Err(e) => {
-                debug!("GetFileDiff tool git check failed: {}", e);
-                return None;
-            }
-        };
-
-        if !is_repo {
-            debug!("GetFileDiff tool path is not a git repository");
-            return None;
-        }
-
-        debug!("GetFileDiff tool detected git repository");
-
-        // Read current file content
-        let current_content = match fs::read_to_string(file_path) {
-            Ok(content) => content,
-            Err(e) => {
-                warn!("GetFileDiff tool failed to read current file: {}", e);
-                return None;
-            }
-        };
-
-        // Calculate file's relative path to repository root
-        let repo_root = match get_repository_root(file_dir) {
-            Ok(root) => root,
-            Err(e) => {
-                warn!("GetFileDiff tool failed to get repository root: {}", e);
-                return None;
-            }
-        };
-
-        let relative_path = match file_path.strip_prefix(&repo_root) {
-            Ok(path) => path,
-            Err(e) => {
-                warn!("GetFileDiff tool failed to calculate relative path: {}", e);
-                return None;
-            }
-        };
-
-        let relative_path_str = relative_path.to_string_lossy().to_string();
-        debug!("GetFileDiff tool file relative path: {}", relative_path_str);
-
-        // Try to get git diff (working tree vs HEAD)
-        // Note: git diff HEAD -- <file> shows differences between working tree and HEAD (including unstaged changes)
-        let git_diff_params = GitDiffParams {
-            source: Some("HEAD".to_string()),
-            files: Some(vec![relative_path_str.clone()]),
-            ..Default::default()
-        };
-
-        let diff_output = match GitService::get_diff(file_dir, &git_diff_params).await {
-            Ok(diff) => diff,
-            Err(e) => {
-                warn!(
-                    "GetFileDiff tool git diff failed: {}, attempting to get HEAD content",
-                    e
-                );
-                // Try to get HEAD file content, then generate diff
-                let head_content = match GitService::get_file_content(
-                    file_dir,
-                    &relative_path_str,
-                    Some("HEAD"),
-                )
-                .await
-                {
-                    Ok(content) => content,
-                    Err(e) => {
-                        debug!("GetFileDiff tool failed to get HEAD file content: {}, file may be new or untracked", e);
-                        // New file or untracked file, use empty string as original content
-                        String::new()
-                    }
-                };
-
-                // Generate diff
-                let diff_content = self.generate_unified_diff(&head_content, &current_content);
-
-                // Calculate statistics
-                let (additions, deletions) =
-                    self.calculate_diff_stats(&head_content, &current_content);
-
-                return Some(Ok(json!({
-                    "file_path": file_path,
-                    "diff_type": "git",
-                    "diff_format": "unified",
-                    "diff_content": diff_content,
-                    "original_content": head_content,
-                    "modified_content": current_content,
-                    "git_ref": "HEAD",
-                    "stats": {
-                        "additions": additions,
-                        "deletions": deletions
-                    },
-                    "message": "Diff from Git HEAD (calculated, new or untracked file)"
-                })));
-            }
-        };
-
-        // Parse git diff output, extract statistics
-        let mut additions = 0;
-        let mut deletions = 0;
-        for line in diff_output.lines() {
-            if line.starts_with('+') && !line.starts_with("++") {
-                additions += 1;
-            } else if line.starts_with('-') && !line.starts_with("--") {
-                deletions += 1;
-            }
-        }
-
-        // Get HEAD file content to maintain consistent return structure
-        let original_content =
-            match GitService::get_file_content(file_dir, &relative_path_str, Some("HEAD")).await {
-                Ok(content) => content,
-                Err(e) => {
-                    warn!("GetFileDiff tool failed to get HEAD file content: {}", e);
-                    // If fetch fails, use empty string
-                    String::new()
-                }
-            };
-
-        Some(Ok(json!({
-            "file_path": file_path,
-            "diff_type": "git",
-            "diff_format": "unified",
-            "diff_content": diff_output,
-            "original_content": original_content,
-            "modified_content": current_content,
-            "git_ref": "HEAD",
-            "stats": {
-                "additions": additions,
-                "deletions": deletions
-            },
-            "message": "Diff from Git HEAD"
-        })))
-    }
-
     /// Return full file content
     fn return_full_content(&self, file_path: &Path) -> BitFunResult<Value> {
         let content = fs::read_to_string(file_path)
@@ -274,7 +128,7 @@ impl GetFileDiffTool {
                 "deletions": 0,
                 "total_lines": total_lines
             },
-            "message": "File full content (no baseline or git found)"
+            "message": "File full content (no baseline snapshot found)"
         }))
     }
 }
@@ -287,17 +141,16 @@ impl Tool for GetFileDiffTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            r#"Gets the diff for a file, showing changes from its baseline or Git HEAD.
+            r#"Gets the diff for a file, showing changes from its baseline snapshot when available.
 
 This tool compares the current file content against:
 1. Baseline snapshot (if available) - the state before AI modifications
-2. Git HEAD (if in a git repository) - the last committed version
-3. Full file content (if neither baseline nor git is available)
+2. Full file content (if no baseline snapshot)
 
 Usage:
 - The file_path parameter must be an absolute path, not a relative path.
 - The diff is returned in unified diff format, showing additions (+) and deletions (-).
-- The response includes diff_type indicating the source: "baseline", "git", or "full".
+- The response includes diff_type indicating the source: "baseline" or "full".
 - The response includes stats for additions and deletions.
 - This tool is read-only and safe to use for code review and analysis.
 "#
@@ -462,7 +315,7 @@ Usage:
                     "deletions": 0,
                     "total_lines": total_lines
                 },
-                "message": "File full content on remote workspace (baseline/git diff not available locally)"
+                "message": "File full content on remote workspace (baseline diff not available locally)"
             });
             let result_for_assistant = self.render_tool_result_message(&data);
             return Ok(vec![ToolResult::Result {
@@ -472,7 +325,6 @@ Usage:
             }]);
         }
 
-        // Priority 1: Try baseline diff
         let path = Path::new(&resolved_path);
         if let Some(result) = self.try_baseline_diff(path, context.workspace_root()).await {
             match result {
@@ -487,37 +339,13 @@ Usage:
                 }
                 Err(e) => {
                     warn!(
-                        "GetFileDiff tool baseline diff failed: {}, trying git diff",
+                        "GetFileDiff tool baseline diff failed: {}, returning full content",
                         e
                     );
-                    // Continue trying git
                 }
             }
         }
 
-        // Priority 2: Try git diff
-        if let Some(result) = self.try_git_diff(path).await {
-            match result {
-                Ok(data) => {
-                    debug!("GetFileDiff tool using git diff");
-                    let result_for_assistant = self.render_tool_result_message(&data);
-                    return Ok(vec![ToolResult::Result {
-                        data,
-                        result_for_assistant: Some(result_for_assistant),
-                        image_attachments: None,
-                    }]);
-                }
-                Err(e) => {
-                    warn!(
-                        "GetFileDiff tool git diff failed: {}, returning full content",
-                        e
-                    );
-                    // Continue returning full content
-                }
-            }
-        }
-
-        // Priority 3: Return full file content
         debug!("GetFileDiff tool returning full file content");
         let data = self.return_full_content(path)?;
         let result_for_assistant = self.render_tool_result_message(&data);

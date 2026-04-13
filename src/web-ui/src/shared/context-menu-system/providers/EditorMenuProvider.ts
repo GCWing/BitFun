@@ -6,7 +6,6 @@ import { MenuContext, ContextType, EditorContext } from '../types/context.types'
 import { commandExecutor } from '../commands/CommandExecutor';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { i18nService } from '@/infrastructure/i18n';
-import { lspExtensionRegistry } from '@/tools/lsp/services/LspExtensionRegistry';
 import type { CodeSnippetContext } from '@/shared/types/context';
 import { useContextStore } from '@/shared/stores/contextStore';
 
@@ -187,8 +186,11 @@ export class EditorMenuProvider implements IMenuProvider {
     }
 
     
-    if (!editorContext.isReadOnly && editorContext.filePath 
-      && lspExtensionRegistry.isFileSupported(editorContext.filePath)) {
+    const languageHint = editorContext.filePath
+      ? languageHintFromPath(editorContext.filePath)
+      : undefined;
+
+    if (!editorContext.isReadOnly && editorContext.filePath && languageHint) {
       items.push({
         id: 'editor-separator-2',
         label: '',
@@ -210,15 +212,11 @@ export class EditorMenuProvider implements IMenuProvider {
       });
     }
 
-    // Only show LSP menu items when the file type is supported by an LSP server
-    const hasLspSupport = editorContext.filePath 
-      && lspExtensionRegistry.isFileSupported(editorContext.filePath);
-
-    if (editorContext.filePath && hasLspSupport) {
+    if (editorContext.filePath && languageHint) {
       
       const position = editorContext.cursorPosition || { line: 1, column: 1 };
       items.push({
-        id: 'editor-separator-lsp',
+        id: 'editor-separator-code-nav',
         label: '',
         separator: true
       });

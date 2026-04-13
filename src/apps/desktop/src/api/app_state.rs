@@ -7,9 +7,7 @@ use bitfun_core::miniapp::{initialize_global_miniapp_manager, JsWorkerPool, Mini
 use bitfun_core::service::remote_ssh::{
     init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
-use bitfun_core::service::{
-    ai_rules, announcement, config, filesystem, mcp, token_usage, workspace,
-};
+use bitfun_core::service::{announcement, config, filesystem, mcp, token_usage, workspace};
 use bitfun_core::util::errors::*;
 
 use serde::{Deserialize, Serialize};
@@ -67,7 +65,6 @@ pub struct AppState {
     pub workspace_path: Arc<RwLock<Option<std::path::PathBuf>>>,
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
-    pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub token_usage_service: Arc<token_usage::TokenUsageService>,
@@ -113,15 +110,6 @@ impl AppState {
         );
         workspace::set_global_workspace_service(workspace_service.clone());
         let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
-
-        ai_rules::initialize_global_ai_rules_service()
-            .await
-            .map_err(|e| {
-                BitFunError::service(format!("Failed to initialize AI rules service: {}", e))
-            })?;
-        let ai_rules_service = ai_rules::get_global_ai_rules_service()
-            .await
-            .map_err(|e| BitFunError::service(format!("Failed to get AI rules service: {}", e)))?;
 
         let agent_registry = agents::get_agent_registry();
 
@@ -188,9 +176,6 @@ impl AppState {
                     workspace_path.display(),
                     e
                 );
-            }
-            if let Err(e) = ai_rules_service.set_workspace(workspace_path).await {
-                log::warn!("Failed to restore AI rules workspace on startup: {}", e);
             }
         }
 
@@ -273,7 +258,6 @@ impl AppState {
             workspace_path: Arc::new(RwLock::new(initial_workspace_path)),
             config_service,
             filesystem_service,
-            ai_rules_service,
             agent_registry,
             mcp_service,
             token_usage_service,

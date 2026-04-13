@@ -610,7 +610,6 @@ async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHa
         pool.stop_all().await;
     }
 
-    state.ai_rules_service.clear_workspace().await;
     state.agent_registry.clear_custom_subagents();
 
     #[cfg(target_os = "macos")]
@@ -672,18 +671,6 @@ async fn apply_active_workspace_context(
         .agent_registry
         .load_custom_subagents(&workspace_info.root_path)
         .await;
-
-    if let Err(e) = state
-        .ai_rules_service
-        .set_workspace(workspace_info.root_path.clone())
-        .await
-    {
-        warn!(
-            "Failed to set AI rules workspace: path={}, error={}",
-            workspace_info.root_path.display(),
-            e
-        );
-    }
 
     #[cfg(target_os = "macos")]
     {

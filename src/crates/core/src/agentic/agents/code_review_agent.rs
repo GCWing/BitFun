@@ -25,7 +25,6 @@ impl CodeReviewAgent {
                 // User interaction tool
                 "AskUserQuestion".to_string(),
                 // Git operations tool
-                "Git".to_string(),
             ],
         }
     }

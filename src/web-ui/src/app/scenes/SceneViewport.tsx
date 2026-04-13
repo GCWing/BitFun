@@ -22,7 +22,6 @@ import './SceneViewport.scss';
 // Session is the primary interaction path. Keep it in the main scene bundle so
 // first open does not stall on a lazy chunk fetch/parse before FlowChat mounts.
 const TerminalScene   = lazy(() => import('./terminal/TerminalScene'));
-const GitScene        = lazy(() => import('./git/GitScene'));
 const FileViewerScene = lazy(() => import('./file-viewer/FileViewerScene'));
 const ProfileScene    = lazy(() => import('./profile/ProfileScene'));
 const AgentsScene       = lazy(() => import('./agents/AgentsScene'));
@@ -109,8 +108,6 @@ function renderScene(
       return <SessionScene workspacePath={workspacePath} isEntering={isEntering} isActive={isActive} />;
     case 'terminal':
       return <TerminalScene isActive={isActive} />;
-    case 'git':
-      return <GitScene workspacePath={workspacePath} isActive={isActive} />;
     case 'settings':
       return <SettingsScene />;
     case 'file-viewer':

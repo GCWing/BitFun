@@ -132,6 +132,5 @@ When writing mermaid diagrams:
 
 {ENV_INFO}
 {PROJECT_LAYOUT}
-{RULES}
 {MEMORIES}
 {PROJECT_CONTEXT_FILES:exclude=review}

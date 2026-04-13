@@ -1070,7 +1070,7 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
     }))
 );
 
-export type CanvasStoreMode = 'agent' | 'project' | 'git' | 'panel-view';
+export type CanvasStoreMode = 'agent' | 'project' | 'panel-view';
 
 /**
  * Selects which canvas store instance is used by the current subtree.
@@ -1080,7 +1080,6 @@ export const CanvasStoreModeContext = createContext<CanvasStoreMode>('agent');
 
 export const useAgentCanvasStore = createCanvasStoreHook();
 export const useProjectCanvasStore = createCanvasStoreHook();
-export const useGitCanvasStore = createCanvasStoreHook();
 export const usePanelViewCanvasStore = createCanvasStoreHook();
 
 // ==================== Agent canvas: per-workspace snapshots (AuxPane / Session scene) ====================
@@ -1207,11 +1206,9 @@ export function useCanvasStore<T>(selector?: (state: CanvasStore) => T): T | Can
   // Keep hook order stable across mode switches by subscribing to each scoped store.
   const agentValue = useAgentCanvasStore(resolvedSelector);
   const projectValue = useProjectCanvasStore(resolvedSelector);
-  const gitValue = useGitCanvasStore(resolvedSelector);
   const panelViewValue = usePanelViewCanvasStore(resolvedSelector);
 
   if (mode === 'project') return projectValue;
-  if (mode === 'git') return gitValue;
   if (mode === 'panel-view') return panelViewValue;
   return agentValue;
 }

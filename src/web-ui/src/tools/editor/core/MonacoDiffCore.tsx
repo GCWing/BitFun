@@ -50,7 +50,6 @@ export const MonacoDiffCore = forwardRef<MonacoDiffCoreRef, MonacoDiffCoreProps>
       renderIndicators = true,
       originalEditable = false,
       ignoreTrimWhitespace = false,
-      enableLsp: _enableLsp = false,
       showMinimap = false,
       onModifiedContentChange,
       onDiffChange,

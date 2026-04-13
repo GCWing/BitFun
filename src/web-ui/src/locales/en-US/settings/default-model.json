@@ -60,9 +60,9 @@
         "displayName": "Git Functions",
         "description": "Commit messages, code review"
       },
-      "startchat-func-agent": {
-        "displayName": "Chat Startup",
-        "description": "Work status analysis, welcome messages"
+      "session-title-func-agent": {
+        "displayName": "Session titles",
+        "description": "Auto-generated conversation titles"
       },
       "arc-func-agent": {
         "displayName": "Architecture Analysis",

@@ -5,10 +5,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, ChevronDown, Check, GitBranch } from 'lucide-react';
-import { gitAPI } from '../../infrastructure/api';
-import type { GitWorkState } from '../../infrastructure/api/service-api/StartchatAgentAPI';
-import { useApp } from '../../app/hooks/useApp';
+import { FolderOpen, ChevronDown, Check } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -32,12 +29,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   workspacePath = '',
 }) => {
   const { t } = useTranslation('flow-chat');
-  const [gitState, setGitState] = useState<GitWorkState | null>(null);
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
 
-  const { switchLeftPanelTab } = useApp();
   const {
     hasWorkspace,
     currentWorkspace,
@@ -70,66 +65,6 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     () => openedWorkspacesList.filter(ws => ws.id !== currentWorkspace?.id),
     [openedWorkspacesList, currentWorkspace?.id],
   );
-
-  const handleGitClick = useCallback(() => {
-    switchLeftPanelTab('git');
-  }, [switchLeftPanelTab]);
-
-  const isGitClean = useMemo(
-    () => !!gitState && gitState.unstagedFiles === 0 && gitState.stagedFiles === 0 && gitState.unpushedCommits === 0,
-    [gitState],
-  );
-
-  const buildGitNarrative = useCallback((): React.ReactNode => {
-    if (!gitState) return null;
-    const parts: { key: string; label: string; suffix: string }[] = [];
-    if (gitState.unstagedFiles > 0)
-      parts.push({ key: 'unstaged', label: t('welcome.gitUnstaged', { count: gitState.unstagedFiles }), suffix: t('welcome.waitingToStage') });
-    if (gitState.stagedFiles > 0)
-      parts.push({ key: 'staged', label: t('welcome.gitStaged', { count: gitState.stagedFiles }), suffix: t('welcome.stagedReady') });
-    if (gitState.unpushedCommits > 0)
-      parts.push({ key: 'unpushed', label: t('welcome.gitUnpushed', { count: gitState.unpushedCommits }), suffix: t('welcome.toPush') });
-    if (parts.length === 0) return null;
-    return (
-      <>
-        {t('welcome.currentlyHas')}
-        {parts.map(({ key, label, suffix }, i) => (
-          <React.Fragment key={key}>
-            {i > 0 && t('welcome.commaSeparator')}
-            <button type="button" className="welcome-panel__inline-btn" onClick={handleGitClick}>
-              {label}
-            </button>
-            {' '}{suffix}
-          </React.Fragment>
-        ))}
-        {t('welcome.period')}
-      </>
-    );
-  }, [gitState, handleGitClick, t]);
-
-  const loadGitState = useCallback(async (workspacePath: string) => {
-    try {
-      const isGitRepo = await gitAPI.isGitRepository(workspacePath);
-      if (!isGitRepo) { setGitState(null); return; }
-      const s = await gitAPI.getStatus(workspacePath);
-      setGitState({
-        currentBranch: s.current_branch,
-        unstagedFiles: s.unstaged.length + s.untracked.length,
-        stagedFiles: s.staged.length,
-        unpushedCommits: s.ahead,
-        aheadBehind: { ahead: s.ahead, behind: s.behind },
-        modifiedFiles: [],
-      });
-    } catch (err) {
-      log.warn('Failed to load git state', err);
-      setGitState(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isCoworkSession || isClawSession || !currentWorkspace?.rootPath) { setGitState(null); return; }
-    void loadGitState(currentWorkspace.rootPath);
-  }, [currentWorkspace?.rootPath, isCoworkSession, isClawSession, loadGitState]);
 
   useEffect(() => {
     if (!workspaceDropdownOpen) return;
@@ -188,7 +123,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
         <div className="welcome-panel__divider" />
 
-        {/* Narrative: workspace + git in natural language */}
+        {/* Narrative: workspace */}
         <div className="welcome-panel__narrative">
           <p className="welcome-panel__narrative-text">
             {isClawSession ? (
@@ -257,27 +192,11 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         </div>
                       )}
                     </span>
-                    {!isCoworkSession && gitState && (
-                      <>
-                        <span className="welcome-panel__context-sep">/</span>
-                        <button type="button" className="welcome-panel__inline-btn" onClick={handleGitClick}>
-                          <GitBranch size={13} className="welcome-panel__inline-icon" />
-                          {gitState.currentBranch}
-                        </button>
-                      </>
-                    )}
                   </span>
                   <span className="welcome-panel__narrative-sentence__text">
-                    {!isCoworkSession && gitState ? t('welcome.project') : t('welcome.projectCowork')}
+                    {isCoworkSession ? t('welcome.projectCowork') : t('welcome.project')}
                   </span>
                 </span>
-                {!isCoworkSession && gitState ? (
-                  <span className="welcome-panel__narrative-git">
-                    {isGitClean
-                      ? <span className="welcome-panel__narrative-clean">{t('welcome.gitClean')}</span>
-                      : buildGitNarrative()}
-                  </span>
-                ) : null}
               </>
             )}
           </p>

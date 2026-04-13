@@ -25,7 +25,7 @@ const FEATURE_CONFIGS: FeatureConfig[] = [
   {
     id: 'sessionTitle',
     settingKey: 'enable_session_title_generation',
-    agentName: 'startchat-func-agent',
+    agentName: 'session-title-func-agent',
   },
 ];
 

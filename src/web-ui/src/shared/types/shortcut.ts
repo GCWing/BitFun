@@ -6,9 +6,8 @@
  * - 'canvas'   : active when focus is inside the editor canvas (data-shortcut-scope="canvas")
  * - 'chat'     : active when focus is inside the chat panel (data-shortcut-scope="chat")
  * - 'filetree' : active when focus is inside the file tree panel
- * - 'git'      : active when focus is inside the git panel
  */
-export type ShortcutScope = 'app' | 'canvas' | 'chat' | 'filetree' | 'git';
+export type ShortcutScope = 'app' | 'canvas' | 'chat' | 'filetree';
 
 /**
  * Keyboard shortcut configuration (modifier + key + scope).

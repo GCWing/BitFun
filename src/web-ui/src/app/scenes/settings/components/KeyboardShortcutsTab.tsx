@@ -102,7 +102,7 @@ function mergeCatalogWithLive(live: ShortcutRegistration[]): ShortcutRegistratio
     out.push(r);
   }
   out.sort((a, b) => {
-    const scopeOrder: Record<ShortcutScope, number> = { app: 0, chat: 1, canvas: 2, filetree: 3, git: 4 };
+    const scopeOrder: Record<ShortcutScope, number> = { app: 0, chat: 1, canvas: 2, filetree: 3 };
     const sa = scopeOrder[a.config.scope ?? 'app'];
     const sb = scopeOrder[b.config.scope ?? 'app'];
     if (sa !== sb) return sa - sb;
@@ -538,8 +538,7 @@ const KeyboardShortcutsTab: React.FC = () => {
     appShortcutsWithoutMerged.length > 0 ||
     canvasShortcutsWithoutMerged.length > 0 ||
     filteredByScope('chat').length > 0 ||
-    filteredByScope('filetree').length > 0 ||
-    filteredByScope('git').length > 0;
+    filteredByScope('filetree').length > 0;
 
   const hasPendingChanges = Object.keys(pendingChanges).length > 0;
 

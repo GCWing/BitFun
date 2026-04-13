@@ -46,7 +46,7 @@ const getContentIcon = (type: string) => {
   if (type === 'terminal') {
     return <Terminal size={16} />;
   }
-  if (type.includes('git')) {
+  if (type.includes('diff')) {
     return <GitBranch size={16} />;
   }
   return <FileCode size={16} />;

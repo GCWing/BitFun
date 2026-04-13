@@ -580,7 +580,8 @@
     "errors": {
       "markdownEditorMissingPath": "无法加载Markdown编辑器：缺少文件路径或初始内容",
       "planViewerMissingPath": "无法加载Plan查看器：缺少文件路径",
-      "terminalMissingSessionId": "无法加载终端：缺少会话ID"
+      "terminalMissingSessionId": "无法加载终端：缺少会话ID",
+      "gitPanelRemoved": "此版本已移除 Git 集成。"
     },
     "placeholder": {
       "architectureLayerViewer": "架构层级查看器功能开发中...",

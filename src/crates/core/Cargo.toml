@@ -55,8 +55,6 @@ zip = { workspace = true }
 flate2 = { workspace = true }
 include_dir = { workspace = true }
 
-git2 = { workspace = true }
-
 # Command detection (cross-platform)
 which = { workspace = true }
 similar = { workspace = true }
@@ -128,10 +126,6 @@ bitfun-transport = { path = "../transport" }
 
 # Tauri dependency (optional, enabled only when needed)
 tauri = { workspace = true, optional = true }
-
-# Non-Windows: vendored OpenSSL for libgit2 (no system install).
-[target.'cfg(not(windows))'.dependencies]
-git2 = { workspace = true, features = ["vendored-openssl"] }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

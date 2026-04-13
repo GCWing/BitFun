@@ -24,7 +24,7 @@ export type PanelType = PanelContentType;
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'center';
 
  
-export type OperationMode = 'agent' | 'project' | 'git';
+export type OperationMode = 'agent' | 'project';
 
  
 export interface IdeControlEvent {

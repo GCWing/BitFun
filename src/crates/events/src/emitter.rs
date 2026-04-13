@@ -12,22 +12,6 @@ pub trait EventEmitter: Send + Sync {
     /// Send generic events
     async fn emit(&self, event_name: &str, payload: serde_json::Value) -> anyhow::Result<()>;
 
-    /// Send LSP events
-    async fn emit_lsp(
-        &self,
-        workspace_path: &str,
-        event_data: serde_json::Value,
-    ) -> anyhow::Result<()> {
-        self.emit(
-            "lsp-event",
-            serde_json::json!({
-                "workspace_path": workspace_path,
-                "event_data": event_data
-            }),
-        )
-        .await
-    }
-
     /// Send Profile events
     async fn emit_profile(
         &self,

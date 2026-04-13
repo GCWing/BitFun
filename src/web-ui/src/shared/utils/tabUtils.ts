@@ -7,7 +7,7 @@ import { enqueuePendingTab } from '@/shared/services/pendingTabQueue';
 import { resolveAndFocusOpenTarget } from '@/shared/services/sceneOpenTargetResolver';
 import type { OpenSource } from '@/shared/services/sceneOpenTargetResolver';
 import { TAB_EVENTS } from '@/app/components/panels/content-canvas/types';
-export type TabTargetMode = 'agent' | 'project' | 'git';
+export type TabTargetMode = 'agent' | 'project';
 
 export interface TabCreationOptions {
   type: string;
@@ -47,8 +47,7 @@ export function createTab(options: TabCreationOptions): void {
     mode = 'agent' 
   } = options;
 
-  const eventName =
-    mode === 'project' ? 'project-create-tab' : mode === 'git' ? 'git-create-tab' : 'agent-create-tab';
+  const eventName = mode === 'project' ? 'project-create-tab' : 'agent-create-tab';
 
   const createTabEvent = new CustomEvent(eventName, {
     detail: {
@@ -132,21 +131,19 @@ export function createDiffEditorTab(
   revealLine?: number,
   replaceExisting?: boolean,
   options?: {
-    titleKind?: 'git-diff' | 'diff' | 'fix-preview';
-    duplicateKeyPrefix?: 'git-diff' | 'diff' | 'fix-diff';
+    titleKind?: 'diff' | 'fix-preview';
+    duplicateKeyPrefix?: 'diff' | 'fix-diff';
   }
 ): void {
-  const titleKind = options?.titleKind ?? (repositoryPath ? 'git-diff' : 'fix-preview');
-  const duplicateKeyPrefix = options?.duplicateKeyPrefix ?? (repositoryPath ? 'git-diff' : 'fix-diff');
+  const titleKind = options?.titleKind ?? (repositoryPath ? 'diff' : 'fix-preview');
+  const duplicateKeyPrefix = options?.duplicateKeyPrefix ?? (repositoryPath ? 'diff' : 'fix-diff');
   const duplicateKey = repositoryPath
     ? `${duplicateKeyPrefix}:${repositoryPath}:${filePath}`
     : `${duplicateKeyPrefix}:${filePath}`;
   const titleSuffix =
-    titleKind === 'git-diff'
-      ? i18nService.getT()('common:tabs.gitDiff')
-      : titleKind === 'diff'
-        ? i18nService.getT()('common:tabs.diff')
-        : i18nService.getT()('common:tabs.fixPreview');
+    titleKind === 'diff'
+      ? i18nService.getT()('common:tabs.diff')
+      : i18nService.getT()('common:tabs.fixPreview');
 
   createTab({
     type: 'diff-code-editor',
@@ -169,63 +166,6 @@ export function createDiffEditorTab(
   });
 }
 
-/**
- * Open a Git diff tab in the Git scene canvas (mode 'git').
- * Use from Git scene only; keeps diff editing inside the Git context.
- */
-export function createGitDiffEditorTab(
-  filePath: string,
-  fileName: string,
-  originalCode: string,
-  modifiedCode: string,
-  repositoryPath: string,
-  readOnly: boolean = false,
-  replaceExisting?: boolean
-): void {
-  createDiffEditorTab(
-    filePath,
-    fileName,
-    originalCode,
-    modifiedCode,
-    readOnly,
-    'git',
-    repositoryPath,
-    undefined,
-    replaceExisting
-  );
-}
-
-/**
- * Open a code editor tab in the Git scene canvas (e.g. for untracked files).
- */
-export function createGitCodeEditorTab(
-  filePath: string,
-  fileName: string,
-  options?: Parameters<typeof createCodeEditorTab>[2]
-): void {
-  createTab({
-    type: 'code-editor',
-    title: fileName,
-    data: {
-      filePath,
-      fileName,
-      language: options?.language,
-      readOnly: options?.readOnly ?? false,
-      showLineNumbers: options?.showLineNumbers ?? true,
-      showMinimap: options?.showMinimap ?? true,
-      theme: options?.theme ?? 'vs-dark',
-      jumpToLine: options?.jumpToLine,
-      jumpToColumn: options?.jumpToColumn,
-    },
-    metadata: { filePath, fileName },
-    checkDuplicate: true,
-    duplicateCheckKey: `code-editor:${filePath}`,
-    replaceExisting: true,
-    mode: 'git',
-  });
-}
-
- 
 export function createMarkdownEditorTab(
   title: string,
   initialContent: string,

@@ -57,11 +57,6 @@ export const APP_SHORTCUTS: ShortcutDef[] = [
     descriptionKey: 'keyboard.shortcuts.scene.openSession',
   },
   {
-    id: 'scene.openGit',
-    config: mod('G', { shift: true, scope: 'app', allowInInput: true }),
-    descriptionKey: 'keyboard.shortcuts.scene.openGit',
-  },
-  {
     id: 'scene.openSettings',
     config: mod(',', { scope: 'app', allowInInput: true }),
     descriptionKey: 'keyboard.shortcuts.scene.openSettings',
@@ -248,41 +243,6 @@ export const FILETREE_SHORTCUTS: ShortcutDef[] = [
   },
 ];
 
-// ─── Git shortcuts (scope: 'git') ─────────────────────────────────────────
-
-export const GIT_SHORTCUTS: ShortcutDef[] = [
-  {
-    id: 'git.commit',
-    config: mod('Enter', { scope: 'git', allowInInput: true }),
-    descriptionKey: 'keyboard.shortcuts.git.commit',
-  },
-  {
-    id: 'git.refresh',
-    config: { key: 'F5', scope: 'git' },
-    descriptionKey: 'keyboard.shortcuts.git.refresh',
-  },
-  {
-    id: 'git.stageAll',
-    config: mod('A', { shift: true, scope: 'git' }),
-    descriptionKey: 'keyboard.shortcuts.git.stageAll',
-  },
-  {
-    id: 'git.unstageAll',
-    config: mod('U', { shift: true, scope: 'git' }),
-    descriptionKey: 'keyboard.shortcuts.git.unstageAll',
-  },
-  {
-    id: 'git.push',
-    config: mod('P', { shift: true, scope: 'git' }),
-    descriptionKey: 'keyboard.shortcuts.git.push',
-  },
-  {
-    id: 'git.pull',
-    config: mod('L', { shift: true, scope: 'git' }),
-    descriptionKey: 'keyboard.shortcuts.git.pull',
-  },
-];
-
 // ─── All shortcuts combined ────────────────────────────────────────────────
 
 export const ALL_SHORTCUTS: ShortcutDef[] = [
@@ -291,7 +251,6 @@ export const ALL_SHORTCUTS: ShortcutDef[] = [
   ...CANVAS_SHORTCUTS,
   ...CHAT_SHORTCUTS,
   ...FILETREE_SHORTCUTS,
-  ...GIT_SHORTCUTS,
 ];
 
 /** Shortcuts registered in code but not listed in ALL_SHORTCUTS (e.g. legacy ids). */
@@ -308,7 +267,7 @@ export function getShortcutDescriptionI18nKey(id: string): string | undefined {
 }
 
 /** Scope display order for the settings UI. */
-export const SCOPE_ORDER: ShortcutScope[] = ['app', 'chat', 'canvas', 'filetree', 'git'];
+export const SCOPE_ORDER: ShortcutScope[] = ['app', 'chat', 'canvas', 'filetree'];
 
 /** i18n keys for scope group labels in the settings UI. */
 export const SCOPE_LABEL_KEYS: Record<ShortcutScope, string> = {
@@ -316,5 +275,4 @@ export const SCOPE_LABEL_KEYS: Record<ShortcutScope, string> = {
   chat:     'keyboard.scopes.chat',
   canvas:   'keyboard.scopes.canvas',
   filetree: 'keyboard.scopes.filetree',
-  git:      'keyboard.scopes.git',
 };

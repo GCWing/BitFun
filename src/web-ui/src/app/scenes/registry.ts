@@ -10,7 +10,6 @@
 import {
   MessageSquare,
   Terminal,
-  GitBranch,
   Settings,
   FileCode2,
   CircleUserRound,
@@ -52,14 +51,6 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'terminal' as SceneTabId,
     label: 'Terminal',
     Icon: Terminal,
-    pinned: false,
-    singleton: true,
-    defaultOpen: false,
-  },
-  {
-    id: 'git' as SceneTabId,
-    label: 'Git',
-    Icon: GitBranch,
     pinned: false,
     singleton: true,
     defaultOpen: false,

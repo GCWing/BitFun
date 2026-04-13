@@ -43,9 +43,9 @@
       "displayName": "Git 功能",
       "description": "提交信息、代码审查"
     },
-    "startchat-func-agent": {
-      "displayName": "会话启动",
-      "description": "工作状态分析、欢迎信息"
+    "session-title-func-agent": {
+      "displayName": "会话标题",
+      "description": "自动生成对话标题"
     }
   },
   "loading": {
