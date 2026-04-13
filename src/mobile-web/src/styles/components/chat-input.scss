@@ -37,8 +37,9 @@
     }
 
     .chat-page__input-area {
-      flex: 1;
+      flex: 1 1 auto;
       min-height: auto;
+      min-width: 0;
     }
 
     .chat-page__input-actions-left { display: none; }
@@ -94,6 +95,8 @@
   position: relative;
   display: flex;
   align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   min-height: 40px;
 }
@@ -118,6 +121,9 @@
 }
 
 .chat-page__input-placeholder {
+  display: block;
+  width: 100%;
+  min-width: 0;
   font-size: 14px;
   color: var(--color-text-primary);
   opacity: 0.6;
@@ -134,6 +140,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
   min-height: 24px;
   padding: 0 0 7px;
 }
@@ -150,6 +157,7 @@
   display: flex;
   align-items: flex-end;
   gap: 6px;
+  margin-left: auto;
   flex-shrink: 0;
 }
 

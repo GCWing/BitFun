@@ -2702,8 +2702,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                 {imageAnalyzing
                   ? t('chat.imageAnalyzingPlaceholder')
                   : isStreaming
-                    ? t('chat.streamingTapToQueue')
-                    : t('chat.inputPlaceholder')}
+                    ? t('chat.collapsedStreamingPlaceholder')
+                    : t('chat.collapsedInputPlaceholder')}
               </span>
             )}
           </div>
