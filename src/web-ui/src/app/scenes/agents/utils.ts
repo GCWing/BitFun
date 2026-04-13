@@ -40,6 +40,12 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
 
   if (id === 'explore') return { ...agent, capabilities: [{ category: '分析', level: 4 }, { category: '编码', level: 3 }] };
   if (id === 'file_finder') return { ...agent, capabilities: [{ category: '分析', level: 3 }, { category: '编码', level: 2 }] };
+  if (id === 'deepresearch') return {
+    ...agent,
+    capabilities: [
+      { category: '分析', level: 5 },
+    ],
+  };
 
   if (name.includes('code') || name.includes('debug') || name.includes('test')) {
     return { ...agent, capabilities: [{ category: '编码', level: 4 }] };

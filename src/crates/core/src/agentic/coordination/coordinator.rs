@@ -1964,7 +1964,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace: subagent_workspace,
             context: context.unwrap_or_default(),
             subagent_parent_info: Some(subagent_parent_info),
-            skip_tool_confirmation: false,
+            // Subagents run autonomously without user interaction; always skip
+            // tool confirmation to prevent them from blocking indefinitely on a
+            // confirmation channel that nobody will ever respond to.
+            skip_tool_confirmation: true,
             workspace_services: subagent_services,
             round_preempt: self.round_preempt_source.get().cloned(),
         };

@@ -12,6 +12,7 @@ mod cowork_mode;
 mod debug_mode;
 mod plan_mode;
 // Built-in subagents
+mod deep_research_agent;
 mod explore_agent;
 mod file_finder_agent;
 // Hidden agents
@@ -27,6 +28,7 @@ pub use code_review_agent::CodeReviewAgent;
 pub use cowork_mode::CoworkMode;
 pub use custom_subagents::{CustomSubagent, CustomSubagentKind};
 pub use debug_mode::DebugMode;
+pub use deep_research_agent::DeepResearchAgent;
 pub use explore_agent::ExploreAgent;
 pub use file_finder_agent::FileFinderAgent;
 pub use generate_doc_agent::GenerateDocAgent;
