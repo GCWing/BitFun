@@ -351,13 +351,11 @@ pub fn paired_success_message(language: BotLanguage) -> String {
     }
 }
 
-/// After IM pairing: assistant mode, default assistant workspace, resume latest Claw (else any) session or create Claw.
+/// After IM pairing: assistant mode, default assistant workspace, create a fresh Claw session.
+/// Always creates a new session so the user starts with a clean context in the IM channel.
 /// Mutates `state` (`display_mode`, `current_assistant`, `current_session_id`). Does not set `paired`.
 pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String {
-    use crate::agentic::persistence::PersistenceManager;
-    use crate::infrastructure::PathManager;
     use crate::service::workspace::get_global_workspace_service;
-    use std::path::PathBuf;
 
     state.display_mode = BotDisplayMode::Assistant;
     let language = current_bot_language().await;
@@ -407,7 +405,6 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
         };
     };
 
-    let path_str = ws_info.root_path.to_string_lossy().to_string();
     let path_buf = ws_info.root_path.clone();
     if let Err(e) = ws_service.open_workspace(path_buf.clone()).await {
         return if language.is_chinese() {
@@ -422,58 +419,8 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
         error!("IM bot bootstrap: snapshot init after pairing: {e}");
     }
 
-    state.current_assistant = Some(path_str.clone());
+    state.current_assistant = Some(ws_info.root_path.to_string_lossy().to_string());
     state.current_session_id = None;
-
-    let pm = match PathManager::new() {
-        Ok(pm) => std::sync::Arc::new(pm),
-        Err(e) => {
-            return if language.is_chinese() {
-                format!("自动准备部分完成：无法访问会话索引（{e}）。可直接尝试发消息。")
-            } else {
-                format!("Partial auto-setup: cannot access session index ({e}). You can try sending a message.")
-            };
-        }
-    };
-    let store = match PersistenceManager::new(pm) {
-        Ok(s) => s,
-        Err(e) => {
-            return if language.is_chinese() {
-                format!("自动准备部分完成：无法访问会话索引（{e}）。可直接尝试发消息。")
-            } else {
-                format!("Partial auto-setup: cannot access session index ({e}). You can try sending a message.")
-            };
-        }
-    };
-
-    let mut metas = match store.list_session_metadata(&PathBuf::from(&path_str)).await {
-        Ok(m) => m,
-        Err(e) => {
-            return if language.is_chinese() {
-                format!("自动准备部分完成：列出会话失败（{e}）。可直接尝试发消息。")
-            } else {
-                format!("Partial auto-setup: failed to list sessions ({e}). You can try sending a message.")
-            };
-        }
-    };
-    metas.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
-
-    let latest = metas
-        .iter()
-        .find(|m| m.agent_type == "Claw")
-        .or_else(|| metas.first());
-
-    if let Some(m) = latest {
-        state.current_session_id = Some(m.session_id.clone());
-        let name = m.session_name.as_str();
-        return if language.is_chinese() {
-            format!("已为你进入助理模式，并恢复最近会话「{name}」。直接发送消息即可继续对话。")
-        } else {
-            format!(
-                "Assistant mode is on; resumed your latest session \"{name}\". Send a message to continue."
-            )
-        };
-    }
 
     let create_res = handle_new_session(state, "Claw").await;
     if state.current_session_id.is_none() {
@@ -491,9 +438,9 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
     }
 
     if language.is_chinese() {
-        "已进入助理模式；尚无历史会话，已为你新建助理会话。直接发送消息即可开始。".to_string()
+        "已进入助理模式，已为你新建助理会话。直接发送消息即可开始。".to_string()
     } else {
-        "Assistant mode is on; no prior sessions were found, so a new assistant session was created. Send a message to start."
+        "Assistant mode is on; a new assistant session was created. Send a message to start."
             .to_string()
     }
 }
