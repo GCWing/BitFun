@@ -358,7 +358,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     contexts,
     onClearContexts: clearContexts,
     onSuccess: onSendMessage,
-    currentAgentType: effectiveTargetSession?.mode || modeState.current,
+    // Composer mode is authoritative (synced from session on switch, updated in
+    // applyModeChange). Prefer it over session.mode so a stale store cannot force
+    // agentic when the user selected Team or another mode.
+    currentAgentType: modeState.current,
   });
 
   const [mcpPromptCommands, setMcpPromptCommands] = useState<SlashMcpPromptItem[]>([]);

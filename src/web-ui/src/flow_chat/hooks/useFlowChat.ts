@@ -106,9 +106,11 @@ export const useFlowChat = () => {
       const remoteConnectionId = isRemote ? workspace?.connectionId : undefined;
       const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
 
+      const agentTypeForSession = (config?.agentType || 'agentic').trim() || 'agentic';
+
       const response = await agentAPI.createSession({
         sessionName,
-        agentType: 'agentic', // Default to agentic; can change via mode selector.
+        agentType: agentTypeForSession,
         workspacePath,
         remoteConnectionId,
         remoteSshHost,
@@ -142,7 +144,7 @@ export const useFlowChat = () => {
         undefined,  // Terminal sessions are managed by the backend.
         sessionName,
         maxContextTokens,
-        undefined,
+        response.agentType || agentTypeForSession,
         workspacePath,
         remoteConnectionId,
         remoteSshHost
