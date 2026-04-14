@@ -264,9 +264,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
           totalTurns={effectiveVisibleTurnInfo?.totalTurns ?? 0}
           currentUserMessage={effectiveVisibleTurnInfo?.userMessage ?? ''}
-          visible={virtualItems.length > 0}
+          visible={!!activeSession}
           sessionId={activeSession?.sessionId}
-          workspacePath={workspacePath}
+          workspacePath={activeSession?.mode === 'Dispatcher' ? undefined : activeSession?.workspacePath}
+          agentType={activeSession?.mode}
           btwOrigin={btwOrigin}
           btwParentTitle={btwParentTitle}
           turns={turnSummaries}

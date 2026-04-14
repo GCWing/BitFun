@@ -154,40 +154,58 @@
     text-overflow: ellipsis;
   }
 
-  // ==================== Center message ====================
-  &__message {
+  // ==================== Center info (agent type / workspace) ====================
+  &__info {
     flex: 1;
     min-width: 0;
-    padding: 0 $size-gap-3;
+    padding: 0 $size-gap-2;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: $size-gap-2;
+    gap: 6px;
     overflow: hidden;
+    cursor: default;
   }
 
-  &__turn-badge {
+  &__agent-type,
+  &__workspace {
     display: inline-flex;
     align-items: center;
-    flex: 0 0 auto;
-    max-width: 100%;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    gap: 4px;
+    min-width: 0;
+    flex-shrink: 1;
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
     line-height: 1;
     white-space: nowrap;
+
+    svg {
+      flex-shrink: 0;
+      opacity: 0.75;
+    }
+
+    > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 
-  &__message-text {
-    min-width: 0;
-    font-size: var(--flowchat-font-size-sm);
-    color: var(--color-text-primary);
-    white-space: nowrap;
+  &__agent-type {
+    flex-shrink: 0;
+    text-transform: capitalize;
+  }
+
+  &__workspace {
     overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
+  }
+
+  &__info-sep {
+    flex-shrink: 0;
+    color: var(--color-text-tertiary, var(--color-text-secondary));
+    font-size: var(--flowchat-font-size-xs);
+    opacity: 0.5;
+    user-select: none;
   }
 
   // ==================== Actions ====================

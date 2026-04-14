@@ -3,17 +3,15 @@
  *
  * Layout (top to bottom):
  *   1. Workspace file search
- *   2. Top: New sessions | Assistant | Extensions (expand → Agents | Skills)
- *   3. Assistant sessions, Workspace
- *   4. Bottom: MiniApp
+ *   2. Top: Dispatcher | Assistant | Agent App (expand → Agents | Mini App) | Skills
+ *   3. Flat session list (all opened workspaces)
  *
  * When a scene-nav transition is active (`isDeparting=true`), items receive
  * positional CSS classes for the split-open animation effect.
  */
 
-import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import { User, Users, Puzzle, AppWindow, ChevronDown, Search, Orbit, MonitorPlay, RotateCcw } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
 import { useSceneManager } from '../../hooks/useSceneManager';
@@ -21,26 +19,17 @@ import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { SceneTabId } from '../SceneBar/types';
 import SectionHeader from './components/SectionHeader';
 import MiniAppEntry from './components/MiniAppEntry';
-import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
 import SessionsSection from './sections/sessions/SessionsSection';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
-import { notificationService } from '@/shared/notification-system';
-import { WorkspaceKind, isRemoteWorkspace } from '@/shared/types';
-import {
-  findReusableEmptySessionId,
-  flowChatSessionConfigForWorkspace,
-  pickWorkspaceForProjectChatSession,
-} from '@/app/utils/projectSessionWorkspace';
-import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
-import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser } from '@/features/ssh-remote';
-import { useSessionModeStore } from '../../stores/sessionModeStore';
+import { WorkspaceKind } from '@/shared/types';
+import { useSSHRemoteContext, RemoteFileBrowser } from '@/features/ssh-remote';
 import NavSearchDialog from './NavSearchDialog';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { ALL_SHORTCUTS } from '@/shared/constants/shortcuts';
@@ -63,13 +52,6 @@ const MainNav: React.FC<MainNavProps> = ({
   useMiniAppCatalogSync();
 
   const sshRemote = useSSHRemoteContext();
-  const [isSSHConnectionDialogOpen, setIsSSHConnectionDialogOpen] = useState(false);
-
-  useEffect(() => {
-    if (sshRemote.showFileBrowser) {
-      setIsSSHConnectionDialogOpen(false);
-    }
-  }, [sshRemote.showFileBrowser]);
 
   const { switchLeftPanelTab } = useApp();
   const { openScene } = useSceneManager();
@@ -78,11 +60,8 @@ const MainNav: React.FC<MainNavProps> = ({
   const { t } = useI18n('common');
   const {
     currentWorkspace,
-    recentWorkspaces,
     openedWorkspacesList,
     assistantWorkspacesList,
-    normalWorkspacesList,
-    switchWorkspace,
     setActiveWorkspace,
   } = useWorkspaceContext();
 
@@ -93,15 +72,10 @@ const MainNav: React.FC<MainNavProps> = ({
 
   // Section expand state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    () => new Set(['assistant-sessions', 'workspace'])
+    () => new Set(['sessions'])
   );
 
-  const workspaceMenuButtonRef = useRef<HTMLButtonElement | null>(null);
-  const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [workspaceMenuClosing, setWorkspaceMenuClosing] = useState(false);
-  const [workspaceMenuPos, setWorkspaceMenuPos] = useState({ top: 0, left: 0 });
-  const [isExtensionsOpen, setIsExtensionsOpen] = useState(false);
+  const [isAgentAppOpen, setIsAgentAppOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   const toggleSection = useCallback((id: string) => {
@@ -116,42 +90,63 @@ const MainNav: React.FC<MainNavProps> = ({
     });
   }, []);
 
-  const closeWorkspaceMenu = useCallback(() => {
-    setWorkspaceMenuClosing(true);
-    window.setTimeout(() => {
-      setWorkspaceMenuOpen(false);
-      setWorkspaceMenuClosing(false);
-    }, 150);
-  }, []);
-
-  const openWorkspaceMenu = useCallback(async () => {
-    try {
-      await workspaceManager.cleanupInvalidWorkspaces();
-    } catch (error) {
-      log.warn('Failed to cleanup invalid workspaces before opening workspace menu', { error });
-    }
-    const rect = workspaceMenuButtonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setWorkspaceMenuPos({ top: rect.bottom + 6, left: rect.left });
-    setWorkspaceMenuOpen(true);
-    setWorkspaceMenuClosing(false);
-  }, []);
-
-  const toggleWorkspaceMenu = useCallback(() => {
-    if (workspaceMenuOpen) { closeWorkspaceMenu(); return; }
-    void openWorkspaceMenu();
-  }, [closeWorkspaceMenu, openWorkspaceMenu, workspaceMenuOpen]);
-
-  const setSessionMode = useSessionModeStore(s => s.setMode);
   const isAssistantWorkspaceActive = currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 
+  // Global workspace = default assistant workspace (no assistantId), fallback to first assistant ws
   const defaultAssistantWorkspace = useMemo(
     () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
     [assistantWorkspacesList]
   );
 
+  const handleOpenDispatcher = useCallback(async () => {
+    try {
+      // Find an existing Dispatcher session across all loaded sessions (mode field, not config.agentType)
+      const storeState = flowChatStore.getState();
+      const existing = Array.from(storeState.sessions.values())
+        .filter((s) => s.mode === 'Dispatcher')
+        .sort((a, b) => (b.lastActiveAt ?? b.createdAt ?? 0) - (a.lastActiveAt ?? a.createdAt ?? 0))[0] ?? null;
+      if (existing) {
+        // Switch directly — no workspace change needed, Dispatcher is nav-level
+        await openMainSession(existing.sessionId);
+        return;
+      }
+      // No existing Dispatcher: create in the assistant workspace for persistence
+      // The workspace is just storage — no need to activate it
+      const globalWs = defaultAssistantWorkspace;
+      if (globalWs) {
+        await flowChatManager.createChatSession(
+          { workspacePath: globalWs.rootPath, workspaceId: globalWs.id },
+          'Dispatcher'
+        );
+      } else {
+        await flowChatManager.createChatSession({}, 'Dispatcher');
+      }
+    } catch (err) {
+      log.error('Failed to open Dispatcher', err);
+    }
+  }, [defaultAssistantWorkspace]);
+
+  const handleNewDispatcherSession = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const globalWs = defaultAssistantWorkspace;
+      if (globalWs) {
+        await flowChatManager.createChatSession(
+          { workspacePath: globalWs.rootPath, workspaceId: globalWs.id },
+          'Dispatcher'
+        );
+      } else {
+        await flowChatManager.createChatSession({}, 'Dispatcher');
+      }
+    } catch (err) {
+      log.error('Failed to create new Dispatcher session', err);
+    }
+  }, [defaultAssistantWorkspace]);
+
   useEffect(() => {
-    openedWorkspacesList.forEach(workspace => {
+    // Initialize sessions from disk for all opened workspaces, including assistant workspaces
+    const allWorkspaces = [...openedWorkspacesList, ...assistantWorkspacesList];
+    allWorkspaces.forEach(workspace => {
       if (workspace.workspaceKind === WorkspaceKind.Remote) {
         void flowChatStore.initializeFromDisk(
           workspace.rootPath,
@@ -162,7 +157,7 @@ const MainNav: React.FC<MainNavProps> = ({
         void flowChatStore.initializeFromDisk(workspace.rootPath);
       }
     });
-  }, [openedWorkspacesList]);
+  }, [openedWorkspacesList, assistantWorkspacesList]);
 
   const toggleNavSearch = useCallback(() => {
     setSearchOpen((v) => !v);
@@ -194,106 +189,14 @@ const MainNav: React.FC<MainNavProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleNavSearch]);
 
-  const handleCreateProjectSession = useCallback(
-    async (mode: 'agentic' | 'Cowork') => {
-      const target = pickWorkspaceForProjectChatSession(currentWorkspace, normalWorkspacesList);
-      if (!target) {
-        notificationService.warning(t('nav.sessions.needProjectWorkspaceForSession'), { duration: 4500 });
-        return;
-      }
-      openScene('session');
-      switchLeftPanelTab('sessions');
-      try {
-        if (target.id !== currentWorkspace?.id) {
-          await setActiveWorkspace(target.id);
-        }
-        const reusableId = findReusableEmptySessionId(target, mode);
-        if (reusableId) {
-          await flowChatManager.switchChatSession(reusableId);
-          return;
-        }
-        await flowChatManager.createChatSession(flowChatSessionConfigForWorkspace(target), mode);
-      } catch (err) {
-        log.error('Failed to create session', err);
-      }
-    },
-    [
-      currentWorkspace,
-      normalWorkspacesList,
-      openScene,
-      setActiveWorkspace,
-      switchLeftPanelTab,
-      t,
-    ]
-  );
-
-  const handleCreateCodeSession = useCallback(() => {
-    setSessionMode('code');
-    void handleCreateProjectSession('agentic');
-  }, [handleCreateProjectSession, setSessionMode]);
-
-  const handleCreateCoworkSession = useCallback(() => {
-    setSessionMode('cowork');
-    void handleCreateProjectSession('Cowork');
-  }, [handleCreateProjectSession, setSessionMode]);
-
-  const handleOpenProject = useCallback(async () => {
-    try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({ directory: true, multiple: false, title: t('header.selectProjectDirectory') });
-      if (selected && typeof selected === 'string') {
-        await workspaceManager.openWorkspace(selected);
-      }
-    } catch (err) {
-      log.error('Failed to open project', err);
-    }
-  }, [t]);
-
-  const handleNewProject = useCallback(() => {
-    window.dispatchEvent(new Event('nav:new-project'));
-  }, []);
-
-  const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
-    const targetWorkspace = recentWorkspaces.find(item => item.id === workspaceId);
-    if (!targetWorkspace) return;
-    closeWorkspaceMenu();
-    await switchWorkspace(targetWorkspace);
-  }, [closeWorkspaceMenu, recentWorkspaces, switchWorkspace]);
-
-  const handleOpenRemoteSSH = useCallback(() => {
-    closeWorkspaceMenu();
-    setIsSSHConnectionDialogOpen(true);
-  }, [closeWorkspaceMenu]);
-
   const handleSelectRemoteWorkspace = useCallback(async (path: string) => {
     try {
       await sshRemote.openWorkspace(path);
       sshRemote.setShowFileBrowser(false);
-      setIsSSHConnectionDialogOpen(false);
     } catch (err) {
       log.error('Failed to open remote workspace', err);
     }
   }, [sshRemote]);
-
-  useEffect(() => {
-    if (!workspaceMenuOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (workspaceMenuButtonRef.current?.contains(target)) return;
-      if (workspaceMenuRef.current?.contains(target)) return;
-      closeWorkspaceMenu();
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeWorkspaceMenu();
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [closeWorkspaceMenu, workspaceMenuOpen]);
 
   const handleOpenAssistant = useCallback(() => {
     const targetAssistantWorkspace =
@@ -332,100 +235,31 @@ const MainNav: React.FC<MainNavProps> = ({
   const isAgentsActive = activeTabId === 'agents';
   const isSkillsActive = activeTabId === 'skills';
 
+  const isMiniAppsSceneActive = activeTabId === 'miniapps' || !!activeMiniAppId;
+
   useEffect(() => {
-    if (isAgentsActive || isSkillsActive) {
-      setIsExtensionsOpen(true);
+    if (isAgentsActive || isMiniAppsSceneActive) {
+      setIsAgentAppOpen(true);
     }
-  }, [isAgentsActive, isSkillsActive]);
+  }, [isAgentsActive, isMiniAppsSceneActive]);
 
-  const workspaceMenuPortal = workspaceMenuOpen ? createPortal(
-    <div
-      ref={workspaceMenuRef}
-      className={`bitfun-nav-panel__workspace-menu${workspaceMenuClosing ? ' is-closing' : ''}`}
-      role="menu"
-      style={{ top: workspaceMenuPos.top, left: workspaceMenuPos.left }}
-    >
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        role="menuitem"
-        onClick={() => { closeWorkspaceMenu(); void handleOpenProject(); }}
-      >
-        <FolderOpen size={13} />
-        <span>{t('header.openProject')}</span>
-      </button>
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        role="menuitem"
-        onClick={() => { closeWorkspaceMenu(); handleNewProject(); }}
-      >
-        <FolderPlus size={13} />
-        <span>{t('header.newProject')}</span>
-      </button>
-      <button
-        type="button"
-        className="bitfun-nav-panel__workspace-menu-item"
-        role="menuitem"
-        onClick={handleOpenRemoteSSH}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-6v6" />
-        </svg>
-        <span>{t('ssh.remote.connect')}</span>
-      </button>
-      <div className="bitfun-nav-panel__workspace-menu-divider" role="separator" />
-      <div className="bitfun-nav-panel__workspace-menu-section-title">
-        <History size={12} aria-hidden="true" />
-        <span>{t('header.recentWorkspaces')}</span>
-      </div>
-      {recentWorkspaces.length === 0 ? (
-        <div className="bitfun-nav-panel__workspace-menu-empty">
-          <span>{t('header.noRecentWorkspaces')}</span>
-        </div>
-      ) : (
-        <div className="bitfun-nav-panel__workspace-menu-workspaces">
-          {recentWorkspaces.map((workspace) => {
-            const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
-            return (
-            <button
-              key={workspace.id}
-              type="button"
-              className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
-              role="menuitem"
-              title={tooltip}
-              onClick={() => { void handleSwitchWorkspace(workspace.id); }}
-            >
-              <FolderOpen size={13} aria-hidden="true" />
-              <span className="bitfun-nav-panel__workspace-menu-item-main">
-                {hostPrefix ? (
-                  <>
-                    <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
-                    <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
-                      ·
-                    </span>
-                  </>
-                ) : null}
-                <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
-              </span>
-              {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
-            </button>
-            );
-          })}
-        </div>
-      )}
-    </div>,
-    document.body
-  ) : null;
+  const isDispatcherActive = useMemo(() => {
+    const storeState = flowChatStore.getState();
+    const activeId = storeState.activeSessionId;
+    if (!activeId) return false;
+    const active = storeState.sessions.get(activeId);
+    return active?.mode === 'Dispatcher';
+  }, [activeTabId]);
 
-  const createCodeTooltip = t('nav.sessions.newCodeSession');
-  const createCoworkTooltip = t('nav.sessions.newCoworkSession');
+  const dispatcherTooltip = t('nav.sessions.dispatcher');
   const assistantTooltip = t('nav.items.persona');
-  const addWorkspaceTooltip = t('nav.tooltips.addWorkspace');
   const isAssistantActive = activeTabId === 'assistant';
-  const agentsTooltip = t('nav.tooltips.agents');
+  const agentsTooltip = t('nav.tooltips.thinkAApp');
   const skillsTooltip = t('nav.tooltips.skills');
-  const extensionsLabel = t('nav.sections.extensions');
+  const agentAppLabel = t('nav.sections.agentApp');
+  const aappTooltip = t('nav.tooltips.aapp');
+  const runAAppTooltip = t('nav.tooltips.runAApp');
+  const driveAAppTooltip = t('nav.tooltips.driveAApp');
   return (
     <>
       {/* ── Workspace search ───────────────────────── */}
@@ -454,33 +288,31 @@ const MainNav: React.FC<MainNavProps> = ({
 
       {/* ── Top action strip ────────────────────────── */}
       <div className="bitfun-nav-panel__top-actions">
-        <Tooltip content={createCodeTooltip} placement="right" followCursor>
-          <button
-            type="button"
-            className="bitfun-nav-panel__top-action-btn"
-            onClick={handleCreateCodeSession}
-            aria-label={createCodeTooltip}
-          >
-            <span className="bitfun-nav-panel__top-action-icon-circle" aria-hidden="true">
-              <Plus size={12} />
-            </span>
-            <span>{t('nav.sessions.newCodeSessionShort')}</span>
-          </button>
-        </Tooltip>
-
-        <Tooltip content={createCoworkTooltip} placement="right" followCursor>
-          <button
-            type="button"
-            className="bitfun-nav-panel__top-action-btn"
-            onClick={handleCreateCoworkSession}
-            aria-label={createCoworkTooltip}
-          >
-            <span className="bitfun-nav-panel__top-action-icon-circle" aria-hidden="true">
-              <Plus size={12} />
-            </span>
-            <span>{t('nav.sessions.newCoworkSessionShort')}</span>
-          </button>
-        </Tooltip>
+        <div className={`bitfun-nav-panel__top-action-row${isDispatcherActive ? ' is-active' : ''}`}>
+          <Tooltip content={dispatcherTooltip} placement="right" followCursor>
+            <button
+              type="button"
+              className="bitfun-nav-panel__top-action-btn bitfun-nav-panel__top-action-btn--in-row"
+              onClick={handleOpenDispatcher}
+              aria-label={dispatcherTooltip}
+            >
+              <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+                <Orbit size={15} />
+              </span>
+              <span>{t('nav.sessions.dispatcherShort')}</span>
+            </button>
+          </Tooltip>
+          <Tooltip content={t('nav.tooltips.newDispatcherSession')} placement="right" followCursor>
+            <button
+              type="button"
+              className="bitfun-nav-panel__top-action-inline-btn"
+              onClick={handleNewDispatcherSession}
+              aria-label={t('nav.tooltips.newDispatcherSession')}
+            >
+              <RotateCcw size={13} />
+            </button>
+          </Tooltip>
+        </div>
 
         <Tooltip content={assistantTooltip} placement="right" followCursor>
           <button
@@ -497,33 +329,33 @@ const MainNav: React.FC<MainNavProps> = ({
         </Tooltip>
 
         <div className="bitfun-nav-panel__top-action-expand">
-          <Tooltip content={extensionsLabel} placement="right" followCursor>
+          <Tooltip content={aappTooltip} placement="right" followCursor>
             <button
               type="button"
               className={[
                 'bitfun-nav-panel__top-action-btn',
                 'bitfun-nav-panel__top-action-btn--expand',
-                isExtensionsOpen ? 'is-open' : '',
+                isAgentAppOpen ? 'is-open' : '',
               ].filter(Boolean).join(' ')}
-              onClick={() => setIsExtensionsOpen(v => !v)}
-              aria-expanded={isExtensionsOpen}
-              aria-label={extensionsLabel}
+              onClick={() => setIsAgentAppOpen(v => !v)}
+              aria-expanded={isAgentAppOpen}
+              aria-label={agentAppLabel}
             >
               <span className="bitfun-nav-panel__top-action-expand-icons" aria-hidden="true">
-                <Blocks size={15} className="bitfun-nav-panel__top-action-expand-icon-default" />
+                <AppWindow size={15} className="bitfun-nav-panel__top-action-expand-icon-default" />
                 <ChevronDown
                   size={15}
                   className={[
                     'bitfun-nav-panel__top-action-expand-icon-chevron',
-                    isExtensionsOpen ? 'is-open' : '',
+                    isAgentAppOpen ? 'is-open' : '',
                   ].filter(Boolean).join(' ')}
                 />
               </span>
-              <span>{extensionsLabel}</span>
+              <span>{agentAppLabel}</span>
             </button>
           </Tooltip>
 
-          <div className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}>
+          <div className={`bitfun-nav-panel__top-action-sublist bitfun-nav-panel__top-action-sublist--agent-app${isAgentAppOpen ? ' is-open' : ''}`}>
             <Tooltip content={agentsTooltip} placement="right" followCursor>
               <button
                 type="button"
@@ -542,90 +374,63 @@ const MainNav: React.FC<MainNavProps> = ({
               </button>
             </Tooltip>
 
-            <Tooltip content={skillsTooltip} placement="right" followCursor>
+            <div className="bitfun-nav-panel__top-action-miniapp-slot">
+              <Tooltip content={runAAppTooltip} placement="right" followCursor>
+                <MiniAppEntry
+                  isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
+                  activeMiniAppId={activeMiniAppId}
+                  onOpenMiniApps={() => openScene('miniapps')}
+                  onOpenMiniApp={(appId) => openScene(`miniapp:${appId}`)}
+                />
+              </Tooltip>
+            </div>
+
+            <Tooltip content={driveAAppTooltip} placement="right" followCursor>
               <button
                 type="button"
-                className={[
-                  'bitfun-nav-panel__top-action-btn',
-                  'bitfun-nav-panel__top-action-btn--sub',
-                  isSkillsActive ? 'is-active' : '',
-                ].filter(Boolean).join(' ')}
-                onClick={handleOpenSkills}
-                aria-label={skillsTooltip}
+                className="bitfun-nav-panel__top-action-btn bitfun-nav-panel__top-action-btn--sub bitfun-nav-panel__top-action-btn--coming-soon"
+                disabled
+                aria-label={driveAAppTooltip}
               >
                 <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
-                  <Puzzle size={15} />
+                  <MonitorPlay size={15} />
                 </span>
-                <span>{t('nav.items.skills')}</span>
+                <span>{t('nav.items.driveAApp')}</span>
+                <span className="bitfun-nav-panel__top-action-badge">{t('nav.badges.comingSoon')}</span>
               </button>
             </Tooltip>
           </div>
         </div>
+
+        <Tooltip content={skillsTooltip} placement="right" followCursor>
+          <button
+            type="button"
+            className={`bitfun-nav-panel__top-action-btn${isSkillsActive ? ' is-active' : ''}`}
+            onClick={handleOpenSkills}
+            aria-label={skillsTooltip}
+          >
+            <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
+              <Puzzle size={15} />
+            </span>
+            <span>{t('nav.items.skills')}</span>
+          </button>
+        </Tooltip>
       </div>
 
       {/* ── Sections ────────────────────────────────── */}
       <div className="bitfun-nav-panel__sections">
 
-        {/* Assistant sessions */}
         <div className="bitfun-nav-panel__section">
           <SectionHeader
-            label={t('nav.sections.assistantSessions')}
+            label={t('nav.sections.sessions')}
             collapsible
-            isOpen={expandedSections.has('assistant-sessions')}
-            onToggle={() => toggleSection('assistant-sessions')}
+            isOpen={expandedSections.has('sessions')}
+            onToggle={() => toggleSection('sessions')}
           />
-          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('assistant-sessions') ? '' : ' is-collapsed'}`}>
-            <div className="bitfun-nav-panel__collapsible-inner">
-              <div className="bitfun-nav-panel__items bitfun-nav-panel__items--session-blocks">
-                {assistantWorkspacesList.map(workspace => {
-                  const assistantDisplayName =
-                    workspace.workspaceKind === WorkspaceKind.Assistant
-                      ? workspace.identity?.name?.trim() || workspace.name
-                      : workspace.name;
-                  return (
-                    <SessionsSection
-                      key={workspace.id}
-                      workspaceId={workspace.id}
-                      workspacePath={workspace.rootPath}
-                      remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-                      isActiveWorkspace={workspace.id === currentWorkspace?.id}
-                      assistantLabel={assistantDisplayName}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Workspace */}
-        <div className="bitfun-nav-panel__section">
-          <SectionHeader
-            label={t('nav.sections.workspace')}
-            collapsible
-            isOpen={expandedSections.has('workspace')}
-            onToggle={() => toggleSection('workspace')}
-            actions={
-              <div className="bitfun-nav-panel__workspace-action-wrap">
-                <Tooltip content={addWorkspaceTooltip} placement="right" followCursor disabled={workspaceMenuOpen}>
-                  <button
-                    ref={workspaceMenuButtonRef}
-                    type="button"
-                    className={`bitfun-nav-panel__section-action${workspaceMenuOpen ? ' is-active' : ''}`}
-                    aria-label={addWorkspaceTooltip}
-                    aria-expanded={workspaceMenuOpen}
-                    onClick={toggleWorkspaceMenu}
-                  >
-                    <Plus size={13} />
-                  </button>
-                </Tooltip>
-              </div>
-            }
-          />
-          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('workspace') ? '' : ' is-collapsed'}`}>
+          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('sessions') ? '' : ' is-collapsed'}`}>
             <div className="bitfun-nav-panel__collapsible-inner">
               <div className="bitfun-nav-panel__items">
-                <WorkspaceListSection variant="projects" />
+                <SessionsSection listAllSessions />
               </div>
             </div>
           </div>
@@ -633,25 +438,6 @@ const MainNav: React.FC<MainNavProps> = ({
 
       </div>
 
-      {/* ── Bottom: MiniApp ───────────────────────── */}
-      <div className="bitfun-nav-panel__bottom-bar">
-        <div className="bitfun-nav-panel__miniapp-footer">
-          <MiniAppEntry
-            isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
-            activeMiniAppId={activeMiniAppId}
-            onOpenMiniApps={() => openScene('miniapps')}
-            onOpenMiniApp={(appId) => openScene(`miniapp:${appId}`)}
-          />
-        </div>
-      </div>
-
-      {workspaceMenuPortal}
-
-      {/* SSH Remote Dialogs */}
-      <SSHConnectionDialog
-        open={isSSHConnectionDialogOpen}
-        onClose={() => setIsSSHConnectionDialogOpen(false)}
-      />
       {sshRemote.showFileBrowser && sshRemote.connectionId && (
         <RemoteFileBrowser
           connectionId={sshRemote.connectionId}

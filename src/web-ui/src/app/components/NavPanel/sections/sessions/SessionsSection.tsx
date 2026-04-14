@@ -15,7 +15,7 @@ import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManag
 import type { FlowChatState, Session } from '../../../../../flow_chat/types/flow-chat';
 import { useSceneStore } from '../../../../stores/sceneStore';
 import type { SceneTabId } from '../../../SceneBar/types';
-import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { getWorkspaceDisplayName, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
@@ -26,15 +26,13 @@ import {
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
   compareSessionsForDisplay,
+  findOpenedWorkspaceForSession,
   sessionBelongsToWorkspaceNavRow,
 } from '@/flow_chat/utils/sessionOrdering';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import './SessionsSection.scss';
 
-/** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
-const SESSIONS_LEVEL_0 = 5;
-const SESSIONS_LEVEL_1 = 10;
 const log = createLogger('SessionsSection');
 const AGENT_SCENE: SceneTabId = 'session';
 
@@ -63,6 +61,8 @@ interface SessionsSectionProps {
   assistantLabel?: string;
   /** When false, hide the leading mode / running icon on each row (e.g. assistant detail page). */
   showSessionModeIcon?: boolean;
+  /** Main nav: list every loaded session and resolve workspace on switch (no per-workspace blocks). */
+  listAllSessions?: boolean;
 }
 
 const SessionsSection: React.FC<SessionsSectionProps> = ({
@@ -73,9 +73,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   isActiveWorkspace: _isActiveWorkspace = true,
   assistantLabel,
   showSessionModeIcon = true,
+  listAllSessions = false,
 }) => {
   const { t } = useI18n('common');
-  const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
+  const { setActiveWorkspace, currentWorkspace, openedWorkspacesList } = useWorkspaceContext();
   const activeTabId = useSceneStore(s => s.activeTabId);
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
@@ -86,7 +87,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   );
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
@@ -130,10 +130,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [editingSessionId]);
 
   useEffect(() => {
-    setExpandLevel(0);
-  }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
-
-  useEffect(() => {
     if (!openMenuSessionId) return;
     const handleOutside = (event: MouseEvent) => {
       if (!sessionMenuPopoverRef.current?.contains(event.target as Node)) {
@@ -149,13 +145,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     () =>
       Array.from(flowChatState.sessions.values())
         .filter((s: Session) => {
+          // Dispatcher is a standalone nav-level session — never shown in any workspace section.
+          if (s.mode === 'Dispatcher') return false;
+          if (listAllSessions) return true;
           if (workspacePath) {
             return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
           }
           return !s.workspacePath;
         })
         .sort(compareSessionsForDisplay),
-    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
+    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost, listAllSessions]
   );
 
   const { topLevelSessions, childrenByParent } = useMemo(() => {
@@ -185,23 +184,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     };
   }, [sessions]);
 
-  const sessionDisplayLimit = useMemo(() => {
-    const total = topLevelSessions.length;
-    if (expandLevel === 2 || total <= SESSIONS_LEVEL_0) return total;
-    if (expandLevel === 1) return Math.min(total, SESSIONS_LEVEL_1);
-    return SESSIONS_LEVEL_0;
-  }, [topLevelSessions.length, expandLevel]);
-
   const visibleItems = useMemo(() => {
-    const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
     const out: Array<{ session: Session; level: 0 | 1 }> = [];
-    for (const p of visibleParents) {
+    for (const p of topLevelSessions) {
       out.push({ session: p, level: 0 });
       const children = childrenByParent.get(p.sessionId) || [];
       for (const c of children) out.push({ session: c, level: 1 });
     }
     return out;
-  }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
+  }, [childrenByParent, topLevelSessions]);
 
   const activeSessionId = flowChatState.activeSessionId;
 
@@ -212,8 +203,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         const session = flowChatStore.getState().sessions.get(sessionId);
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
+        const resolvedWorkspaceId =
+          listAllSessions && session
+            ? findOpenedWorkspaceForSession(session, openedWorkspacesList)?.id
+            : workspaceId;
         const mustActivateWorkspace =
-          Boolean(workspaceId) && workspaceId !== currentWorkspace?.id;
+          Boolean(resolvedWorkspaceId) && resolvedWorkspaceId !== currentWorkspace?.id;
         const activateWorkspace = mustActivateWorkspace
           ? async (targetWorkspaceId: string) => {
               await setActiveWorkspace(targetWorkspaceId);
@@ -222,7 +217,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
         if (relationship.canOpenInAuxPane && parentSessionId && session) {
           await openMainSession(parentSessionId, {
-            workspaceId,
+            workspaceId: resolvedWorkspaceId,
             activateWorkspace,
           });
           openBtwSessionInAuxPane({
@@ -235,14 +230,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
         if (sessionId === activeSessionId) {
           await openMainSession(sessionId, {
-            workspaceId,
+            workspaceId: resolvedWorkspaceId,
             activateWorkspace,
           });
           return;
         }
 
         await openMainSession(sessionId, {
-          workspaceId,
+          workspaceId: resolvedWorkspaceId,
           activateWorkspace,
         });
         window.dispatchEvent(
@@ -258,6 +253,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       setActiveWorkspace,
       workspaceId,
       currentWorkspace?.id,
+      listAllSessions,
+      openedWorkspacesList,
     ]
   );
 
@@ -370,15 +367,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
           const parentTitle = parentSession ? resolveSessionTitle(parentSession) : '';
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
-          const trimmedAssistant = assistantLabel?.trim() ?? '';
-          const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isBtwChild;
+          const rowWorkspace = listAllSessions
+            ? findOpenedWorkspaceForSession(session, openedWorkspacesList)
+            : undefined;
+          const contextLabel = listAllSessions
+            ? (rowWorkspace ? getWorkspaceDisplayName(rowWorkspace) : '')
+            : (assistantLabel?.trim() ?? '');
+          const showContextInTooltip = contextLabel.length > 0;
+          const showRichTooltip = showContextInTooltip || isBtwChild;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
-              {showAssistantInTooltip ? (
+              {showContextInTooltip ? (
                 <div className="bitfun-nav-panel__inline-item-tooltip-meta">
-                  {t('nav.sessions.assistantOwner', { name: trimmedAssistant })}
+                  {listAllSessions
+                    ? t('nav.sessions.sessionContext', { name: contextLabel })
+                    : t('nav.sessions.assistantOwner', { name: contextLabel })}
                 </div>
               ) : null}
               {isBtwChild ? (
@@ -394,7 +398,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             sessionModeKey === 'cowork'
               ? ClipboardList
               : sessionModeKey === 'claw'
-                ? showAssistantInTooltip
+                ? showContextInTooltip
                   ? Panda
                   : Bot
                 : Code2;
@@ -525,47 +529,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             </Tooltip>
           );
         })}
-
-      {topLevelSessions.length > SESSIONS_LEVEL_0 && (
-        <button
-          type="button"
-          className="bitfun-nav-panel__inline-toggle"
-          onClick={() => {
-            const total = topLevelSessions.length;
-            if (expandLevel === 0) {
-              setExpandLevel(1);
-              return;
-            }
-            if (expandLevel === 1 && total > SESSIONS_LEVEL_1) {
-              setExpandLevel(2);
-              return;
-            }
-            setExpandLevel(0);
-          }}
-        >
-          {expandLevel === 0 ? (
-            <>
-              <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
-              <span>
-                {t('nav.sessions.showMore', {
-                  count: topLevelSessions.length - SESSIONS_LEVEL_0,
-                })}
-              </span>
-            </>
-          ) : expandLevel === 1 && topLevelSessions.length > SESSIONS_LEVEL_1 ? (
-            <>
-              <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
-              <span>
-                {t('nav.sessions.showAll', {
-                  count: topLevelSessions.length - SESSIONS_LEVEL_1,
-                })}
-              </span>
-            </>
-          ) : (
-            <span>{t('nav.sessions.showLess')}</span>
-          )}
-        </button>
-      )}
     </div>
   );
 };

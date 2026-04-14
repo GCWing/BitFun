@@ -86,6 +86,9 @@ impl ToolRegistry {
 
     /// Register all tools
     fn register_all_tools(&mut self) {
+        // Agent dispatch tool (Dispatcher mode)
+        self.register_tool(Arc::new(AgentDispatchTool::new()));
+
         // Basic tool set
         self.register_tool(Arc::new(LSTool::new()));
         self.register_tool(Arc::new(FileReadTool::new()));

@@ -677,7 +677,8 @@ $_section-header-height: 24px;
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    padding: 8px 10px 8px 12px;
+    // Horizontal padding matches `.bitfun-nav-panel__top-action-btn--sub` (18 / 8)
+    padding: 8px $size-gap-2 8px 18px;
     border: none;
     border-radius: 10px;
     background: transparent;
@@ -713,27 +714,26 @@ $_section-header-height: 24px;
     }
   }
 
+  // Match `.bitfun-nav-panel__top-action-btn .bitfun-nav-panel__top-action-icon-slot`
+  &__miniapp-entry-lead-icon {
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
   &__miniapp-entry-main {
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
     flex: 1;
-  }
-
-  &__miniapp-entry-copy {
-    min-width: 0;
-    display: inline;
-    position: relative;
-  }
-
-  &__miniapp-badge {
-    position: absolute;
-    top: 0;
-    right: -36px;
-    font-size: var(--font-size-xxs);
-    padding: 1px 5px;
-    border-radius: 4px;
   }
 
   &__miniapp-entry-title {
@@ -1398,7 +1398,6 @@ $_section-header-height: 24px;
 .bitfun-nav-panel__footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-shrink: 0;
   padding: $size-gap-1 $size-gap-2 0;
   gap: $size-gap-1;
@@ -1410,26 +1409,8 @@ $_section-header-height: 24px;
   gap: $size-gap-1;
 }
 
-.bitfun-nav-panel__footer-right {
-  display: flex;
-  align-items: center;
-  gap: $size-gap-1;
-}
-
 .bitfun-nav-panel__footer-btn {
   flex-shrink: 0;
-}
-
-// Footer notification: yellow only when there are unread messages (BellDot)
-.bitfun-nav-panel__footer .bitfun-notification-btn .bitfun-notification-btn__icon--has-message {
-  color: #ca8a04;
-}
-
-.bitfun-nav-panel__footer .bitfun-notification-btn.bitfun-notification-btn--nav-hover-icon:not(.bitfun-notification-btn--has-progress) {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  justify-content: center;
 }
 
 .bitfun-nav-panel__footer-btn--icon {
@@ -1846,18 +1827,89 @@ $_section-header-height: 24px;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: $size-gap-2 $size-gap-2 $size-gap-4 * 0.75;
+  padding: $size-gap-2 $size-gap-2 $size-gap-2;
+  margin-bottom: $size-gap-1;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bitfun-nav-panel__top-action-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: $size-radius-base;
+  transition: background $motion-fast $easing-standard;
+
+  // Row-level hover: entire row gets background, suppress button's own bg
+  &:hover {
+    background: var(--element-bg-soft);
+
+    .bitfun-nav-panel__top-action-btn--in-row {
+      background: transparent;
+      color: var(--color-text-primary);
+    }
+
+    .bitfun-nav-panel__top-action-inline-btn {
+      opacity: 1;
+    }
+  }
+
+  &.is-active {
+    background: var(--element-bg-soft);
+
+    .bitfun-nav-panel__top-action-btn--in-row {
+      background: transparent;
+      color: var(--color-text-primary);
+
+      &:hover {
+        background: transparent;
+      }
+    }
+
+    .bitfun-nav-panel__top-action-inline-btn {
+      opacity: 1;
+    }
+  }
+
+  .bitfun-nav-panel__top-action-inline-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 4px;
+    border: none;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity $motion-fast $easing-standard,
+                background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+  }
+}
+
+.bitfun-nav-panel__top-action-btn--in-row {
+  flex: 1;
+  min-width: 0;
+  width: auto;
 }
 
 .bitfun-nav-panel__top-action-expand {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  // Divider below 扩展 (main row + optional Agents / Skills sublist) → scrollable sections
-  padding-bottom: $size-gap-2;
-  margin-bottom: $size-gap-1;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .bitfun-nav-panel__top-action-sublist {
@@ -1873,6 +1925,20 @@ $_section-header-height: 24px;
   &.is-open {
     max-height: 72px;
     opacity: 1;
+  }
+
+  &--agent-app.is-open {
+    max-height: 180px;
+  }
+}
+
+.bitfun-nav-panel__top-action-miniapp-slot {
+  min-width: 0;
+
+  .bitfun-nav-panel__miniapp-entry {
+    min-height: 38px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 }
 
@@ -1916,7 +1982,7 @@ $_section-header-height: 24px;
     justify-content: center;
   }
 
-  // 助理行：前导 icon 悬停微微放大（与 __top-action-icon-circle 一致；排除 --sub 的 Agents / Skills）
+  // 助理行：前导 icon 悬停微微放大（与 __top-action-icon-circle 一致；排除 --sub 与独立 Skills 行）
   &:not(.bitfun-nav-panel__top-action-btn--sub) .bitfun-nav-panel__top-action-icon-slot {
     transform: scale(1);
     transform-origin: center;
@@ -1976,6 +2042,33 @@ $_section-header-height: 24px;
       transform: translate(-50%, -50%) rotate(180deg);
     }
   }
+}
+
+// Coming-soon disabled state for placeholder AApp entries
+.bitfun-nav-panel__top-action-btn--coming-soon {
+  opacity: 0.48;
+  cursor: not-allowed;
+  pointer-events: auto;
+
+  &:hover {
+    background: transparent;
+    color: var(--color-text-secondary);
+  }
+}
+
+// Badge pill (e.g. "Soon") shown on the right of a nav entry
+.bitfun-nav-panel__top-action-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .bitfun-nav-panel__top-action-btn--expand:hover .bitfun-nav-panel__top-action-expand-icons {

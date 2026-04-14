@@ -34,6 +34,45 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
     flex-shrink: 0;
     padding: 0 $size-gap-1;
   }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 $size-gap-1;
+    gap: $size-gap-1;
+  }
+}
+
+.bitfun-scene-bar__notification-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+
+  // Yellow indicator when there are unread notifications
+  .bitfun-notification-btn__icon--has-message {
+    color: #ca8a04;
+  }
 }
 
 .bitfun-scene-bar--no-controls {

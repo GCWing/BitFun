@@ -20,7 +20,6 @@ import { useNavSceneStore } from '../../stores/navSceneStore';
 import { getSceneNav } from '../../scenes/nav-registry';
 import type { SceneTabId } from '../SceneBar/types';
 import MainNav from './MainNav';
-import PersistentFooterActions from './components/PersistentFooterActions';
 import './NavPanel.scss';
 
 /** Scenes that use the split-open accordion transition. */
@@ -102,7 +101,6 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
         )}
 
       </div>
-      <PersistentFooterActions />
     </nav>
   );
 };

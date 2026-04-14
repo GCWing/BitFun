@@ -78,25 +78,35 @@
       "sessions": "会话",
       "project": "目录",
       "persona": "助理",
-      "agents": "专业智能体",
+      "agents": "思维应用",
       "skills": "技能",
       "tools": "工具",
       "terminal": "Shell",
       "git": "Git",
-      "miniApps": "小应用"
+      "miniApps": "运行应用",
+      "driveAApp": "驱动应用"
     },
     "tooltips": {
       "persona": "助理 — 创建与管理所有助理实例",
       "agents": "它能调用哪些 Agent",
       "skills": "它懂什么专项知识 — 技能知识文件",
       "tools": "它能用什么工具 — 内置工具与 MCP 服务",
-      "addWorkspace": "添加工作区"
+      "addWorkspace": "添加工作区",
+      "aapp": "AApp（Agentic Application）— Agentic OS 的一等公民应用，与传统 OS 应用地位等同，由 OS 统一调度管理",
+      "thinkAApp": "Think AApp 思维应用 — 推理驱动型智能应用，具备自主推理、多轮对话与复杂任务执行能力",
+      "runAApp": "Run AApp 运行应用 — 生成即执行的程序应用，将 Agent 能力固化为可重复运行的智能程序",
+      "driveAApp": "Drive AApp 驱动应用 — 接管并操控传统软件的智能代理，替用户自动完成 GUI 工作流",
+      "newDispatcherSession": "重启 Agentic OS"
     },
     "sections": {
       "workspace": "工作区",
-      "extensions": "定制",
+      "sessions": "会话",
+      "agentApp": "智能应用",
       "shell": "Shell",
       "assistantSessions": "助理会话"
+    },
+    "badges": {
+      "comingSoon": "即将上线"
     },
     "search": {
       "triggerPlaceholder": "搜索",
@@ -162,6 +172,8 @@
       "newCodeSessionShort": "编码会话",
       "newCoworkSessionShort": "办公会话",
       "newClawSession": "新建 Claw 会话",
+      "dispatcher": "打开 Agentic OS",
+      "dispatcherShort": "Agentic OS",
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "codeSessionMode": "Code 会话",
@@ -175,6 +187,7 @@
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",
       "assistantOwner": "所属助理：{{name}}",
+      "sessionContext": "所属：{{name}}",
       "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。"
     },
     "scheduledJobs": {

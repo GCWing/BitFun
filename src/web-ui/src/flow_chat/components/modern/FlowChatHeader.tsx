@@ -1,11 +1,11 @@
 /**
  * FlowChat header.
- * Shows the currently viewed turn and user message.
+ * Shows the workspace path and agent type for the active session.
  * Height matches side panel headers (40px).
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, CornerUpLeft, List } from 'lucide-react';
+import { ChevronDown, ChevronUp, CornerUpLeft, List, FolderOpen, Bot } from 'lucide-react';
 import { Tooltip, IconButton } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -25,13 +25,16 @@ export interface FlowChatHeaderProps {
   currentTurn: number;
   /** Total turns. */
   totalTurns: number;
-  /** Current user message. */
+  /** Current user message (kept for turn list tooltip). */
   currentUserMessage: string;
   /** Whether the header is visible. */
   visible: boolean;
   /** Session ID. */
   sessionId?: string;
+  /** Workspace path displayed in the header. */
   workspacePath?: string;
+  /** Agent type / mode for the active session. */
+  agentType?: string;
   /** BTW child-session origin metadata. */
   btwOrigin?: Session['btwOrigin'] | null;
   /** BTW parent session title. */
@@ -51,7 +54,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   currentUserMessage,
   visible,
   sessionId,
-  workspacePath: _workspacePath,
+  workspacePath,
+  agentType,
   btwOrigin,
   btwParentTitle = '',
   turns = [],
@@ -64,10 +68,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const turnListRef = useRef<HTMLDivElement | null>(null);
   const activeTurnItemRef = useRef<HTMLButtonElement | null>(null);
 
-  // Truncate long messages.
-  const truncatedMessage = currentUserMessage.length > 50
-    ? currentUserMessage.slice(0, 50) + '...'
-    : currentUserMessage;
+  const workspaceName = useMemo(() => {
+    if (!workspacePath) return '';
+    return workspacePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? workspacePath;
+  }, [workspacePath]);
+
   const parentLabel = btwParentTitle || t('btw.parent', { defaultValue: 'parent session' });
   const backTooltip = btwOrigin?.parentTurnIndex
     ? t('flowChatHeader.btwBackTooltipWithTurn', {
@@ -167,7 +172,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     setIsTurnListOpen(false);
   };
 
-  if (!visible || totalTurns === 0) {
+  if (!visible) {
     return null;
   }
 
@@ -177,14 +182,26 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         <SessionFilesBadge sessionId={sessionId} />
       </div>
 
-      <Tooltip content={currentUserMessage} placement="bottom">
-        <div className="flowchat-header__message">
-          <span className="flowchat-header__turn-badge" aria-label={turnBadgeLabel}>
-            <span>{turnBadgeLabel}</span>
-          </span>
-          <span className="flowchat-header__message-text">
-            {truncatedMessage}
-          </span>
+      <Tooltip
+        content={[agentType, workspacePath].filter(Boolean).join(': ')}
+        placement="bottom"
+      >
+        <div className="flowchat-header__info">
+          {agentType ? (
+            <span className="flowchat-header__agent-type">
+              <Bot size={11} />
+              <span>{agentType}</span>
+            </span>
+          ) : null}
+          {agentType && workspaceName ? (
+            <span className="flowchat-header__info-sep">/</span>
+          ) : null}
+          {workspaceName ? (
+            <span className="flowchat-header__workspace">
+              <FolderOpen size={12} />
+              <span>{workspaceName}</span>
+            </span>
+          ) : null}
         </div>
       </Tooltip>
 

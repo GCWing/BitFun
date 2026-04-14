@@ -10,6 +10,7 @@
 
 $_nav-width: 240px;
 $_nav-collapsed-width: 80px;
+$_nav-footer-height: 40px;
 
 // ── Root: left-right split ───────────────────────────────
 
@@ -40,11 +41,23 @@ $_nav-collapsed-width: 80px;
   position: relative;
   z-index: 3;
   transition: width $motion-base $easing-standard;
+  // Reserve space for the independent footer bar at the bottom
+  padding-bottom: $_nav-footer-height;
 
   &.is-collapsed {
     width: 0;
     pointer-events: none;
   }
+}
+
+// ── Independent footer bar — always visible at bottom-left ──
+
+.bitfun-workspace-body__nav-footer {
+  position: absolute;
+  bottom: $size-gap-2;
+  left: $size-gap-2;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .bitfun-is-resizing-nav .bitfun-workspace-body__nav-area {

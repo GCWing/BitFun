@@ -14,6 +14,7 @@ import React, { useCallback, useState } from 'react';
 import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
 import { NavBar } from '../components/NavBar';
 import NavPanel from '../components/NavPanel/NavPanel';
+import PersistentFooterActions from '../components/NavPanel/components/PersistentFooterActions';
 import { SceneBar } from '../components/SceneBar';
 import { SceneViewport } from '../scenes';
 import { useApp } from '../hooks/useApp';
@@ -145,6 +146,11 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
           isEntering={isEntering}
         />
         {sceneOverlay}
+      </div>
+
+      {/* Independent footer bar — always visible regardless of nav collapse state */}
+      <div className="bitfun-workspace-body__nav-footer">
+        <PersistentFooterActions />
       </div>
     </div>
   );

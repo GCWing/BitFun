@@ -7,6 +7,7 @@ use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::project_context::ProjectContextService;
+use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
@@ -22,6 +23,7 @@ const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
+const PLACEHOLDER_RECENT_WORKSPACES: &str = "{RECENT_WORKSPACES}";
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -293,6 +295,47 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
         Ok(format!("# Language Preference\nYou MUST respond in {} regardless of the user's input language. This is the system language setting and should be followed unless the user explicitly specifies a different language. This is crucial for smooth communication and user experience\n", language))
     }
 
+    /// Get recently accessed workspaces formatted as a prompt section
+    pub async fn get_recent_workspaces_info(&self) -> String {
+        let ws_service = match get_global_workspace_service() {
+            Some(s) => s,
+            None => return String::new(),
+        };
+
+        let mut lines: Vec<String> = Vec::new();
+
+        // Assistant/global workspaces
+        let assistant_workspaces = ws_service.get_assistant_workspaces().await;
+        for ws in &assistant_workspaces {
+            lines.push(format!(
+                "  - [global] {} — {}",
+                ws.name,
+                ws.root_path.display()
+            ));
+        }
+
+        // Recent project workspaces
+        let recent = ws_service.get_recent_workspaces().await;
+        for ws in &recent {
+            let last = ws.last_accessed.format("%Y-%m-%d %H:%M").to_string();
+            lines.push(format!(
+                "  - [project] {} — {} (last accessed: {})",
+                ws.name,
+                ws.root_path.display(),
+                last
+            ));
+        }
+
+        if lines.is_empty() {
+            return String::new();
+        }
+
+        format!(
+            "# Available Workspaces\n<available_workspaces>\nThe following workspaces are available. Use these paths when creating agent sessions.\n\n{}\n</available_workspaces>\n\n",
+            lines.join("\n")
+        )
+    }
+
     /// Get Claw-specific workspace boundary instruction
     fn get_claw_workspace_instruction(&self) -> String {
         format!(
@@ -317,6 +360,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{MEMORIES}` - AI memories
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
+    /// - `{RECENT_WORKSPACES}` - Recently accessed global and project workspaces with paths
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
     pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
@@ -435,6 +479,12 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_VISUAL_MODE) {
             let visual_mode = self.get_visual_mode_instruction().await;
             result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
+        }
+
+        // Replace {RECENT_WORKSPACES}
+        if result.contains(PLACEHOLDER_RECENT_WORKSPACES) {
+            let recent_workspaces = self.get_recent_workspaces_info().await;
+            result = result.replace(PLACEHOLDER_RECENT_WORKSPACES, &recent_workspaces);
         }
 
         if self.context.supports_image_understanding == Some(false) {

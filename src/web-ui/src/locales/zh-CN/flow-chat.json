@@ -45,6 +45,7 @@
     "newCodeWithIndex": "新建 Code 会话 {{count}}",
     "newCoworkWithIndex": "新建 Cowork 会话 {{count}}",
     "newClawWithIndex": "新建 Claw 会话 {{count}}",
+    "dispatcher": "Agentic OS",
     "title": "会话",
     "chatWithAgent": "与{{name}}的对话",
     "rename": "重命名会话",
@@ -323,7 +324,8 @@
     "turnBadge": "第 {{current}} 轮",
     "btwBackTooltipWithTurn": "返回到来源会话：{{title}}（第 {{turn}} 轮）",
     "btwBackTooltipWithoutTurn": "返回到来源会话：{{title}}",
-    "btwCreateTooltip": "快速发起一个侧问"
+    "btwCreateTooltip": "快速发起一个侧问",
+    "agentTypeTooltip": "{{type}}：{{path}}"
   },
   "sessionFilesBadge": {
     "files": "文件",
@@ -391,6 +393,26 @@
     "collapse": "收起探索过程"
   },
   "toolCards": {
+    "agentDispatch": {
+      "title": "Agent 调度",
+      "agent": "Agent",
+      "agentBadge": "Agent",
+      "preparingCreate": "准备创建 {{agent}}",
+      "creatingAgent": "正在创建 {{agent}}...",
+      "createdAgent": "已创建 {{agent}}",
+      "actionFailed": "Agent 调度失败",
+      "clickToSwitch": "切换到此 Agent 会话",
+      "listingWorkspaces": "正在列出工作区...",
+      "foundWorkspaces": "找到 {{count}} 个工作区",
+      "checkingStatus": "正在检查 Agent 状态...",
+      "statusSessions": "{{count}} 个活跃 Agent 会话",
+      "sessionId": "会话 ID",
+      "workspace": "工作区",
+      "sessionCount": "{{count}} 个会话",
+      "noWorkspaces": "没有最近打开的工作区",
+      "noSessions": "Agentic OS 中尚未创建任何会话",
+      "globalTag": "全局"
+    },
     "file": {
       "write": "写入文件",
       "edit": "编辑文件",
@@ -903,6 +925,12 @@
     "subtitleEveningClaw": "有什么需要帮忙的？",
     "subtitleNightClaw": "夜深了，有什么还放不下的？",
     "narrativeClaw": "整理思路、起草文字、搜集信息，或者只是随便聊聊——有什么需要，直接告诉我。",
+    "aiPartnerDispatcher": "Agentic OS",
+    "subtitleMorningDispatcher": "今天，想让什么发生？",
+    "subtitleAfternoonDispatcher": "阳光正好，别浪费了。",
+    "subtitleEveningDispatcher": "白天的想法，今晚来实现。",
+    "subtitleNightDispatcher": "深夜出没的，都是认真的人。",
+    "narrativeDispatcher": "说出你想要的，我来让它发生。",
     "featureIntro": "",
     "featureIntroCowork": "",
     "lastTimeYouWere": "上次您正在处理：",

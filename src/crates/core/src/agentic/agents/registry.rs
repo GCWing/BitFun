@@ -1,6 +1,6 @@
 use super::{
     Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DeepResearchAgent, DebugMode,
-    ExploreAgent, FileFinderAgent, GenerateDocAgent, InitAgent, PlanMode,
+    DispatcherMode, ExploreAgent, FileFinderAgent, GenerateDocAgent, InitAgent, PlanMode,
 };
 use crate::agentic::agents::custom_subagents::{
     CustomSubagent, CustomSubagentKind, CustomSubagentLoader,
@@ -128,7 +128,7 @@ pub struct CustomSubagentDetail {
 
 fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" | "Cowork" | "Plan" | "debug" | "Claw" => "auto",
+        "agentic" | "Cowork" | "Plan" | "debug" | "Claw" | "Dispatcher" => "auto",
         _ => "primary",
     }
 }
@@ -294,6 +294,7 @@ impl AgentRegistry {
             Arc::new(DebugMode::new()),
             Arc::new(PlanMode::new()),
             Arc::new(ClawMode::new()),
+            Arc::new(DispatcherMode::new()),
         ];
         for mode in modes {
             register(&mut agents, mode, AgentCategory::Mode, None);
@@ -454,10 +455,11 @@ impl AgentRegistry {
         result.sort_by(|a, b| {
             let order = |id: &str| -> u8 {
                 match id {
-                    "agentic" => 0,
-                    "Cowork" => 1,
-                    "Plan" => 2,
-                    "debug" => 3,
+                    "Dispatcher" => 0,
+                    "agentic" => 1,
+                    "Cowork" => 2,
+                    "Plan" => 3,
+                    "debug" => 4,
                     _ => 99,
                 }
             };
@@ -1069,7 +1071,7 @@ mod tests {
 
     #[test]
     fn top_level_modes_default_to_auto() {
-        for agent_type in ["agentic", "Cowork", "Plan", "debug", "Claw"] {
+        for agent_type in ["agentic", "Cowork", "Plan", "debug", "Claw", "Dispatcher"] {
             assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
         }
     }

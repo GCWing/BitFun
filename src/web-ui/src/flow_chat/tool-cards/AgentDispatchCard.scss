@@ -1,0 +1,287 @@
+/* AgentDispatch tool card styles */
+
+.agent-dispatch-card {
+  cursor: pointer;
+
+  /* Header layout — mirrors TaskToolDisplay */
+  .agent-dispatch-header-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 24px;
+  }
+
+  /* Left icon column with a right separator line */
+  .agent-dispatch-icon-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding-right: 10px;
+    margin-right: 4px;
+    position: relative;
+    color: var(--color-text-secondary, #6b7280);
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: calc(-1 * var(--tool-card-header-pad-y, 10px));
+      bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
+      width: 0;
+      border-right: 1px solid var(--border-base);
+      pointer-events: none;
+    }
+
+    .agent-dispatch-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      color: #6366f1;
+    }
+  }
+
+  /* Main content area */
+  .agent-dispatch-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .agent-dispatch-header-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 20px;
+  }
+
+  .agent-dispatch-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  /* Sub-line workspace hint */
+  .agent-dispatch-workspace-hint {
+    font-size: 11px;
+    color: var(--color-text-muted, #9ca3af);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Agent type badge — colored by agent */
+  .agent-dispatch-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+    letter-spacing: 0.03em;
+    color: var(--agent-badge-color, #6366f1);
+    background: color-mix(in srgb, var(--agent-badge-color, #6366f1) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--agent-badge-color, #6366f1) 28%, transparent);
+  }
+
+  /* Right rail: status icon + nav button */
+  .agent-dispatch-rail {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 4px;
+    padding-left: 8px;
+    border-left: 1px solid var(--border-base);
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .agent-dispatch-status-icon {
+    color: var(--color-text-muted);
+
+    &--done {
+      color: var(--color-success, #10b981);
+    }
+
+    &--error {
+      color: var(--color-danger-text, #f87171);
+    }
+  }
+
+  /* Navigate-to-session button */
+  .agent-dispatch-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #6366f1;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: color-mix(in srgb, #6366f1 14%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500, #60a5fa);
+      outline-offset: 1px;
+    }
+  }
+
+  /* Expanded panel */
+  .agent-dispatch-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agent-dispatch-detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .agent-dispatch-detail-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted, #9ca3af);
+  }
+
+  .agent-dispatch-detail-value {
+    font-size: 12px;
+    color: var(--color-text-primary);
+    word-break: break-all;
+
+    &--mono {
+      font-family: var(--tool-card-font-mono, monospace);
+      font-size: 11px;
+    }
+  }
+
+  /* Workspace list (action=list) */
+  .agent-dispatch-workspace-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .agent-dispatch-workspace-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--color-bg-subtle, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-base);
+
+    &--global {
+      border-color: color-mix(in srgb, #6366f1 35%, transparent);
+      background: color-mix(in srgb, #6366f1 6%, transparent);
+    }
+  }
+
+  .agent-dispatch-workspace-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .agent-dispatch-workspace-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  /* "Global" tag shown for assistant workspaces */
+  .agent-dispatch-global-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #6366f1;
+    background: color-mix(in srgb, #6366f1 14%, transparent);
+    border: 1px solid color-mix(in srgb, #6366f1 28%, transparent);
+    flex-shrink: 0;
+  }
+
+  .agent-dispatch-workspace-path {
+    font-size: 11px;
+    color: var(--color-text-muted, #9ca3af);
+    font-family: var(--tool-card-font-mono, monospace);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agent-dispatch-workspace-count {
+    font-size: 11px;
+    color: var(--color-text-secondary, #6b7280);
+  }
+
+  /* Session list (action=status) */
+  .agent-dispatch-session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .agent-dispatch-session-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: var(--color-bg-subtle, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-base);
+    transition: background 0.15s ease;
+
+    &--clickable {
+      cursor: pointer;
+
+      &:hover {
+        background: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
+      }
+    }
+  }
+
+  .agent-dispatch-session-name {
+    font-size: 12px;
+    color: var(--color-text-primary);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agent-dispatch-session-link-icon {
+    color: var(--color-text-muted, #9ca3af);
+    flex-shrink: 0;
+  }
+
+  /* Empty state */
+  .agent-dispatch-empty {
+    font-size: 12px;
+    color: var(--color-text-muted, #9ca3af);
+    padding: 4px 0;
+  }
+}

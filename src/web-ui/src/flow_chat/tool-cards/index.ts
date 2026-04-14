@@ -31,6 +31,7 @@ import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { BtwMarkerCard } from './BtwMarkerCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
+import { AgentDispatchCard } from './AgentDispatchCard';
 
 // Tool card config map - uses backend tool names
 export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
@@ -244,6 +245,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#ef4444'
   },
 
+  'AgentDispatch': {
+    toolName: 'AgentDispatch',
+    displayName: 'Agent Dispatch',
+    icon: 'AD',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Create and manage agent sessions',
+    displayMode: 'standard',
+    primaryColor: '#6366f1',
+  },
+
   'SessionControl': {
     toolName: 'SessionControl',
     displayName: 'Session Control',
@@ -333,6 +345,9 @@ export const TOOL_CARD_COMPONENTS = {
 
   // TerminalControl tool
   'TerminalControl': TerminalControlDisplay,
+
+  // Dispatcher tool
+  'AgentDispatch': AgentDispatchCard,
 
   // Session tools
   'SessionControl': SessionControlToolCard,

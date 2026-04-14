@@ -78,25 +78,35 @@
       "sessions": "Sessions",
       "project": "Directory",
       "persona": "Nursery",
-      "agents": "Agents",
+      "agents": "Think AApp",
       "skills": "Skills",
       "tools": "Tools",
       "terminal": "Shell",
       "git": "Git",
-      "miniApps": "Mini App"
+      "miniApps": "Run AApp",
+      "driveAApp": "Drive AApp"
     },
     "tooltips": {
       "persona": "Nursery — create and manage all assistant instances",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
       "tools": "What it can use — built-in tools & MCP services",
-      "addWorkspace": "Add workspace"
+      "addWorkspace": "Add workspace",
+      "aapp": "AApp (Agentic Application) — First-class citizens of the Agentic OS, scheduled and managed just like apps in a traditional OS",
+      "thinkAApp": "Think AApp — Reasoning-driven agent applications with autonomous thinking, multi-turn conversation, and complex task execution",
+      "runAApp": "Run AApp — Generated-and-executed program apps that crystallize Agent capabilities into repeatable, runnable programs",
+      "driveAApp": "Drive AApp — Agent applications that take over and operate traditional software, automating GUI workflows on behalf of users",
+      "newDispatcherSession": "Restart Agentic OS"
     },
     "sections": {
       "workspace": "Workspace",
-      "extensions": "Customize",
+      "sessions": "Sessions",
+      "agentApp": "AApp",
       "shell": "Shell",
       "assistantSessions": "Assistant Sessions"
+    },
+    "badges": {
+      "comingSoon": "Soon"
     },
     "search": {
       "triggerPlaceholder": "Search",
@@ -162,6 +172,8 @@
       "newCodeSessionShort": "Code Session",
       "newCoworkSessionShort": "Office Session",
       "newClawSession": "New Claw session",
+      "dispatcher": "Open Agentic OS",
+      "dispatcherShort": "Agentic OS",
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "codeSessionMode": "Code Session",
@@ -175,6 +187,7 @@
       "showAll": "{{count}} more (show all)",
       "showLess": "Show less",
       "assistantOwner": "Assistant: {{name}}",
+      "sessionContext": "In: {{name}}",
       "needProjectWorkspaceForSession": "Open or add a project workspace first. Code and Cowork sessions cannot be created in the assistant area."
     },
     "scheduledJobs": {

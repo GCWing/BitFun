@@ -13,6 +13,7 @@ import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
 import { useCurrentSettingsTabTitle } from '../../hooks/useCurrentSettingsTabTitle';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { createLogger } from '@/shared/utils/logger';
+import NotificationButton from '../TitleBar/NotificationButton';
 import './SceneBar.scss';
 
 const log = createLogger('SceneBar');
@@ -107,6 +108,13 @@ const SceneBar: React.FC<SceneBarProps> = ({
             />
           );
         })}
+      </div>
+
+      <div className="bitfun-scene-bar__actions">
+        <NotificationButton
+          className="bitfun-scene-bar__notification-btn"
+          tooltipPlacement="bottom"
+        />
       </div>
 
       {hasWindowControls && (

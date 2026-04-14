@@ -16,21 +16,25 @@ import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
 
-type SessionDisplayMode = 'code' | 'cowork' | 'claw';
+type SessionDisplayMode = 'code' | 'cowork' | 'claw' | 'dispatcher';
 
 const isAssistantWorkspace = (workspace?: WorkspaceInfo | null): boolean => {
   return workspace?.workspaceKind === WorkspaceKind.Assistant;
 };
 
+// Modes that should pass through even in assistant workspaces instead of defaulting to 'claw'.
+const EXPLICIT_ASSISTANT_MODES = new Set(['Dispatcher', 'dispatcher']);
+
 const normalizeSessionDisplayMode = (
   mode?: string,
   workspace?: WorkspaceInfo | null
 ): SessionDisplayMode => {
-  if (isAssistantWorkspace(workspace)) return 'claw';
+  if (isAssistantWorkspace(workspace) && (!mode || !EXPLICIT_ASSISTANT_MODES.has(mode))) return 'claw';
   if (!mode) return 'code';
   const normalizedMode = mode.toLowerCase();
   if (normalizedMode === 'cowork') return 'cowork';
   if (normalizedMode === 'claw') return 'claw';
+  if (normalizedMode === 'dispatcher') return 'dispatcher';
   return 'code';
 };
 
@@ -107,10 +111,11 @@ const resolveAgentType = (
   requestedMode: string | undefined,
   workspace: WorkspaceInfo | null
 ): string => {
-  if (isAssistantWorkspace(workspace)) {
-    return 'Claw';
-  }
-  return requestedMode || 'agentic';
+  // If a mode is explicitly requested, always honor it.
+  if (requestedMode) return requestedMode;
+  // No explicit mode: default to Claw in assistant workspaces, agentic elsewhere.
+  if (isAssistantWorkspace(workspace)) return 'Claw';
+  return 'agentic';
 };
 
 const requireSessionWorkspacePath = (
@@ -200,7 +205,9 @@ export async function createChatSession(
         ? i18nService.t('flow-chat:session.newCoworkWithIndex', { count: sameModeCount })
         : sessionMode === 'claw'
           ? i18nService.t('flow-chat:session.newClawWithIndex', { count: sameModeCount })
-          : i18nService.t('flow-chat:session.newCodeWithIndex', { count: sameModeCount });
+          : sessionMode === 'dispatcher'
+            ? i18nService.t('flow-chat:session.dispatcher')
+            : i18nService.t('flow-chat:session.newCodeWithIndex', { count: sameModeCount });
     
     const maxContextTokens = await getModelMaxTokens(config.modelName);
 

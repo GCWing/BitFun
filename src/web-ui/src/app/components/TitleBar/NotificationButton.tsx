@@ -19,11 +19,13 @@ import './NotificationButton.scss';
 interface NotificationButtonProps {
   className?: string;
   navFooterHoverIconSwap?: boolean;
+  tooltipPlacement?: 'right' | 'left' | 'top' | 'bottom';
 }
 
 const NotificationButton: React.FC<NotificationButtonProps> = ({
   className = '',
   navFooterHoverIconSwap = false,
+  tooltipPlacement = 'right',
 }) => {
   const { t } = useI18n('common');
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -48,7 +50,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
   }, [activeNotification]);
 
   return (
-    <Tooltip content={t('nav.notifications')} placement="right" disabled={!!activeNotification}>
+    <Tooltip content={t('nav.notifications')} placement={tooltipPlacement} disabled={!!activeNotification}>
     <button
       ref={buttonRef}
       className={[

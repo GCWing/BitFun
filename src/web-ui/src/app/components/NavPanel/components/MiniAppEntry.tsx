@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Badge, Tooltip } from '@/component-library';
+import { LayoutGrid } from 'lucide-react';
+import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
@@ -61,13 +62,13 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
         }}
         role="button"
         tabIndex={0}
-        aria-label={t('scenes.miniApps')}
+        aria-label={t('nav.items.miniApps')}
       >
+        <span className="bitfun-nav-panel__miniapp-entry-lead-icon" aria-hidden>
+          <LayoutGrid size={15} />
+        </span>
         <span className="bitfun-nav-panel__miniapp-entry-main">
-          <span className="bitfun-nav-panel__miniapp-entry-copy">
-            <span className="bitfun-nav-panel__miniapp-entry-title">{t('scenes.miniApps')}</span>
-            <Badge variant="neutral" className="bitfun-nav-panel__miniapp-badge">Beta</Badge>
-          </span>
+          <span className="bitfun-nav-panel__miniapp-entry-title">{t('nav.items.miniApps')}</span>
         </span>
 
         <span className="bitfun-nav-panel__miniapp-entry-apps">
