@@ -13,7 +13,7 @@ Analyze this BitFun usage data and suggest improvements.
      Run `git commit -m "<message>"` and report the result.
      ```
    - Advanced: Skills can reference other files, include conditional logic, and chain multiple steps.
-   - Authoring new skills: Invoke the built-in `writing-skills` skill (Superpowers workflow: test-driven documentation; pair with `test-driven-development` as needed).
+   - Authoring new skills: Invoke the built-in `writing-skills` skill for guidance on creating well-structured skill files.
 
 2. **SubAgents (Task Agents)**: Custom agents you define for specific domains or tasks. SubAgents run in parallel and return results to the parent agent.
    - How to use: Create agents in `.bitfun/agents/` with custom prompts and tool configurations.
