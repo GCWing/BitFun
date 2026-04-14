@@ -27,6 +27,7 @@ pub mod miniapp_api;
 pub mod project_context_api;
 pub mod remote_connect_api;
 pub mod runtime_api;
+pub mod self_control_api;
 pub mod session_api;
 pub mod session_storage_path;
 pub mod skill_api;

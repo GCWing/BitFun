@@ -687,6 +687,7 @@ pub async fn run() {
             // Browser API
             api::browser_api::browser_webview_eval,
             api::browser_api::browser_get_url,
+            api::self_control_api::submit_self_control_response,
             // Insights API
             api::insights_api::generate_insights,
             api::insights_api::get_latest_insights,

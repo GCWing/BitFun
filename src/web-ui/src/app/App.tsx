@@ -139,9 +139,21 @@ function App() {
         log.error('Failed to initialize MCP servers', error);
       }
     };
-    
+
+    // Initialize self-control event listener
+    const initSelfControl = async () => {
+      try {
+        const { startSelfControlEventListener } = await import('../infrastructure/self-control');
+        startSelfControlEventListener();
+        log.debug('Self-control event listener initialized');
+      } catch (error) {
+        log.error('Failed to initialize self-control event listener', error);
+      }
+    };
+
     initIdeControl();
     initMCPServers();
+    initSelfControl();
     
   }, []);
 

@@ -36,6 +36,7 @@ impl ClawMode {
                 // All desktop automation consolidated into ComputerUse
                 // (click_element, click, mouse_move, scroll, drag, screenshot, locate, etc.)
                 "ComputerUse".to_string(),
+                "SelfControl".to_string(),
             ],
         }
     }

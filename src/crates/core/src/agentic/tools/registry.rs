@@ -144,6 +144,9 @@ impl ToolRegistry {
         // MiniApp Agent tool (single InitMiniApp)
         self.register_tool(Arc::new(InitMiniAppTool::new()));
 
+        // Self-control tool for operating BitFun's own GUI
+        self.register_tool(Arc::new(SelfControlTool::new()));
+
         // All desktop automation consolidated into ComputerUse (click_element, click, mouse_move,
         // scroll, drag, screenshot, locate, key_chord, type_text, pointer_move_rel, wait).
         // The separate ComputerUseMousePrecise/Step/Click tools are no longer registered.

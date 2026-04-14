@@ -32,6 +32,7 @@ impl AgenticMode {
                 "Git".to_string(),
                 "TerminalControl".to_string(),
                 "ComputerUse".to_string(),
+                "SelfControl".to_string(),
             ],
         }
     }
