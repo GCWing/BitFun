@@ -344,8 +344,6 @@ fn build_rg_scope_command(build_config: &BuildConfig, scope: &PathFilterArgs) ->
     {
         command.arg("-g").arg(format!("!{exclude_glob}"));
     }
-    command.arg("-g").arg("!.bitfun/**");
-
     command
 }
 
@@ -367,7 +365,6 @@ fn build_rg_files_command(build_config: &BuildConfig) -> Command {
     {
         command.arg("-g").arg(format!("!{exclude_glob}"));
     }
-    command.arg("-g").arg("!.bitfun/**");
     command
 }
 

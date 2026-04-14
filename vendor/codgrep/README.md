@@ -48,6 +48,12 @@ cargo run -- serve
 
 推荐把 `codgrep` 当成一个独立常驻进程来使用，形态更接近本地搜索 server，而不是 ripgrep 风格的一次性搜索 CLI。
 
+如果你使用 `ManagedDaemonClient` 或 `codgrep::sdk::{ManagedClient, tokio::ManagedClient}`：
+
+- daemon 默认按 `index_path/daemon-state.json` 发现和复用。
+- 多个调用方会通过同一路径下的 `daemon-state.lock` 协调启动，避免重复拉起。
+- 调用方通常不需要自己再包一层自定义 daemon 生命周期管理器。
+
 常用运维/调试入口：
 
 ```bash
@@ -94,7 +100,7 @@ cargo run -- bench --suite-dir bench_data
 
 ## External Interface
 
-当前稳定的对外接口应视为 daemon 进程协议：
+当前稳定的对外接口应视为 daemon 进程协议，以及建立在它之上的 Rust SDK：
 
 - daemon protocol request/response/notification schema
 - `DaemonClient` / `ManagedDaemonClient`
@@ -103,22 +109,30 @@ cargo run -- bench --suite-dir bench_data
 
 其中：
 
-- `daemon::protocol` 是唯一稳定的外部 contract。
-- `DaemonClient` / `ManagedDaemonClient` 与 `codgrep::sdk` 都只是这个 contract 的客户端封装。
+- `daemon::protocol` 是跨语言/跨进程集成时的规范基线。
+- `DaemonClient` / `ManagedDaemonClient` 与 `codgrep::sdk` 都是这层 contract 的客户端封装。
+- Rust 调用方应优先依赖 `codgrep::sdk`，而不是直接在产品代码里拼 protocol 请求。
 - crate 根上仍然存在的历史库导出，仅用于仓库内部与迁移期代码复用，不应当作产品接入面。
 
 入口选择（推荐）：
 
-- 外部集成 / IDE / agent / 脚本：优先接 daemon 协议。
+- 外部集成 / IDE / agent / 脚本 / 后续多语言 SDK：以 daemon 协议为准。
 - Rust 调用方：优先使用 `codgrep::sdk`，而不是直接拼 `Request/Response`。
 - 本仓库内部实现：可以继续复用 workspace / index / search 这些库层模块。
+
+Rust SDK 当前会重导出一批常用 protocol DTO，例如 `OpenRepoParams`、`EnsureRepoParams`、`RepoStatus`、`TaskStatus`、`RefreshPolicyConfig`。这些类型在 Rust 集成里建议从 `codgrep::sdk` 路径引用，而不是从 `codgrep::daemon::protocol` 直接引用。
+
+路径边界约定：
+
+- `codgrep` 只把自己的产物目录 `.codgrep-index`、`.codgrep-bench`，以及调用方显式配置的 `index_path` 视为内部路径。
+- `codgrep` 不会内建保留某个宿主产品目录名；像 `.bitfun`、`.idea`、`.vscode` 这类目录是否排除，应由接入方或 ignore 规则决定。
 
 Rust SDK 最小示例：
 
 ```rust
 use codgrep::sdk::{
-    count_only_query, EnsureRepoParams, GlobRequest, ManagedClient, PathScope, RepoConfig,
-    SearchRequest,
+    count_only_query, EnsureRepoParams, GlobRequest, ManagedClient, PathScope,
+    RefreshPolicyConfig, RepoConfig, SearchRequest,
 };
 
 let client = ManagedClient::new();
@@ -126,7 +140,7 @@ let repo = client.ensure_repo(EnsureRepoParams {
     repo_path: "/path/to/repo".into(),
     index_path: None,
     config: RepoConfig::default(),
-    refresh: Default::default(),
+    refresh: RefreshPolicyConfig::default(),
 })?;
 
 let search = repo.search(SearchRequest::new(count_only_query("LLVMContext")))?;
@@ -143,14 +157,17 @@ let glob = repo.glob(
 ```rust
 use std::time::Duration;
 
-use codgrep::sdk::{count_only_query, ManagedClient, OpenRepoParams, RepoConfig, SearchRequest};
+use codgrep::sdk::{
+    count_only_query, ManagedClient, OpenRepoParams, RefreshPolicyConfig, RepoConfig,
+    SearchRequest,
+};
 
 let client = ManagedClient::new();
 let repo = client.open_repo(OpenRepoParams {
     repo_path: "/path/to/repo".into(),
     index_path: None,
     config: RepoConfig::default(),
-    refresh: Default::default(),
+    refresh: RefreshPolicyConfig::default(),
 })?;
 
 let task = repo.index_build()?;
@@ -164,28 +181,32 @@ let search = repo.search(SearchRequest::new(count_only_query("LLVMContext")))?;
 ```rust
 use std::time::Duration;
 
-use codgrep::sdk::{ManagedClient, OpenRepoParams, RepoConfig, RepoEvent};
+use codgrep::sdk::{
+    ManagedClient, OpenRepoParams, RefreshPolicyConfig, RepoEvent, RepoTaskFinished,
+    RepoWorkspaceStatusChanged, RepoConfig,
+};
 
 let client = ManagedClient::new();
 let repo = client.open_repo(OpenRepoParams {
     repo_path: "/path/to/repo".into(),
     index_path: None,
     config: RepoConfig::default(),
-    refresh: Default::default(),
+    refresh: RefreshPolicyConfig::default(),
 })?;
 
 let mut events = repo.subscribe_events()?;
 let task = repo.index_build()?;
+let task_id = task.task_id.clone();
 
 while let Some(event) = events.recv_timeout(Duration::from_secs(1))? {
     match event {
-        RepoEvent::Progress(progress) if progress.task_id == task.task_id => {
+        RepoEvent::Progress(progress) if progress.task_id == task_id => {
             eprintln!("build progress: {} / {:?}", progress.processed, progress.total);
         }
-        RepoEvent::WorkspaceStatusChanged(status) => {
-            eprintln!("repo phase: {:?}", status.status.phase);
+        RepoEvent::WorkspaceStatusChanged(RepoWorkspaceStatusChanged { status, .. }) => {
+            eprintln!("repo phase: {:?}", status.phase);
         }
-        RepoEvent::TaskFinished(done) if done.task.task_id == task.task_id => {
+        RepoEvent::TaskFinished(RepoTaskFinished { task, .. }) if task.task_id == task_id => {
             break;
         }
         _ => {}
@@ -203,7 +224,7 @@ cargo add codgrep --features tokio-sdk
 
 ```rust
 use codgrep::sdk::{
-    count_only_query, EnsureRepoParams, RepoConfig, SearchRequest,
+    count_only_query, EnsureRepoParams, RefreshPolicyConfig, RepoConfig, SearchRequest,
 };
 
 let client = codgrep::sdk::tokio::ManagedClient::new();
@@ -212,7 +233,7 @@ let repo = client
         repo_path: "/path/to/repo".into(),
         index_path: None,
         config: RepoConfig::default(),
-        refresh: Default::default(),
+        refresh: RefreshPolicyConfig::default(),
     })
     .await?;
 

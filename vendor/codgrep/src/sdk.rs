@@ -29,9 +29,13 @@ use crate::{
 
 pub use crate::daemon::protocol::{
     ConsistencyMode, DirtyFileStats, EnsureRepoParams, FileCount, FileMatchCount, OpenRepoParams,
-    PathScope, QuerySpec, RepoConfig, RepoPhase, RepoStatus, SearchBackend, SearchModeConfig,
-    SearchResults, TaskKind, TaskPhase, TaskState, TaskStatus,
+    PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend,
+    SearchModeConfig, SearchResults, TaskKind, TaskPhase, TaskState, TaskStatus,
 };
+
+pub type RepoProgress = ProgressNotificationParams;
+pub type RepoWorkspaceStatusChanged = WorkspaceStatusChangedParams;
+pub type RepoTaskFinished = TaskFinishedParams;
 
 #[derive(Debug, Clone)]
 pub struct ManagedClient {
@@ -93,9 +97,9 @@ pub struct GlobOutcome {
 
 #[derive(Debug, Clone)]
 pub enum RepoEvent {
-    Progress(ProgressNotificationParams),
-    WorkspaceStatusChanged(WorkspaceStatusChangedParams),
-    TaskFinished(TaskFinishedParams),
+    Progress(RepoProgress),
+    WorkspaceStatusChanged(RepoWorkspaceStatusChanged),
+    TaskFinished(RepoTaskFinished),
 }
 
 #[derive(Debug)]

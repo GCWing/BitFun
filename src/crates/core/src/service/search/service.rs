@@ -1,10 +1,9 @@
 use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
 use crate::util::errors::{BitFunError, BitFunResult};
-use codgrep::daemon::protocol::RefreshPolicyConfig;
 use codgrep::sdk::tokio::{ManagedClient, RepoSession};
 use codgrep::sdk::{
-    ConsistencyMode, GlobRequest, OpenRepoParams, PathScope, QuerySpec, RepoConfig, SearchRequest,
-    SearchResults,
+    ConsistencyMode, GlobRequest, OpenRepoParams, PathScope, QuerySpec, RefreshPolicyConfig,
+    RepoConfig, SearchRequest, SearchResults,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
@@ -12,11 +11,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tokio::time::timeout;
 
 use super::types::{
     ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
-    GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus,
+    GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount,
 };
 
 static GLOBAL_WORKSPACE_SEARCH_SERVICE: OnceLock<Arc<WorkspaceSearchService>> = OnceLock::new();
@@ -33,8 +31,8 @@ impl WorkspaceSearchService {
         let mut client = ManagedClient::new()
             .with_start_timeout(Duration::from_secs(10))
             .with_retry_interval(Duration::from_millis(100));
-
-        if let Some(program) = resolve_daemon_program() {
+        let program = resolve_daemon_program();
+        if let Some(program) = program {
             log::info!(
                 "WorkspaceSearchService daemon configured: program={}",
                 PathBuf::from(&program).display()
@@ -76,7 +74,10 @@ impl WorkspaceSearchService {
             .status()
             .await
             .map_err(map_codgrep_error("Failed to fetch repository status"))?;
-        Ok(IndexTaskHandle { task, repo_status })
+        Ok(IndexTaskHandle {
+            task: task.into(),
+            repo_status: repo_status.into(),
+        })
     }
 
     pub async fn rebuild_index(
@@ -92,7 +93,10 @@ impl WorkspaceSearchService {
             .status()
             .await
             .map_err(map_codgrep_error("Failed to fetch repository status"))?;
-        Ok(IndexTaskHandle { task, repo_status })
+        Ok(IndexTaskHandle {
+            task: task.into(),
+            repo_status: repo_status.into(),
+        })
     }
 
     pub async fn search_content(
@@ -156,9 +160,15 @@ impl WorkspaceSearchService {
 
         let result = ContentSearchResult {
             outcome: FileSearchOutcome { results, truncated },
-            file_counts: search.results.file_counts.clone(),
-            backend: search.backend,
-            repo_status: search.status,
+            file_counts: search
+                .results
+                .file_counts
+                .clone()
+                .into_iter()
+                .map(WorkspaceSearchFileCount::from)
+                .collect(),
+            backend: search.backend.into(),
+            repo_status: search.status.into(),
             candidate_docs: search.results.candidate_docs,
             matched_lines: search.results.matched_lines,
             matched_occurrences: search.results.matched_occurrences,
@@ -219,47 +229,25 @@ impl WorkspaceSearchService {
 
         Ok(GlobSearchResult {
             paths: outcome.paths,
-            repo_status: outcome.status,
+            repo_status: outcome.status.into(),
         })
     }
 
     pub async fn shutdown_all_daemons(&self) {
-        let sessions = {
-            let sessions = self.sessions.read().await;
-            sessions.values().cloned().collect::<Vec<_>>()
-        };
-
-        let mut shutdown_addrs = HashSet::new();
-        for session in sessions {
-            let addr = session.addr().to_string();
-            if !shutdown_addrs.insert(addr.clone()) {
-                continue;
-            }
-
-            match timeout(Duration::from_secs(3), session.shutdown_daemon()).await {
-                Ok(Ok(())) => {
-                    log::info!("Shut down codgrep daemon: addr={}", addr);
-                }
-                Ok(Err(error)) => {
-                    log::warn!(
-                        "Failed to shut down codgrep daemon: addr={}, error={}",
-                        addr,
-                        error
-                    );
-                }
-                Err(_) => {
-                    log::warn!("Timed out shutting down codgrep daemon: addr={}", addr);
-                }
-            }
-        }
-
         self.sessions.write().await.clear();
     }
 
     async fn get_or_open_session(&self, repo_root: &Path) -> BitFunResult<Arc<RepoSession>> {
         let repo_root = normalize_repo_root(repo_root)?;
         if let Some(existing) = self.sessions.read().await.get(&repo_root).cloned() {
-            return Ok(existing);
+            if existing.status().await.is_ok() {
+                return Ok(existing);
+            }
+            log::warn!(
+                "Workspace search session became unhealthy, reopening repository session: path={}",
+                repo_root.display()
+            );
+            self.sessions.write().await.remove(&repo_root);
         }
 
         let params = OpenRepoParams {
@@ -273,9 +261,7 @@ impl WorkspaceSearchService {
             self.client
                 .open_repo(params)
                 .await
-                .map_err(map_codgrep_error(
-                    "Failed to open codgrep repository session",
-                ))?,
+                .map_err(map_codgrep_error("Failed to open codgrep repository session"))?,
         );
 
         let mut sessions = self.sessions.write().await;
@@ -305,8 +291,8 @@ impl WorkspaceSearchService {
         };
 
         Ok(WorkspaceIndexStatus {
-            repo_status,
-            active_task,
+            repo_status: repo_status.into(),
+            active_task: active_task.map(Into::into),
         })
     }
 }
