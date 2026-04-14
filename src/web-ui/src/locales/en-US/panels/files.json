@@ -10,10 +10,9 @@
     "limitReachedContent": "Showing the first {{count}} content matches. Refine the query to narrow the result set.",
     "backendSummary": "{{candidateDocs}} candidate docs, {{matchedLines}} matched lines, {{matchedOccurrences}} matched occurrences.",
     "backend": {
-      "indexed_snapshot": "Indexed Snapshot",
-      "indexed_clean": "Indexed Clean",
-      "indexed_workspace_repair": "Indexed Repair",
-      "rg_fallback": "ripgrep Fallback",
+      "indexed": "Indexed",
+      "indexed_repair": "Indexed Repair",
+      "text_fallback": "Text Fallback",
       "scan_fallback": "Scan Fallback"
     },
     "index": {
@@ -27,24 +26,39 @@
         "rebuildRecommended": "Rebuild Recommended"
       },
       "phase": {
-        "opening": "Opening",
-        "missing_index": "Missing Index",
-        "indexing": "Indexing",
-        "ready_clean": "Indexed",
-        "ready_dirty": "Indexed Dirty",
-        "rebuilding": "Rebuilding",
-        "degraded": "Degraded",
+        "preparing": "Preparing",
+        "needs_index": "Needs Index",
+        "building": "Building",
+        "ready": "Ready",
+        "stale": "Stale",
+        "refreshing": "Refreshing",
+        "limited": "Limited",
         "unknown": "Unknown"
       },
       "summary": {
-        "opening": "Preparing the managed search workspace.",
-        "missing_index": "Search works with fallback now. Build the index for faster content search.",
-        "indexing": "Building the workspace index.",
-        "ready_clean": "Managed index is ready. Content search can use the indexed backend.",
-        "ready_dirty": "Managed index is usable, but workspace changes suggest a rebuild soon.",
-        "rebuilding": "Refreshing the workspace index with the latest file changes.",
-        "degraded": "Managed index is degraded. Search can still fall back, but rebuild is recommended.",
+        "preparing": "Preparing the managed search workspace.",
+        "needs_index": "Search works with fallback now. Build the index for faster content search.",
+        "building": "Building the workspace index.",
+        "ready": "Managed index is ready. Content search can use the indexed backend.",
+        "stale": "Managed index is usable, but workspace changes suggest a rebuild soon.",
+        "refreshing": "Refreshing the workspace index with the latest file changes.",
+        "limited": "Managed index is limited. Search can still fall back, but rebuild is recommended.",
         "unavailable": "Search index status is unavailable right now."
+      },
+      "indicator": {
+        "label": "Workspace index status",
+        "checking": "Checking index status...",
+        "tones": {
+          "green": "Index ready",
+          "yellow": "Index needs attention",
+          "gray": "Index not built",
+          "red": "Index rebuild required"
+        },
+        "progressKnown": "{{processed}} / {{total}}",
+        "progressUnknown": "{{processed}} items processed",
+        "dirtyFiles": "Pending changes: {{modified}} modified, {{deleted}} deleted, {{new}} new",
+        "rebuildRecommended": "A rebuild is recommended.",
+        "watcherDegraded": "Workspace watcher is degraded and the index may stop updating."
       },
       "taskState": {
         "queued": "Queued",

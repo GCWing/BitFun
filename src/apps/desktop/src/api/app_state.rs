@@ -235,7 +235,7 @@ impl AppState {
                     .await
                 {
                     log::warn!(
-                        "Failed to restore codgrep repository session on startup: path={}, error={}",
+                        "Failed to restore workspace search repository session on startup: path={}, error={}",
                         workspace_info.root_path.display(),
                         e
                     );

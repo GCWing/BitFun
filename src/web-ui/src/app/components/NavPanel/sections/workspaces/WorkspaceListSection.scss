@@ -256,12 +256,22 @@
     text-align: left;
   }
 
+  &__workspace-item.is-active &__workspace-item-name-btn {
+    padding-right: calc(
+      var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-offset) +
+      4px
+    );
+  }
+
   &__workspace-item:hover &__workspace-item-name-btn,
   &__workspace-item.is-menu-open &__workspace-item-name-btn,
   &__workspace-item:focus-within &__workspace-item-name-btn {
     padding-right: calc(
       var(--bitfun-nav-row-action-size) +
       var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-gap) +
       var(--bitfun-nav-row-action-gap) +
       var(--bitfun-nav-row-action-offset) +
       4px
@@ -450,6 +460,326 @@
     }
   }
 
+  &__workspace-index-indicator {
+    --bitfun-index-tone: var(--color-text-muted);
+
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 18%, transparent),
+      inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent);
+    transition: transform $motion-fast $easing-standard,
+                box-shadow $motion-fast $easing-standard,
+                opacity $motion-fast $easing-standard,
+                filter $motion-fast $easing-standard;
+    cursor: default;
+
+    &:hover {
+      transform: scale(1.08);
+      filter: saturate(1.08);
+    }
+
+    &.is-green {
+      --bitfun-index-tone: var(--color-success, #36c275);
+      background:
+        radial-gradient(circle at 30% 30%, color-mix(in srgb, #fff 40%, transparent), transparent 45%),
+        var(--bitfun-index-tone);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 30%, transparent),
+        0 0 12px color-mix(in srgb, var(--bitfun-index-tone) 30%, transparent),
+        inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent);
+    }
+
+    &.is-yellow {
+      --bitfun-index-tone: var(--color-warning, #e8b54b);
+      background:
+        radial-gradient(circle at 30% 30%, color-mix(in srgb, #fff 40%, transparent), transparent 45%),
+        var(--bitfun-index-tone);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 30%, transparent),
+        0 0 12px color-mix(in srgb, var(--bitfun-index-tone) 28%, transparent),
+        inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent);
+      animation: bitfun-status-dot-pulse 1.4s ease-in-out infinite;
+    }
+
+    &.is-gray {
+      --bitfun-index-tone: color-mix(in srgb, var(--color-text-muted) 75%, var(--element-bg-medium));
+      background:
+        radial-gradient(circle at 30% 30%, color-mix(in srgb, #fff 28%, transparent), transparent 45%),
+        var(--bitfun-index-tone);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 22%, transparent),
+        inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+      opacity: 0.9;
+    }
+
+    &.is-red {
+      --bitfun-index-tone: var(--color-error, #e05d5d);
+      background:
+        radial-gradient(circle at 30% 30%, color-mix(in srgb, #fff 38%, transparent), transparent 45%),
+        var(--bitfun-index-tone);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 30%, transparent),
+        0 0 12px color-mix(in srgb, var(--bitfun-index-tone) 30%, transparent),
+        inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent);
+      animation: bitfun-status-dot-pulse 1s ease-in-out infinite;
+    }
+  }
+
+  &__workspace-index-tooltip {
+    --bitfun-index-tone: var(--color-text-secondary);
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 236px;
+    max-width: 296px;
+    padding: 2px;
+    color: var(--color-text-primary);
+
+    &.is-green {
+      --bitfun-index-tone: var(--color-success, #36c275);
+    }
+
+    &.is-yellow {
+      --bitfun-index-tone: var(--color-warning, #e8b54b);
+    }
+
+    &.is-red {
+      --bitfun-index-tone: var(--color-error, #e05d5d);
+    }
+  }
+
+  &__workspace-index-tooltip-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__workspace-index-tooltip-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__workspace-index-tooltip-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    margin-top: 3px;
+    border-radius: 50%;
+    background: var(--bitfun-index-tone);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--bitfun-index-tone) 18%, transparent),
+      0 0 10px color-mix(in srgb, var(--bitfun-index-tone) 26%, transparent);
+
+    &.is-green {
+      --bitfun-index-tone: var(--color-success, #36c275);
+    }
+
+    &.is-yellow {
+      --bitfun-index-tone: var(--color-warning, #e8b54b);
+    }
+
+    &.is-gray {
+      --bitfun-index-tone: color-mix(in srgb, var(--color-text-muted) 75%, var(--element-bg-medium));
+    }
+
+    &.is-red {
+      --bitfun-index-tone: var(--color-error, #e05d5d);
+    }
+  }
+
+  &__workspace-index-tooltip-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__workspace-index-tooltip-title {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--color-text-primary);
+  }
+
+  &__workspace-index-tooltip-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: var(--font-size-xxs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    border: 1px solid color-mix(in srgb, var(--bitfun-index-tone) 24%, transparent);
+    background: color-mix(in srgb, var(--bitfun-index-tone) 10%, transparent);
+    color: color-mix(in srgb, var(--bitfun-index-tone) 78%, var(--color-text-primary));
+
+    &.is-green {
+      --bitfun-index-tone: var(--color-success, #36c275);
+    }
+
+    &.is-yellow {
+      --bitfun-index-tone: var(--color-warning, #e8b54b);
+    }
+
+    &.is-gray {
+      --bitfun-index-tone: color-mix(in srgb, var(--color-text-muted) 75%, var(--element-bg-medium));
+    }
+
+    &.is-red {
+      --bitfun-index-tone: var(--color-error, #e05d5d);
+    }
+  }
+
+  &__workspace-index-tooltip-phase {
+    font-size: var(--font-size-xxs);
+    color: var(--color-text-muted);
+    line-height: 1.35;
+  }
+
+  &__workspace-index-tooltip-summary {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--bitfun-index-tone) 12%, var(--border-subtle));
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--bitfun-index-tone) 7%, transparent),
+        color-mix(in srgb, var(--element-bg-subtle) 92%, transparent)
+      );
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+  }
+
+  &__workspace-index-tooltip-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--element-bg-medium) 56%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
+    font-size: var(--font-size-xxs);
+    color: var(--color-text-secondary);
+  }
+
+  &__workspace-index-tooltip-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__workspace-index-tooltip-progress-value {
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in srgb, var(--bitfun-index-tone) 76%, var(--color-text-primary));
+    font-weight: 600;
+  }
+
+  &__workspace-index-tooltip-progress-bar {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--element-bg-strong) 68%, transparent);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.22);
+  }
+
+  &__workspace-index-tooltip-progress-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--bitfun-index-tone) 28%, transparent);
+
+    &.is-green {
+      --bitfun-index-tone: var(--color-success, #36c275);
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--bitfun-index-tone) 82%, #fff 18%),
+        var(--bitfun-index-tone)
+      );
+    }
+
+    &.is-yellow {
+      --bitfun-index-tone: var(--color-warning, #e8b54b);
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--bitfun-index-tone) 84%, #fff 16%),
+        var(--bitfun-index-tone)
+      );
+    }
+
+    &.is-gray {
+      --bitfun-index-tone: color-mix(in srgb, var(--color-text-muted) 75%, var(--element-bg-medium));
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--bitfun-index-tone) 88%, #fff 12%),
+        var(--bitfun-index-tone)
+      );
+    }
+
+    &.is-red {
+      --bitfun-index-tone: var(--color-error, #e05d5d);
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--bitfun-index-tone) 84%, #fff 16%),
+        var(--bitfun-index-tone)
+      );
+    }
+  }
+
+  &__workspace-index-tooltip-meta,
+  &__workspace-index-tooltip-error {
+    padding: 8px 10px;
+    border-radius: 9px;
+    font-size: var(--font-size-xxs);
+    line-height: 1.45;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+    background: color-mix(in srgb, var(--element-bg-subtle) 92%, transparent);
+  }
+
+  &__workspace-index-tooltip-meta {
+    color: var(--color-text-secondary);
+
+    &.is-warning {
+      color: color-mix(in srgb, var(--color-warning, #e8b54b) 84%, var(--color-text-primary));
+      border-color: color-mix(in srgb, var(--color-warning, #e8b54b) 18%, transparent);
+      background: color-mix(in srgb, var(--color-warning, #e8b54b) 10%, transparent);
+    }
+  }
+
+  &__workspace-index-tooltip-error {
+    color: color-mix(in srgb, var(--color-error, #e05d5d) 88%, var(--color-text-primary));
+    border-color: color-mix(in srgb, var(--color-error, #e05d5d) 22%, transparent);
+    background: color-mix(in srgb, var(--color-error, #e05d5d) 11%, transparent);
+  }
+
+  &__workspace-index-tooltip-actions {
+    display: flex;
+    align-items: center;
+    justify-content: stretch;
+    padding-top: 2px;
+
+    .btn {
+      width: 100%;
+      min-height: 28px;
+      border-radius: 9px;
+      font-weight: 600;
+      box-shadow: none;
+    }
+  }
+
   &__workspace-item-badge {
     display: inline-flex;
     align-items: center;
@@ -489,11 +819,17 @@
     }
   }
 
-  &__workspace-item-menu {
+  &__workspace-item-actions {
     position: absolute;
     top: 50%;
     right: var(--bitfun-nav-row-action-offset);
     transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bitfun-nav-row-action-gap);
+  }
+
+  &__workspace-item-menu {
     display: inline-flex;
     align-items: center;
     gap: var(--bitfun-nav-row-action-gap);

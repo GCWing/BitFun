@@ -1,4 +1,34 @@
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
+import { Button, ConfirmDialog, Tooltip } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n';
+import { i18nService } from '@/infrastructure/i18n';
+import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import {
+  createWorktreeWorkspace,
+  deleteWorktreeWorkspace,
+} from '@/infrastructure/services/business/worktreeWorkspaceService';
+import { useNavSceneStore } from '@/app/stores/navSceneStore';
+import { useApp } from '@/app/hooks/useApp';
+import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
+import { workspaceAPI } from '@/infrastructure/api';
+import { notificationService } from '@/shared/notification-system';
+import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
+import { BranchSelectModal, type BranchSelectResult } from '../../../panels/BranchSelectModal';
+import SessionsSection from '../sessions/SessionsSection';
+import {
+  WorkspaceKind,
+  isLinkedWorktreeWorkspace,
+  isRemoteWorkspace,
+  type WorkspaceInfo,
+} from '@/shared/types';
+import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
+import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 
 function useStickyObserver(ref: React.RefObject<HTMLDivElement | null>) {
   const [isStuck, setIsStuck] = useState(false);
@@ -52,34 +82,6 @@ function useStickyObserver(ref: React.RefObject<HTMLDivElement | null>) {
 
   return isStuck;
 }
-import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch } from 'lucide-react';
-import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
-import { ConfirmDialog, Tooltip } from '@/component-library';
-import { useI18n } from '@/infrastructure/i18n';
-import { i18nService } from '@/infrastructure/i18n';
-import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import {
-  createWorktreeWorkspace,
-  deleteWorktreeWorkspace,
-} from '@/infrastructure/services/business/worktreeWorkspaceService';
-import { useNavSceneStore } from '@/app/stores/navSceneStore';
-import { useApp } from '@/app/hooks/useApp';
-import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
-import { workspaceAPI } from '@/infrastructure/api';
-import { notificationService } from '@/shared/notification-system';
-import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { openMainSession } from '@/flow_chat/services/openBtwSession';
-import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
-import { BranchSelectModal, type BranchSelectResult } from '../../../panels/BranchSelectModal';
-import SessionsSection from '../sessions/SessionsSection';
-import {
-  WorkspaceKind,
-  isLinkedWorktreeWorkspace,
-  isRemoteWorkspace,
-  type WorkspaceInfo,
-} from '@/shared/types';
-import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
@@ -89,6 +91,13 @@ interface WorkspaceItemProps {
   isDragging?: boolean;
   onDragStart?: React.DragEventHandler<HTMLDivElement>;
   onDragEnd?: React.DragEventHandler<HTMLDivElement>;
+}
+
+function getIndexActionKind(phase?: string | null): 'build' | 'rebuild' {
+  if (!phase || phase === 'needs_index' || phase === 'preparing') {
+    return 'build';
+  }
+  return 'rebuild';
 }
 
 const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
@@ -101,6 +110,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   onDragEnd,
 }) => {
   const { t } = useI18n('common');
+  const { t: tFiles } = useTranslation('panels/files');
   const {
     openWorkspace,
     setActiveWorkspace,
@@ -137,12 +147,152 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       ? workspace.identity?.name?.trim() || workspace.name
       : workspace.name;
   const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
+  const canShowSearchIndex =
+    isActive
+    && workspace.workspaceKind === WorkspaceKind.Normal
+    && !isRemoteWorkspace(workspace);
+  const workspaceSearchIndex = useWorkspaceSearchIndex({
+    workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
+    enabled: canShowSearchIndex,
+  });
 
   // Remote connection status — optional: safe if not inside SSHRemoteProvider
   const sshContext = useContext(SSHContext);
   const remoteConnStatus = workspace.connectionId && sshContext
     ? (sshContext.workspaceStatuses[workspace.connectionId] ?? 'connecting')
     : undefined;
+
+  const searchIndexIndicator = useMemo(() => {
+    if (!canShowSearchIndex) {
+      return null;
+    }
+
+    const repoStatus = workspaceSearchIndex.indexStatus?.repoStatus ?? null;
+    const activeTask = workspaceSearchIndex.indexStatus?.activeTask ?? null;
+    const phase = repoStatus?.phase;
+    const isTaskActive = activeTask?.state === 'queued' || activeTask?.state === 'running';
+    const hasError = Boolean(
+      workspaceSearchIndex.error
+      || repoStatus?.lastError
+      || activeTask?.error
+      || activeTask?.state === 'failed'
+    );
+    const dirtyFiles = repoStatus
+      ? repoStatus.dirtyFiles.modified + repoStatus.dirtyFiles.deleted + repoStatus.dirtyFiles.new
+      : 0;
+
+    let tone: 'green' | 'yellow' | 'gray' | 'red' = 'gray';
+    if (hasError || phase === 'limited') {
+      tone = 'red';
+    } else if (!phase || phase === 'needs_index') {
+      tone = 'gray';
+    } else if (
+      isTaskActive
+      || phase === 'preparing'
+      || phase === 'building'
+      || phase === 'refreshing'
+      || Boolean(repoStatus?.rebuildRecommended)
+    ) {
+      tone = 'yellow';
+    } else if (phase === 'ready' || phase === 'stale') {
+      tone = 'green';
+    }
+
+    const phaseLabel = tFiles(`search.index.phase.${phase ?? 'unknown'}`, {
+      defaultValue: phase ?? tFiles('search.index.phase.unknown'),
+    });
+    const title = tFiles(`search.index.indicator.tones.${tone}`);
+    const summary = repoStatus
+      ? tFiles(`search.index.summary.${phase ?? 'unavailable'}`, {
+          defaultValue: tFiles('search.index.summary.unavailable'),
+        })
+      : workspaceSearchIndex.loading
+        ? tFiles('search.index.indicator.checking')
+        : tFiles('search.index.summary.unavailable');
+    const activeTaskLabel = activeTask
+      ? tFiles(`search.index.taskState.${activeTask.state}`, {
+          defaultValue: activeTask.state,
+        })
+      : null;
+    const progressLabel = activeTask
+      ? typeof activeTask.total === 'number' && activeTask.total > 0
+        ? tFiles('search.index.indicator.progressKnown', {
+            processed: activeTask.processed,
+            total: activeTask.total,
+          })
+        : tFiles('search.index.indicator.progressUnknown', {
+            processed: activeTask.processed,
+          })
+      : null;
+    const progressPercent =
+      activeTask && typeof activeTask.total === 'number' && activeTask.total > 0
+        ? Math.max(0, Math.min(100, (activeTask.processed / activeTask.total) * 100))
+        : null;
+    const progressPercentLabel =
+      typeof progressPercent === 'number'
+        ? `${Math.round(progressPercent)}%`
+        : null;
+    const dirtyFilesLabel =
+      repoStatus && dirtyFiles > 0
+        ? tFiles('search.index.indicator.dirtyFiles', {
+            modified: repoStatus.dirtyFiles.modified,
+            deleted: repoStatus.dirtyFiles.deleted,
+            new: repoStatus.dirtyFiles.new,
+          })
+        : null;
+    const errorText = workspaceSearchIndex.error ?? activeTask?.error ?? repoStatus?.lastError ?? null;
+
+    return {
+      tone,
+      title,
+      phaseLabel,
+      summary,
+      activeTaskLabel,
+      activeTaskMessage: activeTask?.message ?? null,
+      progressLabel,
+      progressPercent,
+      progressPercentLabel,
+      dirtyFilesLabel,
+      rebuildRecommended: Boolean(repoStatus?.rebuildRecommended),
+      watcherHealthy: repoStatus?.watcherHealthy ?? true,
+      errorText,
+      ariaLabel: `${tFiles('search.index.indicator.label')}: ${title} · ${phaseLabel}`,
+    };
+  }, [
+    canShowSearchIndex,
+    tFiles,
+    workspaceSearchIndex.error,
+    workspaceSearchIndex.indexStatus,
+    workspaceSearchIndex.loading,
+  ]);
+  const searchIndexActionKind = getIndexActionKind(
+    workspaceSearchIndex.indexStatus?.repoStatus.phase ?? null
+  );
+  const searchIndexActionLabel = tFiles(
+    searchIndexActionKind === 'build'
+      ? 'search.index.actions.build'
+      : 'search.index.actions.rebuild'
+  );
+
+  const handleSearchIndexAction = useCallback(async () => {
+    const result =
+      searchIndexActionKind === 'build'
+        ? await workspaceSearchIndex.buildIndex()
+        : await workspaceSearchIndex.rebuildIndex();
+
+    if (!result) {
+      return;
+    }
+
+    notificationService.success(
+      tFiles(
+        searchIndexActionKind === 'build'
+          ? 'notifications.searchIndexBuildStarted'
+          : 'notifications.searchIndexRebuildStarted'
+      ),
+      { duration: 2200 }
+    );
+  }, [searchIndexActionKind, tFiles, workspaceSearchIndex]);
 
   const updateMenuPosition = useCallback(() => {
     const anchor = menuAnchorRef.current;
@@ -694,96 +844,192 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </span>
         </button>
 
-        <div className="bitfun-nav-panel__workspace-item-menu" ref={menuRef}>
-          <Tooltip content={t('nav.items.project')} placement="right" followCursor>
-            <button
-              type="button"
-              className="bitfun-nav-panel__workspace-item-menu-trigger"
-              onClick={() => { void handleOpenFiles(); }}
+        <div className="bitfun-nav-panel__workspace-item-actions">
+          {searchIndexIndicator && (
+            <Tooltip
+              interactive
+              placement="right"
+              content={(
+                <div className={`bitfun-nav-panel__workspace-index-tooltip is-${searchIndexIndicator.tone}`}>
+                  <div className="bitfun-nav-panel__workspace-index-tooltip-header">
+                    <div className="bitfun-nav-panel__workspace-index-tooltip-heading">
+                      <span className={`bitfun-nav-panel__workspace-index-tooltip-dot is-${searchIndexIndicator.tone}`} aria-hidden="true" />
+                      <div className="bitfun-nav-panel__workspace-index-tooltip-title-wrap">
+                        <span className="bitfun-nav-panel__workspace-index-tooltip-title">
+                          {searchIndexIndicator.title}
+                        </span>
+                        <span className="bitfun-nav-panel__workspace-index-tooltip-phase">
+                          {searchIndexIndicator.activeTaskLabel ?? searchIndexIndicator.phaseLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`bitfun-nav-panel__workspace-index-tooltip-badge is-${searchIndexIndicator.tone}`}>
+                      {searchIndexIndicator.phaseLabel}
+                    </span>
+                  </div>
+                  <div className="bitfun-nav-panel__workspace-index-tooltip-summary">
+                    {searchIndexIndicator.activeTaskMessage ?? searchIndexIndicator.summary}
+                  </div>
+                  {searchIndexIndicator.progressLabel ? (
+                    <div className="bitfun-nav-panel__workspace-index-tooltip-progress">
+                      <div className="bitfun-nav-panel__workspace-index-tooltip-progress-head">
+                        <span>{searchIndexIndicator.progressLabel}</span>
+                        {searchIndexIndicator.progressPercentLabel ? (
+                          <span className="bitfun-nav-panel__workspace-index-tooltip-progress-value">
+                            {searchIndexIndicator.progressPercentLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                      {typeof searchIndexIndicator.progressPercent === 'number' ? (
+                        <div className="bitfun-nav-panel__workspace-index-tooltip-progress-bar" aria-hidden="true">
+                          <span
+                            className={`bitfun-nav-panel__workspace-index-tooltip-progress-fill is-${searchIndexIndicator.tone}`}
+                            style={{ width: `${searchIndexIndicator.progressPercent}%` }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {searchIndexIndicator.dirtyFilesLabel ? (
+                    <div className="bitfun-nav-panel__workspace-index-tooltip-meta">
+                      {searchIndexIndicator.dirtyFilesLabel}
+                    </div>
+                  ) : null}
+                  {searchIndexIndicator.rebuildRecommended ? (
+                    <div className="bitfun-nav-panel__workspace-index-tooltip-meta is-warning">
+                      {tFiles('search.index.indicator.rebuildRecommended')}
+                    </div>
+                  ) : null}
+                  {!searchIndexIndicator.watcherHealthy ? (
+                    <div className="bitfun-nav-panel__workspace-index-tooltip-meta is-warning">
+                      {tFiles('search.index.indicator.watcherDegraded')}
+                    </div>
+                  ) : null}
+                  {searchIndexIndicator.errorText ? (
+                    <div className="bitfun-nav-panel__workspace-index-tooltip-error">
+                      {searchIndexIndicator.errorText}
+                    </div>
+                  ) : null}
+                  <div className="bitfun-nav-panel__workspace-index-tooltip-actions">
+                    <Button
+                      size="small"
+                      variant={searchIndexActionKind === 'build' ? 'accent' : 'secondary'}
+                      onClick={() => {
+                        void handleSearchIndexAction();
+                      }}
+                      disabled={
+                        workspaceSearchIndex.loading
+                        || workspaceSearchIndex.actionRunning
+                        || workspaceSearchIndex.hasActiveTask
+                      }
+                    >
+                      {workspaceSearchIndex.actionRunning || workspaceSearchIndex.hasActiveTask
+                        ? tFiles('search.index.actions.running')
+                        : searchIndexActionLabel}
+                    </Button>
+                  </div>
+                </div>
+              )}
             >
-              <Folder size="var(--bitfun-nav-row-action-icon-size)" />
-            </button>
-          </Tooltip>
-          <div ref={menuAnchorRef}>
-            <button
-              type="button"
-              className={`bitfun-nav-panel__workspace-item-menu-trigger${menuOpen ? ' is-open' : ''}`}
-              onClick={() => setMenuOpen(prev => !prev)}
-            >
-              <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
-            </button>
-          </div>
+              <span
+                className={`bitfun-nav-panel__workspace-index-indicator is-${searchIndexIndicator.tone}`}
+                aria-label={searchIndexIndicator.ariaLabel}
+                role="status"
+              />
+            </Tooltip>
+          )}
 
-          {menuOpen && menuPosition && createPortal(
-            <div
-              ref={menuPopoverRef}
-              className="bitfun-nav-panel__workspace-item-menu-popover"
-              role="menu"
-              style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
-            >
-              <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCodeSession}>
-                <Plus size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCodeSessionShort')}</span>
+          <div className="bitfun-nav-panel__workspace-item-menu" ref={menuRef}>
+            <Tooltip content={t('nav.items.project')} placement="right" followCursor>
+              <button
+                type="button"
+                className="bitfun-nav-panel__workspace-item-menu-trigger"
+                onClick={() => { void handleOpenFiles(); }}
+              >
+                <Folder size="var(--bitfun-nav-row-action-icon-size)" />
               </button>
-              <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCoworkSession}>
-                <Plus size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCoworkSessionShort')}</span>
+            </Tooltip>
+            <div ref={menuAnchorRef}>
+              <button
+                type="button"
+                className={`bitfun-nav-panel__workspace-item-menu-trigger${menuOpen ? ' is-open' : ''}`}
+                onClick={() => setMenuOpen(prev => !prev)}
+              >
+                <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
               </button>
-              <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateInitSession(); }}>
-                <FileText size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>
-              </button>
-              <div className="bitfun-nav-panel__workspace-item-menu-divider" />
-              {isLinkedWorktree ? (
-                <button
-                  type="button"
-                  className="bitfun-nav-panel__workspace-item-menu-item is-danger"
-                  onClick={handleRequestDeleteWorktree}
-                  disabled={isDeletingWorktree}
-                >
-                  <Trash2 size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorktree')}</span>
+            </div>
+
+            {menuOpen && menuPosition && createPortal(
+              <div
+                ref={menuPopoverRef}
+                className="bitfun-nav-panel__workspace-item-menu-popover"
+                role="menu"
+                style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
+              >
+                <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCodeSession}>
+                  <Plus size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCodeSessionShort')}</span>
                 </button>
-              ) : (
+                <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCoworkSession}>
+                  <Plus size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCoworkSessionShort')}</span>
+                </button>
+                <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateInitSession(); }}>
+                  <FileText size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>
+                </button>
+                <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                {isLinkedWorktree ? (
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                    onClick={handleRequestDeleteWorktree}
+                    disabled={isDeletingWorktree}
+                  >
+                    <Trash2 size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorktree')}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__workspace-item-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setWorktreeModalOpen(true);
+                    }}
+                    disabled={!isRepository}
+                  >
+                    <GitBranch size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setWorktreeModalOpen(true);
-                  }}
-                  disabled={!isRepository}
+                  onClick={() => { void handleCopyWorkspacePath(); }}
+                  disabled={!workspace.rootPath}
                 >
-                  <GitBranch size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
+                  <Copy size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.copyPath')}</span>
                 </button>
-              )}
-              <button
-                type="button"
-                className="bitfun-nav-panel__workspace-item-menu-item"
-                onClick={() => { void handleCopyWorkspacePath(); }}
-                disabled={!workspace.rootPath}
-              >
-                <Copy size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.copyPath')}</span>
-              </button>
-              <button
-                type="button"
-                className="bitfun-nav-panel__workspace-item-menu-item"
-                onClick={() => { void handleReveal(); }}
-                disabled={isRemoteWorkspace(workspace)}
-              >
-                <FolderSearch size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
-              </button>
-              <div className="bitfun-nav-panel__workspace-item-menu-divider" />
-              <button type="button" className="bitfun-nav-panel__workspace-item-menu-item is-danger" onClick={() => { void handleCloseWorkspace(); }}>
-                <FolderOpen size={13} />
-                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.close')}</span>
-              </button>
-            </div>,
-            document.body
-          )}
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  onClick={() => { void handleReveal(); }}
+                  disabled={isRemoteWorkspace(workspace)}
+                >
+                  <FolderSearch size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.reveal')}</span>
+                </button>
+                <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                <button type="button" className="bitfun-nav-panel__workspace-item-menu-item is-danger" onClick={() => { void handleCloseWorkspace(); }}>
+                  <FolderOpen size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.close')}</span>
+                </button>
+              </div>,
+              document.body
+            )}
+          </div>
         </div>
       </div>
 

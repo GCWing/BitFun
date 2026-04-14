@@ -5,15 +5,15 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List, RefreshCw } from 'lucide-react';
+import { Search as SearchIcon, CaseSensitive, Regex, WholeWord, List } from 'lucide-react';
 import {
   FileExplorer,
   getNewItemParentPath,
   useFileSystem,
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
-import { useExplorerSearch, useWorkspaceSearchIndex } from '@/tools/file-explorer';
-import { Search, IconButton, Tooltip, Badge, Button } from '@/component-library';
+import { useExplorerSearch } from '@/tools/file-explorer';
+import { Search, IconButton, Tooltip, Badge } from '@/component-library';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
 import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
@@ -35,7 +35,6 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { isRemoteWorkspace } from '@/shared/types';
 import type {
   SearchMetadata,
-  WorkspaceSearchIndexStatus,
   WorkspaceSearchRepoPhase,
 } from '@/infrastructure/api/service-api/tauri-commands';
 import {
@@ -54,41 +53,30 @@ const REMOTE_REFRESH_POLL_MS = 15000;
 
 function getIndexPhaseBadgeVariant(phase?: WorkspaceSearchRepoPhase): 'neutral' | 'warning' | 'success' | 'error' | 'info' {
   switch (phase) {
-    case 'ready_clean':
+    case 'ready':
       return 'success';
-    case 'ready_dirty':
-    case 'missing_index':
+    case 'stale':
+    case 'needs_index':
       return 'warning';
-    case 'indexing':
-    case 'rebuilding':
-    case 'opening':
+    case 'building':
+    case 'refreshing':
+    case 'preparing':
       return 'info';
-    case 'degraded':
+    case 'limited':
       return 'error';
     default:
       return 'neutral';
   }
 }
 
-function getIndexActionKind(
-  status: WorkspaceSearchIndexStatus | null
-): 'build' | 'rebuild' {
-  const phase = status?.repoStatus.phase;
-  if (!phase || phase === 'missing_index' || phase === 'opening') {
-    return 'build';
-  }
-  return 'rebuild';
-}
-
 function getSearchBackendBadgeVariant(
   metadata: SearchMetadata | null
 ): 'neutral' | 'success' | 'warning' | 'info' {
   switch (metadata?.backend) {
-    case 'indexed_clean':
-    case 'indexed_snapshot':
-    case 'indexed_workspace_repair':
+    case 'indexed':
+    case 'indexed_repair':
       return 'success';
-    case 'rg_fallback':
+    case 'text_fallback':
     case 'scan_fallback':
       return 'warning';
     default:
@@ -131,11 +119,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     && pathsEquivalentFs(currentWorkspace.rootPath, workspacePath)
     && isRemoteWorkspace(currentWorkspace)
   );
-  const workspaceSearchIndex = useWorkspaceSearchIndex({
-    workspacePath,
-    enabled: viewMode === 'search' && !isRemoteCurrentWorkspace,
-  });
-  
   const {
     query: searchQuery,
     setQuery: setSearchQuery,
@@ -185,22 +168,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       : filenameTruncated
         ? t('search.limitReachedFiles', { count: filenameLimit })
         : null;
-  const canManageSearchIndex = viewMode === 'search' && Boolean(workspacePath) && !isRemoteCurrentWorkspace;
-  const indexPhase = workspaceSearchIndex.indexStatus?.repoStatus.phase;
-  const indexActionKind = getIndexActionKind(workspaceSearchIndex.indexStatus);
-  const indexActionLabel = t(
-    indexActionKind === 'build' ? 'search.index.actions.build' : 'search.index.actions.rebuild'
-  );
-  const indexSummary = workspaceSearchIndex.indexStatus
-    ? t(`search.index.summary.${workspaceSearchIndex.indexStatus.repoStatus.phase}`, {
-        defaultValue: workspaceSearchIndex.indexStatus.repoStatus.phase,
-      })
-    : t('search.index.summary.unavailable');
-  const activeTask = workspaceSearchIndex.indexStatus?.activeTask ?? null;
-  const activeTaskProgress =
-    activeTask && typeof activeTask.total === 'number' && activeTask.total > 0
-      ? `${activeTask.processed}/${activeTask.total}`
-      : null;
   const contentSearchBackendLabel = contentSearchMetadata
     ? t(`search.backend.${contentSearchMetadata.backend}`, {
         defaultValue: contentSearchMetadata.backend,
@@ -795,26 +762,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     clearSearch();
   }, [clearSearch]);
 
-  const handleSearchIndexAction = useCallback(async () => {
-    const action = getIndexActionKind(workspaceSearchIndex.indexStatus);
-    const result =
-      action === 'build'
-        ? await workspaceSearchIndex.buildIndex()
-        : await workspaceSearchIndex.rebuildIndex();
-
-    if (!result) {
-      return;
-    }
-
-    notification.success(
-      t(
-        action === 'build'
-          ? 'notifications.searchIndexBuildStarted'
-          : 'notifications.searchIndexRebuildStarted'
-      )
-    );
-  }, [notification, t, workspaceSearchIndex]);
-
   const handleToggleViewMode = useCallback(() => {
     const next = viewMode === 'tree' ? 'search' : 'tree';
     if (onViewModeChange) {
@@ -959,76 +906,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 </Tooltip>
               </div>
             </div>
-            {canManageSearchIndex && (
-              <div className="bitfun-files-panel__search-index">
-                <div className="bitfun-files-panel__search-index-main">
-                  <div className="bitfun-files-panel__search-index-badges">
-                    <Badge variant={getIndexPhaseBadgeVariant(indexPhase)}>
-                      {t(`search.index.phase.${indexPhase ?? 'unknown'}`, {
-                        defaultValue: indexPhase ?? t('search.index.phase.unknown'),
-                      })}
-                    </Badge>
-                    {workspaceSearchIndex.indexStatus?.repoStatus.rebuildRecommended ? (
-                      <Badge variant="warning">
-                        {t('search.index.badges.rebuildRecommended')}
-                      </Badge>
-                    ) : null}
-                    {activeTask ? (
-                      <Badge variant={activeTask.state === 'failed' ? 'error' : 'info'}>
-                        {t(`search.index.taskState.${activeTask.state}`, {
-                          defaultValue: activeTask.state,
-                        })}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="bitfun-files-panel__search-index-summary">
-                    {activeTask ? (
-                      <span>
-                        {activeTask.message}
-                        {activeTaskProgress ? ` · ${activeTaskProgress}` : ''}
-                      </span>
-                    ) : (
-                      <span>{indexSummary}</span>
-                    )}
-                    {workspaceSearchIndex.indexStatus?.repoStatus.lastError ? (
-                      <span className="bitfun-files-panel__search-index-error-text">
-                        {workspaceSearchIndex.indexStatus.repoStatus.lastError}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="bitfun-files-panel__search-index-actions">
-                  <Tooltip content={t('search.index.actions.refresh')}>
-                    <IconButton
-                      size="xs"
-                      onClick={() => {
-                        void workspaceSearchIndex.refreshStatus(true);
-                      }}
-                      disabled={workspaceSearchIndex.loading || workspaceSearchIndex.refreshing}
-                      tooltipPlacement="bottom"
-                    >
-                      <RefreshCw size={14} />
-                    </IconButton>
-                  </Tooltip>
-                  <Button
-                    size="small"
-                    variant={indexActionKind === 'build' ? 'accent' : 'secondary'}
-                    onClick={() => {
-                      void handleSearchIndexAction();
-                    }}
-                    disabled={
-                      workspaceSearchIndex.loading
-                      || workspaceSearchIndex.actionRunning
-                      || workspaceSearchIndex.hasActiveTask
-                    }
-                  >
-                    {workspaceSearchIndex.actionRunning || workspaceSearchIndex.hasActiveTask
-                      ? t('search.index.actions.running')
-                      : indexActionLabel}
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1086,12 +963,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 </div>
               )}
 
-              {canManageSearchIndex && workspaceSearchIndex.error && (
-                <div className="bitfun-files-panel__search-limit-notice bitfun-files-panel__search-limit-notice--warning">
-                  <span>{workspaceSearchIndex.error}</span>
-                </div>
-              )}
-              
               {searchError && (
                 <div className="bitfun-files-panel__error">
                   <p>❌ {searchError}</p>

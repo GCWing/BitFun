@@ -1,7 +1,9 @@
 use crate::api::app_state::AppState;
 use bitfun_core::infrastructure::{FileSearchResult, FileSearchResultGroup, SearchMatchType};
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-use bitfun_core::service::search::ContentSearchResult;
+use bitfun_core::service::search::{
+    ContentSearchResult, WorkspaceSearchBackend, WorkspaceSearchRepoPhase,
+};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -14,8 +16,8 @@ pub struct SearchRepoIndexRequest {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMetadataResponse {
-    pub backend: String,
-    pub repo_phase: String,
+    pub backend: WorkspaceSearchBackend,
+    pub repo_phase: WorkspaceSearchRepoPhase,
     pub rebuild_recommended: bool,
     pub candidate_docs: usize,
     pub matched_lines: usize,
@@ -54,7 +56,7 @@ pub(crate) async fn search_file_contents_via_workspace_search(
             exclude_file_types: Vec::new(),
         })
         .await
-        .map_err(|error| format!("Failed to search file contents via codgrep: {}", error))
+        .map_err(|error| format!("Failed to search file contents via workspace search: {}", error))
 }
 
 pub(crate) fn group_search_results(results: Vec<FileSearchResult>) -> Vec<FileSearchResultGroup> {
@@ -92,14 +94,8 @@ pub(crate) fn search_metadata_from_content_result(
     result: &ContentSearchResult,
 ) -> SearchMetadataResponse {
     SearchMetadataResponse {
-        backend: serde_json::to_value(result.backend.clone())
-            .ok()
-            .and_then(|value| value.as_str().map(ToString::to_string))
-            .unwrap_or_else(|| "unknown".to_string()),
-        repo_phase: serde_json::to_value(result.repo_status.phase)
-            .ok()
-            .and_then(|value| value.as_str().map(ToString::to_string))
-            .unwrap_or_else(|| "unknown".to_string()),
+        backend: result.backend,
+        repo_phase: result.repo_status.phase,
         rebuild_recommended: result.repo_status.rebuild_recommended,
         candidate_docs: result.candidate_docs,
         matched_lines: result.matched_lines,
@@ -113,7 +109,8 @@ pub async fn search_get_repo_status(
     request: SearchRepoIndexRequest,
 ) -> Result<serde_json::Value, String> {
     if !should_use_workspace_search(&request.root_path).await {
-        return Err("Remote workspace search status is not managed by codgrep".to_string());
+        return Err("Remote workspace search status is not managed by BitFun workspace search"
+            .to_string());
     }
 
     state
@@ -130,7 +127,10 @@ pub async fn search_build_index(
     request: SearchRepoIndexRequest,
 ) -> Result<serde_json::Value, String> {
     if !should_use_workspace_search(&request.root_path).await {
-        return Err("Remote workspace search indexing is not managed by codgrep".to_string());
+        return Err(
+            "Remote workspace search indexing is not managed by BitFun workspace search"
+                .to_string(),
+        );
     }
 
     state
@@ -147,7 +147,10 @@ pub async fn search_rebuild_index(
     request: SearchRepoIndexRequest,
 ) -> Result<serde_json::Value, String> {
     if !should_use_workspace_search(&request.root_path).await {
-        return Err("Remote workspace search indexing is not managed by codgrep".to_string());
+        return Err(
+            "Remote workspace search indexing is not managed by BitFun workspace search"
+                .to_string(),
+        );
     }
 
     state

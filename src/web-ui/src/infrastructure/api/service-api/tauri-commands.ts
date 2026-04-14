@@ -242,10 +242,9 @@ export interface FileSearchErrorEvent {
 }
 
 export type SearchBackendKind =
-  | 'indexed_snapshot'
-  | 'indexed_clean'
-  | 'indexed_workspace_repair'
-  | 'rg_fallback'
+  | 'indexed'
+  | 'indexed_repair'
+  | 'text_fallback'
   | 'scan_fallback';
 
 export interface SearchMetadata {
@@ -258,13 +257,18 @@ export interface SearchMetadata {
 }
 
 export type WorkspaceSearchRepoPhase =
-  | 'opening'
-  | 'missing_index'
-  | 'indexing'
-  | 'ready_clean'
-  | 'ready_dirty'
-  | 'rebuilding'
-  | 'degraded';
+  | 'preparing'
+  | 'needs_index'
+  | 'building'
+  | 'ready'
+  | 'stale'
+  | 'refreshing'
+  | 'limited';
+
+export type WorkspaceSearchTaskKind =
+  | 'build'
+  | 'rebuild'
+  | 'refresh';
 
 export type WorkspaceSearchTaskState =
   | 'queued'
@@ -274,11 +278,11 @@ export type WorkspaceSearchTaskState =
   | 'cancelled';
 
 export type WorkspaceSearchTaskPhase =
-  | 'scanning'
-  | 'tokenizing'
-  | 'writing'
+  | 'discovering'
+  | 'processing'
+  | 'persisting'
   | 'finalizing'
-  | 'refreshing_overlay';
+  | 'refreshing';
 
 export interface WorkspaceSearchDirtyFiles {
   modified: number;
@@ -304,7 +308,7 @@ export interface WorkspaceSearchRepoStatus {
 export interface WorkspaceSearchTaskStatus {
   taskId: string;
   workspaceId: string;
-  kind: string;
+  kind: WorkspaceSearchTaskKind;
   state: WorkspaceSearchTaskState;
   phase?: WorkspaceSearchTaskPhase | null;
   message: string;

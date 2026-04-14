@@ -42,36 +42,36 @@ export interface FileMetadata {
 }
 
 interface WorkspaceSearchRepoStatusRaw {
-  repo_id: string;
-  repo_path: string;
-  index_path: string;
+  repoId: string;
+  repoPath: string;
+  indexPath: string;
   phase: WorkspaceSearchIndexStatus['repoStatus']['phase'];
-  snapshot_key?: string | null;
-  last_probe_unix_secs?: number | null;
-  last_rebuild_unix_secs?: number | null;
-  dirty_files: {
+  snapshotKey?: string | null;
+  lastProbeUnixSecs?: number | null;
+  lastRebuildUnixSecs?: number | null;
+  dirtyFiles: {
     modified: number;
     deleted: number;
     new: number;
   };
-  rebuild_recommended: boolean;
-  active_task_id?: string | null;
-  watcher_healthy: boolean;
-  last_error?: string | null;
+  rebuildRecommended: boolean;
+  activeTaskId?: string | null;
+  watcherHealthy: boolean;
+  lastError?: string | null;
 }
 
 interface WorkspaceSearchTaskStatusRaw {
-  task_id: string;
-  workspace_id: string;
-  kind: string;
+  taskId: string;
+  workspaceId: string;
+  kind: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['kind'];
   state: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['state'];
   phase?: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['phase'] | null;
   message: string;
   processed: number;
   total?: number | null;
-  started_unix_secs: number;
-  updated_unix_secs: number;
-  finished_unix_secs?: number | null;
+  startedUnixSecs: number;
+  updatedUnixSecs: number;
+  finishedUnixSecs?: number | null;
   cancellable: boolean;
   error?: string | null;
 }
@@ -114,18 +114,18 @@ function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResult
 
 function mapWorkspaceSearchRepoStatus(raw: WorkspaceSearchRepoStatusRaw): WorkspaceSearchIndexStatus['repoStatus'] {
   return {
-    repoId: raw.repo_id,
-    repoPath: raw.repo_path,
-    indexPath: raw.index_path,
+    repoId: raw.repoId,
+    repoPath: raw.repoPath,
+    indexPath: raw.indexPath,
     phase: raw.phase,
-    snapshotKey: raw.snapshot_key ?? null,
-    lastProbeUnixSecs: raw.last_probe_unix_secs ?? null,
-    lastRebuildUnixSecs: raw.last_rebuild_unix_secs ?? null,
-    dirtyFiles: raw.dirty_files,
-    rebuildRecommended: raw.rebuild_recommended,
-    activeTaskId: raw.active_task_id ?? null,
-    watcherHealthy: raw.watcher_healthy,
-    lastError: raw.last_error ?? null,
+    snapshotKey: raw.snapshotKey ?? null,
+    lastProbeUnixSecs: raw.lastProbeUnixSecs ?? null,
+    lastRebuildUnixSecs: raw.lastRebuildUnixSecs ?? null,
+    dirtyFiles: raw.dirtyFiles,
+    rebuildRecommended: raw.rebuildRecommended,
+    activeTaskId: raw.activeTaskId ?? null,
+    watcherHealthy: raw.watcherHealthy,
+    lastError: raw.lastError ?? null,
   };
 }
 
@@ -133,17 +133,17 @@ function mapWorkspaceSearchTaskStatus(
   raw: WorkspaceSearchTaskStatusRaw
 ): NonNullable<WorkspaceSearchIndexStatus['activeTask']> {
   return {
-    taskId: raw.task_id,
-    workspaceId: raw.workspace_id,
+    taskId: raw.taskId,
+    workspaceId: raw.workspaceId,
     kind: raw.kind,
     state: raw.state,
     phase: raw.phase ?? null,
     message: raw.message,
     processed: raw.processed,
     total: raw.total ?? null,
-    startedUnixSecs: raw.started_unix_secs,
-    updatedUnixSecs: raw.updated_unix_secs,
-    finishedUnixSecs: raw.finished_unix_secs ?? null,
+    startedUnixSecs: raw.startedUnixSecs,
+    updatedUnixSecs: raw.updatedUnixSecs,
+    finishedUnixSecs: raw.finishedUnixSecs ?? null,
     cancellable: raw.cancellable,
     error: raw.error ?? null,
   };
