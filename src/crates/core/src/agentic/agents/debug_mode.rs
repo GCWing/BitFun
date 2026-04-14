@@ -315,28 +315,6 @@ impl Agent for DebugMode {
             language_templates.len()
         );
 
-        let project_layout = prompt_components.get_project_layout();
-        prompt_list.push(format!(
-            r##"# Current Workspace File Structure
-<project_layout>
-Below is a snapshot of the current workspace's file structure.
-
-{project_layout}
-</project_layout>
-
-"##
-        ));
-
-        if let Some(project_context) = prompt_components.get_project_context(None).await {
-            prompt_list.push(format!(
-                "# Current Workspace Context\n{project_context}\n\n"
-            ));
-        }
-
-        if let Some(memory_prompt) = prompt_components.load_ai_memories().await {
-            prompt_list.push(memory_prompt);
-        }
-
         let session_rule = self.build_session_level_rule(&debug_config, workspace_path);
         prompt_list.push(session_rule);
 

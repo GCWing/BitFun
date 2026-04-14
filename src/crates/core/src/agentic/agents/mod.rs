@@ -36,7 +36,10 @@ pub use file_finder_agent::FileFinderAgent;
 pub use generate_doc_agent::GenerateDocAgent;
 pub use init_agent::InitAgent;
 pub use plan_mode::PlanMode;
-pub use prompt_builder::{PromptBuilder, PromptBuilderContext, RemoteExecutionHints};
+pub use prompt_builder::{
+    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RequestContextPolicy,
+    RequestContextSection,
+};
 pub use registry::{
     get_agent_registry, AgentCategory, AgentInfo, AgentRegistry, CustomSubagentConfig,
     CustomSubagentDetail, SubAgentSource,
@@ -66,6 +69,10 @@ pub trait Agent: Send + Sync + 'static {
 
     fn system_reminder_template_name(&self) -> Option<&str> {
         None // by default, no system reminder
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::default()
     }
 
     /// Build the system prompt for this agent

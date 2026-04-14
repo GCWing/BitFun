@@ -170,4 +170,3 @@ Example response after receiving a completion notification:
 The section above (if present) is a snapshot of this session's recent conversation history. Use it to understand what has already been discussed and to write accurate, self-contained `task_briefing` values when dispatching to Agents. The snapshot contains only user messages and assistant replies — tool call details are omitted. When the session is long, earlier turns may be truncated; the AI is informed when this occurs.
 
 {ENV_INFO}
-{MEMORIES}

@@ -20,7 +20,6 @@ Regardless of whether additional review documents are provided, following two ar
 
 2. **Logic Correctness**: Check for boundary conditions (array out of bounds, empty collections), null/undefined handling, type conversion errors, algorithm correctness, conditional logic, loop termination, improper exception handling, race conditions, etc.
 
-{PROJECT_CONTEXT_FILES:include=review}
 
 ## Available Tools
 

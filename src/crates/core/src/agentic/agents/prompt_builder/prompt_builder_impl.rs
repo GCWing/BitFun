@@ -1,14 +1,17 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
 use crate::agentic::persistence::PersistenceManager;
+use super::request_context::{RequestContextPolicy, RequestContextSection};
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::infrastructure::PathManager;
-use crate::service::agent_memory::build_workspace_agent_memory_prompt;
+use crate::service::agent_memory::{
+    build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
+    build_workspace_memory_files_context,
+};
 use crate::service::ai_memory::AIMemoryManager;
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
-use crate::service::project_context::ProjectContextService;
 use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
@@ -18,10 +21,6 @@ use std::sync::Arc;
 /// Placeholder constants
 const PLACEHOLDER_PERSONA: &str = "{PERSONA}";
 const PLACEHOLDER_ENV_INFO: &str = "{ENV_INFO}";
-const PLACEHOLDER_PROJECT_LAYOUT: &str = "{PROJECT_LAYOUT}";
-// PROJECT_CONTEXT_FILES needs configuration parsing
-// const PLACEHOLDER_PROJECT_CONTEXT_FILES: &str = "{PROJECT_CONTEXT_FILES}";
-const PLACEHOLDER_MEMORIES: &str = "{MEMORIES}";
 const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
@@ -194,36 +193,6 @@ impl PromptBuilder {
         project_layout
     }
 
-    /// Get user-provided project information files
-    /// These files (e.g., AGENTS.md, CLAUDE.md) are provided by users to describe project architecture, conventions, and guidelines
-    ///
-    /// Parameters:
-    /// - filter: Optional filter, supports `include=category1,category2` or `exclude=category1`
-    pub async fn get_project_context(&self, filter: Option<&str>) -> Option<String> {
-        if self.context.remote_execution.is_some() {
-            return None;
-        }
-
-        let service = ProjectContextService::new();
-        let workspace = Path::new(&self.context.workspace_path);
-
-        match service.build_context_prompt(workspace, filter).await {
-            Ok(prompt) if !prompt.is_empty() => {
-                let result = format!(
-                    r#"# Project Context
-The following are project documentation that describe the project's architecture, conventions, and guidelines, etc.
-
-{}
-
-"#,
-                    prompt
-                );
-                Some(result)
-            }
-            _ => None,
-        }
-    }
-
     /// Load AI memories from disk and format as prompt
     pub async fn load_ai_memories(&self) -> Option<String> {
         let path_manager = match try_get_path_manager_arc() {
@@ -249,6 +218,67 @@ The following are project documentation that describe the project's architecture
                 warn!("Failed to load memories: {}", e);
                 None
             }
+        }
+    }
+
+    pub async fn build_request_context_reminder(
+        &self,
+        policy: &RequestContextPolicy,
+    ) -> Option<String> {
+        let mut sections = Vec::new();
+        let mut instruction_sections = Vec::new();
+        let mut override_sections = Vec::new();
+        let mut trailing_sections = Vec::new();
+
+        if self.context.remote_execution.is_none() {
+            let workspace = Path::new(&self.context.workspace_path);
+            if policy.includes(RequestContextSection::WorkspaceInstructions) {
+                match build_workspace_instruction_files_context(workspace).await {
+                    Ok(Some(prompt)) => instruction_sections.push(prompt),
+                    Ok(None) => {}
+                    Err(e) => warn!(
+                        "Failed to build workspace instruction context: path={} error={}",
+                        workspace.display(),
+                        e
+                    ),
+                }
+            }
+            if policy.includes(RequestContextSection::WorkspaceMemoryFiles) {
+                match build_workspace_memory_files_context(workspace).await {
+                    Ok(Some(prompt)) => override_sections.push(prompt),
+                    Ok(None) => {}
+                    Err(e) => warn!(
+                        "Failed to build workspace memory context: path={} error={}",
+                        workspace.display(),
+                        e
+                    ),
+                }
+            }
+        }
+
+        if policy.includes(RequestContextSection::AIMemories) {
+            if let Some(memory_prompt) = self.load_ai_memories().await {
+                override_sections.push(memory_prompt);
+            }
+        }
+
+        if policy.includes(RequestContextSection::ProjectLayout) {
+            trailing_sections.push(self.get_project_layout());
+        }
+
+        sections.extend(instruction_sections);
+
+        if policy.has_override_sections() && !override_sections.is_empty() {
+            sections.push("Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.".to_string());
+            sections.extend(override_sections);
+        }
+
+        sections.extend(trailing_sections);
+
+        if sections.is_empty() {
+            None
+        } else {
+            Some(sections.join("\n\n"))
         }
     }
 
@@ -455,11 +485,8 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{PERSONA}` - Workspace persona files (BOOTSTRAP.md, SOUL.md, USER.md, IDENTITY.md)
     /// - `{LANGUAGE_PREFERENCE}` - User language preference (read from global config)
     /// - `{ENV_INFO}` - Environment information
-    /// - `{PROJECT_LAYOUT}` - Project file layout
-    /// - `{PROJECT_CONTEXT_FILES}` - Project context files (AGENTS.md, CLAUDE.md, etc.)
     /// - `{AGENT_MEMORY}` - Agent memory instructions + auto-loaded memory index
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
-    /// - `{MEMORIES}` - AI memories
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
     /// - `{RECENT_WORKSPACES}` - Recently accessed global and project workspaces with paths
     /// - `{ACTIVE_SESSION_CONTEXT}` - Current session's recent dialog history (user + assistant
@@ -510,47 +537,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
             result = result.replace(PLACEHOLDER_ENV_INFO, &env_info);
         }
 
-        // Replace {PROJECT_LAYOUT}
-        if result.contains(PLACEHOLDER_PROJECT_LAYOUT) {
-            let project_layout = self.get_project_layout();
-            result = result.replace(PLACEHOLDER_PROJECT_LAYOUT, &project_layout);
-        }
-
-        // Replace {PROJECT_CONTEXT_FILES}
-        // Supported syntax:
-        // - {PROJECT_CONTEXT_FILES} - Include all enabled documents
-        // - {PROJECT_CONTEXT_FILES:include=general,design} - Only include specified categories
-        // - {PROJECT_CONTEXT_FILES:exclude=review} - Exclude specified categories
-        while let Some(start) = result.find("{PROJECT_CONTEXT_FILES") {
-            let start_pos = start;
-            // Find placeholder end position
-            let end_pos = result[start_pos..]
-                .find('}')
-                .map(|p| start_pos + p + 1)
-                .unwrap_or(result.len());
-
-            // Extract complete placeholder
-            let placeholder = &result[start_pos..end_pos];
-
-            // Parse filter
-            let filter = if let Some(colon_pos) = placeholder.find(':') {
-                // Has filter: {PROJECT_CONTEXT_FILES:include=xxx} or {PROJECT_CONTEXT_FILES:exclude=xxx}
-                let filter_str = &placeholder[colon_pos + 1..placeholder.len() - 1];
-                Some(filter_str.trim().to_string())
-            } else {
-                // No filter
-                None
-            };
-
-            let filter_ref = filter.as_deref();
-            let project_context = self
-                .get_project_context(filter_ref)
-                .await
-                .unwrap_or_default();
-
-            result = result.replace(placeholder, &project_context);
-        }
-
         // Replace {AGENT_MEMORY}
         if result.contains(PLACEHOLDER_AGENT_MEMORY) {
             let agent_memory = if self.context.remote_execution.is_some() {
@@ -571,12 +557,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
                 }
             };
             result = result.replace(PLACEHOLDER_AGENT_MEMORY, &agent_memory);
-        }
-
-        // Replace {MEMORIES}
-        if result.contains(PLACEHOLDER_MEMORIES) {
-            let memories = self.load_ai_memories().await.unwrap_or_default();
-            result = result.replace(PLACEHOLDER_MEMORIES, &memories);
         }
 
         // Replace {VISUAL_MODE}

@@ -55,4 +55,3 @@ Before finalizing documentation:
 
 {ENV_INFO}
 
-{PROJECT_LAYOUT}

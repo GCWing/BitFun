@@ -4,10 +4,12 @@
 
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
-use crate::agentic::agents::{get_agent_registry, PromptBuilderContext, RemoteExecutionHints};
+use crate::agentic::agents::{
+    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+};
 use crate::agentic::core::{
-    Message, MessageContent, MessageHelper, MessageSemanticKind, RequestReasoningTokenPolicy,
-    Session,
+    render_system_reminder, Message, MessageContent, MessageHelper, MessageSemanticKind,
+    RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::image_analysis::{
@@ -263,6 +265,81 @@ impl ExecutionEngine {
         turn_index == 0 && original_user_input.chars().count() <= 10
     }
 
+    async fn build_prompt_context(
+        context: &ExecutionContext,
+        model_name: &str,
+        supports_image_understanding: bool,
+    ) -> Option<PromptBuilderContext> {
+        let workspace_path = context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path_string())?;
+
+        let base = PromptBuilderContext::new(
+            workspace_path.clone(),
+            Some(context.session_id.clone()),
+            Some(model_name.to_string()),
+        )
+        .with_supports_image_understanding(supports_image_understanding);
+
+        let Some(workspace) = context.workspace.as_ref() else {
+            return Some(base);
+        };
+        if !workspace.is_remote() {
+            return Some(base);
+        }
+
+        let Some(connection_id) = workspace.connection_id() else {
+            return Some(base);
+        };
+        let Some(manager) = get_remote_workspace_manager() else {
+            warn!(
+                "Remote workspace active but RemoteWorkspaceStateManager is missing; using client OS hints only"
+            );
+            return Some(base);
+        };
+
+        let ssh_manager = manager.get_ssh_manager().await;
+        let file_service = manager.get_file_service().await;
+        let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
+            if let Some(info) = ssh.get_server_info(connection_id).await {
+                (info.os_type, info.hostname)
+            } else {
+                ("Linux".to_string(), "remote".to_string())
+            }
+        } else {
+            ("Linux".to_string(), "remote".to_string())
+        };
+        let connection_display_name = match &workspace.backend {
+            WorkspaceBackend::Remote {
+                connection_name, ..
+            } => connection_name.clone(),
+            _ => connection_id.to_string(),
+        };
+        let remote_layout = if let Some(ref fs) = file_service {
+            match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200)
+                .await
+            {
+                Ok((_, preview)) => Some(preview),
+                Err(e) => {
+                    warn!("Remote workspace layout for prompt failed: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        Some(base.with_remote_prompt_overlay(
+            RemoteExecutionHints {
+                connection_display_name,
+                kernel_name,
+                hostname,
+            },
+            remote_layout,
+        ))
+    }
+
     pub(crate) async fn resolve_model_id_for_turn(
         &self,
         session: &Session,
@@ -371,14 +448,29 @@ impl ExecutionEngine {
         workspace_path: Option<&Path>,
         current_turn_id: &str,
         attach_images: bool,
+        prepended_user_context: Option<&str>,
     ) -> BitFunResult<Vec<AIMessage>> {
         /// Only the last this many **messages** that contain images keep their images for the API.
         const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
 
         let limits = ImageLimits::for_provider(provider);
 
-        let mut result = Vec::with_capacity(messages.len());
+        let trimmed_user_context = prepended_user_context.and_then(|text| {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
+        let mut result =
+            Vec::with_capacity(messages.len() + usize::from(trimmed_user_context.is_some()));
         let mut attached_image_count = 0usize;
+        let first_non_system_index = messages
+            .iter()
+            .position(|msg| msg.role != crate::agentic::core::MessageRole::System)
+            .unwrap_or(messages.len());
+        let mut user_context_injected = false;
 
         let keep_image_messages = if attach_images {
             Self::image_bearing_indices_to_keep(messages, MAX_IMAGE_BEARING_MESSAGE_ROUNDS)
@@ -387,6 +479,13 @@ impl ExecutionEngine {
         };
 
         for (msg_idx, msg) in messages.iter().enumerate() {
+            if !user_context_injected && msg_idx == first_non_system_index {
+                if let Some(user_context) = trimmed_user_context {
+                    result.push(AIMessage::user(render_system_reminder(user_context)));
+                }
+                user_context_injected = true;
+            }
+
             if Self::skip_message_for_model_send(msg) {
                 continue;
             }
@@ -504,6 +603,12 @@ impl ExecutionEngine {
                     result.push(ai);
                 }
                 _ => result.push(AIMessage::from(msg)),
+            }
+        }
+
+        if !user_context_injected {
+            if let Some(user_context) = trimmed_user_context {
+                result.push(AIMessage::user(render_system_reminder(user_context)));
             }
         }
 
@@ -1025,92 +1130,30 @@ impl ExecutionEngine {
             current_agent.name(),
             ai_client.config.model
         );
-        let system_prompt = {
-            let workspace_str = context
-                .workspace
-                .as_ref()
-                .map(|workspace| workspace.root_path_string());
-            let prompt_context = if let Some(workspace_path) = workspace_str {
-                let base = PromptBuilderContext::new(
-                    workspace_path.clone(),
-                    Some(context.session_id.clone()),
-                    Some(ai_client.config.model.clone()),
-                )
-                .with_supports_image_understanding(primary_supports_image_understanding);
-                let overlayed = if let Some(ws) = context.workspace.as_ref() {
-                    if ws.is_remote() {
-                        if let Some(cid) = ws.connection_id() {
-                            if let Some(mgr) = get_remote_workspace_manager() {
-                                let ssh_opt = mgr.get_ssh_manager().await;
-                                let fs_opt = mgr.get_file_service().await;
-                                let (kernel_name, hostname) = if let Some(ref ssh) = ssh_opt {
-                                    if let Some(info) = ssh.get_server_info(cid).await {
-                                        (info.os_type, info.hostname)
-                                    } else {
-                                        ("Linux".to_string(), "remote".to_string())
-                                    }
-                                } else {
-                                    ("Linux".to_string(), "remote".to_string())
-                                };
-                                let connection_display_name = match &ws.backend {
-                                    WorkspaceBackend::Remote {
-                                        connection_name, ..
-                                    } => connection_name.clone(),
-                                    _ => cid.to_string(),
-                                };
-                                let remote_layout = if let Some(ref fs) = fs_opt {
-                                    match build_remote_workspace_layout_preview(
-                                        fs,
-                                        cid,
-                                        &workspace_path,
-                                        200,
-                                    )
-                                    .await
-                                    {
-                                        Ok((_, s)) => Some(s),
-                                        Err(e) => {
-                                            warn!(
-                                                "Remote workspace layout for prompt failed: {}",
-                                                e
-                                            );
-                                            None
-                                        }
-                                    }
-                                } else {
-                                    None
-                                };
-                                base.with_remote_prompt_overlay(
-                                    RemoteExecutionHints {
-                                        connection_display_name,
-                                        kernel_name,
-                                        hostname,
-                                    },
-                                    remote_layout,
-                                )
-                            } else {
-                                warn!(
-                                    "Remote workspace active but RemoteWorkspaceStateManager is missing; using client OS hints only"
-                                );
-                                base
-                            }
-                        } else {
-                            base
-                        }
-                    } else {
-                        base
-                    }
-                } else {
-                    base
-                };
-                Some(overlayed)
-            } else {
-                None
-            };
-            current_agent
-                .get_system_prompt(prompt_context.as_ref())
-                .await?
+        let prompt_context = Self::build_prompt_context(
+            &context,
+            &ai_client.config.model,
+            primary_supports_image_understanding,
+        )
+        .await;
+        let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
+            PromptBuilder::new(prompt_context.clone())
+                .build_request_context_reminder(&current_agent.request_context_policy())
+                .await
+        } else {
+            None
         };
+        let system_prompt = current_agent
+            .get_system_prompt(prompt_context.as_ref())
+            .await?;
         debug!("System prompt built, length: {} bytes", system_prompt.len());
+        debug!(
+            "Request context reminder built, length: {} bytes",
+            request_context_reminder
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0)
+        );
         let system_prompt_message = Message::system(system_prompt.clone());
 
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
@@ -1401,6 +1444,7 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
+                request_context_reminder.as_deref(),
             )
             .await?;
 
