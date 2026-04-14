@@ -39,7 +39,6 @@ impl CoworkMode {
                 "TerminalControl".to_string(),
                 "WebSearch".to_string(),
                 "ComputerUse".to_string(),
-                "SelfControl".to_string(),
             ],
         }
     }

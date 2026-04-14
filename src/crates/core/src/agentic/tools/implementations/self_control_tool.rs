@@ -32,6 +32,7 @@ impl SelfControlTool {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SelfControlActionType {
+    ExecuteTask,
     GetPageState,
     Click,
     ClickByText,
@@ -73,6 +74,10 @@ pub struct SelfControlInput {
     slot: Option<String>,
     #[serde(default)]
     option_text: Option<String>,
+    #[serde(default)]
+    task: Option<String>,
+    #[serde(default)]
+    params: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,26 +135,26 @@ Use this tool when the user asks you to change settings, open scenes/tabs,
 click UI elements, set models, or perform any action inside the BitFun app itself.
 
 Actions:
-- "get_page_state": Returns the current page state including active scene and interactive elements (buttons, inputs, selects, tabs, etc.).
+- "execute_task": Run a high-level task that is internally planned and executed. Preferred for common workflows. Requires "task".
+  Available tasks: "set_primary_model" (params: { modelQuery }), "set_fast_model" (params: { modelQuery }), "open_model_settings", "return_to_session".
+- "get_page_state": Returns the current page state including active scene, interactive elements, semantic hints, and quick-action targets.
 - "click": Clicks an element by CSS selector. Requires "selector".
 - "click_by_text": Clicks an element containing the given text. Requires "text". Optional "tag".
 - "input": Sets the value of an input element. Requires "selector" and "value".
 - "scroll": Scrolls the page or an element. Optional "selector", requires "direction" (up, down, top, bottom).
 - "open_scene": Opens a scene by ID. Requires "scene_id" (e.g., "settings", "session", "welcome").
-- "open_settings_tab": Opens the settings scene and switches to a tab. Requires "tab_id" (e.g., "models", "basics", "session-config", "ai-context", "mcp-tools", "editor").
+- "open_settings_tab": Opens the settings scene and switches to a tab. Requires "tab_id".
 - "set_config": Sets a config value by key. Requires "key" and "config_value".
 - "get_config": Gets a config value by key. Requires "key".
 - "list_models": Lists all enabled models with their display names, providers, and IDs.
-- "set_default_model": Sets the default model by name search. Requires "model_query" (e.g., "doubao pro", "gpt-4o", "kimi"). Optional "slot" ("primary" or "fast", default "primary").
-- "select_option": Opens a custom Select dropdown and clicks an option by text. Requires "selector" (CSS selector for the Select trigger) and "option_text".
+- "set_default_model": Directly sets the default model by config search. Falls back to UI if not found. Requires "model_query".
+- "select_option": Opens a custom Select dropdown and clicks an option by text. Requires "selector" and "option_text".
 
-For model-related requests, prefer "list_models" first if unsure, then use "set_default_model"
-with an exact display name or model name. For unknown UI tasks, use "get_page_state" first,
-then click/scroll/select as needed.
-
-IMPORTANT: After completing the user's request, always return to the session scene
-using open_scene with scene_id "session", unless the user explicitly asked to stay
-on the current page."#
+Guidelines:
+1. For well-known requests (e.g., "set Kimi as the main model"), ALWAYS prefer "execute_task" with "set_primary_model".
+2. For model requests, use "list_models" only when the user explicitly asks to see available models.
+3. For unknown UI tasks, use "get_page_state" first, read the "semanticHints" field, then decide.
+4. After completing the user's request, return to the session scene with "return_to_session" task or open_scene "session"."#
                 .to_string(),
         )
     }
@@ -161,6 +166,7 @@ on the current page."#
                 "action": {
                     "type": "string",
                     "enum": [
+                        "execute_task",
                         "get_page_state",
                         "click",
                         "click_by_text",
@@ -174,7 +180,16 @@ on the current page."#
                         "set_default_model",
                         "select_option"
                     ],
-                    "description": "The self-control action to perform."
+                    "description": "The self-control action to perform. Prefer execute_task for common workflows."
+                },
+                "task": {
+                    "type": "string",
+                    "enum": ["set_primary_model", "set_fast_model", "open_model_settings", "return_to_session"],
+                    "description": "Task name when using execute_task."
+                },
+                "params": {
+                    "type": "object",
+                    "description": "Task parameters when using execute_task (e.g., { modelQuery: \"kimi\" })."
                 },
                 "selector": {
                     "type": "string",
@@ -271,8 +286,9 @@ on the current page."#
             );
         }
 
-        let action_payload = json!({
+        let mut action_payload = json!({
             "type": match params.action {
+                SelfControlActionType::ExecuteTask => "execute_task",
                 SelfControlActionType::GetPageState => "get_page_state",
                 SelfControlActionType::Click => "click",
                 SelfControlActionType::ClickByText => "click_by_text",
@@ -299,6 +315,13 @@ on the current page."#
             "slot": params.slot,
             "option_text": params.option_text,
         });
+
+        if let Some(task) = &params.task {
+            action_payload["task"] = json!(task);
+        }
+        if let Some(params_val) = &params.params {
+            action_payload["params"] = params_val.clone();
+        }
 
         let event_payload = json!({
             "requestId": request_id,

@@ -1,8 +1,8 @@
 /**
- * SelfControlService — lets BitFun agent operate its own GUI.
+ * SelfControlService — lets BitFun agent operate its own GUI with task-level orchestration.
  *
- * Inspired by page-agent's design but implemented with native DOM APIs
- * and BitFun-specific semantic shortcuts (scene switching, settings tabs, model selection).
+ * Supports both atomic actions (click, input) and semantic tasks (set_primary_model,
+ * open_model_settings) that are automatically planned and executed internally.
  */
 
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -32,10 +32,14 @@ export interface SimplifiedElement {
 export interface PageState {
   title: string;
   activeScene: string;
+  activeSettingsTab?: string;
   elements: SimplifiedElement[];
+  targets: Record<string, string>;
+  semanticHints: string[];
 }
 
 export type SelfControlAction =
+  | { type: 'execute_task'; task: string; params?: Record<string, string> }
   | { type: 'click'; selector: string }
   | { type: 'click_by_text'; text: string; tag?: string }
   | { type: 'input'; selector: string; value: string }
@@ -63,11 +67,18 @@ export class SelfControlService {
 
   getPageState(): PageState {
     const activeScene = useSceneStore.getState().activeTabId;
+    const activeSettingsTab = activeScene === 'settings' ? useSettingsStore.getState().activeTab : undefined;
     const elements = this.collectInteractiveElements();
+    const targets = this.buildTargetIndex(elements);
+    const semanticHints = this.buildSemanticHints(activeScene, activeSettingsTab, elements, targets);
+
     return {
       title: document.title,
       activeScene,
-      elements,
+      activeSettingsTab,
+      elements: elements.slice(0, 60),
+      targets,
+      semanticHints,
     };
   }
 
@@ -76,6 +87,9 @@ export class SelfControlService {
     logger.info('Executing self-control action', { type: action.type });
 
     switch (action.type) {
+      case 'execute_task':
+        return this.executeTask(action.task, action.params);
+
       case 'get_page_state':
         return JSON.stringify(this.getPageState(), null, 2);
 
@@ -124,8 +138,46 @@ export class SelfControlService {
   }
 
   /**
-   * Normalize snake_case fields coming from Rust backend into camelCase
-   * expected by the TypeScript union type.
+   * Task Orchestration — execute high-level tasks by internally planning a sequence of actions.
+   */
+  private async executeTask(task: string, params?: Record<string, string>): Promise<string> {
+    logger.info('Executing task', { task, params });
+
+    switch (task) {
+      case 'set_primary_model':
+      case 'set_fast_model': {
+        const slot = task === 'set_primary_model' ? 'primary' : 'fast';
+        const modelQuery = params?.modelQuery || params?.model || '';
+        if (!modelQuery) return `Missing modelQuery for ${task}`;
+
+        // Try direct config match first
+        const configResult = await this.setDefaultModel(modelQuery, slot);
+        if (!configResult.toLowerCase().includes('not found')) {
+          return configResult;
+        }
+
+        // Fallback to UI selection
+        return this.setDefaultModelViaUI(modelQuery, slot);
+      }
+
+      case 'open_model_settings': {
+        useSceneStore.getState().openScene('settings');
+        useSettingsStore.getState().setActiveTab('models');
+        return 'Opened model settings';
+      }
+
+      case 'return_to_session': {
+        useSceneStore.getState().openScene('session');
+        return 'Returned to session';
+      }
+
+      default:
+        return `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, open_model_settings, return_to_session.`;
+    }
+  }
+
+  /**
+   * Normalize snake_case fields coming from Rust backend into camelCase.
    */
   private normalizeAction(raw: SelfControlAction): SelfControlAction {
     const r = raw as any;
@@ -140,9 +192,10 @@ export class SelfControlService {
     return base as SelfControlAction;
   }
 
-  /**
-   * Fetch and normalize all enabled models from ai.models config.
-   */
+  // --------------------------------------------------------------------------
+  // Model Operations
+  // --------------------------------------------------------------------------
+
   private async fetchEnabledModels(): Promise<ModelInfo[]> {
     const models = (await configManager.getConfig<any[]>('ai.models')) || [];
     logger.debug('Fetched ai.models', { count: models.length });
@@ -194,8 +247,6 @@ export class SelfControlService {
     }
 
     const query = modelQuery.toLowerCase().trim();
-
-    // Scoring: exact match > startsWith > includes
     let bestMatch: ModelInfo | null = null;
     let bestScore = -1;
 
@@ -229,8 +280,44 @@ export class SelfControlService {
     const available = enabledModels.map((m) => `"${m.displayName}" (ID: ${m.id})`).join(', ');
     return (
       `Model "${modelQuery}" not found. Available enabled models: ${available}\n\n` +
-      `Tip: use "list_models" to see exact names, or open the model settings tab to select manually.`
+      `Tip: use "list_models" to see exact names, or use task "set_primary_model" to let me try the UI dropdown automatically.`
     );
+  }
+
+  private async setDefaultModelViaUI(modelQuery: string, slot: 'primary' | 'fast'): Promise<string> {
+    useSceneStore.getState().openScene('settings');
+    useSettingsStore.getState().setActiveTab('models');
+    await new Promise((r) => setTimeout(r, 300));
+
+    const targetAttr = slot === 'primary' ? 'primary-model-select' : 'fast-model-select';
+    const selector = `[data-self-control-target="${targetAttr}"] .select__trigger`;
+    const trigger = document.querySelector(selector) as HTMLElement | null;
+
+    if (!trigger) {
+      return `Could not find ${slot} model selector in the UI. The model setting page may not be fully loaded.`;
+    }
+
+    this.flashHighlight(trigger);
+    trigger.click();
+    await new Promise((r) => setTimeout(r, 200));
+
+    const options = Array.from(document.querySelectorAll('.select__option'));
+    const query = modelQuery.toLowerCase();
+
+    const target = options.find((el) => {
+      const text = this.extractText(el).toLowerCase();
+      return text.includes(query);
+    }) as HTMLElement | undefined;
+
+    if (!target) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      const optionTexts = options.map((el) => `"${this.extractText(el)}"`).join(', ');
+      return `Model "${modelQuery}" not found in the ${slot} dropdown. Available options: ${optionTexts}`;
+    }
+
+    this.flashHighlight(target);
+    target.click();
+    return `Set ${slot} model to "${modelQuery}" via the UI dropdown`;
   }
 
   private async applyDefaultModel(slot: 'primary' | 'fast', model: ModelInfo): Promise<string> {
@@ -241,6 +328,10 @@ export class SelfControlService {
     });
     return `Set ${slot === 'primary' ? 'primary' : 'fast'} model to "${model.displayName}" (ID: ${model.id})`;
   }
+
+  // --------------------------------------------------------------------------
+  // DOM Helpers
+  // --------------------------------------------------------------------------
 
   private collectInteractiveElements(): SimplifiedElement[] {
     const candidates = document.querySelectorAll(
@@ -320,6 +411,57 @@ export class SelfControlService {
     return elements;
   }
 
+  private buildTargetIndex(elements: SimplifiedElement[]): Record<string, string> {
+    const targets: Record<string, string> = {};
+    elements.forEach((el) => {
+      if (el.dataSelfControlTarget) {
+        targets[el.dataSelfControlTarget] = el.text || `<${el.tag}>`;
+      }
+      if (el.dataTestid) {
+        targets[el.dataTestid] = el.text || `<${el.tag}>`;
+      }
+    });
+    return targets;
+  }
+
+  private buildSemanticHints(
+    activeScene: string,
+    activeSettingsTab: string | undefined,
+    elements: SimplifiedElement[],
+    targets: Record<string, string>
+  ): string[] {
+    const hints: string[] = [];
+
+    if (activeScene === 'settings') {
+      hints.push(`Current scene: Settings (${activeSettingsTab || 'unknown tab'})`);
+
+      if (targets['primary-model-select']) {
+        hints.push('You can change the primary model via the "primary-model-select" target.');
+      }
+      if (targets['fast-model-select']) {
+        hints.push('You can change the fast model via the "fast-model-select" target.');
+      }
+    }
+
+    const hasSelect = elements.some((el) => el.class?.includes('select__trigger') || el.role === 'combobox');
+    const hasInput = elements.some((el) => el.tag === 'input' || el.tag === 'textarea');
+    const hasSwitch = elements.some((el) => el.role === 'switch' || el.class?.includes('switch'));
+
+    if (hasSelect) hints.push('This page contains dropdown selects.');
+    if (hasInput) hints.push('This page contains text inputs.');
+    if (hasSwitch) hints.push('This page contains toggle switches.');
+
+    const quickActions = [
+      'open_scene with scene_id "session" to return to the chat',
+      'open_scene with scene_id "settings" to open settings',
+      'execute_task with task "open_model_settings" to jump directly to model settings',
+      'execute_task with task "set_primary_model" and params { modelQuery: "..." } to set the main model',
+    ];
+    hints.push(`Quick actions: ${quickActions.join('; ')}`);
+
+    return hints;
+  }
+
   private extractText(el: Element): string {
     const walk = (node: Node): string => {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -363,7 +505,6 @@ export class SelfControlService {
 
     this.flashHighlight(trigger);
     trigger.click();
-
     await new Promise((r) => setTimeout(r, 150));
 
     const options = Array.from(document.querySelectorAll('.select__option'));
