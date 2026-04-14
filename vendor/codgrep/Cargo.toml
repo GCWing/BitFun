@@ -1,0 +1,53 @@
+[package]
+name = "codgrep"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+tokio-sdk = ["dep:tokio"]
+
+[[bin]]
+name = "cg"
+path = "src/main.rs"
+
+[dependencies]
+aho-corasick = "1.1.4"
+clap = { version = "4.5.20", features = ["derive"] }
+crc32fast = "1.4.2"
+grep-matcher = "0.1.8"
+grep-regex = "0.1.14"
+grep-searcher = "0.1.16"
+ignore = "0.4.23"
+libc = "0.2.177"
+memchr = "2.7.4"
+memmap2 = "0.9.5"
+notify = "6.1.1"
+rayon = "1.10.0"
+regex = "1.11.1"
+regex-automata = "0.4.14"
+regex-syntax = "0.8.10"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.11"
+tokio = { version = "1.48.0", features = ["io-util", "net", "rt", "sync", "time"], optional = true }
+walkdir = "2.5.0"
+
+[dev-dependencies]
+tempfile = "3.14.0"
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+bool_to_int_with_if = "warn"
+dbg_macro = "warn"
+expect_used = "warn"
+map_unwrap_or = "warn"
+match_same_arms = "warn"
+redundant_closure_for_method_calls = "warn"
+semicolon_if_nothing_returned = "warn"
+todo = "warn"
+unimplemented = "warn"
+unnested_or_patterns = "warn"
+unnecessary_wraps = "warn"
+unwrap_used = "warn"

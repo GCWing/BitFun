@@ -20,6 +20,7 @@ pub mod project_context; // Project context management
 pub mod remote_connect; // Remote Connect (phone → desktop)
 pub mod remote_ssh; // Remote SSH (desktop → server)
 pub mod runtime; // Managed runtime and capability management
+pub mod search; // Workspace search via managed codgrep daemon
 pub mod session; // Session persistence
 pub mod snapshot; // Snapshot-based change tracking
 pub mod system; // System command detection and execution
@@ -53,6 +54,11 @@ pub use lsp::LspManager;
 pub use mcp::MCPService;
 pub use project_context::{ContextDocumentStatus, ProjectContextConfig, ProjectContextService};
 pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, RuntimeSource};
+pub use search::{
+    get_global_workspace_search_service, set_global_workspace_search_service, ContentSearchRequest,
+    ContentSearchResult, GlobSearchRequest, GlobSearchResult, IndexTaskHandle,
+    WorkspaceIndexStatus, WorkspaceSearchService,
+};
 pub use snapshot::SnapshotService;
 pub use system::{
     check_command, check_commands, run_command, run_command_simple, CheckCommandResult,

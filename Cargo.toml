@@ -10,6 +10,7 @@ members = [
     "src/apps/desktop",
     "src/apps/server",
     "src/apps/relay-server",
+    "vendor/codgrep",
 ]
 
 exclude = [
