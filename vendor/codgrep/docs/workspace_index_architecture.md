@@ -17,9 +17,10 @@
 
 ## External Contract
 
-对产品/集成方而言，当前推荐把 daemon 协议视为唯一稳定外部 contract。
+对产品/集成方而言，当前推荐把 daemon 协议视为稳定外部 contract；Rust 调用方则优先使用建立在它之上的 `codgrep::sdk`。
 
 - daemon request/response/notification schema 负责对外暴露能力。
+- `codgrep::sdk` 是 Rust 集成的首选 facade。
 - `WorkspaceIndex` / `WorkspaceSnapshot` / `SearchEngine` 这些库层 facade 主要服务于 daemon 内部实现与迁移期代码。
 
 ## Layering

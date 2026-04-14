@@ -4,6 +4,11 @@
 
 `codgrep` 对外稳定接口以 daemon 进程协议为准。
 
+对接入方式的建议是：
+
+- 跨语言 / 跨进程 / 自定义 transport 封装：以本协议为准。
+- Rust 调用方：优先使用 `codgrep::sdk`，避免在产品代码里直接拼 protocol 请求。
+
 这个协议面向三类调用方：
 
 - IDE / 编辑器插件
@@ -30,6 +35,8 @@ v1 采用 `JSON-RPC 2.0` 风格消息：
 
 - `stdio`：推荐给编辑器 / agent 集成，framing 为 LSP 风格 `Content-Length`
 - `tcp` / `unix socket`：推荐给常驻本地 daemon
+
+Rust SDK 目前默认封装的是本地 daemon 场景；其中 `ManagedDaemonClient` / `codgrep::sdk::ManagedClient` 会按 `index_path/daemon-state.json` 发现或拉起 daemon，并通过同目录下的 `daemon-state.lock` 协调并发启动。
 
 ## 顶层消息
 
@@ -88,6 +95,17 @@ v1 采用 `JSON-RPC 2.0` 风格消息：
 ### `repo_id`
 
 v1 沿用当前实现语义：默认使用 normalized `repo_path` 字符串。
+
+### 内部路径保留
+
+协议层不预留宿主产品私有目录名。
+
+当前实现只把下面两类路径视为 `codgrep` 自己的内部产物：
+
+- `.codgrep-index`
+- `.codgrep-bench`
+
+此外，调用方显式传入的 `index_path` 也会被视为内部路径并从扫描/搜索候选中排除。
 
 ### `RepoStatus`
 
@@ -339,6 +357,11 @@ v1 沿用当前实现语义：默认使用 normalized `repo_path` 字符串。
 - 注册 repo runtime
 - 启动 watcher
 - 不自动 build index
+
+补充约定：
+
+- 如果调用方通过 managed client 打开 repo，daemon 发现/复用默认按 `index_path` 派生的 state file 路径进行。
+- `open_repo` 本身不要求接入方自己先拉起 daemon；这部分可以由 managed client 负责。
 
 请求：
 
