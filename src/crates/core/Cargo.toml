@@ -65,6 +65,7 @@ urlencoding = { workspace = true }
 grep-searcher = { workspace = true }
 grep-regex = { workspace = true }
 globset = { workspace = true }
+codgrep = { path = "../../../vendor/codgrep", features = ["tokio-sdk"] }
 
 eventsource-stream = { workspace = true }
 

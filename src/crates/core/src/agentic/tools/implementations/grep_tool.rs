@@ -1,9 +1,14 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::service::search::{
+    get_global_workspace_search_service, ContentSearchOutputMode, ContentSearchRequest,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 use tool_runtime::search::grep_search::{
     grep_search, GrepOptions, GrepSearchResult, OutputMode, ProgressCallback,
 };
@@ -23,12 +28,31 @@ impl GrepTool {
         Self
     }
 
+    fn explicit_head_limit(input: &Value) -> Option<Option<usize>> {
+        input
+            .get("head_limit")
+            .and_then(|v| v.as_u64())
+            .map(|value| {
+                if value == 0 {
+                    None
+                } else {
+                    Some(value as usize)
+                }
+            })
+    }
+
     fn resolve_head_limit(input: &Value) -> Option<usize> {
-        match input.get("head_limit").and_then(|v| v.as_u64()) {
-            Some(0) => None,
-            Some(value) => Some(value as usize),
-            None => Some(DEFAULT_HEAD_LIMIT),
-        }
+        Self::explicit_head_limit(input).unwrap_or(Some(DEFAULT_HEAD_LIMIT))
+    }
+
+    fn backend_max_results(
+        input: &Value,
+        offset: usize,
+        _display_head_limit: Option<usize>,
+    ) -> Option<usize> {
+        Self::explicit_head_limit(input)
+            .flatten()
+            .map(|limit| limit.saturating_add(offset))
     }
 
     fn shell_escape(value: &str) -> String {
@@ -305,6 +329,170 @@ impl GrepTool {
 
         Ok(options)
     }
+
+    fn build_workspace_search_request(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<(ContentSearchRequest, String, usize, Option<usize>)> {
+        let workspace_root = context
+            .workspace
+            .as_ref()
+            .map(|workspace| PathBuf::from(workspace.root_path_string()))
+            .ok_or_else(|| BitFunError::tool("Workspace is required for Grep".to_string()))?;
+
+        let pattern = input
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
+        let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+        let resolved_path = context.resolve_workspace_tool_path(search_path)?;
+        let resolved_path_buf = PathBuf::from(&resolved_path);
+        let output_mode = input
+            .get("output_mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("files_with_matches")
+            .to_string();
+        let offset = Self::resolve_offset(input);
+        let head_limit = Self::resolve_head_limit(input);
+        let max_results = Self::backend_max_results(input, offset, head_limit);
+        let before_context = input.get("-B").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let after_context = input.get("-A").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let shared_context = input
+            .get("context")
+            .or_else(|| input.get("-C"))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
+        let globs = Self::parse_glob_patterns(input.get("glob").and_then(|v| v.as_str()));
+        let file_types = input
+            .get("type")
+            .and_then(|v| v.as_str())
+            .map(|value| vec![value.to_string()])
+            .unwrap_or_default();
+        let output_mode_enum = match output_mode.as_str() {
+            "content" => ContentSearchOutputMode::Content,
+            "count" => ContentSearchOutputMode::Count,
+            _ => ContentSearchOutputMode::FilesWithMatches,
+        };
+        let request = ContentSearchRequest {
+            repo_root: workspace_root.clone(),
+            search_path: (resolved_path_buf != workspace_root).then_some(resolved_path_buf),
+            pattern: pattern.to_string(),
+            output_mode: output_mode_enum,
+            case_sensitive: !input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false),
+            use_regex: true,
+            whole_word: false,
+            multiline: input
+                .get("multiline")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            before_context: if shared_context > 0 {
+                shared_context
+            } else {
+                before_context
+            },
+            after_context: if shared_context > 0 {
+                shared_context
+            } else {
+                after_context
+            },
+            max_results,
+            globs,
+            file_types,
+            exclude_file_types: Vec::new(),
+        };
+
+        Ok((request, output_mode, offset, head_limit))
+    }
+
+    fn format_workspace_search_output(
+        &self,
+        output_mode: &str,
+        offset: usize,
+        head_limit: Option<usize>,
+        result: &crate::service::search::ContentSearchResult,
+        context: &ToolUseContext,
+    ) -> (String, usize, usize) {
+        match output_mode {
+            "content" => {
+                let mut lines = result
+                    .outcome
+                    .results
+                    .iter()
+                    .map(|item| {
+                        let line = item.line_number.unwrap_or_default();
+                        format!(
+                            "{}:{}:{}",
+                            item.path,
+                            line,
+                            item.matched_content.clone().unwrap_or_default()
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                apply_offset_and_limit(&mut lines, offset, head_limit);
+                let rendered = Self::relativize_result_text(
+                    &lines.join("\n"),
+                    Self::display_base(context).as_deref(),
+                );
+                let file_count = result
+                    .outcome
+                    .results
+                    .iter()
+                    .map(|item| item.path.as_str())
+                    .collect::<std::collections::HashSet<_>>()
+                    .len();
+                (rendered, file_count, result.matched_occurrences)
+            }
+            "count" => {
+                let mut lines = result
+                    .file_counts
+                    .iter()
+                    .map(|count| format!("{}:{}", count.path, count.matched_lines))
+                    .collect::<Vec<_>>();
+                lines.sort();
+                let mut lines = lines.into_iter().collect::<Vec<_>>();
+                apply_offset_and_limit(&mut lines, offset, head_limit);
+                let rendered = Self::relativize_result_text(
+                    &lines.join("\n"),
+                    Self::display_base(context).as_deref(),
+                );
+                (rendered, result.file_counts.len(), result.matched_lines)
+            }
+            _ => {
+                let mut files = result
+                    .outcome
+                    .results
+                    .iter()
+                    .map(|item| item.path.clone())
+                    .collect::<Vec<_>>();
+                files.sort();
+                files.dedup();
+                apply_offset_and_limit(&mut files, offset, head_limit);
+                let rendered = Self::relativize_result_text(
+                    &files.join("\n"),
+                    Self::display_base(context).as_deref(),
+                );
+                let total_matches = files.len();
+                (rendered, total_matches, total_matches)
+            }
+        }
+    }
+}
+
+fn apply_offset_and_limit(items: &mut Vec<String>, offset: usize, head_limit: Option<usize>) {
+    if offset > 0 {
+        if offset >= items.len() {
+            items.clear();
+        } else {
+            *items = items[offset..].to_vec();
+        }
+    }
+
+    if let Some(limit) = head_limit {
+        if items.len() > limit {
+            items.truncate(limit);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -324,6 +512,22 @@ mod tests {
         );
         assert_eq!(
             GrepTool::resolve_head_limit(&json!({ "head_limit": 0 })),
+            None
+        );
+    }
+
+    #[test]
+    fn backend_max_results_only_uses_explicit_limit() {
+        assert_eq!(
+            GrepTool::backend_max_results(&json!({}), 0, Some(DEFAULT_HEAD_LIMIT)),
+            None
+        );
+        assert_eq!(
+            GrepTool::backend_max_results(&json!({ "head_limit": 25 }), 3, Some(25)),
+            Some(28)
+        );
+        assert_eq!(
+            GrepTool::backend_max_results(&json!({ "head_limit": 0 }), 7, None),
             None
         );
     }
@@ -402,7 +606,7 @@ Usage:
     }
 
     fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
-        true
+        false
     }
 
     fn needs_permissions(&self, _input: Option<&Value>) -> bool {
@@ -458,6 +662,66 @@ Usage:
 
         if resolved.uses_remote_workspace_backend() {
             return self.call_remote(input, context).await;
+        }
+
+        if let Some(search_service) = get_global_workspace_search_service() {
+            let (request, output_mode, offset, head_limit) =
+                self.build_workspace_search_request(input, context)?;
+            let pattern = request.pattern.clone();
+            let search_mode = request.output_mode.search_mode();
+            let path = request
+                .search_path
+                .as_ref()
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_else(|| request.repo_root.to_string_lossy().to_string());
+            let search_started_at = Instant::now();
+            let search_result = search_service.search_content(request).await?;
+            let (result_text, file_count, total_matches) = self.format_workspace_search_output(
+                &output_mode,
+                offset,
+                head_limit,
+                &search_result,
+                context,
+            );
+            let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
+
+            log::info!(
+                "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, search_mode={:?}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
+                pattern,
+                path,
+                output_mode,
+                search_mode,
+                file_count,
+                total_matches,
+                search_result.backend,
+                search_result.repo_status.phase,
+                search_result.repo_status.rebuild_recommended,
+                search_result.repo_status.dirty_files.modified,
+                search_result.repo_status.dirty_files.deleted,
+                search_result.repo_status.dirty_files.new,
+                search_result.candidate_docs,
+                search_result.matched_lines,
+                search_result.matched_occurrences,
+                workspace_search_elapsed_ms,
+            );
+
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "pattern": pattern,
+                    "path": path,
+                    "output_mode": output_mode,
+                    "file_count": file_count,
+                    "total_matches": total_matches,
+                    "backend": search_result.backend,
+                    "repo_phase": search_result.repo_status.phase,
+                    "rebuild_recommended": search_result.repo_status.rebuild_recommended,
+                    "applied_limit": head_limit,
+                    "applied_offset": if offset > 0 { Some(offset) } else { None::<usize> },
+                    "result": result_text,
+                }),
+                result_for_assistant: Some(result_text),
+                image_attachments: None,
+            }]);
         }
 
         let grep_options = self.build_grep_options(input, context)?;

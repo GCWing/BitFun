@@ -1,4 +1,5 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::service::search::{get_global_workspace_search_service, GlobSearchRequest};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use globset::{GlobBuilder, GlobMatcher};
@@ -565,6 +566,46 @@ impl Tool for GlobTool {
         }
 
         let resolved_str = resolved.resolved_path.clone();
+
+        if let Some(search_service) = get_global_workspace_search_service() {
+            let workspace_root = context
+                .workspace
+                .as_ref()
+                .map(|workspace| PathBuf::from(workspace.root_path_string()))
+                .ok_or_else(|| {
+                    BitFunError::tool(
+                        "workspace_path is required when Glob path is omitted".to_string(),
+                    )
+                })?;
+            let resolved_path = PathBuf::from(&resolved_str);
+            let glob_result = search_service
+                .glob(GlobSearchRequest {
+                    repo_root: workspace_root.clone(),
+                    search_path: (resolved_path != workspace_root).then_some(resolved_path),
+                    pattern: pattern.to_string(),
+                    limit,
+                })
+                .await?;
+
+            let result_text = if glob_result.paths.is_empty() {
+                format!("No files found matching pattern '{}'", pattern)
+            } else {
+                glob_result.paths.join("\n")
+            };
+
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "pattern": pattern,
+                    "path": resolved_str,
+                    "matches": glob_result.paths,
+                    "match_count": glob_result.paths.len(),
+                    "repo_phase": glob_result.repo_status.phase,
+                    "rebuild_recommended": glob_result.repo_status.rebuild_recommended
+                }),
+                result_for_assistant: Some(result_text),
+                image_attachments: None,
+            }]);
+        }
         let resolved_str_for_rg = resolved_str.clone();
         let pattern_for_rg = pattern.to_string();
         let matches = tokio::task::spawn_blocking(move || {

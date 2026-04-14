@@ -14,6 +14,9 @@ import type {
   FileSearchResultGroup,
   FileSearchStreamKind,
   FileSearchStreamStartResponse,
+  SearchRepoIndexRequest,
+  WorkspaceSearchIndexStatus,
+  WorkspaceSearchIndexTaskHandle,
 } from './tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -36,6 +39,51 @@ export interface FileMetadata {
   isDir: boolean;
   isRemote?: boolean;
   isRuntimeArtifact?: boolean;
+}
+
+interface WorkspaceSearchRepoStatusRaw {
+  repo_id: string;
+  repo_path: string;
+  index_path: string;
+  phase: WorkspaceSearchIndexStatus['repoStatus']['phase'];
+  snapshot_key?: string | null;
+  last_probe_unix_secs?: number | null;
+  last_rebuild_unix_secs?: number | null;
+  dirty_files: {
+    modified: number;
+    deleted: number;
+    new: number;
+  };
+  rebuild_recommended: boolean;
+  active_task_id?: string | null;
+  watcher_healthy: boolean;
+  last_error?: string | null;
+}
+
+interface WorkspaceSearchTaskStatusRaw {
+  task_id: string;
+  workspace_id: string;
+  kind: string;
+  state: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['state'];
+  phase?: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['phase'] | null;
+  message: string;
+  processed: number;
+  total?: number | null;
+  started_unix_secs: number;
+  updated_unix_secs: number;
+  finished_unix_secs?: number | null;
+  cancellable: boolean;
+  error?: string | null;
+}
+
+interface WorkspaceSearchIndexStatusRaw {
+  repoStatus: WorkspaceSearchRepoStatusRaw;
+  activeTask?: WorkspaceSearchTaskStatusRaw | null;
+}
+
+interface WorkspaceSearchIndexTaskHandleRaw {
+  task: WorkspaceSearchTaskStatusRaw;
+  repoStatus: WorkspaceSearchRepoStatusRaw;
 }
 
 function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResultGroup[] {
@@ -62,6 +110,59 @@ function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResult
   }
 
   return Array.from(groups.values());
+}
+
+function mapWorkspaceSearchRepoStatus(raw: WorkspaceSearchRepoStatusRaw): WorkspaceSearchIndexStatus['repoStatus'] {
+  return {
+    repoId: raw.repo_id,
+    repoPath: raw.repo_path,
+    indexPath: raw.index_path,
+    phase: raw.phase,
+    snapshotKey: raw.snapshot_key ?? null,
+    lastProbeUnixSecs: raw.last_probe_unix_secs ?? null,
+    lastRebuildUnixSecs: raw.last_rebuild_unix_secs ?? null,
+    dirtyFiles: raw.dirty_files,
+    rebuildRecommended: raw.rebuild_recommended,
+    activeTaskId: raw.active_task_id ?? null,
+    watcherHealthy: raw.watcher_healthy,
+    lastError: raw.last_error ?? null,
+  };
+}
+
+function mapWorkspaceSearchTaskStatus(
+  raw: WorkspaceSearchTaskStatusRaw
+): NonNullable<WorkspaceSearchIndexStatus['activeTask']> {
+  return {
+    taskId: raw.task_id,
+    workspaceId: raw.workspace_id,
+    kind: raw.kind,
+    state: raw.state,
+    phase: raw.phase ?? null,
+    message: raw.message,
+    processed: raw.processed,
+    total: raw.total ?? null,
+    startedUnixSecs: raw.started_unix_secs,
+    updatedUnixSecs: raw.updated_unix_secs,
+    finishedUnixSecs: raw.finished_unix_secs ?? null,
+    cancellable: raw.cancellable,
+    error: raw.error ?? null,
+  };
+}
+
+function mapWorkspaceSearchIndexStatus(raw: WorkspaceSearchIndexStatusRaw): WorkspaceSearchIndexStatus {
+  return {
+    repoStatus: mapWorkspaceSearchRepoStatus(raw.repoStatus),
+    activeTask: raw.activeTask ? mapWorkspaceSearchTaskStatus(raw.activeTask) : null,
+  };
+}
+
+function mapWorkspaceSearchIndexTaskHandle(
+  raw: WorkspaceSearchIndexTaskHandleRaw
+): WorkspaceSearchIndexTaskHandle {
+  return {
+    task: mapWorkspaceSearchTaskStatus(raw.task),
+    repoStatus: mapWorkspaceSearchRepoStatus(raw.repoStatus),
+  };
 }
 
 export class WorkspaceAPI {
@@ -731,6 +832,7 @@ export class WorkspaceAPI {
         limit: response.limit,
         truncated: response.truncated,
         totalResults: groupedResults.length,
+        searchMetadata: response.searchMetadata,
       };
       if (groupedResults.length > 0) {
         callbacks.onProgress?.({
@@ -757,6 +859,36 @@ export class WorkspaceAPI {
       callbacks,
       effectiveSignal
     );
+  }
+
+  async getSearchRepoStatus(rootPath: string): Promise<WorkspaceSearchIndexStatus> {
+    const request: SearchRepoIndexRequest = { rootPath };
+    try {
+      const raw = await api.invoke<WorkspaceSearchIndexStatusRaw>('search_get_repo_status', { request });
+      return mapWorkspaceSearchIndexStatus(raw);
+    } catch (error) {
+      throw createTauriCommandError('search_get_repo_status', error, { rootPath });
+    }
+  }
+
+  async buildSearchIndex(rootPath: string): Promise<WorkspaceSearchIndexTaskHandle> {
+    const request: SearchRepoIndexRequest = { rootPath };
+    try {
+      const raw = await api.invoke<WorkspaceSearchIndexTaskHandleRaw>('search_build_index', { request });
+      return mapWorkspaceSearchIndexTaskHandle(raw);
+    } catch (error) {
+      throw createTauriCommandError('search_build_index', error, { rootPath });
+    }
+  }
+
+  async rebuildSearchIndex(rootPath: string): Promise<WorkspaceSearchIndexTaskHandle> {
+    const request: SearchRepoIndexRequest = { rootPath };
+    try {
+      const raw = await api.invoke<WorkspaceSearchIndexTaskHandleRaw>('search_rebuild_index', { request });
+      return mapWorkspaceSearchIndexTaskHandle(raw);
+    } catch (error) {
+      throw createTauriCommandError('search_rebuild_index', error, { rootPath });
+    }
   }
 
    
