@@ -58,10 +58,11 @@ pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, Run
 pub use search::{
     get_global_workspace_search_service, set_global_workspace_search_service, ContentSearchRequest,
     ContentSearchResult, GlobSearchRequest, GlobSearchResult, IndexTaskHandle,
-    WorkspaceIndexStatus, WorkspaceSearchBackend, WorkspaceSearchFileCount,
-    WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus, WorkspaceSearchService,
-    WorkspaceSearchTaskKind, WorkspaceSearchTaskPhase, WorkspaceSearchTaskState,
-    WorkspaceSearchTaskStatus,
+    WorkspaceIndexStatus, WorkspaceSearchBackend, WorkspaceSearchContextLine,
+    WorkspaceSearchDirtyFiles, WorkspaceSearchFileCount, WorkspaceSearchHit, WorkspaceSearchLine,
+    WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchRepoPhase,
+    WorkspaceSearchRepoStatus, WorkspaceSearchService, WorkspaceSearchTaskKind,
+    WorkspaceSearchTaskPhase, WorkspaceSearchTaskState, WorkspaceSearchTaskStatus,
 };
 pub use snapshot::SnapshotService;
 pub use system::{

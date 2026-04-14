@@ -1,10 +1,12 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::search::{
     get_global_workspace_search_service, ContentSearchOutputMode, ContentSearchRequest,
+    WorkspaceSearchHit, WorkspaceSearchLine,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -334,7 +336,7 @@ impl GrepTool {
         &self,
         input: &Value,
         context: &ToolUseContext,
-    ) -> BitFunResult<(ContentSearchRequest, String, usize, Option<usize>)> {
+    ) -> BitFunResult<(ContentSearchRequest, String, bool, usize, Option<usize>)> {
         let workspace_root = context
             .workspace
             .as_ref()
@@ -353,6 +355,10 @@ impl GrepTool {
             .and_then(|v| v.as_str())
             .unwrap_or("files_with_matches")
             .to_string();
+        let show_line_numbers = input
+            .get("-n")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(output_mode == "content");
         let offset = Self::resolve_offset(input);
         let head_limit = Self::resolve_head_limit(input);
         let max_results = Self::backend_max_results(input, offset, head_limit);
@@ -402,44 +408,29 @@ impl GrepTool {
             exclude_file_types: Vec::new(),
         };
 
-        Ok((request, output_mode, offset, head_limit))
+        Ok((request, output_mode, show_line_numbers, offset, head_limit))
     }
 
     fn format_workspace_search_output(
         &self,
         output_mode: &str,
+        show_line_numbers: bool,
         offset: usize,
         head_limit: Option<usize>,
         result: &crate::service::search::ContentSearchResult,
-        context: &ToolUseContext,
+        display_base: Option<&str>,
     ) -> (String, usize, usize) {
         match output_mode {
             "content" => {
-                let mut lines = result
-                    .outcome
-                    .results
-                    .iter()
-                    .map(|item| {
-                        let line = item.line_number.unwrap_or_default();
-                        format!(
-                            "{}:{}:{}",
-                            item.path,
-                            line,
-                            item.matched_content.clone().unwrap_or_default()
-                        )
-                    })
-                    .collect::<Vec<_>>();
+                let mut lines =
+                    render_workspace_search_content_lines(&result.hits, show_line_numbers);
                 apply_offset_and_limit(&mut lines, offset, head_limit);
-                let rendered = Self::relativize_result_text(
-                    &lines.join("\n"),
-                    Self::display_base(context).as_deref(),
-                );
+                let rendered = Self::relativize_result_text(&lines.join("\n"), display_base);
                 let file_count = result
-                    .outcome
-                    .results
+                    .hits
                     .iter()
-                    .map(|item| item.path.as_str())
-                    .collect::<std::collections::HashSet<_>>()
+                    .map(|hit| hit.path.as_str())
+                    .collect::<HashSet<_>>()
                     .len();
                 (rendered, file_count, result.matched_occurrences)
             }
@@ -452,10 +443,7 @@ impl GrepTool {
                 lines.sort();
                 let mut lines = lines.into_iter().collect::<Vec<_>>();
                 apply_offset_and_limit(&mut lines, offset, head_limit);
-                let rendered = Self::relativize_result_text(
-                    &lines.join("\n"),
-                    Self::display_base(context).as_deref(),
-                );
+                let rendered = Self::relativize_result_text(&lines.join("\n"), display_base);
                 (rendered, result.file_counts.len(), result.matched_lines)
             }
             _ => {
@@ -468,15 +456,43 @@ impl GrepTool {
                 files.sort();
                 files.dedup();
                 apply_offset_and_limit(&mut files, offset, head_limit);
-                let rendered = Self::relativize_result_text(
-                    &files.join("\n"),
-                    Self::display_base(context).as_deref(),
-                );
+                let rendered = Self::relativize_result_text(&files.join("\n"), display_base);
                 let total_matches = files.len();
                 (rendered, total_matches, total_matches)
             }
         }
     }
+}
+
+fn render_workspace_search_content_lines(
+    hits: &[WorkspaceSearchHit],
+    show_line_numbers: bool,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    for hit in hits {
+        for line in &hit.lines {
+            match line {
+                WorkspaceSearchLine::Match { value } => {
+                    let snippet = value.snippet.trim_end();
+                    if show_line_numbers {
+                        lines.push(format!("{}:{}:{}", hit.path, value.location.line, snippet));
+                    } else {
+                        lines.push(format!("{}:{}", hit.path, snippet));
+                    }
+                }
+                WorkspaceSearchLine::Context { value } => {
+                    let snippet = value.snippet.trim_end();
+                    if show_line_numbers {
+                        lines.push(format!("{}-{}:{}", hit.path, value.line_number, snippet));
+                    } else {
+                        lines.push(format!("{}-{}", hit.path, snippet));
+                    }
+                }
+                WorkspaceSearchLine::ContextBreak => lines.push("--".to_string()),
+            }
+        }
+    }
+    lines
 }
 
 fn apply_offset_and_limit(items: &mut Vec<String>, offset: usize, head_limit: Option<usize>) {
@@ -497,7 +513,13 @@ fn apply_offset_and_limit(items: &mut Vec<String>, offset: usize, head_limit: Op
 
 #[cfg(test)]
 mod tests {
-    use super::{GrepTool, DEFAULT_HEAD_LIMIT};
+    use super::{render_workspace_search_content_lines, GrepTool, DEFAULT_HEAD_LIMIT};
+    use crate::infrastructure::FileSearchOutcome;
+    use crate::service::search::{
+        ContentSearchResult, WorkspaceSearchBackend, WorkspaceSearchHit, WorkspaceSearchLine,
+        WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchRepoPhase,
+        WorkspaceSearchRepoStatus,
+    };
     use serde_json::json;
 
     #[test]
@@ -541,6 +563,146 @@ mod tests {
             relativized,
             "src/main.rs:12:fn main()\nsrc/lib.rs:3:pub fn lib()"
         );
+    }
+
+    #[test]
+    fn renders_workspace_search_context_lines_in_rg_style() {
+        let lines = render_workspace_search_content_lines(
+            &[WorkspaceSearchHit {
+                path: "/repo/src/main.rs".to_string(),
+                matches: vec![WorkspaceSearchMatch {
+                    location: WorkspaceSearchMatchLocation {
+                        line: 12,
+                        column: 5,
+                    },
+                    snippet: "panic!(\"x\")".to_string(),
+                    matched_text: "panic".to_string(),
+                }],
+                lines: vec![
+                    WorkspaceSearchLine::Context {
+                        value: crate::service::search::WorkspaceSearchContextLine {
+                            line_number: 10,
+                            snippet: "let a = 1".to_string(),
+                        },
+                    },
+                    WorkspaceSearchLine::Context {
+                        value: crate::service::search::WorkspaceSearchContextLine {
+                            line_number: 11,
+                            snippet: "let b = 2".to_string(),
+                        },
+                    },
+                    WorkspaceSearchLine::Match {
+                        value: WorkspaceSearchMatch {
+                            location: WorkspaceSearchMatchLocation {
+                                line: 12,
+                                column: 5,
+                            },
+                            snippet: "panic!(\"x\")".to_string(),
+                            matched_text: "panic".to_string(),
+                        },
+                    },
+                    WorkspaceSearchLine::Context {
+                        value: crate::service::search::WorkspaceSearchContextLine {
+                            line_number: 13,
+                            snippet: "cleanup()".to_string(),
+                        },
+                    },
+                    WorkspaceSearchLine::ContextBreak,
+                    WorkspaceSearchLine::Context {
+                        value: crate::service::search::WorkspaceSearchContextLine {
+                            line_number: 20,
+                            snippet: "return".to_string(),
+                        },
+                    },
+                ],
+            }],
+            true,
+        );
+
+        assert_eq!(
+            lines,
+            vec![
+                "/repo/src/main.rs-10:let a = 1",
+                "/repo/src/main.rs-11:let b = 2",
+                "/repo/src/main.rs:12:panic!(\"x\")",
+                "/repo/src/main.rs-13:cleanup()",
+                "--",
+                "/repo/src/main.rs-20:return",
+            ]
+        );
+    }
+
+    #[test]
+    fn content_workspace_output_uses_hits_for_context_lines() {
+        let tool = GrepTool::new();
+        let result = ContentSearchResult {
+            outcome: FileSearchOutcome {
+                results: Vec::new(),
+                truncated: false,
+            },
+            file_counts: Vec::new(),
+            hits: vec![WorkspaceSearchHit {
+                path: "/repo/src/main.rs".to_string(),
+                matches: vec![WorkspaceSearchMatch {
+                    location: WorkspaceSearchMatchLocation {
+                        line: 12,
+                        column: 5,
+                    },
+                    snippet: "panic!(\"x\")".to_string(),
+                    matched_text: "panic".to_string(),
+                }],
+                lines: vec![
+                    WorkspaceSearchLine::Context {
+                        value: crate::service::search::WorkspaceSearchContextLine {
+                            line_number: 11,
+                            snippet: "let b = 2".to_string(),
+                        },
+                    },
+                    WorkspaceSearchLine::Match {
+                        value: WorkspaceSearchMatch {
+                            location: WorkspaceSearchMatchLocation {
+                                line: 12,
+                                column: 5,
+                            },
+                            snippet: "panic!(\"x\")".to_string(),
+                            matched_text: "panic".to_string(),
+                        },
+                    },
+                ],
+            }],
+            backend: WorkspaceSearchBackend::Indexed,
+            repo_status: WorkspaceSearchRepoStatus {
+                repo_id: "repo".to_string(),
+                repo_path: "/repo".to_string(),
+                index_path: "/repo/.bitfun/search/codgrep-index".to_string(),
+                phase: WorkspaceSearchRepoPhase::Ready,
+                snapshot_key: None,
+                last_probe_unix_secs: None,
+                last_rebuild_unix_secs: None,
+                dirty_files: crate::service::search::WorkspaceSearchDirtyFiles {
+                    modified: 0,
+                    deleted: 0,
+                    new: 0,
+                },
+                rebuild_recommended: false,
+                active_task_id: None,
+                watcher_healthy: true,
+                last_error: None,
+            },
+            candidate_docs: 1,
+            matched_lines: 1,
+            matched_occurrences: 1,
+        };
+
+        let (rendered, file_count, total_matches) =
+            tool.format_workspace_search_output("content", true, 0, None, &result, Some("/repo"));
+
+        assert_eq!(
+            rendered,
+            "src/main.rs-11:let b = 2\nsrc/main.rs:12:panic!(\"x\")"
+        );
+        assert_eq!(file_count, 1);
+        assert_eq!(total_matches, 1);
     }
 }
 
@@ -665,7 +827,7 @@ Usage:
         }
 
         if let Some(search_service) = get_global_workspace_search_service() {
-            let (request, output_mode, offset, head_limit) =
+            let (request, output_mode, show_line_numbers, offset, head_limit) =
                 self.build_workspace_search_request(input, context)?;
             let pattern = request.pattern.clone();
             let search_mode = request.output_mode.search_mode();
@@ -676,12 +838,14 @@ Usage:
                 .unwrap_or_else(|| request.repo_root.to_string_lossy().to_string());
             let search_started_at = Instant::now();
             let search_result = search_service.search_content(request).await?;
+            let display_base = Self::display_base(context);
             let (result_text, file_count, total_matches) = self.format_workspace_search_output(
                 &output_mode,
+                show_line_numbers,
                 offset,
                 head_limit,
                 &search_result,
-                context,
+                display_base.as_deref(),
             );
             let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
 

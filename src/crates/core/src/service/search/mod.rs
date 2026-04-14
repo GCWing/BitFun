@@ -8,7 +8,8 @@ pub use service::{
 pub use types::{
     ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
     GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchBackend,
-    WorkspaceSearchFileCount, WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus,
-    WorkspaceSearchTaskKind, WorkspaceSearchTaskPhase, WorkspaceSearchTaskState,
-    WorkspaceSearchTaskStatus,
+    WorkspaceSearchContextLine, WorkspaceSearchDirtyFiles, WorkspaceSearchFileCount,
+    WorkspaceSearchHit, WorkspaceSearchLine, WorkspaceSearchMatch, WorkspaceSearchMatchLocation,
+    WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus, WorkspaceSearchTaskKind,
+    WorkspaceSearchTaskPhase, WorkspaceSearchTaskState, WorkspaceSearchTaskStatus,
 };

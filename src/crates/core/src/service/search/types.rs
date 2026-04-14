@@ -1,4 +1,8 @@
 use crate::infrastructure::FileSearchOutcome;
+use codgrep::daemon::protocol::{
+    FileMatch as CodgrepFileMatch, MatchLocation as CodgrepMatchLocation,
+    SearchHit as CodgrepSearchHit, SearchLine as CodgrepSearchLine,
+};
 use codgrep::sdk::{
     DirtyFileStats as CodgrepDirtyFileStats, FileCount as CodgrepFileCount,
     RepoPhase as CodgrepRepoPhase, RepoStatus as CodgrepRepoStatus,
@@ -271,6 +275,93 @@ impl From<CodgrepFileCount> for WorkspaceSearchFileCount {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceSearchMatchLocation {
+    pub line: usize,
+    pub column: usize,
+}
+
+impl From<CodgrepMatchLocation> for WorkspaceSearchMatchLocation {
+    fn from(value: CodgrepMatchLocation) -> Self {
+        Self {
+            line: value.line,
+            column: value.column,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSearchMatch {
+    pub location: WorkspaceSearchMatchLocation,
+    pub snippet: String,
+    pub matched_text: String,
+}
+
+impl From<CodgrepFileMatch> for WorkspaceSearchMatch {
+    fn from(value: CodgrepFileMatch) -> Self {
+        Self {
+            location: value.location.into(),
+            snippet: value.snippet,
+            matched_text: value.matched_text,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSearchContextLine {
+    pub line_number: usize,
+    pub snippet: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum WorkspaceSearchLine {
+    Match { value: WorkspaceSearchMatch },
+    Context { value: WorkspaceSearchContextLine },
+    ContextBreak,
+}
+
+impl From<CodgrepSearchLine> for WorkspaceSearchLine {
+    fn from(value: CodgrepSearchLine) -> Self {
+        match value {
+            CodgrepSearchLine::Match { value } => Self::Match {
+                value: value.into(),
+            },
+            CodgrepSearchLine::Context {
+                line_number,
+                snippet,
+            } => Self::Context {
+                value: WorkspaceSearchContextLine {
+                    line_number,
+                    snippet,
+                },
+            },
+            CodgrepSearchLine::ContextBreak => Self::ContextBreak,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSearchHit {
+    pub path: String,
+    pub matches: Vec<WorkspaceSearchMatch>,
+    pub lines: Vec<WorkspaceSearchLine>,
+}
+
+impl From<CodgrepSearchHit> for WorkspaceSearchHit {
+    fn from(value: CodgrepSearchHit) -> Self {
+        Self {
+            path: value.path,
+            matches: value.matches.into_iter().map(Into::into).collect(),
+            lines: value.lines.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceIndexStatus {
     pub repo_status: WorkspaceSearchRepoStatus,
     pub active_task: Option<WorkspaceSearchTaskStatus>,
@@ -281,6 +372,7 @@ pub struct WorkspaceIndexStatus {
 pub struct ContentSearchResult {
     pub outcome: FileSearchOutcome,
     pub file_counts: Vec<WorkspaceSearchFileCount>,
+    pub hits: Vec<WorkspaceSearchHit>,
     pub backend: WorkspaceSearchBackend,
     pub repo_status: WorkspaceSearchRepoStatus,
     pub candidate_docs: usize,

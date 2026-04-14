@@ -15,6 +15,7 @@ use tokio::sync::RwLock;
 use super::types::{
     ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
     GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount,
+    WorkspaceSearchHit,
 };
 
 static GLOBAL_WORKSPACE_SEARCH_SERVICE: OnceLock<Arc<WorkspaceSearchService>> = OnceLock::new();
@@ -167,6 +168,13 @@ impl WorkspaceSearchService {
                 .into_iter()
                 .map(WorkspaceSearchFileCount::from)
                 .collect(),
+            hits: search
+                .results
+                .hits
+                .clone()
+                .into_iter()
+                .map(WorkspaceSearchHit::from)
+                .collect(),
             backend: search.backend.into(),
             repo_status: search.status.into(),
             candidate_docs: search.results.candidate_docs,
@@ -261,7 +269,9 @@ impl WorkspaceSearchService {
             self.client
                 .open_repo(params)
                 .await
-                .map_err(map_codgrep_error("Failed to open codgrep repository session"))?,
+                .map_err(map_codgrep_error(
+                    "Failed to open codgrep repository session",
+                ))?,
         );
 
         let mut sessions = self.sessions.write().await;
