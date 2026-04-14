@@ -11,6 +11,7 @@ mod claw_mode;
 mod cowork_mode;
 mod debug_mode;
 mod plan_mode;
+mod team_mode;
 // Built-in subagents
 mod deep_research_agent;
 mod explore_agent;
@@ -34,6 +35,7 @@ pub use file_finder_agent::FileFinderAgent;
 pub use generate_doc_agent::GenerateDocAgent;
 pub use init_agent::InitAgent;
 pub use plan_mode::PlanMode;
+pub use team_mode::TeamMode;
 pub use prompt_builder::{PromptBuilder, PromptBuilderContext, RemoteExecutionHints};
 pub use registry::{
     get_agent_registry, AgentCategory, AgentInfo, AgentRegistry, CustomSubagentConfig,

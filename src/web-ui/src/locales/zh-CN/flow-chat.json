@@ -237,7 +237,8 @@
       "Plan": "先规划后执行，先明确需求并制定实施计划，再进行编码",
       "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
-      "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告"
+      "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告",
+      "Team": "虚拟工程团队：CEO、工程经理、设计师、QA 负责人、安全官、发布工程师 — 按完整冲刺流程协同工作"
     },
     "modeNames": {
       "agentic": "Agentic",
@@ -245,7 +246,8 @@
       "Plan": "Plan",
       "debug": "Debug",
       "Cowork": "Cowork",
-      "DeepResearch": "Deep Research"
+      "DeepResearch": "Deep Research",
+      "Team": "Team"
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",

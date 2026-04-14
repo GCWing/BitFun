@@ -44,8 +44,13 @@ pub fn builtin_skill_group_key(dir_name: &str) -> Option<&'static str> {
         "docx" | "pdf" | "pptx" | "xlsx" => Some("office"),
         "find-skills" | "writing-skills" => Some("meta"),
         "agent-browser" => Some("computer-use"),
-        _ => Some("superpowers"),
+        _ if dir_name.starts_with("gstack-") => Some("team"),
+        _ => None,
     }
+}
+
+pub fn is_team_skill(dir_name: &str) -> bool {
+    builtin_skill_group_key(dir_name) == Some("team")
 }
 
 pub async fn ensure_builtin_skills_installed() -> BitFunResult<()> {
@@ -177,9 +182,10 @@ mod tests {
             builtin_skill_group_key("agent-browser"),
             Some("computer-use")
         );
-        assert_eq!(
-            builtin_skill_group_key("test-driven-development"),
-            Some("superpowers")
-        );
+        assert_eq!(builtin_skill_group_key("unknown-skill"), None);
+        assert_eq!(builtin_skill_group_key("gstack-review"), Some("team"));
+        assert_eq!(builtin_skill_group_key("gstack-ship"), Some("team"));
+        assert_eq!(builtin_skill_group_key("gstack-qa"), Some("team"));
+        assert_eq!(builtin_skill_group_key("gstack-cso"), Some("team"));
     }
 }

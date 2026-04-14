@@ -1,5 +1,6 @@
 //! Default built-in skill profiles per mode.
 
+use super::builtin::is_team_skill;
 use super::mode_overrides::UserModeSkillOverrides;
 use super::types::{SkillInfo, SkillLocation};
 use std::collections::HashSet;
@@ -51,6 +52,11 @@ fn builtin_profile_for_mode(mode_id: &str) -> BuiltinSkillProfile {
 pub fn is_enabled_by_default_for_mode(skill: &SkillInfo, mode_id: &str) -> bool {
     if skill.level != SkillLocation::User || !skill.is_builtin {
         return true;
+    }
+
+    // Team (gstack-*) skills are only enabled in Team mode
+    if is_team_skill(&skill.dir_name) {
+        return mode_id == "Team";
     }
 
     let profile = builtin_profile_for_mode(mode_id);
@@ -119,14 +125,14 @@ mod tests {
     #[test]
     fn builtin_defaults_follow_mode_profiles() {
         let pdf = builtin_skill("pdf");
-        let tdd = builtin_skill("test-driven-development");
+        let browser = builtin_skill("agent-browser");
 
         assert!(!is_enabled_by_default_for_mode(&pdf, "agentic"));
-        assert!(is_enabled_by_default_for_mode(&tdd, "agentic"));
+        assert!(is_enabled_by_default_for_mode(&browser, "agentic"));
         assert!(is_enabled_by_default_for_mode(&pdf, "Cowork"));
-        assert!(!is_enabled_by_default_for_mode(&tdd, "Cowork"));
+        assert!(!is_enabled_by_default_for_mode(&browser, "Cowork"));
         assert!(!is_enabled_by_default_for_mode(&pdf, "Plan"));
-        assert!(!is_enabled_by_default_for_mode(&tdd, "debug"));
+        assert!(!is_enabled_by_default_for_mode(&browser, "debug"));
     }
 
     #[test]
@@ -134,6 +140,20 @@ mod tests {
         let custom = custom_user_skill("my-custom-skill");
         assert!(is_enabled_by_default_for_mode(&custom, "agentic"));
         assert!(is_enabled_by_default_for_mode(&custom, "Plan"));
+    }
+
+    #[test]
+    fn team_skills_only_enabled_in_team_mode() {
+        let review = builtin_skill("gstack-review");
+        let ship = builtin_skill("gstack-ship");
+
+        assert!(is_enabled_by_default_for_mode(&review, "Team"));
+        assert!(is_enabled_by_default_for_mode(&ship, "Team"));
+
+        assert!(!is_enabled_by_default_for_mode(&review, "agentic"));
+        assert!(!is_enabled_by_default_for_mode(&ship, "agentic"));
+        assert!(!is_enabled_by_default_for_mode(&review, "Plan"));
+        assert!(!is_enabled_by_default_for_mode(&review, "Cowork"));
     }
 
     #[test]
