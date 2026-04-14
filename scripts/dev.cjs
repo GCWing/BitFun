@@ -165,13 +165,16 @@ function runCommand(command, cwd = ROOT_DIR) {
 /**
  * Spawn a command with explicit args array (no shell interpolation, safe for paths with spaces)
  */
-function spawnCommand(cmd, args, cwd = ROOT_DIR, env = process.env, shell = false) {
+function spawnCommand(cmd, args, cwd = ROOT_DIR, envOverrides = {}, shell = false) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       cwd,
       stdio: 'inherit',
       shell,
-      env,
+      env: {
+        ...process.env,
+        ...envOverrides,
+      },
     });
 
     child.on('close', (code) => {
@@ -541,6 +544,36 @@ async function startDesktopPreview() {
   await new Promise(() => {});
 }
 
+function codgrepBinaryName() {
+  return process.platform === 'win32' ? 'cg.exe' : 'cg';
+}
+
+function codgrepBinaryPath(profile = 'debug') {
+  return path.join(ROOT_DIR, 'target', profile, codgrepBinaryName());
+}
+
+function ensureCodgrepBinary(profile = 'debug') {
+  const cargoCommand =
+    profile === 'debug'
+      ? 'cargo build -p codgrep --bin cg'
+      : `cargo build -p codgrep --bin cg --profile ${profile}`;
+
+  const result = runInherit(cargoCommand);
+  if (!result.ok) {
+    return result;
+  }
+
+  const binaryPath = codgrepBinaryPath(profile);
+  if (!fs.existsSync(binaryPath)) {
+    return {
+      ok: false,
+      error: new Error(`codgrep binary not found after build: ${binaryPath}`),
+    };
+  }
+
+  return { ok: true, binaryPath };
+}
+
 /**
  * Main entry
  */
@@ -566,7 +599,7 @@ async function main() {
   printHeader(`BitFun ${modeLabel} Development`);
   printBlank();
 
-  const totalSteps = desktopMode ? 4 : 3;
+  const totalSteps = desktopMode ? 5 : 3;
   let currentStep = 1;
 
   // Step 1: Copy resources
@@ -617,6 +650,20 @@ async function main() {
     if (!mobileWebResult.ok) {
       process.exit(1);
     }
+
+    printStep(currentStep++, totalSteps, 'Build workspace search daemon');
+    const codgrepResult = ensureCodgrepBinary('debug');
+    if (!codgrepResult.ok) {
+      printError('Build workspace search daemon failed');
+      if (codgrepResult.error && codgrepResult.error.message) {
+        printError(codgrepResult.error.message);
+      }
+      if (codgrepResult.error && codgrepResult.error.status !== undefined) {
+        printError(`Exit code: ${codgrepResult.error.status}`);
+      }
+      process.exit(1);
+    }
+    process.env.CODGREP_DAEMON_BIN = codgrepResult.binaryPath;
   }
 
   // Final step: Start dev server
