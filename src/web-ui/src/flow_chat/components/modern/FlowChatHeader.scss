@@ -3,11 +3,12 @@
 @use '../../../component-library/styles/tokens' as *;
 
 .flowchat-header {
-  display: flex;
+  // Three columns: equal flexible sides keep the middle column geometrically centered
+  // (opening search / turn controls must not shift the title).
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: $size-gap-1;
-  padding: 0 $size-gap-3;
   border-bottom: 1px dashed var(--border-base);
 
   // Frosted glass effect.
@@ -15,8 +16,11 @@
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
   
-  height: 36px;
-  min-height: 36px;
+  // Taller than 36px so glyph descenders (g, y, p) are not clipped by the bar.
+  box-sizing: border-box;
+  min-height: 40px;
+  height: auto;
+  padding: 4px $size-gap-3;
   flex-shrink: 0;
   transition: all $motion-base $easing-standard;
   position: relative;
@@ -155,39 +159,53 @@
     text-overflow: ellipsis;
   }
 
+  &__center {
+    grid-column: 2;
+    justify-self: center;
+    align-self: center;
+    min-width: 0;
+    max-width: min(560px, 58vw);
+    overflow: visible;
+  }
+
   // ==================== Center info (agent type / workspace) ====================
   &__info {
-    flex: 1;
     min-width: 0;
     padding: 0 $size-gap-2;
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: center;
     gap: 6px;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: visible;
     cursor: default;
   }
 
   &__agent-type,
   &__workspace {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     gap: 4px;
     min-width: 0;
     flex-shrink: 1;
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
-    line-height: 1;
+    // Enough line box for descenders; avoid unitless 1.x that still clips some fonts.
+    line-height: 1.5;
     white-space: nowrap;
 
     svg {
       flex-shrink: 0;
       opacity: 0.75;
+      align-self: center;
     }
 
+    // Ellipsis needs horizontal clipping; `overflow: hidden` also clips descenders.
+    // `overflow-x: clip` does not force overflow-y to auto, so descenders can paint.
     > span {
       min-width: 0;
-      overflow: hidden;
+      overflow-x: clip;
+      overflow-y: visible;
       text-overflow: ellipsis;
     }
   }
@@ -202,13 +220,15 @@
   }
 
   &__workspace {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   &__info-sep {
     flex-shrink: 0;
     color: var(--color-text-tertiary, var(--color-text-secondary));
     font-size: var(--flowchat-font-size-xs);
+    line-height: 1.5;
     opacity: 0.5;
     user-select: none;
   }
@@ -221,11 +241,17 @@
     flex-shrink: 0;
 
     &--left {
-      margin-right: $size-gap-2;
+      grid-column: 1;
+      justify-self: start;
+    }
+
+    &:not(&--left) {
+      grid-column: 3;
+      justify-self: end;
     }
   }
 
-  // ==================== Search ====================
+  // ==================== Search (right-aligned strip; does not span full header) ====================
   &__search-btn {
     flex: 0 0 auto;
 
@@ -235,49 +261,38 @@
   }
 
   &__search {
-    flex: 1;
+    flex: 0 1 auto;
+    max-width: min(320px, 42vw);
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
-    padding: 0 $size-gap-1;
+    // Tight spacing between input, match count, and nav buttons.
+    gap: 2px;
     overflow: hidden;
   }
 
-  &__search-icon {
-    flex-shrink: 0;
-    color: var(--color-text-secondary);
-    opacity: 0.7;
-  }
-
-  &__search-input {
+  &__search-field {
     flex: 1;
     min-width: 0;
-    height: 24px;
-    padding: 0 $size-gap-2;
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
-    background: color-mix(in srgb, var(--color-bg-elevated) 60%, transparent);
-    color: var(--color-text-primary);
-    font-size: var(--flowchat-font-size-sm);
-    outline: none;
-    transition: border-color $motion-base $easing-standard,
-                background $motion-base $easing-standard;
 
-    &::placeholder {
-      color: var(--color-text-secondary);
-      opacity: 0.6;
+    &.bitfun-input-wrapper {
+      gap: 0;
     }
 
-    &:focus {
-      border-color: color-mix(in srgb, var(--accent-primary) 60%, var(--border-base));
-      background: color-mix(in srgb, var(--color-bg-elevated) 85%, transparent);
+    &.bitfun-input-wrapper--error .bitfun-input {
+      color: var(--color-error, #c77070);
     }
 
-    &--no-results {
-      border-color: color-mix(in srgb, #e05252 50%, var(--border-base));
-      color: #e05252;
+    // Default Input horizontal padding is generous; pull the right edge closer to match controls.
+    .bitfun-input-container {
+      padding-right: 6px;
     }
+  }
+
+  &__search-prefix-icon {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    opacity: 0.75;
   }
 
   &__search-count {
@@ -285,8 +300,13 @@
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-secondary);
     white-space: nowrap;
-    min-width: 40px;
     text-align: right;
+    padding-left: 2px;
+
+    // Avoid a fixed min-width reserve when there is no count (span is empty).
+    &:empty {
+      display: none;
+    }
   }
 
   // Virtual item highlight when it contains a search match.
