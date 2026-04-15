@@ -54,10 +54,10 @@
   }
   
   // Reserve space for the floating FlowChatHeader.
-  // Header height (36px) + border (1px) + blur area (16px) + extra gap (4px) = 57px.
+  // Header bar (min 40px) + border (1px) + blur area (16px) + extra gap (4px) = 61px.
   .message-list-header {
-    height: 57px;
-    min-height: 57px;
+    height: 61px;
+    min-height: 61px;
     flex-shrink: 0;
   }
   

@@ -28,7 +28,7 @@ import './VirtualMessageList.scss';
 const COMPENSATION_EPSILON_PX = 0.5;
 const ANCHOR_LOCK_MIN_DEVIATION_PX = 0.5;
 const ANCHOR_LOCK_DURATION_MS = 450;
-const PINNED_TURN_VIEWPORT_OFFSET_PX = 57; // Keep in sync with `.message-list-header`.
+const PINNED_TURN_VIEWPORT_OFFSET_PX = 61; // Keep in sync with `.message-list-header`.
 const TOUCH_SCROLL_INTENT_EXIT_THRESHOLD_PX = 6;
 
 // Read `FLOWCHAT_SCROLL_STABILITY.md` before changing collapse compensation logic.

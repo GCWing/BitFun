@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { ChevronDown, ChevronUp, CornerUpLeft, List, FolderOpen, Bot, Orbit, Search, X } from 'lucide-react';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -278,7 +278,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }
 
   return (
-    <div className={`flowchat-header${isSearchOpen ? ' flowchat-header--search-open' : ''}`}>
+    <div className="flowchat-header">
       <div className="flowchat-header__actions flowchat-header__actions--left">
         {showBackToAgenticOs && onOpenAgenticOs ? (
           <IconButton
@@ -296,61 +296,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         <SessionFilesBadge sessionId={sessionId} />
       </div>
 
-      {isSearchOpen ? (
-        <div className="flowchat-header__search" role="search">
-          <Search size={13} className="flowchat-header__search-icon" aria-hidden="true" />
-          <input
-            ref={searchInputRef}
-            className={`flowchat-header__search-input${hasNoResults ? ' flowchat-header__search-input--no-results' : ''}`}
-            type="text"
-            value={searchQuery}
-            onChange={e => onSearchChange?.(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
-            aria-label={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
-          />
-          <span className="flowchat-header__search-count" aria-live="polite">
-            {searchQuery.trim()
-              ? hasNoResults
-                ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
-                : t('flowChatHeader.searchResult', {
-                    current: searchCurrentMatch,
-                    total: searchMatchCount,
-                    defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
-                  })
-              : null}
-          </span>
-          <IconButton
-            variant="ghost"
-            size="xs"
-            onClick={onSearchPrev}
-            disabled={searchMatchCount === 0}
-            tooltip={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-            aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-          >
-            <ChevronUp size={14} />
-          </IconButton>
-          <IconButton
-            variant="ghost"
-            size="xs"
-            onClick={onSearchNext}
-            disabled={searchMatchCount === 0}
-            tooltip={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-            aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-          >
-            <ChevronDown size={14} />
-          </IconButton>
-          <IconButton
-            variant="ghost"
-            size="xs"
-            onClick={handleCloseSearch}
-            tooltip={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
-            aria-label={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
-          >
-            <X size={14} />
-          </IconButton>
-        </div>
-      ) : (
+      <div className="flowchat-header__center">
         <Tooltip
           content={[tooltipAgentLine, workspacePath].filter(Boolean).join(': ')}
           placement="bottom"
@@ -373,9 +319,67 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             ) : null}
           </div>
         </Tooltip>
-      )}
+      </div>
 
       <div className="flowchat-header__actions">
+        {isSearchOpen ? (
+          <div className="flowchat-header__search" role="search" data-testid="flowchat-header-search-bar">
+            <Input
+              ref={searchInputRef}
+              className="flowchat-header__search-field"
+              variant="filled"
+              inputSize="small"
+              prefix={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
+              type="text"
+              value={searchQuery}
+              onChange={e => onSearchChange?.(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
+              aria-label={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
+              error={hasNoResults}
+            />
+            <span className="flowchat-header__search-count" aria-live="polite">
+              {searchQuery.trim()
+                ? hasNoResults
+                  ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
+                  : t('flowChatHeader.searchResult', {
+                      current: searchCurrentMatch,
+                      total: searchMatchCount,
+                      defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
+                    })
+                : null}
+            </span>
+            <IconButton
+              variant="ghost"
+              size="xs"
+              onClick={onSearchPrev}
+              disabled={searchMatchCount === 0}
+              tooltip={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
+              aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
+            >
+              <ChevronUp size={14} />
+            </IconButton>
+            <IconButton
+              variant="ghost"
+              size="xs"
+              onClick={onSearchNext}
+              disabled={searchMatchCount === 0}
+              tooltip={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
+              aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
+            >
+              <ChevronDown size={14} />
+            </IconButton>
+            <IconButton
+              variant="ghost"
+              size="xs"
+              onClick={handleCloseSearch}
+              tooltip={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
+              aria-label={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
+            >
+              <X size={14} />
+            </IconButton>
+          </div>
+        ) : null}
         {!isSearchOpen && (
           <div className="flowchat-header__turn-nav" ref={turnListRef}>
             <IconButton
