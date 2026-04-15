@@ -1532,6 +1532,13 @@ impl Tool for ComputerUseTool {
                         "scroll requires non-zero delta_x and/or delta_y".to_string(),
                     ));
                 }
+                // Positional scroll: move pointer to target before scrolling.
+                let scroll_pos_x = input.get("scroll_x").and_then(|v| v.as_i64());
+                let scroll_pos_y = input.get("scroll_y").and_then(|v| v.as_i64());
+                if let (Some(sx), Some(sy)) = (scroll_pos_x, scroll_pos_y) {
+                    host_ref.mouse_move_global_f64(sx as f64, sy as f64).await?;
+                    host_ref.wait_ms(30).await?;
+                }
                 host_ref.scroll(dx, dy).await?;
                 let input_coords = json!({ "kind": "scroll", "delta_x": dx, "delta_y": dy });
                 let body = computer_use_augment_result_json(

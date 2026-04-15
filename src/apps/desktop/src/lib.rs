@@ -436,7 +436,6 @@ pub async fn run() {
             get_session_stats,
             get_snapshot_system_stats,
             get_snapshot_sessions,
-            cleanup_snapshot_data,
             check_git_isolation,
             get_file_change_history,
             get_all_modified_files,

@@ -12,6 +12,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
+const AI_STREAM_RESPONSE_TARGET: &str = "ai::gemini_stream_response";
+
 static GEMINI_STREAM_ID_SEQ: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug)]
@@ -118,7 +120,7 @@ pub async fn handle_gemini_stream(
 
         let raw = sse.data;
         stats.record_sse_event("data");
-        trace!("Gemini SSE: {:?}", raw);
+        trace!(target: AI_STREAM_RESPONSE_TARGET, "Gemini SSE: {:?}", raw);
 
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(raw.clone());
@@ -179,6 +181,12 @@ pub async fn handle_gemini_stream(
                 tool_call_state.on_non_tool_response();
             }
         }
+
+        trace!(
+            target: AI_STREAM_RESPONSE_TARGET,
+            "Gemini unified responses: {:?}",
+            unified_responses
+        );
 
         for unified_response in unified_responses {
             stats.record_unified_response(&unified_response);

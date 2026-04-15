@@ -1,7 +1,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
+use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -162,7 +162,7 @@ impl Tool for FileReadTool {
 Assume this tool is able to read all files on the machine. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
 
 Usage:
-- The file_path parameter must be an absolute path, not a relative path.
+- The file_path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool.
 - By default, it reads up to {} lines starting from the beginning of the file. 
 - You can optionally specify a start_line and limit. For large files, prefer reading targeted ranges instead of starting over from the beginning every time.
 - Any lines longer than {} characters will be truncated.
@@ -181,7 +181,7 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The absolute path to the file to read"
+                    "description": "The absolute path to the file to read, or an exact bitfun://runtime URI returned by another tool"
                 },
                 "start_line": {
                     "type": "number",
@@ -234,15 +234,9 @@ Usage:
             }
         };
 
-        let root_owned =
-            context.and_then(|ctx| ctx.workspace.as_ref().map(|w| w.root_path_string()));
-        let resolved_path = match resolve_workspace_tool_path(
-            file_path,
-            root_owned.as_deref(),
-            context.map(|c| c.is_remote()).unwrap_or(false),
-        ) {
-            Ok(path) => path,
-            Err(err) => {
+        let resolved = match context.map(|ctx| ctx.resolve_tool_path(file_path)) {
+            Some(Ok(path)) => path,
+            Some(Err(err)) => {
                 return ValidationResult {
                     result: false,
                     message: Some(err.to_string()),
@@ -250,17 +244,56 @@ Usage:
                     meta: None,
                 }
             }
+            None => {
+                if is_bitfun_runtime_uri(file_path) {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "Tool context is required to resolve bitfun runtime URIs".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                let path = Path::new(file_path);
+                if !path.is_absolute() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("file_path must be absolute".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                if !path.exists() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(format!("File does not exist: {}", file_path)),
+                        error_code: Some(404),
+                        meta: None,
+                    };
+                }
+
+                if !path.is_file() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(format!("Path is not a file: {}", file_path)),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                return ValidationResult::default();
+            }
         };
 
-        // For remote workspaces, skip local filesystem checks — the actual
-        // read goes through WorkspaceFileSystem in call_impl.
-        let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
-        if !is_remote {
-            let path = Path::new(&resolved_path);
+        if !resolved.uses_remote_workspace_backend() {
+            let path = Path::new(&resolved.resolved_path);
             if !path.exists() {
                 return ValidationResult {
                     result: false,
-                    message: Some(format!("File does not exist: {}", resolved_path)),
+                    message: Some(format!("File does not exist: {}", resolved.logical_path)),
                     error_code: Some(404),
                     meta: None,
                 };
@@ -268,7 +301,7 @@ Usage:
             if !path.is_file() {
                 return ValidationResult {
                     result: false,
-                    message: Some(format!("Path is not a file: {}", resolved_path)),
+                    message: Some(format!("Path is not a file: {}", resolved.logical_path)),
                     error_code: Some(400),
                     meta: None,
                 };
@@ -310,15 +343,14 @@ Usage:
             .and_then(|v| v.as_u64())
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
-        let resolved_path = context.resolve_workspace_tool_path(file_path)?;
+        let resolved = context.resolve_tool_path(file_path)?;
 
-        // Use the workspace file system from context — works for both local and remote.
-        let read_file_result = if context.is_remote() {
-            self.read_remote_window(&resolved_path, start_line, limit, context)
+        let read_file_result = if resolved.uses_remote_workspace_backend() {
+            self.read_remote_window(&resolved.resolved_path, start_line, limit, context)
                 .await?
         } else {
             read_file(
-                &resolved_path,
+                &resolved.resolved_path,
                 start_line,
                 limit,
                 self.max_line_chars,
@@ -331,7 +363,7 @@ Usage:
             "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",
             read_file_result.start_line,
             read_file_result.end_line,
-            resolved_path,
+            resolved.logical_path,
             read_file_result.total_lines,
             read_file_result.content
         );
@@ -350,7 +382,7 @@ Usage:
 
         let result = ToolResult::Result {
             data: json!({
-                "file_path": resolved_path,
+                "file_path": resolved.logical_path,
                 "content": read_file_result.content,
                 "total_lines": read_file_result.total_lines,
                 "lines_read": lines_read,

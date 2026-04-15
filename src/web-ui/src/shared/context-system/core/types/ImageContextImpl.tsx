@@ -87,7 +87,9 @@ export class ImageContextValidator implements ContextValidator<'image'> {
       if (context.isLocal && context.imagePath) {
         try {
           const exists = await invoke<boolean>('check_path_exists', {
-            path: context.imagePath
+            request: {
+              path: context.imagePath
+            }
           });
           
           if (!exists) {

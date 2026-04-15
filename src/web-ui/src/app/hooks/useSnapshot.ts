@@ -69,7 +69,6 @@ export interface UseSnapshotReturn {
   acceptOperation: (sessionId: string, operationId: string) => Promise<void>;
   rejectOperation: (sessionId: string, operationId: string) => Promise<void>;
   rollbackSession: (sessionId: string) => Promise<void>;
-  cleanupExpiredData: (maxAgeDays?: number) => Promise<void>;
   
   // Utilities
   clearError: () => void;
@@ -202,23 +201,6 @@ export const useSnapshot = (): UseSnapshotReturn => {
     }
   }, [loadSessionOperations, loadStats, loadSessions, t, workspacePath]);
 
-  // Cleanup expired data
-  const cleanupExpiredData = useCallback(async (maxAgeDays: number = 30) => {
-    try {
-      setError(null);
-      await snapshotAPI.cleanupSnapshotData(maxAgeDays, workspacePath || undefined);
-      
-      // Reload stats
-      await Promise.all([
-        loadStats(),
-        loadSessions()
-      ]);
-    } catch (err) {
-      log.error('Failed to cleanup expired data', err);
-      setError(t('snapshot.cleanupFailed'));
-    }
-  }, [loadStats, loadSessions, t, workspacePath]);
-
   // Update snapshot session info (called on backend create)
   const updateSnapshotSession = useCallback((session: SnapshotSession) => {
     setSessions(prevSessions => {
@@ -262,7 +244,6 @@ export const useSnapshot = (): UseSnapshotReturn => {
     acceptOperation,
     rejectOperation,
     rollbackSession,
-    cleanupExpiredData,
     
     // Utilities
     clearError

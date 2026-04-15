@@ -1611,15 +1611,6 @@ end tell"#])
 
         let (mut frame, margin_l, margin_t) =
             compose_computer_use_frame(content_rgb, ruler_origin_native_x, ruler_origin_native_y);
-        let image_content_rect = ComputerUseImageContentRect {
-            left: margin_l,
-            top: margin_t,
-            width: content_w,
-            height: content_h,
-        };
-
-        let (image_w, image_h) = frame.dimensions();
-        let vision_scale = 1.0_f64;
 
         #[cfg(target_os = "macos")]
         let macos_map_geo = if let Some(center) = params.crop_center {
@@ -1706,7 +1697,43 @@ end tell"#])
             }
         }
 
-        let jpeg_bytes = Self::encode_jpeg(&frame, JPEG_QUALITY)?;
+        // High-resolution downscale (inspired by TuriX-CUA): reduce >4K images for model API efficiency.
+        let (final_frame, vision_scale, pointer_image_x, pointer_image_y) = {
+            let max_dim = frame.width().max(frame.height());
+            let scale_factor: u32 = if max_dim >= 7680 {
+                4
+            } else if max_dim > 2200 {
+                2
+            } else {
+                1
+            };
+            if scale_factor > 1 {
+                let new_w = (frame.width() / scale_factor).max(1);
+                let new_h = (frame.height() / scale_factor).max(1);
+                let dyn_img = DynamicImage::ImageRgb8(frame);
+                let resized =
+                    dyn_img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+                let scaled_pointer_x = pointer_image_x.map(|px| px / scale_factor as i32);
+                let scaled_pointer_y = pointer_image_y.map(|py| py / scale_factor as i32);
+                (
+                    resized.to_rgb8(),
+                    scale_factor as f64,
+                    scaled_pointer_x,
+                    scaled_pointer_y,
+                )
+            } else {
+                (frame, 1.0_f64, pointer_image_x, pointer_image_y)
+            }
+        };
+
+        let (image_w, image_h) = final_frame.dimensions();
+        let image_content_rect = ComputerUseImageContentRect {
+            left: 0,
+            top: 0,
+            width: image_w,
+            height: image_h,
+        };
+        let jpeg_bytes = Self::encode_jpeg(&final_frame, JPEG_QUALITY)?;
 
         let point_crop_half_extent_native = params
             .crop_center

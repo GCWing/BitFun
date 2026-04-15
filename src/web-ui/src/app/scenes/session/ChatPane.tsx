@@ -11,6 +11,7 @@ import { useCanvasStore } from '../../components/panels/content-canvas/stores/ca
 import type { LineRange } from '@/component-library';
 import path from 'path-browserify';
 import { createLogger } from '@/shared/utils/logger';
+import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 
 import './ChatPane.scss';
 
@@ -47,8 +48,9 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
 
     let absoluteFilePath = filePath;
     const isWindowsAbsolutePath = /^[A-Za-z]:[\\/]/.test(filePath);
+    const isProtocolPath = hasNonFileUriScheme(filePath);
 
-    if (!isWindowsAbsolutePath && !path.isAbsolute(filePath) && workspacePath) {
+    if (!isProtocolPath && !isWindowsAbsolutePath && !path.isAbsolute(filePath) && workspacePath) {
       absoluteFilePath = path.join(workspacePath, filePath);
       log.debug('Converting relative path to absolute', {
         relative: filePath,

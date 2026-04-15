@@ -16,6 +16,7 @@ use tokio::time::timeout;
 const OPENAI_CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
 const INLINE_THINK_OPEN_TAG: &str = "<think>";
 const INLINE_THINK_CLOSE_TAG: &str = "</think>";
+const AI_STREAM_RESPONSE_TARGET: &str = "ai::openai_stream_response";
 
 #[derive(Debug, Default)]
 struct OpenAIToolCallFilter {
@@ -485,7 +486,7 @@ pub async fn handle_openai_stream(
 
         let raw = sse.data;
         stats.record_sse_event("data");
-        trace!("OpenAI SSE: {:?}", raw);
+        trace!(target: AI_STREAM_RESPONSE_TARGET, "OpenAI SSE: {:?}", raw);
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(raw.clone());
         }
@@ -558,7 +559,11 @@ pub async fn handle_openai_stream(
 
         let has_empty_choices = sse_data.is_choices_empty();
         let unified_responses = sse_data.into_unified_responses();
-        trace!("OpenAI unified responses: {:?}", unified_responses);
+        trace!(
+            target: AI_STREAM_RESPONSE_TARGET,
+            "OpenAI unified responses: {:?}",
+            unified_responses
+        );
         if unified_responses.is_empty() {
             if has_empty_choices {
                 stats.increment("skip:empty_choices_no_usage");
@@ -825,7 +830,10 @@ mod tests {
         );
 
         assert_eq!(responses.len(), 1);
-        let tool_call = responses[0].tool_call.as_ref().expect("tool call should exist");
+        let tool_call = responses[0]
+            .tool_call
+            .as_ref()
+            .expect("tool call should exist");
         assert_eq!(tool_call.id.as_deref(), Some("call_1"));
         assert_eq!(tool_call.name.as_deref(), Some("read_file"));
         assert_eq!(tool_call.arguments.as_deref(), Some("{\"path\":\"a.txt\"}"));
@@ -836,19 +844,17 @@ mod tests {
     fn drops_orphan_id_only_tool_call_when_it_shares_sse_with_redundant_empty_tail() {
         let mut filter = OpenAIToolCallFilter::default();
 
-        assert!(
-            filter
-                .normalize_response(UnifiedResponse {
-                    tool_call: Some(UnifiedToolCall {
-                        id: Some("call_1".to_string()),
-                        name: Some("read_file".to_string()),
-                        arguments: Some("{\"path\":\"a.txt\"}".to_string()),
-                        arguments_is_snapshot: false,
-                    }),
-                    ..Default::default()
-                })
-                .is_some()
-        );
+        assert!(filter
+            .normalize_response(UnifiedResponse {
+                tool_call: Some(UnifiedToolCall {
+                    id: Some("call_1".to_string()),
+                    name: Some("read_file".to_string()),
+                    arguments: Some("{\"path\":\"a.txt\"}".to_string()),
+                    arguments_is_snapshot: false,
+                }),
+                ..Default::default()
+            })
+            .is_some());
 
         let responses = normalize_raw_with_filter(
             &mut filter,

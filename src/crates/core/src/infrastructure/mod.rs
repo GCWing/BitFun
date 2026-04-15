@@ -10,9 +10,7 @@ pub mod filesystem;
 pub mod storage;
 
 pub use ai::AIClient;
-pub use app_paths::{
-    get_path_manager_arc, try_get_path_manager_arc, CacheType, PathManager, StorageLevel,
-};
+pub use app_paths::{get_path_manager_arc, try_get_path_manager_arc, PathManager, StorageLevel};
 pub use events::BackendEventManager;
 pub use filesystem::{
     BatchedFileSearchProgressSink, FileContentSearchOptions, FileInfo, FileNameSearchOptions,

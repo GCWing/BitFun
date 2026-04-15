@@ -2,6 +2,7 @@ use crate::service::snapshot::types::{
     FileMetadata, FileSnapshot, OptimizedContent, SnapshotError, SnapshotResult, SnapshotType,
     StorageStats,
 };
+use crate::service::workspace_runtime::WorkspaceRuntimeContext;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::fs;
@@ -23,17 +24,7 @@ pub struct BaselineCache {
 
 impl BaselineCache {
     /// Creates a new baseline cache.
-    pub fn new(bitfun_dir: &Path) -> Self {
-        let baseline_dir = bitfun_dir.join("snapshots").join("baselines");
-
-        if let Err(e) = std::fs::create_dir_all(&baseline_dir) {
-            warn!(
-                "Failed to create baseline directory: path={} error={}",
-                baseline_dir.display(),
-                e
-            );
-        }
-
+    pub fn new(baseline_dir: PathBuf) -> Self {
         debug!(
             "BaselineCache initialized: directory={}",
             baseline_dir.display()
@@ -211,6 +202,8 @@ impl BaselineCache {
 /// Only stores snapshots of file content; does not manage a change queue.
 pub struct FileSnapshotSystem {
     snapshot_dir: PathBuf,
+    snapshot_by_hash_dir: PathBuf,
+    snapshot_metadata_dir: PathBuf,
     hash_to_path: HashMap<String, PathBuf>,
     active_snapshots: HashMap<String, FileSnapshot>,
     compression_enabled: bool,
@@ -220,16 +213,18 @@ pub struct FileSnapshotSystem {
 
 impl FileSnapshotSystem {
     /// Creates a new file snapshot system.
-    pub fn new(bitfun_dir: &Path) -> Self {
-        let snapshot_dir = bitfun_dir.join("snapshots");
+    pub fn new(runtime_context: WorkspaceRuntimeContext) -> Self {
+        let snapshot_dir = runtime_context.snapshots_dir.clone();
 
         Self {
+            snapshot_by_hash_dir: runtime_context.snapshot_by_hash_dir.clone(),
+            snapshot_metadata_dir: runtime_context.snapshot_metadata_dir.clone(),
             snapshot_dir,
             hash_to_path: HashMap::new(),
             active_snapshots: HashMap::new(),
             compression_enabled: true,
             dedup_enabled: true,
-            baseline_cache: BaselineCache::new(bitfun_dir),
+            baseline_cache: BaselineCache::new(runtime_context.snapshot_baselines_dir.clone()),
         }
     }
 
@@ -252,14 +247,17 @@ impl FileSnapshotSystem {
     async fn ensure_directories(&self) -> SnapshotResult<()> {
         let directories = [
             &self.snapshot_dir,
-            &self.snapshot_dir.join("by_hash"),
-            &self.snapshot_dir.join("metadata"),
+            &self.snapshot_by_hash_dir,
+            &self.snapshot_metadata_dir,
+            &self.baseline_cache.baseline_dir,
         ];
 
         for dir in &directories {
             if !dir.exists() {
-                fs::create_dir_all(dir)?;
-                debug!("Created snapshot directory: path={}", dir.display());
+                return Err(SnapshotError::ConfigError(format!(
+                    "Snapshot runtime directory is missing: {}",
+                    dir.display()
+                )));
             }
         }
 
@@ -268,7 +266,7 @@ impl FileSnapshotSystem {
 
     /// Loads the existing snapshot index.
     async fn load_snapshot_index(&mut self) -> SnapshotResult<()> {
-        let metadata_dir = self.snapshot_dir.join("metadata");
+        let metadata_dir = self.snapshot_metadata_dir.clone();
 
         if !metadata_dir.exists() {
             return Ok(());
@@ -501,20 +499,18 @@ impl FileSnapshotSystem {
 
     /// Returns the content file path.
     fn get_content_path(&self, content_hash: &str) -> PathBuf {
-        self.snapshot_dir
-            .join("by_hash")
+        self.snapshot_by_hash_dir
             .join(format!("{}.snap", content_hash))
     }
 
     /// Returns the metadata file path.
     fn get_metadata_path(&self, snapshot_id: &str) -> PathBuf {
         if snapshot_id.starts_with("baseline_") {
-            self.snapshot_dir
-                .join("baselines")
+            self.baseline_cache
+                .baseline_dir
                 .join(format!("{}.json", snapshot_id))
         } else {
-            self.snapshot_dir
-                .join("metadata")
+            self.snapshot_metadata_dir
                 .join(format!("{}.json", snapshot_id))
         }
     }
@@ -685,7 +681,7 @@ impl FileSnapshotSystem {
 
         let total_snapshots = self.active_snapshots.len();
 
-        let content_dir = self.snapshot_dir.join("by_hash");
+        let content_dir = self.snapshot_by_hash_dir.clone();
         if content_dir.exists() {
             for entry in fs::read_dir(&content_dir)? {
                 let entry = entry?;
@@ -731,7 +727,7 @@ impl FileSnapshotSystem {
         info!("Cleaning up orphaned snapshots");
 
         let mut cleaned_count = 0;
-        let content_dir = self.snapshot_dir.join("by_hash");
+        let content_dir = self.snapshot_by_hash_dir.clone();
 
         if !content_dir.exists() {
             return Ok(0);

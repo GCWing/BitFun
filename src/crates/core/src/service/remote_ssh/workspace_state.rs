@@ -197,11 +197,15 @@ pub fn remote_root_to_mirror_subpath(remote_root_norm: &str) -> PathBuf {
 }
 
 /// Local directory where persisted sessions for this remote workspace root are stored.
-pub fn remote_workspace_session_mirror_dir(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
+pub fn remote_workspace_runtime_root(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
     PathManager::remote_ssh_mirror_root()
         .join(sanitize_ssh_hostname_for_mirror(ssh_host))
         .join(remote_root_to_mirror_subpath(remote_root_norm))
-        .join("sessions")
+}
+
+/// Local directory where persisted sessions for this remote workspace root are stored.
+pub fn remote_workspace_session_mirror_dir(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
+    remote_workspace_runtime_root(ssh_host, remote_root_norm).join("sessions")
 }
 
 /// Human-readable logical key: `{host}:{normalized_absolute_root}` (for logs / UI; not a directory name).

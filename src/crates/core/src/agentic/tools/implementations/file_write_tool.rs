@@ -1,7 +1,6 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -34,6 +33,7 @@ impl Tool for FileWriteTool {
 Usage:
 - This tool will overwrite the existing file if there is one at the provided path.
 - If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
+- The file_path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked."#.to_string())
@@ -45,7 +45,7 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The absolute path to the file to write (must be absolute, not relative)"
+                    "description": "The absolute path to the file to write, or an exact bitfun://runtime URI returned by another tool"
                 },
                 "content": {
                     "type": "string",
@@ -95,19 +95,15 @@ Usage:
             };
         }
 
-        let root_owned =
-            context.and_then(|ctx| ctx.workspace.as_ref().map(|w| w.root_path_string()));
-        if let Err(err) = resolve_workspace_tool_path(
-            file_path,
-            root_owned.as_deref(),
-            context.map(|c| c.is_remote()).unwrap_or(false),
-        ) {
-            return ValidationResult {
-                result: false,
-                message: Some(err.to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
+        if let Some(ctx) = context {
+            if let Err(err) = ctx.resolve_tool_path(file_path) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(err.to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
         }
 
         ValidationResult::default()
@@ -140,36 +136,44 @@ Usage:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
 
-        let resolved_path = context.resolve_workspace_tool_path(file_path)?;
+        let resolved = context.resolve_tool_path(file_path)?;
 
         let content = input
             .get("content")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
 
-        if let Some(ws_fs) = context.ws_fs() {
+        if resolved.uses_remote_workspace_backend() {
+            let ws_fs = context.ws_fs().ok_or_else(|| {
+                BitFunError::tool("Remote workspace file system is unavailable".to_string())
+            })?;
             ws_fs
-                .write_file(&resolved_path, content.as_bytes())
+                .write_file(&resolved.resolved_path, content.as_bytes())
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
         } else {
-            if let Some(parent) = Path::new(&resolved_path).parent() {
+            if let Some(parent) = Path::new(&resolved.resolved_path).parent() {
                 fs::create_dir_all(parent)
                     .await
                     .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
             }
-            fs::write(&resolved_path, content).await.map_err(|e| {
-                BitFunError::tool(format!("Failed to write file {}: {}", resolved_path, e))
-            })?;
+            fs::write(&resolved.resolved_path, content)
+                .await
+                .map_err(|e| {
+                    BitFunError::tool(format!(
+                        "Failed to write file {}: {}",
+                        resolved.logical_path, e
+                    ))
+                })?;
         }
 
         let result = ToolResult::Result {
             data: json!({
-                "file_path": resolved_path,
+                "file_path": resolved.logical_path,
                 "bytes_written": content.len(),
                 "success": true
             }),
-            result_for_assistant: Some(format!("Successfully wrote to {}", resolved_path)),
+            result_for_assistant: Some(format!("Successfully wrote to {}", resolved.logical_path)),
             image_attachments: None,
         };
 

@@ -45,7 +45,6 @@ pub use registry::{
     CustomSubagentDetail, SubAgentSource,
 };
 use std::any::Any;
-
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
 

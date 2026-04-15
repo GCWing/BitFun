@@ -335,19 +335,6 @@ export class SnapshotAPI {
     }
   }
 
-   
-  async cleanupSnapshotData(maxAgeDays: number = 30, workspacePath?: string): Promise<any> {
-    try {
-      const resolvedWorkspacePath = requireWorkspacePath(workspacePath);
-      return await api.invoke('cleanup_snapshot_data', {
-        request: { maxAgeDays, workspacePath: resolvedWorkspacePath } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('cleanup_snapshot_data', error, { maxAgeDays, workspacePath });
-    }
-  }
-
-   
   async cleanupEmptySessions(): Promise<any> {
     try {
       return await api.invoke('cleanup_empty_sessions', { 

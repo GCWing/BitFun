@@ -115,6 +115,7 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::PathManager;
     use crate::service::session::SessionMetadata;
+    use crate::service::workspace_runtime::WorkspaceRuntimeService;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use uuid::Uuid;
@@ -213,5 +214,64 @@ mod tests {
             .expect("second maintenance should succeed");
         assert!(second_report.skipped);
         assert_eq!(second_report.deleted_sessions, 0);
+    }
+
+    #[tokio::test]
+    async fn legacy_hidden_sessions_are_migrated_then_cleaned_after_runtime_ensure() {
+        let workspace = TestWorkspace::new();
+        let path_manager = Arc::new(PathManager::new().expect("path manager"));
+        let runtime_service = WorkspaceRuntimeService::new(path_manager.clone());
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let maintenance = SessionWorkspaceMaintenanceService::new(persistence_manager.clone());
+
+        let mut legacy_hidden = SessionMetadata::new(
+            Uuid::new_v4().to_string(),
+            "Subagent: stale task".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        legacy_hidden.created_by = Some("session-parent".to_string());
+
+        persistence_manager
+            .save_session_metadata(workspace.path(), &legacy_hidden)
+            .await
+            .expect("metadata should save");
+
+        let runtime_context = runtime_service.context_for_local_workspace(workspace.path());
+        let legacy_sessions_root = workspace.path().join(".bitfun").join("sessions");
+        std::fs::create_dir_all(&legacy_sessions_root).expect("legacy sessions root should exist");
+        std::fs::rename(
+            runtime_context.sessions_dir.join(&legacy_hidden.session_id),
+            legacy_sessions_root.join(&legacy_hidden.session_id),
+        )
+        .expect("session directory should move back to legacy location");
+        let _ = std::fs::remove_dir_all(&runtime_context.runtime_root);
+
+        runtime_service
+            .ensure_local_workspace_runtime(workspace.path())
+            .await
+            .expect("runtime ensure should migrate legacy sessions");
+
+        let report = maintenance
+            .ensure_workspace_maintained(workspace.path())
+            .await
+            .expect("maintenance should succeed");
+
+        assert_eq!(report.hidden_sessions, 1);
+        assert_eq!(report.deleted_sessions, 1);
+        assert!(
+            !runtime_context
+                .sessions_dir
+                .join(&legacy_hidden.session_id)
+                .exists(),
+            "hidden session should be deleted from migrated runtime storage"
+        );
+        assert!(
+            !legacy_sessions_root
+                .join(&legacy_hidden.session_id)
+                .exists(),
+            "legacy session directory should not remain after migration and cleanup"
+        );
     }
 }

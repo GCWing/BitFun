@@ -14,6 +14,7 @@ use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions, SessionTranscriptIndexEntry, ToolItemData, TranscriptLineRange,
 };
+use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -166,16 +167,24 @@ struct ParsedTranscriptTurnSelector {
 
 pub struct PersistenceManager {
     path_manager: Arc<PathManager>,
+    runtime_service: Arc<WorkspaceRuntimeService>,
 }
 
 impl PersistenceManager {
     pub fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
-        Ok(Self { path_manager })
+        Ok(Self {
+            runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
+            path_manager,
+        })
     }
 
     /// Get PathManager reference
     pub fn path_manager(&self) -> &Arc<PathManager> {
         &self.path_manager
+    }
+
+    pub fn runtime_service(&self) -> &Arc<WorkspaceRuntimeService> {
+        &self.runtime_service
     }
 
     fn project_sessions_dir(&self, workspace_path: &Path) -> PathBuf {
@@ -239,15 +248,21 @@ impl PersistenceManager {
         self.project_sessions_dir(workspace_path).join("index.json")
     }
 
-    async fn ensure_project_sessions_dir(&self, workspace_path: &Path) -> BitFunResult<PathBuf> {
+    fn existing_project_sessions_dir(&self, workspace_path: &Path) -> Option<PathBuf> {
         let dir = self.project_sessions_dir(workspace_path);
-        fs::create_dir_all(&dir).await.map_err(|e| {
-            BitFunError::io(format!(
-                "Failed to create project sessions directory: {}",
-                e
-            ))
-        })?;
-        Ok(dir)
+        dir.exists().then_some(dir)
+    }
+
+    async fn ensure_runtime_for_write(&self, workspace_path: &Path) -> BitFunResult<()> {
+        let remote_mirror_root = PathManager::remote_ssh_mirror_root();
+        if workspace_path.starts_with(&remote_mirror_root) {
+            return Ok(());
+        }
+
+        self.runtime_service
+            .ensure_local_workspace_runtime(workspace_path)
+            .await
+            .map(|_| ())
     }
 
     async fn ensure_session_dir(
@@ -1165,7 +1180,9 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
-        let sessions_root = self.ensure_project_sessions_dir(workspace_path).await?;
+        let Some(sessions_root) = self.existing_project_sessions_dir(workspace_path) else {
+            return Ok(Vec::new());
+        };
         let mut metadata_list = Vec::new();
         let mut entries = fs::read_dir(&sessions_root)
             .await
@@ -1307,6 +1324,10 @@ impl PersistenceManager {
             return Ok(Vec::new());
         }
 
+        if self.existing_project_sessions_dir(workspace_path).is_none() {
+            return Ok(Vec::new());
+        }
+
         let lock = self.get_session_index_lock(workspace_path).await;
         let _guard = lock.lock().await;
         let index_path = self.index_path(workspace_path);
@@ -1340,6 +1361,10 @@ impl PersistenceManager {
             return Ok(Vec::new());
         }
 
+        if self.existing_project_sessions_dir(workspace_path).is_none() {
+            return Ok(Vec::new());
+        }
+
         self.scan_session_metadata_dirs(workspace_path).await
     }
 
@@ -1348,6 +1373,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         metadata: &SessionMetadata,
     ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &metadata.session_id)
             .await?;
 
@@ -1411,6 +1437,7 @@ impl PersistenceManager {
         turn_index: usize,
         messages: &[Message],
     ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_snapshots_dir(workspace_path, session_id)
             .await?;
 
@@ -1537,6 +1564,7 @@ impl PersistenceManager {
 
     /// Save session
     pub async fn save_session(&self, workspace_path: &Path, session: &Session) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
 
@@ -1631,6 +1659,7 @@ impl PersistenceManager {
         session_id: &str,
         state: &SessionState,
     ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
         let mut stored_state = self
             .load_stored_session_state(workspace_path, session_id)
             .await?
@@ -1711,6 +1740,7 @@ impl PersistenceManager {
         workspace_path: &Path,
         turn: &DialogTurnData,
     ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
         let mut metadata = self
             .load_session_metadata(workspace_path, &turn.session_id)
             .await?
@@ -2308,5 +2338,58 @@ mod tests {
         assert!(visible.is_empty());
         assert_eq!(raw.len(), 1);
         assert!(raw[0].is_legacy_leaked_subagent_candidate());
+    }
+
+    #[tokio::test]
+    async fn listing_sessions_does_not_create_sessions_dir_for_uninitialized_runtime() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+
+        let visible = manager
+            .list_session_metadata(workspace.path())
+            .await
+            .expect("visible listing should succeed");
+        let raw = manager
+            .list_session_metadata_including_internal(workspace.path())
+            .await
+            .expect("raw listing should succeed");
+
+        assert!(visible.is_empty());
+        assert!(raw.is_empty());
+        assert!(
+            !manager.project_sessions_dir(workspace.path()).exists(),
+            "listing sessions should not create the runtime sessions directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn saving_session_metadata_ensures_runtime_layout_before_writing() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+
+        let metadata = SessionMetadata::new(
+            Uuid::new_v4().to_string(),
+            "Runtime ensure".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        let runtime = manager
+            .runtime_service()
+            .context_for_local_workspace(workspace.path());
+        assert!(runtime.runtime_root.exists());
+        assert!(runtime.sessions_dir.exists());
+        assert!(runtime.snapshot_by_hash_dir.exists());
+        assert!(runtime.snapshot_metadata_dir.exists());
+        assert!(runtime.snapshot_operations_dir.exists());
+        assert!(runtime.plans_dir.exists());
+        assert!(runtime.layout_state_file.exists());
     }
 }

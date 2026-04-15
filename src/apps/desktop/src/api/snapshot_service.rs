@@ -823,14 +823,6 @@ pub async fn get_snapshot_system_stats(
     Ok(stats)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CleanupSnapshotDataRequest {
-    #[serde(rename = "maxAgeDays")]
-    pub max_age_days: u64,
-    #[serde(alias = "workspacePath")]
-    pub workspace_path: String,
-}
-
 #[tauri::command]
 pub async fn get_snapshot_sessions(
     request: SnapshotWorkspaceRequest,
@@ -841,24 +833,6 @@ pub async fn get_snapshot_sessions(
         .list_sessions()
         .await
         .map_err(|e| format!("Failed to list snapshot sessions: {}", e))
-}
-
-#[tauri::command]
-pub async fn cleanup_snapshot_data(
-    request: CleanupSnapshotDataRequest,
-) -> Result<serde_json::Value, String> {
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
-
-    manager
-        .cleanup_snapshot_data(request.max_age_days)
-        .await
-        .map_err(|e| format!("Failed to cleanup snapshot data: {}", e))?;
-
-    Ok(serde_json::json!({
-        "success": true,
-        "message": "Snapshot data cleanup completed",
-        "keep_recent_days": request.max_age_days,
-    }))
 }
 
 #[tauri::command]

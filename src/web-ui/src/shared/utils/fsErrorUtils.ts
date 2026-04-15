@@ -14,10 +14,11 @@ export function isLikelyFileNotFoundError(err: unknown): boolean {
   );
 }
 
-/** Metadata from get_file_metadata: missing remote file uses is_file false and is_dir false. */
-export function isFileMissingFromMetadata(fileInfo: Record<string, unknown> | null | undefined): boolean {
+/** Metadata from get_file_metadata uses camelCase fields from desktop commands. */
+export function isFileMissingFromMetadata(fileInfo: unknown): boolean {
   if (!fileInfo || typeof fileInfo !== 'object') {
     return true;
   }
-  return fileInfo.is_file !== true;
+  const metadata = fileInfo as { isFile?: unknown };
+  return metadata.isFile !== true;
 }

@@ -14,7 +14,6 @@ use tokio::fs;
 pub struct CleanupPolicy {
     pub temp_retention_days: u64,
     pub log_retention_days: u64,
-    pub session_retention_days: u64,
     pub max_cache_size_mb: u64,
     pub backup_retention_count: usize,
     pub auto_cleanup_enabled: bool,
@@ -25,7 +24,6 @@ impl Default for CleanupPolicy {
         Self {
             temp_retention_days: 7,
             log_retention_days: 30,
-            session_retention_days: 90,
             max_cache_size_mb: 1024,
             backup_retention_count: 10,
             auto_cleanup_enabled: true,
@@ -78,10 +76,6 @@ impl CleanupService {
             result.merge(log_result, "Old Logs");
         }
 
-        if let Ok(session_result) = self.cleanup_old_sessions().await {
-            result.merge(session_result, "Expired Sessions");
-        }
-
         if let Ok(cache_result) = self.cleanup_oversized_cache().await {
             result.merge(cache_result, "Oversized Cache");
         }
@@ -108,37 +102,6 @@ impl CleanupService {
         let retention = Duration::from_secs(self.policy.log_retention_days * 24 * 3600);
 
         self.cleanup_old_files(&logs_dir, retention).await
-    }
-
-    async fn cleanup_old_sessions(&self) -> BitFunResult<CleanupResult> {
-        let mut result = CleanupResult::default();
-
-        let workspaces_dir = self.path_manager.workspaces_dir();
-
-        if !workspaces_dir.exists() {
-            return Ok(result);
-        }
-
-        let retention = Duration::from_secs(self.policy.session_retention_days * 24 * 3600);
-
-        let mut read_dir = fs::read_dir(&workspaces_dir)
-            .await
-            .map_err(|e| BitFunError::service(format!("Failed to read workspaces: {}", e)))?;
-
-        while let Some(entry) = read_dir
-            .next_entry()
-            .await
-            .map_err(|e| BitFunError::service(format!("Failed to read workspace entry: {}", e)))?
-        {
-            if entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false) {
-                let session_result = self.cleanup_old_files(&entry.path(), retention).await?;
-                result.files_deleted += session_result.files_deleted;
-                result.directories_deleted += session_result.directories_deleted;
-                result.bytes_freed += session_result.bytes_freed;
-            }
-        }
-
-        Ok(result)
     }
 
     async fn cleanup_oversized_cache(&self) -> BitFunResult<CleanupResult> {

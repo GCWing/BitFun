@@ -3,7 +3,6 @@
 //! Used to create and store plan files during the planning phase
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::Serialize;
@@ -70,7 +69,7 @@ You should provide a structured list of implementation todos:
 
 UPDATING THE PLAN:
 - This tool creates a NEW plan file each time it is called
-- The plan file URI will be returned in the tool result
+- The plan file path returned in the tool result may be an absolute runtime path (local) or a `bitfun://runtime/...` URI (remote)
 - To update an existing plan, read and edit the plan file directly using your file editing tools
 - Do NOT call CreatePlan again to update an existing plan
 
@@ -181,51 +180,13 @@ Additional guidelines:
 
         let file_content = generate_plan_file_content(name, overview, plan, todos);
 
-        let plan_file_path_str = if context.is_remote() {
-            let ws_fs = context.ws_fs().ok_or_else(|| {
-                BitFunError::tool(
-                    "Workspace file system not available for remote CreatePlan".to_string(),
-                )
-            })?;
-            let ws_shell = context.ws_shell().ok_or_else(|| {
-                BitFunError::tool("Workspace shell not available for remote CreatePlan".to_string())
-            })?;
-            let root = context
-                .workspace
-                .as_ref()
-                .map(|w| w.root_path_string())
-                .ok_or_else(|| BitFunError::tool("Workspace path not set".to_string()))?;
-            ws_shell
-                .exec("mkdir -p .bitfun/plans", Some(30_000))
-                .await
-                .map_err(|e| {
-                    BitFunError::tool(format!("Failed to create plans directory: {}", e))
-                })?;
-            let plan_path = format!(
-                "{}/.bitfun/plans/{}",
-                root.trim_end_matches('/'),
-                plan_file_name
-            );
-            ws_fs
-                .write_file(&plan_path, file_content.as_bytes())
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to write plan file: {}", e)))?;
-            plan_path
-        } else {
-            let workspace_path = context
-                .workspace_root()
-                .ok_or(BitFunError::tool("Workspace path not set".to_string()))?;
-            let path_manager = get_path_manager_arc();
-            let plans_dir = path_manager.project_plans_dir(workspace_path);
-            let plan_file_path = plans_dir.join(&plan_file_name);
-            path_manager.ensure_dir(&plans_dir).await.map_err(|e| {
-                BitFunError::tool(format!("Failed to create plans directory: {}", e))
-            })?;
-            fs::write(&plan_file_path, &file_content)
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to write plan file: {}", e)))?;
-            plan_file_path.to_string_lossy().to_string()
-        };
+        let runtime_context = context.ensure_current_workspace_runtime().await?;
+        let plans_dir = runtime_context.plans_dir.clone();
+        let plan_file_path = plans_dir.join(&plan_file_name);
+        fs::write(&plan_file_path, &file_content)
+            .await
+            .map_err(|e| BitFunError::tool(format!("Failed to write plan file: {}", e)))?;
+        let plan_file_path_str = plan_file_path.to_string_lossy().to_string();
 
         // Process todos for return result
         let processed_todos: Vec<Value> = if let Some(todos_arr) = todos {
@@ -246,9 +207,8 @@ Additional guidelines:
             vec![]
         };
 
-        // Build a workspace-relative path for the computer:// link so the user can
-        // click it directly in the chat interface. Falls back to the absolute path
-        // for remote workspaces where a relative path cannot be derived.
+        // Prefer workspace-relative computer:// links, but fall back to an
+        // absolute computer:// path when plans live outside the workspace tree.
         let computer_link = context
             .workspace_root()
             .and_then(|root| {
@@ -257,20 +217,24 @@ Additional guidelines:
                     .ok()
                     .map(|rel| format!("computer://{}", rel.to_string_lossy().replace('\\', "/")))
             })
-            .unwrap_or_else(|| plan_file_path_str.clone());
+            .unwrap_or_else(|| format!("computer://{}", plan_file_path_str.replace('\\', "/")));
+
+        let plan_reference =
+            context.build_runtime_artifact_reference(&format!("plans/{}", plan_file_name))?;
 
         let result_for_assistant = format!(
-            "Plan file created. Absolute path: {}\nLink for user: [{}]({})\nYour next reply MUST show the clickable link [{}]({}) and then end the conversation turn. Do not continue with more planning details or additional questions.",
-            plan_file_path_str,
-            plan_file_name,
-            computer_link,
+            "Plan file created at: {}
+Clickable link for user: [{}]({})
+Your next reply MUST show the clickable link and then end the conversation turn. Do not continue with more planning details or additional questions.",
+            plan_reference,
             plan_file_name,
             computer_link,
         );
 
         let result = json!({
             "success": true,
-            "plan_file_path": plan_file_path_str,
+            "plan_file_path": plan_reference,
+            "computer_link": computer_link.clone(),
             "plan_file_name": plan_file_name,
             "name": name,
             "overview": overview,

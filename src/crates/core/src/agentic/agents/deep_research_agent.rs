@@ -85,7 +85,10 @@ mod tests {
     #[test]
     fn always_uses_default_prompt_template() {
         let agent = DeepResearchAgent::new();
-        assert_eq!(agent.prompt_template_name(Some("gpt-5.1")), "deep_research_agent");
+        assert_eq!(
+            agent.prompt_template_name(Some("gpt-5.1")),
+            "deep_research_agent"
+        );
         assert_eq!(agent.prompt_template_name(None), "deep_research_agent");
     }
 }

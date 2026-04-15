@@ -13,9 +13,7 @@ pub struct StoragePathsInfo {
     pub user_data_dir: PathBuf,
     pub cache_root: PathBuf,
     pub logs_dir: PathBuf,
-    pub backups_dir: PathBuf,
     pub temp_dir: PathBuf,
-    pub workspaces_dir: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,9 +36,7 @@ pub async fn get_storage_paths(state: State<'_, AppState>) -> Result<StoragePath
         user_data_dir: path_manager.user_data_dir(),
         cache_root: path_manager.cache_root(),
         logs_dir: path_manager.logs_dir(),
-        backups_dir: path_manager.backups_dir(),
         temp_dir: path_manager.temp_dir(),
-        workspaces_dir: path_manager.workspaces_dir(),
     })
 }
 
@@ -56,11 +52,11 @@ pub async fn get_project_storage_paths(
 
     Ok(ProjectStoragePathsInfo {
         project_root: path_manager.project_root(&workspace_path),
-        config_file: path_manager.project_config_file(&workspace_path),
+        runtime_root: path_manager.project_runtime_root(&workspace_path),
         agents_dir: path_manager.project_agents_dir(&workspace_path),
         sessions_dir: path_manager.project_sessions_dir(&workspace_path),
-        cache_dir: path_manager.project_cache_dir(&workspace_path),
-        logs_dir: path_manager.project_logs_dir(&workspace_path),
+        memory_dir: path_manager.project_memory_dir(&workspace_path),
+        plans_dir: path_manager.project_plans_dir(&workspace_path),
     })
 }
 
@@ -68,11 +64,11 @@ pub async fn get_project_storage_paths(
 #[serde(rename_all = "camelCase")]
 pub struct ProjectStoragePathsInfo {
     pub project_root: PathBuf,
-    pub config_file: PathBuf,
+    pub runtime_root: PathBuf,
     pub agents_dir: PathBuf,
     pub sessions_dir: PathBuf,
-    pub cache_dir: PathBuf,
-    pub logs_dir: PathBuf,
+    pub memory_dir: PathBuf,
+    pub plans_dir: PathBuf,
 }
 
 #[tauri::command]
@@ -132,14 +128,15 @@ pub async fn initialize_project_storage(
     workspace_path: String,
 ) -> Result<(), String> {
     let workspace_service = &state.workspace_service;
-    let path_manager = workspace_service.path_manager();
+    let runtime_service = workspace_service.runtime_service();
 
     let workspace_path = PathBuf::from(workspace_path);
 
-    path_manager
-        .initialize_project_directories(&workspace_path)
+    runtime_service
+        .ensure_local_workspace_runtime(&workspace_path)
         .await
-        .map_err(|e| format!("Failed to initialize project directories: {}", e))
+        .map(|_| ())
+        .map_err(|e| format!("Failed to initialize project runtime: {}", e))
 }
 
 fn calculate_dir_size(

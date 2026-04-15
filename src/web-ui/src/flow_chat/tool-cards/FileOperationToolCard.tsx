@@ -43,6 +43,7 @@ import { diffLines } from 'diff';
 import { createLogger } from '@/shared/utils/logger';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -358,7 +359,16 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   };
 
   const handleOpenInCodeEditor = useCallback(async () => {
-    if (!sessionId || !currentFilePath) return;
+    if (!currentFilePath) return;
+
+    if (!sessionId || !currentFilePath || hasNonFileUriScheme(currentFilePath)) {
+      fileTabManager.openFile({
+        filePath: currentFilePath,
+        fileName,
+        mode: 'agent',
+      });
+      return;
+    }
 
     try {
       const { snapshotAPI } = await import('../../infrastructure/api');
