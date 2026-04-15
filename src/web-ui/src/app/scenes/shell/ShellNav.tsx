@@ -15,7 +15,7 @@ import TerminalEditModal from '@/app/components/panels/TerminalEditModal';
 import { useContextMenuStore } from '@/shared/context-menu-system';
 import { ContextType } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
-import { useSceneStore } from '@/app/stores/sceneStore';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { getTerminalService } from '@/tools/terminal';
@@ -40,7 +40,8 @@ const ShellNav: React.FC = () => {
   const { activeWorkspace, openedWorkspacesList, workspaceName, setActiveWorkspace } = useWorkspaceContext();
   const navView = useShellStore((s) => s.navView);
   const setNavView = useShellStore((s) => s.setNavView);
-  const activeSceneId = useSceneStore((s) => s.activeTabId);
+  const activeOverlay = useOverlayStore((s) => s.activeOverlay);
+  const activeSceneId = activeOverlay ?? 'session';
   const activeTerminalSessionId = useTerminalSceneStore((s) => s.activeSessionId);
   const showMenu = useContextMenuStore((s) => s.showMenu);
   const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);

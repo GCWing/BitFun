@@ -18,12 +18,12 @@ import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react
 import { useI18n } from '@/infrastructure/i18n';
 import { useNavSceneStore } from '../../stores/navSceneStore';
 import { getSceneNav } from '../../scenes/nav-registry';
-import type { SceneTabId } from '../SceneBar/types';
+import type { OverlaySceneId } from '../../overlay/types';
 import MainNav from './MainNav';
 import './NavPanel.scss';
 
-/** Scenes that use the split-open accordion transition. */
-const SPLIT_OPEN_SCENES: ReadonlySet<SceneTabId> = new Set(['file-viewer']);
+/** Overlay scenes that use the split-open accordion transition. */
+const SPLIT_OPEN_SCENES: ReadonlySet<OverlaySceneId> = new Set(['file-viewer']);
 
 interface NavPanelProps {
   // Persist the last known sceneId so SceneNav content remains visible
@@ -37,7 +37,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   const showSceneNav = useNavSceneStore(s => s.showSceneNav);
   const navSceneId = useNavSceneStore(s => s.navSceneId);
 
-  const [mountedSceneId, setMountedSceneId] = useState<SceneTabId | null>(navSceneId);
+  const [mountedSceneId, setMountedSceneId] = useState<OverlaySceneId | null>(navSceneId);
   useEffect(() => {
     if (navSceneId) setMountedSceneId(navSceneId);
   }, [navSceneId]);

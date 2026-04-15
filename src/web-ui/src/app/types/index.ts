@@ -5,8 +5,8 @@
 
 import { i18nService } from '@/infrastructure/i18n';
 
-// Re-export scene tab types for convenience
-export type { SceneTabId, SceneTabDef, SceneTab } from '../components/SceneBar/types';
+// Re-export scene/overlay types for convenience
+export type { SceneTabId, OverlaySceneId, SceneId, OverlaySceneDef } from '../overlay/types';
 
 // Agent types
 export interface Agent {

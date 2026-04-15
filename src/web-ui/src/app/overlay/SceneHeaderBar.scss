@@ -1,0 +1,244 @@
+/**
+ * SceneHeaderBar styles — persistent scene-area top bar.
+ * Same 40px height and position as the former SceneBar tab strip.
+ */
+
+@use '../../component-library/styles/tokens.scss' as *;
+
+.scene-header-bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  flex-shrink: 0;
+  position: relative;           // anchor for absolute-centered search
+  // Match the left nav (NavBar) background so the top chrome reads as one surface
+  background: var(--color-bg-primary);
+  user-select: none;
+  overflow: hidden;
+  gap: $size-gap-1;
+  padding: 0 $size-gap-1;
+
+  // ── Overlay nav (home btn + title) ────────────────────
+
+  &__overlay-nav {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    flex-shrink: 0;
+  }
+
+  &__home-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-accent-500);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+  }
+
+  &__overlay-title {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+
+    // Subtle separator after title
+    &::after {
+      content: '';
+      display: inline-block;
+      width: 1px;
+      height: 12px;
+      background: var(--border-subtle);
+      margin-left: $size-gap-2;
+      vertical-align: middle;
+    }
+  }
+
+  // ── Global search — absolutely centered in the bar ────
+
+  &__search {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    // Shrink if squeezed by left/right elements (pointer-events: none on wrapper so clicks reach trigger)
+    pointer-events: none;
+  }
+
+  &__search-trigger {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 400px;
+    height: 26px;
+    padding: 0 $size-gap-2;
+    border: 1px solid transparent;
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-soft);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    transition: border-color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-medium);
+      border-color: var(--border-subtle);
+      color: var(--color-text-secondary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+
+    :root[data-theme-type='light'] & {
+      background: color-mix(in srgb, var(--color-bg-secondary) 60%, transparent);
+      border-color: var(--border-subtle);
+
+      &:hover {
+        background: var(--color-bg-secondary);
+        border-color: var(--border-medium);
+      }
+    }
+  }
+
+  &__search-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  &__search-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  &__search-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__search-shortcuts {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--color-text-muted);
+  }
+
+  &__search-kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+    background: color-mix(in srgb, var(--color-bg-primary) 50%, transparent);
+    font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--color-text-muted);
+  }
+
+  // ── Right: actions — pushed to the right end ──────────
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: $size-gap-1;
+    margin-left: auto;  // push to far right regardless of left-side content width
+  }
+
+  // ── Window controls ────────────────────────────────────
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 $size-gap-1;
+  }
+}
+
+// Notification button in scene header
+.scene-header-bar__notification-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard;
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+
+  .bitfun-notification-btn__icon--has-message {
+    color: #ca8a04;
+  }
+}
+
+// macOS: no-controls variant — add right padding so content doesn't touch edge
+.bitfun-app-layout--macos .scene-header-bar {
+  padding-right: $size-gap-3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-header-bar__home-btn,
+  .scene-header-bar__search-trigger {
+    transition: none;
+  }
+}

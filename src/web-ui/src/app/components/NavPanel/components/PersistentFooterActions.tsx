@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import { useSceneManager } from '../../../hooks/useSceneManager';
+import { useOverlayManager } from '../../../hooks/useOverlayManager';
 import { useNavSceneStore } from '../../../stores/navSceneStore';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -27,7 +27,7 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
-  const { openScene } = useSceneManager();
+  const { openOverlay } = useOverlayManager();
   const showSceneNav = useNavSceneStore((s) => s.showSceneNav);
   const navSceneId = useNavSceneStore((s) => s.navSceneId);
   const openNavScene = useNavSceneStore((s) => s.openNavScene);
@@ -62,7 +62,7 @@ const PersistentFooterActions: React.FC = () => {
 
   const handleOpenSettings = () => {
     closeMenu();
-    openScene('settings');
+    openOverlay('settings');
   };
 
   const handleOpenShell = useCallback(() => {

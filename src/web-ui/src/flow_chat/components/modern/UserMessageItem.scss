@@ -2,44 +2,64 @@
  * User message item styles (BEM).
  */
 
-.user-message-item {
-  padding: 0.5rem 1rem;
-  background: var(--element-bg-medium);
-  border: 1px solid var(--border-medium);
-  border-radius: 8px;
-  margin: 0 3rem 1rem 3rem;
-  transition: all 0.2s ease;
-  animation: slideInUp 0.3s ease;
-  position: relative;
-  
-  &:hover {
-    .user-message-item__copy-btn {
-      opacity: 1;
-    }
+// Timestamp above each dialog turn (session start on first turn, turn start afterward).
+// Centered label with horizontal rules on both sides.
+.user-message-item__round-marker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.65rem 3rem 0.3rem 3rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.35));
+  user-select: none;
 
-    .user-message-item__rollback-btn {
-      opacity: 1;
-    }
+  &::before,
+  &::after {
+    content: '';
+    flex: 1 1 0;
+    min-width: 0.75rem;
+    height: 1px;
+    background: var(--border-subtle, rgba(255, 255, 255, 0.08));
   }
-  
-  // Responsive: reduce margins on smaller screens.
+
   @media (max-width: 768px) {
     margin-left: 1.5rem;
     margin-right: 1.5rem;
   }
 }
 
-.user-message-item__timestamp {
-  font-size: 0.75em;
-  color: var(--color-text-muted, #888);
-  font-weight: 400;
-  margin-bottom: 0.5rem;
+.user-message-item__round-time {
+  flex-shrink: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.user-message-item__main {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
+// Base shell (overridden by --system / --human compact rows).
+.user-message-item {
+  padding: 0.25rem 0.75rem;
+  background: var(--element-bg-medium);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  margin: 0.35rem 3rem 0.5rem 3rem;
+  transition: border-color 0.2s ease;
+  animation: slideInUp 0.3s ease;
+  position: relative;
+
+  &:hover {
+    border-color: var(--border-strong, var(--border-medium));
+
+    .user-message-item__copy-btn,
+    .user-message-item__rollback-btn {
+      opacity: 1;
+    }
+  }
+
+  @media (max-width: 768px) {
+    margin-left: 1.5rem;
+    margin-right: 1.5rem;
+  }
 }
 
 .user-message-item__actions {
@@ -49,34 +69,126 @@
   flex-shrink: 0;
 }
 
-.user-message-item__blocks {
-  margin-top: 10px;
-}
+// ── Expanded full content ────────────────────────────────────────────────────
 
-.user-message-item__content {
-  flex: 1;
-  font-weight: 500;
-  line-height: 1.6;
+.user-message-item__expanded-body {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  font-weight: 400;
+  font-size: 0.9rem;
+  line-height: 1.7;
   color: var(--color-text-primary, #e0e0e0);
   white-space: pre-wrap;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
   word-break: break-word;
-  min-width: 0; /* Ensures the content can shrink properly. */
-  max-height: 4.8em; /* Collapsed: show up to 3 lines (line-height * 3). */
   user-select: text;
-  transition: all 0.2s ease;
-  
-}
-
-// Expanded state (outer scroll area).
-.user-message-item--expanded {
   max-height: 60vh;
   overflow-y: auto;
+}
+
+// Expanded state marker (kept for compat, no longer controls height directly).
+.user-message-item--expanded {
+  // intentionally empty
+}
+
+.user-message-item__blocks {
+  margin-top: 8px;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Compact rows: human (--human) + system-triggered (--system), understated
+// ────────────────────────────────────────────────────────────────────────────
+
+// Human + system-triggered: same compact inline row (no card).
+.user-message-item--system,
+.user-message-item--human {
+  background: transparent;
+  border: none;
+  margin: 1rem 3rem 0 3rem;
+  padding: 0.15rem 0;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+
+  &:hover {
+    opacity: 1;
+
+    .user-message-item__copy-btn {
+      opacity: 1;
+    }
+  }
+}
+
+.user-message-item--system {
+  .user-message-item__rollback-btn {
+    display: none;
+  }
+}
+
+// Leading icon for human messages (aligned with system source label column).
+.user-message-item__user-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.28));
+  user-select: none;
+
+  svg {
+    display: block;
+  }
+}
+
+// Same slot as nav "Agentic OS" (Orbit) for agent_session–triggered turns.
+.user-message-item__agentic-os-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.28));
+  user-select: none;
+
+  svg {
+    display: block;
+  }
+}
+
+// All source variants: no distinct colors, handled by --system.
+.user-message-item--agent-session,
+.user-message-item--scheduled-job,
+.user-message-item--bot,
+.user-message-item--cli,
+.user-message-item--remote {
+  // Intentionally empty.
+}
+
+// Single-row container for system messages.
+.user-message-item__system-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+// Source type label (e.g. "Agent Session").
+.user-message-item__source-label {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.28));
+  user-select: none;
+  white-space: nowrap;
+}
+
+// Inline message content — truncated to one line.
+.user-message-item__system-content {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--color-text-secondary, #999);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 // Failed state.
@@ -87,6 +199,16 @@
   box-shadow: none;
   
   .user-message-item__content {
+    color: var(--color-text-muted, #888);
+  }
+}
+
+// Compact human row: no dashed frame; mute text only.
+.user-message-item--human.user-message-item--failed {
+  border: none;
+  background: transparent;
+
+  .user-message-item__system-content {
     color: var(--color-text-muted, #888);
   }
 }
@@ -291,5 +413,13 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+// Search highlight within user message text.
+.user-message-item__search-highlight {
+  background: color-mix(in srgb, var(--accent-primary, #6b8afb) 35%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
 }
 

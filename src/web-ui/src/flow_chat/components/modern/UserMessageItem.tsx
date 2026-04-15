@@ -5,8 +5,9 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X } from 'lucide-react';
+import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, User, Orbit } from 'lucide-react';
 import type { DialogTurn } from '../../types/flow-chat';
+import type { TriggerSource } from '@/shared/types/session-history';
 import { useFlowChatContext } from './FlowChatContext';
 import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
@@ -19,31 +20,115 @@ import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
 
+/** Returns true when the turn was triggered by a non-human source. */
+function isSystemTrigger(triggerSource: TriggerSource | undefined): boolean {
+  return !!triggerSource && triggerSource !== 'desktop_ui';
+}
+
+/** Maps a TriggerSource to a CSS modifier suffix. */
+function triggerSourceModifier(triggerSource: TriggerSource | undefined): string {
+  switch (triggerSource) {
+    case 'agent_session': return 'agent-session';
+    case 'scheduled_job': return 'scheduled-job';
+    case 'bot': return 'bot';
+    case 'cli': return 'cli';
+    case 'desktop_api':
+    case 'remote_relay': return 'remote';
+    default: return '';
+  }
+}
+
+/** Maps a TriggerSource to a display label (non-agent_session; those use the Agentic OS nav icon). */
+function triggerSourceLabel(triggerSource: TriggerSource | undefined): string {
+  switch (triggerSource) {
+    case 'scheduled_job': return 'Scheduled';
+    case 'bot': return 'Bot';
+    case 'cli': return 'CLI';
+    case 'desktop_api': return 'API';
+    case 'remote_relay': return 'Remote';
+    default: return 'System';
+  }
+}
+
+
 interface UserMessageItemProps {
   message: DialogTurn['userMessage'];
   turnId: string;
 }
 
+function formatRoundTimestamp(locale: string, ms: number): string {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(ms);
+  } catch {
+    return new Date(ms).toLocaleString();
+  }
+}
+
+/** Splits text into segments and wraps matching parts with <mark>. */
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const q = query.trim();
+  const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+  if (parts.length <= 1) return text;
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === q.toLowerCase() ? (
+          <mark key={i} className="user-message-item__search-highlight">{part}</mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId }) => {
-    const { t } = useTranslation('flow-chat');
-    const { config, sessionId, activeSessionOverride } = useFlowChatContext();
+    const { t, i18n } = useTranslation('flow-chat');
+    const { config, sessionId, activeSessionOverride, searchQuery } = useFlowChatContext();
     const activeSessionFromStore = useActiveSession();
     const activeSession = activeSessionOverride ?? activeSessionFromStore;
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
-    const [hasOverflow, setHasOverflow] = useState(false);
+    const [isTruncated, setIsTruncated] = useState(false);
     const [isRollingBack, setIsRollingBack] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLSpanElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
 
     const turnIndex = activeSession?.dialogTurns.findIndex(t => t.id === turnId) ?? -1;
     const dialogTurn = turnIndex >= 0 ? activeSession?.dialogTurns[turnIndex] : null;
+    const turnStartMs = dialogTurn?.startTime ?? message?.timestamp ?? 0;
+    const sessionStartMs = activeSession?.createdAt ?? turnStartMs;
+
+    const roundMarkerText = useMemo(() => {
+      const locale = i18n.language || undefined;
+      if (turnIndex === 0) {
+        return t('message.sessionStartMarker', {
+          time: formatRoundTimestamp(locale ?? 'en-US', sessionStartMs),
+        });
+      }
+      return formatRoundTimestamp(locale ?? 'en-US', turnStartMs);
+    }, [turnIndex, sessionStartMs, turnStartMs, t, i18n.language]);
+
+    const roundMarkerIso = useMemo(() => {
+      const ms = turnIndex === 0 ? sessionStartMs : turnStartMs;
+      return new Date(ms).toISOString();
+    }, [turnIndex, sessionStartMs, turnStartMs]);
     const isFailed = dialogTurn?.status === 'error';
-    const canRollback = !!sessionId && turnIndex >= 0 && !isRollingBack;
+    const isSystem = isSystemTrigger(message?.triggerSource);
+    const canRollback = !!sessionId && turnIndex >= 0 && !isRollingBack && !isSystem;
 
     const { displayText, reproductionSteps } = useMemo(() => {
       const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
@@ -61,30 +146,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 
       return { displayText: cleaned, reproductionSteps: reproduction };
     }, [messageContent, messageImages]);
-    
-    // Check whether content overflows.
-    useEffect(() => {
-      const checkOverflow = () => {
-        if (contentRef.current && !expanded) {
-          const element = contentRef.current;
-          // Detect truncated text.
-          const isOverflowing = element.scrollHeight > element.clientHeight || 
-                                element.scrollWidth > element.clientWidth;
-          setHasOverflow(isOverflowing);
-        } else {
-          setHasOverflow(false);
-        }
-      };
-      
-      checkOverflow();
-      
-      window.addEventListener('resize', checkOverflow);
-      
-      return () => {
-        window.removeEventListener('resize', checkOverflow);
-      };
-    }, [displayText, expanded]);
-    
+
+    /** Human user row: wrap preview in typographic double quotes. */
+    const quotedDisplayText = useMemo(
+      () => `\u201c${displayText}\u201d`,
+      [displayText],
+    );
+
     // Copy the user message.
     const handleCopy = useCallback(async (e: React.MouseEvent) => {
       e.stopPropagation(); // Prevent toggle via bubbling.
@@ -139,14 +207,21 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       }
     }, [canRollback, sessionId, t, turnIndex]);
     
-    // Toggle expanded state.
+    // Detect whether the single-line preview is actually truncated.
+    useEffect(() => {
+      const el = contentRef.current;
+      if (!el) return;
+      const check = () => setIsTruncated(el.scrollWidth > el.clientWidth);
+      check();
+      const ro = new ResizeObserver(check);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, [displayText]);
+
     const handleToggleExpand = useCallback(() => {
-      // Only allow expand/collapse when there is overflow.
-      if (!hasOverflow && !expanded) {
-        return;
-      }
+      if (!isTruncated && !expanded) return;
       setExpanded(prev => !prev);
-    }, [hasOverflow, expanded]);
+    }, [isTruncated, expanded]);
     
     // Fill content into the input (failed state only).
     const handleFillToInput = useCallback((e: React.MouseEvent) => {
@@ -177,29 +252,89 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       return <div style={{ minHeight: '1px' }} />;
     }
     
+    const systemModifier = isSystem ? triggerSourceModifier(message.triggerSource) : '';
+    const rootClassName = [
+      'user-message-item',
+      expanded ? 'user-message-item--expanded' : '',
+      isFailed ? 'user-message-item--failed' : '',
+      isSystem ? 'user-message-item--system' : 'user-message-item--human',
+      isSystem && systemModifier ? `user-message-item--${systemModifier}` : '',
+    ].filter(Boolean).join(' ');
+
+    if (isSystem) {
+      return (
+        <>
+        <div className="user-message-item__round-marker">
+          <time className="user-message-item__round-time" dateTime={roundMarkerIso}>
+            {roundMarkerText}
+          </time>
+        </div>
+        <div ref={containerRef} className={rootClassName}>
+          <div
+            className="user-message-item__system-row"
+            onClick={handleToggleExpand}
+            style={{ cursor: (isTruncated || expanded) ? 'pointer' : 'default' }}
+            title={(isTruncated || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
+          >
+            {message.triggerSource === 'agent_session' ? (
+              <span
+                className="user-message-item__agentic-os-icon"
+                aria-label={t('session.dispatcher')}
+                title={t('session.dispatcher')}
+              >
+                <Orbit size={14} strokeWidth={2} />
+              </span>
+            ) : (
+              <span className="user-message-item__source-label">
+                {triggerSourceLabel(message.triggerSource)}
+              </span>
+            )}
+            <span ref={contentRef} className="user-message-item__system-content">
+              {highlightText(displayText, searchQuery ?? '')}
+            </span>
+            <button
+              className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
+              onClick={e => { e.stopPropagation(); handleCopy(e); }}
+              title={copied ? t('message.copyFailed') : t('message.copy')}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          </div>
+          {expanded && (
+            <div className="user-message-item__expanded-body">
+              {highlightText(displayText, searchQuery ?? '')}
+            </div>
+          )}
+        </div>
+        </>
+      );
+    }
+
     return (
+      <>
+      <div className="user-message-item__round-marker">
+        <time className="user-message-item__round-time" dateTime={roundMarkerIso}>
+          {roundMarkerText}
+        </time>
+      </div>
       <div 
         ref={containerRef}
-        className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
+        className={rootClassName}
       >
-        {config?.showTimestamps && (
-          <div className="user-message-item__timestamp">
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </div>
-        )}
-        <div className="user-message-item__main">
-          <div 
-            ref={contentRef}
-            className="user-message-item__content"
-            onClick={handleToggleExpand}
-            title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
-            style={{
-              cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
-            }}
-          >
-            {displayText}
-          </div>
-          <div className="user-message-item__actions">
+        {/* Single-line row — same layout as system-triggered messages, with user icon */}
+        <div
+          className="user-message-item__system-row"
+          onClick={handleToggleExpand}
+          style={{ cursor: (isTruncated || expanded) ? 'pointer' : 'default' }}
+          title={(isTruncated || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
+        >
+          <span className="user-message-item__user-icon" aria-label={t('message.user')}>
+            <User size={14} strokeWidth={2} />
+          </span>
+          <span ref={contentRef} className="user-message-item__system-content">
+            {highlightText(quotedDisplayText, searchQuery ?? '')}
+          </span>
+          <div className="user-message-item__actions" onClick={e => e.stopPropagation()}>
             <button
               className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
               onClick={handleCopy}
@@ -234,6 +369,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
         </div>
 
+        {/* Expanded full content */}
+        {expanded && (
+          <div className="user-message-item__expanded-body">
+            {highlightText(quotedDisplayText, searchQuery ?? '')}
+          </div>
+        )}
+
         {message.images && message.images.length > 0 && (
           <div className="user-message-item__images">
             {message.images.map(img => {
@@ -262,6 +404,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
         )}
       </div>
+      </>
     );
   }
 );

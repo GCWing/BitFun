@@ -1352,6 +1352,29 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_message_metadata = Some(metadata);
         }
 
+        // Inject trigger source into metadata so the frontend can distinguish human
+        // user input from agent-session notifications, scheduled jobs, bots, etc.
+        {
+            let trigger_source_str = match submission_policy.trigger_source {
+                DialogTriggerSource::DesktopUi => "desktop_ui",
+                DialogTriggerSource::DesktopApi => "desktop_api",
+                DialogTriggerSource::AgentSession => "agent_session",
+                DialogTriggerSource::ScheduledJob => "scheduled_job",
+                DialogTriggerSource::Bot => "bot",
+                DialogTriggerSource::Cli => "cli",
+                DialogTriggerSource::RemoteRelay => "remote_relay",
+            };
+            let mut metadata =
+                Self::ensure_user_message_metadata_object(user_message_metadata.take());
+            if let Some(obj) = metadata.as_object_mut() {
+                obj.insert(
+                    "triggerSource".to_string(),
+                    serde_json::json!(trigger_source_str),
+                );
+            }
+            user_message_metadata = Some(metadata);
+        }
+
         // Start new dialog turn (sets state to Processing internally)
         let turn_index = self.session_manager.get_turn_count(&session_id);
         // Pass frontend turnId, generate if not provided
@@ -1705,7 +1728,25 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await;
         debug!("Session state change event sent");
 
-        // Step 3: Async cleanup of old turn (let it end naturally via cancel token, non-blocking)
+        // Step 3: Notify the scheduler immediately so that any agent-session reply_route
+        // (e.g. Dispatcher waiting for a sub-agent to finish) is forwarded without delay.
+        // The execution task will also send TurnOutcome::Cancelled once the in-flight AI
+        // call returns, but by then active_turns will already have been removed, making
+        // the second forward_agent_session_reply call a no-op.
+        if let Some(tx) = self.scheduler_notify_tx.get() {
+            let _ = tx.try_send((
+                session_id.to_string(),
+                TurnOutcome::Cancelled {
+                    turn_id: dialog_turn_id.to_string(),
+                },
+            ));
+            debug!(
+                "Immediately notified scheduler of cancellation: session_id={}, turn_id={}",
+                session_id, dialog_turn_id
+            );
+        }
+
+        // Step 4: Async cleanup of old turn (let it end naturally via cancel token, non-blocking)
         let execution_engine = self.execution_engine.clone();
         let tool_pipeline = self.tool_pipeline.clone();
         let dialog_turn_id_clone = dialog_turn_id.to_string();

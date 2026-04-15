@@ -4,7 +4,7 @@ import { FolderOpen, User, MessageSquare } from 'lucide-react';
 import { Search } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import { useSceneManager } from '@/app/hooks/useSceneManager';
+import { useOverlayManager } from '@/app/hooks/useOverlayManager';
 import { useApp } from '@/app/hooks/useApp';
 import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
 import { useNurseryStore } from '@/app/scenes/profile/nurseryStore';
@@ -49,7 +49,7 @@ const matchesQuery = (query: string, ...fields: (string | undefined | null)[]): 
 const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   const { t } = useI18n('common');
   const { openedWorkspacesList, assistantWorkspacesList, setActiveWorkspace } = useWorkspaceContext();
-  const { openScene } = useSceneManager();
+  const { openOverlay } = useOverlayManager();
   const { switchLeftPanelTab } = useApp();
   const setSelectedAssistantWorkspaceId = useMyAgentStore(s => s.setSelectedAssistantWorkspaceId);
   const openNurseryAssistant = useNurseryStore(s => s.openAssistant);
@@ -243,14 +243,14 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
       openNurseryAssistant(item.id);
       await setActiveWorkspace(item.id).catch(() => {});
       switchLeftPanelTab('profile');
-      openScene('assistant');
+      openOverlay('assistant');
     } else if (item.kind === 'session') {
       await openMainSession(item.id, {
         workspaceId: item.workspaceId,
         activateWorkspace: item.workspaceId ? setActiveWorkspace : undefined,
       });
     }
-  }, [onClose, setActiveWorkspace, setSelectedAssistantWorkspaceId, openNurseryAssistant, switchLeftPanelTab, openScene]);
+  }, [onClose, setActiveWorkspace, setSelectedAssistantWorkspaceId, openNurseryAssistant, switchLeftPanelTab, openOverlay]);
 
   // Passed to Search component's onKeyDown — called before its built-in handling.
   // Use e.preventDefault() to suppress Search's own Enter/Escape logic when needed.

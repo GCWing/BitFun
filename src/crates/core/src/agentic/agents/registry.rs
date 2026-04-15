@@ -431,12 +431,14 @@ impl AgentRegistry {
     }
 
     /// get all mode agent information (including enabled status, used for frontend mode selector etc.)
+    /// Standalone session types (e.g. Dispatcher/Agentic OS) are excluded — they are independent
+    /// session categories created from the nav, not switchable sub-modes within a session.
     pub async fn get_modes_info(&self) -> Vec<AgentInfo> {
         let mode_configs = get_mode_configs().await;
         let map = self.read_agents();
         let mut result: Vec<AgentInfo> = map
             .values()
-            .filter(|e| e.category == AgentCategory::Mode)
+            .filter(|e| e.category == AgentCategory::Mode && e.agent.id() != "Dispatcher")
             .map(|e| {
                 let mut agent_info = AgentInfo::from_agent_entry(e);
                 let agent_type = &agent_info.id;
@@ -455,11 +457,10 @@ impl AgentRegistry {
         result.sort_by(|a, b| {
             let order = |id: &str| -> u8 {
                 match id {
-                    "Dispatcher" => 0,
-                    "agentic" => 1,
-                    "Cowork" => 2,
-                    "Plan" => 3,
-                    "debug" => 4,
+                    "agentic" => 0,
+                    "Cowork" => 1,
+                    "Plan" => 2,
+                    "debug" => 3,
                     _ => 99,
                 }
             };

@@ -1,40 +1,37 @@
 import { useEffect, useRef } from 'react';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
-import { useSceneManager } from './useSceneManager';
+import type { OverlaySceneId } from '@/app/overlay/types';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 
 export interface UseGallerySceneAutoRefreshOptions {
-  /** Tab id from SceneBar (e.g. skills, agents, miniapps). */
-  sceneId: SceneTabId;
+  /** Overlay scene id (e.g. 'skills', 'agents', 'miniapps'). */
+  sceneId: OverlaySceneId;
   /** Reload lists; may be async. */
   refetch: () => void | Promise<void>;
   enabled?: boolean;
 }
 
 /**
- * Gallery scenes stay mounted while inactive (SceneViewport). Refresh when:
- * 1. User switches back to this tab (inactive → active).
- * 2. The window regains visibility while this tab is active (e.g. external edits).
+ * Gallery overlay scenes are unmounted when not active (single overlay slot).
+ * This hook refreshes data when:
+ * 1. The overlay becomes active (user navigates to it).
+ * 2. The window regains visibility while this overlay is active.
  *
- * Initial load remains the responsibility of each feature hook (workspacePath,
- * search query, etc.); this hook only covers re-entry and focus.
+ * Initial load remains the responsibility of each feature hook.
  */
 export function useGallerySceneAutoRefresh({
   sceneId,
   refetch,
   enabled = true,
 }: UseGallerySceneAutoRefreshOptions): void {
-  const { activeTabId } = useSceneManager();
-  const isActive = activeTabId === sceneId;
+  const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const isActive = activeOverlay === sceneId;
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
 
-  /** null = not yet synced (skip first tick to avoid duplicating hook mount loads). */
   const wasActiveRef = useRef<boolean | null>(null);
 
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
     if (wasActiveRef.current === null) {
       wasActiveRef.current = isActive;
       return;
@@ -46,20 +43,14 @@ export function useGallerySceneAutoRefresh({
   }, [enabled, isActive]);
 
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
     const onVisibility = () => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
-      if (activeTabId !== sceneId) {
-        return;
-      }
+      if (document.visibilityState !== 'visible') return;
+      if (activeOverlay !== sceneId) return;
       void Promise.resolve(refetchRef.current());
     };
 
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [enabled, activeTabId, sceneId]);
+  }, [enabled, activeOverlay, sceneId]);
 }

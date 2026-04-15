@@ -3,7 +3,7 @@
  * Supports mixed streaming output.
  */
 
-import type { DialogTurnKind, SessionKind } from '@/shared/types/session-history';
+import type { DialogTurnKind, SessionKind, TriggerSource } from '@/shared/types/session-history';
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -112,6 +112,8 @@ export interface DialogTurn {
     content: string;
     timestamp: number;
     hasImages?: boolean;
+    /** Promoted from metadata.triggerSource. Undefined means desktop_ui (human). */
+    triggerSource?: TriggerSource;
     metadata?: Record<string, any>;
     images?: Array<{
       id: string;

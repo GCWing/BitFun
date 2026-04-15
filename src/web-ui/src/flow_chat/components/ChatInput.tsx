@@ -39,8 +39,8 @@ import { Tooltip, IconButton } from '@/component-library';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/openBtwSession';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
-import { useSceneStore } from '@/app/stores/sceneStore';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
+import { useOverlayStore } from '@/app/stores/overlayStore';
+import type { OverlaySceneId } from '@/app/overlay/types';
 import type { SkillInfo } from '@/infrastructure/config/types';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
@@ -270,7 +270,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
   const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
   const currentMode = modeState.current;
-  const canSwitchModes = !isAssistantWorkspace && currentMode !== 'Cowork';
+  // Cowork and Dispatcher sessions have a fixed agent type and do not support mode switching.
+  const canSwitchModes = !isAssistantWorkspace && currentMode !== 'Cowork' && currentMode !== 'Dispatcher';
 
   // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
   const switchableModes = useMemo(
@@ -289,7 +290,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [switchableModes]
   );
 
-  const openScene = useSceneStore(s => s.openScene);
+  const openOverlay = useOverlayStore(s => s.openOverlay);
   const [boostPanelSkills, setBoostPanelSkills] = useState<SkillInfo[]>([]);
   const [boostSkillsLoading, setBoostSkillsLoading] = useState(false);
 
@@ -1983,9 +1984,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       clearSkillsTimer();
       setSkillsFlyoutOpen(false);
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
-      openScene('skills' as SceneTabId);
+      openOverlay('skills' as OverlaySceneId);
     },
-    [clearSkillsTimer, openScene]
+    [clearSkillsTimer, openOverlay]
   );
   
   const handleActivate = useCallback((e?: React.MouseEvent) => {

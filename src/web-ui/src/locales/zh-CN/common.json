@@ -68,7 +68,8 @@
   "nav": {
     "aria": {
       "navControl": "导航控制",
-      "mainNav": "主导航"
+      "mainNav": "主导航",
+      "sceneHeader": "场景标题栏"
     },
     "back": "后退",
     "forward": "前进",
@@ -110,7 +111,7 @@
     },
     "search": {
       "triggerPlaceholder": "搜索",
-      "triggerTooltip": "搜索 (Ctrl+K、Alt+F)",
+      "triggerTooltip": "搜索 (Alt+F)",
       "inputPlaceholder": "搜索工作区、助理、会话...",
       "groupWorkspaces": "已打开工作区",
       "groupAssistants": "助理",
@@ -809,6 +810,9 @@
     "assistant": "助理",
     "shell": "Shell",
     "panelView": "面板视图"
+  },
+  "overlay": {
+    "returnToAgenticOS": "返回 Agentic OS"
   },
   "loading": {
     "scenes": "正在加载场景"

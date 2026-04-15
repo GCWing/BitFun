@@ -98,7 +98,8 @@
     "rollbackPanelBulletUndo": "撤销从该轮开始的所有文件变更",
     "rollbackPanelBulletHistory": "保留会话历史（之后仍可继续对话）",
     "rollbackSuccess": "已回滚并删除后续对话记录",
-    "rollbackFailed": "回滚失败"
+    "rollbackFailed": "回滚失败",
+    "sessionStartMarker": "会话开始 {{time}}"
   },
   "contextMenu": {
     "copySelection": "复制选中内容",
@@ -326,7 +327,14 @@
     "btwBackTooltipWithoutTurn": "返回到来源会话：{{title}}",
     "btwCreateTooltip": "快速发起一个侧问",
     "agentTypeTooltip": "{{type}}：{{path}}",
-    "backToAgenticOs": "返回 Agentic OS 会话"
+    "backToAgenticOs": "返回 Agentic OS 会话",
+    "searchPlaceholder": "搜索消息",
+    "searchResult": "{{current}} / {{total}}",
+    "searchNoResults": "无结果",
+    "searchPrevious": "上一个匹配",
+    "searchNext": "下一个匹配",
+    "searchClose": "关闭搜索",
+    "searchOpen": "搜索消息"
   },
   "sessionFilesBadge": {
     "files": "文件",

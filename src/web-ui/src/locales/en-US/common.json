@@ -68,7 +68,8 @@
   "nav": {
     "aria": {
       "navControl": "Navigation controls",
-      "mainNav": "Main navigation"
+      "mainNav": "Main navigation",
+      "sceneHeader": "Scene header"
     },
     "back": "Back",
     "forward": "Forward",
@@ -110,7 +111,7 @@
     },
     "search": {
       "triggerPlaceholder": "Search",
-      "triggerTooltip": "Search (Ctrl+K, Alt+F)",
+      "triggerTooltip": "Search (Alt+F)",
       "inputPlaceholder": "Search workspaces, assistants, sessions...",
       "groupWorkspaces": "Open Workspaces",
       "groupAssistants": "Assistants",
@@ -809,6 +810,9 @@
     "assistant": "Assistant",
     "shell": "Shell",
     "panelView": "Panel View"
+  },
+  "overlay": {
+    "returnToAgenticOS": "Return to Agentic OS"
   },
   "loading": {
     "scenes": "Loading scene"

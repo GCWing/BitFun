@@ -51,6 +51,14 @@ export interface FlowChatContextValue {
    * Collapse the specified explore group.
    */
   onCollapseGroup?: (groupId: string) => void;
+
+  // ========== Message search state ==========
+  /** Active search query string. Empty string means no active search. */
+  searchQuery?: string;
+  /** Set of virtual item indices that contain search matches. */
+  searchMatchIndices?: ReadonlySet<number>;
+  /** Virtual item index of the currently focused search match, or -1 if none. */
+  searchCurrentMatchVirtualIndex?: number;
 }
 
 export const FlowChatContext = createContext<FlowChatContextValue>({});

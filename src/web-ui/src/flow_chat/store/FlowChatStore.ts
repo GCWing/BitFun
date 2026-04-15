@@ -1669,7 +1669,8 @@ export class FlowChatStore {
       const displayContent =
         metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
 
-
+      const triggerSource = (metadata?.triggerSource || turn.userMessage.triggerSource) as
+        import('@/shared/types/session-history').TriggerSource | undefined;
 
       return {
       id: turn.turnId,
@@ -1681,6 +1682,7 @@ export class FlowChatStore {
         content: displayContent,
         timestamp: turn.userMessage.timestamp,
         hasImages,
+        triggerSource,
         metadata,
         images,
       },

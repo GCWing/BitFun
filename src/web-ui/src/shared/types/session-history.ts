@@ -7,6 +7,19 @@
 export type SessionKind = 'normal' | 'btw';
 export type PersistedSessionKind = 'standard' | 'subagent';
 
+/**
+ * Identifies what triggered a dialog turn.
+ * Injected into userMessage.metadata.triggerSource by the backend coordinator.
+ */
+export type TriggerSource =
+  | 'desktop_ui'
+  | 'desktop_api'
+  | 'agent_session'
+  | 'scheduled_job'
+  | 'bot'
+  | 'cli'
+  | 'remote_relay';
+
 export interface SessionCustomMetadata extends Record<string, unknown> {
   kind?: SessionKind;
   parentSessionId?: string | null;
@@ -66,6 +79,8 @@ export interface UserMessageData {
   id: string;
   content: string;
   timestamp: number;
+  /** Promoted from metadata.triggerSource for type-safe access. */
+  triggerSource?: TriggerSource;
   metadata?: Record<string, any>;
 }
 

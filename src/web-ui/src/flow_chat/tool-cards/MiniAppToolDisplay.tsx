@@ -8,13 +8,14 @@ import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { useSceneManager } from '@/app/hooks/useSceneManager';
+import { useOverlayManager } from '@/app/hooks/useOverlayManager';
+import type { OverlaySceneId } from '@/app/overlay/types';
 import './MiniAppToolDisplay.scss';
 
 export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolResult, partialParams, isParamsStreaming, toolCall } = toolItem;
-  const { openScene } = useSceneManager();
+  const { openOverlay } = useOverlayManager();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toolId = toolItem.id ?? toolCall?.id;
@@ -134,7 +135,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             className="miniapp-open-btn"
-            onClick={() => openScene(`miniapp:${appId}`)}
+            onClick={() => openOverlay(`miniapp:${appId}` as OverlaySceneId)}
             title={t('toolCards.initMiniApp.openInMiniAppTitle')}
           >
             <ExternalLink size={12} />

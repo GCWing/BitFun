@@ -13,8 +13,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
 import type { FlowChatState, Session } from '../../../../../flow_chat/types/flow-chat';
-import { useSceneStore } from '../../../../stores/sceneStore';
-import type { SceneTabId } from '../../../SceneBar/types';
+import { useOverlayStore } from '../../../../stores/overlayStore';
 import { getWorkspaceDisplayName, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -34,7 +33,7 @@ import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import './SessionsSection.scss';
 
 const log = createLogger('SessionsSection');
-const AGENT_SCENE: SceneTabId = 'session';
+const AGENT_SCENE = 'session' as const;
 
 type SessionMode = 'code' | 'cowork' | 'claw';
 
@@ -77,7 +76,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 }) => {
   const { t } = useI18n('common');
   const { setActiveWorkspace, currentWorkspace, openedWorkspacesList } = useWorkspaceContext();
-  const activeTabId = useSceneStore(s => s.activeTabId);
+  const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const activeTabId = activeOverlay ?? AGENT_SCENE;
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
     | { childSessionId: string; parentSessionId: string; workspacePath?: string }

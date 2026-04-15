@@ -107,7 +107,7 @@ $_nav-footer-height: 40px;
   box-shadow: 0 0 10px rgba(96, 165, 250, 0.50);
 }
 
-// ── Right column: rounded scene card (SceneBar + SceneViewport) ───
+// ── Right column: AgenticOSWorkspace (base session + overlay layer) ───
 
 .bitfun-workspace-body__scene-area {
   display: flex;
@@ -124,9 +124,9 @@ $_nav-footer-height: 40px;
 }
 
 // When nav is collapsed, the floating collapsed-nav (80px wide) overlays
-// the top-left area. Offset SceneBar content to avoid visual clipping/occlusion.
+// the top-left area. Offset the scene header bar to avoid visual clipping.
 .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-scene-bar {
+  .scene-header-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1});
   }
 }
@@ -136,7 +136,7 @@ $_nav-footer-height: 40px;
 }
 
 .bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
-  .bitfun-scene-bar {
+  .scene-header-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1} + 72px);
   }
 }

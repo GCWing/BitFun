@@ -1,66 +1,50 @@
 /**
- * Global shortcuts for the top SceneBar and scene quick-open actions.
+ * Global shortcuts for scene/overlay quick-open actions.
  *
- * Scene navigation (allowInInput: true — fires from anywhere):
- *   Alt+1 / Alt+2 / Alt+3  — activate the 1st–3rd open scene left-to-right.
- *
- * Scene quick-open (allowInInput: true — fires from anywhere):
- *   Mod+Shift+A — open Agent/Session scene
- *   Mod+,       — open Settings scene
- *   Mod+Shift+` — open Terminal scene
+ *   Mod+Shift+A — return to Agentic OS base session (close overlay)
+ *   Mod+,       — open Settings overlay
+ *   Mod+Shift+` — open Terminal overlay
  */
 
 import { useCallback } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { useSceneStore } from '@/app/stores/sceneStore';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
+import { useOverlayStore } from '@/app/stores/overlayStore';
+import type { OverlaySceneId } from '@/app/overlay/types';
 
-function activateSceneByStripIndex(index: number): void {
-  const { openTabs, activateScene } = useSceneStore.getState();
-  if (index < 0 || index >= openTabs.length) return;
-  activateScene(openTabs[index].id);
+function openOverlayById(id: OverlaySceneId): void {
+  useOverlayStore.getState().openOverlay(id);
 }
 
-function openSceneById(id: SceneTabId): void {
-  useSceneStore.getState().openScene(id);
+function closeActiveOverlay(): void {
+  useOverlayStore.getState().closeOverlay();
 }
 
 export function useGlobalSceneShortcuts(): void {
-  const byIndex = useCallback((i: number) => () => activateSceneByStripIndex(i), []);
+  const openSettings = useCallback(() => openOverlayById('settings'), []);
+  const openTerminal = useCallback(() => openOverlayById('terminal'), []);
+  const returnToSession = useCallback(() => closeActiveOverlay(), []);
 
-  // ── Scene-bar position shortcuts (Alt+1–3) ────────────────────────────
-  useShortcut('scene.focus1', { key: '1', alt: true, scope: 'app', allowInInput: true }, byIndex(0), {
-    priority: 12,
-    description: 'keyboard.shortcuts.scene.focusMerged',
-  });
-  useShortcut('scene.focus2', { key: '2', alt: true, scope: 'app', allowInInput: true }, byIndex(1), {
-    priority: 12,
-    description: 'keyboard.shortcuts.scene.focusMerged',
-  });
-  useShortcut('scene.focus3', { key: '3', alt: true, scope: 'app', allowInInput: true }, byIndex(2), {
-    priority: 12,
-    description: 'keyboard.shortcuts.scene.focusMerged',
-  });
-
-  // ── Scene quick-open ──────────────────────────────────────────────────
+  // Return to Agentic OS base session
   useShortcut(
     'scene.openSession',
     { key: 'A', ctrl: true, shift: true, scope: 'app', allowInInput: true },
-    () => openSceneById('session'),
+    returnToSession,
     { priority: 10, description: 'keyboard.shortcuts.scene.openSession' }
   );
 
+  // Open Settings overlay
   useShortcut(
     'scene.openSettings',
     { key: ',', ctrl: true, scope: 'app', allowInInput: true },
-    () => openSceneById('settings'),
+    openSettings,
     { priority: 10, description: 'keyboard.shortcuts.scene.openSettings' }
   );
 
+  // Open Terminal overlay
   useShortcut(
     'scene.openTerminal',
     { key: '`', ctrl: true, shift: true, scope: 'app', allowInInput: true },
-    () => openSceneById('terminal'),
+    openTerminal,
     { priority: 10, description: 'keyboard.shortcuts.scene.openTerminal' }
   );
 }

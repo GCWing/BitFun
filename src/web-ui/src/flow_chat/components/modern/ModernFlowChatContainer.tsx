@@ -18,6 +18,7 @@ import { useFlowChatCopyDialog } from './useFlowChatCopyDialog';
 import { useFlowChatSessionRelationship } from './useFlowChatSessionRelationship';
 import { useFlowChatSync } from './useFlowChatSync';
 import { useFlowChatToolActions } from './useFlowChatToolActions';
+import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
 import type { FlowChatConfig } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
@@ -48,6 +49,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const activeSession = useActiveSession();
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
+  const [searchOpenRequest, setSearchOpenRequest] = useState(0);
   const autoPinnedSessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
@@ -69,6 +71,18 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     workspacePath,
     onFileViewRequest,
   });
+
+  const {
+    searchQuery,
+    onSearchChange,
+    matches: searchMatches,
+    matchIndices: searchMatchIndices,
+    currentMatchIndex: searchCurrentMatchIndex,
+    currentMatchVirtualIndex: searchCurrentMatchVirtualIndex,
+    goToNext: handleSearchNext,
+    goToPrev: handleSearchPrev,
+    clearSearch,
+  } = useFlowChatSearch(virtualItems);
 
   useFlowChatSync();
   useFlowChatCopyDialog();
@@ -102,6 +116,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onExpandGroup: handleExpandGroup,
     onExpandAllInTurn: handleExpandAllInTurn,
     onCollapseGroup: handleCollapseGroup,
+    searchQuery,
+    searchMatchIndices,
+    searchCurrentMatchVirtualIndex,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -116,6 +133,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleExpandGroup,
     handleExpandAllInTurn,
     handleCollapseGroup,
+    searchQuery,
+    searchMatchIndices,
+    searchCurrentMatchVirtualIndex,
   ]);
 
   const turnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {
@@ -195,6 +215,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     };
   }, [activeSession?.sessionId, turnSummaries]);
 
+  // Scroll to current search match when it changes.
+  useEffect(() => {
+    if (searchCurrentMatchVirtualIndex < 0) return;
+    const frameId = requestAnimationFrame(() => {
+      virtualListRef.current?.scrollToIndex(searchCurrentMatchVirtualIndex);
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [searchCurrentMatchVirtualIndex]);
+
   const handleJumpToTurn = useCallback((turnId: string) => {
     if (!turnId) return;
 
@@ -273,6 +302,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     { priority: 20, description: 'keyboard.shortcuts.chat.btwFill' }
   );
 
+  useShortcut(
+    'chat.search',
+    { key: 'F', ctrl: true, scope: 'chat', allowInInput: false },
+    () => {
+      setSearchOpenRequest(prev => prev + 1);
+    },
+    { priority: 15, description: 'keyboard.shortcuts.chat.search' }
+  );
+
   return (
     <FlowChatContext.Provider value={contextValue}>
       <div
@@ -297,6 +335,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onJumpToNextTurn={handleJumpToNextTurn}
           showBackToAgenticOs={!!activeSession && !isDispatcherSession}
           onOpenAgenticOs={handleOpenAgenticOs}
+          searchQuery={searchQuery}
+          onSearchChange={onSearchChange}
+          searchMatchCount={searchMatches.length}
+          searchCurrentMatch={searchMatches.length > 0 ? searchCurrentMatchIndex + 1 : 0}
+          onSearchNext={handleSearchNext}
+          onSearchPrev={handleSearchPrev}
+          onSearchClose={clearSearch}
+          searchOpenRequest={searchOpenRequest}
         />
 
         <div className="modern-flowchat-container__messages">

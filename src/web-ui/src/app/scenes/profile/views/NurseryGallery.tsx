@@ -9,7 +9,7 @@ import {
 } from '@/app/components';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useApp } from '@/app/hooks/useApp';
-import { useSceneStore } from '@/app/stores/sceneStore';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { WorkspaceInfo } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
@@ -36,7 +36,7 @@ interface TemplateStats {
 const NurseryGallery: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
   const { assistantWorkspacesList, createAssistantWorkspace, setActiveWorkspace, deleteAssistantWorkspace } = useWorkspaceContext();
-  const openScene = useSceneStore(s => s.openScene);
+  const closeOverlay = useOverlayStore(s => s.closeOverlay);
   const { switchLeftPanelTab } = useApp();
   const { openTemplate, openAssistant } = useNurseryStore();
   const [creating, setCreating] = useState(false);
@@ -125,7 +125,7 @@ const NurseryGallery: React.FC = () => {
 
   const handleNewAssistantSession = useCallback(
     async (workspace: WorkspaceInfo) => {
-      openScene('session');
+      closeOverlay();
       switchLeftPanelTab('sessions');
       try {
         await flowChatManager.createChatSession({ workspacePath: workspace.rootPath }, 'Claw');
@@ -134,7 +134,7 @@ const NurseryGallery: React.FC = () => {
         log.error('Failed to create assistant session from gallery', e);
       }
     },
-    [openScene, setActiveWorkspace, switchLeftPanelTab],
+    [closeOverlay, setActiveWorkspace, switchLeftPanelTab],
   );
 
   return (

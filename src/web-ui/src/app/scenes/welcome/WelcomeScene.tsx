@@ -11,11 +11,10 @@ import {
   FolderOpen, Clock, FolderPlus, Trash2,
 } from 'lucide-react';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import { useSceneStore } from '@/app/stores/sceneStore';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
 import type { WorkspaceInfo } from '@/shared/types';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import './WelcomeScene.scss';
@@ -28,7 +27,7 @@ const WelcomeScene: React.FC = () => {
     hasWorkspace, currentWorkspace, recentWorkspaces,
     openWorkspace, switchWorkspace, removeWorkspaceFromRecent,
   } = useWorkspaceContext();
-  const openScene = useSceneStore(s => s.openScene);
+  const closeOverlay = useOverlayStore(s => s.closeOverlay);
   const [isSelecting, setIsSelecting] = useState(false);
   const [welcomeMessageIndex] = useState(
     () => Math.floor(Math.random() * 4),
@@ -63,14 +62,14 @@ const WelcomeScene: React.FC = () => {
       });
       if (selected && typeof selected === 'string') {
         await openWorkspace(selected);
-        openScene('session' as SceneTabId);
+        closeOverlay();
       }
     } catch (e) {
       log.error('Failed to open folder', e);
     } finally {
       setIsSelecting(false);
     }
-  }, [openWorkspace, openScene, t]);
+  }, [openWorkspace, closeOverlay, t]);
 
   const handleNewProject = useCallback(() => {
     window.dispatchEvent(new Event('nav:new-project'));
@@ -79,11 +78,11 @@ const WelcomeScene: React.FC = () => {
   const handleSwitchWorkspace = useCallback(async (workspace: WorkspaceInfo) => {
     try {
       await switchWorkspace(workspace);
-      openScene('session' as SceneTabId);
+      closeOverlay();
     } catch (e) {
       log.error('Failed to switch workspace', e);
     }
-  }, [switchWorkspace, openScene]);
+  }, [switchWorkspace, closeOverlay]);
 
   const handleRemoveFromRecent = useCallback(async (workspaceId: string) => {
     try {

@@ -1,5 +1,4 @@
-import type { SceneTabId } from '@/app/components/SceneBar/types';
-import { useSceneStore } from '@/app/stores/sceneStore';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 
@@ -9,10 +8,10 @@ interface OpenShellSessionTargetOptions {
 }
 
 function openStandaloneShellSession(sessionId: string): void {
-  const { openScene } = useSceneStore.getState();
+  const { openOverlay } = useOverlayStore.getState();
   const terminalState = useTerminalSceneStore.getState();
 
-  openScene('shell' as SceneTabId);
+  openOverlay('shell');
 
   // Force a remount when reopening the same session so the terminal view
   // can recover from stale/error state and always reflect the latest selection.
@@ -29,14 +28,14 @@ function openStandaloneShellSession(sessionId: string): void {
 
 /**
  * Unified shell open strategy:
- * - stay inside Agent right tabs when the active scene is session
- * - otherwise open the standalone shell scene
+ * - stay inside Agent right tabs when the base session is active (no overlay)
+ * - otherwise open the standalone shell overlay
  */
 export function openShellSessionTarget(options: OpenShellSessionTargetOptions): void {
   const { sessionId, sessionName } = options;
-  const { activeTabId } = useSceneStore.getState();
+  const { activeOverlay } = useOverlayStore.getState();
 
-  if (activeTabId === 'session') {
+  if (activeOverlay === null) {
     createTerminalTab(sessionId, sessionName, 'agent');
     return;
   }

@@ -225,6 +225,73 @@
     }
   }
 
+  // ==================== Search ====================
+  &__search-btn {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__search {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 0 $size-gap-1;
+    overflow: hidden;
+  }
+
+  &__search-icon {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  &__search-input {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    padding: 0 $size-gap-2;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+    background: color-mix(in srgb, var(--color-bg-elevated) 60%, transparent);
+    color: var(--color-text-primary);
+    font-size: var(--flowchat-font-size-sm);
+    outline: none;
+    transition: border-color $motion-base $easing-standard,
+                background $motion-base $easing-standard;
+
+    &::placeholder {
+      color: var(--color-text-secondary);
+      opacity: 0.6;
+    }
+
+    &:focus {
+      border-color: color-mix(in srgb, var(--accent-primary) 60%, var(--border-base));
+      background: color-mix(in srgb, var(--color-bg-elevated) 85%, transparent);
+    }
+
+    &--no-results {
+      border-color: color-mix(in srgb, #e05252 50%, var(--border-base));
+      color: #e05252;
+    }
+  }
+
+  &__search-count {
+    flex-shrink: 0;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  // Virtual item highlight when it contains a search match.
+  // Applied via VirtualItemRenderer on the .virtual-item-wrapper level.
+
   &__git-branch {
     display: inline-flex;
     align-items: center;

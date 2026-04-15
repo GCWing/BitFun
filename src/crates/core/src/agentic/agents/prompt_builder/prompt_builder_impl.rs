@@ -1,5 +1,7 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
+use crate::agentic::persistence::PersistenceManager;
 use crate::infrastructure::try_get_path_manager_arc;
+use crate::infrastructure::PathManager;
 use crate::service::agent_memory::build_workspace_agent_memory_prompt;
 use crate::service::ai_memory::AIMemoryManager;
 use crate::service::bootstrap::build_workspace_persona_prompt;
@@ -11,6 +13,7 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
+use std::sync::Arc;
 
 /// Placeholder constants
 const PLACEHOLDER_PERSONA: &str = "{PERSONA}";
@@ -24,6 +27,11 @@ const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_RECENT_WORKSPACES: &str = "{RECENT_WORKSPACES}";
+const PLACEHOLDER_ACTIVE_SESSION_CONTEXT: &str = "{ACTIVE_SESSION_CONTEXT}";
+
+/// Maximum character length for active session context injected into system prompt.
+/// Older turns are dropped first when the total exceeds this limit.
+const MAX_ACTIVE_SESSION_CONTEXT_CHARS: usize = 8_000;
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -336,6 +344,99 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
         )
     }
 
+    /// Build a concise text snapshot of the current active session's dialog turns.
+    ///
+    /// Only user messages and assistant text are included (tool calls are omitted).
+    /// If the total character count exceeds [`MAX_ACTIVE_SESSION_CONTEXT_CHARS`], the oldest
+    /// turns are dropped and a truncation notice is prepended so the AI is aware.
+    ///
+    /// Returns an empty string when `session_id` is not set in the context or when
+    /// loading turns fails.
+    pub async fn get_active_session_context(&self) -> String {
+        let session_id = match &self.context.session_id {
+            Some(id) => id.clone(),
+            None => return String::new(),
+        };
+
+        let manager = match (|| -> BitFunResult<PersistenceManager> {
+            Ok(PersistenceManager::new(Arc::new(PathManager::new()?))?)
+        })() {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(
+                    "Failed to create PersistenceManager for active session context: {}",
+                    e
+                );
+                return String::new();
+            }
+        };
+
+        let workspace_path = Path::new(&self.context.workspace_path);
+        let turns = match manager
+            .load_session_turns(workspace_path, &session_id)
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                warn!(
+                    "Failed to load session turns for active session context: session_id={} error={}",
+                    session_id, e
+                );
+                return String::new();
+            }
+        };
+
+        if turns.is_empty() {
+            return String::new();
+        }
+
+        // Format each turn as a compact user / assistant block (no tool details)
+        let mut turn_texts: Vec<String> = turns
+            .iter()
+            .map(|turn| {
+                let user_content = turn.user_message.content.trim().to_string();
+
+                let assistant_text: String = turn
+                    .model_rounds
+                    .iter()
+                    .flat_map(|round| round.text_items.iter())
+                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
+                    .map(|item| item.content.trim())
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+
+                let mut text = format!("[Turn {}]\nUser: {}", turn.turn_index, user_content);
+                if !assistant_text.is_empty() {
+                    text.push_str(&format!("\nAssistant: {}", assistant_text));
+                }
+                text
+            })
+            .collect();
+
+        // Drop oldest turns until total fits within the character budget
+        let mut total_chars: usize = turn_texts.iter().map(|t| t.len() + 2).sum();
+        let mut truncated = false;
+        while total_chars > MAX_ACTIVE_SESSION_CONTEXT_CHARS && turn_texts.len() > 1 {
+            let removed_len = turn_texts[0].len() + 2;
+            turn_texts.remove(0);
+            total_chars = total_chars.saturating_sub(removed_len);
+            truncated = true;
+        }
+
+        let truncation_notice = if truncated {
+            "[Note: Earlier turns have been truncated. Only the most recent portion of this session is shown.]\n\n"
+        } else {
+            ""
+        };
+
+        format!(
+            "# Current Session Context\n<session_context>\n{}{}\n</session_context>\n\n",
+            truncation_notice,
+            turn_texts.join("\n\n")
+        )
+    }
+
     /// Get Claw-specific workspace boundary instruction
     fn get_claw_workspace_instruction(&self) -> String {
         format!(
@@ -361,6 +462,9 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{MEMORIES}` - AI memories
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
     /// - `{RECENT_WORKSPACES}` - Recently accessed global and project workspaces with paths
+    /// - `{ACTIVE_SESSION_CONTEXT}` - Current session's recent dialog history (user + assistant
+    ///   text only, no tool details). Oldest turns are dropped when the total exceeds
+    ///   [`MAX_ACTIVE_SESSION_CONTEXT_CHARS`]; a truncation notice is prepended in that case.
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
     pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
@@ -485,6 +589,12 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_RECENT_WORKSPACES) {
             let recent_workspaces = self.get_recent_workspaces_info().await;
             result = result.replace(PLACEHOLDER_RECENT_WORKSPACES, &recent_workspaces);
+        }
+
+        // Replace {ACTIVE_SESSION_CONTEXT}
+        if result.contains(PLACEHOLDER_ACTIVE_SESSION_CONTEXT) {
+            let session_context = self.get_active_session_context().await;
+            result = result.replace(PLACEHOLDER_ACTIVE_SESSION_CONTEXT, &session_context);
         }
 
         if self.context.supports_image_understanding == Some(false) {

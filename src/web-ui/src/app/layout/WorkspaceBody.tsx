@@ -6,17 +6,14 @@
  *     NavBar        (32px — back/forward + drag + WindowControls)
  *     NavPanel      (flex:1 — navigation sidebar)
  *   .scene-area (flex:1, flex-column)
- *     SceneBar      (32px — scene tab strip)
- *     SceneViewport (flex:1 — active scene content)
+ *     AgenticOSWorkspace (flex:1 — base session + optional overlay)
  */
 
 import React, { useCallback, useState } from 'react';
-import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
 import { NavBar } from '../components/NavBar';
 import NavPanel from '../components/NavPanel/NavPanel';
 import PersistentFooterActions from '../components/NavPanel/components/PersistentFooterActions';
-import { SceneBar } from '../components/SceneBar';
-import { SceneViewport } from '../scenes';
+import AgenticOSWorkspace from '../overlay/AgenticOSWorkspace';
 import { useApp } from '../hooks/useApp';
 import './WorkspaceBody.scss';
 
@@ -46,7 +43,6 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   isMaximized = false,
   sceneOverlay,
 }) => {
-  const { workspace: currentWorkspace } = useCurrentWorkspace();
   const { state, toggleLeftPanel } = useApp();
   const isNavCollapsed = state.layout.leftPanelCollapsed;
   const [navWidth, setNavWidth] = useState(NAV_DEFAULT_WIDTH);
@@ -78,7 +74,6 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
       const deltaX = moveEvent.clientX - startX;
       const rawWidth = startWidth + deltaX;
 
-      // Collapse only after the width hits minimum AND continues left by COLLAPSE_THRESHOLD
       if (rawWidth <= NAV_MIN_WIDTH - COLLAPSE_THRESHOLD) {
         hasCollapsed = true;
         toggleLeftPanel();
@@ -120,7 +115,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         <NavPanel className="bitfun-workspace-body__nav-panel" />
       </div>
 
-      {/* Resize divider — placed at workspace-body level to avoid overflow:hidden clipping */}
+      {/* Resize divider */}
       {!isNavCollapsed && (
         <div
           className="bitfun-workspace-body__nav-divider"
@@ -133,17 +128,14 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         />
       )}
 
-      {/* Right: scene tab bar + scene content */}
+      {/* Right: Agentic OS two-layer scene area */}
       <div className="bitfun-workspace-body__scene-area">
-        <SceneBar
+        <AgenticOSWorkspace
+          isEntering={isEntering}
           onMinimize={onMinimize}
           onMaximize={onMaximize}
           onClose={onClose}
           isMaximized={isMaximized}
-        />
-        <SceneViewport
-          workspacePath={currentWorkspace?.rootPath}
-          isEntering={isEntering}
         />
         {sceneOverlay}
       </div>

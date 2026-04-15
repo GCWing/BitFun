@@ -1,5 +1,6 @@
 use crate::agentic::coordination::{
     get_global_coordinator, DialogTriggerSource, DialogSubmissionPolicy, get_global_scheduler,
+    AgentSessionReplyRoute,
 };
 use crate::agentic::core::SessionConfig;
 use crate::agentic::SessionSummary;
@@ -298,9 +299,30 @@ Parameters for "status":
 
                 let session_id = session.session_id.clone();
 
-                // Send task_briefing as first message if provided
+                // Send task_briefing as first message if provided.
+                // Include a reply_route so that when the sub-agent's turn completes, the
+                // scheduler automatically forwards the result back to this Dispatcher session
+                // as a user message, enabling the Dispatcher to report task completion.
                 if let Some(briefing) = params.task_briefing.filter(|b| !b.trim().is_empty()) {
                     if let Some(scheduler) = get_global_scheduler() {
+                        let dispatcher_session_id = context
+                            .session_id
+                            .clone()
+                            .unwrap_or_default();
+                        let dispatcher_workspace = if let Some(root) = context.workspace_root() {
+                            root.to_string_lossy().into_owned()
+                        } else {
+                            Self::get_global_workspace_path().await
+                        };
+                        let reply_route = if dispatcher_session_id.is_empty() {
+                            None
+                        } else {
+                            Some(AgentSessionReplyRoute {
+                                source_session_id: dispatcher_session_id,
+                                source_workspace_path: dispatcher_workspace,
+                            })
+                        };
+
                         let submit_result = scheduler
                             .submit(
                                 session_id.clone(),
@@ -310,7 +332,7 @@ Parameters for "status":
                                 agent_type.clone(),
                                 Some(workspace.clone()),
                                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
-                                None,
+                                reply_route,
                                 None,
                             )
                             .await;

@@ -9,7 +9,7 @@ import { TabBar } from '../tab-bar';
 import { DropZone } from './DropZone';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import { usePanelViewCanvasStore } from '../stores';
-import { useSceneStore } from '../../../../stores/sceneStore';
+import { useOverlayStore } from '../../../../stores/overlayStore';
 import type { 
   EditorGroupId, 
   EditorGroupState, 
@@ -129,7 +129,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
     const tab = group.tabs.find(t => t.id === tabId);
     if (!tab || !tab.content) return;
     usePanelViewCanvasStore.getState().addTab(tab.content as PanelContent, 'active');
-    useSceneStore.getState().openScene('panel-view');
+    useOverlayStore.getState().openOverlay('panel-view');
   }, [group.tabs]);
 
   const isDragging = draggingTabId !== null;

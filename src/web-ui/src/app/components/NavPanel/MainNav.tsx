@@ -14,13 +14,13 @@ import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import { User, Users, Puzzle, AppWindow, ChevronDown, Search, Orbit, MonitorPlay, RotateCcw } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useApp } from '../../hooks/useApp';
-import { useSceneManager } from '../../hooks/useSceneManager';
+import { useOverlayManager } from '../../hooks/useOverlayManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import type { SceneTabId } from '../SceneBar/types';
+import type { OverlaySceneId } from '../../overlay/types';
 import SectionHeader from './components/SectionHeader';
 import MiniAppEntry from './components/MiniAppEntry';
 import SessionsSection from './sections/sessions/SessionsSection';
-import { useSceneStore } from '../../stores/sceneStore';
+import { useOverlayStore } from '../../stores/overlayStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
@@ -42,7 +42,7 @@ const log = createLogger('MainNav');
 
 interface MainNavProps {
   isDeparting?: boolean;
-  anchorNavSceneId?: SceneTabId | null;
+  anchorNavSceneId?: OverlaySceneId | null;
 }
 
 const MainNav: React.FC<MainNavProps> = ({
@@ -54,8 +54,9 @@ const MainNav: React.FC<MainNavProps> = ({
   const sshRemote = useSSHRemoteContext();
 
   const { switchLeftPanelTab } = useApp();
-  const { openScene } = useSceneManager();
-  const activeTabId = useSceneStore(s => s.activeTabId);
+  const { openOverlay } = useOverlayManager();
+  const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const activeTabId = activeOverlay ?? 'session';
   const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
   const { t } = useI18n('common');
   const {
@@ -197,24 +198,24 @@ const MainNav: React.FC<MainNavProps> = ({
       });
     }
     switchLeftPanelTab('profile');
-    openScene('assistant');
+    openOverlay('assistant');
   }, [
     currentWorkspace,
     defaultAssistantWorkspace,
     isAssistantWorkspaceActive,
-    openScene,
+    openOverlay,
     setActiveWorkspace,
     setSelectedAssistantWorkspaceId,
     switchLeftPanelTab,
   ]);
 
   const handleOpenAgents = useCallback(() => {
-    openScene('agents');
-  }, [openScene]);
+    openOverlay('agents');
+  }, [openOverlay]);
 
   const handleOpenSkills = useCallback(() => {
-    openScene('skills');
-  }, [openScene]);
+    openOverlay('skills');
+  }, [openOverlay]);
 
   const isAgentsActive = activeTabId === 'agents';
   const isSkillsActive = activeTabId === 'skills';
@@ -244,6 +245,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const aappTooltip = t('nav.tooltips.aapp');
   const runAAppTooltip = t('nav.tooltips.runAApp');
   const driveAAppTooltip = t('nav.tooltips.driveAApp');
+
   return (
     <>
       {/* ── Workspace search ───────────────────────── */}
@@ -256,13 +258,18 @@ const MainNav: React.FC<MainNavProps> = ({
               onClick={() => setSearchOpen(true)}
               aria-label={t('nav.search.triggerTooltip')}
             >
-              <span className="bitfun-nav-panel__search-trigger__icon" aria-hidden="true">
-                <span className="bitfun-nav-panel__search-trigger__icon-inner">
-                  <Search size={13} />
+              <span className="bitfun-nav-panel__search-trigger__row">
+                <span className="bitfun-nav-panel__search-trigger__icon" aria-hidden="true">
+                  <span className="bitfun-nav-panel__search-trigger__icon-inner">
+                    <Search size={13} />
+                  </span>
                 </span>
-              </span>
-              <span className="bitfun-nav-panel__search-trigger__label">
-                {t('nav.search.triggerPlaceholder')}
+                <span className="bitfun-nav-panel__search-trigger__label">
+                  {t('nav.search.triggerPlaceholder')}
+                </span>
+                <span className="bitfun-nav-panel__search-trigger__shortcuts" aria-hidden="true">
+                  <kbd className="bitfun-nav-panel__search-trigger__kbd">Alt+F</kbd>
+                </span>
               </span>
             </button>
           </Tooltip>
@@ -363,8 +370,8 @@ const MainNav: React.FC<MainNavProps> = ({
                 <MiniAppEntry
                   isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
                   activeMiniAppId={activeMiniAppId}
-                  onOpenMiniApps={() => openScene('miniapps')}
-                  onOpenMiniApp={(appId) => openScene(`miniapp:${appId}`)}
+                  onOpenMiniApps={() => openOverlay('miniapps')}
+                  onOpenMiniApp={(appId) => openOverlay(`miniapp:${appId}` as OverlaySceneId)}
                 />
               </Tooltip>
             </div>

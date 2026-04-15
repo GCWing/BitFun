@@ -10,7 +10,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useSceneManager } from '@/app/hooks/useSceneManager';
+import { useOverlayManager } from '@/app/hooks/useOverlayManager';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 import MiniAppCard from '../components/MiniAppCard';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -25,7 +26,7 @@ import {
   GallerySkeleton,
   GalleryZone,
 } from '@/app/components';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
+import type { OverlaySceneId } from '@/app/overlay/types';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useMiniAppStore } from '../miniAppStore';
@@ -44,7 +45,7 @@ const MiniAppGalleryView: React.FC = () => {
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
   const { workspacePath } = useCurrentWorkspace();
-  const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
+  const { openOverlay, activeOverlay } = useOverlayManager();
   const { t } = useI18n('scenes/miniapp');
 
   const [search, setSearch] = useState('');
@@ -52,7 +53,7 @@ const MiniAppGalleryView: React.FC = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selectedApp, setSelectedApp] = useState<MiniAppMeta | null>(null);
 
-  const openTabIds = useMemo(() => new Set(openTabs.map((tab) => tab.id)), [openTabs]);
+  const openTabIds = useMemo(() => new Set(activeOverlay ? [activeOverlay] : []), [activeOverlay]);
   const runningIdSet = useMemo(() => new Set(runningWorkerIds), [runningWorkerIds]);
 
   const runningApps = useMemo(
@@ -84,31 +85,28 @@ const MiniAppGalleryView: React.FC = () => {
   const handleOpenApp = useCallback(
     (appId: string) => {
       setSelectedApp(null);
-      const tabId: SceneTabId = `miniapp:${appId}`;
-      if (openTabIds.has(tabId)) {
-        activateScene(tabId);
-      } else {
-        openScene(tabId);
-      }
+      const overlayId = `miniapp:${appId}` as OverlaySceneId;
+      openOverlay(overlayId);
     },
-    [openTabIds, activateScene, openScene]
+    [openOverlay]
   );
 
   const handleStopRunning = useCallback(
     async (appId: string) => {
-      const tabId: SceneTabId = `miniapp:${appId}`;
+      const overlayId = `miniapp:${appId}` as OverlaySceneId;
       try {
         await miniAppAPI.workerStop(appId);
       } catch (error) {
         log.warn('Stop worker failed, removing local running state', error);
       } finally {
         markWorkerStopped(appId);
-        if (openTabIds.has(tabId)) {
-          closeScene(tabId);
+        if (openTabIds.has(overlayId)) {
+          // Close overlay if this miniapp is currently active
+          useOverlayStore?.getState().closeOverlay();
         }
       }
     },
-    [markWorkerStopped, closeScene, openTabIds]
+    [markWorkerStopped, openTabIds]
   );
 
   const handleDeleteRequest = (appId: string) => {
@@ -126,9 +124,9 @@ const MiniAppGalleryView: React.FC = () => {
       }
       setApps(apps.filter((app) => app.id !== appId));
       markWorkerStopped(appId);
-      const tabId: SceneTabId = `miniapp:${appId}`;
-      if (openTabIds.has(tabId)) {
-        closeScene(tabId);
+      const overlayId = `miniapp:${appId}` as OverlaySceneId;
+      if (openTabIds.has(overlayId)) {
+        useOverlayStore?.getState().closeOverlay();
       }
     } catch (error) {
       log.error('Delete failed', error);

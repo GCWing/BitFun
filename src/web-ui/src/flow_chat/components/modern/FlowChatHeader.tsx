@@ -4,8 +4,8 @@
  * Height matches side panel headers (40px).
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, CornerUpLeft, List, FolderOpen, Bot, Orbit } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { ChevronDown, ChevronUp, CornerUpLeft, List, FolderOpen, Bot, Orbit, Search, X } from 'lucide-react';
 import { Tooltip, IconButton } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -52,6 +52,24 @@ export interface FlowChatHeaderProps {
   /** When set with handler, show left icon to switch to Agentic OS (Dispatcher). */
   showBackToAgenticOs?: boolean;
   onOpenAgenticOs?: () => void;
+
+  // ========== Search ==========
+  /** Current search query string. */
+  searchQuery?: string;
+  /** Called when the user types in the search box. */
+  onSearchChange?: (query: string) => void;
+  /** Total number of search matches. */
+  searchMatchCount?: number;
+  /** 1-based index of the currently focused match (0 means no active match). */
+  searchCurrentMatch?: number;
+  /** Navigate to the next match. */
+  onSearchNext?: () => void;
+  /** Navigate to the previous match. */
+  onSearchPrev?: () => void;
+  /** Called when the user closes the search bar. */
+  onSearchClose?: () => void;
+  /** Increments each time the parent requests to open the search bar (e.g. Ctrl+F). */
+  searchOpenRequest?: number;
 }
 export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   currentTurn,
@@ -70,11 +88,21 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onJumpToNextTurn,
   showBackToAgenticOs,
   onOpenAgenticOs,
+  searchQuery = '',
+  onSearchChange,
+  searchMatchCount = 0,
+  searchCurrentMatch = 0,
+  onSearchNext,
+  onSearchPrev,
+  onSearchClose,
+  searchOpenRequest = 0,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [isTurnListOpen, setIsTurnListOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const turnListRef = useRef<HTMLDivElement | null>(null);
   const activeTurnItemRef = useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const workspaceName = useMemo(() => {
     if (!workspacePath) return '';
@@ -164,6 +192,62 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     };
   }, [currentTurn, displayTurns.length, isTurnListOpen]);
 
+  // Sync open state from parent (e.g. Ctrl+F shortcut).
+  // Using a counter so every new request opens the bar, even after a prior close.
+  const prevSearchOpenRequestRef = useRef(0);
+  useEffect(() => {
+    if (searchOpenRequest > 0 && searchOpenRequest !== prevSearchOpenRequestRef.current) {
+      prevSearchOpenRequestRef.current = searchOpenRequest;
+      setIsSearchOpen(true);
+    }
+  }, [searchOpenRequest]);
+
+  // Focus the search input whenever it opens.
+  useEffect(() => {
+    if (isSearchOpen) {
+      const frameId = requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+    return undefined;
+  }, [isSearchOpen]);
+
+  // Close turn list when search opens.
+  useEffect(() => {
+    if (isSearchOpen) {
+      setIsTurnListOpen(false);
+    }
+  }, [isSearchOpen]);
+
+  const handleOpenSearch = useCallback(() => {
+    setIsSearchOpen(true);
+  }, []);
+
+  const handleCloseSearch = useCallback(() => {
+    setIsSearchOpen(false);
+    onSearchClose?.();
+  }, [onSearchClose]);
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Escape') {
+        handleCloseSearch();
+      } else if (e.key === 'Enter') {
+        if (e.shiftKey) {
+          onSearchPrev?.();
+        } else {
+          onSearchNext?.();
+        }
+        e.preventDefault();
+      }
+    },
+    [handleCloseSearch, onSearchNext, onSearchPrev],
+  );
+
+  const hasNoResults = searchQuery.trim().length > 0 && searchMatchCount === 0;
+
   const handleBackToParent = () => {
     const parentId = btwOrigin?.parentSessionId;
     if (!parentId) return;
@@ -194,7 +278,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }
 
   return (
-    <div className="flowchat-header">
+    <div className={`flowchat-header${isSearchOpen ? ' flowchat-header--search-open' : ''}`}>
       <div className="flowchat-header__actions flowchat-header__actions--left">
         {showBackToAgenticOs && onOpenAgenticOs ? (
           <IconButton
@@ -212,98 +296,169 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         <SessionFilesBadge sessionId={sessionId} />
       </div>
 
-      <Tooltip
-        content={[tooltipAgentLine, workspacePath].filter(Boolean).join(': ')}
-        placement="bottom"
-      >
-        <div className="flowchat-header__info">
-          {displayAgentLabel ? (
-            <span className={`flowchat-header__agent-type${isDispatcherSession ? ' flowchat-header__agent-type--plain' : ''}`}>
-              {showAgentTypeIcon ? <Bot size={11} /> : null}
-              <span>{displayAgentLabel}</span>
-            </span>
-          ) : null}
-          {displayAgentLabel && workspaceName ? (
-            <span className="flowchat-header__info-sep">/</span>
-          ) : null}
-          {workspaceName ? (
-            <span className="flowchat-header__workspace">
-              <FolderOpen size={12} />
-              <span>{workspaceName}</span>
-            </span>
-          ) : null}
-        </div>
-      </Tooltip>
-
-      <div className="flowchat-header__actions">
-        <div className="flowchat-header__turn-nav" ref={turnListRef}>
+      {isSearchOpen ? (
+        <div className="flowchat-header__search" role="search">
+          <Search size={13} className="flowchat-header__search-icon" aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            className={`flowchat-header__search-input${hasNoResults ? ' flowchat-header__search-input--no-results' : ''}`}
+            type="text"
+            value={searchQuery}
+            onChange={e => onSearchChange?.(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
+            aria-label={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
+          />
+          <span className="flowchat-header__search-count" aria-live="polite">
+            {searchQuery.trim()
+              ? hasNoResults
+                ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
+                : t('flowChatHeader.searchResult', {
+                    current: searchCurrentMatch,
+                    total: searchMatchCount,
+                    defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
+                  })
+              : null}
+          </span>
           <IconButton
-            className={`flowchat-header__turn-nav-button${isTurnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
             variant="ghost"
             size="xs"
-            onClick={handleToggleTurnList}
-            tooltip={turnListTooltip}
-            disabled={!hasTurnNavigation}
-            aria-label={turnListTooltip}
-            aria-expanded={isTurnListOpen}
-            aria-haspopup="dialog"
-            data-testid="flowchat-header-turn-list"
-          >
-            <List size={14} />
-          </IconButton>
-          <IconButton
-            className="flowchat-header__turn-nav-button"
-            variant="ghost"
-            size="xs"
-            onClick={onJumpToPreviousTurn}
-            tooltip={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
-            disabled={previousTurnDisabled || !onJumpToPreviousTurn}
-            aria-label={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
-            data-testid="flowchat-header-turn-prev"
+            onClick={onSearchPrev}
+            disabled={searchMatchCount === 0}
+            tooltip={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
+            aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
           >
             <ChevronUp size={14} />
           </IconButton>
           <IconButton
-            className="flowchat-header__turn-nav-button"
             variant="ghost"
             size="xs"
-            onClick={onJumpToNextTurn}
-            tooltip={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
-            disabled={nextTurnDisabled || !onJumpToNextTurn}
-            aria-label={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
-            data-testid="flowchat-header-turn-next"
+            onClick={onSearchNext}
+            disabled={searchMatchCount === 0}
+            tooltip={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
+            aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
           >
             <ChevronDown size={14} />
           </IconButton>
-
-          {isTurnListOpen && hasTurnNavigation && (
-            <div className="flowchat-header__turn-list-panel" role="dialog" aria-label={turnListTooltip}>
-              <div className="flowchat-header__turn-list-header">
-                <span>{turnListTooltip}</span>
-                <span>{currentTurn}/{totalTurns}</span>
-              </div>
-              <div className="flowchat-header__turn-list">
-                {displayTurns.map(turn => (
-                  <button
-                    key={turn.turnId}
-                    type="button"
-                    className={`flowchat-header__turn-list-item${turn.turnIndex === currentTurn ? ' flowchat-header__turn-list-item--active' : ''}`}
-                    onClick={() => handleTurnSelect(turn.turnId)}
-                    ref={turn.turnIndex === currentTurn ? activeTurnItemRef : undefined}
-                  >
-                    <span className="flowchat-header__turn-list-badge">
-                      {t('flowChatHeader.turnBadge', {
-                        current: turn.turnIndex,
-                        defaultValue: `Turn ${turn.turnIndex}`,
-                      })}
-                    </span>
-                    <span className="flowchat-header__turn-list-title">{turn.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <IconButton
+            variant="ghost"
+            size="xs"
+            onClick={handleCloseSearch}
+            tooltip={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
+            aria-label={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
+          >
+            <X size={14} />
+          </IconButton>
         </div>
+      ) : (
+        <Tooltip
+          content={[tooltipAgentLine, workspacePath].filter(Boolean).join(': ')}
+          placement="bottom"
+        >
+          <div className="flowchat-header__info">
+            {displayAgentLabel ? (
+              <span className={`flowchat-header__agent-type${isDispatcherSession ? ' flowchat-header__agent-type--plain' : ''}`}>
+                {showAgentTypeIcon ? <Bot size={11} /> : null}
+                <span>{displayAgentLabel}</span>
+              </span>
+            ) : null}
+            {displayAgentLabel && workspaceName ? (
+              <span className="flowchat-header__info-sep">/</span>
+            ) : null}
+            {workspaceName ? (
+              <span className="flowchat-header__workspace">
+                <FolderOpen size={12} />
+                <span>{workspaceName}</span>
+              </span>
+            ) : null}
+          </div>
+        </Tooltip>
+      )}
+
+      <div className="flowchat-header__actions">
+        {!isSearchOpen && (
+          <div className="flowchat-header__turn-nav" ref={turnListRef}>
+            <IconButton
+              className={`flowchat-header__turn-nav-button${isTurnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
+              variant="ghost"
+              size="xs"
+              onClick={handleToggleTurnList}
+              tooltip={turnListTooltip}
+              disabled={!hasTurnNavigation}
+              aria-label={turnListTooltip}
+              aria-expanded={isTurnListOpen}
+              aria-haspopup="dialog"
+              data-testid="flowchat-header-turn-list"
+            >
+              <List size={14} />
+            </IconButton>
+            <IconButton
+              className="flowchat-header__turn-nav-button"
+              variant="ghost"
+              size="xs"
+              onClick={onJumpToPreviousTurn}
+              tooltip={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
+              disabled={previousTurnDisabled || !onJumpToPreviousTurn}
+              aria-label={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
+              data-testid="flowchat-header-turn-prev"
+            >
+              <ChevronUp size={14} />
+            </IconButton>
+            <IconButton
+              className="flowchat-header__turn-nav-button"
+              variant="ghost"
+              size="xs"
+              onClick={onJumpToNextTurn}
+              tooltip={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
+              disabled={nextTurnDisabled || !onJumpToNextTurn}
+              aria-label={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
+              data-testid="flowchat-header-turn-next"
+            >
+              <ChevronDown size={14} />
+            </IconButton>
+
+            {isTurnListOpen && hasTurnNavigation && (
+              <div className="flowchat-header__turn-list-panel" role="dialog" aria-label={turnListTooltip}>
+                <div className="flowchat-header__turn-list-header">
+                  <span>{turnListTooltip}</span>
+                  <span>{currentTurn}/{totalTurns}</span>
+                </div>
+                <div className="flowchat-header__turn-list">
+                  {displayTurns.map(turn => (
+                    <button
+                      key={turn.turnId}
+                      type="button"
+                      className={`flowchat-header__turn-list-item${turn.turnIndex === currentTurn ? ' flowchat-header__turn-list-item--active' : ''}`}
+                      onClick={() => handleTurnSelect(turn.turnId)}
+                      ref={turn.turnIndex === currentTurn ? activeTurnItemRef : undefined}
+                    >
+                      <span className="flowchat-header__turn-list-badge">
+                        {t('flowChatHeader.turnBadge', {
+                          current: turn.turnIndex,
+                          defaultValue: `Turn ${turn.turnIndex}`,
+                        })}
+                      </span>
+                      <span className="flowchat-header__turn-list-title">{turn.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {!isSearchOpen && (
+          <IconButton
+            className="flowchat-header__search-btn"
+            variant="ghost"
+            size="xs"
+            onClick={handleOpenSearch}
+            tooltip={t('flowChatHeader.searchOpen', { defaultValue: 'Search messages' })}
+            aria-label={t('flowChatHeader.searchOpen', { defaultValue: 'Search messages' })}
+            data-testid="flowchat-header-search"
+          >
+            <Search size={14} />
+          </IconButton>
+        )}
         {!!btwOrigin?.parentSessionId && (
           <IconButton
             className="flowchat-header__btw-back"

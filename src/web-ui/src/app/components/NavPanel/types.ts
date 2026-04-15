@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { PanelType } from '../../types';
-import type { SceneTabId } from '../SceneBar/types';
+import type { OverlaySceneId, SceneId } from '../../overlay/types';
 
 /** Determines what clicking a NavItem does */
 export type NavBehavior =
@@ -17,18 +17,18 @@ export interface NavItem {
   tooltipKey?: string;
   Icon: LucideIcon;
   behavior: NavBehavior;
-  /** For behavior:'scene' — which SceneBar tab to open/activate */
-  sceneId?: SceneTabId;
-  /** Optional nav-panel scene switch without opening right-side scene */
-  navSceneId?: SceneTabId;
+  /** For behavior:'scene' — which overlay scene to open, or 'session' for base */
+  sceneId?: SceneId;
+  /** Optional nav-panel scene switch without opening right-side overlay */
+  navSceneId?: OverlaySceneId;
 }
 
 export interface NavSection {
   id: string;
   /** Null hides the section header row entirely */
   label: string | null;
-  /** Optional scene opened when clicking the section header */
-  sceneId?: SceneTabId;
+  /** Optional overlay scene opened when clicking the section header */
+  sceneId?: SceneId;
   collapsible?: boolean;
   defaultExpanded?: boolean;
   items: NavItem[];

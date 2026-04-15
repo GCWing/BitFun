@@ -18,6 +18,20 @@
   @media (max-width: 768px) {
     max-width: 100%;
   }
+
+  // Search match highlight states.
+  &--search-match {
+    outline: 1px solid color-mix(in srgb, var(--accent-primary, #6b8afb) 35%, transparent);
+    outline-offset: -1px;
+    border-radius: 6px;
+  }
+
+  &--search-current {
+    outline: 2px solid color-mix(in srgb, var(--accent-primary, #6b8afb) 75%, transparent);
+    outline-offset: -1px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent-primary, #6b8afb) 8%, transparent);
+  }
 }
 
 

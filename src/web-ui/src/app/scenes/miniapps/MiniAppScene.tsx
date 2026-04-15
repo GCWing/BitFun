@@ -1,6 +1,6 @@
 /**
  * MiniAppScene — standalone scene tab for a single MiniApp.
- * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
+ * Mounts MiniAppRunner; close via overlay home button (does not stop worker).
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
@@ -12,7 +12,7 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { createLogger } from '@/shared/utils/logger';
 import { IconButton, Button } from '@/component-library';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
+import type { OverlaySceneId } from '@/app/overlay/types';
 import { useMiniAppStore } from './miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppScene.scss';
@@ -67,7 +67,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   }, [appId, load]);
 
   useEffect(() => {
-    const tabId = `miniapp:${appId}` as SceneTabId;
+    const tabId = `miniapp:${appId}` as OverlaySceneId;
     const shouldHandle = (payload?: { id?: string }) => payload?.id === appId;
 
     const unlistenUpdated = api.listen<{ id?: string }>('miniapp-updated', (payload) => {

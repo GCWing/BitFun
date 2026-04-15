@@ -781,6 +781,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     : cleanRemoteUserInput(userInput || '');
   const turnKind =
     userMessageMetadata?.kind === 'manual_compaction' ? 'manual_compaction' : 'user_dialog';
+  const triggerSource = userMessageMetadata?.triggerSource as import('@/shared/types/session-history').TriggerSource | undefined;
 
   const freshSession = store.getState().sessions.get(sessionId);
   const dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
@@ -794,6 +795,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
         content: displayContent,
         timestamp: Date.now(),
         hasImages,
+        triggerSource,
         metadata: userMessageMetadata,
         images,
       },
@@ -824,6 +826,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       kind: turn.kind || turnKind,
       userMessage: {
         ...turn.userMessage,
+        triggerSource: turn.userMessage.triggerSource ?? triggerSource,
         metadata: turn.userMessage.metadata || userMessageMetadata,
       },
       backendTurnIndex: turnIndex,

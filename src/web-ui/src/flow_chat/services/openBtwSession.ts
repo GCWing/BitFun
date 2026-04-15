@@ -1,6 +1,6 @@
 import { i18nService } from '@/infrastructure/i18n';
 import { appManager } from '@/app/services/AppManager';
-import { useSceneStore } from '@/app/stores/sceneStore';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 import { createTab } from '@/shared/utils/tabUtils';
 import type { PanelContent } from '@/app/components/panels/base/types';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -92,7 +92,6 @@ export async function openMainSession(
 ): Promise<void> {
   appManager.updateLayout({
     leftPanelActiveTab: 'sessions',
-    leftPanelCollapsed: false,
   });
 
   if (options?.workspaceId && options.activateWorkspace) {
@@ -106,7 +105,7 @@ export async function openMainSession(
     syncSessionToModernStore(sessionId);
   }
 
-  useSceneStore.getState().openScene('session');
+  useOverlayStore.getState().closeOverlay();
 }
 
 export function openBtwSessionInAuxPane(params: {

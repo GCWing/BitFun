@@ -98,7 +98,8 @@
     "rollbackPanelBulletUndo": "Undo all file changes from that turn onward",
     "rollbackPanelBulletHistory": "Keep the session history (you can roll forward again anytime)",
     "rollbackSuccess": "Rolled back and deleted subsequent dialog records",
-    "rollbackFailed": "Rollback failed"
+    "rollbackFailed": "Rollback failed",
+    "sessionStartMarker": "Session started {{time}}"
   },
   "contextMenu": {
     "copySelection": "Copy Selection",
@@ -326,7 +327,14 @@
     "btwBackTooltipWithoutTurn": "Go back to the source session: {{title}}",
     "btwCreateTooltip": "Start a quick side question",
     "agentTypeTooltip": "{{type}}: {{path}}",
-    "backToAgenticOs": "Back to Agentic OS"
+    "backToAgenticOs": "Back to Agentic OS",
+    "searchPlaceholder": "Search messages",
+    "searchResult": "{{current}} / {{total}}",
+    "searchNoResults": "No results",
+    "searchPrevious": "Previous match",
+    "searchNext": "Next match",
+    "searchClose": "Close search",
+    "searchOpen": "Search messages"
   },
   "sessionFilesBadge": {
     "files": "files",

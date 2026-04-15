@@ -1,5 +1,5 @@
 /**
- * nav-registry — maps SceneTabId → lazy-loaded scene-specific NavPanel component.
+ * nav-registry — maps OverlaySceneId → lazy-loaded scene-specific NavPanel component.
  *
  * Extension pattern:
  *   1. Create `src/app/scenes/<scene>/XxxNav.tsx`
@@ -10,11 +10,11 @@
 
 import { lazy } from 'react';
 import type { ComponentType } from 'react';
-import type { SceneTabId } from '../components/SceneBar/types';
+import type { OverlaySceneId } from '../overlay/types';
 
 type LazyNavComponent = ReturnType<typeof lazy<ComponentType>>;
 
-const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, LazyNavComponent>> = {
+const SCENE_NAV_REGISTRY: Partial<Record<OverlaySceneId, LazyNavComponent>> = {
   settings: lazy(() => import('./settings/SettingsNav')),
   'file-viewer': lazy(() => import('./file-viewer/FileViewerNav')),
   shell: lazy(() => import('./shell/ShellNav')),
@@ -25,6 +25,6 @@ const SCENE_NAV_REGISTRY: Partial<Record<SceneTabId, LazyNavComponent>> = {
  * Returns the lazy nav component registered for the given scene,
  * or `null` if the scene uses the default MainNav.
  */
-export function getSceneNav(sceneId: SceneTabId): LazyNavComponent | null {
+export function getSceneNav(sceneId: OverlaySceneId): LazyNavComponent | null {
   return SCENE_NAV_REGISTRY[sceneId] ?? null;
 }

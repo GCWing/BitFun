@@ -1,42 +1,40 @@
 /**
- * useSceneManager — thin wrapper around the shared sceneStore.
+ * useSceneManager — compatibility wrapper around useOverlayManager.
  *
- * All consumers (SceneBar, SceneViewport, NavPanel, …) now read from and
- * write to the same Zustand store, so state is always in sync.
+ * @deprecated Use useOverlayManager directly.
+ * This shim translates the old tab-based API surface to the new overlay model:
+ *   - openScene('session') → closeOverlay()
+ *   - openScene(overlayId) → openOverlay(overlayId)
+ *   - activeTabId          → activeOverlay ?? 'session'
  */
 
-import { SCENE_TAB_REGISTRY, getMiniAppSceneDef } from '../scenes/registry';
-import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
-import { useSceneStore } from '../stores/sceneStore';
-import { useMiniAppStore } from '../scenes/miniapps/miniAppStore';
+import { useOverlayStore } from '../stores/overlayStore';
+import type { OverlaySceneId } from '../overlay/types';
 
 export interface UseSceneManagerReturn {
-  openTabs: ReturnType<typeof useSceneStore.getState>['openTabs'];
-  activeTabId: ReturnType<typeof useSceneStore.getState>['activeTabId'];
-  tabDefs: SceneTabDef[];
-  activateScene: (id: SceneTabId) => void;
-  openScene: (id: SceneTabId) => void;
-  closeScene: (id: SceneTabId) => void;
+  activeTabId: string;
+  openScene: (id: string) => void;
+  closeScene: (id: string) => void;
+  activateScene: (id: string) => void;
 }
 
 export function useSceneManager(): UseSceneManagerReturn {
-  const { openTabs, activeTabId, activateScene, openScene, closeScene } = useSceneStore();
-  const apps = useMiniAppStore((s) => s.apps);
+  const { activeOverlay, openOverlay, closeOverlay } = useOverlayStore();
 
-  const miniAppDefs: SceneTabDef[] = openTabs
-    .filter((t) => typeof t.id === 'string' && t.id.startsWith('miniapp:'))
-    .map((t) => {
-      const appId = (t.id as string).slice('miniapp:'.length);
-      const app = apps.find((a) => a.id === appId);
-      return getMiniAppSceneDef(appId, app?.name);
-    });
+  const openScene = (id: string) => {
+    if (id === 'session' || id === 'welcome') {
+      closeOverlay();
+    } else {
+      openOverlay(id as OverlaySceneId);
+    }
+  };
 
   return {
-    openTabs,
-    activeTabId,
-    tabDefs: [...SCENE_TAB_REGISTRY, ...miniAppDefs],
-    activateScene,
+    activeTabId: activeOverlay ?? 'session',
     openScene,
-    closeScene,
+    closeScene: (id) => {
+      if (activeOverlay === id) closeOverlay();
+    },
+    activateScene: openScene,
   };
 }
