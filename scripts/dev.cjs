@@ -574,6 +574,12 @@ function ensureCodgrepBinary(profile = 'debug') {
   return { ok: true, binaryPath };
 }
 
+async function ensureCodgrepBundleResource(profile = 'debug') {
+  const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-codgrep-resource.mjs')).href;
+  const helper = await import(helperUrl);
+  return helper.ensureCodgrepResource(profile);
+}
+
 /**
  * Main entry
  */
@@ -664,6 +670,14 @@ async function main() {
       process.exit(1);
     }
     process.env.CODGREP_DAEMON_BIN = codgrepResult.binaryPath;
+
+    try {
+      await ensureCodgrepBundleResource('debug');
+    } catch (error) {
+      printError('Prepare workspace search daemon bundle resource failed');
+      printError(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
   }
 
   // Final step: Start dev server
