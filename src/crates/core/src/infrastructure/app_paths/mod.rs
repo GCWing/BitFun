@@ -4,4 +4,7 @@
 
 pub mod path_manager;
 
-pub use path_manager::{get_path_manager_arc, try_get_path_manager_arc, PathManager, StorageLevel};
+pub use path_manager::{
+    get_path_manager_arc, try_get_path_manager_arc, PathManager, StorageLevel,
+    APP_CONFIG_DIR_NAME, APP_HIDDEN_DIR_NAME,
+};

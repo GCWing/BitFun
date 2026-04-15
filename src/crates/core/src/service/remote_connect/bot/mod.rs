@@ -552,14 +552,19 @@ const REMOTE_CONNECT_PERSISTENCE_FILENAME: &str = "remote_connect_persistence.js
 const LEGACY_BOT_PERSISTENCE_FILENAME: &str = "bot_connections.json";
 
 pub fn bot_persistence_path() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|home| {
-        home.join(".bitfun")
-            .join(REMOTE_CONNECT_PERSISTENCE_FILENAME)
-    })
+    Some(
+        get_path_manager_arc()
+            .bitfun_home_dir()
+            .join(REMOTE_CONNECT_PERSISTENCE_FILENAME),
+    )
 }
 
 fn legacy_bot_persistence_path() -> Option<std::path::PathBuf> {
-    dirs::home_dir().map(|home| home.join(".bitfun").join(LEGACY_BOT_PERSISTENCE_FILENAME))
+    Some(
+        get_path_manager_arc()
+            .bitfun_home_dir()
+            .join(LEGACY_BOT_PERSISTENCE_FILENAME),
+    )
 }
 
 pub fn load_bot_persistence() -> BotPersistenceData {
@@ -652,3 +657,4 @@ mod tests {
         let _ = std::fs::remove_dir_all(base);
     }
 }
+use crate::infrastructure::get_path_manager_arc;

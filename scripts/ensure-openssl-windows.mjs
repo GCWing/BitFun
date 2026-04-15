@@ -1,6 +1,6 @@
 /**
  * Windows: ensure FireDaemon prebuilt OpenSSL for Cargo (russh / libgit2).
- * - Cached under .bitfun/cache/firedaemon-openssl-<version>/x64 (gitignored).
+ * - Cached under .bitfun_agentic_os/cache/firedaemon-openssl-<version>/x64 (gitignored).
  * - Skips download if OPENSSL_DIR already points at a valid tree, or cache hit, or BITFUN_SKIP_OPENSSL_BOOTSTRAP=1.
  * Mutates `process.env` by default so child processes (tauri, cargo) inherit OPENSSL_*.
  */
@@ -18,7 +18,7 @@ const LOG = '[bitfun-openssl]';
 // Keep in sync with $Version in scripts/ci/setup-openssl-windows.ps1.
 export const OPENSSL_VERSION = '3.5.5';
 const OPENSSL_URL = `https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-${OPENSSL_VERSION}.zip`;
-export const CACHE_ROOT = join(ROOT, '.bitfun', 'cache', `firedaemon-openssl-${OPENSSL_VERSION}`);
+export const CACHE_ROOT = join(ROOT, '.bitfun_agentic_os', 'cache', `firedaemon-openssl-${OPENSSL_VERSION}`);
 
 function libcryptoPath(opensslDir) {
   return join(opensslDir, 'lib', 'libcrypto.lib');

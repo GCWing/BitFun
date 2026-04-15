@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 const MAX_PROJECT_SLUG_LEN: usize = 120;
+pub const APP_CONFIG_DIR_NAME: &str = "bitfun_agentic_os";
+pub const APP_HIDDEN_DIR_NAME: &str = ".bitfun_agentic_os";
 
 /// Storage level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -60,7 +62,7 @@ impl PathManager {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| BitFunError::config("Failed to get config directory".to_string()))?;
 
-        Ok(config_dir.join("bitfun"))
+        Ok(config_dir.join(APP_CONFIG_DIR_NAME))
     }
 
     /// Get assistant home root directory: ~/.bitfun/
@@ -70,7 +72,7 @@ impl PathManager {
         }
         dirs::home_dir()
             .unwrap_or_else(|| self.user_root.clone())
-            .join(".bitfun")
+            .join(APP_HIDDEN_DIR_NAME)
     }
 
     /// Get the legacy assistant workspace base directory: ~/.bitfun/
@@ -188,19 +190,19 @@ impl PathManager {
         if cfg!(target_os = "windows") {
             dirs::data_dir()
                 .unwrap_or_else(|| PathBuf::from("C:\\ProgramData"))
-                .join("BitFun")
+                .join(APP_CONFIG_DIR_NAME)
                 .join("skills")
         } else if cfg!(target_os = "macos") {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("/tmp"))
                 .join("Library")
                 .join("Application Support")
-                .join("BitFun")
+                .join(APP_CONFIG_DIR_NAME)
                 .join("skills")
         } else {
             dirs::data_local_dir()
                 .unwrap_or_else(|| PathBuf::from("/tmp"))
-                .join("BitFun")
+                .join(APP_CONFIG_DIR_NAME)
                 .join("skills")
         }
     }
@@ -232,7 +234,7 @@ impl PathManager {
             .unwrap_or_else(|_| {
                 dirs::home_dir()
                     .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".bitfun")
+                    .join(APP_HIDDEN_DIR_NAME)
                     .join("remote_ssh")
             })
     }
@@ -269,7 +271,7 @@ impl PathManager {
 
     /// Get project config root directory: {project}/.bitfun/
     pub fn project_root(&self, workspace_path: &Path) -> PathBuf {
-        workspace_path.join(".bitfun")
+        workspace_path.join(APP_HIDDEN_DIR_NAME)
     }
 
     /// Get the shared runtime projects root directory: ~/.bitfun/projects/
@@ -431,7 +433,7 @@ impl Default for PathManager {
                     e
                 );
                 Self {
-                    user_root: std::env::temp_dir().join("bitfun"),
+                    user_root: std::env::temp_dir().join(APP_CONFIG_DIR_NAME),
                     bitfun_home_override: None,
                     project_runtime_slug_cache: Arc::new(Mutex::new(HashMap::new())),
                 }
@@ -449,7 +451,7 @@ impl PathManager {
             .unwrap_or_else(|| user_root.clone());
         Self {
             user_root,
-            bitfun_home_override: Some(base.join("home").join(".bitfun")),
+            bitfun_home_override: Some(base.join("home").join(APP_HIDDEN_DIR_NAME)),
             project_runtime_slug_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }

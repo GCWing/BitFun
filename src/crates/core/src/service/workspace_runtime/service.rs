@@ -75,9 +75,7 @@ impl WorkspaceRuntimeService {
         workspace_path: &Path,
     ) -> BitFunResult<WorkspaceRuntimeEnsureResult> {
         let context = self.context_for_local_workspace(workspace_path);
-        let legacy_project_root = self.path_manager.project_root(workspace_path);
-        self.ensure_runtime_context(context, Some(legacy_project_root))
-            .await
+        self.ensure_runtime_context(context).await
     }
 
     pub async fn ensure_remote_workspace_runtime(
@@ -86,7 +84,7 @@ impl WorkspaceRuntimeService {
         remote_root: &str,
     ) -> BitFunResult<WorkspaceRuntimeEnsureResult> {
         let context = self.context_for_remote_workspace(ssh_host, remote_root);
-        self.ensure_runtime_context(context, None).await
+        self.ensure_runtime_context(context).await
     }
 
     pub async fn ensure_runtime_for_workspace_binding(
@@ -108,7 +106,6 @@ impl WorkspaceRuntimeService {
     async fn ensure_runtime_context(
         &self,
         context: WorkspaceRuntimeContext,
-        legacy_project_root: Option<PathBuf>,
     ) -> BitFunResult<WorkspaceRuntimeEnsureResult> {
         if self.is_runtime_verified(&context.runtime_root) {
             return Ok(Self::cached_ensure_result(context));
@@ -121,13 +118,6 @@ impl WorkspaceRuntimeService {
             return Ok(Self::cached_ensure_result(context));
         }
 
-        let mut migrated_entries = Vec::new();
-        if let Some(legacy_project_root) = legacy_project_root.as_deref() {
-            migrated_entries = self
-                .migrate_legacy_project_runtime_data(legacy_project_root, &context)
-                .await?;
-        }
-
         let mut created_directories = Vec::new();
         for dir in context.required_directories() {
             if !dir.exists() {
@@ -136,29 +126,25 @@ impl WorkspaceRuntimeService {
             }
         }
 
-        if !context.layout_state_file.exists()
-            || !created_directories.is_empty()
-            || !migrated_entries.is_empty()
-        {
-            self.persist_layout_state(&context, &migrated_entries)
-                .await?;
+        if !context.layout_state_file.exists() || !created_directories.is_empty() {
+            self.persist_layout_state(&context, &[]).await?;
         }
 
         self.mark_runtime_verified(&context.runtime_root);
 
-        if !created_directories.is_empty() || !migrated_entries.is_empty() {
+        if !created_directories.is_empty() {
             debug!(
                 "Workspace runtime ensured: root={} created_dirs={} migrated_entries={}",
                 context.runtime_root.display(),
                 created_directories.len(),
-                migrated_entries.len()
+                0
             );
         }
 
         Ok(WorkspaceRuntimeEnsureResult {
             context,
             created_directories,
-            migrated_entries,
+            migrated_entries: Vec::new(),
         })
     }
 
@@ -230,176 +216,6 @@ impl WorkspaceRuntimeService {
             })?;
         Ok(())
     }
-
-    async fn migrate_legacy_project_runtime_data(
-        &self,
-        legacy_project_root: &Path,
-        context: &WorkspaceRuntimeContext,
-    ) -> BitFunResult<Vec<RuntimeMigrationRecord>> {
-        if !legacy_project_root.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut migrated_entries = Vec::new();
-        let mappings = vec![
-            (
-                vec![legacy_project_root.join("sessions")],
-                context.sessions_dir.clone(),
-            ),
-            (
-                vec![legacy_project_root.join("memory")],
-                context.memory_dir.clone(),
-            ),
-            (
-                vec![legacy_project_root.join("plans")],
-                context.plans_dir.clone(),
-            ),
-            (
-                vec![legacy_project_root.join("snapshots")],
-                context.snapshots_dir.clone(),
-            ),
-            (
-                vec![legacy_project_root.join("ai_memories.json")],
-                context.runtime_root.join("ai_memories.json"),
-            ),
-        ];
-
-        for (candidates, target) in mappings {
-            if let Some(record) = self
-                .migrate_first_existing_path(&candidates, &target)
-                .await?
-            {
-                migrated_entries.push(record);
-            }
-        }
-
-        Ok(migrated_entries)
-    }
-
-    async fn migrate_first_existing_path(
-        &self,
-        candidates: &[PathBuf],
-        target: &Path,
-    ) -> BitFunResult<Option<RuntimeMigrationRecord>> {
-        if target.exists() {
-            return Ok(None);
-        }
-
-        for candidate in candidates {
-            if !candidate.exists() {
-                continue;
-            }
-
-            return self.move_legacy_path(candidate, target).await.map(Some);
-        }
-
-        Ok(None)
-    }
-
-    async fn move_legacy_path(
-        &self,
-        source: &Path,
-        target: &Path,
-    ) -> BitFunResult<RuntimeMigrationRecord> {
-        if let Some(parent) = target.parent() {
-            self.path_manager.ensure_dir(parent).await?;
-        }
-
-        match tokio::fs::rename(source, target).await {
-            Ok(()) => Ok(RuntimeMigrationRecord {
-                source: source.to_path_buf(),
-                target: target.to_path_buf(),
-                strategy: "rename".to_string(),
-            }),
-            Err(_) if source.is_dir() => {
-                copy_dir_recursive(source, target)?;
-                std::fs::remove_dir_all(source).map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to remove legacy directory {}: {}",
-                        source.display(),
-                        e
-                    ))
-                })?;
-                Ok(RuntimeMigrationRecord {
-                    source: source.to_path_buf(),
-                    target: target.to_path_buf(),
-                    strategy: "copy_dir".to_string(),
-                })
-            }
-            Err(_) => {
-                std::fs::copy(source, target).map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to copy legacy file {} to {}: {}",
-                        source.display(),
-                        target.display(),
-                        e
-                    ))
-                })?;
-                std::fs::remove_file(source).map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to remove legacy file {}: {}",
-                        source.display(),
-                        e
-                    ))
-                })?;
-                Ok(RuntimeMigrationRecord {
-                    source: source.to_path_buf(),
-                    target: target.to_path_buf(),
-                    strategy: "copy_file".to_string(),
-                })
-            }
-        }
-    }
-}
-
-fn copy_dir_recursive(source: &Path, target: &Path) -> BitFunResult<()> {
-    std::fs::create_dir_all(target).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to create target directory {}: {}",
-            target.display(),
-            e
-        ))
-    })?;
-
-    for entry in std::fs::read_dir(source).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to read legacy directory {}: {}",
-            source.display(),
-            e
-        ))
-    })? {
-        let entry = entry.map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to inspect legacy directory entry under {}: {}",
-                source.display(),
-                e
-            ))
-        })?;
-        let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
-        let file_type = entry.file_type().map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to read file type for {}: {}",
-                source_path.display(),
-                e
-            ))
-        })?;
-
-        if file_type.is_dir() {
-            copy_dir_recursive(&source_path, &target_path)?;
-        } else if file_type.is_file() {
-            std::fs::copy(&source_path, &target_path).map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to copy legacy file {} to {}: {}",
-                    source_path.display(),
-                    target_path.display(),
-                    e
-                ))
-            })?;
-        }
-    }
-
-    Ok(())
 }
 
 fn runtime_lock_for(runtime_root: &Path) -> Arc<AsyncMutex<()>> {
@@ -468,33 +284,6 @@ mod tests {
             .project_root(&workspace_root)
             .join("context")
             .exists());
-
-        let _ = fs::remove_dir_all(&test_root);
-    }
-
-    #[tokio::test]
-    async fn ensure_local_workspace_runtime_migrates_legacy_runtime_entries() {
-        let test_root =
-            std::env::temp_dir().join(format!("bitfun-runtime-test-{}", Uuid::new_v4()));
-        let workspace_root = test_root.join("workspace");
-        let legacy_root = workspace_root.join(".bitfun");
-        fs::create_dir_all(legacy_root.join("sessions")).expect("legacy sessions should exist");
-        fs::write(legacy_root.join("sessions").join("s1.json"), "{}")
-            .expect("legacy session file should be written");
-
-        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
-            test_root.join("user"),
-        ));
-        let service = WorkspaceRuntimeService::new(path_manager.clone());
-
-        let ensured = service
-            .ensure_local_workspace_runtime(&workspace_root)
-            .await
-            .expect("runtime should be ensured");
-
-        assert!(ensured.context.sessions_dir.join("s1.json").exists());
-        assert!(!legacy_root.join("sessions").exists());
-        assert_eq!(ensured.migrated_entries.len(), 1);
 
         let _ = fs::remove_dir_all(&test_root);
     }

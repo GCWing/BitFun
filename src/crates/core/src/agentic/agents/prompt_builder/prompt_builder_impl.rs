@@ -504,7 +504,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         // Replace {AGENT_MEMORY}
         if result.contains(PLACEHOLDER_AGENT_MEMORY) {
             let agent_memory = if self.context.remote_execution.is_some() {
-                "# Agent memory\nSession memory under `.bitfun/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
+                "# Agent memory\nSession memory under `.bitfun_agentic_os/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
                     .to_string()
             } else {
                 let workspace = Path::new(&self.context.workspace_path);

@@ -106,7 +106,7 @@ pub async fn set_user_mode_skill_state(
 
 pub fn project_mode_skills_path_for_remote(remote_root: &str) -> String {
     format!(
-        "{}/.bitfun/config/{}",
+        "{}/.bitfun_agentic_os/config/{}",
         remote_root.trim_end_matches('/'),
         PROJECT_MODE_SKILLS_FILE_NAME
     )

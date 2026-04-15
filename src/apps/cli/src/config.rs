@@ -3,6 +3,7 @@
 /// CLI uses core's GlobalConfig system directly (same as tauri version)
 /// Only CLI-specific configuration is kept here (UI, shortcuts, etc.)
 use anyhow::Result;
+use bitfun_core::infrastructure::APP_CONFIG_DIR_NAME;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -99,12 +100,12 @@ impl CliConfig {
         let config_dir = if cfg!(target_os = "windows") {
             dirs::config_dir()
                 .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
-                .join("bitfun")
+                .join(APP_CONFIG_DIR_NAME)
         } else {
             dirs::home_dir()
                 .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
                 .join(".config")
-                .join("bitfun")
+                .join(APP_CONFIG_DIR_NAME)
         };
 
         Ok(config_dir.join("config.toml"))
@@ -146,12 +147,12 @@ impl CliConfig {
         let config_dir = if cfg!(target_os = "windows") {
             dirs::config_dir()
                 .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
-                .join("bitfun")
+                .join(APP_CONFIG_DIR_NAME)
         } else {
             dirs::home_dir()
                 .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
                 .join(".config")
-                .join("bitfun")
+                .join(APP_CONFIG_DIR_NAME)
         };
 
         fs::create_dir_all(&config_dir)?;

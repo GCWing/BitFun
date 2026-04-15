@@ -26,6 +26,8 @@ use std::sync::LazyLock;
 use tokio::task;
 use uuid::Uuid;
 
+use crate::infrastructure::APP_HIDDEN_DIR_NAME;
+
 const DEFAULT_SESSION_ID: &str = "debug-session";
 
 static DEFAULT_LOG_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -35,7 +37,7 @@ static DEFAULT_LOG_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
 
     std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
-        .join(".bitfun")
+        .join(APP_HIDDEN_DIR_NAME)
         .join("debug.log")
 });
 

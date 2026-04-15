@@ -1910,29 +1910,20 @@ mod tests {
         .await
         .expect("second workspace should initialize");
 
-        let legacy_session = SessionMetadata::new(
+        let second_session = SessionMetadata::new(
             Uuid::new_v4().to_string(),
-            "Legacy Session".to_string(),
+            "Workspace Session".to_string(),
             "agent".to_string(),
             "model".to_string(),
         );
         persistence_manager
-            .save_session_metadata(&second_workspace_root, &legacy_session)
+            .save_session_metadata(&second_workspace_root, &second_session)
             .await
-            .expect("legacy session metadata should save");
+            .expect("workspace session metadata should save");
 
         let second_runtime = persistence_manager
             .runtime_service()
             .context_for_local_workspace(&second_workspace_root);
-        let legacy_sessions_root = second_workspace_root.join(".bitfun").join("sessions");
-        std::fs::create_dir_all(&legacy_sessions_root)
-            .expect("legacy sessions root should be created");
-        std::fs::rename(
-            second_runtime.sessions_dir.join(&legacy_session.session_id),
-            legacy_sessions_root.join(&legacy_session.session_id),
-        )
-        .expect("session directory should move to legacy path");
-        let _ = std::fs::remove_dir_all(&second_runtime.runtime_root);
 
         let first_runtime = service
             .runtime_service
@@ -1981,9 +1972,9 @@ mod tests {
         assert!(
             second_runtime
                 .sessions_dir
-                .join(&legacy_session.session_id)
+                .join(&second_session.session_id)
                 .exists(),
-            "non-active opened workspace sessions should migrate into the shared runtime root"
+            "non-active opened workspace sessions should remain in the shared runtime root"
         );
 
         let restored_sessions = persistence_manager
@@ -1991,12 +1982,6 @@ mod tests {
             .await
             .expect("restored workspace sessions should list successfully");
         assert_eq!(restored_sessions.len(), 1);
-        assert_eq!(restored_sessions[0].session_id, legacy_session.session_id);
-        assert!(
-            !legacy_sessions_root
-                .join(&legacy_session.session_id)
-                .exists(),
-            "legacy session directory should be removed after startup migration"
-        );
+        assert_eq!(restored_sessions[0].session_id, second_session.session_id);
     }
 }

@@ -108,7 +108,7 @@ impl IngestServerManager {
 
         let addr = listener.local_addr()?;
         info!("Debug Log Ingest Server started on http://{}", addr);
-        info!("Debug logs will be written to: <workspace>/.bitfun/debug.log");
+        info!("Debug logs will be written to: <workspace>/.bitfun_agentic_os/debug.log");
 
         let state_clone = state.clone();
         tokio::spawn(async move {

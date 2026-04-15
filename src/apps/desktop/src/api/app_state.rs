@@ -182,7 +182,7 @@ impl AppState {
         // Initialize SSH Remote services synchronously so they're ready before app starts
         let ssh_data_dir = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("BitFun")
+            .join("bitfun_agentic_os")
             .join("ssh");
         let ssh_manager = Arc::new(RwLock::new(None));
         let ssh_manager_clone = ssh_manager.clone();

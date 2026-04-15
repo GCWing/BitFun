@@ -1,5 +1,5 @@
 use crate::agentic::agents::Agent;
-use crate::infrastructure::get_path_manager_arc;
+use crate::infrastructure::{get_path_manager_arc, APP_HIDDEN_DIR_NAME};
 use log::error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,9 +13,9 @@ pub struct SubagentDirEntry {
     pub kind: CustomSubagentKind,
 }
 
-/// Project subagent directory names (relative to workspace root, each item is in [".bitfun", "agents"] format)
+/// Project subagent directory names (relative to workspace root, each item is in [".bitfun_agentic_os", "agents"] format)
 const PROJECT_AGENT_SUBDIRS: &[(&str, &str)] = &[
-    (".bitfun", "agents"),
+    (APP_HIDDEN_DIR_NAME, "agents"),
     (".claude", "agents"),
     (".cursor", "agents"),
     (".codex", "agents"),
@@ -55,7 +55,7 @@ impl CustomSubagentLoader {
         // User subagents: ~/.claude/agents, ~/.cursor/agents, ~/.codex/agents
         if let Some(home) = dirs::home_dir() {
             for (parent, sub) in PROJECT_AGENT_SUBDIRS {
-                if *parent == ".bitfun" {
+                if *parent == APP_HIDDEN_DIR_NAME {
                     continue; // bitfun user path already handled by path_manager
                 }
                 let p = home.join(parent).join(sub);

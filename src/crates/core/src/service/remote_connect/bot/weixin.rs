@@ -225,8 +225,8 @@ fn ensure_trailing_slash(url: &str) -> String {
 }
 
 fn sync_buf_path(bot_account_id: &str) -> PathBuf {
-    let base = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
-    base.join(".bitfun")
+    get_path_manager_arc()
+        .bitfun_home_dir()
         .join("weixin")
         .join(format!("{bot_account_id}_get_updates_buf.txt"))
 }
@@ -1831,3 +1831,4 @@ mod weixin_inbound_tests {
         assert!(b.contains("reply"));
     }
 }
+use crate::infrastructure::get_path_manager_arc;

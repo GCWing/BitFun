@@ -107,9 +107,11 @@ fn derive_walk_root(search_path_abs: &Path, pattern: &str) -> (PathBuf, String) 
 }
 
 fn resolve_glob_config(pattern: &str) -> (bool, bool) {
-    let is_whitelisted = pattern.starts_with(".bitfun")
-        || pattern.contains("/.bitfun")
-        || pattern.contains("\\.bitfun");
+    let unix_marker = format!("/{}", APP_HIDDEN_DIR_NAME);
+    let windows_marker = format!("\\{}", APP_HIDDEN_DIR_NAME);
+    let is_whitelisted = pattern.starts_with(APP_HIDDEN_DIR_NAME)
+        || pattern.contains(&unix_marker)
+        || pattern.contains(&windows_marker);
 
     let apply_gitignore = !is_whitelisted;
     let ignore_hidden_files = !is_whitelisted;
@@ -691,3 +693,4 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
+use crate::infrastructure::APP_HIDDEN_DIR_NAME;

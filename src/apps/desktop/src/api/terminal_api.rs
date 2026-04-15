@@ -22,6 +22,7 @@ use bitfun_core::service::terminal::{
     ShellInfo as CoreShellInfo, ShellType, SignalRequest as CoreSignalRequest, TerminalApi,
     TerminalConfig, WriteRequest as CoreWriteRequest,
 };
+use bitfun_core::infrastructure::get_path_manager_arc;
 
 pub struct TerminalState {
     api: Arc<Mutex<Option<TerminalApi>>>,
@@ -72,11 +73,7 @@ impl TerminalState {
     /// Get the scripts directory path for shell integration
     /// Uses the same path structure as PathManager
     fn get_scripts_dir() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("bitfun")
-            .join("temp")
-            .join("scripts")
+        get_path_manager_arc().temp_dir().join("scripts")
     }
 }
 

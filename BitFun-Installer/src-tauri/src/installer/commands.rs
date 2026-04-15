@@ -26,6 +26,7 @@ const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
 const PAYLOAD_MANIFEST_FILE: &str = "payload-manifest.json";
 const INSTALL_MANIFEST_FILE: &str = ".bitfun-install-manifest.json";
 const INSTALLER_STATE_FILE: &str = "installer-state.json";
+const APP_CONFIG_DIR_NAME: &str = "bitfun_agentic_os";
 const EMBEDDED_PAYLOAD_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded_payload.zip"));
 
@@ -1017,7 +1018,7 @@ fn directory_has_entries(path: &Path) -> Result<bool, String> {
 fn ensure_app_config_path() -> Result<PathBuf, String> {
     let config_root = dirs::config_dir()
         .ok_or_else(|| "Failed to get user config directory".to_string())?
-        .join("bitfun")
+        .join(APP_CONFIG_DIR_NAME)
         .join("config");
     std::fs::create_dir_all(&config_root)
         .map_err(|e| format!("Failed to create BitFun config directory: {}", e))?;

@@ -81,7 +81,7 @@ pub(crate) async fn computer_use_augment_result_json(
 
 /// On-disk copy of each Computer use screenshot (pointer overlay included) for debugging.
 /// Filenames: `cu_<ms>_full.jpg` (whole display) or `cu_<ms>_crop_<x>_<y>.jpg` when a point crop was requested.
-const COMPUTER_USE_DEBUG_SUBDIR: &str = ".bitfun/computer_use_debug";
+const COMPUTER_USE_DEBUG_SUBDIR: &str = ".bitfun_agentic_os/computer_use_debug";
 
 pub struct ComputerUseTool;
 

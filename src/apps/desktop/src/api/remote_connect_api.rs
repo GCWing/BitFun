@@ -158,8 +158,8 @@ fn detect_from_exe() -> Option<String> {
         candidates.push(exe_dir.join("../lib/bitfun/mobile-web"));
         candidates.push(exe_dir.join("../share/bitfun/mobile-web/dist"));
         candidates.push(exe_dir.join("../share/bitfun/mobile-web"));
-        candidates.push(exe_dir.join("../share/com.bitfun.desktop/mobile-web/dist"));
-        candidates.push(exe_dir.join("../share/com.bitfun.desktop/mobile-web"));
+        candidates.push(exe_dir.join("../share/com.bitfun_agentic_os.desktop/mobile-web/dist"));
+        candidates.push(exe_dir.join("../share/com.bitfun_agentic_os.desktop/mobile-web"));
     }
 
     check_candidates(&candidates, "exe-relative")

@@ -156,10 +156,10 @@ async fn main() -> Result<()> {
         let log_dir = CliConfig::config_dir()
             .ok()
             .map(|d| d.join("logs"))
-            .unwrap_or_else(|| std::env::temp_dir().join("bitfun-cli"));
+            .unwrap_or_else(|| std::env::temp_dir().join("bitfun_agentic_os-cli"));
 
         std::fs::create_dir_all(&log_dir).ok();
-        let log_file = log_dir.join("bitfun-cli.log");
+        let log_file = log_dir.join("bitfun_agentic_os-cli.log");
 
         if let Ok(file) = OpenOptions::new().create(true).append(true).open(log_file) {
             tracing_subscriber::fmt()

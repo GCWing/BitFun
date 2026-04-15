@@ -787,11 +787,12 @@ impl FileTreeService {
 
     fn should_skip_file(&self, file_name: &str) -> bool {
         // Skip hidden files and directories (unless explicitly included)
-        // But .gitignore and .bitfun are always shown
+        // But .gitignore and app-managed hidden directories are always shown
         if !self.options.include_hidden
             && file_name.starts_with('.')
             && file_name != ".gitignore"
             && file_name != ".bitfun"
+            && file_name != ".bitfun_agentic_os"
         {
             return true;
         }

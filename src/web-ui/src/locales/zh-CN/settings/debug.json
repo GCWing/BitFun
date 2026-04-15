@@ -17,8 +17,8 @@
   "settings": {
     "logPath": {
       "label": "日志文件路径",
-      "description": "Debug日志保存路径（相对于工作区根目录），默认为 .bitfun/debug.log",
-      "placeholder": ".bitfun/debug.log",
+      "description": "Debug日志保存路径（相对于工作区根目录），默认为 .bitfun_agentic_os/debug.log",
+      "placeholder": ".bitfun_agentic_os/debug.log",
       "browse": "浏览"
     },
     "ingestPort": {
