@@ -8,6 +8,10 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync, readdirSync } from 'fs';
 import { ensureOpenSslWindows } from './ensure-openssl-windows.mjs';
+import {
+  codgrepBinaryPath,
+  ensureCodgrepResource,
+} from './prepare-codgrep-resource.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -20,10 +24,6 @@ function tauriBuildArgsFromArgv() {
     i += 1;
   }
   return args.slice(i);
-}
-
-function codgrepBinaryName() {
-  return process.platform === 'win32' ? 'cg.exe' : 'cg';
 }
 
 function codgrepProfileFromTauriArgs(args) {
@@ -40,10 +40,6 @@ function codgrepProfileFromTauriArgs(args) {
     }
   }
   return 'release';
-}
-
-function codgrepBinaryPath(profile) {
-  return join(ROOT, 'target', profile, codgrepBinaryName());
 }
 
 function ensureCodgrepBinary(profile) {
@@ -80,6 +76,7 @@ async function main() {
 
   await ensureOpenSslWindows();
   process.env.CODGREP_DAEMON_BIN = ensureCodgrepBinary(codgrepProfile);
+  ensureCodgrepResource(codgrepProfile);
 
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).

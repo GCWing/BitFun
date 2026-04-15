@@ -357,6 +357,7 @@ fn daemon_binary_candidates(
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
             push_candidate(parent.join(binary_name));
+            push_exe_relative_bundle_candidates(&mut push_candidate, parent, binary_name);
         }
     }
 
@@ -381,6 +382,29 @@ fn daemon_binary_candidates(
     }
 
     candidates
+}
+
+fn push_exe_relative_bundle_candidates(
+    push_candidate: &mut impl FnMut(PathBuf),
+    exe_dir: &Path,
+    binary_name: &str,
+) {
+    if cfg!(target_os = "macos") {
+        push_candidate(exe_dir.join("../Resources/codgrep").join(binary_name));
+    }
+
+    push_candidate(exe_dir.join("codgrep").join(binary_name));
+    push_candidate(exe_dir.join("resources/codgrep").join(binary_name));
+
+    if cfg!(target_os = "linux") {
+        push_candidate(exe_dir.join("../lib/bitfun/codgrep").join(binary_name));
+        push_candidate(exe_dir.join("../share/bitfun/codgrep").join(binary_name));
+        push_candidate(
+            exe_dir
+                .join("../share/com.bitfun.desktop/codgrep")
+                .join(binary_name),
+        );
+    }
 }
 
 fn default_index_path(repo_root: &Path) -> PathBuf {

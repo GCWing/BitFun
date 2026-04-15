@@ -165,6 +165,12 @@ function ensureCodgrepBinary(profile = 'debug') {
   return { ok: true, binaryPath };
 }
 
+async function ensureCodgrepBundleResource(profile = 'debug') {
+  const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-codgrep-resource.mjs')).href;
+  const helper = await import(helperUrl);
+  return helper.ensureCodgrepResource(profile);
+}
+
 /**
  * Main entry
  */
@@ -237,6 +243,14 @@ async function main() {
       if (codgrepResult.error && codgrepResult.error.status !== undefined) {
         printError(`Exit code: ${codgrepResult.error.status}`);
       }
+      process.exit(1);
+    }
+
+    try {
+      await ensureCodgrepBundleResource('debug');
+    } catch (error) {
+      printError('Prepare workspace search daemon bundle resource failed');
+      printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   }
