@@ -50,8 +50,6 @@ import zhCNSettingsSessionConfig from '../../../locales/zh-CN/settings/session-c
 import zhCNSettingsDebug from '../../../locales/zh-CN/settings/debug.json';
 import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
 import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
-import zhCNSettingsAiMemory from '../../../locales/zh-CN/settings/ai-memory.json';
-import zhCNSettingsAiContext from '../../../locales/zh-CN/settings/ai-context.json';
 import zhCNSettingsAgents from '../../../locales/zh-CN/settings/agents.json';
 import zhCNSettingsDefaultModel from '../../../locales/zh-CN/settings/default-model.json';
 
@@ -82,8 +80,6 @@ import enUSSettingsSessionConfig from '../../../locales/en-US/settings/session-c
 import enUSSettingsDebug from '../../../locales/en-US/settings/debug.json';
 import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
 import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
-import enUSSettingsAiMemory from '../../../locales/en-US/settings/ai-memory.json';
-import enUSSettingsAiContext from '../../../locales/en-US/settings/ai-context.json';
 import enUSSettingsAgents from '../../../locales/en-US/settings/agents.json';
 import enUSSettingsDefaultModel from '../../../locales/en-US/settings/default-model.json';
 
@@ -121,8 +117,6 @@ const resources = {
     'settings/debug': zhCNSettingsDebug,
     'settings/editor': zhCNSettingsEditor,
     'settings/skills': zhCNSettingsSkills,
-    'settings/ai-memory': zhCNSettingsAiMemory,
-    'settings/ai-context': zhCNSettingsAiContext,
     'settings/agents': zhCNSettingsAgents,
     'settings/default-model': zhCNSettingsDefaultModel,
   },
@@ -154,8 +148,6 @@ const resources = {
     'settings/debug': enUSSettingsDebug,
     'settings/editor': enUSSettingsEditor,
     'settings/skills': enUSSettingsSkills,
-    'settings/ai-memory': enUSSettingsAiMemory,
-    'settings/ai-context': enUSSettingsAiContext,
     'settings/agents': enUSSettingsAgents,
     'settings/default-model': enUSSettingsDefaultModel,
   },
@@ -209,8 +201,6 @@ export class I18nService {
           'settings/debug',
           'settings/editor',
           'settings/skills',
-          'settings/ai-memory',
-          'settings/ai-context',
           'settings/agents',
           'settings/default-model',
         ],

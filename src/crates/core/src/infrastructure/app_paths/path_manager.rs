@@ -257,11 +257,6 @@ impl PathManager {
         self.miniapps_dir().join(app_id)
     }
 
-    /// Get user-level rules directory: ~/.config/bitfun/data/rules/
-    pub fn user_rules_dir(&self) -> PathBuf {
-        self.user_data_dir().join("rules")
-    }
-
     /// Get logs directory: ~/.config/bitfun/logs/
     pub fn logs_dir(&self) -> PathBuf {
         self.user_root.join("logs")
@@ -304,11 +299,6 @@ impl PathManager {
         self.project_root(workspace_path).join("agents")
     }
 
-    /// Get project-level rules directory: {project}/.bitfun/rules/
-    pub fn project_rules_dir(&self, workspace_path: &Path) -> PathBuf {
-        self.project_root(workspace_path).join("rules")
-    }
-
     /// Get project snapshots directory: ~/.bitfun/projects/<workspace-slug>/snapshots/
     pub fn project_snapshots_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_runtime_root(workspace_path).join("snapshots")
@@ -327,12 +317,6 @@ impl PathManager {
     /// Get project memory directory: ~/.bitfun/projects/<workspace-slug>/memory/
     pub fn project_memory_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_runtime_root(workspace_path).join("memory")
-    }
-
-    /// Get project AI memories file: ~/.bitfun/projects/<workspace-slug>/ai_memories.json
-    pub fn project_ai_memories_file(&self, workspace_path: &Path) -> PathBuf {
-        self.project_runtime_root(workspace_path)
-            .join("ai_memories.json")
     }
 
     fn project_runtime_slug(&self, workspace_path: &Path) -> String {
@@ -423,7 +407,6 @@ impl PathManager {
             self.cache_root(),
             self.user_data_dir(),
             self.user_cron_dir(),
-            self.user_rules_dir(),
             self.miniapps_dir(),
             self.logs_dir(),
             self.temp_dir(),

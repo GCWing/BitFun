@@ -6,7 +6,11 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
-import type { AnyFlowItem } from '../../types/flow-chat';
+
+interface SearchableFlowItem {
+  type: string;
+  content?: string;
+}
 
 export interface SearchMatch {
   /** Smallest virtual index in this turn where text matched (scroll / “current” anchor). */
@@ -27,10 +31,10 @@ export interface UseFlowChatSearchReturn {
   clearSearch: () => void;
 }
 
-function extractSearchableText(items: readonly AnyFlowItem[]): string {
+function extractSearchableText(items: readonly SearchableFlowItem[]): string {
   return items
     .filter(item => item.type === 'text' || item.type === 'thinking')
-    .map(item => (item as { content?: string }).content ?? '')
+    .map(item => item.content ?? '')
     .join(' ');
 }
 

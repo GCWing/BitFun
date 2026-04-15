@@ -96,7 +96,7 @@ function highlightText(text: string, query: string): React.ReactNode {
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId }) => {
     const { t, i18n } = useTranslation('flow-chat');
-    const { config, sessionId, activeSessionOverride, searchQuery } = useFlowChatContext();
+    const { sessionId, activeSessionOverride, searchQuery } = useFlowChatContext();
     const activeSessionFromStore = useActiveSession();
     const activeSession = activeSessionOverride ?? activeSessionFromStore;
     const [copied, setCopied] = useState(false);

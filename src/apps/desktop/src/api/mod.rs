@@ -1,7 +1,6 @@
 //! API layer module
 
 pub mod agentic_api;
-pub mod ai_memory_api;
 pub mod announcement_api;
 pub mod app_state;
 pub mod btw_api;
@@ -19,7 +18,6 @@ pub mod mcp_api;
 pub mod project_detection_api;
 pub mod miniapp_api;
 pub mod path_target;
-pub mod project_context_api;
 pub mod remote_connect_api;
 pub mod runtime_api;
 pub mod session_api;

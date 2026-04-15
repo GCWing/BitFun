@@ -1,13 +1,11 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
 use crate::agentic::persistence::PersistenceManager;
 use super::request_context::{RequestContextPolicy, RequestContextSection};
-use crate::infrastructure::try_get_path_manager_arc;
 use crate::infrastructure::PathManager;
 use crate::service::agent_memory::{
     build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
     build_workspace_memory_files_context,
 };
-use crate::service::ai_memory::AIMemoryManager;
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
@@ -193,34 +191,6 @@ impl PromptBuilder {
         project_layout
     }
 
-    /// Load AI memories from disk and format as prompt
-    pub async fn load_ai_memories(&self) -> Option<String> {
-        let path_manager = match try_get_path_manager_arc() {
-            Ok(pm) => pm,
-            Err(e) => {
-                warn!("Failed to create PathManager: {}", e);
-                return None;
-            }
-        };
-
-        let memory_manager = match AIMemoryManager::new(path_manager).await {
-            Ok(mm) => mm,
-            Err(e) => {
-                warn!("Failed to create AIMemoryManager: {}", e);
-                return None;
-            }
-        };
-
-        match memory_manager.get_memories_for_prompt().await {
-            Ok(Some(prompt)) => Some(prompt),
-            Ok(None) => None,
-            Err(e) => {
-                warn!("Failed to load memories: {}", e);
-                None
-            }
-        }
-    }
-
     pub async fn build_request_context_reminder(
         &self,
         policy: &RequestContextPolicy,
@@ -253,12 +223,6 @@ impl PromptBuilder {
                         e
                     ),
                 }
-            }
-        }
-
-        if policy.includes(RequestContextSection::AIMemories) {
-            if let Some(memory_prompt) = self.load_ai_memories().await {
-                override_sections.push(memory_prompt);
             }
         }
 

@@ -207,7 +207,7 @@ export const AgentDispatchCard: React.FC<ToolCardProps> = React.memo(
       action === 'create' && status === 'completed' && !!createdSessionId;
 
     const handleCardClick = useCallback(
-      (e: React.MouseEvent) => {
+      () => {
         if (action === 'create' && status === 'completed' && createdSessionId) {
           void openMainSession(createdSessionId);
           return;

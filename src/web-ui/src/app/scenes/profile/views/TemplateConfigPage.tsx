@@ -46,21 +46,19 @@ function getMcpShortName(toolName: string): string {
   return parseMcpToolName(toolName)?.toolName ?? toolName;
 }
 
-type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';
+type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'memories';
 
-const CTX_SEGMENT_ORDER: readonly CtxSegKey[] = ['systemPrompt', 'toolInjection', 'rules', 'memories'];
+const CTX_SEGMENT_ORDER: readonly CtxSegKey[] = ['systemPrompt', 'toolInjection', 'memories'];
 
 const CTX_SEGMENT_COLORS: Record<CtxSegKey, string> = {
   systemPrompt: '#34d399',
   toolInjection: '#60a5fa',
-  rules: '#a78bfa',
   memories: '#f472b6',
 };
 
 const CTX_LABEL_I18N_KEY: Record<CtxSegKey, string> = {
   systemPrompt: 'nursery.template.tokenSystemPrompt',
   toolInjection: 'nursery.template.tokenToolInjection',
-  rules: 'nursery.template.tokenRules',
   memories: 'nursery.template.tokenMemories',
 };
 
@@ -73,14 +71,12 @@ function fmtPct(val: number, total: number): string {
 // claw_mode.md ≈ 838 tok + persona files (BOOTSTRAP/SOUL/USER/IDENTITY) ≈ 600 tok
 const CLAW_SYS_TOKENS = 1438;
 const TOKENS_PER_TOOL = 45;   // matches backend estimation
-const TOKENS_PER_RULE = 80;
 const TOKENS_PER_MEMORY = 60;
 const CTX_WINDOW = 128_000;
 
 interface MockBreakdown {
   systemPrompt: number;
   toolInjection: number;
-  rules: number;
   memories: number;
   total: number;
 }
@@ -110,14 +106,12 @@ function formatSkillDisplayName(skill: ModeSkillInfo, duplicateNames: Set<string
 
 function buildMockBreakdown(
   toolCount: number,
-  rulesCount: number,
   memoriesCount: number,
 ): MockBreakdown {
   const systemPrompt = CLAW_SYS_TOKENS;
   const toolInjection = toolCount * TOKENS_PER_TOOL;
-  const rules = rulesCount * TOKENS_PER_RULE;
   const memories = memoriesCount * TOKENS_PER_MEMORY;
-  return { systemPrompt, toolInjection, rules, memories, total: systemPrompt + toolInjection + rules + memories };
+  return { systemPrompt, toolInjection, memories, total: systemPrompt + toolInjection + memories };
 }
 
 const TemplateConfigPage: React.FC = () => {
@@ -156,7 +150,7 @@ const TemplateConfigPage: React.FC = () => {
   );
 
   const tokenBreakdown = useMemo(
-    () => buildMockBreakdown(enabledToolCount, 0, 0),
+    () => buildMockBreakdown(enabledToolCount, 0),
     [enabledToolCount],
   );
 

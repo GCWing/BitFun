@@ -74,7 +74,7 @@ const NurseryGallery: React.FC = () => {
   }, [t]);
 
   const tokenBreakdown = useMemo(
-    () => (templateStats ? estimateTokens('', templateStats.enabledToolCount, 0, 0) : null),
+    () => (templateStats ? estimateTokens('', templateStats.enabledToolCount, 0) : null),
     [templateStats],
   );
 

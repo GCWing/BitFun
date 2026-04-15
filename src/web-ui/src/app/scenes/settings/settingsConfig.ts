@@ -9,7 +9,6 @@ export type ConfigTab =
   | 'basics'
   | 'models'
   | 'session-config'
-  | 'ai-context'
   | 'mcp-tools'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
@@ -118,12 +117,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         ],
       },
       {
-        id: 'ai-context',
-        labelKey: 'configCenter.tabs.aiContext',
-        descriptionKey: 'configCenter.tabDescriptions.aiContext',
-        keywords: ['memory', 'context', 'rag', 'knowledge'],
-      },
-      {
         id: 'mcp-tools',
         labelKey: 'configCenter.tabs.mcpTools',
         descriptionKey: 'configCenter.tabDescriptions.mcpTools',
@@ -168,6 +161,7 @@ const KNOWN_TABS: ConfigTab[] = SETTINGS_CATEGORIES.flatMap((c) => c.tabs.map((t
 /** Map removed or renamed tabs; used by deep links and IDE actions. */
 export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'theme' || section === 'logging' || section === 'terminal') return 'basics';
+  if (section === 'ai-context') return DEFAULT_SETTINGS_TAB;
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';
   if ((KNOWN_TABS as readonly string[]).includes(section)) return section as ConfigTab;

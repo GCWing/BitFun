@@ -1,9 +1,0 @@
-{
-  "title": "Memory",
-  "subtitle": "Manage AI context memory",
-  "scope": {
-    "user": "User",
-    "project": "Project"
-  },
-  "memoryProjectPlaceholder": "Project-level memory is not yet available."
-}

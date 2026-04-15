@@ -11,7 +11,6 @@
       "basics": "Language, theme, logging, terminal shell, and launch at login.",
       "models": "AI models, API keys, providers, and proxy.",
       "sessionConfig": "Session behavior, tools, and timeouts.",
-      "aiContext": "AI memory and context.",
       "mcpTools": "MCP servers and tool integrations.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
@@ -26,7 +25,6 @@
       "basics": "Basics",
       "models": "Models",
       "sessionConfig": "Session Config",
-      "aiContext": "Memory",
       "skills": "Skills",
       "mcpTools": "MCP",
       "agents": "Agents",
@@ -395,14 +393,6 @@
     "semanticSearchDesc": "Semantic-based code search",
     "autoFix": "Auto Fix",
     "autoFixDesc": "Automatically fix code errors and warnings"
-  },
-  "aiMemory": {
-    "title": "Memory",
-    "subtitle": "Manage AI context memory",
-    "clearMemory": "Clear Memory",
-    "confirmClear": "Are you sure you want to clear all memory? This action cannot be undone.",
-    "memorySize": "Memory Size",
-    "lastUpdated": "Last Updated"
   },
   "modes": {
     "title": "Modes",

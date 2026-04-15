@@ -56,7 +56,6 @@
 
   "cards": {
     "model":       "Models",
-    "rules":       "Behavior Rules",
     "memory":      "Memory",
     "toolsMcp":    "Tools & MCP",
     "skills":      "Skills",
@@ -73,7 +72,6 @@
   },
 
   "kpi": {
-    "rules":        "User {{user}} · Project {{project}} · {{enabled}} active",
     "memory":       "{{count}} active",
     "skills":       "{{count}} active",
     "toolStats":    "{{enabled}}/{{total}} built-in",
@@ -81,7 +79,6 @@
   },
 
   "empty": {
-    "rules":     "No rules configured",
     "memory":    "No memories",
     "tools":     "No tools available",
     "skills":    "No skills"
@@ -134,7 +131,6 @@
       "tokenTitle":   "Context Usage Estimate",
       "tokenSystemPrompt": "System Prompt",
       "tokenToolInjection": "Tool Injection",
-      "tokenRules":   "Rules",
       "tokenMemories": "Memories",
       "tokenTotal":   "Default Total",
       "stats": {

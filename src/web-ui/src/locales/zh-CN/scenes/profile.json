@@ -56,7 +56,6 @@
 
   "cards": {
     "model":       "模型",
-    "rules":       "行为守则",
     "memory":      "记忆",
     "toolsMcp":    "工具与MCP",
     "skills":      "技能",
@@ -73,7 +72,6 @@
   },
 
   "kpi": {
-    "rules":        "用户 {{user}} · 项目 {{project}} · {{enabled}} 启用",
     "memory":       "{{count}} 条启用",
     "skills":       "{{count}} 个启用",
     "toolStats":    "{{enabled}}/{{total}} 内置",
@@ -81,7 +79,6 @@
   },
 
   "empty": {
-    "rules":     "暂无守则",
     "memory":    "暂无记忆",
     "tools":     "暂无工具信息",
     "skills":    "暂无技能"
@@ -134,7 +131,6 @@
       "tokenTitle":   "上下文占用估算",
       "tokenSystemPrompt": "系统提示词",
       "tokenToolInjection": "工具描述注入",
-      "tokenRules":   "行为守则",
       "tokenMemories": "记忆",
       "tokenTotal":   "默认总占用",
       "stats": {
