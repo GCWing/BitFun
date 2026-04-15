@@ -1,36 +1,29 @@
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  statSync,
-} from 'fs';
+import { chmodSync, existsSync, statSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const RESOURCE_DIR = join(ROOT, 'build-resources', 'codgrep');
+const RESOURCE_DIR = join(ROOT, 'resources', 'codgrep');
 
 export function codgrepBinaryName() {
   return process.platform === 'win32' ? 'cg.exe' : 'cg';
 }
 
-export function codgrepBinaryPath(profile) {
-  return join(ROOT, 'target', profile, codgrepBinaryName());
+export function codgrepBinaryPath() {
+  return join(RESOURCE_DIR, codgrepBinaryName());
 }
 
-export function ensureCodgrepResource(profile) {
-  const binaryPath = codgrepBinaryPath(profile);
+export function ensureCodgrepBinary() {
+  const binaryPath = codgrepBinaryPath();
   if (!existsSync(binaryPath)) {
-    throw new Error(`codgrep binary not found: ${binaryPath}`);
+    throw new Error(
+      `codgrep binary not found: ${binaryPath}. Put the prebuilt daemon binary at resources/codgrep/${codgrepBinaryName()}`
+    );
   }
 
-  mkdirSync(RESOURCE_DIR, { recursive: true });
-  const bundledPath = join(RESOURCE_DIR, codgrepBinaryName());
-  copyFileSync(binaryPath, bundledPath);
   if (process.platform !== 'win32') {
-    chmodSync(bundledPath, statSync(binaryPath).mode);
+    chmodSync(binaryPath, statSync(binaryPath).mode | 0o111);
   }
-  return bundledPath;
+  return binaryPath;
 }

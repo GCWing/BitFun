@@ -22,7 +22,6 @@ dist-ssr
 target/
 **/target/
 Cargo.lock
-build-resources/codgrep/
 
 # Monaco Editor - copied from node_modules
 public/monaco-editor/

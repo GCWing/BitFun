@@ -548,36 +548,28 @@ function codgrepBinaryName() {
   return process.platform === 'win32' ? 'cg.exe' : 'cg';
 }
 
-function codgrepBinaryPath(profile = 'debug') {
-  return path.join(ROOT_DIR, 'target', profile, codgrepBinaryName());
+function codgrepBinaryPath() {
+  return path.join(ROOT_DIR, 'resources', 'codgrep', codgrepBinaryName());
 }
 
-function ensureCodgrepBinary(profile = 'debug') {
-  const cargoCommand =
-    profile === 'debug'
-      ? 'cargo build -p codgrep --bin cg'
-      : `cargo build -p codgrep --bin cg --profile ${profile}`;
-
-  const result = runInherit(cargoCommand);
-  if (!result.ok) {
-    return result;
-  }
-
-  const binaryPath = codgrepBinaryPath(profile);
+function ensureCodgrepBinary() {
+  const binaryPath = codgrepBinaryPath();
   if (!fs.existsSync(binaryPath)) {
     return {
       ok: false,
-      error: new Error(`codgrep binary not found after build: ${binaryPath}`),
+      error: new Error(
+        `codgrep binary not found: ${binaryPath}. Put the prebuilt daemon binary at resources/codgrep/${codgrepBinaryName()}`
+      ),
     };
   }
 
   return { ok: true, binaryPath };
 }
 
-async function ensureCodgrepBundleResource(profile = 'debug') {
+async function ensureCodgrepBundleResource() {
   const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-codgrep-resource.mjs')).href;
   const helper = await import(helperUrl);
-  return helper.ensureCodgrepResource(profile);
+  return helper.ensureCodgrepBinary();
 }
 
 /**
@@ -658,9 +650,9 @@ async function main() {
     }
 
     printStep(currentStep++, totalSteps, 'Build workspace search daemon');
-    const codgrepResult = ensureCodgrepBinary('debug');
+    const codgrepResult = ensureCodgrepBinary();
     if (!codgrepResult.ok) {
-      printError('Build workspace search daemon failed');
+      printError('Workspace search daemon is missing');
       if (codgrepResult.error && codgrepResult.error.message) {
         printError(codgrepResult.error.message);
       }
@@ -672,9 +664,9 @@ async function main() {
     process.env.CODGREP_DAEMON_BIN = codgrepResult.binaryPath;
 
     try {
-      await ensureCodgrepBundleResource('debug');
+      await ensureCodgrepBundleResource();
     } catch (error) {
-      printError('Prepare workspace search daemon bundle resource failed');
+      printError('Validate workspace search daemon failed');
       printError(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }

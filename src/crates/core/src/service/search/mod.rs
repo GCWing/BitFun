@@ -1,3 +1,4 @@
+pub(crate) mod codgrep;
 pub mod service;
 pub mod types;
 

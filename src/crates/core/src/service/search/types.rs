@@ -1,9 +1,9 @@
 use crate::infrastructure::FileSearchOutcome;
-use codgrep::daemon::protocol::{
+use crate::service::search::codgrep::daemon::protocol::{
     FileMatch as CodgrepFileMatch, MatchLocation as CodgrepMatchLocation,
     SearchHit as CodgrepSearchHit, SearchLine as CodgrepSearchLine,
 };
-use codgrep::sdk::{
+use crate::service::search::codgrep::sdk::{
     DirtyFileStats as CodgrepDirtyFileStats, FileCount as CodgrepFileCount,
     RepoPhase as CodgrepRepoPhase, RepoStatus as CodgrepRepoStatus,
     SearchBackend as CodgrepSearchBackend, SearchModeConfig, TaskKind as CodgrepTaskKind,

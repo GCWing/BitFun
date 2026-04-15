@@ -1,10 +1,10 @@
 use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
-use crate::util::errors::{BitFunError, BitFunResult};
-use codgrep::sdk::tokio::{ManagedClient, RepoSession};
-use codgrep::sdk::{
+use crate::service::search::codgrep::sdk::tokio::{ManagedClient, RepoSession};
+use crate::service::search::codgrep::sdk::{
     ConsistencyMode, GlobRequest, OpenRepoParams, PathScope, QuerySpec, RefreshPolicyConfig,
     RepoConfig, SearchRequest, SearchResults,
 };
+use crate::util::errors::{BitFunError, BitFunResult};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -371,14 +371,6 @@ fn daemon_binary_candidates(
                 .join(profile)
                 .join(binary_name),
         );
-        push_candidate(
-            workspace_root
-                .join("vendor")
-                .join("codgrep")
-                .join("target")
-                .join(profile)
-                .join(binary_name),
-        );
     }
 
     candidates
@@ -609,6 +601,8 @@ fn split_preview(
     (None, Some(snippet.to_string()), None)
 }
 
-fn map_codgrep_error(prefix: &'static str) -> impl Fn(codgrep::error::AppError) -> BitFunError {
+fn map_codgrep_error(
+    prefix: &'static str,
+) -> impl Fn(crate::service::search::codgrep::error::AppError) -> BitFunError {
     move |error| BitFunError::service(format!("{prefix}: {error}"))
 }
