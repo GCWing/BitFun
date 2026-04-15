@@ -6,13 +6,17 @@
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import { SelfControlAPI } from '@/infrastructure/api/service-api/SelfControlAPI';
-import { selfControlService, type SelfControlAction } from './SelfControlService';
+import {
+  selfControlService,
+  type SelfControlAction,
+  type SelfControlIncomingAction,
+} from './SelfControlService';
 
 const logger = createLogger('SelfControlEventListener');
 
 export interface SelfControlRequestEvent {
   requestId: string;
-  action: SelfControlAction;
+  action: SelfControlIncomingAction | SelfControlAction;
 }
 
 let unlistenFn: (() => void) | null = null;
@@ -27,7 +31,10 @@ export function startSelfControlEventListener(): void {
 
   unlistenFn = api.listen<SelfControlRequestEvent>('selfcontrol://request', (event) => {
     const { requestId, action } = event;
-    logger.info('Received self-control request', { requestId, actionType: action.type });
+    logger.info('Received self-control request', {
+      requestId,
+      actionType: action.type ?? action.action ?? 'unknown',
+    });
 
     void (async () => {
       try {
