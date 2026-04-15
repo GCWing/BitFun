@@ -180,6 +180,10 @@ export interface CancelSearchRequest {
   searchId: string;
 }
 
+export interface SearchRepoIndexRequest {
+  rootPath: string;
+}
+
 export type SearchMatchType = 'fileName' | 'content';
 
 export interface FileSearchResult {
@@ -198,6 +202,7 @@ export interface FileSearchResponse {
   results: FileSearchResult[];
   limit: number;
   truncated: boolean;
+  searchMetadata?: SearchMetadata;
 }
 
 export interface FileSearchResultGroup {
@@ -227,12 +232,103 @@ export interface FileSearchCompleteEvent {
   limit: number;
   truncated: boolean;
   totalResults: number;
+  searchMetadata?: SearchMetadata;
 }
 
 export interface FileSearchErrorEvent {
   searchId: string;
   searchKind: FileSearchStreamKind;
   error: string;
+}
+
+export type SearchBackendKind =
+  | 'indexed'
+  | 'indexed_repair'
+  | 'text_fallback'
+  | 'scan_fallback';
+
+export interface SearchMetadata {
+  backend: SearchBackendKind | string;
+  repoPhase: WorkspaceSearchRepoPhase | string;
+  rebuildRecommended: boolean;
+  candidateDocs: number;
+  matchedLines: number;
+  matchedOccurrences: number;
+}
+
+export type WorkspaceSearchRepoPhase =
+  | 'preparing'
+  | 'needs_index'
+  | 'building'
+  | 'ready'
+  | 'stale'
+  | 'refreshing'
+  | 'limited';
+
+export type WorkspaceSearchTaskKind =
+  | 'build'
+  | 'rebuild'
+  | 'refresh';
+
+export type WorkspaceSearchTaskState =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export type WorkspaceSearchTaskPhase =
+  | 'discovering'
+  | 'processing'
+  | 'persisting'
+  | 'finalizing'
+  | 'refreshing';
+
+export interface WorkspaceSearchDirtyFiles {
+  modified: number;
+  deleted: number;
+  new: number;
+}
+
+export interface WorkspaceSearchRepoStatus {
+  repoId: string;
+  repoPath: string;
+  indexPath: string;
+  phase: WorkspaceSearchRepoPhase;
+  snapshotKey?: string | null;
+  lastProbeUnixSecs?: number | null;
+  lastRebuildUnixSecs?: number | null;
+  dirtyFiles: WorkspaceSearchDirtyFiles;
+  rebuildRecommended: boolean;
+  activeTaskId?: string | null;
+  watcherHealthy: boolean;
+  lastError?: string | null;
+}
+
+export interface WorkspaceSearchTaskStatus {
+  taskId: string;
+  workspaceId: string;
+  kind: WorkspaceSearchTaskKind;
+  state: WorkspaceSearchTaskState;
+  phase?: WorkspaceSearchTaskPhase | null;
+  message: string;
+  processed: number;
+  total?: number | null;
+  startedUnixSecs: number;
+  updatedUnixSecs: number;
+  finishedUnixSecs?: number | null;
+  cancellable: boolean;
+  error?: string | null;
+}
+
+export interface WorkspaceSearchIndexStatus {
+  repoStatus: WorkspaceSearchRepoStatus;
+  activeTask?: WorkspaceSearchTaskStatus | null;
+}
+
+export interface WorkspaceSearchIndexTaskHandle {
+  task: WorkspaceSearchTaskStatus;
+  repoStatus: WorkspaceSearchRepoStatus;
 }
 
 export interface ExplorerNodeDto {

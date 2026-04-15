@@ -13,7 +13,7 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
-import { Search, IconButton, Tooltip } from '@/component-library';
+import { Search, IconButton, Tooltip, Badge } from '@/component-library';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
 import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
@@ -33,6 +33,10 @@ import {
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isRemoteWorkspace } from '@/shared/types';
+import type {
+  SearchMetadata,
+  WorkspaceSearchRepoPhase,
+} from '@/infrastructure/api/service-api/tauri-commands';
 import {
   downloadWorkspaceFileToDisk,
   isDragPositionOverElement,
@@ -46,6 +50,39 @@ import './FilesPanel.scss';
 const log = createLogger('FilesPanel');
 const FOCUS_REFRESH_THROTTLE_MS = 1000;
 const REMOTE_REFRESH_POLL_MS = 15000;
+
+function getIndexPhaseBadgeVariant(phase?: WorkspaceSearchRepoPhase): 'neutral' | 'warning' | 'success' | 'error' | 'info' {
+  switch (phase) {
+    case 'ready':
+      return 'success';
+    case 'stale':
+    case 'needs_index':
+      return 'warning';
+    case 'building':
+    case 'refreshing':
+    case 'preparing':
+      return 'info';
+    case 'limited':
+      return 'error';
+    default:
+      return 'neutral';
+  }
+}
+
+function getSearchBackendBadgeVariant(
+  metadata: SearchMetadata | null
+): 'neutral' | 'success' | 'warning' | 'info' {
+  switch (metadata?.backend) {
+    case 'indexed':
+    case 'indexed_repair':
+      return 'success';
+    case 'text_fallback':
+    case 'scan_fallback':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
+}
 
 interface FilesPanelProps {
   workspacePath?: string;
@@ -82,7 +119,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     && pathsEquivalentFs(currentWorkspace.rootPath, workspacePath)
     && isRemoteWorkspace(currentWorkspace)
   );
-  
   const {
     query: searchQuery,
     setQuery: setSearchQuery,
@@ -95,6 +131,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     contentLimit,
     filenameTruncated,
     contentTruncated,
+    contentSearchMetadata,
     searchOptions,
     setSearchOptions,
     clearSearch,
@@ -131,6 +168,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       : filenameTruncated
         ? t('search.limitReachedFiles', { count: filenameLimit })
         : null;
+  const contentSearchBackendLabel = contentSearchMetadata
+    ? t(`search.backend.${contentSearchMetadata.backend}`, {
+        defaultValue: contentSearchMetadata.backend,
+      })
+    : null;
+  const showContentSearchMetadata =
+    searchMode === 'content' && Boolean(searchQuery.trim()) && Boolean(contentSearchMetadata);
 
   const {
     fileTree,
@@ -869,7 +913,34 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                   <span>{searchLimitNotice}</span>
                 </div>
               )}
-              
+
+              {showContentSearchMetadata && contentSearchMetadata && (
+                <div className="bitfun-files-panel__search-backend">
+                  <div className="bitfun-files-panel__search-backend-badges">
+                    <Badge variant={getSearchBackendBadgeVariant(contentSearchMetadata)}>
+                      {contentSearchBackendLabel}
+                    </Badge>
+                    <Badge variant={getIndexPhaseBadgeVariant(contentSearchMetadata.repoPhase as WorkspaceSearchRepoPhase)}>
+                      {t(`search.index.phase.${contentSearchMetadata.repoPhase}`, {
+                        defaultValue: contentSearchMetadata.repoPhase,
+                      })}
+                    </Badge>
+                    {contentSearchMetadata.rebuildRecommended ? (
+                      <Badge variant="warning">
+                        {t('search.index.badges.rebuildRecommended')}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="bitfun-files-panel__search-backend-summary">
+                    {t('search.backendSummary', {
+                      candidateDocs: contentSearchMetadata.candidateDocs,
+                      matchedLines: contentSearchMetadata.matchedLines,
+                      matchedOccurrences: contentSearchMetadata.matchedOccurrences,
+                    })}
+                  </div>
+                </div>
+              )}
+
               {searchError && (
                 <div className="bitfun-files-panel__error">
                   <p>❌ {searchError}</p>

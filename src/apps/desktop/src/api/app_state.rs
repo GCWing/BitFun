@@ -8,7 +8,7 @@ use bitfun_core::service::remote_ssh::{
     init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
 use bitfun_core::service::{
-    ai_rules, announcement, config, filesystem, mcp, token_usage, workspace,
+    ai_rules, announcement, config, filesystem, mcp, search, token_usage, workspace,
 };
 use bitfun_core::util::errors::*;
 
@@ -67,6 +67,7 @@ pub struct AppState {
     pub workspace_path: Arc<RwLock<Option<std::path::PathBuf>>>,
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
+    pub workspace_search_service: Arc<search::WorkspaceSearchService>,
     pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
@@ -113,6 +114,8 @@ impl AppState {
         );
         workspace::set_global_workspace_service(workspace_service.clone());
         let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
+        let workspace_search_service = Arc::new(search::WorkspaceSearchService::new());
+        search::set_global_workspace_search_service(workspace_search_service.clone());
 
         ai_rules::initialize_global_ai_rules_service()
             .await
@@ -170,10 +173,10 @@ impl AppState {
             uptime_seconds: 0,
         }));
 
-        let initial_workspace_path = workspace_service
-            .get_current_workspace()
-            .await
-            .map(|workspace| workspace.root_path);
+        let initial_workspace = workspace_service.get_current_workspace().await;
+        let initial_workspace_path = initial_workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path.clone());
 
         if let Some(workspace_path) = initial_workspace_path.clone() {
             if let Err(e) =
@@ -191,6 +194,21 @@ impl AppState {
             }
             if let Err(e) = ai_rules_service.set_workspace(workspace_path).await {
                 log::warn!("Failed to restore AI rules workspace on startup: {}", e);
+            }
+        }
+
+        if let Some(workspace_info) = initial_workspace {
+            if workspace_info.workspace_kind != workspace::WorkspaceKind::Remote {
+                if let Err(e) = workspace_search_service
+                    .open_repo(&workspace_info.root_path)
+                    .await
+                {
+                    log::warn!(
+                        "Failed to restore workspace search repository session on startup: path={}, error={}",
+                        workspace_info.root_path.display(),
+                        e
+                    );
+                }
             }
         }
 
@@ -273,6 +291,7 @@ impl AppState {
             workspace_path: Arc::new(RwLock::new(initial_workspace_path)),
             config_service,
             filesystem_service,
+            workspace_search_service,
             ai_rules_service,
             agent_registry,
             mcp_service,
@@ -304,6 +323,7 @@ impl AppState {
         services.insert("workspace_service".to_string(), true);
         services.insert("config_service".to_string(), true);
         services.insert("filesystem_service".to_string(), true);
+        services.insert("workspace_search_service".to_string(), true);
 
         let all_healthy = services.values().all(|&status| status);
 

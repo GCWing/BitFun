@@ -11,6 +11,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type {
   FileSearchResult,
   FileSearchResultGroup,
+  SearchMetadata,
 } from '@/infrastructure/api/service-api/tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -54,6 +55,7 @@ export interface UseExplorerSearchResult {
   filenameResults: FileSearchResult[];
   contentResults: FileSearchResult[];
   allResults: FileSearchResult[];
+  contentSearchMetadata: SearchMetadata | null;
   searchPhase: ExplorerSearchPhase;
   filenameLimit: number;
   contentLimit: number;
@@ -175,6 +177,7 @@ export function useExplorerSearch(
   const [searchMode, setSearchMode] = useState<ExplorerSearchMode>(initialMode);
   const [filenameGroups, setFilenameGroups] = useState<FileSearchResultGroup[]>([]);
   const [contentGroups, setContentGroups] = useState<FileSearchResultGroup[]>([]);
+  const [contentSearchMetadata, setContentSearchMetadata] = useState<SearchMetadata | null>(null);
   const [searchPhase, setSearchPhase] = useState<ExplorerSearchPhase>(() => buildIdlePhase(initialMode));
   const [filenameLimit, setFilenameLimit] = useState(filenameMaxResults);
   const [contentLimit, setContentLimit] = useState(contentMaxResults);
@@ -232,6 +235,7 @@ export function useExplorerSearch(
     setContentLimit(contentMaxResults);
     setFilenameTruncated(false);
     setContentTruncated(false);
+    setContentSearchMetadata(null);
     setSearchPhase(buildIdlePhase(searchMode));
     setError(null);
   }, [cancelAllSearches, contentMaxResults, filenameMaxResults, searchMode]);
@@ -340,6 +344,7 @@ export function useExplorerSearch(
           return;
         }
 
+        setContentSearchMetadata(response.searchMetadata ?? null);
         setContentLimit(response.limit);
         setContentTruncated(response.truncated);
         setSearchPhase((prev) => {
@@ -397,6 +402,7 @@ export function useExplorerSearch(
       setContentLimit(contentMaxResults);
       setFilenameTruncated(false);
       setContentTruncated(false);
+      setContentSearchMetadata(null);
       setSearchPhase(buildIdlePhase(searchMode));
       setError(null);
       return;
@@ -410,6 +416,7 @@ export function useExplorerSearch(
     setContentLimit(contentMaxResults);
     setFilenameTruncated(false);
     setContentTruncated(false);
+    setContentSearchMetadata(null);
     setSearchPhase(buildSearchingPhase(searchMode, shouldRunFilename, shouldRunContent));
 
     if (shouldRunFilename) {
@@ -495,6 +502,7 @@ export function useExplorerSearch(
     filenameResults,
     contentResults,
     allResults,
+    contentSearchMetadata,
     searchPhase,
     filenameLimit,
     contentLimit,
