@@ -26,7 +26,8 @@ export type PanelContentType =
   | 'task-detail'
   | 'plan-viewer'
   | 'btw-session'
-  | 'terminal';
+  | 'terminal'
+  | 'generative-widget';
 
 export interface PanelContent {
   type: PanelContentType;

@@ -205,6 +205,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'generative-widget': {
+    type: 'generative-widget',
+    displayName: 'Widget Preview',
+    icon: Network,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
 };
 
 /**

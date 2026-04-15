@@ -39,6 +39,7 @@ import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
+import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
 import { BtwMarkerCard } from './BtwMarkerCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
@@ -324,6 +325,16 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'standard',
     primaryColor: '#7c8cef'
   },
+  'GenerativeUI': {
+    toolName: 'GenerativeUI',
+    displayName: 'Generative UI',
+    icon: 'UI',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Render interactive widget previews inline in FlowChat',
+    displayMode: 'detailed',
+    primaryColor: '#38bdf8'
+  },
 };
 
 // Tool card component map - uses backend tool names
@@ -382,6 +393,9 @@ export const TOOL_CARD_COMPONENTS = {
 
   // MiniApp tool
   'InitMiniApp': InitMiniAppDisplay,
+
+  // Generative widget tool
+  'GenerativeUI': GenerativeWidgetToolCard,
 };
 
 /**

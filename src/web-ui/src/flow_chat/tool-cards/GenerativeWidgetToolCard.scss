@@ -1,0 +1,46 @@
+.generative-widget-card {
+  overflow: hidden;
+}
+
+.generative-widget-card .base-tool-card-expanded {
+  padding: 0;
+}
+
+.generative-widget-card__icon {
+  color: #7dd3fc;
+}
+
+.generative-widget-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.generative-widget-card__status {
+  font-size: 12px;
+  color: var(--color-text-secondary, #98a2b3);
+  white-space: nowrap;
+}
+
+.generative-widget-card__status--error {
+  color: #fda4af;
+}
+
+.generative-widget-card__preview {
+  padding: 10px 12px 12px;
+}
+
+.generative-widget-card__placeholder {
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--color-text-secondary, #98a2b3);
+  font-size: 13px;
+}
+
+.generative-widget-card__placeholder--error {
+  color: #fca5a5;
+}

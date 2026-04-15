@@ -230,6 +230,9 @@ importers:
       monaco-editor:
         specifier: ^0.52.2
         version: 0.52.2
+      morphdom:
+        specifier: ^2.7.8
+        version: 2.7.8
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
@@ -4129,6 +4132,9 @@ packages:
 
   monaco-editor@0.52.2:
     resolution: {integrity: sha512-GEQWEZmfkOGLdd3XK8ryrfWz3AIP8YymVXiPHEdewrUq7mh0qrKrfHLNCXcbB6sTnMLnOZ3ztSiKcciFUkIJwQ==}
+
+  morphdom@2.7.8:
+    resolution: {integrity: sha512-D/fR4xgGUyVRbdMGU6Nejea1RFzYxYtyurG4Fbv2Fi/daKlWKuXGLOdXtl+3eIwL110cI2hz1ZojGICjjFLgTg==}
 
   ms@2.1.2:
     resolution: {integrity: sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==}
@@ -9961,6 +9967,8 @@ snapshots:
   modern-tar@0.7.5: {}
 
   monaco-editor@0.52.2: {}
+
+  morphdom@2.7.8: {}
 
   ms@2.1.2: {}
 
