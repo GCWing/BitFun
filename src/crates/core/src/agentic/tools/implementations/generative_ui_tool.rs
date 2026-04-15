@@ -1,4 +1,4 @@
-//! GenerativeUI tool — renders LLM-generated HTML/SVG widgets inline in FlowChat.
+//! GenerativeUI tool — renders LLM-generated HTML/SVG widgets.
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::util::errors::BitFunResult;
@@ -10,6 +10,10 @@ pub struct GenerativeUITool;
 impl GenerativeUITool {
     pub fn new() -> Self {
         Self
+    }
+
+    fn architecture_widget_reminder() -> &'static str {
+        "Architecture/codebase widget reminder: if the widget is a repo map, README architecture view, or module diagram, clickable nodes must carry verified file metadata on the clickable element itself. Use `data-file-path` for a REAL existing file and `data-line` for the exact definition line when the node represents code. Do not attach file metadata to abstract grouping nodes, package containers, or directories. If a node is conceptual or cannot be verified, leave it non-clickable."
     }
 }
 
@@ -26,7 +30,7 @@ impl Tool for GenerativeUITool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Use GenerativeUI to render visual HTML or SVG content inline inside the FlowChat tool card.
+        Ok(r#"Use GenerativeUI to render visual HTML or SVG content.
 
 Use this when the user asks for visual or interactive output such as:
 - charts, dashboards, tables
@@ -42,27 +46,34 @@ Input rules:
 5. Keep the first useful content visible early. Avoid giant style blocks.
 6. Prefer self-contained widgets. CDN scripts are allowed when needed, but keep them minimal.
 7. If the user only needs text, do not use this tool.
-8. Design for the inline FlowChat card first. Avoid layouts that assume a separate side panel.
-9. Avoid large CSS resets, fixed overlays, and nested scrolling.
-10. Keep the widget focused. Prefer one clear visual or one small interactive tool.
-11. If the widget needs follow-up reasoning, use `sendPrompt('...')` from inside the widget.
-12. Do not invent custom desktop bridge APIs such as `window.app.call(...)` for file opening inside widgets.
-13. Do not use `parent.postMessage(...)` or custom `onclick` protocols for file opening when `data-file-path` can be attached directly to the clickable element.
-14. For clickable file navigation, add attributes like `data-file-path="src/main.rs"` and optional `data-line="42"` on the clickable element.
-15. For codebase maps or architecture diagrams, clickable nodes MUST use `data-file-path`.
-16. For codebase architecture diagrams, prefer one clickable node per file or module that should open in the editor.
-17. If the user asks for click-to-open files, do not build a details-only interaction with `data-key` and `onclick="showDetail(...)"` unless the clickable node also carries `data-file-path`.
-18. For charts, give charts a fixed-height wrapper and keep legends or summary numbers outside the canvas when possible.
-19. For mockups, use compact spacing and clear hierarchy. Avoid building full app chrome unless the chrome itself is the point.
-20. For lightweight generative art, prefer SVG and keep the output deterministic and performant.
-
-The rendered widget appears directly inside the FlowChat tool card and should be designed to fit that inline context."#.to_string())
+8. Prefer compact, scroll-light layouts. Avoid large CSS resets, fixed overlays, oversized app chrome, and nested scrolling.
+9. Keep the widget focused. Prefer one clear visual or one small interactive tool.
+10. If the widget needs follow-up reasoning, use `sendPrompt('...')` from inside the widget.
+11. Do not invent custom desktop bridge APIs such as `window.app.call(...)` for file opening inside widgets.
+12. Do not use `parent.postMessage(...)` or custom `onclick` protocols for file opening when `data-file-path` can be attached directly to the clickable element.
+13. CRITICAL for codebase maps, repo overviews, and architecture diagrams: NEVER guess or invent paths. Every clickable `data-file-path` MUST point to a REAL file that exists in the workspace.
+14. For clickable file navigation, add `data-file-path` on the clickable element itself, and add `data-line` for the exact definition or anchor line whenever the node represents code.
+15. `data-file-path` may be workspace-relative such as `src/crates/core/src/lib.rs`, or absolute when already verified, but it MUST resolve to a file, not a directory.
+16. Do NOT attach `data-file-path` to abstract grouping nodes such as "Core", "Frontend", "Agent System", or module containers unless that node intentionally opens one specific real file.
+17. For codebase architecture diagrams, prefer one clickable node per concrete file. If a node represents a broader concept, package, or directory, leave it non-clickable instead of pointing it at a folder.
+18. Workflow for architecture widgets: first verify candidate files with Glob or LS, then use Read with line numbers when needed, and only then emit clickable nodes with verified file paths and lines.
+19. If you cannot verify the exact file path and line number, do not make that node clickable. Better to have fewer accurate links than many broken ones.
+20. If the user asks for click-to-open files, do not build a details-only interaction with `data-key` and `onclick="showDetail(...)"` unless the clickable node also carries its own `data-file-path`.
+21. Do not put one `data-file-path` on a large wrapper that contains multiple visual nodes. The actual clickable node must own the path metadata.
+22. Make clickable nodes look clickable with visible grouping, spacing, and hover feedback instead of producing a static poster.
+23. For charts, give charts a fixed-height wrapper and keep legends or summary numbers outside the canvas when possible.
+24. For mockups, use compact spacing and clear hierarchy. Avoid building full app chrome unless the chrome itself is the point.
+25. For lightweight generative art, prefer SVG and keep the output deterministic and performant."#.to_string())
     }
 
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
             "additionalProperties": false,
+            "description": format!(
+                "Render a compact HTML/SVG widget. {}",
+                Self::architecture_widget_reminder()
+            ),
             "required": ["title", "widget_code"],
             "properties": {
                 "title": {
@@ -71,7 +82,10 @@ The rendered widget appears directly inside the FlowChat tool card and should be
                 },
                 "widget_code": {
                     "type": "string",
-                    "description": "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>."
+                    "description": format!(
+                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. {} If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
+                        Self::architecture_widget_reminder()
+                    )
                 },
                 "width": {
                     "type": "integer",
@@ -87,13 +101,24 @@ The rendered widget appears directly inside the FlowChat tool card and should be
                 },
                 "modules": {
                     "type": "array",
-                    "description": "Optional guidance tags such as interactive, chart, mockup, art, diagram.",
+                    "description": "Optional guidance tags such as interactive, chart, mockup, art, diagram, architecture, or repo-map. If this includes architecture/repo-map/diagram, apply the architecture widget reminder strictly.",
                     "items": {
                         "type": "string"
                     }
                 }
             }
         })
+    }
+
+    async fn input_schema_for_model_with_context(&self, _context: Option<&ToolUseContext>) -> Value {
+        let mut schema = self.input_schema();
+        if let Some(obj) = schema.as_object_mut() {
+            obj.insert(
+                "x-bitfun-reminder".to_string(),
+                Value::String(Self::architecture_widget_reminder().to_string()),
+            );
+        }
+        schema
     }
 
     fn user_facing_name(&self) -> String {

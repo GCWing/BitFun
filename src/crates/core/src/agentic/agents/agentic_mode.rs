@@ -26,7 +26,6 @@ impl AgenticMode {
                 "Glob".to_string(),
                 "WebSearch".to_string(),
                 "TodoWrite".to_string(),
-                "VisualizeReadMe".to_string(),
                 "GenerativeUI".to_string(),
                 "Skill".to_string(),
                 "AskUserQuestion".to_string(),

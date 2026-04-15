@@ -126,7 +126,6 @@ impl ToolRegistry {
         self.register_tool(Arc::new(ListMCPPromptsTool::new()));
         self.register_tool(Arc::new(GetMCPPromptTool::new()));
 
-        self.register_tool(Arc::new(VisualizeReadMeTool::new()));
         self.register_tool(Arc::new(GenerativeUITool::new()));
         // GetFileDiff tool
         self.register_tool(Arc::new(GetFileDiffTool::new()));

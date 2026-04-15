@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Sparkles } from 'lucide-react';
 import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -34,7 +34,6 @@ function parseWidgetResult(raw: unknown): WidgetResult | null {
 export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) => {
   const { status, toolCall, toolResult, partialParams, isParamsStreaming } = toolItem;
   const resultData = useMemo(() => parseWidgetResult(toolResult?.result), [toolResult?.result]);
-  const [measuredHeight, setMeasuredHeight] = useState(160);
 
   const liveParams = isParamsStreaming ? partialParams : toolCall?.input;
   const widgetCode = useMemo(() => {
@@ -74,13 +73,23 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running' || status === 'pending';
   const isFailed = status === 'error' || toolResult?.success === false;
   const widgetId = resultData?.widget_id || toolCall?.id || toolItem.id;
+  const preferredWidth = useMemo(() => {
+    const fromStreaming = liveParams?.width;
+    if (typeof fromStreaming === 'number' && fromStreaming >= 240) {
+      return fromStreaming;
+    }
+
+    const fromResult = resultData?.width;
+    if (typeof fromResult === 'number' && fromResult >= 240) {
+      return fromResult;
+    }
+
+    const fromInput = toolCall?.input?.width;
+    return typeof fromInput === 'number' && fromInput >= 240 ? fromInput : undefined;
+  }, [liveParams, resultData?.width, toolCall?.input]);
 
   const handleWidgetEvent = useCallback((event: any) => {
     handleWidgetBridgeEvent(event, 'tool-card');
-  }, []);
-
-  const handleHeightChange = useCallback((height: number) => {
-    setMeasuredHeight(height);
   }, []);
 
   const header = (
@@ -109,14 +118,14 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
       {toolResult?.error || 'Widget rendering failed.'}
     </div>
   ) : widgetCode.trim().length > 0 ? (
-    <div className="generative-widget-card__preview" style={{ minHeight: `${measuredHeight}px` }}>
+    <div className="generative-widget-card__preview">
       <GenerativeWidgetFrame
         widgetId={widgetId}
         title={title}
         widgetCode={widgetCode}
+        preferredWidth={preferredWidth}
         executeScripts={status === 'completed'}
         onWidgetEvent={handleWidgetEvent}
-        onHeightChange={handleHeightChange}
       />
     </div>
   ) : (

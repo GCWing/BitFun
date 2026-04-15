@@ -41,6 +41,7 @@ export interface GenerativeWidgetFrameProps {
   widgetId: string;
   title?: string;
   widgetCode: string;
+  preferredWidth?: number;
   executeScripts?: boolean;
   className?: string;
   onWidgetEvent?: (event: WidgetMessage) => void;
@@ -58,14 +59,18 @@ const SHELL_HTML = `<!DOCTYPE html>
       margin: 0;
       padding: 0;
       width: 100%;
-      min-height: 100%;
+      min-height: 0;
       background: transparent;
       color: #e8e8e8;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
-    body { min-height: 100%; }
-    #root { min-height: 100%; width: 100%; }
+    body { min-height: 0; }
+    #root {
+      width: 100%;
+      min-width: 100%;
+    }
     @keyframes bitfunWidgetFadeIn {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
@@ -97,12 +102,9 @@ const SHELL_HTML = `<!DOCTYPE html>
 
       function measureHeight() {
         var root = document.getElementById('root');
-        var rootRectHeight = root ? root.getBoundingClientRect().height : 0;
         return Math.max(
-          Math.ceil(rootRectHeight),
           root ? root.scrollHeight : 0,
-          document.body ? document.body.scrollHeight : 0,
-          document.documentElement ? document.documentElement.scrollHeight : 0,
+          root ? root.offsetHeight : 0,
           120
         );
       }
@@ -260,6 +262,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   widgetId,
   title,
   widgetCode,
+  preferredWidth,
   executeScripts = false,
   className = '',
   onWidgetEvent,
@@ -271,6 +274,8 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   const lastExecutedHtmlRef = useRef('');
 
   const normalizedCode = useMemo(() => widgetCode || '', [widgetCode]);
+  const resolvedPreferredWidth =
+    typeof preferredWidth === 'number' && preferredWidth >= 240 ? Math.round(preferredWidth) : null;
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<WidgetMessage>) => {
@@ -329,6 +334,10 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
         ref={iframeRef}
         title={title || 'Generative widget'}
         className="bitfun-generative-widget-frame__iframe"
+        style={{
+          width: resolvedPreferredWidth ? `${resolvedPreferredWidth}px` : '100%',
+          minWidth: '100%',
+        }}
         sandbox="allow-scripts allow-forms allow-modals allow-popups"
         srcDoc={SHELL_HTML}
         onLoad={() => setIsLoaded(true)}
