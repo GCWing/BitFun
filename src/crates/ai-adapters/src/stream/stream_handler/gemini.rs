@@ -205,6 +205,7 @@ mod tests {
         let mut state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{\"city\":".to_string()),
@@ -213,6 +214,7 @@ mod tests {
         state.assign_id(&mut first);
 
         let mut second = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("\"Paris\"}".to_string()),
@@ -232,6 +234,7 @@ mod tests {
         let mut state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
@@ -241,6 +244,7 @@ mod tests {
         state.on_non_tool_response();
 
         let mut second = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
@@ -261,12 +265,14 @@ mod tests {
         let mut second_state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("grep".to_string()),
             arguments: Some("{}".to_string()),
             arguments_is_snapshot: false,
         };
         let mut second = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("read".to_string()),
             arguments: Some("{}".to_string()),

@@ -79,6 +79,7 @@ struct OpenAIToolCall {
 impl From<OpenAIToolCall> for UnifiedToolCall {
     fn from(tool_call: OpenAIToolCall) -> Self {
         Self {
+            tool_call_index: Some(tool_call.index),
             id: tool_call.id,
             name: tool_call.function.as_ref().and_then(|f| f.name.clone()),
             arguments: tool_call
@@ -343,6 +344,20 @@ mod tests {
         let responses = sse_data.into_unified_responses();
 
         assert_eq!(responses.len(), 2);
+        assert_eq!(
+            responses[0]
+                .tool_call
+                .as_ref()
+                .and_then(|tool| tool.tool_call_index),
+            Some(0)
+        );
+        assert_eq!(
+            responses[1]
+                .tool_call
+                .as_ref()
+                .and_then(|tool| tool.tool_call_index),
+            Some(1)
+        );
         assert_eq!(
             responses[0]
                 .tool_call

@@ -377,3 +377,154 @@ async fn openai_fixture_filters_orphan_id_only_block_when_it_shares_chunk_with_f
         ]
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_routes_interleaved_tool_args_by_index() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/interleaved_parallel_tool_args_by_index.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert_eq!(result.tool_calls.len(), 2);
+
+    assert_eq!(result.tool_calls[0].tool_id, "call_1");
+    assert_eq!(result.tool_calls[0].tool_name, "tool_one");
+    assert_eq!(result.tool_calls[0].arguments, json!({ "x": 1 }));
+    assert!(!result.tool_calls[0].is_error);
+
+    assert_eq!(result.tool_calls[1].tool_id, "call_2");
+    assert_eq!(result.tool_calls[1].tool_name, "tool_two");
+    assert_eq!(result.tool_calls[1].arguments, json!({ "y": 2 }));
+    assert!(!result.tool_calls[1].is_error);
+
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(10)
+    );
+
+    let early_detected_ids: Vec<&str> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                ..
+            } => Some(tool_id.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(early_detected_ids, vec!["call_1", "call_2"]);
+
+    let partial_params: Vec<(&str, &str)> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event:
+                    ToolEventData::ParamsPartial {
+                        tool_id, params, ..
+                    },
+                ..
+            } => Some((tool_id.as_str(), params.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        partial_params,
+        vec![("call_1", "{\"x\":1}"), ("call_2", "{\"y\":2}")]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_accepts_tool_call_without_type_field() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/tool_call_missing_type_field.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert_eq!(result.tool_calls.len(), 1);
+    assert_eq!(result.tool_calls[0].tool_id, "call_abc123");
+    assert_eq!(result.tool_calls[0].tool_name, "test_tool");
+    assert_eq!(result.tool_calls[0].arguments, json!({ "value": "hello" }));
+    assert!(!result.tool_calls[0].is_error);
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(15)
+    );
+
+    let early_detected = output.events.iter().any(|event| {
+        matches!(
+            event,
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
+                ..
+            } if tool_id == "call_abc123" && tool_name == "test_tool"
+        )
+    });
+    assert!(
+        early_detected,
+        "missing type field should still trigger tool early detection"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_ignores_trailing_empty_tool_args_finish_chunk() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/tool_call_trailing_empty_args_finish_chunk.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let result = output.result.expect("stream result");
+
+    assert_eq!(result.tool_calls.len(), 1);
+    assert_eq!(result.tool_calls[0].tool_id, "call_tail_1");
+    assert_eq!(result.tool_calls[0].tool_name, "search_google");
+    assert_eq!(
+        result.tool_calls[0].arguments,
+        json!({ "query": "latest news on ai" })
+    );
+    assert!(!result.tool_calls[0].is_error);
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(246)
+    );
+
+    let early_detected_ids: Vec<&str> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::EarlyDetected { tool_id, .. },
+                ..
+            } => Some(tool_id.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(early_detected_ids, vec!["call_tail_1"]);
+
+    let partial_params: Vec<&str> = output
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            AgenticEvent::ToolEvent {
+                tool_event: ToolEventData::ParamsPartial { params, .. },
+                ..
+            } => Some(params.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        partial_params,
+        vec!["{\"query\":\"latest", " news", " on ai\"}"]
+    );
+}

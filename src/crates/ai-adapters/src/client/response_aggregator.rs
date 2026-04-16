@@ -1,5 +1,5 @@
 use crate::stream::UnifiedResponse;
-use crate::tool_call_accumulator::{PendingToolCall, ToolCallBoundary};
+use crate::tool_call_accumulator::{PendingToolCalls, ToolCallBoundary, ToolCallStreamKey};
 use crate::types::{GeminiResponse, GeminiUsage, ToolCall};
 use anyhow::Result;
 use futures::StreamExt;
@@ -19,7 +19,7 @@ pub(crate) async fn aggregate_stream_response(
     let mut provider_metadata: Option<serde_json::Value> = None;
 
     let mut tool_calls: Vec<ToolCall> = Vec::new();
-    let mut pending_tool_call = PendingToolCall::default();
+    let mut pending_tool_calls = PendingToolCalls::default();
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
@@ -44,60 +44,48 @@ pub(crate) async fn aggregate_stream_response(
 
                 if let Some(tool_call) = tool_call {
                     let crate::stream::UnifiedToolCall {
+                        tool_call_index,
                         id,
                         name,
                         arguments,
                         arguments_is_snapshot,
                     } = tool_call;
+                    let outcome = pending_tool_calls.apply_delta(
+                        ToolCallStreamKey::from(tool_call_index),
+                        id,
+                        name,
+                        arguments,
+                        arguments_is_snapshot,
+                    );
 
-                    if let Some(tool_call_id) = id {
-                        if !tool_call_id.is_empty() {
-                            let is_new_tool = pending_tool_call.tool_id() != tool_call_id;
-                            if is_new_tool {
-                                if let Some(finalized) =
-                                    pending_tool_call.finalize(ToolCallBoundary::NewTool)
-                                {
-                                    if finalized.is_error {
-                                        warn!(
-                                            "[send_message] Dropping invalid tool call at boundary=new_tool: tool_id={}, tool_name={}, raw_len={}",
-                                            finalized.tool_id,
-                                            finalized.tool_name,
-                                            finalized.raw_arguments.len()
-                                        );
-                                    } else {
-                                        let arguments = finalized.arguments_as_object_map();
-                                        tool_calls.push(ToolCall {
-                                            id: finalized.tool_id,
-                                            name: finalized.tool_name,
-                                            arguments,
-                                        });
-                                    }
-                                }
-                                pending_tool_call.start_new(tool_call_id, name.clone());
-                                debug!(
-                                    "[send_message] Detected tool call: {}",
-                                    pending_tool_call.tool_name()
-                                );
-                            } else {
-                                pending_tool_call.update_tool_name_if_missing(name.clone());
-                            }
+                    if let Some(finalized) = outcome.finalized_previous {
+                        if finalized.is_error {
+                            warn!(
+                                "[send_message] Dropping invalid tool call at boundary=new_tool: tool_id={}, tool_name={}, raw_len={}",
+                                finalized.tool_id,
+                                finalized.tool_name,
+                                finalized.raw_arguments.len()
+                            );
+                        } else {
+                            let arguments = finalized.arguments_as_object_map();
+                            tool_calls.push(ToolCall {
+                                id: finalized.tool_id,
+                                name: finalized.tool_name,
+                                arguments,
+                            });
                         }
                     }
 
-                    if let Some(tool_call_arguments) = arguments {
-                        if pending_tool_call.has_pending() {
-                            if arguments_is_snapshot {
-                                pending_tool_call.replace_arguments(&tool_call_arguments);
-                            } else {
-                                pending_tool_call.append_arguments(&tool_call_arguments);
-                            }
-                        }
+                    if let Some(early_detected) = outcome.early_detected {
+                        debug!(
+                            "[send_message] Detected tool call: {}",
+                            early_detected.tool_name
+                        );
                     }
                 }
 
                 if let Some(finish_reason_) = chunk_finish_reason {
-                    if let Some(finalized) =
-                        pending_tool_call.finalize(ToolCallBoundary::FinishReason)
+                    for finalized in pending_tool_calls.finalize_all(ToolCallBoundary::FinishReason)
                     {
                         if finalized.is_error {
                             warn!(
@@ -138,7 +126,7 @@ pub(crate) async fn aggregate_stream_response(
         }
     }
 
-    if let Some(finalized) = pending_tool_call.finalize(ToolCallBoundary::EndOfAggregation) {
+    for finalized in pending_tool_calls.finalize_all(ToolCallBoundary::EndOfAggregation) {
         if finalized.is_error {
             warn!(
                 "[send_message] Dropping invalid tool call at boundary=end_of_aggregation: tool_id={}, tool_name={}, raw_len={}",

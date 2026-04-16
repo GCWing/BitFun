@@ -1,0 +1,7 @@
+data: {"id":"chatcmpl_azure_001","object":"chat.completion.chunk","created":1711357598,"model":"mistral-large","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_abc123","function":{"name":"test_tool","arguments":""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_azure_001","object":"chat.completion.chunk","created":1711357599,"model":"mistral-large","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"value\""}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_azure_001","object":"chat.completion.chunk","created":1711357600,"model":"mistral-large","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":":\"hello\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
+
+data: [DONE]
