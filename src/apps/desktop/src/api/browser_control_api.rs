@@ -34,8 +34,7 @@ pub async fn browser_control_get_status(
 ) -> Result<BrowserControlStatusResponse, String> {
     let port = request.port;
     let available = BrowserLauncher::is_cdp_available(port).await;
-    let kind = BrowserLauncher::detect_default_browser()
-        .unwrap_or(BrowserKind::Chrome);
+    let kind = BrowserLauncher::detect_default_browser().unwrap_or(BrowserKind::Chrome);
 
     let (version, page_count) = if available {
         let ver = CdpClient::get_version(port)
@@ -83,8 +82,7 @@ pub async fn browser_control_launch(
     request: BrowserControlLaunchRequest,
 ) -> Result<BrowserControlLaunchResponse, String> {
     let port = request.port;
-    let kind = BrowserLauncher::detect_default_browser()
-        .map_err(|e| e.to_string())?;
+    let kind = BrowserLauncher::detect_default_browser().map_err(|e| e.to_string())?;
 
     let result = BrowserLauncher::launch_with_cdp(&kind, port)
         .await
@@ -103,22 +101,20 @@ pub async fn browser_control_launch(
             message: None,
             browser_kind: kind.to_string(),
         }),
-        LaunchResult::LaunchedButCdpNotReady { message, .. } => {
+        LaunchResult::LaunchedButCdpNotReady { message, .. } => Ok(BrowserControlLaunchResponse {
+            success: false,
+            status: "cdp_not_ready".into(),
+            message: Some(message),
+            browser_kind: kind.to_string(),
+        }),
+        LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => {
             Ok(BrowserControlLaunchResponse {
                 success: false,
-                status: "cdp_not_ready".into(),
-                message: Some(message),
+                status: "needs_restart".into(),
+                message: Some(instructions),
                 browser_kind: kind.to_string(),
             })
         }
-        LaunchResult::BrowserRunningWithoutCdp {
-            instructions, ..
-        } => Ok(BrowserControlLaunchResponse {
-            success: false,
-            status: "needs_restart".into(),
-            message: Some(instructions),
-            browser_kind: kind.to_string(),
-        }),
     }
 }
 
@@ -127,10 +123,8 @@ pub async fn browser_control_launch(
 pub async fn browser_control_create_launcher() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        let kind = BrowserLauncher::detect_default_browser()
-            .map_err(|e| e.to_string())?;
-        BrowserLauncher::create_cdp_launcher_app(&kind, DEFAULT_CDP_PORT)
-            .map_err(|e| e.to_string())
+        let kind = BrowserLauncher::detect_default_browser().map_err(|e| e.to_string())?;
+        BrowserLauncher::create_cdp_launcher_app(&kind, DEFAULT_CDP_PORT).map_err(|e| e.to_string())
     }
     #[cfg(not(target_os = "macos"))]
     {

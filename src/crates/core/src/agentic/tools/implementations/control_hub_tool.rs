@@ -83,18 +83,13 @@ impl ControlHubTool {
             map.insert("action".to_string(), json!(action));
         }
 
-        let cu_tool =
-            super::computer_use_tool::ComputerUseTool::new();
+        let cu_tool = super::computer_use_tool::ComputerUseTool::new();
         cu_tool.call_impl(&cu_input, context).await
     }
 
     // ── Browser domain ─────────────────────────────────────────────────
 
-    async fn handle_browser(
-        &self,
-        action: &str,
-        params: &Value,
-    ) -> BitFunResult<Vec<ToolResult>> {
+    async fn handle_browser(&self, action: &str, params: &Value) -> BitFunResult<Vec<ToolResult>> {
         let port = params
             .get("port")
             .and_then(|v| v.as_u64())
@@ -123,10 +118,7 @@ impl ControlHubTool {
                         });
                         Ok(vec![ToolResult::ok(
                             result.clone(),
-                            Some(format!(
-                                "Connected to {} on CDP port {}",
-                                kind, port
-                            )),
+                            Some(format!("Connected to {} on CDP port {}", kind, port)),
                         )])
                     }
                     LaunchResult::LaunchedButCdpNotReady { message, .. } => {
@@ -167,17 +159,18 @@ impl ControlHubTool {
                 let page_id = params
                     .get("page_id")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| BitFunError::tool("switch_page requires 'page_id'".to_string()))?;
+                    .ok_or_else(|| {
+                        BitFunError::tool("switch_page requires 'page_id'".to_string())
+                    })?;
                 let pages = CdpClient::list_pages(port).await?;
                 let page = pages
                     .iter()
                     .find(|p| p.id == page_id)
-                    .ok_or_else(|| {
-                        BitFunError::tool(format!("Page '{}' not found", page_id))
-                    })?;
-                let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
-                    BitFunError::tool("Page has no WebSocket URL".to_string())
-                })?;
+                    .ok_or_else(|| BitFunError::tool(format!("Page '{}' not found", page_id)))?;
+                let ws_url = page
+                    .web_socket_debugger_url
+                    .as_ref()
+                    .ok_or_else(|| BitFunError::tool("Page has no WebSocket URL".to_string()))?;
                 let client = CdpClient::connect(ws_url).await?;
                 let cdp_slot = get_cdp_client_slot();
                 let mut slot = cdp_slot.write().await;
@@ -427,11 +420,22 @@ impl ControlHubTool {
     fn platform_open_command(app_name: &str) -> (String, Vec<String>) {
         #[cfg(target_os = "macos")]
         {
-            ("open".to_string(), vec!["-a".to_string(), app_name.to_string()])
+            (
+                "open".to_string(),
+                vec!["-a".to_string(), app_name.to_string()],
+            )
         }
         #[cfg(target_os = "windows")]
         {
-            ("cmd".to_string(), vec!["/C".to_string(), "start".to_string(), "".to_string(), app_name.to_string()])
+            (
+                "cmd".to_string(),
+                vec![
+                    "/C".to_string(),
+                    "start".to_string(),
+                    "".to_string(),
+                    app_name.to_string(),
+                ],
+            )
         }
         #[cfg(target_os = "linux")]
         {
@@ -456,9 +460,7 @@ impl ControlHubTool {
                 let app_name = params
                     .get("app_name")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        BitFunError::tool("open_app requires 'app_name'".to_string())
-                    })?;
+                    .ok_or_else(|| BitFunError::tool("open_app requires 'app_name'".to_string()))?;
                 // Delegate to ComputerUse's open_app if host is available
                 let cu_input = json!({ "action": "open_app", "app_name": app_name });
                 if context.computer_use_host.is_some() {
@@ -469,9 +471,7 @@ impl ControlHubTool {
                 let output = std::process::Command::new(&cmd)
                     .args(&args)
                     .output()
-                    .map_err(|e| {
-                        BitFunError::tool(format!("Failed to open app: {}", e))
-                    })?;
+                    .map_err(|e| BitFunError::tool(format!("Failed to open app: {}", e)))?;
                 if output.status.success() {
                     Ok(vec![ToolResult::ok(
                         json!({ "success": true, "app": app_name }),
@@ -489,9 +489,7 @@ impl ControlHubTool {
                 let script = params
                     .get("script")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        BitFunError::tool("run_script requires 'script'".to_string())
-                    })?;
+                    .ok_or_else(|| BitFunError::tool("run_script requires 'script'".to_string()))?;
                 let script_type = params
                     .get("script_type")
                     .and_then(|v| v.as_str())
@@ -505,17 +503,10 @@ impl ControlHubTool {
                                 .args(["-e", script])
                                 .output()
                                 .map_err(|e| {
-                                    BitFunError::tool(format!(
-                                        "Failed to run AppleScript: {}",
-                                        e
-                                    ))
+                                    BitFunError::tool(format!("Failed to run AppleScript: {}", e))
                                 })?;
-                            let stdout = String::from_utf8_lossy(&output.stdout)
-                                .trim()
-                                .to_string();
-                            let stderr = String::from_utf8_lossy(&output.stderr)
-                                .trim()
-                                .to_string();
+                            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
                             if output.status.success() {
                                 Ok(vec![ToolResult::ok(
                                     json!({ "success": true, "output": stdout }),
@@ -526,10 +517,7 @@ impl ControlHubTool {
                                     }),
                                 )])
                             } else {
-                                Err(BitFunError::tool(format!(
-                                    "AppleScript error: {}",
-                                    stderr
-                                )))
+                                Err(BitFunError::tool(format!("AppleScript error: {}", stderr)))
                             }
                         }
                         #[cfg(not(target_os = "macos"))]
@@ -555,12 +543,8 @@ impl ControlHubTool {
                             .map_err(|e| {
                                 BitFunError::tool(format!("Failed to run script: {}", e))
                             })?;
-                        let stdout = String::from_utf8_lossy(&output.stdout)
-                            .trim()
-                            .to_string();
-                        let stderr = String::from_utf8_lossy(&output.stderr)
-                            .trim()
-                            .to_string();
+                        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
                         if output.status.success() {
                             Ok(vec![ToolResult::ok(
                                 json!({ "success": true, "output": stdout }),
@@ -722,14 +706,8 @@ Only available in BitFun desktop app.
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        let domain = input
-            .get("domain")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        let action = input
-            .get("action")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
+        let domain = input.get("domain").and_then(|v| v.as_str()).unwrap_or("?");
+        let action = input.get("action").and_then(|v| v.as_str()).unwrap_or("?");
         format!("ControlHub: {}.{}", domain, action)
     }
 

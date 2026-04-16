@@ -226,7 +226,12 @@ pub(crate) async fn send_stream(
         max_tries,
         || apply_headers(client, client.client.post(&url), &url),
         move |response, tx, tx_raw| {
-            tokio::spawn(handle_anthropic_stream(response, tx, tx_raw));
+            tokio::spawn(handle_anthropic_stream(
+                response,
+                tx,
+                tx_raw,
+                client.config.inline_think_in_text,
+            ));
         },
     )
     .await

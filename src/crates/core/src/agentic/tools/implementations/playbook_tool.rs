@@ -17,8 +17,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 /// Embedded playbook YAML files from `builtin_playbooks/`.
-static BUILTIN_PLAYBOOKS_DIR: Dir<'_> =
-    include_dir!("$CARGO_MANIFEST_DIR/builtin_playbooks");
+static BUILTIN_PLAYBOOKS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin_playbooks");
 
 /// A parsed playbook definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,9 +132,11 @@ impl PlaybookTool {
                     .collect();
                 Value::Object(resolved)
             }
-            Value::Array(arr) => {
-                Value::Array(arr.iter().map(|v| Self::resolve_templates(v, vars)).collect())
-            }
+            Value::Array(arr) => Value::Array(
+                arr.iter()
+                    .map(|v| Self::resolve_templates(v, vars))
+                    .collect(),
+            ),
             other => other.clone(),
         }
     }
@@ -166,10 +167,7 @@ impl PlaybookTool {
     /// - `"param_name is not value"` → true when `vars[param_name] != value`
     /// - `"param_name is provided"` → true when `vars[param_name]` exists and is non-empty
     /// - `None` / empty → always true (unconditional step)
-    fn evaluate_condition(
-        condition: &Option<String>,
-        vars: &HashMap<String, String>,
-    ) -> bool {
+    fn evaluate_condition(condition: &Option<String>, vars: &HashMap<String, String>) -> bool {
         let cond = match condition {
             Some(c) if !c.trim().is_empty() => c.trim(),
             _ => return true,
@@ -220,7 +218,10 @@ impl PlaybookTool {
                         .collect::<Vec<_>>()
                         .join(", ")
                 };
-                format!("- **{}**: {} [params: {}]", pb.name, pb.description, params_desc)
+                format!(
+                    "- **{}**: {} [params: {}]",
+                    pb.name, pb.description, params_desc
+                )
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -318,14 +319,8 @@ Use this tool when you recognize a common task pattern — it saves planning tim
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        let action = input
-            .get("action")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        let name = input
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let action = input.get("action").and_then(|v| v.as_str()).unwrap_or("?");
+        let name = input.get("name").and_then(|v| v.as_str()).unwrap_or("");
         if name.is_empty() {
             format!("Playbook: {}", action)
         } else {
@@ -341,12 +336,14 @@ Use this tool when you recognize a common task pattern — it saves planning tim
                 .map(|(i, s)| {
                     let domain = s.get("domain").and_then(|v| v.as_str()).unwrap_or("?");
                     let action = s.get("action").and_then(|v| v.as_str()).unwrap_or("?");
-                    let desc = s
-                        .get("description")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                    let desc = s.get("description").and_then(|v| v.as_str()).unwrap_or("");
                     if desc.is_empty() {
-                        format!("{}. ControlHub {{ domain: \"{}\", action: \"{}\" }}", i + 1, domain, action)
+                        format!(
+                            "{}. ControlHub {{ domain: \"{}\", action: \"{}\" }}",
+                            i + 1,
+                            domain,
+                            action
+                        )
                     } else {
                         format!(
                             "{}. {} — ControlHub {{ domain: \"{}\", action: \"{}\" }}",
@@ -404,9 +401,7 @@ Use this tool when you recognize a common task pattern — it saves planning tim
                 let name = input
                     .get("name")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        BitFunError::tool("'run' requires 'name'".to_string())
-                    })?;
+                    .ok_or_else(|| BitFunError::tool("'run' requires 'name'".to_string()))?;
 
                 let pb = self.find_playbook(name).ok_or_else(|| {
                     let available: Vec<&str> =
@@ -426,7 +421,10 @@ Use this tool when you recognize a common task pattern — it saves planning tim
                 }
                 if let Some(params_obj) = input.get("params").and_then(|v| v.as_object()) {
                     for (k, v) in params_obj {
-                        let val = v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string());
+                        let val = v
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| v.to_string());
                         vars.insert(k.clone(), val);
                     }
                 }
@@ -467,11 +465,7 @@ Use this tool when you recognize a common task pattern — it saves planning tim
                     })
                     .collect();
 
-                info!(
-                    "Playbook '{}' resolved with {} steps",
-                    name,
-                    steps.len()
-                );
+                info!("Playbook '{}' resolved with {} steps", name, steps.len());
 
                 Ok(vec![ToolResult::ok(
                     json!({

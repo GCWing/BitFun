@@ -850,7 +850,7 @@ pub struct AIModelConfig {
 
     /// Whether to parse OpenAI-compatible text chunks containing `<think>...</think>` into
     /// streaming reasoning content.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub inline_think_in_text: bool,
 
     /// Custom HTTP request headers.
@@ -906,6 +906,7 @@ struct AIModelConfigCompat {
     metadata: Option<serde_json::Value>,
     enable_thinking_process: Option<bool>,
     reasoning_mode: Option<ReasoningMode>,
+    #[serde(default = "default_true")]
     inline_think_in_text: bool,
     custom_headers: Option<std::collections::HashMap<String, String>>,
     custom_headers_mode: Option<String>,
@@ -1336,7 +1337,7 @@ impl Default for AIModelConfig {
             metadata: None,
             enable_thinking_process: false,
             reasoning_mode: None,
-            inline_think_in_text: false,
+            inline_think_in_text: true,
             custom_headers: None,
             custom_headers_mode: None,
             skip_ssl_verify: false,
@@ -1573,5 +1574,27 @@ mod tests {
             value.get("reasoning_mode").and_then(|v| v.as_str()),
             Some("enabled")
         );
+    }
+
+    #[test]
+    fn default_model_config_enables_inline_think_in_text() {
+        let config = AIModelConfig::default();
+        assert!(config.inline_think_in_text);
+    }
+
+    #[test]
+    fn deserializes_missing_inline_think_in_text_as_enabled() {
+        let config: AIModelConfig = serde_json::from_value(serde_json::json!({
+            "id": "model_1",
+            "name": "Provider",
+            "provider": "openai",
+            "model_name": "test-model",
+            "base_url": "https://example.com/v1",
+            "api_key": "key",
+            "enabled": true
+        }))
+        .expect("config without inline_think_in_text should deserialize");
+
+        assert!(config.inline_think_in_text);
     }
 }

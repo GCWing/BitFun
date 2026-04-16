@@ -76,7 +76,11 @@ impl BrowserLauncher {
     #[cfg(target_os = "macos")]
     fn detect_default_browser_macos() -> BitFunResult<BrowserKind> {
         let output = Command::new("defaults")
-            .args(["read", "com.apple.LaunchServices/com.apple.launchservices.secure", "LSHandlers"])
+            .args([
+                "read",
+                "com.apple.LaunchServices/com.apple.launchservices.secure",
+                "LSHandlers",
+            ])
             .output()
             .ok();
 
@@ -175,9 +179,7 @@ impl BrowserLauncher {
                 BrowserKind::Brave => {
                     "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser".into()
                 }
-                BrowserKind::Arc => {
-                    "/Applications/Arc.app/Contents/MacOS/Arc".into()
-                }
+                BrowserKind::Arc => "/Applications/Arc.app/Contents/MacOS/Arc".into(),
                 BrowserKind::Chromium => {
                     "/Applications/Chromium.app/Contents/MacOS/Chromium".into()
                 }
@@ -218,15 +220,9 @@ impl BrowserLauncher {
 
     /// Launch the browser with the CDP debug port flag.
     /// Returns instructions if the browser is already running without CDP.
-    pub async fn launch_with_cdp(
-        kind: &BrowserKind,
-        port: u16,
-    ) -> BitFunResult<LaunchResult> {
+    pub async fn launch_with_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
         if Self::is_cdp_available(port).await {
-            info!(
-                "CDP already available on port {} for {}",
-                port, kind
-            );
+            info!("CDP already available on port {} for {}", port, kind);
             return Ok(LaunchResult::AlreadyConnected);
         }
 
@@ -253,9 +249,7 @@ impl BrowserLauncher {
         }
 
         info!("Launching {} with CDP on port {}", kind, port);
-        let result = Command::new(&exe)
-            .arg(&flag)
-            .spawn();
+        let result = Command::new(&exe).arg(&flag).spawn();
 
         match result {
             Ok(_child) => {
@@ -296,10 +290,7 @@ impl BrowserLauncher {
         #[cfg(target_os = "macos")]
         {
             for name in &process_names {
-                let output = Command::new("pgrep")
-                    .args(["-f", name])
-                    .output()
-                    .ok();
+                let output = Command::new("pgrep").args(["-f", name]).output().ok();
                 if let Some(out) = output {
                     if out.status.success() && !out.stdout.is_empty() {
                         return true;
@@ -329,10 +320,7 @@ impl BrowserLauncher {
         #[cfg(target_os = "linux")]
         {
             for name in &process_names {
-                let output = Command::new("pgrep")
-                    .args(["-f", name])
-                    .output()
-                    .ok();
+                let output = Command::new("pgrep").args(["-f", name]).output().ok();
                 if let Some(out) = output {
                     if out.status.success() && !out.stdout.is_empty() {
                         return true;
@@ -345,37 +333,29 @@ impl BrowserLauncher {
 
     /// Create a macOS `.app` wrapper that launches the browser with CDP enabled.
     #[cfg(target_os = "macos")]
-    pub fn create_cdp_launcher_app(
-        kind: &BrowserKind,
-        port: u16,
-    ) -> BitFunResult<String> {
+    pub fn create_cdp_launcher_app(kind: &BrowserKind, port: u16) -> BitFunResult<String> {
         let app_name = format!("{} Debug", kind);
         let app_dir = format!("/Applications/{}.app", app_name);
         let macos_dir = format!("{}/Contents/MacOS", app_dir);
         let script_path = format!("{}/launch", macos_dir);
         let exe = Self::browser_executable(kind);
 
-        std::fs::create_dir_all(&macos_dir).map_err(|e| {
-            BitFunError::tool(format!("Failed to create app bundle: {}", e))
-        })?;
+        std::fs::create_dir_all(&macos_dir)
+            .map_err(|e| BitFunError::tool(format!("Failed to create app bundle: {}", e)))?;
 
         let script = format!(
             "#!/bin/bash\nexec \"{}\" --remote-debugging-port={} \"$@\"\n",
             exe, port
         );
-        std::fs::write(&script_path, &script).map_err(|e| {
-            BitFunError::tool(format!("Failed to write launcher script: {}", e))
-        })?;
+        std::fs::write(&script_path, &script)
+            .map_err(|e| BitFunError::tool(format!("Failed to write launcher script: {}", e)))?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
                 .map_err(|e| {
-                    BitFunError::tool(format!(
-                        "Failed to set executable permission: {}",
-                        e
-                    ))
+                    BitFunError::tool(format!("Failed to set executable permission: {}", e))
                 })?;
         }
 
@@ -396,9 +376,7 @@ impl BrowserLauncher {
         );
 
         std::fs::write(format!("{}/Contents/Info.plist", app_dir), &plist)
-            .map_err(|e| {
-                BitFunError::tool(format!("Failed to write Info.plist: {}", e))
-            })?;
+            .map_err(|e| BitFunError::tool(format!("Failed to write Info.plist: {}", e)))?;
 
         info!("Created CDP launcher app at {}", app_dir);
         Ok(app_dir)

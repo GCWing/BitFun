@@ -127,8 +127,7 @@ impl<'a> BrowserActions<'a> {
             .and_then(|r| r.get("value"))
             .and_then(|v| v.as_str())
             .unwrap_or("{}");
-        let coords: Value =
-            serde_json::from_str(coords_str).unwrap_or(json!({}));
+        let coords: Value = serde_json::from_str(coords_str).unwrap_or(json!({}));
         let x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
@@ -171,10 +170,7 @@ impl<'a> BrowserActions<'a> {
         self.evaluate(&focus_js).await?;
 
         self.client
-            .send(
-                "Input.insertText",
-                Some(json!({ "text": value })),
-            )
+            .send("Input.insertText", Some(json!({ "text": value })))
             .await?;
 
         Ok(json!({
@@ -187,10 +183,7 @@ impl<'a> BrowserActions<'a> {
     /// Type text at the currently focused element (appends, does not clear).
     pub async fn type_text(&self, text: &str) -> BitFunResult<Value> {
         self.client
-            .send(
-                "Input.insertText",
-                Some(json!({ "text": text })),
-            )
+            .send("Input.insertText", Some(json!({ "text": text })))
             .await?;
         Ok(json!({ "success": true, "action": "type", "text": text }))
     }
@@ -245,11 +238,7 @@ impl<'a> BrowserActions<'a> {
     }
 
     /// Scroll the page.
-    pub async fn scroll(
-        &self,
-        direction: &str,
-        amount: Option<i64>,
-    ) -> BitFunResult<Value> {
+    pub async fn scroll(&self, direction: &str, amount: Option<i64>) -> BitFunResult<Value> {
         let px = amount.unwrap_or(500);
         let delta_y = match direction {
             "up" => -px,
@@ -307,7 +296,9 @@ impl<'a> BrowserActions<'a> {
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
                         if found {
-                            return Ok(json!({ "success": true, "action": "wait", "condition": cond }));
+                            return Ok(
+                                json!({ "success": true, "action": "wait", "condition": cond }),
+                            );
                         }
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
@@ -332,10 +323,7 @@ impl<'a> BrowserActions<'a> {
                 Some(json!({ "format": "jpeg", "quality": 80 })),
             )
             .await?;
-        let data = result
-            .get("data")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let data = result.get("data").and_then(|v| v.as_str()).unwrap_or("");
         Ok(json!({
             "success": true,
             "action": "screenshot",
