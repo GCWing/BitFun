@@ -18,6 +18,7 @@ use crate::types::*;
 use anyhow::Result;
 use format::ApiFormat;
 use reqwest::Client;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 /// Streamed response result with the parsed stream and optional raw SSE receiver.
@@ -28,10 +29,18 @@ pub struct StreamResponse {
     pub raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
 }
 
+/// Runtime stream behavior shared across provider implementations.
+#[derive(Debug, Clone, Default)]
+pub struct StreamOptions {
+    /// Maximum idle time between streamed chunks. `None` means wait indefinitely.
+    pub idle_timeout: Option<Duration>,
+}
+
 #[derive(Debug, Clone)]
 pub struct AIClient {
     pub(crate) client: Client,
     pub config: AIConfig,
+    pub(crate) stream_options: StreamOptions,
 }
 
 impl AIClient {
@@ -44,14 +53,26 @@ impl AIClient {
 
     /// Create an AIClient without proxy.
     pub fn new(config: AIConfig) -> Self {
-        let client = http::create_http_client(None, config.skip_ssl_verify);
-        Self { client, config }
+        Self::new_with_runtime_options(config, None, StreamOptions::default())
     }
 
     /// Create an AIClient with proxy configuration.
     pub fn new_with_proxy(config: AIConfig, proxy_config: Option<ProxyConfig>) -> Self {
+        Self::new_with_runtime_options(config, proxy_config, StreamOptions::default())
+    }
+
+    /// Create an AIClient with proxy and runtime stream options.
+    pub fn new_with_runtime_options(
+        config: AIConfig,
+        proxy_config: Option<ProxyConfig>,
+        stream_options: StreamOptions,
+    ) -> Self {
         let client = http::create_http_client(proxy_config, config.skip_ssl_verify);
-        Self { client, config }
+        Self {
+            client,
+            config,
+            stream_options,
+        }
     }
 
     pub async fn send_message_stream(

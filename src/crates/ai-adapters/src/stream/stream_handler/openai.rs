@@ -1,16 +1,15 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
+use super::{next_stream_item, TimedStreamItem};
 use crate::stream::types::openai::{OpenAISSEData, OpenAIToolCallArgumentsNormalizer};
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
 use log::{error, trace, warn};
 use reqwest::Response;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::timeout;
 
 const OPENAI_CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
 const AI_STREAM_RESPONSE_TARGET: &str = "ai::openai_stream_response";
@@ -71,9 +70,9 @@ pub async fn handle_openai_stream(
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
     inline_think_in_text: bool,
+    idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
-    let idle_timeout = Duration::from_secs(600);
     let mut stats = StreamStats::new("OpenAI");
     // Track whether a chunk with `finish_reason` was received.
     // Some providers (e.g. MiniMax) close the stream after the final chunk
@@ -83,10 +82,9 @@ pub async fn handle_openai_stream(
     let mut normalizer = OpenAIResponseNormalizer::new(inline_think_in_text);
 
     loop {
-        let sse_event = timeout(idle_timeout, stream.next()).await;
-        let sse = match sse_event {
-            Ok(Some(Ok(sse))) => sse,
-            Ok(None) => {
+        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+            TimedStreamItem::Item(Ok(sse)) => sse,
+            TimedStreamItem::End => {
                 if received_finish_reason {
                     for normalized_response in normalizer.flush() {
                         stats.record_unified_response(&normalized_response);
@@ -101,15 +99,16 @@ pub async fn handle_openai_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            Ok(Some(Err(e))) => {
+            TimedStreamItem::Item(Err(e)) => {
                 let error_msg = format!("SSE stream error: {}", e);
                 stats.log_summary("sse_stream_error");
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            Err(_) => {
-                let error_msg = format!("SSE stream timeout after {}s", idle_timeout.as_secs());
+            TimedStreamItem::TimedOut => {
+                let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!("SSE stream timeout after {}s", timeout_secs);
                 stats.log_summary("sse_stream_timeout");
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));

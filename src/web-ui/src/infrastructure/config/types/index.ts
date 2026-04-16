@@ -162,6 +162,7 @@ export interface AIConfig {
   streaming: boolean;
   auto_save_conversations: boolean;
   conversation_history_limit: number;
+  stream_idle_timeout_secs?: number | null;
   tool_execution_timeout_secs?: number | null;
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;

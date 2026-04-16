@@ -750,6 +750,7 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
         .get_config(None)
         .await
         .map_err(|e| format!("Failed to get configuration: {}", e))?;
+    let stream_options = bitfun_core::infrastructure::ai::build_stream_options(&global_config.ai);
 
     let primary_model_id = global_config.ai.default_models.primary.ok_or_else(|| {
         "Primary model not configured, please configure it in settings".to_string()
@@ -763,7 +764,11 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
 
     let ai_config = bitfun_core::util::types::AIConfig::try_from(model_config.clone())
         .map_err(|e| format!("Failed to convert AI configuration: {}", e))?;
-    let ai_client = bitfun_core::infrastructure::ai::AIClient::new(ai_config);
+    let ai_client = bitfun_core::infrastructure::ai::AIClient::new_with_runtime_options(
+        ai_config,
+        None,
+        stream_options,
+    );
 
     {
         let mut ai_client_guard = state.ai_client.write().await;

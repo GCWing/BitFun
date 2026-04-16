@@ -195,6 +195,15 @@
     "save": "Save Proxy Configuration",
     "saveSuccess": "Proxy configuration saved, restart IDE to take effect"
   },
+  "streamIdleTimeout": {
+    "title": "Streaming Timeout",
+    "label": "Idle Timeout (seconds)",
+    "hint": "Global idle timeout between streamed chunks. Leave empty to wait indefinitely.",
+    "placeholder": "Leave empty for no timeout",
+    "invalid": "Enter a positive integer in seconds, or leave this field empty.",
+    "save": "Save Streaming Timeout",
+    "saveSuccess": "Streaming timeout saved"
+  },
   "capabilities": {
     "text_chat": "Chat",
     "image_understanding": "Vision",

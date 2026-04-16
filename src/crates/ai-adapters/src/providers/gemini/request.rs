@@ -333,6 +333,7 @@ pub(crate) async fn send_stream(
         gemini_tools,
         extra_body,
     );
+    let idle_timeout = client.stream_options.idle_timeout;
 
     execute_sse_request(
         "Gemini Streaming API",
@@ -341,7 +342,7 @@ pub(crate) async fn send_stream(
         max_tries,
         || apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
-            tokio::spawn(handle_gemini_stream(response, tx, tx_raw));
+            tokio::spawn(handle_gemini_stream(response, tx, tx_raw, idle_timeout));
         },
     )
     .await

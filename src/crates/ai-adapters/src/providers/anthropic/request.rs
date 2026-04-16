@@ -218,6 +218,8 @@ pub(crate) async fn send_stream(
         anthropic_tools,
         extra_body,
     );
+    let inline_think_in_text = client.config.inline_think_in_text;
+    let idle_timeout = client.stream_options.idle_timeout;
 
     execute_sse_request(
         "Anthropic Streaming API",
@@ -230,7 +232,8 @@ pub(crate) async fn send_stream(
                 response,
                 tx,
                 tx_raw,
-                client.config.inline_think_in_text,
+                inline_think_in_text,
+                idle_timeout,
             ));
         },
     )

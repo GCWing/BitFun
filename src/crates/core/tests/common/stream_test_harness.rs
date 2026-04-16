@@ -87,6 +87,7 @@ pub async fn run_stream_fixture_with_options(
                 tx_event,
                 Some(tx_raw_sse),
                 options.openai_inline_think_in_text,
+                None,
             ));
         }
         StreamFixtureProvider::Anthropic => {
@@ -95,16 +96,23 @@ pub async fn run_stream_fixture_with_options(
                 tx_event,
                 Some(tx_raw_sse),
                 options.anthropic_inline_think_in_text,
+                None,
             ));
         }
         StreamFixtureProvider::Gemini => {
-            tokio::spawn(handle_gemini_stream(response, tx_event, Some(tx_raw_sse)));
+            tokio::spawn(handle_gemini_stream(
+                response,
+                tx_event,
+                Some(tx_raw_sse),
+                None,
+            ));
         }
         StreamFixtureProvider::Responses => {
             tokio::spawn(handle_responses_stream(
                 response,
                 tx_event,
                 Some(tx_raw_sse),
+                None,
             ));
         }
     }

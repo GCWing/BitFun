@@ -173,6 +173,24 @@ function formatTokenCountShort(n: number): string {
   return String(n);
 }
 
+function parseOptionalPositiveIntegerInput(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+
+  if (!/^\d+$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
 /** Last line of defense: same logical model name once per save; prefer draft tied to an existing config id. */
 function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): SelectedModelDraft[] {
   const out: SelectedModelDraft[] = [];
@@ -266,6 +284,8 @@ const AIModelConfig: React.FC = () => {
     username: '',
     password: ''
   });
+  const [streamIdleTimeoutInput, setStreamIdleTimeoutInput] = useState('');
+  const [isStreamIdleTimeoutSaving, setIsStreamIdleTimeoutSaving] = useState(false);
   const [isProxySaving, setIsProxySaving] = useState(false);
   const [remoteModelOptions, setRemoteModelOptions] = useState<RemoteModelOption[]>([]);
   const [isFetchingRemoteModels, setIsFetchingRemoteModels] = useState(false);
@@ -347,6 +367,11 @@ const AIModelConfig: React.FC = () => {
     }),
     [t]
   );
+  const parsedStreamIdleTimeout = useMemo(
+    () => parseOptionalPositiveIntegerInput(streamIdleTimeoutInput),
+    [streamIdleTimeoutInput]
+  );
+  const isStreamIdleTimeoutInvalid = parsedStreamIdleTimeout === undefined;
 
   const getCustomRequestBodyTrimHint = useCallback((provider?: string): string => {
     switch (provider) {
@@ -371,12 +396,18 @@ const AIModelConfig: React.FC = () => {
   
   const loadConfig = useCallback(async () => {
     try {
-      const models = await configManager.getConfig<AIModelConfigType[]>('ai.models') || [];
-      const proxy = await configManager.getConfig<ProxyConfig>('ai.proxy');
+      const [models, proxy, streamIdleTimeoutSecs] = await Promise.all([
+        configManager.getConfig<AIModelConfigType[]>('ai.models'),
+        configManager.getConfig<ProxyConfig>('ai.proxy'),
+        configManager.getConfig<number | null>('ai.stream_idle_timeout_secs'),
+      ]);
       setAiModels(models);
       if (proxy) {
         setProxyConfig(proxy);
       }
+      setStreamIdleTimeoutInput(
+        streamIdleTimeoutSecs != null ? String(streamIdleTimeoutSecs) : ''
+      );
     } catch (error) {
       log.error('Failed to load AI config', error);
     }
@@ -1136,6 +1167,30 @@ const AIModelConfig: React.FC = () => {
       notification.error(t('messages.saveFailed'));
     } finally {
       setIsProxySaving(false);
+    }
+  };
+
+  const handleSaveStreamIdleTimeout = async () => {
+    if (isStreamIdleTimeoutInvalid) {
+      notification.warning(t('streamIdleTimeout.invalid'));
+      return;
+    }
+
+    setIsStreamIdleTimeoutSaving(true);
+    try {
+      await configManager.setConfig(
+        'ai.stream_idle_timeout_secs',
+        parsedStreamIdleTimeout ?? null
+      );
+      setStreamIdleTimeoutInput(
+        parsedStreamIdleTimeout != null ? String(parsedStreamIdleTimeout) : ''
+      );
+      notification.success(t('streamIdleTimeout.saveSuccess'));
+    } catch (error) {
+      log.error('Failed to save stream idle timeout', error);
+      notification.error(t('messages.saveFailed'));
+    } finally {
+      setIsStreamIdleTimeoutSaving(false);
     }
   };
 
@@ -2211,6 +2266,37 @@ const AIModelConfig: React.FC = () => {
               ))}
             </div>
           )}
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('streamIdleTimeout.title')}
+          description={t('streamIdleTimeout.hint')}
+          extra={(
+            <Button
+              variant="primary"
+              size="small"
+              onClick={handleSaveStreamIdleTimeout}
+              disabled={isStreamIdleTimeoutSaving || isStreamIdleTimeoutInvalid}
+            >
+              {isStreamIdleTimeoutSaving ? (
+                <Loader size={16} className="spinning" />
+              ) : (
+                t('streamIdleTimeout.save')
+              )}
+            </Button>
+          )}
+        >
+          <ConfigPageRow
+            label={t('streamIdleTimeout.label')}
+            align="center"
+          >
+            <Input
+              value={streamIdleTimeoutInput}
+              onChange={(e) => setStreamIdleTimeoutInput(e.target.value)}
+              placeholder={t('streamIdleTimeout.placeholder')}
+              inputSize="small"
+            />
+          </ConfigPageRow>
         </ConfigPageSection>
 
         <ConfigPageSection

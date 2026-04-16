@@ -6,7 +6,7 @@
 //! 3. Invalidate cache when configuration changes
 //! 4. Provide global singleton access
 
-use crate::infrastructure::ai::AIClient;
+use crate::infrastructure::ai::{build_stream_options, AIClient};
 use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::AIConfig;
@@ -176,7 +176,12 @@ impl AIClientFactory {
             None
         };
 
-        let client = Arc::new(AIClient::new_with_proxy(ai_config, proxy_config));
+        let stream_options = build_stream_options(&global_config.ai);
+        let client = Arc::new(AIClient::new_with_runtime_options(
+            ai_config,
+            proxy_config,
+            stream_options,
+        ));
 
         {
             let mut cache = match self.client_cache.write() {
