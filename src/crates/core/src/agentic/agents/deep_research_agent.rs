@@ -76,7 +76,10 @@ mod tests {
     fn has_expected_default_tools() {
         let agent = DeepResearchAgent::new();
         let tools = agent.default_tools();
-        assert!(tools.contains(&"Task".to_string()), "Task tool required for parallel sub-agent orchestration");
+        assert!(
+            tools.contains(&"Task".to_string()),
+            "Task tool required for parallel sub-agent orchestration"
+        );
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
         assert!(tools.contains(&"Write".to_string()));
@@ -87,7 +90,10 @@ mod tests {
     #[test]
     fn always_uses_default_prompt_template() {
         let agent = DeepResearchAgent::new();
-        assert_eq!(agent.prompt_template_name(Some("gpt-5.1")), "deep_research_agent");
+        assert_eq!(
+            agent.prompt_template_name(Some("gpt-5.1")),
+            "deep_research_agent"
+        );
         assert_eq!(agent.prompt_template_name(None), "deep_research_agent");
     }
 }

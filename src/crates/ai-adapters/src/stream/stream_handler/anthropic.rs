@@ -13,6 +13,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
+const AI_STREAM_RESPONSE_TARGET: &str = "ai::anthropic_stream_response";
+
 /// Convert a byte stream into a structured response stream
 ///
 /// # Arguments
@@ -56,7 +58,7 @@ pub async fn handle_anthropic_stream(
             }
         };
 
-        trace!("Anthropic SSE: {:?}", sse);
+        trace!(target: AI_STREAM_RESPONSE_TARGET, "Anthropic SSE: {:?}", sse);
         let event_type = sse.event;
         let data = sse.data;
         stats.record_sse_event(&event_type);
@@ -95,7 +97,11 @@ pub async fn handle_anthropic_stream(
                     ContentBlock::ToolUse { .. }
                 ) {
                     let unified_response = UnifiedResponse::from(content_block_start);
-                    trace!("Anthropic unified response: {:?}", unified_response);
+                    trace!(
+                        target: AI_STREAM_RESPONSE_TARGET,
+                        "Anthropic unified response: {:?}",
+                        unified_response
+                    );
                     stats.record_unified_response(&unified_response);
                     let _ = tx_event.send(Ok(unified_response));
                 }
@@ -112,7 +118,11 @@ pub async fn handle_anthropic_stream(
                 };
                 match UnifiedResponse::try_from(content_block_delta) {
                     Ok(unified_response) => {
-                        trace!("Anthropic unified response: {:?}", unified_response);
+                        trace!(
+                            target: AI_STREAM_RESPONSE_TARGET,
+                            "Anthropic unified response: {:?}",
+                            unified_response
+                        );
                         stats.record_unified_response(&unified_response);
                         let _ = tx_event.send(Ok(unified_response));
                     }
@@ -141,7 +151,11 @@ pub async fn handle_anthropic_stream(
                     Some(usage.clone())
                 };
                 let unified_response = UnifiedResponse::from(message_delta);
-                trace!("Anthropic unified response: {:?}", unified_response);
+                trace!(
+                    target: AI_STREAM_RESPONSE_TARGET,
+                    "Anthropic unified response: {:?}",
+                    unified_response
+                );
                 stats.record_unified_response(&unified_response);
                 let _ = tx_event.send(Ok(unified_response));
             }

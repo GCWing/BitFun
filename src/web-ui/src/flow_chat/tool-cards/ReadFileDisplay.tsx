@@ -7,6 +7,7 @@ import { Loader2, Clock, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+
 export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
   toolItem,
   onOpenInEditor

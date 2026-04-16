@@ -2,13 +2,19 @@
 
 use crate::api::app_state::AppState;
 use crate::api::dto::WorkspaceInfoDto;
+use crate::api::path_target::{
+    create_directory as create_desktop_directory, create_empty_file,
+    delete_directory as delete_desktop_directory, delete_file as delete_desktop_file,
+    get_path_metadata, path_exists, read_text_file, rename_path, resolve_desktop_path_target,
+    write_text_file, DesktopPathTarget,
+};
 use bitfun_core::infrastructure::{
-    BatchedFileSearchProgressSink, FileOperationOptions, FileSearchResult, FileSearchResultGroup,
-    FileTreeNode, SearchMatchType,
+    BatchedFileSearchProgressSink, FileSearchResult, FileSearchResultGroup, FileTreeNode,
+    SearchMatchType,
 };
 use bitfun_core::service::file_watch;
+use bitfun_core::service::remote_ssh::get_remote_workspace_manager;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
-use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
 use bitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };
@@ -46,22 +52,6 @@ fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::Remote
         connection_name: name,
         ssh_host,
     })
-}
-
-/// Resolves which SSH connection owns `path`. `request_preferred` comes from the workspace/session
-/// (explicit scoping); legacy UI omits it and we fall back to the last single-remote pointer.
-async fn lookup_remote_entry_for_path(
-    state: &State<'_, AppState>,
-    path: &str,
-    request_preferred: Option<&str>,
-) -> Option<RemoteWorkspaceEntry> {
-    let manager = get_remote_workspace_manager()?;
-    let legacy = state
-        .get_remote_workspace_async()
-        .await
-        .map(|w| w.connection_id);
-    let preferred: Option<String> = request_preferred.map(|s| s.to_string()).or(legacy);
-    manager.lookup_connection(path, preferred.as_deref()).await
 }
 
 fn lock_active_searches<'a>(
@@ -1912,34 +1902,12 @@ pub async fn read_file_content(
     state: State<'_, AppState>,
     request: ReadFileContentRequest,
 ) -> Result<String, String> {
-    if let Some(entry) = lookup_remote_entry_for_path(
+    read_text_file(
         &state,
         &request.file_path,
         request.remote_connection_id.as_deref(),
     )
     .await
-    {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        let bytes = remote_fs
-            .read_file(&entry.connection_id, &request.file_path)
-            .await
-            .map_err(|e| format!("Failed to read remote file: {}", e))?;
-        return String::from_utf8(bytes).map_err(|e| format!("File is not valid UTF-8: {}", e));
-    }
-
-    match state.filesystem_service.read_file(&request.file_path).await {
-        Ok(result) => Ok(result.content),
-        Err(e) => {
-            error!(
-                "Failed to read file content: path={}, error={}",
-                request.file_path, e
-            );
-            Err(format!("Failed to read file content: {}", e))
-        }
-    }
 }
 
 #[tauri::command]
@@ -1947,45 +1915,13 @@ pub async fn write_file_content(
     state: State<'_, AppState>,
     request: WriteFileContentRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(
+    write_text_file(
         &state,
         &request.file_path,
+        &request.content,
         request.remote_connection_id.as_deref(),
     )
     .await
-    {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs
-            .write_file(
-                &entry.connection_id,
-                &request.file_path,
-                request.content.as_bytes(),
-            )
-            .await
-            .map_err(|e| format!("Failed to write remote file: {}", e))?;
-        return Ok(());
-    }
-
-    let full_path = request.file_path;
-    let options = FileOperationOptions {
-        backup_on_overwrite: false,
-        ..FileOperationOptions::default()
-    };
-
-    match state
-        .filesystem_service
-        .write_file_with_options(&full_path, &request.content, options)
-        .await
-    {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            error!("Failed to write file: path={}, error={}", full_path, e);
-            Err(format!("Failed to write file {}, error: {}", full_path, e))
-        }
-    }
 }
 
 #[tauri::command]
@@ -2028,19 +1964,7 @@ pub async fn check_path_exists(
     state: State<'_, AppState>,
     request: CheckPathExistsRequest,
 ) -> Result<bool, String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        return remote_fs
-            .exists(&entry.connection_id, &request.path)
-            .await
-            .map_err(|e| format!("Failed to check remote path: {}", e));
-    }
-
-    let path = std::path::Path::new(&request.path);
-    Ok(path.exists())
+    path_exists(&state, &request.path).await
 }
 
 #[tauri::command]
@@ -2048,71 +1972,7 @@ pub async fn get_file_metadata(
     state: State<'_, AppState>,
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
-    use std::time::SystemTime;
-
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-
-        // Use SFTP stat for stable mtime/size. Returning `SystemTime::now()` as `modified` caused
-        // the editor's 5s poll to always see a "newer" file and spam the external-change dialog.
-        let stat_entry = remote_fs
-            .stat(&entry.connection_id, &request.path)
-            .await
-            .map_err(|e| format!("Failed to stat remote file: {}", e))?;
-
-        let (is_file, is_dir, size, modified) = match stat_entry {
-            Some(e) => (
-                e.is_file,
-                e.is_dir,
-                e.size.unwrap_or(0),
-                e.modified.unwrap_or(0),
-            ),
-            None => (false, false, 0, 0),
-        };
-
-        return Ok(serde_json::json!({
-            "path": request.path,
-            "modified": modified,
-            "size": size,
-            "is_file": is_file,
-            "is_dir": is_dir,
-            "is_remote": true
-        }));
-    }
-
-    let path = std::path::Path::new(&request.path);
-    match std::fs::metadata(path) {
-        Ok(metadata) => {
-            let modified = metadata
-                .modified()
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64;
-
-            let size = metadata.len();
-            let is_file = metadata.is_file();
-            let is_dir = metadata.is_dir();
-
-            Ok(serde_json::json!({
-                "path": request.path,
-                "modified": modified,
-                "size": size,
-                "is_file": is_file,
-                "is_dir": is_dir
-            }))
-        }
-        Err(e) => {
-            error!(
-                "Failed to get file metadata: path={}, error={}",
-                request.path, e
-            );
-            Err(format!("Failed to get file metadata: {}", e))
-        }
-    }
+    get_path_metadata(&state, &request.path).await
 }
 
 /// Returns SHA-256 hex (lowercase) of file bytes after the same normalization as the web editor
@@ -2122,35 +1982,41 @@ pub async fn get_file_editor_sync_hash(
     state: State<'_, AppState>,
     request: GetFileMetadataRequest,
 ) -> Result<serde_json::Value, String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        let bytes = remote_fs
-            .read_file(&entry.connection_id, &request.path)
-            .await
-            .map_err(|e| format!("Failed to read remote file: {}", e))?;
-        let hash = state
-            .filesystem_service
-            .editor_sync_sha256_hex_from_raw_bytes(&bytes);
-        return Ok(serde_json::json!({
-            "path": request.path,
-            "hash": hash,
-            "is_remote": true
-        }));
+    match resolve_desktop_path_target(&state, &request.path, None).await? {
+        DesktopPathTarget::Remote {
+            requested_path,
+            entry,
+        } => {
+            let remote_fs = state
+                .get_remote_file_service_async()
+                .await
+                .map_err(|e| format!("Remote file service not available: {}", e))?;
+            let bytes = remote_fs
+                .read_file(&entry.connection_id, &requested_path)
+                .await
+                .map_err(|e| format!("Failed to read remote file: {}", e))?;
+            let hash = state
+                .filesystem_service
+                .editor_sync_sha256_hex_from_raw_bytes(&bytes);
+            Ok(serde_json::json!({
+                "path": requested_path,
+                "hash": hash,
+                "is_remote": true
+            }))
+        }
+        DesktopPathTarget::Local { resolved_path, .. } => {
+            let hash = state
+                .filesystem_service
+                .editor_sync_content_sha256_hex(&resolved_path.to_string_lossy())
+                .await
+                .map_err(|e| e.to_string())?;
+
+            Ok(serde_json::json!({
+                "path": request.path,
+                "hash": hash
+            }))
+        }
     }
-
-    let hash = state
-        .filesystem_service
-        .editor_sync_content_sha256_hex(&request.path)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(serde_json::json!({
-        "path": request.path,
-        "hash": hash
-    }))
 }
 
 #[tauri::command]
@@ -2158,25 +2024,7 @@ pub async fn rename_file(
     state: State<'_, AppState>,
     request: RenameFileRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.old_path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs
-            .rename(&entry.connection_id, &request.old_path, &request.new_path)
-            .await
-            .map_err(|e| format!("Failed to rename remote file: {}", e))?;
-        return Ok(());
-    }
-
-    state
-        .filesystem_service
-        .move_file(&request.old_path, &request.new_path)
-        .await
-        .map_err(|e| format!("Failed to rename file: {}", e))?;
-
-    Ok(())
+    rename_path(&state, &request.old_path, &request.new_path).await
 }
 
 /// Copy a local file to another local path (binary-safe). Used for export and drag-upload into local workspaces.
@@ -2203,25 +2051,7 @@ pub async fn delete_file(
     state: State<'_, AppState>,
     request: DeleteFileRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs
-            .remove_file(&entry.connection_id, &request.path)
-            .await
-            .map_err(|e| format!("Failed to delete remote file: {}", e))?;
-        return Ok(());
-    }
-
-    state
-        .filesystem_service
-        .delete_file(&request.path)
-        .await
-        .map_err(|e| format!("Failed to delete file: {}", e))?;
-
-    Ok(())
+    delete_desktop_file(&state, &request.path).await
 }
 
 #[tauri::command]
@@ -2230,33 +2060,7 @@ pub async fn delete_directory(
     request: DeleteDirectoryRequest,
 ) -> Result<(), String> {
     let recursive = request.recursive.unwrap_or(false);
-
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        if recursive {
-            remote_fs
-                .remove_dir_all(&entry.connection_id, &request.path)
-                .await
-                .map_err(|e| format!("Failed to delete remote directory: {}", e))?;
-        } else {
-            remote_fs
-                .remove_dir_all(&entry.connection_id, &request.path)
-                .await
-                .map_err(|e| format!("Failed to delete remote directory: {}", e))?;
-        }
-        return Ok(());
-    }
-
-    state
-        .filesystem_service
-        .delete_directory(&request.path, recursive)
-        .await
-        .map_err(|e| format!("Failed to delete directory: {}", e))?;
-
-    Ok(())
+    delete_desktop_directory(&state, &request.path, recursive).await
 }
 
 #[tauri::command]
@@ -2264,26 +2068,7 @@ pub async fn create_file(
     state: State<'_, AppState>,
     request: CreateFileRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs
-            .write_file(&entry.connection_id, &request.path, b"")
-            .await
-            .map_err(|e| format!("Failed to create remote file: {}", e))?;
-        return Ok(());
-    }
-
-    let options = FileOperationOptions::default();
-    state
-        .filesystem_service
-        .write_file_with_options(&request.path, "", options)
-        .await
-        .map_err(|e| format!("Failed to create file: {}", e))?;
-
-    Ok(())
+    create_empty_file(&state, &request.path).await
 }
 
 #[tauri::command]
@@ -2291,25 +2076,7 @@ pub async fn create_directory(
     state: State<'_, AppState>,
     request: CreateDirectoryRequest,
 ) -> Result<(), String> {
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        remote_fs
-            .create_dir_all(&entry.connection_id, &request.path)
-            .await
-            .map_err(|e| format!("Failed to create remote directory: {}", e))?;
-        return Ok(());
-    }
-
-    state
-        .filesystem_service
-        .create_directory(&request.path)
-        .await
-        .map_err(|e| format!("Failed to create directory: {}", e))?;
-
-    Ok(())
+    create_desktop_directory(&state, &request.path).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -2325,89 +2092,108 @@ pub async fn list_directory_files(
 ) -> Result<Vec<String>, String> {
     use std::path::Path;
 
-    if let Some(entry) = lookup_remote_entry_for_path(&state, &request.path, None).await {
-        let remote_fs = state
-            .get_remote_file_service_async()
-            .await
-            .map_err(|e| format!("Remote file service not available: {}", e))?;
-        let entries = remote_fs
-            .read_dir(&entry.connection_id, &request.path)
-            .await
-            .map_err(|e| format!("Failed to read remote directory: {}", e))?;
-        let mut files: Vec<String> = entries
-            .into_iter()
-            .filter(|e| !e.is_dir)
-            .filter(|e| {
-                if let Some(ref extensions) = request.extensions {
-                    if let Some(ext) = Path::new(&e.name).extension().and_then(|x| x.to_str()) {
-                        extensions.iter().any(|x| x.eq_ignore_ascii_case(ext))
+    match resolve_desktop_path_target(&state, &request.path, None).await? {
+        DesktopPathTarget::Remote {
+            requested_path,
+            entry,
+        } => {
+            let remote_fs = state
+                .get_remote_file_service_async()
+                .await
+                .map_err(|e| format!("Remote file service not available: {}", e))?;
+            let entries = remote_fs
+                .read_dir(&entry.connection_id, &requested_path)
+                .await
+                .map_err(|e| format!("Failed to read remote directory: {}", e))?;
+            let mut files: Vec<String> = entries
+                .into_iter()
+                .filter(|e| !e.is_dir)
+                .filter(|e| {
+                    if let Some(ref extensions) = request.extensions {
+                        if let Some(ext) = Path::new(&e.name).extension().and_then(|x| x.to_str()) {
+                            extensions.iter().any(|x| x.eq_ignore_ascii_case(ext))
+                        } else {
+                            false
+                        }
                     } else {
-                        false
+                        true
                     }
-                } else {
-                    true
-                }
-            })
-            .map(|e| e.name)
-            .collect();
-        files.sort();
-        return Ok(files);
-    }
+                })
+                .map(|e| e.name)
+                .collect();
+            files.sort();
+            Ok(files)
+        }
+        DesktopPathTarget::Local { resolved_path, .. } => {
+            let dir_path = resolved_path.as_path();
+            if !dir_path.exists() {
+                return Ok(Vec::new());
+            }
 
-    let dir_path = Path::new(&request.path);
-    if !dir_path.exists() {
-        return Ok(Vec::new());
-    }
+            if !dir_path.is_dir() {
+                return Err("Path is not a directory".to_string());
+            }
 
-    if !dir_path.is_dir() {
-        return Err("Path is not a directory".to_string());
-    }
+            let mut files = Vec::new();
+            let entries = std::fs::read_dir(dir_path)
+                .map_err(|e| format!("Failed to read directory: {}", e))?;
 
-    let mut files = Vec::new();
-    let entries =
-        std::fs::read_dir(dir_path).map_err(|e| format!("Failed to read directory: {}", e))?;
+            for entry in entries {
+                let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+                let path = entry.path();
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let path = entry.path();
-
-        if path.is_file() {
-            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if let Some(ref extensions) = request.extensions {
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if extensions.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
+                if path.is_file() {
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        if let Some(ref extensions) = request.extensions {
+                            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                                if extensions.iter().any(|e| e.eq_ignore_ascii_case(ext)) {
+                                    files.push(file_name.to_string());
+                                }
+                            }
+                        } else {
                             files.push(file_name.to_string());
                         }
                     }
-                } else {
-                    files.push(file_name.to_string());
                 }
             }
+
+            files.sort();
+            Ok(files)
         }
     }
-
-    files.sort();
-    Ok(files)
 }
 
 #[tauri::command]
-pub async fn reveal_in_explorer(request: RevealInExplorerRequest) -> Result<(), String> {
-    let path = std::path::Path::new(&request.path);
+pub async fn reveal_in_explorer(
+    state: State<'_, AppState>,
+    request: RevealInExplorerRequest,
+) -> Result<(), String> {
+    let target = resolve_desktop_path_target(&state, &request.path, None).await?;
+    let path = match target.as_local_path() {
+        Some(path) => path,
+        None => {
+            return Err(format!(
+                "Cannot reveal remote path in local file explorer: {}",
+                request.path
+            ))
+        }
+    };
     if !path.exists() {
         return Err(format!("Path does not exist: {}", request.path));
     }
     let is_directory = path.is_dir();
+    let path_str = path.to_string_lossy().to_string();
 
     #[cfg(target_os = "windows")]
     {
         if is_directory {
-            let normalized_path = request.path.replace("/", "\\");
+            let normalized_path = path_str.replace("/", "\\");
             bitfun_core::util::process_manager::create_command("explorer")
                 .arg(&normalized_path)
                 .spawn()
                 .map_err(|e| format!("Failed to open explorer: {}", e))?;
         } else {
-            let normalized_path = request.path.replace("/", "\\");
+            let normalized_path = path_str.replace("/", "\\");
             bitfun_core::util::process_manager::create_command("explorer")
                 .args(["/select,", &normalized_path])
                 .spawn()
@@ -2419,12 +2205,12 @@ pub async fn reveal_in_explorer(request: RevealInExplorerRequest) -> Result<(), 
     {
         if is_directory {
             bitfun_core::util::process_manager::create_command("open")
-                .arg(&request.path)
+                .arg(&path_str)
                 .spawn()
                 .map_err(|e| format!("Failed to open finder: {}", e))?;
         } else {
             bitfun_core::util::process_manager::create_command("open")
-                .args(&["-R", &request.path])
+                .args(["-R", &path_str])
                 .spawn()
                 .map_err(|e| format!("Failed to open finder: {}", e))?;
         }

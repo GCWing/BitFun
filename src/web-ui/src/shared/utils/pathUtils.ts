@@ -15,8 +15,21 @@ export function normalizeRemoteWorkspacePath(path: string): string {
   return s.replace(/\/+$/, '');
 }
 
+export function hasNonFileUriScheme(path: string): boolean {
+  if (typeof path !== 'string') return false;
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(path) && !path.startsWith('file://');
+}
+
+export function isBitFunRuntimeUri(path: string): boolean {
+  return typeof path === 'string' && path.startsWith('bitfun://runtime/');
+}
+
 export function normalizePath(path: string): string {
   if (typeof path !== 'string') return path;
+
+  if (hasNonFileUriScheme(path)) {
+    return path;
+  }
   
   
   

@@ -6,6 +6,7 @@ use crate::service::snapshot::snapshot_system::FileSnapshotSystem;
 use crate::service::snapshot::types::{
     OperationType, SessionInfo, SnapshotConfig, SnapshotError, SnapshotResult,
 };
+use crate::service::workspace_runtime::WorkspaceRuntimeContext;
 use log::info;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,19 +19,27 @@ pub struct SnapshotService {
     file_lock_manager: Arc<FileLockManager>,
     snapshot_core: Arc<RwLock<SnapshotCore>>,
     workspace_dir: PathBuf,
-    bitfun_dir: PathBuf,
+    runtime_context: WorkspaceRuntimeContext,
     initialized: bool,
 }
 
 impl SnapshotService {
-    pub fn new(workspace_dir: PathBuf, config: Option<SnapshotConfig>) -> Self {
+    pub fn new(
+        workspace_dir: PathBuf,
+        runtime_context: WorkspaceRuntimeContext,
+        config: Option<SnapshotConfig>,
+    ) -> Self {
         let config = config.unwrap_or_default();
-        let bitfun_dir = workspace_dir.join(".bitfun");
-
-        let isolation_manager = Arc::new(RwLock::new(IsolationManager::new(workspace_dir.clone())));
-        let snapshot_system = FileSnapshotSystem::new(&bitfun_dir);
-        let snapshot_core = Arc::new(RwLock::new(SnapshotCore::new(&bitfun_dir, snapshot_system)));
-        let file_lock_manager = Arc::new(FileLockManager::new(bitfun_dir.clone()));
+        let isolation_manager = Arc::new(RwLock::new(IsolationManager::new(
+            workspace_dir.clone(),
+            runtime_context.clone(),
+        )));
+        let snapshot_system = FileSnapshotSystem::new(runtime_context.clone());
+        let snapshot_core = Arc::new(RwLock::new(SnapshotCore::new(
+            runtime_context.clone(),
+            snapshot_system,
+        )));
+        let file_lock_manager = Arc::new(FileLockManager::new(runtime_context.clone()));
 
         Self {
             config,
@@ -38,7 +47,7 @@ impl SnapshotService {
             file_lock_manager,
             snapshot_core,
             workspace_dir,
-            bitfun_dir,
+            runtime_context,
             initialized: false,
         }
     }
@@ -70,7 +79,7 @@ impl SnapshotService {
         info!(
             "Snapshot service initialized: git_isolated={} bitfun_dir={}",
             isolation_status,
-            self.bitfun_dir.display()
+            self.runtime_context.runtime_root.display()
         );
 
         Ok(())
@@ -363,7 +372,7 @@ impl SnapshotService {
         };
         Ok(SystemStats {
             git_isolated: isolation_status,
-            bitfun_dir: self.bitfun_dir.clone(),
+            bitfun_dir: self.runtime_context.runtime_root.clone(),
         })
     }
 
@@ -371,14 +380,6 @@ impl SnapshotService {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
         Ok(snapshot_core.list_session_ids())
-    }
-
-    pub async fn cleanup_snapshot_data(&self, keep_recent_days: u64) -> SnapshotResult<()> {
-        self.ensure_initialized().await?;
-        let isolation_manager = self.isolation_manager.read().await;
-        isolation_manager
-            .cleanup_snapshot_data(keep_recent_days)
-            .await
     }
 
     pub async fn get_file_change_history(
@@ -520,7 +521,7 @@ impl SnapshotService {
     }
 
     pub fn get_bitfun_dir(&self) -> &Path {
-        &self.bitfun_dir
+        &self.runtime_context.runtime_root
     }
 
     pub async fn check_git_isolation(&self) -> SnapshotResult<bool> {

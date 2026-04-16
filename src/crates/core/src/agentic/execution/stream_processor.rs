@@ -497,7 +497,8 @@ impl StreamProcessor {
             if ctx.pending_tool_call.has_pending() {
                 ctx.has_effective_output = true;
                 if arguments_is_snapshot {
-                    ctx.pending_tool_call.replace_arguments(&tool_call_arguments);
+                    ctx.pending_tool_call
+                        .replace_arguments(&tool_call_arguments);
                 } else {
                     ctx.pending_tool_call.append_arguments(&tool_call_arguments);
                 }

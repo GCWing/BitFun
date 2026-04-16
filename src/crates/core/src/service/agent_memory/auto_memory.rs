@@ -1,17 +1,25 @@
+use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::*;
 use log::debug;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
 const MEMORY_DIR_NAME: &str = "memory";
-const BITFUN_DIR_NAME: &str = ".bitfun";
 const MEMORY_INDEX_FILE: &str = "memory.md";
 const MEMORY_INDEX_TEMPLATE: &str = "# Memory Index\n";
 const MEMORY_INDEX_MAX_LINES: usize = 200;
 const TOPIC_MEMORY_MAX_FILES: usize = 30;
 
 fn memory_dir_path(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(BITFUN_DIR_NAME).join(MEMORY_DIR_NAME)
+    let path_manager = get_path_manager_arc();
+    let path = path_manager.project_memory_dir(workspace_root);
+    debug!(
+        "Resolved workspace memory directory: workspace={} memory_dir={} storage_subdir={}",
+        workspace_root.display(),
+        path.display(),
+        MEMORY_DIR_NAME
+    );
+    path
 }
 
 fn format_path_for_prompt(path: &Path) -> String {

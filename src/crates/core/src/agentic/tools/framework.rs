@@ -1,14 +1,55 @@
 //! Tool framework - Tool interface definition and execution context
+use crate::agentic::tools::workspace_paths::{
+    build_bitfun_runtime_uri, is_bitfun_runtime_uri, normalize_runtime_relative_path,
+    parse_bitfun_runtime_uri,
+};
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+use crate::infrastructure::get_path_manager_arc;
+use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
+use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::BitFunResult;
 use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolPathBackend {
+    Local,
+    RemoteWorkspace,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolPathResolution {
+    pub requested_path: String,
+    pub logical_path: String,
+    pub resolved_path: String,
+    pub backend: ToolPathBackend,
+    pub runtime_scope: Option<String>,
+    pub runtime_root: Option<PathBuf>,
+}
+
+impl ToolPathResolution {
+    pub fn uses_remote_workspace_backend(&self) -> bool {
+        matches!(self.backend, ToolPathBackend::RemoteWorkspace)
+    }
+
+    pub fn is_runtime_artifact(&self) -> bool {
+        self.runtime_scope.is_some()
+    }
+
+    pub fn logical_child_path(&self, absolute_child_path: &Path) -> Option<String> {
+        let scope = self.runtime_scope.as_deref()?;
+        let root = self.runtime_root.as_ref()?;
+        let relative = absolute_child_path.strip_prefix(root).ok()?;
+        let relative_str = relative.to_string_lossy().replace('\\', "/");
+        build_bitfun_runtime_uri(scope, &relative_str).ok()
+    }
+}
 
 /// Tool use context
 #[derive(Debug, Clone)]
@@ -69,8 +110,159 @@ impl ToolUseContext {
         )
     }
 
+    pub fn current_workspace_runtime_root(&self) -> BitFunResult<PathBuf> {
+        let workspace = self.workspace.as_ref().ok_or_else(|| {
+            crate::util::errors::BitFunError::tool(
+                "A workspace is required to resolve runtime artifacts".to_string(),
+            )
+        })?;
+
+        if workspace.is_remote() {
+            let identity = &workspace.session_identity;
+            Ok(remote_workspace_runtime_root(
+                &identity.hostname,
+                &identity.workspace_path,
+            ))
+        } else {
+            Ok(get_path_manager_arc().project_runtime_root(workspace.root_path()))
+        }
+    }
+
+    pub fn current_workspace_scope(&self) -> Option<String> {
+        self.workspace
+            .as_ref()
+            .and_then(|workspace| workspace.workspace_id.clone())
+    }
+
+    pub async fn ensure_current_workspace_runtime(&self) -> BitFunResult<WorkspaceRuntimeContext> {
+        let workspace = self.workspace.as_ref().ok_or_else(|| {
+            crate::util::errors::BitFunError::tool(
+                "A workspace is required to ensure runtime artifacts".to_string(),
+            )
+        })?;
+
+        let runtime_service = get_workspace_runtime_service_arc();
+        Ok(runtime_service
+            .ensure_runtime_for_workspace_binding(workspace)
+            .await?
+            .context)
+    }
+
+    pub fn should_emit_runtime_uri(&self) -> bool {
+        self.is_remote()
+    }
+
+    pub fn build_runtime_uri(&self, relative_path: &str) -> BitFunResult<String> {
+        let scope = self
+            .current_workspace_scope()
+            .unwrap_or_else(|| "current".to_string());
+        build_bitfun_runtime_uri(&scope, &normalize_runtime_relative_path(relative_path)?)
+    }
+
+    pub fn build_runtime_artifact_reference(&self, relative_path: &str) -> BitFunResult<String> {
+        let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
+        if self.should_emit_runtime_uri() {
+            return self.build_runtime_uri(&normalized_relative_path);
+        }
+
+        let mut resolved_path = self.current_workspace_runtime_root()?;
+        for segment in normalized_relative_path.split('/') {
+            resolved_path.push(segment);
+        }
+
+        Ok(resolved_path.to_string_lossy().to_string())
+    }
+
+    pub fn build_session_runtime_artifact_reference(
+        &self,
+        session_id: &str,
+        relative_path: &str,
+    ) -> BitFunResult<String> {
+        let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
+        self.build_runtime_artifact_reference(&format!(
+            "sessions/{}/{}",
+            session_id, normalized_relative_path
+        ))
+    }
+
+    pub fn current_workspace_session_dir(&self, session_id: &str) -> BitFunResult<PathBuf> {
+        Ok(self
+            .current_workspace_runtime_root()?
+            .join("sessions")
+            .join(session_id))
+    }
+
+    pub fn current_workspace_session_tool_results_dir(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<PathBuf> {
+        Ok(self
+            .current_workspace_session_dir(session_id)?
+            .join("tool-results"))
+    }
+
+    pub fn current_workspace_session_tool_result_path(
+        &self,
+        session_id: &str,
+        file_name: &str,
+    ) -> BitFunResult<PathBuf> {
+        Ok(self
+            .current_workspace_session_tool_results_dir(session_id)?
+            .join(file_name))
+    }
+
+    pub fn resolve_tool_path(&self, path: &str) -> BitFunResult<ToolPathResolution> {
+        if is_bitfun_runtime_uri(path) {
+            let parsed = parse_bitfun_runtime_uri(path)?;
+            let workspace_scope = self.current_workspace_scope();
+            let scope_matches = parsed.workspace_scope == "current"
+                || workspace_scope.as_deref() == Some(parsed.workspace_scope.as_str());
+            if !scope_matches {
+                return Err(crate::util::errors::BitFunError::tool(format!(
+                    "Runtime URI scope '{}' does not match the current workspace",
+                    parsed.workspace_scope
+                )));
+            }
+
+            let runtime_root = self.current_workspace_runtime_root()?;
+            let mut resolved_path = runtime_root.clone();
+            for segment in parsed.relative_path.split('/') {
+                resolved_path.push(segment);
+            }
+
+            let effective_scope = workspace_scope.unwrap_or_else(|| parsed.workspace_scope.clone());
+            let logical_path = build_bitfun_runtime_uri(&effective_scope, &parsed.relative_path)?;
+
+            return Ok(ToolPathResolution {
+                requested_path: path.to_string(),
+                logical_path,
+                resolved_path: resolved_path.to_string_lossy().to_string(),
+                backend: ToolPathBackend::Local,
+                runtime_scope: Some(effective_scope),
+                runtime_root: Some(runtime_root),
+            });
+        }
+
+        let resolved_path = self.resolve_workspace_tool_path(path)?;
+        Ok(ToolPathResolution {
+            requested_path: path.to_string(),
+            logical_path: resolved_path.clone(),
+            resolved_path,
+            backend: if self.is_remote() {
+                ToolPathBackend::RemoteWorkspace
+            } else {
+                ToolPathBackend::Local
+            },
+            runtime_scope: None,
+            runtime_root: None,
+        })
+    }
+
     /// Whether `path` is absolute for the active workspace (POSIX `/` for remote SSH).
     pub fn workspace_path_is_effectively_absolute(&self, path: &str) -> bool {
+        if is_bitfun_runtime_uri(path) {
+            return true;
+        }
         if self.is_remote() {
             crate::agentic::tools::workspace_paths::posix_style_path_is_absolute(path)
         } else {

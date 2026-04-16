@@ -1,13 +1,17 @@
 //! Resolve on-disk session roots for insights (local + remote SSH mirror).
 
+use crate::infrastructure::get_path_manager_arc;
 use crate::service::remote_ssh::workspace_state::get_effective_session_path;
 use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-/// Map a workspace record to the directory where `.bitfun/sessions` lives
-/// (local project root or `~/.bitfun/remote_ssh/...` mirror).
+/// Map a workspace record to the directory where persisted sessions live.
 pub async fn effective_session_storage_path_for_workspace(ws: &WorkspaceInfo) -> PathBuf {
+    if ws.remote_ssh_connection_id().is_none() {
+        return get_path_manager_arc().project_sessions_dir(&ws.root_path);
+    }
+
     let path_str = ws.root_path.to_string_lossy().to_string();
     let conn = ws.remote_ssh_connection_id().map(|s| s.to_string());
     let mut host = ws
@@ -28,7 +32,7 @@ pub async fn effective_session_storage_path_for_workspace(ws: &WorkspaceInfo) ->
     get_effective_session_path(&path_str, conn.as_deref(), host.as_deref()).await
 }
 
-/// Unique effective roots that have a `.bitfun/sessions` directory.
+/// Unique effective session directories for all tracked workspaces.
 pub async fn collect_effective_session_storage_roots() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
@@ -38,10 +42,9 @@ pub async fn collect_effective_session_storage_roots() -> Vec<PathBuf> {
     };
 
     for ws in ws_service.list_workspace_infos().await {
-        let root = effective_session_storage_path_for_workspace(&ws).await;
-        let sessions_dir = root.join(".bitfun").join("sessions");
-        if sessions_dir.exists() && seen.insert(root.clone()) {
-            paths.push(root);
+        let sessions_dir = effective_session_storage_path_for_workspace(&ws).await;
+        if sessions_dir.exists() && seen.insert(sessions_dir.clone()) {
+            paths.push(sessions_dir);
         }
     }
 

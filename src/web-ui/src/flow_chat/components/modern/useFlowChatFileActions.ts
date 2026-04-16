@@ -8,6 +8,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { fileTabManager } from '@/shared/services/FileTabManager';
 import type { LineRange } from '@/component-library';
+import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 
 const log = createLogger('useFlowChatFileActions');
 
@@ -39,8 +40,9 @@ export function useFlowChatFileActions({
 
     let absoluteFilePath = filePath;
     const isWindowsAbsolutePath = /^[A-Za-z]:[\\/]/.test(filePath);
+    const isProtocolPath = hasNonFileUriScheme(filePath);
 
-    if (!isWindowsAbsolutePath && !path.isAbsolute(filePath) && workspacePath) {
+    if (!isProtocolPath && !isWindowsAbsolutePath && !path.isAbsolute(filePath) && workspacePath) {
       absoluteFilePath = path.join(workspacePath, filePath);
       log.debug('Converted relative path to absolute', {
         relative: filePath,

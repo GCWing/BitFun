@@ -35,7 +35,6 @@ pub use file_finder_agent::FileFinderAgent;
 pub use generate_doc_agent::GenerateDocAgent;
 pub use init_agent::InitAgent;
 pub use plan_mode::PlanMode;
-pub use team_mode::TeamMode;
 pub use prompt_builder::{
     PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RequestContextPolicy,
     RequestContextSection,
@@ -45,6 +44,7 @@ pub use registry::{
     CustomSubagentDetail, SubAgentSource,
 };
 use std::any::Any;
+pub use team_mode::TeamMode;
 
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));

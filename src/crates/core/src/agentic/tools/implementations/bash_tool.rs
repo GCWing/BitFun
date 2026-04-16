@@ -781,6 +781,19 @@ Usage notes:
 }
 
 impl BashTool {
+    fn background_output_file_path(
+        context: &ToolUseContext,
+        chat_session_id: &str,
+        tool_use_id: &str,
+    ) -> Option<std::path::PathBuf> {
+        context
+            .current_workspace_session_tool_result_path(
+                chat_session_id,
+                &format!("{}.txt", tool_use_id),
+            )
+            .ok()
+    }
+
     /// Execute a command in a new background terminal session.
     /// Returns immediately with the new session ID.
     #[allow(clippy::too_many_arguments)]
@@ -845,12 +858,11 @@ impl BashTool {
             bg_session_id, chat_session_id
         );
 
-        // Determine output file path: <workspace>/.bitfun/terminals/<bg_session_id>.txt
-        let output_file_path = context.workspace_root().map(|ws| {
-            ws.join(".bitfun")
-                .join("terminals")
-                .join(format!("{}.txt", bg_session_id))
-        });
+        // Store background output under the session-scoped runtime tool-results tree:
+        // local:  ~/.bitfun/projects/<project-slug>/sessions/<chat-session-id>/tool-results/<tool-use-id>.txt
+        // remote: ~/.bitfun/remote_ssh/<host>/<remote-path>/sessions/<chat-session-id>/tool-results/<tool-use-id>.txt
+        let output_file_path =
+            Self::background_output_file_path(context, chat_session_id, &tool_use_id);
 
         // Spawn task: write PTY output to file, delete when session ends
         if let Some(file_path) = output_file_path.clone() {
@@ -859,7 +871,7 @@ impl BashTool {
                 if let Some(parent) = file_path.parent() {
                     if let Err(e) = tokio::fs::create_dir_all(parent).await {
                         error!(
-                            "Failed to create terminals output dir for bg session {}: {}",
+                            "Failed to create tool-results output dir for bg session {}: {}",
                             bg_id_for_log, e
                         );
                         return;
@@ -912,8 +924,15 @@ impl BashTool {
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
         let output_file_str = output_file_path.as_deref().map(|p| p.display().to_string());
+        let output_file_reference = context
+            .build_session_runtime_artifact_reference(
+                chat_session_id,
+                &format!("tool-results/{}.txt", tool_use_id),
+            )
+            .ok()
+            .or_else(|| output_file_str.clone());
 
-        let output_file_note = output_file_str
+        let output_file_note = output_file_reference
             .as_deref()
             .map(|s| format!("\nOutput is being written to: {}", s))
             .unwrap_or_default();
@@ -927,7 +946,7 @@ impl BashTool {
             "working_directory": initial_cwd,
             "execution_time_ms": execution_time_ms,
             "terminal_session_id": bg_session_id,
-            "output_file": output_file_str,
+            "output_file": output_file_reference,
         });
 
         let result_for_assistant = format!(

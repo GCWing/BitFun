@@ -27,6 +27,17 @@ interface FileSearchStreamCallbacks {
   onProgress?: (event: FileSearchProgressEvent) => void;
 }
 
+export interface FileMetadata {
+  path: string;
+  resolvedPath?: string;
+  modified: number;
+  size: number;
+  isFile: boolean;
+  isDir: boolean;
+  isRemote?: boolean;
+  isRuntimeArtifact?: boolean;
+}
+
 function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResultGroup[] {
   const groups = new Map<string, FileSearchResultGroup>();
 
@@ -242,6 +253,27 @@ export class WorkspaceAPI {
       });
     } catch (error) {
       throw createTauriCommandError('read_file_content', error, { filePath, encoding });
+    }
+  }
+
+  async getFileMetadata(path: string): Promise<FileMetadata> {
+    try {
+      const raw = await api.invoke<Record<string, unknown>>('get_file_metadata', {
+        request: { path }
+      });
+      return {
+        path: String(raw.path ?? path),
+        resolvedPath: typeof raw.resolvedPath === 'string' ? raw.resolvedPath : undefined,
+        modified: Number(raw.modified ?? 0),
+        size: Number(raw.size ?? 0),
+        isFile: raw.isFile === true,
+        isDir: raw.isDir === true,
+        isRemote: typeof raw.isRemote === 'boolean' ? raw.isRemote : undefined,
+        isRuntimeArtifact:
+          typeof raw.isRuntimeArtifact === 'boolean' ? raw.isRuntimeArtifact : undefined,
+      };
+    } catch (error) {
+      throw createTauriCommandError('get_file_metadata', error, { path });
     }
   }
 

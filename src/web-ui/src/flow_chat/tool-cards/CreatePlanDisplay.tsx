@@ -18,6 +18,7 @@ import yaml from 'yaml';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { basenamePath, dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 import './CreatePlanDisplay.scss';
 
 const log = createLogger('PlanDisplay');
@@ -137,10 +138,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     }
 
     const normalizedPlanPath = planFilePath.replace(/\\/g, '/');
-    // Keep original format for FileSystemService.startsWith comparisons.
-    const dirPath = planFilePath.substring(0, planFilePath.lastIndexOf('\\') >= 0 
-      ? planFilePath.lastIndexOf('\\') 
-      : planFilePath.lastIndexOf('/'));
+    const dirPath = dirnameAbsolutePath(planFilePath);
 
     const loadFromFile = async () => {
       // Skip refresh while writing to avoid feedback loops.
@@ -176,6 +174,10 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
     if (!hasAutoLoaded.current) {
       hasAutoLoaded.current = true;
       loadFromFile();
+    }
+
+    if (!dirPath) {
+      return;
     }
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -230,16 +232,14 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
   }, [buildStatus, isBuildStarted]);
 
   const planFileName = useMemo(() => {
-    if (!planData?.planFilePath) return '';
-    const parts = planData.planFilePath.replace(/\\/g, '/').split('/');
-    return parts[parts.length - 1] || '';
-  }, [planData]);
+    return basenamePath(planFilePath);
+  }, [planFilePath]);
 
   const handleViewPlan = useCallback(() => {
-    if (planData?.planFilePath) {
-      ideControl.navigation.goToFile(planData.planFilePath);
+    if (planFilePath) {
+      ideControl.navigation.goToFile(planFilePath);
     }
-  }, [planData]);
+  }, [planFilePath]);
 
   const handleBuild = useCallback(async () => {
     if (!planFilePath || buildStatus !== 'build') return;
@@ -474,7 +474,7 @@ export const CreatePlanDisplay: React.FC<ToolCardProps> = ({
     }
     return [];
   }, [isParamsStreaming, partialParams, toolResult, useStreamingInputFallback, toolInput]);
-  
+
   return (
     <PlanDisplay
       planFilePath={planFilePath}

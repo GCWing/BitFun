@@ -128,7 +128,7 @@ IMPORTANT: Whenever you mention a file path that the user might want to open, ma
 - Source file: [filename.ts](src/filename.ts)
 - Specific line: [filename.ts:42](src/filename.ts#L42)
 - Generated report: [report.md](computer://deep-research/report.md)
-- Plan file: [my-plan.plan.md](computer://.bitfun/plans/my-plan.plan.md)
+- Plan file returned by a tool: [my-plan.plan.md](computer:///Users/alice/.bitfun/projects/my-project/plans/my-plan.plan.md)
 </good-examples>
 <bad-examples>
 - Bare path: src/filename.ts

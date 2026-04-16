@@ -14,6 +14,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
+const AI_STREAM_RESPONSE_TARGET: &str = "ai::responses_stream_response";
+
 #[derive(Debug, Default, Clone)]
 struct InProgressToolCall {
     call_id: Option<String>,
@@ -44,6 +46,20 @@ impl InProgressToolCall {
     }
 }
 
+fn emit_unified_response(
+    tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    stats: &mut StreamStats,
+    unified_response: UnifiedResponse,
+) {
+    trace!(
+        target: AI_STREAM_RESPONSE_TARGET,
+        "Responses unified response: {:?}",
+        unified_response
+    );
+    stats.record_unified_response(&unified_response);
+    let _ = tx_event.send(Ok(unified_response));
+}
+
 fn emit_tool_call_item(
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
@@ -51,8 +67,7 @@ fn emit_tool_call_item(
 ) {
     if let Some(unified_response) = parse_responses_output_item(item_value) {
         if unified_response.tool_call.is_some() {
-            stats.record_unified_response(&unified_response);
-            let _ = tx_event.send(Ok(unified_response));
+            emit_unified_response(tx_event, stats, unified_response);
         }
     }
 }
@@ -130,8 +145,7 @@ fn handle_function_call_output_item_done(
                 }),
                 ..Default::default()
             };
-            stats.record_unified_response(&unified_response);
-            let _ = tx_event.send(Ok(unified_response));
+            emit_unified_response(tx_event, stats, unified_response);
         }
     }
 
@@ -210,7 +224,7 @@ pub async fn handle_responses_stream(
 
         let raw = sse.data;
         stats.record_sse_event("data");
-        trace!("Responses SSE: {:?}", raw);
+        trace!(target: AI_STREAM_RESPONSE_TARGET, "Responses SSE: {:?}", raw);
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(raw.clone());
         }
@@ -277,8 +291,7 @@ pub async fn handle_responses_stream(
                         text: Some(delta),
                         ..Default::default()
                     };
-                    stats.record_unified_response(&unified_response);
-                    let _ = tx_event.send(Ok(unified_response));
+                    emit_unified_response(&tx_event, &mut stats, unified_response);
                 }
             }
             "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
@@ -287,8 +300,7 @@ pub async fn handle_responses_stream(
                         reasoning_content: Some(delta),
                         ..Default::default()
                     };
-                    stats.record_unified_response(&unified_response);
-                    let _ = tx_event.send(Ok(unified_response));
+                    emit_unified_response(&tx_event, &mut stats, unified_response);
                 }
             }
             "response.function_call_arguments.delta" => {
@@ -323,8 +335,7 @@ pub async fn handle_responses_stream(
                     }),
                     ..Default::default()
                 };
-                stats.record_unified_response(&unified_response);
-                let _ = tx_event.send(Ok(unified_response));
+                emit_unified_response(&tx_event, &mut stats, unified_response);
             }
             "response.output_item.done" => {
                 let Some(item_value) = event.item else {
@@ -349,8 +360,7 @@ pub async fn handle_responses_stream(
                         unified_response.text = None;
                     }
                     if unified_response.text.is_some() || unified_response.tool_call.is_some() {
-                        stats.record_unified_response(&unified_response);
-                        let _ = tx_event.send(Ok(unified_response));
+                        emit_unified_response(&tx_event, &mut stats, unified_response);
                     }
                 }
             }
@@ -395,8 +405,7 @@ pub async fn handle_responses_stream(
                                         ),
                                         ..Default::default()
                                     };
-                                    stats.record_unified_response(&unified_response);
-                                    let _ = tx_event.send(Ok(unified_response));
+                                    emit_unified_response(&tx_event, &mut stats, unified_response);
                                 }
                             }
                         }
@@ -413,8 +422,7 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        stats.record_unified_response(&unified_response);
-                        let _ = tx_event.send(Ok(unified_response));
+                        emit_unified_response(&tx_event, &mut stats, unified_response);
                         continue;
                     }
                     Some(Err(e)) => {
@@ -432,8 +440,7 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        stats.record_unified_response(&unified_response);
-                        let _ = tx_event.send(Ok(unified_response));
+                        emit_unified_response(&tx_event, &mut stats, unified_response);
                         continue;
                     }
                 }
@@ -450,8 +457,7 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        stats.record_unified_response(&unified_response);
-                        let _ = tx_event.send(Ok(unified_response));
+                        emit_unified_response(&tx_event, &mut stats, unified_response);
                         continue;
                     }
                     Some(Err(e)) => {
@@ -468,8 +474,7 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        stats.record_unified_response(&unified_response);
-                        let _ = tx_event.send(Ok(unified_response));
+                        emit_unified_response(&tx_event, &mut stats, unified_response);
                         continue;
                     }
                 }
@@ -521,8 +526,7 @@ pub async fn handle_responses_stream(
                     finish_reason: Some(finish_reason),
                     ..Default::default()
                 };
-                stats.record_unified_response(&unified_response);
-                let _ = tx_event.send(Ok(unified_response));
+                emit_unified_response(&tx_event, &mut stats, unified_response);
                 continue;
             }
             _ => {}

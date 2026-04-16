@@ -619,10 +619,7 @@ The rules section has a number of possible rules/memories/context that you shoul
         let mut rules = Vec::new();
 
         if !dir.exists() {
-            if let Err(e) = tokio::fs::create_dir_all(dir).await {
-                warn!("Failed to create rules directory {:?}: {}", dir, e);
-                return Ok(rules);
-            }
+            return Ok(rules);
         }
 
         let mut entries = match tokio::fs::read_dir(dir).await {
@@ -908,5 +905,38 @@ The rules section has a number of possible rules/memories/context that you shoul
         if current_workspace.as_deref() == Some(workspace) {
             *self.project_rules.write().await = rules.to_vec();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AIRulesService;
+    use crate::infrastructure::PathManager;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn loading_missing_project_rules_does_not_create_rules_dir() {
+        let test_root =
+            std::env::temp_dir().join(format!("bitfun-ai-rules-test-{}", Uuid::new_v4()));
+        let workspace_root = test_root.join("workspace");
+        std::fs::create_dir_all(&workspace_root).expect("test workspace should be created");
+
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            test_root.join("user-root"),
+        ));
+        let service = AIRulesService::new(path_manager.clone())
+            .await
+            .expect("ai rules service should initialize");
+
+        let rules = service
+            .get_project_rules_for_workspace(&workspace_root)
+            .await
+            .expect("loading project rules should succeed");
+
+        assert!(rules.is_empty());
+        assert!(!path_manager.project_rules_dir(&workspace_root).exists());
+
+        let _ = std::fs::remove_dir_all(&test_root);
     }
 }

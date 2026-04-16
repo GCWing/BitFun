@@ -413,6 +413,7 @@ impl Tool for GlobTool {
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths
 - Use this tool when you need to find files by name patterns
+- The path parameter may be an absolute path or an exact `bitfun://runtime/...` URI returned by another tool
 - You can call multiple tools in a single response. It is always better to speculatively perform multiple searches in parallel if they are potentially useful.
 <example>
 - List files in path: path = "/path/to/search", pattern = "*"
@@ -431,7 +432,7 @@ impl Tool for GlobTool {
                 },
                 "path": {
                     "type": "string",
-                    "description": "The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter \"undefined\" or \"null\" - simply omit it for the default behavior. Must be a valid absolute path if provided."
+                    "description": "The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter \"undefined\" or \"null\" - simply omit it for the default behavior. Must be a valid absolute path or exact bitfun://runtime URI if provided."
                 },
                 "limit": {
                     "type": "number",
@@ -464,19 +465,32 @@ impl Tool for GlobTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
 
-        let resolved_str = match input.get("path").and_then(|v| v.as_str()) {
-            Some(user_path) => context.resolve_workspace_tool_path(user_path)?,
-            None => context
-                .workspace
-                .as_ref()
-                .map(|w| w.root_path_string())
-                .ok_or_else(|| {
-                    BitFunError::tool(
-                        "workspace_path is required when Glob path is omitted".to_string(),
-                    )
-                })?,
+        let resolved = match input.get("path").and_then(|v| v.as_str()) {
+            Some(user_path) => context.resolve_tool_path(user_path)?,
+            None => {
+                let root = context
+                    .workspace
+                    .as_ref()
+                    .map(|w| w.root_path_string())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "workspace_path is required when Glob path is omitted".to_string(),
+                        )
+                    })?;
+                crate::agentic::tools::framework::ToolPathResolution {
+                    requested_path: root.clone(),
+                    logical_path: root.clone(),
+                    resolved_path: root,
+                    backend: if context.is_remote() {
+                        crate::agentic::tools::framework::ToolPathBackend::RemoteWorkspace
+                    } else {
+                        crate::agentic::tools::framework::ToolPathBackend::Local
+                    },
+                    runtime_scope: None,
+                    runtime_root: None,
+                }
+            }
         };
-
         let limit = input
             .get("limit")
             .and_then(|v| v.as_u64())
@@ -484,12 +498,12 @@ impl Tool for GlobTool {
             .unwrap_or(100);
 
         // Remote workspace: prefer `rg --files --glob`, but fall back to `find`
-        if context.is_remote() {
+        if resolved.uses_remote_workspace_backend() {
             let ws_shell = context
                 .ws_shell()
                 .ok_or_else(|| BitFunError::tool("Workspace shell not available".to_string()))?;
 
-            let search_dir = resolved_str.clone();
+            let search_dir = resolved.resolved_path.clone();
             let (_stdout, _stderr, exit_code) = ws_shell
                 .exec("command -v rg >/dev/null 2>&1", Some(5_000))
                 .await
@@ -524,7 +538,14 @@ impl Tool for GlobTool {
                     normalize_path(&Path::new(&search_dir).join(relative_path))
                 })
                 .collect();
-            let limited = limit_paths(&matches, limit);
+            let limited = limit_paths(&matches, limit)
+                .into_iter()
+                .map(|path| {
+                    resolved
+                        .logical_child_path(Path::new(&path))
+                        .unwrap_or(path)
+                })
+                .collect::<Vec<_>>();
             let result_text = if limited.is_empty() {
                 format!("No files found matching pattern '{}'", pattern)
             } else {
@@ -534,7 +555,7 @@ impl Tool for GlobTool {
             return Ok(vec![ToolResult::Result {
                 data: json!({
                     "pattern": pattern,
-                    "path": search_dir,
+                    "path": resolved.logical_path,
                     "matches": limited,
                     "match_count": limited.len()
                 }),
@@ -543,6 +564,7 @@ impl Tool for GlobTool {
             }]);
         }
 
+        let resolved_str = resolved.resolved_path.clone();
         let resolved_str_for_rg = resolved_str.clone();
         let pattern_for_rg = pattern.to_string();
         let matches = tokio::task::spawn_blocking(move || {
@@ -551,6 +573,15 @@ impl Tool for GlobTool {
         .await
         .map_err(|err| BitFunError::tool(format!("Glob tool task failed: {}", err)))?
         .map_err(BitFunError::tool)?;
+
+        let matches = matches
+            .into_iter()
+            .map(|path| {
+                resolved
+                    .logical_child_path(Path::new(&path))
+                    .unwrap_or(path)
+            })
+            .collect::<Vec<_>>();
 
         let result_text = if matches.is_empty() {
             format!("No files found matching pattern '{}'", pattern)
@@ -561,7 +592,7 @@ impl Tool for GlobTool {
         let result = ToolResult::Result {
             data: json!({
                 "pattern": pattern,
-                "path": resolved_str,
+                "path": resolved.logical_path,
                 "matches": matches,
                 "match_count": matches.len()
             }),

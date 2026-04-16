@@ -1799,7 +1799,7 @@ console.log(user.greet());`);
               toolItem={createMockToolItem('CreatePlan',
                 {},
                 {
-                  plan_file_path: '/project/.bitfun/plans/refactor-user-module.md',
+                  plan_file_path: '/Users/demo/.bitfun/projects/project-slug/plans/refactor-user-module.plan.md',
                   name: 'Refactor Module',
                   overview: 'Plan overview',
                   todos: [
@@ -1822,7 +1822,7 @@ console.log(user.greet());`);
               toolItem={createMockToolItem('CreatePlan',
                 {},
                 {
-                  plan_file_path: '/project/.bitfun/plans/add-dark-mode.md',
+                  plan_file_path: '/Users/demo/.bitfun/projects/project-slug/plans/add-dark-mode.plan.md',
                   name: 'Dark Mode',
                   overview: 'Add dark mode support',
                   todos: [

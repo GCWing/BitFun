@@ -14,6 +14,7 @@ import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { fileSystemService } from '@/tools/file-system/services/FileSystemService';
 import { planBuildStateService } from '@/shared/services/PlanBuildStateService';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { basenamePath, dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 import './PlanViewer.scss';
 
 const log = createLogger('PlanViewer');
@@ -102,9 +103,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
 
   const displayFileName = useMemo(() => {
     if (fileName) return fileName;
-    if (!filePath) return '';
-    const parts = filePath.replace(/\\/g, '/').split('/');
-    return parts[parts.length - 1] || '';
+    return basenamePath(filePath);
   }, [filePath, fileName]);
 
   const hasTodos = !!(planData?.todos && planData.todos.length > 0);
@@ -188,9 +187,11 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
     if (!filePath) return;
 
     const normalizedPlanPath = filePath.replace(/\\/g, '/');
-    const dirPath = filePath.substring(0, filePath.lastIndexOf('\\') >= 0 
-      ? filePath.lastIndexOf('\\') 
-      : filePath.lastIndexOf('/'));
+    const dirPath = dirnameAbsolutePath(filePath);
+
+    if (!dirPath) {
+      return;
+    }
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 

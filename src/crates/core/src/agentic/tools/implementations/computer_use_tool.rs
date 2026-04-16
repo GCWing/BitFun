@@ -1545,9 +1545,7 @@ impl Tool for ComputerUseTool {
                 let scroll_pos_x = input.get("scroll_x").and_then(|v| v.as_i64());
                 let scroll_pos_y = input.get("scroll_y").and_then(|v| v.as_i64());
                 if let (Some(sx), Some(sy)) = (scroll_pos_x, scroll_pos_y) {
-                    host_ref
-                        .mouse_move_global_f64(sx as f64, sy as f64)
-                        .await?;
+                    host_ref.mouse_move_global_f64(sx as f64, sy as f64).await?;
                     host_ref.wait_ms(30).await?;
                 }
                 host_ref.scroll(dx, dy).await?;

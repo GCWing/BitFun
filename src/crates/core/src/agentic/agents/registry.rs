@@ -1,5 +1,5 @@
 use super::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DeepResearchAgent, DebugMode,
+    Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DebugMode, DeepResearchAgent,
     ExploreAgent, FileFinderAgent, GenerateDocAgent, InitAgent, PlanMode, TeamMode,
 };
 use crate::agentic::agents::custom_subagents::{
@@ -1072,7 +1072,15 @@ mod tests {
 
     #[test]
     fn top_level_modes_default_to_auto() {
-        for agent_type in ["agentic", "Cowork", "Plan", "debug", "Claw", "DeepResearch", "Team"] {
+        for agent_type in [
+            "agentic",
+            "Cowork",
+            "Plan",
+            "debug",
+            "Claw",
+            "DeepResearch",
+            "Team",
+        ] {
             assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
         }
     }

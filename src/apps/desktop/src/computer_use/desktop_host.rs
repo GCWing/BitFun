@@ -1713,10 +1713,16 @@ end tell"#])
                 let new_w = (frame.width() / scale_factor).max(1);
                 let new_h = (frame.height() / scale_factor).max(1);
                 let dyn_img = DynamicImage::ImageRgb8(frame);
-                let resized = dyn_img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+                let resized =
+                    dyn_img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
                 let scaled_pointer_x = pointer_image_x.map(|px| px / scale_factor as i32);
                 let scaled_pointer_y = pointer_image_y.map(|py| py / scale_factor as i32);
-                (resized.to_rgb8(), scale_factor as f64, scaled_pointer_x, scaled_pointer_y)
+                (
+                    resized.to_rgb8(),
+                    scale_factor as f64,
+                    scaled_pointer_x,
+                    scaled_pointer_y,
+                )
             } else {
                 (frame, 1.0_f64, pointer_image_x, pointer_image_y)
             }
@@ -2082,10 +2088,7 @@ fn flash_click_highlight_cg(gx: f64, gy: f64) {
         // The bitmap is drawn; sleep then discard (the visual feedback is best-effort).
         // On macOS the actual overlay window requires AppKit; as a lightweight alternative
         // we just log the click location for debugging.
-        debug!(
-            "computer_use: click highlight at ({:.0}, {:.0})",
-            gx, gy
-        );
+        debug!("computer_use: click highlight at ({:.0}, {:.0})", gx, gy);
         std::thread::sleep(Duration::from_millis(DURATION_MS));
     });
 }
@@ -2275,7 +2278,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 rgba,
                 screen,
                 vec![], // No SoM labels for peek screenshots
-                None, // No UI tree text for peek screenshots
+                None,   // No UI tree text for peek screenshots
                 false,
             )
         })

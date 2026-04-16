@@ -79,8 +79,7 @@ impl PersistenceService {
         path_manager: Arc<PathManager>,
         workspace_path: PathBuf,
     ) -> BitFunResult<Self> {
-        let base_dir = path_manager.project_root(&workspace_path);
-        path_manager.ensure_dir(&base_dir).await?;
+        let base_dir = path_manager.project_runtime_root(&workspace_path);
 
         Ok(Self {
             base_dir,

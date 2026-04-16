@@ -109,7 +109,8 @@ impl GrepTool {
             .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
 
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let resolved_path = context.resolve_workspace_tool_path(search_path)?;
+        let resolved = context.resolve_tool_path(search_path)?;
+        let resolved_path = resolved.resolved_path.clone();
 
         let case_insensitive = input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false);
         let head_limit = Self::resolve_head_limit(input);
@@ -210,7 +211,7 @@ impl GrepTool {
         Ok(vec![ToolResult::Result {
             data: json!({
                 "pattern": pattern,
-                "path": resolved_path,
+                "path": resolved.logical_path,
                 "output_mode": output_mode,
                 "total_matches": total_matches,
                 "applied_limit": head_limit,
@@ -233,7 +234,8 @@ impl GrepTool {
             .ok_or_else(|| BitFunError::tool("pattern is required".to_string()))?;
 
         let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-        let resolved_path = context.resolve_workspace_tool_path(search_path)?;
+        let resolved = context.resolve_tool_path(search_path)?;
+        let resolved_path = resolved.resolved_path.clone();
 
         let case_insensitive = input.get("-i").and_then(|v| v.as_bool()).unwrap_or(false);
         let multiline = input
@@ -271,7 +273,11 @@ impl GrepTool {
             .output_mode(output_mode)
             .show_line_numbers(show_line_numbers);
 
-        if let Some(display_base) = Self::display_base(context) {
+        if resolved.is_runtime_artifact() {
+            if let Some(runtime_root) = &resolved.runtime_root {
+                options = options.display_base(runtime_root.to_string_lossy().to_string());
+            }
+        } else if let Some(display_base) = Self::display_base(context) {
             options = options.display_base(display_base);
         }
 
@@ -347,6 +353,7 @@ Usage:
 - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.
 - Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
 - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
+- The path parameter may be an absolute path or an exact `bitfun://runtime/...` URI returned by another tool
 - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
 - Use Task tool for open-ended searches requiring multiple rounds
 - Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\{\}` to find `interface{}` in Go code)
@@ -363,7 +370,7 @@ Usage:
                 },
                 "path": {
                     "type": "string",
-                    "description": "File or directory to search in (rg PATH). Defaults to current working directory."
+                    "description": "File or directory to search in (rg PATH). Defaults to current working directory. May be an absolute path or an exact bitfun://runtime URI."
                 },
                 "glob": {
                     "type": "string",
@@ -446,13 +453,16 @@ Usage:
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         // Remote workspace: use shell-based grep/rg
-        if context.is_remote() {
+        let search_path = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+        let resolved = context.resolve_tool_path(search_path)?;
+
+        if resolved.uses_remote_workspace_backend() {
             return self.call_remote(input, context).await;
         }
 
         let grep_options = self.build_grep_options(input, context)?;
         let pattern = grep_options.pattern.clone();
-        let path = grep_options.path.clone();
+        let path = resolved.logical_path.clone();
         let output_mode = grep_options.output_mode.to_string();
 
         let event_system = crate::infrastructure::events::event_system::get_global_event_system();

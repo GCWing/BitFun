@@ -1536,8 +1536,8 @@ function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
       const toolItem = item as FlowToolItem;
       
       if (toolItem.toolName === 'CreatePlan' && toolItem.toolResult?.success) {
-        const path = toolItem.toolResult.result?.plan_file_path;
-        if (path) createPlanFiles.add(path);
+        const planPath = toolItem.toolResult.result?.plan_file_path;
+        if (planPath) createPlanFiles.add(planPath);
       }
       
       if (['Edit', 'Write'].includes(toolItem.toolName) && toolItem.toolResult?.success) {

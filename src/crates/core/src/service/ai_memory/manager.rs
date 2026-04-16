@@ -50,7 +50,7 @@ impl AIMemoryManager {
         workspace_path: &str,
     ) -> BitFunResult<Self> {
         let workspace_path = PathBuf::from(workspace_path);
-        let storage_path = workspace_path.join(".bitfun").join("ai_memories.json");
+        let storage_path = path_manager.project_ai_memories_file(&workspace_path);
 
         if let Some(parent) = storage_path.parent() {
             fs::create_dir_all(parent).await.map_err(|e| {

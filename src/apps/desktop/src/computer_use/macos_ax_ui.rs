@@ -26,10 +26,7 @@ unsafe extern "C" {
         attribute: CFStringRef,
         value: *mut CFTypeRef,
     ) -> i32;
-    fn AXUIElementCopyActionNames(
-        element: AXUIElementRef,
-        names: *mut CFArrayRef,
-    ) -> i32;
+    fn AXUIElementCopyActionNames(element: AXUIElementRef, names: *mut CFArrayRef) -> i32;
     fn AXUIElementCopyElementAtPosition(
         element: AXUIElementRef,
         x: f32,
@@ -158,9 +155,7 @@ unsafe fn is_ax_enabled(elem: AXUIElementRef) -> bool {
     enabled
 }
 
-unsafe fn read_value_desc(
-    elem: AXUIElementRef,
-) -> (Option<String>, Option<String>) {
+unsafe fn read_value_desc(elem: AXUIElementRef) -> (Option<String>, Option<String>) {
     let value = ax_copy_attr(elem, "AXValue").and_then(|v| {
         let s = cfstring_to_string(v);
         ax_release(v);
@@ -511,7 +506,6 @@ pub fn locate_ui_element_center(
     )
 }
 
-
 unsafe fn is_ax_interactive(elem: AXUIElementRef, role: &str) -> bool {
     let actions = ax_copy_action_names(elem);
     let interactive_actions = [
@@ -611,7 +605,10 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
                             let wy_f = wy as f64;
                             let ww_f = ww as f64;
                             let wh_f = wh as f64;
-                            on_screen = bl < wx_f + ww_f && bl + bw > wx_f && bt < wy_f + wh_f && bt + bh > wy_f;
+                            on_screen = bl < wx_f + ww_f
+                                && bl + bw > wx_f
+                                && bt < wy_f + wh_f
+                                && bt + bh > wy_f;
                         }
                         if on_screen {
                             let (val_s, desc_s) = unsafe { read_value_desc(cur.ax) };
@@ -691,8 +688,16 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
         if let Some(d) = &el.description {
             attrs.push_str(&format!(" description: \"{}\"", d));
         }
-        attrs.push_str(&format!(" (w,h): \"{}, {}\"", el.bounds_width as i32, el.bounds_height as i32));
-        ui_tree_lines.push(format!("{}[:]<{} {}>", el.label, el.role, attrs.trim_start()));
+        attrs.push_str(&format!(
+            " (w,h): \"{}, {}\"",
+            el.bounds_width as i32, el.bounds_height as i32
+        ));
+        ui_tree_lines.push(format!(
+            "{}[:]<{} {}>",
+            el.label,
+            el.role,
+            attrs.trim_start()
+        ));
     }
     let ui_tree_text = if ui_tree_lines.is_empty() {
         None

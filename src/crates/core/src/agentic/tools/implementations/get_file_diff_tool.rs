@@ -1,7 +1,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::resolve_workspace_tool_path;
+use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::service::git::git_service::GitService;
 use crate::service::git::git_types::GitDiffParams;
 use crate::service::git::git_utils::get_repository_root;
@@ -295,7 +295,7 @@ This tool compares the current file content against:
 3. Full file content (if neither baseline nor git is available)
 
 Usage:
-- The file_path parameter must be an absolute path, not a relative path.
+- The file_path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool.
 - The diff is returned in unified diff format, showing additions (+) and deletions (-).
 - The response includes diff_type indicating the source: "baseline", "git", or "full".
 - The response includes stats for additions and deletions.
@@ -311,7 +311,7 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The absolute path to the file to get diff for"
+                    "description": "The absolute path to the file to get diff for, or an exact bitfun://runtime URI returned by another tool"
                 }
             },
             "required": ["file_path"],
@@ -346,29 +346,68 @@ Usage:
                 };
             }
 
-            let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
-
-            let root_owned =
-                context.and_then(|c| c.workspace.as_ref().map(|w| w.root_path_string()));
-            let resolved_path =
-                match resolve_workspace_tool_path(file_path, root_owned.as_deref(), is_remote) {
-                    Ok(p) => p,
-                    Err(e) => {
+            let resolved = match context.map(|ctx| ctx.resolve_tool_path(file_path)) {
+                Some(Ok(value)) => value,
+                Some(Err(err)) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(err.to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+                None => {
+                    if is_bitfun_runtime_uri(file_path) {
                         return ValidationResult {
                             result: false,
-                            message: Some(e.to_string()),
+                            message: Some(
+                                "Tool context is required to resolve bitfun runtime URIs"
+                                    .to_string(),
+                            ),
                             error_code: Some(400),
                             meta: None,
                         };
                     }
-                };
+                    let path = Path::new(file_path);
+                    if !path.is_absolute() {
+                        return ValidationResult {
+                            result: false,
+                            message: Some("file_path must be absolute".to_string()),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                    if !path.exists() {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(format!("File does not exist: {}", file_path)),
+                            error_code: Some(404),
+                            meta: None,
+                        };
+                    }
+                    if !path.is_file() {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(format!("Path is not a file: {}", file_path)),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+                    return ValidationResult {
+                        result: true,
+                        message: None,
+                        error_code: None,
+                        meta: None,
+                    };
+                }
+            };
 
-            if !is_remote {
-                let path = Path::new(&resolved_path);
+            if !resolved.uses_remote_workspace_backend() {
+                let path = Path::new(&resolved.resolved_path);
                 if !path.exists() {
                     return ValidationResult {
                         result: false,
-                        message: Some(format!("File does not exist: {}", resolved_path)),
+                        message: Some(format!("File does not exist: {}", resolved.logical_path)),
                         error_code: Some(404),
                         meta: None,
                     };
@@ -377,7 +416,7 @@ Usage:
                 if !path.is_file() {
                     return ValidationResult {
                         result: false,
-                        message: Some(format!("Path is not a file: {}", resolved_path)),
+                        message: Some(format!("Path is not a file: {}", resolved.logical_path)),
                         error_code: Some(400),
                         meta: None,
                     };
@@ -434,24 +473,24 @@ Usage:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
 
-        let resolved_path = context.resolve_workspace_tool_path(file_path)?;
+        let resolved = context.resolve_tool_path(file_path)?;
 
         debug!(
             "GetFileDiff tool starting diff retrieval for file: {:?}",
-            resolved_path
+            resolved.logical_path
         );
 
-        if context.is_remote() {
+        if resolved.uses_remote_workspace_backend() {
             let ws_fs = context.ws_fs().ok_or_else(|| {
                 BitFunError::tool("Workspace file system not available for remote diff".to_string())
             })?;
             let content = ws_fs
-                .read_file_text(&resolved_path)
+                .read_file_text(&resolved.resolved_path)
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
             let total_lines = content.lines().count();
             let data = json!({
-                "file_path": resolved_path,
+                "file_path": resolved.logical_path,
                 "diff_type": "full",
                 "diff_format": "unified",
                 "diff_content": content.clone(),
@@ -473,7 +512,33 @@ Usage:
         }
 
         // Priority 1: Try baseline diff
-        let path = Path::new(&resolved_path);
+        let path = Path::new(&resolved.resolved_path);
+        if resolved.is_runtime_artifact() {
+            let content = fs::read_to_string(path)
+                .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
+            let total_lines = content.lines().count();
+            let data = json!({
+                "file_path": resolved.logical_path,
+                "diff_type": "full",
+                "diff_format": "unified",
+                "diff_content": content.clone(),
+                "original_content": "",
+                "modified_content": content,
+                "stats": {
+                    "additions": 0,
+                    "deletions": 0,
+                    "total_lines": total_lines
+                },
+                "message": "Runtime artifact full content (baseline/git diff not available)"
+            });
+            let result_for_assistant = self.render_tool_result_message(&data);
+            return Ok(vec![ToolResult::Result {
+                data,
+                result_for_assistant: Some(result_for_assistant),
+                image_attachments: None,
+            }]);
+        }
+
         if let Some(result) = self.try_baseline_diff(path, context.workspace_root()).await {
             match result {
                 Ok(data) => {

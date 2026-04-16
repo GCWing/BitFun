@@ -5,6 +5,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::service::filesystem::{format_directory_listing, list_directory_entries};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -51,7 +52,7 @@ impl Tool for LSTool {
         Ok(r#"Recursively lists files and directories in a given path.
 
 Usage:
-- The path parameter must be an absolute path, not a relative path
+- The path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool
 - Hidden files (files starting with '.') are automatically excluded
 - Results are sorted by modification time (newest first)"#
             .to_string())
@@ -63,7 +64,7 @@ Usage:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "The absolute path to the directory to list (must be absolute, not relative)"
+                    "description": "The absolute path to the directory to list, or an exact bitfun://runtime URI returned by another tool"
                 },
                 "limit": {
                     "type": "number",
@@ -102,25 +103,75 @@ Usage:
                 };
             }
 
-            let is_abs = context
-                .map(|c| c.workspace_path_is_effectively_absolute(path))
-                .unwrap_or_else(|| Path::new(path).is_absolute());
-            if !is_abs {
-                return ValidationResult {
-                    result: false,
-                    message: Some(format!("path must be an absolute path, got: {}", path)),
-                    error_code: Some(400),
-                    meta: None,
-                };
-            }
+            let resolved = match context.map(|ctx| ctx.resolve_tool_path(path)) {
+                Some(Ok(value)) => value,
+                Some(Err(err)) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(err.to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+                None => {
+                    if is_bitfun_runtime_uri(path) {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(
+                                "Tool context is required to resolve bitfun runtime URIs"
+                                    .to_string(),
+                            ),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
 
-            let is_remote = context.map(|c| c.is_remote()).unwrap_or(false);
-            if !is_remote {
-                let local_path = Path::new(path);
+                    let local_path = Path::new(path);
+                    if !local_path.is_absolute() {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(format!("path must be an absolute path, got: {}", path)),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+
+                    if !local_path.exists() {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(format!("Directory does not exist: {}", path)),
+                            error_code: Some(404),
+                            meta: None,
+                        };
+                    }
+
+                    if !local_path.is_dir() {
+                        return ValidationResult {
+                            result: false,
+                            message: Some(format!("Path is not a directory: {}", path)),
+                            error_code: Some(400),
+                            meta: None,
+                        };
+                    }
+
+                    return ValidationResult {
+                        result: true,
+                        message: None,
+                        error_code: None,
+                        meta: None,
+                    };
+                }
+            };
+
+            if !resolved.uses_remote_workspace_backend() {
+                let local_path = Path::new(&resolved.resolved_path);
                 if !local_path.exists() {
                     return ValidationResult {
                         result: false,
-                        message: Some(format!("Directory does not exist: {}", path)),
+                        message: Some(format!(
+                            "Directory does not exist: {}",
+                            resolved.logical_path
+                        )),
                         error_code: Some(404),
                         meta: None,
                     };
@@ -129,7 +180,10 @@ Usage:
                 if !local_path.is_dir() {
                     return ValidationResult {
                         result: false,
-                        message: Some(format!("Path is not a directory: {}", path)),
+                        message: Some(format!(
+                            "Path is not a directory: {}",
+                            resolved.logical_path
+                        )),
                         error_code: Some(400),
                         meta: None,
                     };
@@ -180,16 +234,18 @@ Usage:
             .map(|v| v as usize)
             .unwrap_or(self.default_limit);
 
-        // Remote workspace: execute ls via SSH shell
-        if context.is_remote() {
+        let resolved = context.resolve_tool_path(path)?;
+
+        // Remote workspace path: execute ls via SSH shell
+        if resolved.uses_remote_workspace_backend() {
             let ws_shell = context.ws_shell().ok_or_else(|| {
                 BitFunError::tool("Workspace shell not available for remote LS".to_string())
             })?;
 
             let ls_cmd = format!(
                 "find {} -maxdepth 1 -not -name '.*' -not -path {} | head -n {} | sort",
-                shell_escape(path),
-                shell_escape(path),
+                shell_escape(&resolved.resolved_path),
+                shell_escape(&resolved.resolved_path),
                 limit + 1
             );
 
@@ -217,14 +273,18 @@ Usage:
             // Use a simpler stat-based listing for the text output
             let stat_cmd = format!(
                 "ls -la --time-style=long-iso {} 2>/dev/null || ls -la {}",
-                shell_escape(path),
-                shell_escape(path)
+                shell_escape(&resolved.resolved_path),
+                shell_escape(&resolved.resolved_path)
             );
             let (ls_output, _, _) = ws_shell.exec(&stat_cmd, Some(15_000)).await.map_err(|e| {
                 BitFunError::tool(format!("Failed to list remote directory: {}", e))
             })?;
 
-            let result_text = format!("Directory listing: {}\n\n{}", path, ls_output.trim());
+            let result_text = format!(
+                "Directory listing: {}\n\n{}",
+                resolved.logical_path,
+                ls_output.trim()
+            );
 
             let entries_json: Vec<Value> = stdout
                 .lines()
@@ -245,7 +305,7 @@ Usage:
             let total_entries = entries_json.len();
             let result = ToolResult::Result {
                 data: json!({
-                    "path": path,
+                    "path": resolved.logical_path,
                     "entries": entries_json,
                     "total": total_entries,
                     "limit": limit,
@@ -258,15 +318,19 @@ Usage:
         }
 
         // Local: original implementation
-        let entries = list_directory_entries(path, limit).map_err(BitFunError::tool)?;
+        let entries =
+            list_directory_entries(&resolved.resolved_path, limit).map_err(BitFunError::tool)?;
 
         let entries_json = entries
             .iter()
             .filter(|entry| entry.depth == 1)
             .map(|entry| {
+                let entry_path = resolved
+                    .logical_child_path(&entry.path)
+                    .unwrap_or_else(|| entry.path.to_string_lossy().to_string());
                 json!({
                     "name": entry.path.file_name().unwrap_or_default().to_string_lossy(),
-                    "path": entry.path.to_string_lossy(),
+                    "path": entry_path,
                     "is_dir": entry.is_dir,
                     "modified_time": format_time(entry.modified_time)
                 })
@@ -274,7 +338,12 @@ Usage:
             .collect::<Vec<Value>>();
         let total_entries = entries.len();
 
-        let mut result_text = format_directory_listing(&entries, path);
+        let mut result_text = format_directory_listing(&entries, &resolved.resolved_path);
+        if resolved.logical_path != resolved.resolved_path {
+            let physical_header = resolved.resolved_path.replace('\\', "/");
+            let logical_header = resolved.logical_path.replace('\\', "/");
+            result_text = result_text.replacen(&physical_header, &logical_header, 1);
+        }
         if total_entries == 0 {
             result_text.push_str("\n(no entries found)");
         } else if total_entries >= limit {
@@ -283,7 +352,7 @@ Usage:
 
         let result = ToolResult::Result {
             data: json!({
-                "path": path,
+                "path": resolved.logical_path,
                 "entries": entries_json,
                 "total": total_entries,
                 "limit": limit
