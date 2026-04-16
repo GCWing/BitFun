@@ -250,7 +250,7 @@
     "title": "Advanced Settings",
     "inlineThinkInText": {
       "label": "Parse <think> Tags In Text",
-      "hint": "Split OpenAI-compatible text streams containing <think>...</think> into live reasoning content. Disabled by default."
+      "hint": "Split text streams containing <think>...</think> into live reasoning content."
     },
     "skipSslVerify": {
       "label": "Skip SSL Certificate Verification",

@@ -8,10 +8,6 @@ pub(crate) fn is_siliconflow_url(url: &str) -> bool {
     url.contains("api.siliconflow.cn")
 }
 
-pub(crate) fn is_minimax_url(url: &str) -> bool {
-    url.contains("api.minimaxi.com")
-}
-
 pub(crate) fn parse_glm_major_minor(model_name: &str) -> Option<(u32, u32)> {
     let lower = model_name.to_ascii_lowercase();
     let tail = lower.strip_prefix("glm-")?;
@@ -56,13 +52,6 @@ pub(crate) fn apply_openai_compatible_reasoning_fields(
         if normalized_mode != ReasoningMode::Default {
             request_body["enable_thinking"] =
                 serde_json::json!(normalized_mode == ReasoningMode::Enabled);
-        }
-        return;
-    }
-
-    if is_minimax_url(url) {
-        if normalized_mode == ReasoningMode::Enabled {
-            request_body["reasoning_split"] = serde_json::json!(true);
         }
         return;
     }
