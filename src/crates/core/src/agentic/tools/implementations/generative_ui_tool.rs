@@ -110,7 +110,10 @@ Input rules:
         })
     }
 
-    async fn input_schema_for_model_with_context(&self, _context: Option<&ToolUseContext>) -> Value {
+    async fn input_schema_for_model_with_context(
+        &self,
+        _context: Option<&ToolUseContext>,
+    ) -> Value {
         let mut schema = self.input_schema();
         if let Some(obj) = schema.as_object_mut() {
             obj.insert(

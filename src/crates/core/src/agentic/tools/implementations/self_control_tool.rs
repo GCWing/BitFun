@@ -52,8 +52,9 @@ struct PendingSelfControlRequest {
     sender: oneshot::Sender<SelfControlResponse>,
 }
 
-static PENDING_REQUESTS: std::sync::OnceLock<Arc<RwLock<HashMap<String, PendingSelfControlRequest>>>> =
-    std::sync::OnceLock::new();
+static PENDING_REQUESTS: std::sync::OnceLock<
+    Arc<RwLock<HashMap<String, PendingSelfControlRequest>>>,
+> = std::sync::OnceLock::new();
 
 fn get_pending_requests() -> Arc<RwLock<HashMap<String, PendingSelfControlRequest>>> {
     PENDING_REQUESTS
@@ -224,7 +225,10 @@ Guidelines:
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        let action = input.get("action").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let action = input
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
         format!("Using SelfControl: {}", action)
     }
 
@@ -233,7 +237,10 @@ Guidelines:
             Some(result) => result.to_string(),
             None => output.to_string(),
         };
-        format!("{}\n\n(Reminder: return to the session scene when done.)", base)
+        format!(
+            "{}\n\n(Reminder: return to the session scene when done.)",
+            base
+        )
     }
 
     async fn validate_input(
@@ -241,7 +248,12 @@ Guidelines:
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        if input.get("action").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+        if input
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .is_empty()
+        {
             return ValidationResult {
                 result: false,
                 message: Some("Missing required field: action".to_string()),
@@ -268,10 +280,7 @@ Guidelines:
         {
             let pending_requests = get_pending_requests();
             let mut pending = pending_requests.write().await;
-            pending.insert(
-                request_id.clone(),
-                PendingSelfControlRequest { sender: tx },
-            );
+            pending.insert(request_id.clone(), PendingSelfControlRequest { sender: tx });
         }
 
         // Forward the entire input payload directly — no field re-mapping needed.
@@ -319,7 +328,9 @@ Guidelines:
                         Some(result_text),
                     )])
                 } else {
-                    let error_text = response.error.unwrap_or_else(|| "Unknown error".to_string());
+                    let error_text = response
+                        .error
+                        .unwrap_or_else(|| "Unknown error".to_string());
                     Err(BitFunError::tool(format!(
                         "Self-control action failed: {}",
                         error_text

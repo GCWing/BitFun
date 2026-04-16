@@ -442,12 +442,12 @@
                         "dataType": "boolean",
                         "key": "inline_think_in_text",
                         "title": "解析文本中的 <think> 标签",
-                        "description": "将 OpenAI 兼容文本流中的 <think>...</think> 实时拆分为 reasoning 内容，默认关闭",
+                        "description": "将 OpenAI 兼容或 Anthropic 兼容文本流中的 <think>...</think> 实时拆分为 reasoning 内容，默认关闭",
                         "default": false,
                         "conditional": {
                           "when": "provider",
-                          "operator": "equals",
-                          "value": "openai",
+                          "operator": "in",
+                          "value": ["openai", "anthropic"],
                           "show": true
                         }
                       },

@@ -1,5 +1,6 @@
 mod anthropic;
 mod gemini;
+mod inline_think;
 mod openai;
 mod responses;
 mod stream_stats;

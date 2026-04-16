@@ -1,3 +1,4 @@
+use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
 use crate::stream::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
@@ -25,11 +26,13 @@ pub async fn handle_anthropic_stream(
     response: Response,
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    inline_think_in_text: bool,
 ) {
     let mut stream = response.bytes_stream().eventsource();
     let idle_timeout = Duration::from_secs(600);
     let mut usage = Usage::default();
     let mut stats = StreamStats::new("Anthropic");
+    let mut inline_think_parser = InlineThinkParser::new(inline_think_in_text);
 
     loop {
         let sse_event = timeout(idle_timeout, stream.next()).await;
@@ -96,14 +99,12 @@ pub async fn handle_anthropic_stream(
                     content_block_start.content_block,
                     ContentBlock::ToolUse { .. }
                 ) {
-                    let unified_response = UnifiedResponse::from(content_block_start);
-                    trace!(
-                        target: AI_STREAM_RESPONSE_TARGET,
-                        "Anthropic unified response: {:?}",
-                        unified_response
+                    emit_normalized_response(
+                        &mut inline_think_parser,
+                        &tx_event,
+                        &mut stats,
+                        UnifiedResponse::from(content_block_start),
                     );
-                    stats.record_unified_response(&unified_response);
-                    let _ = tx_event.send(Ok(unified_response));
                 }
             }
             "content_block_delta" => {
@@ -117,15 +118,12 @@ pub async fn handle_anthropic_stream(
                     }
                 };
                 match UnifiedResponse::try_from(content_block_delta) {
-                    Ok(unified_response) => {
-                        trace!(
-                            target: AI_STREAM_RESPONSE_TARGET,
-                            "Anthropic unified response: {:?}",
-                            unified_response
-                        );
-                        stats.record_unified_response(&unified_response);
-                        let _ = tx_event.send(Ok(unified_response));
-                    }
+                    Ok(unified_response) => emit_normalized_response(
+                        &mut inline_think_parser,
+                        &tx_event,
+                        &mut stats,
+                        unified_response,
+                    ),
                     Err(e) => {
                         stats.increment("skip:invalid_content_block_delta");
                         error!("Skipping invalid content_block_delta: {}", e);
@@ -150,14 +148,12 @@ pub async fn handle_anthropic_stream(
                 } else {
                     Some(usage.clone())
                 };
-                let unified_response = UnifiedResponse::from(message_delta);
-                trace!(
-                    target: AI_STREAM_RESPONSE_TARGET,
-                    "Anthropic unified response: {:?}",
-                    unified_response
+                emit_normalized_response(
+                    &mut inline_think_parser,
+                    &tx_event,
+                    &mut stats,
+                    UnifiedResponse::from(message_delta),
                 );
-                stats.record_unified_response(&unified_response);
-                let _ = tx_event.send(Ok(unified_response));
             }
             "error" => {
                 let sse_error: AnthropicSSEError = match serde_json::from_str(&data) {
@@ -177,10 +173,36 @@ pub async fn handle_anthropic_stream(
                 return;
             }
             "message_stop" => {
+                for unified_response in inline_think_parser.flush() {
+                    trace!(
+                        target: AI_STREAM_RESPONSE_TARGET,
+                        "Anthropic unified response: {:?}",
+                        unified_response
+                    );
+                    stats.record_unified_response(&unified_response);
+                    let _ = tx_event.send(Ok(unified_response));
+                }
                 stats.log_summary("message_stop");
                 return;
             }
             _ => {}
         }
+    }
+}
+
+fn emit_normalized_response(
+    inline_think_parser: &mut InlineThinkParser,
+    tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    stats: &mut StreamStats,
+    unified_response: UnifiedResponse,
+) {
+    for normalized_response in inline_think_parser.normalize_response(unified_response) {
+        trace!(
+            target: AI_STREAM_RESPONSE_TARGET,
+            "Anthropic unified response: {:?}",
+            normalized_response
+        );
+        stats.record_unified_response(&normalized_response);
+        let _ = tx_event.send(Ok(normalized_response));
     }
 }
