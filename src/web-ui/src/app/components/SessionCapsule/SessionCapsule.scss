@@ -485,6 +485,7 @@ $session-capsule-inline-pad: $size-gap-3;
 .session-capsule__footer {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: $size-gap-1;
   padding: $size-gap-1 $session-capsule-inline-pad;
   flex-shrink: 0;

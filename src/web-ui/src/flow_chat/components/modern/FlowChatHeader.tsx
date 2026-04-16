@@ -1,5 +1,5 @@
 /**
- * FlowChat header — turn navigation, search and BTW back controls.
+ * FlowChat header — message search (when turn list is collapsed), turn list toggle, BTW back.
  *
  * The session title and the "return to Agentic OS" button have been moved to
  * UnifiedTopBar so the whole application shares a single top chrome.
@@ -8,7 +8,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronDown, ChevronUp, CornerUpLeft, List, Search, X } from 'lucide-react';
-import { Tooltip, IconButton, Input } from '@/component-library';
+import { IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -23,12 +23,6 @@ export interface FlowChatHeaderTurnSummary {
 }
 
 export interface FlowChatHeaderProps {
-  /** Current turn index. */
-  currentTurn: number;
-  /** Total turns. */
-  totalTurns: number;
-  /** Current user message (kept for turn list tooltip). */
-  currentUserMessage: string;
   /** Whether the header is visible. */
   visible: boolean;
   /** Session ID. */
@@ -39,12 +33,8 @@ export interface FlowChatHeaderProps {
   btwParentTitle?: string;
   /** Ordered turn summaries used by header navigation. */
   turns?: FlowChatHeaderTurnSummary[];
-  /** Jump to a specific turn. */
+  /** Jump to a specific turn (used by turn list sidebar). */
   onJumpToTurn?: (turnId: string) => void;
-  /** Jump to the previous turn. */
-  onJumpToPreviousTurn?: () => void;
-  /** Jump to the next turn. */
-  onJumpToNextTurn?: () => void;
 
   // ========== Search ==========
   /** Current search query string. */
@@ -70,17 +60,12 @@ export interface FlowChatHeaderProps {
   onTurnListOpenChange?: (open: boolean) => void;
 }
 export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
-  currentTurn,
-  totalTurns,
-  currentUserMessage: _currentUserMessage,
   visible,
   sessionId,
   btwOrigin,
   btwParentTitle = '',
   turns = [],
   onJumpToTurn,
-  onJumpToPreviousTurn,
-  onJumpToNextTurn,
   searchQuery = '',
   onSearchChange,
   searchMatchCount = 0,
@@ -110,31 +95,37 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const turnListTooltip = t('flowChatHeader.turnList', {
     defaultValue: 'Turn list',
   });
-  const previousTurnDisabled = currentTurn <= 1;
-  const nextTurnDisabled = currentTurn <= 0 || currentTurn >= totalTurns;
   const hasTurnNavigation = turns.length > 0 && !!onJumpToTurn;
+
+  // When collapsing the turn list with an active query, reopen the header search bar.
+  const prevTurnListOpenRef = useRef(turnListOpen);
+  useEffect(() => {
+    if (prevTurnListOpenRef.current && !turnListOpen && searchQuery.trim().length > 0) {
+      setIsSearchOpen(true);
+    }
+    prevTurnListOpenRef.current = turnListOpen;
+  }, [turnListOpen, searchQuery]);
 
   // Sync open state from parent (e.g. Ctrl+F shortcut).
   // Using a counter so every new request opens the bar, even after a prior close.
   const prevSearchOpenRequestRef = useRef(0);
   useEffect(() => {
+    if (turnListOpen) return;
     if (searchOpenRequest > 0 && searchOpenRequest !== prevSearchOpenRequestRef.current) {
       prevSearchOpenRequestRef.current = searchOpenRequest;
       setIsSearchOpen(true);
     }
-  }, [searchOpenRequest]);
+  }, [searchOpenRequest, turnListOpen]);
 
-  // Focus the search input whenever it opens.
+  // Focus the search input whenever it opens (header search is hidden while turn list is open).
   useEffect(() => {
-    if (isSearchOpen) {
-      const frameId = requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      });
-      return () => cancelAnimationFrame(frameId);
-    }
-    return undefined;
-  }, [isSearchOpen]);
+    if (turnListOpen || !isSearchOpen) return undefined;
+    const frameId = requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [isSearchOpen, turnListOpen]);
 
   const handleOpenSearch = useCallback(() => {
     setIsSearchOpen(true);
@@ -193,7 +184,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       </div>
 
       <div className="flowchat-header__actions">
-        {isSearchOpen ? (
+        {!turnListOpen && isSearchOpen ? (
           <div className="flowchat-header__search" role="search" data-testid="flowchat-header-search-bar">
             <Input
               ref={searchInputRef}
@@ -251,7 +242,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             </IconButton>
           </div>
         ) : null}
-        {!isSearchOpen && (
+        {!turnListOpen && !isSearchOpen && (
           <IconButton
             className="flowchat-header__search-btn"
             variant="ghost"
@@ -263,34 +254,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           >
             <Search size={14} />
           </IconButton>
-        )}
-        {!isSearchOpen && (
-          <div className="flowchat-header__turn-steppers">
-            <IconButton
-              className="flowchat-header__turn-nav-button"
-              variant="ghost"
-              size="xs"
-              onClick={onJumpToPreviousTurn}
-              tooltip={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
-              disabled={previousTurnDisabled || !onJumpToPreviousTurn}
-              aria-label={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
-              data-testid="flowchat-header-turn-prev"
-            >
-              <ChevronUp size={14} />
-            </IconButton>
-            <IconButton
-              className="flowchat-header__turn-nav-button"
-              variant="ghost"
-              size="xs"
-              onClick={onJumpToNextTurn}
-              tooltip={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
-              disabled={nextTurnDisabled || !onJumpToNextTurn}
-              aria-label={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
-              data-testid="flowchat-header-turn-next"
-            >
-              <ChevronDown size={14} />
-            </IconButton>
-          </div>
         )}
         {!!btwOrigin?.parentSessionId && (
           <IconButton
@@ -306,24 +269,22 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <CornerUpLeft size={12} />
           </IconButton>
         )}
-        {!isSearchOpen && (
-          <div className="flowchat-header__turn-nav">
-            <IconButton
-              className={`flowchat-header__turn-nav-button${turnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
-              variant="ghost"
-              size="xs"
-              onClick={handleToggleTurnList}
-              tooltip={turnListTooltip}
-              disabled={!hasTurnNavigation}
-              aria-label={turnListTooltip}
-              aria-expanded={turnListOpen}
-              aria-controls="flowchat-turn-list-sidebar"
-              data-testid="flowchat-header-turn-list"
-            >
-              <List size={14} />
-            </IconButton>
-          </div>
-        )}
+        <div className="flowchat-header__turn-nav">
+          <IconButton
+            className={`flowchat-header__turn-nav-button${turnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
+            variant="ghost"
+            size="xs"
+            onClick={handleToggleTurnList}
+            tooltip={turnListTooltip}
+            disabled={!hasTurnNavigation}
+            aria-label={turnListTooltip}
+            aria-expanded={turnListOpen}
+            aria-controls="flowchat-turn-list-sidebar"
+            data-testid="flowchat-header-turn-list"
+          >
+            <List size={14} />
+          </IconButton>
+        </div>
       </div>
     </div>
   );

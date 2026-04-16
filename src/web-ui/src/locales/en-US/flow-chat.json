@@ -708,6 +708,13 @@
       "readingFile": "Reading",
       "preparingRead": "Preparing to read"
     },
+    "sessionHistory": {
+      "parsingParams": "Parsing parameters...",
+      "fallbackDisplayName": "Another session",
+      "lineCompleted": "Read history: {{name}}",
+      "lineRunning": "Reading history: {{name}}",
+      "linePending": "Preparing to read history: {{name}}"
+    },
     "terminalControl": {
       "terminatingSession": "Terminating terminal",
       "sessionKilled": "Terminal killed",

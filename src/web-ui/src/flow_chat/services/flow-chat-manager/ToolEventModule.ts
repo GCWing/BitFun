@@ -326,6 +326,8 @@ function handleStarted(
   
   if (existingItem) {
     store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+      // Early events may omit tool_name; Started carries the canonical name — keep card registry in sync.
+      toolName: toolEvent.tool_name,
       toolCall: {
         input: toolEvent.params,
         id: toolEvent.tool_id
@@ -393,6 +395,7 @@ function handleCompleted(
   }
   
   const updates = {
+    toolName: toolEvent.tool_name,
     toolResult: {
       result: toolEvent.result,
       success: true,
@@ -420,6 +423,7 @@ function handleFailed(
   toolEvent: FailedToolEvent
 ): void {
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+    toolName: toolEvent.tool_name,
     toolResult: {
       result: null,
       success: false,

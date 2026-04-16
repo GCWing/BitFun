@@ -123,7 +123,19 @@
       "viewDetails": "Task details",
       "runningSwitchTooltip": "{{title}} · Click to switch",
       "openTaskList": "View all tasks",
-      "runningSessionsGroupLabel": "Running"
+      "runningSessionsGroupLabel": "Running",
+      "newSessionButton": "New process",
+      "newSessionDialogTitle": "New process",
+      "agentLabel": "Agent",
+      "workspaceLabel": "Workspace",
+      "workspacePlaceholder": "Choose an open workspace",
+      "browseWorkspace": "Browse folder…",
+      "confirmCreate": "Create",
+      "noOpenWorkspace": "No workspace open yet",
+      "workspaceMissing": "Select a valid workspace",
+      "newSessionLede": "Choose an agent mode and workspace — start a fresh process.",
+      "newSessionSectionAgent": "Agent",
+      "newSessionSectionWorkspace": "Workspace"
     },
     "badges": {
       "comingSoon": "Soon"

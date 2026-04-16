@@ -8,6 +8,17 @@ import { createLogger } from '@/shared/utils/logger';
 import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
 
 const log = createLogger('ToolCardRegistry');
+
+/** Provider / stream quirks (e.g. snake_case) — map to TOOL_CARD_CONFIGS keys. */
+const TOOL_REGISTRY_ALIASES: Record<string, string> = {
+  session_history: 'SessionHistory',
+};
+
+function resolveToolRegistryKey(raw: string): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return trimmed;
+  return TOOL_REGISTRY_ALIASES[trimmed] ?? TOOL_REGISTRY_ALIASES[trimmed.toLowerCase()] ?? trimmed;
+}
 // Tool display components
 import { ReadFileDisplay } from './ReadFileDisplay';
 import { GrepSearchDisplay } from './GrepSearchDisplay';
@@ -31,6 +42,7 @@ import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { BtwMarkerCard } from './BtwMarkerCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
+import { SessionHistoryDisplay } from './SessionHistoryDisplay';
 import { AgentDispatchCard } from './AgentDispatchCard';
 
 // Tool card config map - uses backend tool names
@@ -278,6 +290,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#8b5cf6'
   },
 
+  'SessionHistory': {
+    toolName: 'SessionHistory',
+    displayName: 'Read session history',
+    icon: 'SH',
+    requiresConfirmation: false,
+    resultDisplayType: 'summary',
+    description: 'Export and read another session transcript',
+    displayMode: 'compact',
+    primaryColor: '#3b82f6'
+  },
+
   // Bash terminal tool
   'Bash': {
     toolName: 'Bash',
@@ -352,6 +375,7 @@ export const TOOL_CARD_COMPONENTS = {
   // Session tools
   'SessionControl': SessionControlToolCard,
   'SessionMessage': SessionMessageToolCard,
+  'SessionHistory': SessionHistoryDisplay,
 
   // Bash tool
   'Bash': TerminalToolCard,
@@ -364,14 +388,15 @@ export const TOOL_CARD_COMPONENTS = {
  * Get tool card config.
  */
 export function getToolCardConfig(toolName: string): ToolCardConfig {
+  const raw = (toolName ?? '').trim();
   // Check MCP tools (prefix: mcp__).
-  if (isMcpToolName(toolName)) {
-    const parsed = parseMcpToolName(toolName);
-    const actualToolName = parsed?.toolName ?? toolName;
+  if (isMcpToolName(raw)) {
+    const parsed = parseMcpToolName(raw);
+    const actualToolName = parsed?.toolName ?? raw;
 
     return {
-      toolName,
-      displayName: actualToolName || toolName,
+      toolName: raw,
+      displayName: actualToolName || raw,
       icon: 'MCP',
       requiresConfirmation: false,
       resultDisplayType: 'detailed',
@@ -380,15 +405,16 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
       primaryColor: '#8b5cf6'
     };
   }
-  
+
+  const key = resolveToolRegistryKey(raw);
   // Match by name or fall back to defaults.
-  return TOOL_CARD_CONFIGS[toolName] || {
-    toolName,
-    displayName: `Tool: ${toolName}`,
+  return TOOL_CARD_CONFIGS[key] || {
+    toolName: raw,
+    displayName: `Tool: ${raw}`,
     icon: 'TOOL',
     requiresConfirmation: false,
     resultDisplayType: 'summary',
-    description: `Run ${toolName} tool`,
+    description: `Run ${raw} tool`,
     displayMode: 'standard',
     primaryColor: '#6b7280'
   };
@@ -398,16 +424,18 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
  * Get tool card component.
  */
 export function getToolCardComponent(toolName: string) {
+  const raw = (toolName ?? '').trim();
   // Check MCP tools (prefix: mcp__).
-  if (isMcpToolName(toolName)) {
+  if (isMcpToolName(raw)) {
     return MCPToolDisplay;
   }
-  
-  const component = TOOL_CARD_COMPONENTS[toolName as keyof typeof TOOL_CARD_COMPONENTS];
+
+  const key = resolveToolRegistryKey(raw);
+  const component = TOOL_CARD_COMPONENTS[key as keyof typeof TOOL_CARD_COMPONENTS];
   
   // Debug log (only when a component is missing).
   if (!component) {
-    log.warn('Tool card component not found, using default', { toolName });
+    log.warn('Tool card component not found, using default', { toolName: raw, resolvedKey: key });
   }
   
   return component || DefaultToolCard;
