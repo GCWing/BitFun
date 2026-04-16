@@ -18,7 +18,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Code2, ListChecks, LayoutList, ListTodo, Pin, Sparkles } from 'lucide-react';
+import { Code2, ListChecks, LayoutList, ListTodo, Pin, Plus, Sparkles } from 'lucide-react';
 import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -37,6 +37,7 @@ import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stor
 import { createLogger } from '@/shared/utils/logger';
 import { useOverlayStore } from '../../stores/overlayStore';
 import SessionsSection from '../NavPanel/sections/sessions/SessionsSection';
+import { NewSessionDialog } from './NewSessionDialog';
 import './SessionCapsule.scss';
 
 const log = createLogger('SessionCapsule');
@@ -99,6 +100,7 @@ const SessionCapsule: React.FC = () => {
   const [expanded, setExpanded] = useState<boolean>(readExpandedFromStorage);
   const [pinned, setPinned] = useState<boolean>(readPinnedFromStorage);
   const [listFilterQuery, setListFilterQuery] = useState('');
+  const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const panelRef = useRef<HTMLDivElement>(null);
@@ -239,6 +241,7 @@ const SessionCapsule: React.FC = () => {
       if (panelRef.current?.contains(target)) return;
       const root = target instanceof Element ? target : target.parentElement;
       if (root?.closest?.('[data-bitfun-ignore-session-capsule-outside]')) return;
+      if (root?.closest?.('.modal-overlay')) return;
       setExpanded(false);
       writeExpandedToStorage(false);
     };
@@ -292,8 +295,18 @@ const SessionCapsule: React.FC = () => {
             <SessionsSection listAllSessions listFilterQuery={listFilterQuery} />
           </div>
 
-          {/* 底部工具栏：详情 + 固定展开 */}
+          {/* 底部：新建会话 + 详情 + 固定展开 */}
           <div className="session-capsule__footer">
+            <Tooltip content={t('nav.sessionCapsule.newSessionButton')} placement="top">
+              <button
+                type="button"
+                className="session-capsule__icon-btn"
+                onClick={() => setNewSessionDialogOpen(true)}
+                aria-label={t('nav.sessionCapsule.newSessionButton')}
+              >
+                <Plus size={13} strokeWidth={2.25} />
+              </button>
+            </Tooltip>
             <Tooltip content={t('nav.sessionCapsule.viewDetails')} placement="top">
               <button
                 type="button"
@@ -318,6 +331,7 @@ const SessionCapsule: React.FC = () => {
               </button>
             </Tooltip>
           </div>
+          <NewSessionDialog open={newSessionDialogOpen} onClose={() => setNewSessionDialogOpen(false)} />
         </>
       ) : runningSessionsOrdered.length > 0 ? (
         /* ── Running sessions card — wider panel showing each active task ── */

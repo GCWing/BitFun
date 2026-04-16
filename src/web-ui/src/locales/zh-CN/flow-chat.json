@@ -700,6 +700,13 @@
       "readingFile": "正在读取",
       "preparingRead": "准备读取"
     },
+    "sessionHistory": {
+      "parsingParams": "解析参数中...",
+      "fallbackDisplayName": "其它会话",
+      "lineCompleted": "读取 {{name}} 的历史",
+      "lineRunning": "正在读取 {{name}} 的历史",
+      "linePending": "准备读取 {{name}} 的历史"
+    },
     "terminalControl": {
       "terminatingSession": "正在终止终端",
       "sessionKilled": "终端已终止",

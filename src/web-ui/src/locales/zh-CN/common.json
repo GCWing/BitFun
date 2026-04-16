@@ -123,7 +123,19 @@
       "viewDetails": "任务详情",
       "runningSwitchTooltip": "{{title}} · 点击切换",
       "openTaskList": "查看全部任务",
-      "runningSessionsGroupLabel": "运行中"
+      "runningSessionsGroupLabel": "运行中",
+      "newSessionButton": "新建进程",
+      "newSessionDialogTitle": "新建进程",
+      "agentLabel": "Agent",
+      "workspaceLabel": "工作路径",
+      "workspacePlaceholder": "选择已打开的工作区",
+      "browseWorkspace": "浏览文件夹…",
+      "confirmCreate": "创建",
+      "noOpenWorkspace": "暂无已打开的工作区",
+      "workspaceMissing": "请选择有效的工作区",
+      "newSessionLede": "选择 Agent 与项目路径，开启一条新的任务进程。",
+      "newSessionSectionAgent": "Agent",
+      "newSessionSectionWorkspace": "工作路径"
     },
     "badges": {
       "comingSoon": "即将上线"

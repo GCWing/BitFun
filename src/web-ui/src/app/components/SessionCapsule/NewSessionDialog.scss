@@ -1,0 +1,133 @@
+/**
+ * New session dialog — tall vertical “magazine” card: masthead, numbered sections, accent rule.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+// Taller content area inside Modal (narrow width + generous height).
+// Do not use modal__content--fill-flex here — it sets overflow:hidden and blocks scroll on short viewports.
+.new-session-dialog__modal-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: min(580px, 78vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  // Space below modal title bar — text was flush against header border
+  padding-top: $size-gap-5;
+  padding-bottom: $size-gap-2;
+}
+
+.new-session-dialog {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: min(560px, 76vh);
+  padding-block: 0 2px;
+}
+
+// ── Masthead (intro line; full content width — no narrow measure) ──
+.new-session-dialog__masthead {
+  flex-shrink: 0;
+  padding-bottom: 18px;
+}
+
+.new-session-dialog__lede {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  color: var(--color-text-secondary);
+  max-width: none;
+  width: 100%;
+}
+
+// ── Editorial “page” card ───────────────────────────────
+.new-session-dialog__card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+  min-height: 0;
+  padding: 28px 22px 30px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--color-bg-elevated, var(--color-bg-primary));
+  box-shadow: none;
+}
+
+.new-session-dialog__section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.new-session-dialog__section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.new-session-dialog__index {
+  flex-shrink: 0;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.new-session-dialog__section-title {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+.new-session-dialog__control {
+  min-width: 0;
+}
+
+.new-session-dialog__divider {
+  flex-shrink: 0;
+  height: 1px;
+  margin: 2px 0;
+  background: var(--border-subtle);
+  opacity: 1;
+}
+
+.new-session-dialog__browse {
+  margin-top: 14px;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ── Footer ─────────────────────────────────────────────
+.new-session-dialog__actions {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: $size-gap-2;
+}
+
+@media (max-height: 560px) {
+  .new-session-dialog__modal-surface {
+    min-height: min(480px, 85vh);
+  }
+
+  .new-session-dialog__card {
+    padding-block: 20px;
+    gap: 22px;
+  }
+}
+

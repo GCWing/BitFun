@@ -53,6 +53,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
+  const [turnListSearchFocusRequest, setTurnListSearchFocusRequest] = useState(0);
   const [turnListOpen, setTurnListOpen] = useState(false);
   const autoPinnedSessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
@@ -266,20 +267,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     [handleJumpToTurn],
   );
 
-  const handleJumpToPreviousTurn = useCallback(() => {
-    if (!effectiveVisibleTurnInfo || effectiveVisibleTurnInfo.turnIndex <= 1) return;
-    const previousTurn = turnSummaries[effectiveVisibleTurnInfo.turnIndex - 2];
-    if (!previousTurn) return;
-    handleJumpToTurn(previousTurn.turnId);
-  }, [effectiveVisibleTurnInfo, handleJumpToTurn, turnSummaries]);
-
-  const handleJumpToNextTurn = useCallback(() => {
-    if (!effectiveVisibleTurnInfo || effectiveVisibleTurnInfo.turnIndex >= turnSummaries.length) return;
-    const nextTurn = turnSummaries[effectiveVisibleTurnInfo.turnIndex];
-    if (!nextTurn) return;
-    handleJumpToTurn(nextTurn.turnId);
-  }, [effectiveVisibleTurnInfo, handleJumpToTurn, turnSummaries]);
-
   // Publish session context to UnifiedTopBar via headerStore so the unified
   // back button and title can be rendered there.
   const { setSessionContext, clearSessionContext } = useHeaderStore.getState();
@@ -337,7 +324,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     'chat.search',
     { key: 'F', ctrl: true, scope: 'chat', allowInInput: false },
     () => {
-      setSearchOpenRequest(prev => prev + 1);
+      if (turnListOpen && turnSummaries.length > 0) {
+        setTurnListSearchFocusRequest(prev => prev + 1);
+      } else {
+        setSearchOpenRequest(prev => prev + 1);
+      }
     },
     { priority: 15, description: 'keyboard.shortcuts.chat.search' }
   );
@@ -350,17 +341,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         data-shortcut-scope="chat"
       >
         <FlowChatHeader
-          currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
-          totalTurns={effectiveVisibleTurnInfo?.totalTurns ?? 0}
-          currentUserMessage={effectiveVisibleTurnInfo?.userMessage ?? ''}
           visible={!!activeSession}
           sessionId={activeSession?.sessionId}
           btwOrigin={btwOrigin}
           btwParentTitle={btwParentTitle}
           turns={turnSummaries}
           onJumpToTurn={handleJumpToTurn}
-          onJumpToPreviousTurn={handleJumpToPreviousTurn}
-          onJumpToNextTurn={handleJumpToNextTurn}
           searchQuery={searchQuery}
           onSearchChange={onSearchChange}
           searchMatchCount={searchMatches.length}
@@ -403,6 +389,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
             totalTurns={effectiveVisibleTurnInfo?.totalTurns ?? turnSummaries.length}
             onSelectTurn={handleTurnListSelect}
             searchMatchedTurnIds={searchQuery.trim().length > 0 ? searchMatchedTurnIds : undefined}
+            searchQuery={searchQuery}
+            onSearchChange={onSearchChange}
+            searchMatchCount={searchMatches.length}
+            searchCurrentMatch={searchMatches.length > 0 ? searchCurrentMatchIndex + 1 : 0}
+            onSearchNext={handleSearchNext}
+            onSearchPrev={handleSearchPrev}
+            onSearchClose={clearSearch}
+            searchFocusRequest={turnListSearchFocusRequest}
           />
         </div>
       </div>
