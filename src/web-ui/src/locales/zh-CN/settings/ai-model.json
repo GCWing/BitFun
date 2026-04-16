@@ -250,7 +250,7 @@
     "title": "高级设置",
     "inlineThinkInText": {
       "label": "解析文本中的 <think> 标签",
-      "hint": "将 OpenAI 兼容文本流中的 <think>...</think> 实时拆分为思考内容，默认关闭"
+      "hint": "将文本流中的 <think>...</think> 实时拆分为思考内容"
     },
     "skipSslVerify": {
       "label": "跳过SSL证书验证",
