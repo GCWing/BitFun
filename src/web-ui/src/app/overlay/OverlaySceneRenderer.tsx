@@ -24,6 +24,7 @@ const MiniAppGalleryScene = lazy(() => import('../scenes/miniapps/MiniAppGallery
 const ShellScene        = lazy(() => import('../scenes/shell/ShellScene'));
 const MiniAppScene      = lazy(() => import('../scenes/miniapps/MiniAppScene'));
 const PanelViewScene    = lazy(() => import('../scenes/panel-view/PanelViewScene'));
+const TaskDetailScene   = lazy(() => import('../scenes/task-detail/TaskDetailScene'));
 
 interface OverlaySceneRendererProps {
   overlayId: OverlaySceneId;
@@ -78,6 +79,8 @@ function renderOverlayScene(id: OverlaySceneId, workspacePath?: string): React.R
       return <ShellScene isActive />;
     case 'panel-view':
       return <PanelViewScene workspacePath={workspacePath} />;
+    case 'task-detail':
+      return <TaskDetailScene />;
     default:
       if (typeof id === 'string' && id.startsWith('miniapp:')) {
         return <MiniAppScene appId={id.slice('miniapp:'.length)} />;

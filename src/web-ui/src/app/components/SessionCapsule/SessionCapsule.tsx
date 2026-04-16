@@ -18,7 +18,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Code2, ListChecks, LayoutList, ListTodo, Pin, Plus, Sparkles } from 'lucide-react';
+import { Code2, ListChecks, LayoutDashboard, ListTodo, Pin, Plus, Sparkles } from 'lucide-react';
 import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -36,6 +36,7 @@ import { compareSessionsForDisplay, findOpenedWorkspaceForSession } from '../../
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { createLogger } from '@/shared/utils/logger';
 import { useOverlayStore } from '../../stores/overlayStore';
+import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import SessionsSection from '../NavPanel/sections/sessions/SessionsSection';
 import { NewSessionDialog } from './NewSessionDialog';
 import './SessionCapsule.scss';
@@ -91,6 +92,8 @@ function writePinnedToStorage(value: boolean): void {
 const SessionCapsule: React.FC = () => {
   const { t } = useI18n('common');
   const activeOverlay = useOverlayStore((s) => s.activeOverlay);
+  const openOverlay = useOverlayStore((s) => s.openOverlay);
+  const openTaskDetail = useSessionCapsuleStore((s) => s.openTaskDetail);
   const { openedWorkspacesList, setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
   const activeBtwSessionTab = useAgentCanvasStore((state) => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
@@ -211,6 +214,16 @@ const SessionCapsule: React.FC = () => {
     [activeSessionId, currentWorkspace?.id, openedWorkspacesList, setActiveWorkspace]
   );
 
+  const handleOpenTaskDetail = useCallback(() => {
+    const state = flowChatStore.getState();
+    const targetId =
+      state.activeSessionId ??
+      Array.from(state.sessions.values()).sort(compareSessionsForDisplay)[0]?.sessionId;
+    if (!targetId) return;
+    openTaskDetail(targetId);
+    openOverlay('task-detail');
+  }, [openTaskDetail, openOverlay]);
+
   const toggle = useCallback(() => {
     setExpanded((v) => {
       const next = !v;
@@ -312,8 +325,9 @@ const SessionCapsule: React.FC = () => {
                 type="button"
                 className="session-capsule__icon-btn"
                 aria-label={t('nav.sessionCapsule.viewDetails')}
+                onClick={handleOpenTaskDetail}
               >
-                <LayoutList size={13} strokeWidth={2.25} />
+                <LayoutDashboard size={13} strokeWidth={2.25} />
               </button>
             </Tooltip>
             <Tooltip

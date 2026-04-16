@@ -7,8 +7,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ListChecks } from 'lucide-react';
-import { Search } from '@/component-library';
+import { LayoutDashboard, ListChecks } from 'lucide-react';
+import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -17,7 +17,9 @@ import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { compareSessionsForDisplay } from '@/flow_chat/utils/sessionOrdering';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
+import { useOverlayStore } from '../../stores/overlayStore';
 import '../NavPanel/NavSearchDialog.scss';
+import './SessionListDialog.scss';
 
 const getTitle = (s: Session): string =>
   s.title?.trim() || `Task ${s.sessionId.slice(0, 6)}`;
@@ -31,6 +33,8 @@ const SessionListDialog: React.FC = () => {
   const { t } = useI18n('common');
   const open = useSessionCapsuleStore((s) => s.sessionListDialogOpen);
   const close = useSessionCapsuleStore((s) => s.closeSessionListDialog);
+  const openTaskDetail = useSessionCapsuleStore((s) => s.openTaskDetail);
+  const openOverlay = useOverlayStore((s) => s.openOverlay);
 
   const { openedWorkspacesList, setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
   const [query, setQuery] = useState('');
@@ -101,6 +105,13 @@ const SessionListDialog: React.FC = () => {
     );
   }, [close, openedWorkspacesList, currentWorkspace?.id, setActiveWorkspace]);
 
+  const handleOpenDetail = useCallback((e: React.MouseEvent, session: Session) => {
+    e.stopPropagation();
+    openTaskDetail(session.sessionId);
+    openOverlay('task-detail');
+    close();
+  }, [openTaskDetail, openOverlay, close]);
+
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -162,12 +173,14 @@ const SessionListDialog: React.FC = () => {
                 {t('nav.search.groupSessions')}
               </div>
               {filtered.map(({ session, workspaceName }, i) => (
-                <button
+                <div
                   key={session.sessionId}
-                  type="button"
-                  className={`bitfun-nav-search-dialog__item${i === activeIndex ? ' bitfun-nav-search-dialog__item--active' : ''}`}
+                  className={`bitfun-nav-search-dialog__item bitfun-session-list-item${i === activeIndex ? ' bitfun-nav-search-dialog__item--active' : ''}`}
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => void handleSelect(session)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && void handleSelect(session)}
                 >
                   <span className="bitfun-nav-search-dialog__item-icon">
                     <ListChecks size={14} />
@@ -182,7 +195,17 @@ const SessionListDialog: React.FC = () => {
                       </span>
                     )}
                   </span>
-                </button>
+                  <Tooltip content="查看详情" placement="top">
+                    <button
+                      type="button"
+                      className="bitfun-session-list-item__detail-btn"
+                      onClick={(e) => handleOpenDetail(e, session)}
+                      aria-label="查看任务详情"
+                    >
+                      <LayoutDashboard size={12} />
+                    </button>
+                  </Tooltip>
+                </div>
               ))}
             </div>
           )}

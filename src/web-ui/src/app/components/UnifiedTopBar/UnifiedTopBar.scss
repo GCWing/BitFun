@@ -78,37 +78,6 @@
     user-select: none;
   }
 
-  &__sessions-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: none;
-    border-radius: $size-radius-sm;
-    background: transparent;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
-
-    &:hover {
-      color: var(--color-accent-500);
-      background: var(--element-bg-soft);
-    }
-
-    &:active {
-      background: var(--element-bg-medium);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
-      outline-offset: -1px;
-    }
-  }
-
   // Portaled to document.body — must sit above FlowChat's glass header (z-index 20) and other scene chrome.
   &__menu-backdrop {
     position: fixed;
@@ -400,7 +369,6 @@
 @media (prefers-reduced-motion: reduce) {
   .unified-top-bar {
     &__back-btn,
-    &__sessions-btn,
     &__search-trigger {
       transition: none;
     }

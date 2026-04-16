@@ -42,6 +42,7 @@
     "about": "About",
     "openMenu": "Open Menu",
     "openSessionsList": "Open task list",
+    "openTaskManagement": "Task Management",
     "closeMenu": "Close Menu",
     "selectProjectDirectory": "Select a project directory to open",
     "configCenter": "Settings",
@@ -841,7 +842,8 @@
     "mermaidEditor": "Mermaid",
     "assistant": "Assistant",
     "shell": "Shell",
-    "panelView": "Panel View"
+    "panelView": "Panel View",
+    "taskDetail": "Task Manager"
   },
   "overlay": {
     "returnToAgenticOS": "Return to Agentic OS"

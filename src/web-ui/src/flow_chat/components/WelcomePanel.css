@@ -93,6 +93,25 @@
   letter-spacing: -0.02em;
 }
 
+/* Agentic OS (dispatcher): Orbit icon (larger than nav footer for heading scale) */
+.welcome-panel__heading--dispatcher {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.welcome-panel__dispatcher-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.welcome-panel__dispatcher-icon svg {
+  display: block;
+}
+
 .welcome-panel__tagline {
   margin: 6px 0 0;
   font-size: 15px;

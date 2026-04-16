@@ -20,6 +20,7 @@ export type OverlaySceneId =
   | 'assistant'
   | 'shell'
   | 'panel-view'
+  | 'task-detail'
   | `miniapp:${string}`;
 
 /** Full scene identifier — base or overlay. */

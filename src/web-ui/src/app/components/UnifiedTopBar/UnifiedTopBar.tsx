@@ -20,7 +20,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Info, ListChecks, PictureInPicture2, Search, FolderOpen, Settings } from 'lucide-react';
+import { ArrowLeft, Info, PictureInPicture2, Search, FolderOpen, Settings } from 'lucide-react';
 import { Modal, Tooltip, WindowControls } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
@@ -252,10 +252,12 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
     sessionContext?.mode?.toLowerCase() === 'dispatcher';
 
   const sessionWorkspaceName = useMemo(() => {
+    const explicit = sessionContext?.workspaceDisplayName?.trim();
+    if (explicit) return explicit;
     const p = sessionContext?.workspacePath;
     if (!p) return '';
     return p.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? p;
-  }, [sessionContext?.workspacePath]);
+  }, [sessionContext?.workspacePath, sessionContext?.workspaceDisplayName]);
 
   const sessionTitle = useMemo(() => {
     if (!sessionContext) return '';
@@ -269,8 +271,6 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
   const showBackBtn = hasOverlay || (!!sessionContext && !isDispatcherSession);
   const contextTitle = hasOverlay ? overlayTitle : sessionTitle;
   const backTooltip = t('overlay.returnToAgenticOS');
-  const showHeaderSessionListBtn =
-    activeOverlay === 'settings' || activeOverlay === 'shell';
 
   const handleContextBack = useCallback(() => {
     if (hasOverlay) {
@@ -403,23 +403,6 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
               document.body
             )}
         </div>
-
-        {showHeaderSessionListBtn && (
-          <Tooltip
-            content={t('header.openSessionsList')}
-            placement="bottom"
-            followCursor
-          >
-            <button
-              type="button"
-              className="unified-top-bar__sessions-btn"
-              onClick={() => openSessionListDialog()}
-              aria-label={t('header.openSessionsList')}
-            >
-              <ListChecks size={14} strokeWidth={2.25} aria-hidden="true" />
-            </button>
-          </Tooltip>
-        )}
 
         {showContextNav && (
           <div className="unified-top-bar__context-nav">

@@ -25,7 +25,8 @@ import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
 import type { FlowChatConfig } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
-import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { getWorkspaceDisplayName, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { fallbackWorkspaceFolderLabel, resolveWorkspaceForSession } from '../../utils/sessionOrdering';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -59,7 +60,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const turnListSidebarRef = useRef<HTMLElement | null>(null);
-  const { workspacePath, assistantWorkspacesList } = useWorkspaceContext();
+  const { workspacePath, assistantWorkspacesList, openedWorkspacesList } = useWorkspaceContext();
   const defaultAssistantWorkspace = useMemo(
     () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
     [assistantWorkspacesList]
@@ -270,6 +271,16 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   // Publish session context to UnifiedTopBar via headerStore so the unified
   // back button and title can be rendered there.
   const { setSessionContext, clearSessionContext } = useHeaderStore.getState();
+  const workspaceDisplayName = useMemo(() => {
+    if (!activeSession?.workspacePath?.trim()) return '';
+    const ws = resolveWorkspaceForSession(activeSession, openedWorkspacesList);
+    if (ws) {
+      const label = getWorkspaceDisplayName(ws).trim();
+      if (label) return label;
+    }
+    return fallbackWorkspaceFolderLabel(activeSession.workspacePath);
+  }, [activeSession, openedWorkspacesList]);
+
   useEffect(() => {
     if (!activeSession) {
       clearSessionContext();
@@ -278,11 +289,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     setSessionContext({
       mode: activeSession.mode ?? '',
       workspacePath: activeSession.workspacePath,
+      workspaceDisplayName,
       assistantWorkspace: defaultAssistantWorkspace
         ? { id: defaultAssistantWorkspace.id, rootPath: defaultAssistantWorkspace.rootPath }
         : null,
     });
-  }, [activeSession, defaultAssistantWorkspace, setSessionContext, clearSessionContext]);
+  }, [activeSession, defaultAssistantWorkspace, workspaceDisplayName, setSessionContext, clearSessionContext]);
 
   useShortcut(
     'chat.stopGeneration',

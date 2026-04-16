@@ -15,6 +15,7 @@ import {
   Boxes,
   User,
   ExternalLink,
+  LayoutDashboard,
 } from 'lucide-react';
 import type { OverlaySceneDef, OverlaySceneId } from './types';
 
@@ -78,6 +79,12 @@ export const OVERLAY_SCENE_REGISTRY: OverlaySceneDef[] = [
     label: 'Panel View',
     labelKey: 'scenes.panelView',
     Icon: ExternalLink,
+  },
+  {
+    id: 'task-detail',
+    label: 'Task Detail',
+    labelKey: 'scenes.taskDetail',
+    Icon: LayoutDashboard,
   },
 ];
 

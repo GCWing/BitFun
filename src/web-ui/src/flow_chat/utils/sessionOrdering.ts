@@ -3,6 +3,38 @@ import type { WorkspaceInfo } from '@/shared/types';
 import { isRemoteWorkspace } from '@/shared/types';
 import { isSamePath, normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 
+/**
+ * Prefer stable `workspaceId` when matching opened workspaces (path strings can differ slightly).
+ */
+export function resolveWorkspaceForSession(
+  session: Pick<Session, 'workspaceId' | 'workspacePath' | 'remoteConnectionId' | 'remoteSshHost'> | undefined,
+  openedWorkspaces: WorkspaceInfo[]
+): WorkspaceInfo | undefined {
+  if (!session) return undefined;
+  const wid = session.workspaceId?.trim();
+  if (wid) {
+    const byId = openedWorkspaces.find(w => w.id === wid);
+    if (byId) return byId;
+  }
+  return findOpenedWorkspaceForSession(session, openedWorkspaces);
+}
+
+/**
+ * Short folder label when `WorkspaceInfo` is not available. Assistant roots often end with
+ * `.../personal_assistant/workspace` or legacy `.../.bitfun/workspace` — using only the last
+ * segment yields the meaningless word "workspace".
+ */
+export function fallbackWorkspaceFolderLabel(workspacePath: string): string {
+  const norm = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const parts = norm.split('/').filter(Boolean);
+  if (parts.length === 0) return '';
+  const last = parts[parts.length - 1];
+  if (last.toLowerCase() === 'workspace' && parts.length >= 2) {
+    return parts[parts.length - 2] || last;
+  }
+  return last;
+}
+
 /** Extract `host` from our saved form `ssh-{user}@{host}:{port}` (used when metadata omits `remoteSshHost`). */
 function hostFromSshConnectionId(connectionId: string): string | null {
   const t = connectionId.trim();

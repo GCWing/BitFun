@@ -1,0 +1,625 @@
+/**
+ * TaskDetailScene — styles mirroring AssistantConfigPage (acp-layout).
+ *
+ * Variables, spacing rhythm, and visual language are intentionally kept
+ * in sync with NurseryView.scss / AssistantConfigPage so the two panels
+ * feel like siblings inside the same design system.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+// ── Shared metrics (match acp- variables exactly) ──────────────────────────
+
+$tds-gutter:      clamp(36px, 5.5vw, 72px);
+$tds-col-gap:     clamp(20px, 2.2vw, 32px);
+$tds-content-top: clamp(40px, 4.5vh, 52px);
+
+// ── Fade-in animation ─────────────────────────────────────────────────────
+
+@keyframes tds-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tds-spin {
+  to { transform: rotate(360deg); }
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────
+
+.tds {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg-scene);
+  animation: tds-fade-in 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+// ── Two-column layout — mirrors .acp-layout exactly ──────────────────────
+
+.tds-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  padding: 0 $tds-gutter;
+  gap: $tds-col-gap;
+
+  // Left: majority (60 %) — search box + dual panes
+  &__left {
+    flex: 0 0 60%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    --tds-left-pad: #{$size-gap-6};
+  }
+
+  // Right: rail (40 %) — workspace sessions
+  &__right {
+    flex: 0 0 40%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+
+// ── Left: page title / header ─────────────────────────────────────────────
+
+.tds-left-header {
+  flex-shrink: 0;
+  padding: $tds-content-top var(--tds-left-pad, #{$size-gap-6}) $size-gap-4;
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-2;
+
+  &__title {
+    font-size: clamp(26px, 2.8vw, 30px);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1.12;
+    margin: 0;
+  }
+
+  &__subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+}
+
+// ── Left: search — wrapper + Search component overrides ──────────────────
+
+.tds-search-wrap {
+  flex-shrink: 0;
+  padding: 0 var(--tds-left-pad, #{$size-gap-6}) $size-gap-5;
+}
+
+// Override Search component to use xl border-radius and subtle border
+.tds-search .search__wrapper {
+  border-radius: $size-radius-xl;
+  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--element-bg-subtle) 94%, transparent);
+  transition:
+    border-color $motion-fast $easing-standard,
+    background $motion-fast $easing-standard,
+    box-shadow $motion-fast $easing-standard;
+}
+
+.tds-search.search--focused .search__wrapper {
+  border-color: transparent;
+  background: var(--element-bg-soft);
+  box-shadow:
+    0 0 0 2px var(--color-accent-500),
+    0 12px 30px -8px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+}
+
+.tds-search.search--hovered:not(.search--focused) .search__wrapper {
+  border-color: var(--border-medium);
+  background: color-mix(in srgb, var(--element-bg-base) 90%, transparent);
+}
+
+// ── Left: dual panes (OS sessions | workspaces) ───────────────────────────
+
+// Wrapper keeps the two panes at the same horizontal inset as the search box
+.tds-left-split-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--tds-left-pad, #{$size-gap-6});
+}
+
+.tds-left-split {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.tds-left-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  &:first-child {
+    padding-right: $size-gap-4;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  &:last-child {
+    padding-left: $size-gap-4;
+  }
+}
+
+// ── Pane section header ───────────────────────────────────────────────────
+
+.tds-pane-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  padding: 0 $size-gap-1 $size-gap-3;
+  margin-bottom: $size-gap-1;
+  border-bottom: 1px solid var(--border-subtle);
+
+  &__icon {
+    flex-shrink: 0;
+
+    &--dispatcher { color: var(--color-purple-500); }
+    &--ws         { color: var(--color-accent-500); }
+  }
+
+  &__title {
+    font-size: var(--font-size-2xs);
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    flex: 1;
+  }
+
+  &__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: $size-radius-full;
+    background: var(--element-bg-medium);
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+  }
+
+  &__chip {
+    height: 20px;
+    padding: 0 $size-gap-2;
+    border-radius: $size-radius-full;
+    border: 1px solid transparent;
+    background: transparent;
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background $motion-fast $easing-standard,
+                border-color $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
+
+    &:hover {
+      border-color: var(--border-subtle);
+      color: var(--color-text-secondary);
+    }
+
+    &.is-active {
+      background: var(--color-accent-100);
+      border-color: var(--border-accent-soft);
+      color: var(--color-accent-500);
+    }
+  }
+}
+
+// ── Pane scrollable list ──────────────────────────────────────────────────
+
+.tds-pane-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-block: $size-gap-1;
+  padding-right: $size-gap-1;
+
+  &::-webkit-scrollbar { width: 3px; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 2px;
+  }
+  &::-webkit-scrollbar-track { background: transparent; }
+}
+
+// ── Right: rail shell — mirrors .acp-right-shell ─────────────────────────
+
+.tds-rail-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-xl;
+  overflow: hidden;
+  background: transparent;
+  margin: $tds-content-top 0 clamp(#{$size-gap-10}, 6vh, #{$size-gap-12});
+}
+
+// ── Rail header ───────────────────────────────────────────────────────────
+
+.tds-rail-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $size-gap-2;
+  padding: $size-gap-4 $size-gap-5 $size-gap-3;
+  border-bottom: 1px solid var(--border-subtle);
+
+  &__icon { flex-shrink: 0; color: var(--color-accent-500); }
+
+  &__title {
+    font-size: var(--font-size-2xs);
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+  }
+
+  &__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: $size-radius-full;
+    background: var(--element-bg-medium);
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+  }
+
+  &__running {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-accent-500);
+    padding: 2px 7px;
+    border-radius: $size-radius-full;
+    background: var(--color-accent-50);
+    border: 1px solid var(--color-accent-100);
+
+    svg { animation: tds-spin 2s linear infinite; }
+  }
+
+  &__filters {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+}
+
+// ── Rail scrollable list ──────────────────────────────────────────────────
+
+.tds-rail-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: $size-gap-2 $size-gap-3 $size-gap-5;
+
+  &::-webkit-scrollbar { width: 3px; }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 2px;
+  }
+  &::-webkit-scrollbar-track { background: transparent; }
+}
+
+// ── Rail: Select component width constraint ───────────────────────────────
+
+.tds-rail-select {
+  width: 130px;
+  flex-shrink: 0;
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────
+
+.tds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $size-gap-3;
+  padding: $size-gap-8 $size-gap-4;
+  color: var(--color-text-muted);
+  text-align: center;
+
+  svg { opacity: 0.18; }
+
+  p {
+    font-size: var(--font-size-sm);
+    margin: 0;
+    opacity: 0.55;
+    font-style: italic;
+  }
+
+  &--compact {
+    padding: $size-gap-5 $size-gap-2;
+    gap: $size-gap-2;
+
+    p { font-size: var(--font-size-xs); }
+  }
+}
+
+// ── Session row — mirrors .bitfun-nav-panel__inline-item in acp-sessions-area ─
+
+.tds-row {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  min-height: 40px;
+  padding: $size-gap-2 $size-gap-3;
+  border-radius: $size-radius-lg;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: background $motion-fast $easing-standard;
+  margin-bottom: 1px;
+  outline: none;
+
+  &:hover {
+    background: var(--element-bg-soft);
+    .tds-row__arrow { opacity: 1; }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--border-accent-soft);
+    outline-offset: -2px;
+  }
+
+  &.is-highlighted {
+    background: color-mix(in srgb, var(--color-accent-100) 60%, transparent);
+  }
+
+  &.is-running .tds-row__icon--spin {
+    animation: tds-spin 1.2s linear infinite;
+  }
+}
+
+.tds-row__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &--running { background: var(--color-accent-500); box-shadow: 0 0 0 2px var(--color-accent-100); }
+  &--active  { background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.14); }
+  &--error   { background: var(--color-error); }
+  &--idle    { background: var(--border-medium); }
+}
+
+.tds-row__icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: $size-radius-sm;
+  background: var(--element-bg-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tds-row__icon {
+  &--code       { color: var(--color-accent-500); }
+  &--cowork     { color: #10b981; }
+  &--claw       { color: #f59e0b; }
+  &--dispatcher { color: var(--color-purple-500); }
+  &--spin       { color: var(--color-accent-500); }
+}
+
+.tds-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tds-row__title {
+  font-size: var(--font-size-sm);
+  font-weight: $font-weight-medium;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tds-row__meta {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
+  flex-wrap: wrap;
+}
+
+.tds-row__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: $size-radius-full;
+  font-size: 10px;
+  font-weight: $font-weight-semibold;
+
+  &--code   { background: var(--color-accent-100);          color: var(--color-accent-500); }
+  &--cowork { background: rgba(16, 185, 129, 0.10);         color: #10b981; }
+  &--claw   { background: rgba(245, 158, 11, 0.10);         color: #f59e0b; }
+  &--ws {
+    background: var(--element-bg-medium);
+    color: var(--color-text-muted);
+    font-weight: $font-weight-medium;
+    max-width: 110px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.tds-row__meta-dot {
+  font-size: 10px;
+  color: var(--border-medium);
+}
+
+.tds-row__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.tds-row__arrow {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard;
+}
+
+// ── Workspace row (opened workspaces pane) ────────────────────────────────
+
+.tds-ws-row {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-3;
+  min-height: 40px;
+  padding: $size-gap-2 $size-gap-3;
+  border-radius: $size-radius-lg;
+  cursor: pointer;
+  background: transparent;
+  outline: none;
+  transition: background $motion-fast $easing-standard;
+  margin-bottom: 1px;
+
+  &:hover {
+    background: var(--element-bg-soft);
+    .tds-ws-row__arrow { opacity: 1; }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--border-accent-soft);
+    outline-offset: -2px;
+  }
+
+  &.is-filter {
+    background: color-mix(in srgb, var(--color-accent-100) 60%, transparent);
+  }
+}
+
+.tds-ws-row__icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: $size-radius-sm;
+  background: var(--element-bg-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tds-ws-row__icon { color: var(--color-accent-500); }
+
+.tds-ws-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tds-ws-row__title {
+  font-size: var(--font-size-sm);
+  font-weight: $font-weight-medium;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tds-ws-row__meta {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
+}
+
+.tds-ws-row__badge {
+  font-size: 10px;
+  font-weight: $font-weight-semibold;
+  padding: 0 5px;
+  border-radius: $size-radius-full;
+  background: var(--color-accent-100);
+  color: var(--color-accent-500);
+}
+
+.tds-ws-row__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.tds-ws-row__arrow {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard;
+}
+
+.tds-ws-row__close {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard;
+
+  .tds-ws-row:hover & {
+    opacity: 1;
+  }
+}
+
+// ── Responsive ────────────────────────────────────────────────────────────
+
+@media (max-width: 860px) {
+  .tds-layout {
+    flex-direction: column;
+    gap: $size-gap-5;
+
+    &__left  { flex: none; max-height: 55vh; }
+    &__right { flex: 1; min-height: 200px; }
+  }
+
+  .tds-rail-shell {
+    margin-top: 0;
+    margin-bottom: $size-gap-4;
+  }
+}
+
+// ── Reduced motion ────────────────────────────────────────────────────────
+
+@media (prefers-reduced-motion: reduce) {
+  .tds { animation: none; }
+  .tds-row__icon--spin,
+  .tds-rail-head__running svg { animation: none; }
+}

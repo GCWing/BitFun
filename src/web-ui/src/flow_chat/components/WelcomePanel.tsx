@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, ChevronDown, Check } from 'lucide-react';
+import { FolderOpen, ChevronDown, Check, Orbit } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -114,11 +114,22 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
               </div>
             )}
             <div className="welcome-panel__greeting-text">
-              <h1 className="welcome-panel__heading">
-                {isDispatcherSession
-                  ? greeting.title
-                  : <>{greeting.title}，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}</>
-                }
+              <h1
+                className={`welcome-panel__heading${isDispatcherSession ? ' welcome-panel__heading--dispatcher' : ''}`}
+              >
+                {isDispatcherSession ? (
+                  <>
+                    <span className="welcome-panel__dispatcher-icon" aria-hidden>
+                      <Orbit size={30} strokeWidth={2} />
+                    </span>
+                    {greeting.title}
+                  </>
+                ) : (
+                  <>
+                    {greeting.title}，{t(aiPartnerKey)}
+                    {isClawSession && assistantName ? `，${assistantName}` : ''}
+                  </>
+                )}
               </h1>
               <p className="welcome-panel__tagline">{tagline}</p>
             </div>

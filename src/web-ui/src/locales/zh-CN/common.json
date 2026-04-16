@@ -42,6 +42,7 @@
     "about": "关于",
     "openMenu": "打开菜单",
     "openSessionsList": "打开任务列表",
+    "openTaskManagement": "任务管理",
     "closeMenu": "关闭菜单",
     "selectProjectDirectory": "选择要打开的工作区目录",
     "configCenter": "配置中心",
@@ -841,7 +842,8 @@
     "mermaidEditor": "Mermaid 图表",
     "assistant": "助理",
     "shell": "Shell",
-    "panelView": "面板视图"
+    "panelView": "面板视图",
+    "taskDetail": "任务管理"
   },
   "overlay": {
     "returnToAgenticOS": "返回 Agentic OS"

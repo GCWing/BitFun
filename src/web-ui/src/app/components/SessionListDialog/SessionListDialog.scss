@@ -1,0 +1,37 @@
+/**
+ * SessionListDialog — additional styles for the session list item with detail button.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.bitfun-session-list-item {
+  &:hover .bitfun-session-list-item__detail-btn,
+  &.bitfun-nav-search-dialog__item--active .bitfun-session-list-item__detail-btn {
+    opacity: 1;
+  }
+}
+
+.bitfun-session-list-item__detail-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: $size-radius-sm;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+
+  &:hover {
+    background: var(--element-bg-medium);
+    color: var(--color-accent-500);
+    opacity: 1 !important;
+  }
+}
