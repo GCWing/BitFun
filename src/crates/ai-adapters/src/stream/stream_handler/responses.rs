@@ -1,18 +1,17 @@
 use super::stream_stats::StreamStats;
+use super::{next_stream_item, TimedStreamItem};
 use crate::stream::types::responses::{
     parse_responses_output_item, ResponsesCompleted, ResponsesDone, ResponsesStreamEvent,
 };
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
 use log::{error, trace};
 use reqwest::Response;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::timeout;
 
 const AI_STREAM_RESPONSE_TARGET: &str = "ai::responses_stream_response";
 
@@ -63,9 +62,10 @@ fn emit_unified_response(
 fn emit_tool_call_item(
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
+    output_index: Option<usize>,
     item_value: Value,
 ) {
-    if let Some(unified_response) = parse_responses_output_item(item_value) {
+    if let Some(unified_response) = parse_responses_output_item(item_value, output_index) {
         if unified_response.tool_call.is_some() {
             emit_unified_response(tx_event, stats, unified_response);
         }
@@ -101,14 +101,14 @@ fn handle_function_call_output_item_done(
     });
 
     let Some(output_index) = output_index else {
-        emit_tool_call_item(tx_event, stats, item_value);
+        emit_tool_call_item(tx_event, stats, event_output_index, item_value);
         return;
     };
 
     let Some(tc) = tool_calls_by_output_index.get_mut(&output_index) else {
         // The provider may send `output_item.done` with an output_index even when the
         // earlier `output_item.added` event was omitted or missed. Fall back to the full item.
-        emit_tool_call_item(tx_event, stats, item_value);
+        emit_tool_call_item(tx_event, stats, Some(output_index), item_value);
         return;
     };
 
@@ -138,6 +138,7 @@ fn handle_function_call_output_item_done(
             };
             let unified_response = UnifiedResponse {
                 tool_call: Some(crate::stream::types::unified::UnifiedToolCall {
+                    tool_call_index: Some(output_index),
                     id,
                     name,
                     arguments: Some(delta),
@@ -178,9 +179,9 @@ pub async fn handle_responses_stream(
     response: Response,
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
-    let idle_timeout = Duration::from_secs(600);
     // Some providers close the stream after emitting the terminal event and may not send `[DONE]`.
     let mut received_finish_reason = false;
     let mut received_text_delta = false;
@@ -189,10 +190,9 @@ pub async fn handle_responses_stream(
     let mut stats = StreamStats::new("Responses");
 
     loop {
-        let sse_event = timeout(idle_timeout, stream.next()).await;
-        let sse = match sse_event {
-            Ok(Some(Ok(sse))) => sse,
-            Ok(None) => {
+        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+            TimedStreamItem::Item(Ok(sse)) => sse,
+            TimedStreamItem::End => {
                 if received_finish_reason {
                     stats.log_summary("stream_closed_after_finish_reason");
                     return;
@@ -203,18 +203,16 @@ pub async fn handle_responses_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            Ok(Some(Err(e))) => {
+            TimedStreamItem::Item(Err(e)) => {
                 let error_msg = format!("Responses SSE stream error: {}", e);
                 stats.log_summary("sse_stream_error");
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            Err(_) => {
-                let error_msg = format!(
-                    "Responses SSE stream timeout after {}s",
-                    idle_timeout.as_secs()
-                );
+            TimedStreamItem::TimedOut => {
+                let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!("Responses SSE stream timeout after {}s", timeout_secs);
                 stats.log_summary("sse_stream_timeout");
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
@@ -328,6 +326,7 @@ pub async fn handle_responses_stream(
 
                 let unified_response = UnifiedResponse {
                     tool_call: Some(crate::stream::types::unified::UnifiedToolCall {
+                        tool_call_index: Some(output_index),
                         id,
                         name,
                         arguments: Some(delta),
@@ -355,7 +354,9 @@ pub async fn handle_responses_stream(
                     continue;
                 }
 
-                if let Some(mut unified_response) = parse_responses_output_item(item_value) {
+                if let Some(mut unified_response) =
+                    parse_responses_output_item(item_value, event.output_index)
+                {
                     if received_text_delta && unified_response.text.is_some() {
                         unified_response.text = None;
                     }
@@ -397,6 +398,7 @@ pub async fn handle_responses_stream(
                                     let unified_response = UnifiedResponse {
                                         tool_call: Some(
                                             crate::stream::types::unified::UnifiedToolCall {
+                                                tool_call_index: Some(idx),
                                                 id,
                                                 name,
                                                 arguments: Some(delta),
@@ -612,6 +614,7 @@ mod tests {
             .expect("tool call event")
             .expect("ok response");
         let tool_call = response.tool_call.expect("tool call");
+        assert_eq!(tool_call.tool_call_index, Some(3));
         assert_eq!(tool_call.id.as_deref(), Some("call_1"));
         assert_eq!(tool_call.name.as_deref(), Some("get_weather"));
         assert_eq!(

@@ -66,7 +66,10 @@ impl From<ResponsesUsage> for UnifiedTokenUsage {
     }
 }
 
-pub fn parse_responses_output_item(item_value: Value) -> Option<UnifiedResponse> {
+pub fn parse_responses_output_item(
+    item_value: Value,
+    tool_call_index: Option<usize>,
+) -> Option<UnifiedResponse> {
     let item_type = item_value.get("type")?.as_str()?;
 
     match item_type {
@@ -75,6 +78,7 @@ pub fn parse_responses_output_item(item_value: Value) -> Option<UnifiedResponse>
             reasoning_content: None,
             thinking_signature: None,
             tool_call: Some(UnifiedToolCall {
+                tool_call_index,
                 id: item_value
                     .get("call_id")
                     .and_then(Value::as_str)
@@ -129,16 +133,19 @@ mod tests {
 
     #[test]
     fn parses_output_text_message_item() {
-        let response = parse_responses_output_item(json!({
-            "type": "message",
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "output_text",
-                    "text": "hello"
-                }
-            ]
-        }))
+        let response = parse_responses_output_item(
+            json!({
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": "hello"
+                    }
+                ]
+            }),
+            None,
+        )
         .expect("message item");
 
         assert_eq!(response.text.as_deref(), Some("hello"));
@@ -146,15 +153,19 @@ mod tests {
 
     #[test]
     fn parses_function_call_item() {
-        let response = parse_responses_output_item(json!({
-            "type": "function_call",
-            "call_id": "call_1",
-            "name": "get_weather",
-            "arguments": "{\"city\":\"Beijing\"}"
-        }))
+        let response = parse_responses_output_item(
+            json!({
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Beijing\"}"
+            }),
+            Some(3),
+        )
         .expect("function call item");
 
         let tool_call = response.tool_call.expect("tool call");
+        assert_eq!(tool_call.tool_call_index, Some(3));
         assert_eq!(tool_call.id.as_deref(), Some("call_1"));
         assert_eq!(tool_call.name.as_deref(), Some("get_weather"));
     }

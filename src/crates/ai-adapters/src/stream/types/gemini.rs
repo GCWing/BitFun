@@ -360,6 +360,7 @@ impl GeminiSSEData {
                         reasoning_content: None,
                         thinking_signature,
                         tool_call: Some(UnifiedToolCall {
+                            tool_call_index: None,
                             id: None,
                             name: function_call.name,
                             arguments: serde_json::to_string(&arguments).ok(),

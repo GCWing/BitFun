@@ -39,6 +39,14 @@ impl ConfigProvider for AIConfigProvider {
         let mut warnings = Vec::new();
 
         if let Ok(ai_config) = serde_json::from_value::<AIConfig>(config.clone()) {
+            if let Some(stream_idle_timeout_secs) = ai_config.stream_idle_timeout_secs {
+                if stream_idle_timeout_secs == 0 {
+                    return Err(BitFunError::validation(
+                        "AI stream_idle_timeout_secs must be greater than 0".to_string(),
+                    ));
+                }
+            }
+
             for (index, model) in ai_config.models.iter().enumerate() {
                 if model.name.trim().is_empty() {
                     return Err(BitFunError::validation(format!(

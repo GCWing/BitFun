@@ -109,6 +109,7 @@ pub(crate) async fn send_stream(
         openai_tools,
         extra_body,
     );
+    let idle_timeout = client.stream_options.idle_timeout;
 
     execute_sse_request(
         "Responses API",
@@ -117,7 +118,7 @@ pub(crate) async fn send_stream(
         max_tries,
         || common::apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
-            tokio::spawn(handle_responses_stream(response, tx, tx_raw));
+            tokio::spawn(handle_responses_stream(response, tx, tx_raw, idle_timeout));
         },
     )
     .await

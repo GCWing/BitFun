@@ -75,6 +75,7 @@ pub async fn set_config(
             if request.path.starts_with("ai.models")
                 || request.path.starts_with("ai.default_models")
                 || request.path.starts_with("ai.agent_models")
+                || request.path.starts_with("ai.stream_idle_timeout_secs")
                 || request.path.starts_with("ai.proxy")
             {
                 state.ai_client_factory.invalidate_cache();

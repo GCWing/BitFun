@@ -3,6 +3,8 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnifiedToolCall {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_index: Option<usize>,
     pub id: Option<String>,
     pub name: Option<String>,
     pub arguments: Option<String>,

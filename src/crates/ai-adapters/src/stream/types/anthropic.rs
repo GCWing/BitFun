@@ -114,6 +114,7 @@ impl From<ContentBlockStart> for UnifiedResponse {
         let mut result = UnifiedResponse::default();
         if let ContentBlock::ToolUse { id, name } = value.content_block {
             let tool_call = UnifiedToolCall {
+                tool_call_index: None,
                 id: Some(id),
                 name: Some(name),
                 arguments: None,
@@ -158,6 +159,7 @@ impl TryFrom<ContentBlockDelta> for UnifiedResponse {
             }
             Delta::InputJson { partial_json } => {
                 let tool_call = UnifiedToolCall {
+                    tool_call_index: None,
                     id: None,
                     name: None,
                     arguments: Some(partial_json),

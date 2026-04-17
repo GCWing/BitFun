@@ -195,6 +195,15 @@
     "save": "保存代理配置",
     "saveSuccess": "代理配置已保存，重启IDE后生效"
   },
+  "streamIdleTimeout": {
+    "title": "流式超时",
+    "label": "空闲超时（秒）",
+    "hint": "全局控制流式响应在两次 chunk 之间的最大等待时间。留空表示无限等待。",
+    "placeholder": "留空表示不设超时",
+    "invalid": "请输入正整数秒数，或留空。",
+    "save": "保存流式超时",
+    "saveSuccess": "流式超时已保存"
+  },
   "capabilities": {
     "text_chat": "对话",
     "image_understanding": "多模态",

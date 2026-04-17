@@ -87,6 +87,7 @@ pub(crate) async fn send_stream(
     let openai_tools = OpenAIMessageConverter::convert_tools(tools);
     let request_body = build_request_body(client, &url, openai_messages, openai_tools, extra_body);
     let inline_think_in_text = client.config.inline_think_in_text;
+    let idle_timeout = client.stream_options.idle_timeout;
 
     execute_sse_request(
         "OpenAI Streaming API",
@@ -100,6 +101,7 @@ pub(crate) async fn send_stream(
                 tx,
                 tx_raw,
                 inline_think_in_text,
+                idle_timeout,
             ));
         },
     )

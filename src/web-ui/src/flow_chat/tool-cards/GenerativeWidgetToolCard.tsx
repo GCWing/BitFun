@@ -73,20 +73,6 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running' || status === 'pending';
   const isFailed = status === 'error' || toolResult?.success === false;
   const widgetId = resultData?.widget_id || toolCall?.id || toolItem.id;
-  const preferredWidth = useMemo(() => {
-    const fromStreaming = liveParams?.width;
-    if (typeof fromStreaming === 'number' && fromStreaming >= 240) {
-      return fromStreaming;
-    }
-
-    const fromResult = resultData?.width;
-    if (typeof fromResult === 'number' && fromResult >= 240) {
-      return fromResult;
-    }
-
-    const fromInput = toolCall?.input?.width;
-    return typeof fromInput === 'number' && fromInput >= 240 ? fromInput : undefined;
-  }, [liveParams, resultData?.width, toolCall?.input]);
 
   const handleWidgetEvent = useCallback((event: any) => {
     handleWidgetBridgeEvent(event, 'tool-card');
@@ -123,7 +109,6 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
         widgetId={widgetId}
         title={title}
         widgetCode={widgetCode}
-        preferredWidth={preferredWidth}
         executeScripts={status === 'completed'}
         onWidgetEvent={handleWidgetEvent}
       />

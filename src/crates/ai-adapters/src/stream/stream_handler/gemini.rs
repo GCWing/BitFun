@@ -1,16 +1,15 @@
 use super::stream_stats::StreamStats;
+use super::{next_stream_item, TimedStreamItem};
 use crate::stream::types::gemini::GeminiSSEData;
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
 use log::{error, trace};
 use reqwest::Response;
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::timeout;
 
 const AI_STREAM_RESPONSE_TARGET: &str = "ai::gemini_stream_response";
 
@@ -77,18 +76,17 @@ pub async fn handle_gemini_stream(
     response: Response,
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
-    let idle_timeout = Duration::from_secs(600);
     let mut received_finish_reason = false;
     let mut tool_call_state = GeminiToolCallState::new();
     let mut stats = StreamStats::new("Gemini");
 
     loop {
-        let sse_event = timeout(idle_timeout, stream.next()).await;
-        let sse = match sse_event {
-            Ok(Some(Ok(sse))) => sse,
-            Ok(None) => {
+        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+            TimedStreamItem::Item(Ok(sse)) => sse,
+            TimedStreamItem::End => {
                 if received_finish_reason {
                     stats.log_summary("stream_closed_after_finish_reason");
                     return;
@@ -99,18 +97,16 @@ pub async fn handle_gemini_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            Ok(Some(Err(e))) => {
+            TimedStreamItem::Item(Err(e)) => {
                 let error_msg = format!("Gemini SSE stream error: {}", e);
                 stats.log_summary("sse_stream_error");
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            Err(_) => {
-                let error_msg = format!(
-                    "Gemini SSE stream timeout after {}s",
-                    idle_timeout.as_secs()
-                );
+            TimedStreamItem::TimedOut => {
+                let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!("Gemini SSE stream timeout after {}s", timeout_secs);
                 stats.log_summary("sse_stream_timeout");
                 error!("{}", error_msg);
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
@@ -205,6 +201,7 @@ mod tests {
         let mut state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{\"city\":".to_string()),
@@ -213,6 +210,7 @@ mod tests {
         state.assign_id(&mut first);
 
         let mut second = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("\"Paris\"}".to_string()),
@@ -232,6 +230,7 @@ mod tests {
         let mut state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
@@ -241,6 +240,7 @@ mod tests {
         state.on_non_tool_response();
 
         let mut second = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
@@ -261,12 +261,14 @@ mod tests {
         let mut second_state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("grep".to_string()),
             arguments: Some("{}".to_string()),
             arguments_is_snapshot: false,
         };
         let mut second = UnifiedToolCall {
+            tool_call_index: None,
             id: None,
             name: Some("read".to_string()),
             arguments: Some("{}".to_string()),
