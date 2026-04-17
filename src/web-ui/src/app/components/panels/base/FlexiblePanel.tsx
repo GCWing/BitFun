@@ -22,6 +22,9 @@ const TerminalTabPanel = React.lazy(() =>
   }))
 );
 
+const GenerativeWidgetPanel = React.lazy(() =>
+  import('@/tools/generative-widget/GenerativeWidgetPanel')
+);
 const TaskDetailPanel = React.lazy(() => 
   import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
     default: module.TaskDetailPanel 
@@ -531,6 +534,17 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           </React.Suspense>
         );
 
+
+      case 'generative-widget':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading widget preview...</div>}>
+            <GenerativeWidgetPanel
+              title={content.title}
+              widgetId={content.data?.widgetId}
+              widgetCode={content.data?.widgetCode}
+            />
+          </React.Suspense>
+        );
       default:
         return (
           <div className="bitfun-flexible-panel__unknown-content">
