@@ -6,7 +6,7 @@ export const HIDDEN_AGENT_IDS = new Set<string>(['Claw', 'Dispatcher']);
 /** Core mode agents shown in the top zone only; excluded from overview zone list and counts. */
 export const CORE_AGENT_IDS = new Set<string>(['agentic', 'Cowork']);
 
-/** Agents that appear in the bottom “Agent 总览” grid (same pool as filter chip counts). */
+/** Agents that appear in the bottom Agent overview grid (same pool as filter chip counts). */
 export function isAgentInOverviewZone(agent: { id: string }): boolean {
   return !HIDDEN_AGENT_IDS.has(agent.id) && !CORE_AGENT_IDS.has(agent.id);
 }

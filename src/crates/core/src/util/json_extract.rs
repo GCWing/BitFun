@@ -122,8 +122,7 @@ fn extract_greedy_braces(text: &str) -> Option<String> {
 /// Best-effort repair of malformed JSON produced by AI models.
 ///
 /// Common breakage: the model writes unescaped `"` inside string values
-/// (e.g. Chinese text like `"你到底是什么模型"` where the inner quotes are
-/// plain ASCII U+0022).  This function walks the JSON character-by-character,
+/// (e.g. CJK prose where nested quotes are plain ASCII U+0022).  This function walks the JSON character-by-character,
 /// tracking brace/bracket depth and string state, and escapes interior quotes
 /// that would otherwise break the parse.
 fn try_repair_json(input: &str) -> Option<String> {
@@ -354,7 +353,7 @@ mod tests {
 
     #[test]
     fn repair_unescaped_chinese_style_quotes() {
-        // AI writes: "headline": "用户问AI"你是什么模型"" — inner quotes are ASCII U+0022
+        // AI emits nested quotes inside headline value — inner quotes are ASCII U+0022
         let input =
             "```json\n{\"headline\": \"用户问AI\"你是什么模型\"\", \"detail\": \"ok\"}\n```";
         let result = extract_json_from_ai_response(input);
@@ -369,7 +368,7 @@ mod tests {
 
     #[test]
     fn repair_multiple_rogue_quotes_in_one_value() {
-        // "text": "他说"你好"然后又说"再见""
+        // text value containing multiple unescaped interior quote pairs
         let input = r#"{"text": "他说"你好"然后又说"再见"", "other": "fine"}"#;
         let result = extract_json_from_ai_response(input);
         assert!(
@@ -414,7 +413,7 @@ mod tests {
 
     #[test]
     fn repair_real_world_interaction_style() {
-        // Reproduces: "narrative": "...围绕着"这个项目是什么？""现在改了什么？"..."
+        // narrative value with nested quoted fragments inside the string
         let input = "```json\n{\n  \"narrative\": \"会话围绕着\"这个项目是什么？\"和\"现在改了什么？\"展开\",\n  \"key_patterns\": [\"pattern1\"]\n}\n```";
         let result = extract_json_from_ai_response(input);
         assert!(result.is_some(), "should repair interaction style JSON");

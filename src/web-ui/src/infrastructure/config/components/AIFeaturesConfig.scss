@@ -15,7 +15,7 @@
     gap: $size-gap-2;
   }
 
-  /** Computer use: authorized status label (Granted / 已授权) */
+  /** Computer use: authorized status label (Granted) */
   &__perm-status--granted {
     color: var(--color-text-muted);
   }

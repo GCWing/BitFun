@@ -1633,7 +1633,7 @@ $_section-header-height: 24px;
   }
 }
 
-// ── 左栏：菜单操作项 ──────────────────────────────────
+// ── Left column: menu actions ──────────────────────────────────
 .bitfun-nav-panel__footer-menu-col-actions {
   flex-shrink: 0;
   width: 192px;
@@ -1642,7 +1642,7 @@ $_section-header-height: 24px;
   flex-direction: column;
 }
 
-// ── 竖向分隔线 ───────────────────────────────────────
+// ── Vertical divider ───────────────────────────────────────
 .bitfun-nav-panel__footer-menu-col-sep {
   flex-shrink: 0;
   width: 1px;
@@ -1651,7 +1651,7 @@ $_section-header-height: 24px;
   align-self: stretch;
 }
 
-// ── 右栏：打招呼 / 推荐区 ────────────────────────────
+// ── Right column: greeting / recommendations ────────────────────────────
 .bitfun-nav-panel__footer-menu-greeting {
   flex: 0 0 200px;
   display: flex;
@@ -2228,7 +2228,7 @@ $_section-header-height: 24px;
     justify-content: center;
   }
 
-  // 助理行：前导 icon 悬停微微放大（与 __top-action-icon-circle 一致；排除 --sub 与独立 Skills 行）
+  // Assistant row: leading icon scales up slightly on hover (same as __top-action-icon-circle; excludes --sub and standalone Skills row)
   &:not(.bitfun-nav-panel__top-action-btn--sub) .bitfun-nav-panel__top-action-icon-slot {
     transform: scale(1);
     transform-origin: center;
@@ -2259,7 +2259,7 @@ $_section-header-height: 24px;
   }
 }
 
-// 扩展：默认 Blocks，悬停时图标位切换为 Chevron；展开时箭头朝上
+// Expand: default Blocks; on hover the icon slot switches to Chevron; when expanded the arrow points up
 .bitfun-nav-panel__top-action-expand-icons {
   position: relative;
   width: 22px;

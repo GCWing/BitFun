@@ -408,7 +408,7 @@ const TaskDetailScene: React.FC = () => {
     <div className="tds">
       <div className="tds-layout">
 
-        {/* ── Left: title + search + dual panes (2×2 grid aligns OS |工作区 headers) ─ */}
+        {/* ── Left: title + search + dual panes (2×2 grid aligns OS | workspace headers) ─ */}
         <div className="tds-layout__left">
           <div className="tds-left-header">
             <h1 className="tds-left-header__title">{t('taskDetailScene.pageTitle')}</h1>

@@ -106,6 +106,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lanNetworkInfo, setLanNetworkInfo] = useState<{ localIp: string; gatewayIp: string | null } | null>(null);
+  const [lanNetworkInfoLoading, setLanNetworkInfoLoading] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
@@ -131,6 +132,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTargetRef = useRef<'relay' | 'bot'>('relay');
+  const statusRef = useRef<RemoteConnectStatus | null>(null);
+  /** True after the first `getStatus` pass finishes while `status` was still null (including failed attempts). */
+  const [statusFetchFinished, setStatusFetchFinished] = useState(false);
+
+  statusRef.current = status;
 
   // ── Derived state ────────────────────────────────────────────────
 
@@ -164,6 +170,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     if (!isOpen) {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
+      setStatusFetchFinished(false);
       return;
     }
 
@@ -201,7 +208,22 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         }
       }
     };
-    void checkExisting();
+
+    const hadCachedStatus = statusRef.current !== null;
+    if (hadCachedStatus) {
+      void checkExisting();
+    } else {
+      void (async () => {
+        try {
+          await checkExisting();
+        } finally {
+          if (!cancelled) {
+            setStatusFetchFinished(true);
+          }
+        }
+      })();
+    }
+
     return () => {
       cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
@@ -209,16 +231,26 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   }, [isOpen, startPolling]);
 
   useEffect(() => {
-    if (!isOpen || activeGroup !== 'network' || networkTab !== 'lan') return;
+    if (!isOpen || activeGroup !== 'network' || networkTab !== 'lan') {
+      setLanNetworkInfoLoading(false);
+      return;
+    }
     let cancelled = false;
     const loadLanNetworkInfo = async () => {
-      const info = await remoteConnectAPI.getLanNetworkInfo();
-      if (!cancelled) {
-        setLanNetworkInfo(
-          info
-            ? { localIp: info.local_ip, gatewayIp: info.gateway_ip ?? null }
-            : null,
-        );
+      setLanNetworkInfoLoading(true);
+      try {
+        const info = await remoteConnectAPI.getLanNetworkInfo();
+        if (!cancelled) {
+          setLanNetworkInfo(
+            info
+              ? { localIp: info.local_ip, gatewayIp: info.gateway_ip ?? null }
+              : null,
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLanNetworkInfoLoading(false);
+        }
       }
     };
     void loadLanNetworkInfo();
@@ -624,19 +656,31 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       <div className="bitfun-remote-connect__body">
         {renderInfoCard(
           <>
-            {networkTab === 'lan' && (lanNetworkInfo?.localIp || lanNetworkInfo?.gatewayIp) && (
-              <div className="bitfun-remote-connect__info-meta-group">
-                {lanNetworkInfo?.localIp && (
-                  <p className="bitfun-remote-connect__info-meta">
-                    {t('remoteConnect.currentIp')}: {lanNetworkInfo.localIp}
-                  </p>
-                )}
-                {lanNetworkInfo?.gatewayIp && (
-                  <p className="bitfun-remote-connect__info-meta">
-                    {t('remoteConnect.gatewayIp')}: {lanNetworkInfo.gatewayIp}
-                  </p>
-                )}
-              </div>
+            {networkTab === 'lan' && (
+              lanNetworkInfoLoading ? (
+                <div
+                  className="bitfun-remote-connect__info-meta-group bitfun-remote-connect__info-meta-group--skeleton"
+                  aria-hidden="true"
+                >
+                  <div className="bitfun-remote-connect__info-meta-skeleton-line bitfun-remote-connect__info-meta-skeleton-line--long" />
+                  <div className="bitfun-remote-connect__info-meta-skeleton-line bitfun-remote-connect__info-meta-skeleton-line--medium" />
+                </div>
+              ) : (lanNetworkInfo?.localIp || lanNetworkInfo?.gatewayIp) ? (
+                <div className="bitfun-remote-connect__info-meta-group bitfun-remote-connect__info-meta-group--ready">
+                  {lanNetworkInfo?.localIp && (
+                    <p className="bitfun-remote-connect__info-meta">
+                      {t('remoteConnect.currentIp')}: {lanNetworkInfo.localIp}
+                    </p>
+                  )}
+                  {lanNetworkInfo?.gatewayIp && (
+                    <p className="bitfun-remote-connect__info-meta">
+                      {t('remoteConnect.gatewayIp')}: {lanNetworkInfo.gatewayIp}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="bitfun-remote-connect__info-meta-group bitfun-remote-connect__info-meta-group--placeholder" aria-hidden="true" />
+              )
             )}
             <p className="bitfun-remote-connect__info-text">
               {networkTab === 'custom_server' ? (
@@ -896,6 +940,8 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const isNetworkConnecting = !!connectionResult && activeGroup === 'network' && !isRelayConnected;
   const isBotConnecting = !!connectionResult && activeGroup === 'bot' && !isBotConnected;
+  /** First open in session: no cached `status` yet — show skeleton until `getStatus` completes. */
+  const showRemoteConnectSkeleton = isOpen && status === null && !statusFetchFinished;
   const handleAgreeDisclaimer = useCallback(() => {
     setRemoteConnectDisclaimerAgreed();
     setHasAgreedDisclaimer(true);
@@ -921,74 +967,106 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         )}
         showCloseButton
         size="large"
+        overlayClassName="bitfun-remote-connect-overlay"
+        contentClassName="bitfun-remote-connect-modal__content"
       >
         <div className="bitfun-remote-connect">
-          {/* ── Group tabs ── */}
-          <div className="bitfun-remote-connect__groups">
-            <button
-              type="button"
-              className={`bitfun-remote-connect__group-btn${activeGroup === 'network' ? ' is-active' : ''}`}
-              onClick={() => { setActiveGroup('network'); setConnectionResult(null); setError(null); }}
-              disabled={isBotConnecting}
+          {showRemoteConnectSkeleton ? (
+            <div
+              className="bitfun-remote-connect__skeleton"
+              aria-busy="true"
+              aria-live="polite"
             >
-              {t('remoteConnect.groupNetwork')}
-              {isRelayConnected && <span className="bitfun-remote-connect__dot" />}
-            </button>
-            <span className="bitfun-remote-connect__group-divider" />
-            <button
-              type="button"
-              className={`bitfun-remote-connect__group-btn${activeGroup === 'bot' ? ' is-active' : ''}`}
-              onClick={() => { setActiveGroup('bot'); setConnectionResult(null); setError(null); }}
-              disabled={isNetworkConnecting}
-            >
-              {t('remoteConnect.groupBot')}
-              {isBotConnected && <span className="bitfun-remote-connect__dot" />}
-            </button>
-          </div>
-
-          {/* ── Sub-tabs ── */}
-          {activeGroup === 'network' ? (
-            <div className="bitfun-remote-connect__subtabs">
-              {NETWORK_TABS.map((tab, i) => (
-                <React.Fragment key={tab.id}>
-                  {i > 0 && <span className="bitfun-remote-connect__subtab-divider" />}
-                  <button
-                    type="button"
-                    className={`bitfun-remote-connect__subtab${networkTab === tab.id ? ' is-active' : ''}${isRelayConnected && connectedNetworkTab === tab.id ? ' is-connected' : ''}`}
-                    onClick={() => { setNetworkTab(tab.id); setConnectionResult(null); setError(null); }}
-                    disabled={isNetworkSubDisabled(tab.id) || isNetworkConnecting}
-                  >
-                    {t(tab.labelKey)}
-                    {isRelayConnected && connectedNetworkTab === tab.id && networkTab !== tab.id && (
-                      <span className="bitfun-remote-connect__dot-sm" />
-                    )}
-                  </button>
-                </React.Fragment>
-              ))}
+              <div className="bitfun-remote-connect__groups">
+                <div className="bitfun-remote-connect__skeleton-pill bitfun-remote-connect__skeleton-pill--group" />
+                <span className="bitfun-remote-connect__group-divider" aria-hidden="true" />
+                <div className="bitfun-remote-connect__skeleton-pill bitfun-remote-connect__skeleton-pill--group" />
+              </div>
+              <div className="bitfun-remote-connect__subtabs">
+                {NETWORK_TABS.map((tab, i) => (
+                  <React.Fragment key={tab.id}>
+                    {i > 0 && <span className="bitfun-remote-connect__subtab-divider" aria-hidden="true" />}
+                    <div className="bitfun-remote-connect__skeleton-pill bitfun-remote-connect__skeleton-pill--subtab" />
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="bitfun-remote-connect__body bitfun-remote-connect__skeleton-body">
+                <div className="bitfun-remote-connect__skeleton-card" />
+                <div className="bitfun-remote-connect__skeleton-line bitfun-remote-connect__skeleton-line--short" />
+                <div className="bitfun-remote-connect__skeleton-line" />
+                <div className="bitfun-remote-connect__skeleton-line bitfun-remote-connect__skeleton-line--medium" />
+              </div>
             </div>
           ) : (
-            <div className="bitfun-remote-connect__subtabs">
-              {BOT_TABS.map((tab, i) => (
-                <React.Fragment key={tab.id}>
-                  {i > 0 && <span className="bitfun-remote-connect__subtab-divider" />}
-                  <button
-                    type="button"
-                    className={`bitfun-remote-connect__subtab${botTab === tab.id ? ' is-active' : ''}${isBotConnected && connectedBotTab === tab.id ? ' is-connected' : ''}`}
-                    onClick={() => { setBotTab(tab.id); setConnectionResult(null); setError(null); }}
-                    disabled={isBotSubDisabled(tab.id) || isBotConnecting}
-                  >
-                    {tab.id === 'feishu' ? t('remoteConnect.feishu') : tab.id === 'weixin' ? t('remoteConnect.weixin') : tab.label}
-                    {isBotConnected && connectedBotTab === tab.id && botTab !== tab.id && (
-                      <span className="bitfun-remote-connect__dot-sm" />
-                    )}
-                  </button>
-                </React.Fragment>
-              ))}
-            </div>
-          )}
+            <>
+              {/* ── Group tabs ── */}
+              <div className="bitfun-remote-connect__groups">
+                <button
+                  type="button"
+                  className={`bitfun-remote-connect__group-btn${activeGroup === 'network' ? ' is-active' : ''}`}
+                  onClick={() => { setActiveGroup('network'); setConnectionResult(null); setError(null); }}
+                  disabled={isBotConnecting}
+                >
+                  {t('remoteConnect.groupNetwork')}
+                  {isRelayConnected && <span className="bitfun-remote-connect__dot" />}
+                </button>
+                <span className="bitfun-remote-connect__group-divider" />
+                <button
+                  type="button"
+                  className={`bitfun-remote-connect__group-btn${activeGroup === 'bot' ? ' is-active' : ''}`}
+                  onClick={() => { setActiveGroup('bot'); setConnectionResult(null); setError(null); }}
+                  disabled={isNetworkConnecting}
+                >
+                  {t('remoteConnect.groupBot')}
+                  {isBotConnected && <span className="bitfun-remote-connect__dot" />}
+                </button>
+              </div>
 
-          {/* ── Content ── */}
-          {activeGroup === 'network' ? renderNetworkContent() : renderBotContent()}
+              {/* ── Sub-tabs ── */}
+              {activeGroup === 'network' ? (
+                <div className="bitfun-remote-connect__subtabs">
+                  {NETWORK_TABS.map((tab, i) => (
+                    <React.Fragment key={tab.id}>
+                      {i > 0 && <span className="bitfun-remote-connect__subtab-divider" />}
+                      <button
+                        type="button"
+                        className={`bitfun-remote-connect__subtab${networkTab === tab.id ? ' is-active' : ''}${isRelayConnected && connectedNetworkTab === tab.id ? ' is-connected' : ''}`}
+                        onClick={() => { setNetworkTab(tab.id); setConnectionResult(null); setError(null); }}
+                        disabled={isNetworkSubDisabled(tab.id) || isNetworkConnecting}
+                      >
+                        {t(tab.labelKey)}
+                        {isRelayConnected && connectedNetworkTab === tab.id && networkTab !== tab.id && (
+                          <span className="bitfun-remote-connect__dot-sm" />
+                        )}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <div className="bitfun-remote-connect__subtabs">
+                  {BOT_TABS.map((tab, i) => (
+                    <React.Fragment key={tab.id}>
+                      {i > 0 && <span className="bitfun-remote-connect__subtab-divider" />}
+                      <button
+                        type="button"
+                        className={`bitfun-remote-connect__subtab${botTab === tab.id ? ' is-active' : ''}${isBotConnected && connectedBotTab === tab.id ? ' is-connected' : ''}`}
+                        onClick={() => { setBotTab(tab.id); setConnectionResult(null); setError(null); }}
+                        disabled={isBotSubDisabled(tab.id) || isBotConnecting}
+                      >
+                        {tab.id === 'feishu' ? t('remoteConnect.feishu') : tab.id === 'weixin' ? t('remoteConnect.weixin') : tab.label}
+                        {isBotConnected && connectedBotTab === tab.id && botTab !== tab.id && (
+                          <span className="bitfun-remote-connect__dot-sm" />
+                        )}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Content ── */}
+              {activeGroup === 'network' ? renderNetworkContent() : renderBotContent()}
+            </>
+          )}
         </div>
       </Modal>
 
