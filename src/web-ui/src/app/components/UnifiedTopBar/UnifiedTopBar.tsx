@@ -36,7 +36,6 @@ import {
 } from '../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { useHeaderStore } from '../../stores/headerStore';
-import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import SessionListDialog from '../SessionListDialog/SessionListDialog';
 import { getOverlayDef } from '../../overlay/overlayRegistry';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -48,7 +47,7 @@ import {
   type RemoteConnectStatus,
 } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import RemoteControlButton from './RemoteControlButton';
-import NavSearchDialog from '../NavPanel/NavSearchDialog';
+import GlobalSearchDialog from '../GlobalSearchDialog/GlobalSearchDialog';
 import type { OverlaySceneId } from '../../overlay/types';
 import './UnifiedTopBar.scss';
 
@@ -80,7 +79,6 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
   const { warning } = useNotification();
   const closeOverlay = useOverlayStore((s) => s.closeOverlay);
   const openOverlay = useOverlayStore((s) => s.openOverlay);
-  const openSessionListDialog = useSessionCapsuleStore((s) => s.openSessionListDialog);
   const sessionContext = useHeaderStore((s) => s.sessionContext);
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
   const hasOverlay = activeOverlay !== null;
@@ -466,7 +464,7 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
             </span>
           </button>
         </Tooltip>
-        <NavSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+        <GlobalSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
       </div>
 
       {/* Right: remote control + window controls (notification bell: WorkspaceBody bottom-right) */}

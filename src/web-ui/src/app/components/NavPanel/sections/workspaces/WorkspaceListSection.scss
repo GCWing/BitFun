@@ -515,7 +515,7 @@
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
   }
 
-  /* Match `.bitfun-nav-panel__footer-menu-divider` (PersistentFooterActions more menu) */
+  /* Match `.bitfun-nav-panel__footer-menu-divider` (WorkspaceFooterActions more menu) */
   &__workspace-item-menu-divider {
     height: 1px;
     margin: $size-gap-1 $size-gap-2;

@@ -37,10 +37,9 @@ export class IdeControlEventBus {
     }
 
     
-    this.registerController('panel', new PanelController());
-    this.registerController('open_panel', new PanelController());
-    this.registerController('close_panel', new PanelController());
-    this.registerController('toggle_panel', new PanelController());
+    const panelController = new PanelController();
+    this.registerController('panel', panelController);
+    this.registerController('open_panel', panelController);
 
     
     try {
@@ -88,21 +87,11 @@ export class IdeControlEventBus {
    
   private getController(operation: IdeControlOperation): IdeController | undefined {
     
-    let controller = this.controllers.get(operation);
-
-    
-    if (!controller) {
-      
-      if (
-        operation === 'open_panel' ||
-        operation === 'close_panel' ||
-        operation === 'toggle_panel'
-      ) {
-        controller = this.controllers.get('panel');
-      }
+    if (operation === 'open_panel') {
+      return this.controllers.get('panel');
     }
 
-    return controller;
+    return this.controllers.get(operation);
   }
 
    

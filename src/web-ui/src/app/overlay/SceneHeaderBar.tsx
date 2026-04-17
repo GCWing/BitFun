@@ -18,7 +18,7 @@ import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useOverlayStore } from '../stores/overlayStore';
 import { getOverlayDef } from './overlayRegistry';
 import NotificationButton from '../components/TitleBar/NotificationButton';
-import NavSearchDialog from '../components/NavPanel/NavSearchDialog';
+import GlobalSearchDialog from '../components/GlobalSearchDialog/GlobalSearchDialog';
 import type { OverlaySceneId } from './types';
 import { createLogger } from '@/shared/utils/logger';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -160,7 +160,7 @@ const SceneHeaderBar: React.FC<SceneHeaderBarProps> = ({
             </span>
           </button>
         </Tooltip>
-        <NavSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+        <GlobalSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
       </div>
 
       {/* Right: actions + window controls */}

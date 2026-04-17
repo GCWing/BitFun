@@ -15,6 +15,7 @@ import {
 import { PanelContent, TabData } from '@/app/components/panels/base/types';
 import type { LineRange } from '@/component-library/components/Markdown';
 import { normalizeSettingsTab } from '@/app/scenes/settings/settingsConfig';
+import { useOverlayStore } from '@/app/stores/overlayStore';
 
 const panelController = new PanelController();
 
@@ -244,7 +245,7 @@ export const quickActions = {
         useSettingsStore.getState().setActiveTab(normalizeSettingsTab(section));
       }
     });
-    window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'settings' } }));
+    useOverlayStore.getState().openOverlay('settings');
   },
 
    

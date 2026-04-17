@@ -16,7 +16,7 @@ import AgenticOSWorkspace from '../overlay/AgenticOSWorkspace';
 import UnifiedTopBar from '../components/UnifiedTopBar/UnifiedTopBar';
 import NotificationButton from '../components/TitleBar/NotificationButton';
 import SessionCapsule from '../components/SessionCapsule/SessionCapsule';
-import PersistentFooterActions from '../components/NavPanel/components/PersistentFooterActions';
+import WorkspaceFooterActions from '../components/WorkspaceFooterActions/WorkspaceFooterActions';
 import { useOverlayStore } from '../stores/overlayStore';
 import './WorkspaceBody.scss';
 
@@ -73,7 +73,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
 
       {/* Bottom-left floating: More menu (Dispatcher, Shell, …) */}
       <div className="bitfun-workspace-body__nav-footer">
-        <PersistentFooterActions />
+        <WorkspaceFooterActions />
       </div>
 
       {/* Bottom-right: notification center trigger */}

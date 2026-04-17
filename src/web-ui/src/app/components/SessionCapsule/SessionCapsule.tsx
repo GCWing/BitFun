@@ -1,14 +1,14 @@
 /**
  * SessionCapsule — floating vertical capsule for session navigation.
  *
- * Replaces the former left sidebar session list (NavPanel + SessionsSection).
+ * Replaces the former left sidebar session list (NavPanel + session list).
  *
  * States:
  *   Collapsed — a small rounded pill on the left edge, vertically centered.
  *               No running tasks: list icon + session count badge (click expands).
  *               With running tasks: every running session shows a mode-colored avatar; click switches.
  *               Below avatars: compact button to expand the full list.
- *   Expanded  — a tall rounded rectangle (capsule) containing the SessionsSection list.
+ *   Expanded  — a tall rounded rectangle (capsule) containing the session list.
  *
  * The panel is position:fixed so it floats over all content.
  * Collapse/expand state is persisted in localStorage.
@@ -37,7 +37,7 @@ import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stor
 import { createLogger } from '@/shared/utils/logger';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
-import SessionsSection from '../NavPanel/sections/sessions/SessionsSection';
+import SessionList from '../SessionList/SessionList';
 import { NewSessionDialog } from './NewSessionDialog';
 import './SessionCapsule.scss';
 
@@ -160,7 +160,7 @@ const SessionCapsule: React.FC = () => {
       .sort(compareSessionsForDisplay);
   }, [runningSessionIds, flowChatState.sessions]);
 
-  /** Exclude Agentic OS Dispatcher sessions — same filter as SessionsSection / SessionListDialog. */
+  /** Exclude Agentic OS Dispatcher sessions — same filter as SessionList / SessionListDialog. */
   const sessionCount = useMemo(
     () =>
       Array.from(flowChatState.sessions.values()).filter(
@@ -211,9 +211,6 @@ const SessionCapsule: React.FC = () => {
           workspaceId: resolvedWorkspaceId,
           activateWorkspace,
         });
-        window.dispatchEvent(
-          new CustomEvent('flowchat:switch-session', { detail: { sessionId } })
-        );
       } catch (err) {
         log.error('Failed to switch session from capsule', err);
       }
@@ -252,7 +249,7 @@ const SessionCapsule: React.FC = () => {
   }, [expanded]);
 
   // Collapse when clicking outside the capsule (expanded only).
-  // Ignore portaled UI that belongs to the session list (see SessionsSection).
+  // Ignore portaled UI that belongs to the session list (see SessionList).
   useEffect(() => {
     if (!expanded || pinned) return;
     const handler = (e: PointerEvent) => {
@@ -312,7 +309,7 @@ const SessionCapsule: React.FC = () => {
 
           {/* 任务列表 */}
           <div className="session-capsule__list">
-            <SessionsSection listAllSessions listFilterQuery={listFilterQuery} />
+            <SessionList listAllSessions listFilterQuery={listFilterQuery} />
           </div>
 
           {/* 底部：新建会话 + 详情 + 固定展开 */}

@@ -397,9 +397,6 @@ const TaskDetailScene: React.FC = () => {
         workspaceId: ws?.id,
         activateWorkspace: mustActivate ? setActiveWorkspace : undefined,
       });
-      window.dispatchEvent(
-        new CustomEvent('flowchat:switch-session', { detail: { sessionId: session.sessionId } })
-      );
       closeTaskDetail();
       closeOverlay();
     } catch (e) {

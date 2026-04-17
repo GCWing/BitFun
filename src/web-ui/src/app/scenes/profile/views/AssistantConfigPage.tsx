@@ -24,7 +24,7 @@ import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
 import { useAgentIdentityDocument } from '@/app/scenes/my-agent/useAgentIdentityDocument';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { MEditor } from '@/tools/editor/meditor';
-import SessionsSection from '@/app/components/NavPanel/sections/sessions/SessionsSection';
+import SessionList from '@/app/components/SessionList/SessionList';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 
@@ -458,7 +458,7 @@ const AssistantConfigPage: React.FC = () => {
           />
           <div className="acp-sessions-area">
             <h2 className="acp-sessions-area__title">{t('nursery.assistant.sessionsSectionTitle')}</h2>
-            <SessionsSection
+            <SessionList
               workspaceId={workspace?.id}
               workspacePath={workspacePath}
               assistantLabel={identityName}

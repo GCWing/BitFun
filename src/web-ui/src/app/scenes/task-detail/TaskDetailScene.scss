@@ -27,7 +27,7 @@ $tds-content-top: clamp(40px, 4.5vh, 52px);
 
 // ── Root ──────────────────────────────────────────────────────────────────
 
-// Reserve space for WorkspaceBody’s fixed PersistentFooterActions (bottom-left dock)
+// Reserve space for WorkspaceBody’s fixed WorkspaceFooterActions (bottom-left dock)
 $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0px));
 
 .tds {

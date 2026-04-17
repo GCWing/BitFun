@@ -77,20 +77,6 @@ export const useOverlayStore = create<OverlayState>((set, get) => ({
   },
 }));
 
-// ── Global event bridge for legacy 'scene:open' dispatches ────────────────
-if (typeof window !== 'undefined') {
-  window.addEventListener('scene:open', (e: Event) => {
-    const sceneId = (e as CustomEvent<{ sceneId: string }>).detail?.sceneId;
-    if (!sceneId) return;
-
-    if (sceneId === 'session') {
-      useOverlayStore.getState().closeOverlay();
-    } else {
-      useOverlayStore.getState().openOverlay(sceneId as OverlaySceneId);
-    }
-  });
-}
-
 /** Whether an overlay is currently open (i.e. a non-session scene is active). */
 export function selectHasActiveOverlay(state: OverlayState): boolean {
   return state.activeOverlay !== null;

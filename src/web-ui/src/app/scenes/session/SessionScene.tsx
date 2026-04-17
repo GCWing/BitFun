@@ -12,6 +12,7 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../../hooks/useApp';
+import { useHeaderStore } from '../../stores/headerStore';
 import ChatPane from './ChatPane';
 import AuxPane, { type AuxPaneRef } from './AuxPane';
 
@@ -44,6 +45,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { state, updateRightPanelWidth, toggleRightPanel } = useApp();
+  const sessionMode = useHeaderStore((s) => s.sessionContext?.mode);
   const auxPaneRef = useRef<AuxPaneRef>(null);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -178,6 +180,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
 
   const isRightAsMain = state.layout.chatCollapsed;
   const isChatHidden = state.layout.centerPanelCollapsed || isRightAsMain;
+  const isDispatcherSession = sessionMode?.toLowerCase() === 'dispatcher';
 
   const panelModeLabels = useMemo(() => ({
     collapsed:    t('layout.panelMode.collapsed'),
@@ -198,6 +201,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
       ref={containerRef}
       className={[
         'bitfun-session-scene',
+        isDispatcherSession && 'bitfun-session-scene--dispatcher',
         isDragging && 'bitfun-session-scene--dragging',
         isEntering && 'layout-entering',
       ].filter(Boolean).join(' ')}

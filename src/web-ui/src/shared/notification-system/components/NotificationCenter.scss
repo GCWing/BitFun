@@ -2,7 +2,7 @@
 @use '../../../component-library/styles/nav-panel-font-scope.scss' as nav-font;
 @use '../styles/match-nav-search-surface' as search-surface;
 
-// Modal shell — align with NavSearchDialog (transparent overlay, scene card, layered shadow)
+// Modal shell — align with GlobalSearchDialog (transparent overlay, scene card, layered shadow)
 .modal-overlay:has(.notification-center) {
   @include nav-font.nav-panel-font-token-scope;
 

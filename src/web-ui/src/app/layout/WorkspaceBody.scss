@@ -33,7 +33,7 @@
   z-index: $z-dropdown;
   pointer-events: auto;
 
-  // PersistentFooterActions reuses `.bitfun-nav-panel__footer`, which has horizontal padding
+  // WorkspaceFooterActions reuses `.bitfun-nav-panel__footer`, which has horizontal padding
   // for the docked nav panel. Floating here we only want the same inset as bottom-right
   // (`$size-gap-3`), not an extra `$size-gap-2` from the footer stylesheet.
   .bitfun-nav-panel__footer {
@@ -52,7 +52,7 @@
   pointer-events: auto;
 }
 
-// Match `.bitfun-nav-panel__footer-btn--icon` (PersistentFooterActions, bottom-left)
+// Match `.bitfun-nav-panel__footer-btn--icon` (WorkspaceFooterActions, bottom-left)
 .bitfun-workspace-body__notification-btn {
   display: flex;
   align-items: center;

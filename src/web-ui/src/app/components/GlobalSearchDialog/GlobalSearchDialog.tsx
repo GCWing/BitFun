@@ -16,17 +16,17 @@ import type { SessionMetadata } from '@/shared/types/session-history';
 import type { WorkspaceInfo } from '@/shared/types';
 import { sessionAPI } from '@/infrastructure/api';
 import { WorkspaceKind } from '@/shared/types';
-import './NavSearchDialog.scss';
+import './GlobalSearchDialog.scss';
 
-interface NavSearchDialogProps {
+interface GlobalSearchDialogProps {
   open: boolean;
   onClose: () => void;
 }
 
-type ResultKind = 'workspace' | 'assistant' | 'session';
+type SearchResultKind = 'workspace' | 'assistant' | 'session';
 
 interface SearchResultItem {
-  kind: ResultKind;
+  kind: SearchResultKind;
   id: string;
   label: string;
   sublabel?: string;
@@ -35,18 +35,18 @@ interface SearchResultItem {
 
 const MAX_PER_GROUP = 20;
 
-const getTitle = (session: Session): string =>
+const getSessionTitle = (session: Session): string =>
   session.title?.trim() || `Task ${session.sessionId.slice(0, 6)}`;
 
-const sessionRecencyTime = (session: Session): number =>
+const getSessionRecencyTime = (session: Session): number =>
   session.updatedAt ?? session.lastActiveAt ?? session.createdAt ?? 0;
 
 const matchesQuery = (query: string, ...fields: (string | undefined | null)[]): boolean => {
-  const q = query.toLowerCase();
-  return fields.some(f => f && f.toLowerCase().includes(q));
+  const normalizedQuery = query.toLowerCase();
+  return fields.some(field => field && field.toLowerCase().includes(normalizedQuery));
 };
 
-const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
+const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }) => {
   const { t } = useI18n('common');
   const { openedWorkspacesList, assistantWorkspacesList, setActiveWorkspace } = useWorkspaceContext();
   const { openOverlay } = useOverlayManager();
@@ -56,7 +56,6 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
-  /** Persisted session rows for opened workspaces — filled when dialog opens (search filters client-side). */
   const [persistedOpenWorkspaceSessions, setPersistedOpenWorkspaceSessions] = useState<
     Array<{ meta: SessionMetadata; workspace: WorkspaceInfo }>
   >([]);
@@ -67,15 +66,14 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   useEffect(() => {
     if (!open) return;
     setFlowChatState(flowChatStore.getState());
-    const unsub = flowChatStore.subscribe(s => setFlowChatState(s));
-    return () => unsub();
+    const unsubscribe = flowChatStore.subscribe(state => setFlowChatState(state));
+    return () => unsubscribe();
   }, [open]);
 
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActiveIndex(0);
-    }
+    if (!open) return;
+    setQuery('');
+    setActiveIndex(0);
   }, [open]);
 
   useEffect(() => {
@@ -83,18 +81,19 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
       setPersistedOpenWorkspaceSessions([]);
       return;
     }
+
     let cancelled = false;
     void (async () => {
       try {
         const rows: Array<{ meta: SessionMetadata; workspace: WorkspaceInfo }> = [];
-        for (const w of openedWorkspacesList) {
-          const list = await sessionAPI.listSessions(
-            w.rootPath,
-            w.connectionId ?? undefined,
-            w.sshHost ?? undefined
+        for (const workspace of openedWorkspacesList) {
+          const sessionList = await sessionAPI.listSessions(
+            workspace.rootPath,
+            workspace.connectionId ?? undefined,
+            workspace.sshHost ?? undefined
           );
-          for (const meta of list) {
-            rows.push({ meta, workspace: w });
+          for (const meta of sessionList) {
+            rows.push({ meta, workspace });
           }
         }
         if (!cancelled) {
@@ -106,22 +105,22 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
         }
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, [open, openedWorkspacesList]);
 
   const projectWorkspaces = useMemo(
-    () => openedWorkspacesList.filter(w => w.workspaceKind !== WorkspaceKind.Assistant),
+    () => openedWorkspacesList.filter(workspace => workspace.workspaceKind !== WorkspaceKind.Assistant),
     [openedWorkspacesList]
   );
 
   const openedWorkspaceIdSet = useMemo(
-    () => new Set(openedWorkspacesList.map(w => w.id)),
+    () => new Set(openedWorkspacesList.map(workspace => workspace.id)),
     [openedWorkspacesList]
   );
 
-  /** Sessions that resolve to an opened workspace (project + assistant rows in the nav). */
   const sessionsInOpenedWorkspaces = useMemo((): Array<{ session: Session; workspace: WorkspaceInfo }> => {
     const result: Array<{ session: Session; workspace: WorkspaceInfo }> = [];
     for (const session of flowChatState.sessions.values()) {
@@ -130,90 +129,113 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
         result.push({ session, workspace });
       }
     }
-    result.sort((a, b) => sessionRecencyTime(b.session) - sessionRecencyTime(a.session));
+    result.sort((left, right) => getSessionRecencyTime(right.session) - getSessionRecencyTime(left.session));
     return result;
   }, [flowChatState.sessions, openedWorkspacesList, openedWorkspaceIdSet]);
 
-  const mainLineSessionsOpen = useMemo(
+  const topLevelSessions = useMemo(
     () => sessionsInOpenedWorkspaces.filter(({ session }) => !session.parentSessionId),
     [sessionsInOpenedWorkspaces]
   );
 
   const results = useMemo((): SearchResultItem[] => {
     const items: SearchResultItem[] = [];
-    const q = query.trim();
+    const trimmedQuery = query.trim();
 
-    if (!q) {
-      for (const w of projectWorkspaces.slice(0, MAX_PER_GROUP)) {
-        items.push({ kind: 'workspace', id: w.id, label: w.name, sublabel: w.rootPath });
+    if (!trimmedQuery) {
+      for (const workspace of projectWorkspaces.slice(0, MAX_PER_GROUP)) {
+        items.push({
+          kind: 'workspace',
+          id: workspace.id,
+          label: workspace.name,
+          sublabel: workspace.rootPath,
+        });
       }
-      for (const w of assistantWorkspacesList.slice(0, MAX_PER_GROUP)) {
-        const displayName = w.identity?.name?.trim() || w.name;
-        items.push({ kind: 'assistant', id: w.id, label: displayName, sublabel: w.description });
+      for (const workspace of assistantWorkspacesList.slice(0, MAX_PER_GROUP)) {
+        const displayName = workspace.identity?.name?.trim() || workspace.name;
+        items.push({
+          kind: 'assistant',
+          id: workspace.id,
+          label: displayName,
+          sublabel: workspace.description,
+        });
       }
       return items;
     }
 
     const filteredWorkspaces = projectWorkspaces
-      .filter(w => matchesQuery(q, w.name, w.rootPath))
+      .filter(workspace => matchesQuery(trimmedQuery, workspace.name, workspace.rootPath))
       .slice(0, MAX_PER_GROUP);
-    for (const w of filteredWorkspaces) {
-      items.push({ kind: 'workspace', id: w.id, label: w.name, sublabel: w.rootPath });
+    for (const workspace of filteredWorkspaces) {
+      items.push({
+        kind: 'workspace',
+        id: workspace.id,
+        label: workspace.name,
+        sublabel: workspace.rootPath,
+      });
     }
 
     const filteredAssistants = assistantWorkspacesList
-      .filter(w => matchesQuery(q, w.name, w.identity?.name, w.description))
+      .filter(workspace => matchesQuery(trimmedQuery, workspace.name, workspace.identity?.name, workspace.description))
       .slice(0, MAX_PER_GROUP);
-    for (const w of filteredAssistants) {
-      const displayName = w.identity?.name?.trim() || w.name;
-      items.push({ kind: 'assistant', id: w.id, label: displayName, sublabel: w.description });
+    for (const workspace of filteredAssistants) {
+      const displayName = workspace.identity?.name?.trim() || workspace.name;
+      items.push({
+        kind: 'assistant',
+        id: workspace.id,
+        label: displayName,
+        sublabel: workspace.description,
+      });
     }
 
-    const storeMatches = mainLineSessionsOpen.filter(({ session }) =>
-      matchesQuery(q, getTitle(session), session.sessionId)
+    const storeMatches = topLevelSessions.filter(({ session }) =>
+      matchesQuery(trimmedQuery, getSessionTitle(session), session.sessionId)
     );
-    const storeIds = new Set(storeMatches.map(({ session }) => session.sessionId));
+    const loadedSessionIds = new Set(storeMatches.map(({ session }) => session.sessionId));
 
     const diskMatches = persistedOpenWorkspaceSessions.filter(({ meta, workspace }) => {
       if (!openedWorkspaceIdSet.has(workspace.id)) return false;
       if (meta.customMetadata?.parentSessionId) return false;
       const label = meta.sessionName?.trim() || `Task ${meta.sessionId.slice(0, 6)}`;
-      if (!matchesQuery(q, label, meta.sessionId)) return false;
-      return !storeIds.has(meta.sessionId);
+      if (!matchesQuery(trimmedQuery, label, meta.sessionId)) return false;
+      return !loadedSessionIds.has(meta.sessionId);
     });
 
-    const merged: Array<{ session: Session; workspace: WorkspaceInfo } | { disk: SessionMetadata; workspace: WorkspaceInfo }> = [
+    const mergedEntries: Array<
+      { session: Session; workspace: WorkspaceInfo } |
+      { disk: SessionMetadata; workspace: WorkspaceInfo }
+    > = [
       ...storeMatches.map(({ session, workspace }) => ({ session, workspace })),
       ...diskMatches.map(({ meta, workspace }) => ({ disk: meta, workspace })),
     ];
-    merged.sort((a, b) => {
-      const ta =
-        'session' in a
-          ? sessionRecencyTime(a.session)
-          : a.disk.lastActiveAt ?? a.disk.createdAt ?? 0;
-      const tb =
-        'session' in b
-          ? sessionRecencyTime(b.session)
-          : b.disk.lastActiveAt ?? b.disk.createdAt ?? 0;
-      return tb - ta;
+    mergedEntries.sort((left, right) => {
+      const leftTime =
+        'session' in left
+          ? getSessionRecencyTime(left.session)
+          : left.disk.lastActiveAt ?? left.disk.createdAt ?? 0;
+      const rightTime =
+        'session' in right
+          ? getSessionRecencyTime(right.session)
+          : right.disk.lastActiveAt ?? right.disk.createdAt ?? 0;
+      return rightTime - leftTime;
     });
 
-    for (const entry of merged.slice(0, MAX_PER_GROUP)) {
+    for (const entry of mergedEntries.slice(0, MAX_PER_GROUP)) {
       if ('session' in entry) {
         const { session, workspace } = entry;
         items.push({
           kind: 'session',
           id: session.sessionId,
-          label: getTitle(session),
+          label: getSessionTitle(session),
           sublabel: t('nav.search.sessionWorkspaceHint', { workspace: workspace.name }),
           workspaceId: workspace.id,
         });
       } else {
-        const { disk: meta, workspace } = entry;
+        const { disk, workspace } = entry;
         items.push({
           kind: 'session',
-          id: meta.sessionId,
-          label: meta.sessionName?.trim() || `Task ${meta.sessionId.slice(0, 6)}`,
+          id: disk.sessionId,
+          label: disk.sessionName?.trim() || `Task ${disk.sessionId.slice(0, 6)}`,
           sublabel: t('nav.search.sessionWorkspaceHint', { workspace: workspace.name }),
           workspaceId: workspace.id,
         });
@@ -222,13 +244,13 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
 
     return items;
   }, [
-    query,
-    projectWorkspaces,
     assistantWorkspacesList,
-    mainLineSessionsOpen,
-    persistedOpenWorkspaceSessions,
     openedWorkspaceIdSet,
+    persistedOpenWorkspaceSessions,
+    projectWorkspaces,
+    query,
     t,
+    topLevelSessions,
   ]);
 
   useEffect(() => {
@@ -239,54 +261,71 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     onClose();
     if (item.kind === 'workspace') {
       await setActiveWorkspace(item.id);
-    } else if (item.kind === 'assistant') {
+      return;
+    }
+
+    if (item.kind === 'assistant') {
       setSelectedAssistantWorkspaceId(item.id);
       openNurseryAssistant(item.id);
       await setActiveWorkspace(item.id).catch(() => {});
       switchLeftPanelTab('profile');
       openOverlay('assistant');
-    } else if (item.kind === 'session') {
-      await openMainSession(item.id, {
-        workspaceId: item.workspaceId,
-        activateWorkspace: item.workspaceId ? setActiveWorkspace : undefined,
-      });
+      return;
     }
-  }, [onClose, setActiveWorkspace, setSelectedAssistantWorkspaceId, openNurseryAssistant, switchLeftPanelTab, openOverlay]);
 
-  // Passed to Search component's onKeyDown — called before its built-in handling.
-  // Use e.preventDefault() to suppress Search's own Enter/Escape logic when needed.
-  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
+    await openMainSession(item.id, {
+      workspaceId: item.workspaceId,
+      activateWorkspace: item.workspaceId ? setActiveWorkspace : undefined,
+    });
+  }, [
+    onClose,
+    openNurseryAssistant,
+    openOverlay,
+    setActiveWorkspace,
+    setSelectedAssistantWorkspaceId,
+    switchLeftPanelTab,
+  ]);
+
+  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
       onClose();
       return;
     }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIndex(i => Math.min(i + 1, Math.max(0, results.length - 1)));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveIndex(i => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex(index => Math.min(index + 1, Math.max(0, results.length - 1)));
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex(index => Math.max(index - 1, 0));
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
       const item = results[activeIndex];
-      if (item) void handleSelect(item);
+      if (item) {
+        void handleSelect(item);
+      }
     }
   }, [activeIndex, handleSelect, onClose, results]);
 
-  // Scroll active item into view
   useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const active = list.querySelector<HTMLButtonElement>('.bitfun-nav-search-dialog__item--active');
-    active?.scrollIntoView({ block: 'nearest' });
+    const listElement = listRef.current;
+    if (!listElement) return;
+    const activeElement = listElement.querySelector<HTMLButtonElement>('.bitfun-nav-search-dialog__item--active');
+    activeElement?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex]);
 
   if (!open) return null;
 
-  const workspaceItems = results.filter(r => r.kind === 'workspace');
-  const assistantItems = results.filter(r => r.kind === 'assistant');
-  const sessionItems = results.filter(r => r.kind === 'session');
+  const workspaceItems = results.filter(result => result.kind === 'workspace');
+  const assistantItems = results.filter(result => result.kind === 'assistant');
+  const sessionItems = results.filter(result => result.kind === 'session');
   const queryTrimmed = query.trim();
   const showDefaultSessionColumn = !queryTrimmed;
 
@@ -294,7 +333,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   const renderGroup = (
     groupLabel: string,
     items: SearchResultItem[],
-    icon: (item: SearchResultItem) => React.ReactNode
+    renderIcon: (item: SearchResultItem) => React.ReactNode
   ) => {
     if (items.length === 0) return null;
     const startIndex = globalIndex;
@@ -302,17 +341,17 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     return (
       <div className="bitfun-nav-search-dialog__group" key={groupLabel}>
         <div className="bitfun-nav-search-dialog__group-label">{groupLabel}</div>
-        {items.map((item, i) => {
-          const idx = startIndex + i;
+        {items.map((item, itemIndex) => {
+          const itemGlobalIndex = startIndex + itemIndex;
           return (
             <button
               key={item.id}
               type="button"
-              className={`bitfun-nav-search-dialog__item${idx === activeIndex ? ' bitfun-nav-search-dialog__item--active' : ''}`}
-              onMouseEnter={() => setActiveIndex(idx)}
+              className={`bitfun-nav-search-dialog__item${itemGlobalIndex === activeIndex ? ' bitfun-nav-search-dialog__item--active' : ''}`}
+              onMouseEnter={() => setActiveIndex(itemGlobalIndex)}
               onClick={() => void handleSelect(item)}
             >
-              <span className="bitfun-nav-search-dialog__item-icon">{icon(item)}</span>
+              <span className="bitfun-nav-search-dialog__item-icon">{renderIcon(item)}</span>
               <span className="bitfun-nav-search-dialog__item-content">
                 <span className="bitfun-nav-search-dialog__item-label">{item.label}</span>
                 {item.sublabel && (
@@ -327,7 +366,12 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   };
 
   const dialog = (
-    <div className="bitfun-nav-search-dialog__overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="bitfun-nav-search-dialog__overlay"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <div className="bitfun-nav-search-dialog__card" ref={cardRef}>
         <div className="bitfun-nav-search-dialog__input-row">
           <Search
@@ -370,4 +414,4 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   return createPortal(dialog, document.body);
 };
 
-export default NavSearchDialog;
+export default GlobalSearchDialog;

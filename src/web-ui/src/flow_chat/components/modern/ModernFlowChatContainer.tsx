@@ -51,6 +51,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const { t } = useTranslation('flow-chat');
   const virtualItems = useVirtualItems();
   const activeSession = useActiveSession();
+  const isDispatcherSession = activeSession?.mode?.toLowerCase() === 'dispatcher';
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
@@ -345,11 +346,28 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     { priority: 15, description: 'keyboard.shortcuts.chat.search' }
   );
 
+  const dispatcherBackgroundVars = useMemo(
+    () =>
+      (isDispatcherSession
+        ? {
+            ['--color-bg-flowchat' as const]: 'var(--color-bg-primary)',
+            ['--color-bg-scene' as const]: 'var(--color-bg-primary)',
+          }
+        : undefined) as React.CSSProperties | undefined,
+    [isDispatcherSession]
+  );
+
   return (
     <FlowChatContext.Provider value={contextValue}>
       <div
         ref={chatScopeRef}
-        className={`modern-flowchat-container flow-chat-typography ${className}`}
+        className={[
+          'modern-flowchat-container',
+          'flow-chat-typography',
+          isDispatcherSession && 'modern-flowchat-container--dispatcher',
+          className,
+        ].filter(Boolean).join(' ')}
+        style={dispatcherBackgroundVars}
         data-shortcut-scope="chat"
       >
         <FlowChatHeader
@@ -371,7 +389,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onTurnListOpenChange={setTurnListOpen}
         />
 
-        <div className="modern-flowchat-container__body">
+        <div
+          className={[
+            'modern-flowchat-container__body',
+            isDispatcherSession && 'modern-flowchat-container__body--dispatcher',
+          ].filter(Boolean).join(' ')}
+        >
           <div className="modern-flowchat-container__messages">
             {virtualItems.length === 0 ? (
               <WelcomePanel

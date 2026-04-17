@@ -46,9 +46,7 @@
     "src/shared/context-system/core/types/**",
     "src/shared/crypto/**",
     "src/shared/context-menu-system/examples/**",
-    "src/infrastructure/services/api/index.ts",
-    "src/infrastructure/services/infra/index.ts",
-    "src/flow_chat/components/ImageAnalysisCard.tsx"
+    "src/infrastructure/services/infra/index.ts"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

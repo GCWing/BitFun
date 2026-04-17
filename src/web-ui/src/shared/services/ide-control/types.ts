@@ -9,8 +9,6 @@ import type { LineRange } from '@/component-library/components/Markdown';
  
 export type IdeControlOperation =
   | 'open_panel'
-  | 'close_panel'
-  | 'toggle_panel'
   | 'navigate'
   | 'layout'
   | 'tab'

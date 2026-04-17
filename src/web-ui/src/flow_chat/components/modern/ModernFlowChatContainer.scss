@@ -16,12 +16,20 @@
   background: var(--color-bg-scene);
   position: relative; // Positioning context for floating header.
 
+  &--dispatcher {
+    background: var(--color-bg-primary);
+  }
+
   &__body {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: row;
     position: relative;
+
+    &--dispatcher {
+      background: var(--color-bg-primary);
+    }
   }
 
   &__messages {

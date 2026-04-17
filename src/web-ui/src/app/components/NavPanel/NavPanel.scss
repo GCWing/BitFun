@@ -1041,7 +1041,7 @@ $_section-header-height: 24px;
     padding: 2px 0;
     gap: 2px;
 
-    // Multiple SessionsSection siblings: match vertical rhythm of __workspace-list (gap 0 + 2px row padding).
+    // Multiple SessionList siblings: match vertical rhythm of __workspace-list (gap 0 + 2px row padding).
     &--session-blocks {
       gap: 0;
     }

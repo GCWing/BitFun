@@ -2,7 +2,7 @@
  * SessionListDialog — centered modal showing the full session list with search.
  *
  * Opened by the task list icon in UnifiedTopBar when settings / shell overlay
- * is active. Mirrors the visual structure of NavSearchDialog.
+ * is active. Mirrors the visual structure of GlobalSearchDialog.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,7 +18,7 @@ import { compareSessionsForDisplay } from '@/flow_chat/utils/sessionOrdering';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import { useOverlayStore } from '../../stores/overlayStore';
-import '../NavPanel/NavSearchDialog.scss';
+import '../GlobalSearchDialog/GlobalSearchDialog.scss';
 import './SessionListDialog.scss';
 
 const getTitle = (s: Session): string =>
@@ -100,9 +100,6 @@ const SessionListDialog: React.FC = () => {
       workspaceId: ws?.id,
       activateWorkspace: mustActivate ? setActiveWorkspace : undefined,
     });
-    window.dispatchEvent(
-      new CustomEvent('flowchat:switch-session', { detail: { sessionId: session.sessionId } })
-    );
   }, [close, openedWorkspacesList, currentWorkspace?.id, setActiveWorkspace]);
 
   const handleOpenDetail = useCallback((e: React.MouseEvent, session: Session) => {

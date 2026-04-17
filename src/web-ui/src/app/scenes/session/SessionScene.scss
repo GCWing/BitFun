@@ -17,6 +17,10 @@
   background: var(--color-bg-flowchat);
   color: var(--color-text-primary);
 
+  &--dispatcher {
+    --color-bg-flowchat: var(--color-bg-primary);
+  }
+
   &--dragging {
     user-select: none;
     cursor: col-resize;

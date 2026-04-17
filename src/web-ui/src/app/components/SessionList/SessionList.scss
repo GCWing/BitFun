@@ -1,12 +1,12 @@
 /**
- * SessionsSection styles — inline accordion shown under the Sessions nav item.
+ * SessionList styles for the reusable session list surface.
  *
- * Uses the parent BEM block (.bitfun-nav-panel) to stay consistent with the
- * rest of the navigation styling, while being self-contained in this file.
+ * The class names stay on the existing `.bitfun-nav-panel__...` contract so the
+ * list continues to blend into the surrounding workspace chrome unchanged.
  */
 
-@use '../../../../../component-library/styles/tokens.scss' as *;
-@use '../../../../../component-library/styles/nav-panel-font-scope.scss' as nav-font;
+@use '../../../component-library/styles/tokens.scss' as *;
+@use '../../../component-library/styles/nav-panel-font-scope.scss' as nav-font;
 
 .bitfun-nav-panel {
   &__inline-list {
@@ -14,9 +14,6 @@
     flex-direction: column;
     padding: 2px 0;
     gap: 1px;
-    // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
-    // (see .bitfun-nav-panel__items--session-blocks gap: 0), aligned with __workspace-item padding.
-    // Flush to __items / workspace row — row padding + __inline-item handle edge inset.
     margin: 0;
 
     &--filter-empty {
@@ -56,7 +53,6 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-
   }
 
   &__inline-empty {
@@ -173,7 +169,6 @@
     }
   }
 
-  // 「助理会话」区块：行前导图标悬停微微放大（与顶部 __top-action-icon-slot 的 1.07 一致；运行中 Loader 仅用旋转动画）
   &__items--session-blocks &__inline-item:hover &__inline-item-icon:not(.is-running) {
     transform: scale(1.07);
   }
@@ -232,7 +227,6 @@
     word-break: break-word;
   }
 
-  // Reserve width always so long titles do not reflow when the more button fades in.
   &__inline-item-actions {
     display: flex;
     align-items: center;
@@ -417,7 +411,6 @@
     }
   }
 
-  // Shell running-status dot
   &__shell-dot {
     flex-shrink: 0;
     border-radius: 50%;
@@ -434,7 +427,6 @@
     }
   }
 
-  // Inline item badge (count / status text)
   &__inline-item-badge {
     flex-shrink: 0;
     font-size: var(--font-size-xxs);
@@ -451,7 +443,6 @@
     }
   }
 
-  // Inline item dot (health status indicator for MCP etc.)
   &__inline-item-dot {
     flex-shrink: 0;
     width: 6px;
@@ -470,12 +461,10 @@
     }
   }
 
-  // Disabled inline item (agent/skill not enabled)
   &__inline-item.is-disabled {
     opacity: 0.5;
   }
 
-  // Unhealthy MCP server indicator
   &__inline-item.is-unhealthy {
     .bitfun-nav-panel__inline-item-icon {
       color: var(--color-warning, #f59e0b);
@@ -484,13 +473,25 @@
   }
 }
 
-// Session running spin animation
 @keyframes bitfun-nav-session-spin {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes bitfun-footer-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

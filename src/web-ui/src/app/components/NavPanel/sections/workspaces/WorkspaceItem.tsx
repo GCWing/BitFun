@@ -13,7 +13,7 @@ import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
-import SessionsSection from '../sessions/SessionsSection';
+import SessionList from '@/app/components/SessionList/SessionList';
 import {
   WorkspaceKind,
   isRemoteWorkspace,
@@ -461,7 +461,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         </div>
 
         <div className={`bitfun-nav-panel__assistant-item-sessions${sessionsCollapsed ? ' is-collapsed' : ''}`}>
-          <SessionsSection
+          <SessionList
             workspaceId={workspace.id}
             workspacePath={workspace.rootPath}
             remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
@@ -624,7 +624,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       </div>
 
       <div className={`bitfun-nav-panel__workspace-item-sessions${sessionsCollapsed ? ' is-collapsed' : ''}`}>
-        <SessionsSection
+        <SessionList
           workspaceId={workspace.id}
           workspacePath={workspace.rootPath}
           remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}

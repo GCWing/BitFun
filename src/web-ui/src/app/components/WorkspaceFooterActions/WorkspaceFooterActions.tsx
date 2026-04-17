@@ -14,35 +14,31 @@ import {
 } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import { useOverlayManager } from '../../../hooks/useOverlayManager';
+import { useOverlayManager } from '../../hooks/useOverlayManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
-import { useOverlayStore } from '../../../stores/overlayStore';
-import { useMyAgentStore } from '../../../scenes/my-agent/myAgentStore';
-import { useMiniAppCatalogSync } from '../../../scenes/miniapps/hooks/useMiniAppCatalogSync';
+import { useOverlayStore } from '../../stores/overlayStore';
+import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
+import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openDispatcherSession } from '@/flow_chat/services/openDispatcherSession';
 import { WorkspaceKind } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
-import { useApp } from '../../../hooks/useApp';
+import { useApp } from '../../hooks/useApp';
+import './WorkspaceFooterActions.scss';
 
-// Footer styles live in NavPanel.scss; this component is also mounted from WorkspaceBody
-// without mounting the full NavPanel shell, so we must import the sheet here or the floating bar is unstyled.
-import '../NavPanel.scss';
-
-const log = createLogger('PersistentFooterActions');
+const log = createLogger('WorkspaceFooterActions');
 
 const GREETING_KEYS = ['greetingMorning', 'greetingAfternoon', 'greetingEvening', 'greetingNight'] as const;
 
-const PersistentFooterActions: React.FC = () => {
+const WorkspaceFooterActions: React.FC = () => {
   const { t } = useI18n('common');
   const { openOverlay, toggleOverlay } = useOverlayManager();
-
   const { switchLeftPanelTab } = useApp();
 
   useMiniAppCatalogSync();
 
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
-  const setSelectedAssistantWorkspaceId = useMyAgentStore((s) => s.setSelectedAssistantWorkspaceId);
+  const setSelectedAssistantWorkspaceId = useMyAgentStore(state => state.setSelectedAssistantWorkspaceId);
 
   const {
     currentWorkspace,
@@ -51,44 +47,44 @@ const PersistentFooterActions: React.FC = () => {
   } = useWorkspaceContext();
 
   const defaultAssistantWorkspace = useMemo(
-    () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
+    () => assistantWorkspacesList.find(workspace => !workspace.assistantId) ?? assistantWorkspacesList[0] ?? null,
     [assistantWorkspacesList]
   );
 
   const isAssistantWorkspaceActive = currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 
   const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    const key = h >= 5 && h < 12
+    const hour = new Date().getHours();
+    const key = hour >= 5 && hour < 12
       ? GREETING_KEYS[0]
-      : h >= 12 && h < 18
+      : hour >= 12 && hour < 18
         ? GREETING_KEYS[1]
-        : h >= 18 && h < 22
+        : hour >= 18 && hour < 22
           ? GREETING_KEYS[2]
           : GREETING_KEYS[3];
-                    return t(`welcome.${key}`);
+    return t(`welcome.${key}`);
   }, [t]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
-  const [isAAppSubOpen, setIsAAppSubOpen] = useState(false);
+  const [isAgentAppsSubmenuOpen, setIsAgentAppsSubmenuOpen] = useState(false);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
-    setIsAAppSubOpen(false);
+    setIsAgentAppsSubmenuOpen(false);
     setTimeout(() => {
       setMenuOpen(false);
       setMenuClosing(false);
     }, 150);
   }, []);
 
-  const toggleMenu = () => {
+  const toggleMenu = useCallback(() => {
     if (menuOpen) {
       closeMenu();
-    } else {
-      setMenuOpen(true);
+      return;
     }
-  };
+    setMenuOpen(true);
+  }, [closeMenu, menuOpen]);
 
   const handleOpenShell = useCallback(() => {
     closeMenu();
@@ -103,13 +99,13 @@ const PersistentFooterActions: React.FC = () => {
           ? { rootPath: defaultAssistantWorkspace.rootPath, id: defaultAssistantWorkspace.id }
           : null,
       });
-    } catch (err) {
-      log.error('Failed to open Dispatcher', err);
+    } catch (error) {
+      log.error('Failed to open Dispatcher', error);
     }
   }, [closeMenu, defaultAssistantWorkspace]);
 
-  const handleNewDispatcherSession = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCreateDispatcherSession = useCallback(async (event: React.MouseEvent) => {
+    event.stopPropagation();
     try {
       if (defaultAssistantWorkspace) {
         await flowChatManager.createChatSession(
@@ -119,8 +115,8 @@ const PersistentFooterActions: React.FC = () => {
       } else {
         await flowChatManager.createChatSession({}, 'Dispatcher');
       }
-    } catch (err) {
-      log.error('Failed to create new Dispatcher session', err);
+    } catch (error) {
+      log.error('Failed to create new Dispatcher session', error);
     }
   }, [defaultAssistantWorkspace]);
 
@@ -207,7 +203,6 @@ const PersistentFooterActions: React.FC = () => {
                   className={`bitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
                   role="menu"
                 >
-                  {/* ── 左栏：导航操作区 ── */}
                   <div className="bitfun-nav-panel__footer-menu-col-actions">
                     <button
                       type="button"
@@ -219,24 +214,23 @@ const PersistentFooterActions: React.FC = () => {
                       <span>{t('nav.items.persona')}</span>
                     </button>
 
-                    {/* ── 智能应用（二级菜单）── */}
                     <button
                       type="button"
-                      className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--expandable${isAAppSubOpen ? ' is-open' : ''}`}
+                      className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--expandable${isAgentAppsSubmenuOpen ? ' is-open' : ''}`}
                       role="menuitem"
-                      aria-expanded={isAAppSubOpen}
-                      onClick={() => setIsAAppSubOpen(v => !v)}
+                      aria-expanded={isAgentAppsSubmenuOpen}
+                      onClick={() => setIsAgentAppsSubmenuOpen(value => !value)}
                     >
                       <AppWindow size={14} />
                       <span>{t('nav.sections.agentApp')}</span>
                       <ChevronDown
                         size={13}
-                        className={`bitfun-nav-panel__footer-menu-chevron${isAAppSubOpen ? ' is-open' : ''}`}
+                        className={`bitfun-nav-panel__footer-menu-chevron${isAgentAppsSubmenuOpen ? ' is-open' : ''}`}
                         aria-hidden="true"
                       />
                     </button>
 
-                    <div className={`bitfun-nav-panel__footer-menu-sublist${isAAppSubOpen ? ' is-open' : ''}`}>
+                    <div className={`bitfun-nav-panel__footer-menu-sublist${isAgentAppsSubmenuOpen ? ' is-open' : ''}`}>
                       <div>
                         <button
                           type="button"
@@ -308,7 +302,7 @@ const PersistentFooterActions: React.FC = () => {
                         <button
                           type="button"
                           className="bitfun-nav-panel__footer-menu-item-inline-btn"
-                          onClick={handleNewDispatcherSession}
+                          onClick={handleCreateDispatcherSession}
                           aria-label={t('nav.tooltips.newDispatcherSession')}
                         >
                           <RotateCcw size={12} />
@@ -317,10 +311,8 @@ const PersistentFooterActions: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* ── 竖向分隔线 ── */}
                   <div className="bitfun-nav-panel__footer-menu-col-sep" aria-hidden="true" />
 
-                  {/* ── 右栏：打招呼 / 推荐区 ── */}
                   <div className="bitfun-nav-panel__footer-menu-greeting">
                     <p className="bitfun-nav-panel__footer-menu-greeting-title">{greeting}</p>
                     <p className="bitfun-nav-panel__footer-menu-greeting-sub">{t('nav.menuPanel.subtitle')}</p>
@@ -369,12 +361,10 @@ const PersistentFooterActions: React.FC = () => {
               </>
             )}
           </div>
-
         </div>
-
       </div>
     </>
   );
 };
 
-export default PersistentFooterActions;
+export default WorkspaceFooterActions;

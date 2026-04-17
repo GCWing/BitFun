@@ -2926,7 +2926,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     border-radius: 2px;
   }
 
-  // Override SessionsSection's built-in NavPanel indentation so rows
+  // Override SessionList's inherited NavPanel indentation so rows
   // align flush with the chat input above; slightly roomier than nav but not loose.
   .bitfun-nav-panel__inline-list {
     padding-inline: 0;
