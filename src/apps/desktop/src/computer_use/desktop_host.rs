@@ -1879,7 +1879,7 @@ end tell"#])
             // failure here is a strong signal that capture won't work either
             // (e.g. running under Session 0 / blocked by group policy).
             let screen_capture_granted =
-                screenshots::DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
 
             // Accessibility / input injection: there is no opt-in permission
             // on Windows, but UIPI silently blocks input into elevated windows
@@ -1916,7 +1916,7 @@ end tell"#])
             let x11_display = std::env::var("DISPLAY").is_ok();
 
             let screen_capture_granted =
-                screenshots::DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
 
             // Global keyboard / mouse injection on Linux requires either an
             // X11 session with XTEST (`enigo` / `rdev` work) *or* uinput on
