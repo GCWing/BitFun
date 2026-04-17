@@ -2,9 +2,10 @@
 
 use async_trait::async_trait;
 use bitfun_core::agentic::tools::computer_use_host::{
-    clamp_point_crop_half_extent, ActionRecord, ComputerScreenshot, ComputerUseHost,
-    ComputerUseImageContentRect, ComputerUseImplicitScreenshotCenter,
-    ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseNavigateQuadrant,
+    clamp_point_crop_half_extent, ActionRecord, ComputerScreenshot, ComputerUseDisplayInfo,
+    ComputerUseHost, ComputerUseImageContentRect, ComputerUseImplicitScreenshotCenter,
+    ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseLastMutationKind,
+    ComputerUseNavigateQuadrant,
     ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
     ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
     OcrRegionNative, ScreenshotCropCenter, SomElement, UiElementLocateQuery, UiElementLocateResult,
@@ -751,6 +752,17 @@ struct ComputerUseSessionMutableState {
     pointer_trusted_after_ocr_move: bool,
     /// Action optimizer for loop detection, history, and visual verification.
     optimizer: ComputerUseOptimizer,
+    /// Most-recent action **kind** that mutated UI / pointer state. Surfaced
+    /// to the model via `interaction_state.last_mutation` so it can pair the
+    /// right verification step (e.g. after `Click` + `pending_verify` ⇒ take
+    /// a confirming `screenshot`; after `TypeText` ⇒ may chain Enter without
+    /// re-screenshotting because typing does not move the pointer).
+    last_mutation_kind: Option<ComputerUseLastMutationKind>,
+    /// Caller-pinned target display (set via `desktop.focus_display`).
+    /// When set, all subsequent screenshots / peeks / locates use this
+    /// display instead of "screen under the mouse pointer". The model
+    /// uses this to disambiguate multi-monitor targets explicitly.
+    preferred_display_id: Option<u32>,
 }
 
 impl ComputerUseSessionMutableState {
@@ -765,6 +777,8 @@ impl ComputerUseSessionMutableState {
             pending_verify_screenshot: false,
             pointer_trusted_after_ocr_move: false,
             optimizer: ComputerUseOptimizer::new(),
+            last_mutation_kind: None,
+            preferred_display_id: None,
         }
     }
 
@@ -782,12 +796,16 @@ impl ComputerUseSessionMutableState {
         self.pending_verify_screenshot = false;
         self.pointer_trusted_after_ocr_move = false;
         self.block_vision_pixel_nudge_after_screenshot = true;
+        self.last_mutation_kind = Some(ComputerUseLastMutationKind::Screenshot);
     }
 
     /// Called after pointer mutation (move, step, relative), click, scroll, key_chord, or type_text.
     fn transition_after_pointer_mutation(&mut self) {
         self.click_needs_fresh_screenshot = true;
         self.pointer_trusted_after_ocr_move = false;
+        // Note: `last_mutation_kind` is set explicitly by the calling
+        // action (PointerMove / Click / Scroll / KeyChord / TypeText / Drag)
+        // so we do not overwrite it here with a generic value.
     }
 
     /// Called after click (same effect as pointer mutation for freshness).
@@ -795,11 +813,16 @@ impl ComputerUseSessionMutableState {
         self.click_needs_fresh_screenshot = true;
         self.pending_verify_screenshot = true;
         self.pointer_trusted_after_ocr_move = false;
+        self.last_mutation_kind = Some(ComputerUseLastMutationKind::Click);
     }
 
     /// Called after key, typing, scroll, or drag — UI likely changed; next `screenshot` should confirm.
     fn transition_after_committed_ui_action(&mut self) {
         self.pending_verify_screenshot = true;
+    }
+
+    fn record_mutation(&mut self, kind: ComputerUseLastMutationKind) {
+        self.last_mutation_kind = Some(kind);
     }
 }
 
@@ -1795,6 +1818,34 @@ end tell"#])
     }
 
     fn permission_sync() -> ComputerUsePermissionSnapshot {
+        #[cfg(target_os = "windows")]
+        fn is_process_elevated() -> bool {
+            use windows::Win32::Foundation::HANDLE;
+            use windows::Win32::Security::{
+                GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+            };
+            use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+            unsafe {
+                let mut token = HANDLE::default();
+                if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
+                    return false;
+                }
+                let mut elevation = TOKEN_ELEVATION::default();
+                let mut ret_len: u32 = 0;
+                let ok = GetTokenInformation(
+                    token,
+                    TokenElevation,
+                    Some(&mut elevation as *mut _ as *mut _),
+                    std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+                    &mut ret_len,
+                )
+                .is_ok();
+                let _ = windows::Win32::Foundation::CloseHandle(token);
+                ok && elevation.TokenIsElevated != 0
+            }
+        }
+
+
         #[cfg(target_os = "macos")]
         {
             let platform_note = if cfg!(debug_assertions) && !macos::ax_trusted() {
@@ -1813,25 +1864,80 @@ end tell"#])
         }
         #[cfg(target_os = "windows")]
         {
+            // Phase 4: real probe instead of always returning `true`.
+            // Screen capture: enumerating displays via the `screenshots` crate
+            // exercises the same DXGI/GDI path used for actual capture, so a
+            // failure here is a strong signal that capture won't work either
+            // (e.g. running under Session 0 / blocked by group policy).
+            let screen_capture_granted =
+                screenshots::DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+
+            // Accessibility / input injection: there is no opt-in permission
+            // on Windows, but UIPI silently blocks input into elevated windows
+            // when we are not elevated. Detect elevation so the model can warn
+            // the user instead of silently mis-clicking.
+            let elevated = is_process_elevated();
+            let mut notes: Vec<&'static str> = Vec::new();
+            if !screen_capture_granted {
+                notes.push(
+                    "Screen capture probe failed: no displays enumerated (Session 0 / RDP / policy?).",
+                );
+            }
+            if !elevated {
+                notes.push(
+                    "Not running elevated: UIPI may block input into Administrator windows.",
+                );
+            }
             ComputerUsePermissionSnapshot {
                 accessibility_granted: true,
-                screen_capture_granted: true,
-                platform_note: None,
+                screen_capture_granted,
+                platform_note: if notes.is_empty() {
+                    None
+                } else {
+                    Some(notes.join(" "))
+                },
             }
         }
         #[cfg(target_os = "linux")]
         {
-            let wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+            // Phase 4: probe display server type *and* the actual capture path.
+            let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+            let wayland = std::env::var("WAYLAND_DISPLAY").is_ok()
+                || session_type.eq_ignore_ascii_case("wayland");
+            let x11_display = std::env::var("DISPLAY").is_ok();
+
+            let screen_capture_granted =
+                screenshots::DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+
+            // Global keyboard / mouse injection on Linux requires either an
+            // X11 session with XTEST (`enigo` / `rdev` work) *or* uinput on
+            // Wayland (root). Without DISPLAY we can't inject synthetic input
+            // even on a Wayland session running XWayland.
+            let accessibility_granted = if wayland { false } else { x11_display };
+
+            let mut notes: Vec<String> = Vec::new();
+            if wayland {
+                notes.push(
+                    "Wayland session: synthetic input is unsupported; screen capture relies on xdg-desktop-portal."
+                        .to_string(),
+                );
+            }
+            if !x11_display && !wayland {
+                notes.push("DISPLAY not set: no X server reachable for input injection.".to_string());
+            }
+            if !screen_capture_granted {
+                notes.push(
+                    "Screen capture probe failed: no displays enumerated by the screenshots crate."
+                        .to_string(),
+                );
+            }
             ComputerUsePermissionSnapshot {
-                accessibility_granted: !wayland,
-                screen_capture_granted: !wayland,
-                platform_note: if wayland {
-                    Some(
-                        "Wayland: global automation may be limited; use an X11 session for best results."
-                            .to_string(),
-                    )
-                } else {
+                accessibility_granted,
+                screen_capture_granted,
+                platform_note: if notes.is_empty() {
                     None
+                } else {
+                    Some(notes.join(" "))
                 },
             }
         }
@@ -1845,6 +1951,11 @@ end tell"#])
         }
     }
 
+    /// Kept for compatibility / potential future call sites. Phase 1 routed
+    /// the only previous caller (`key_chord` Enter/Return) through
+    /// `computer_use_guard_click_allowed` instead, so this is currently dead
+    /// code but a thinner guard variant might be useful again.
+    #[allow(dead_code)]
     fn computer_use_guard_verified_ui(&self) -> BitFunResult<()> {
         let s = self
             .state
@@ -1892,19 +2003,30 @@ end tell"#])
     }
 
     /// Resolve a screen capture from cache (if still valid and same screen) or capture fresh.
+    ///
+    /// Phase 2 fix: when the model has called `desktop.focus_display`, we
+    /// commit to that screen instead of trusting the mouse pointer. This is
+    /// the explicit fix for the user's original complaint — on multi-monitor
+    /// setups the cursor often lives on a different screen than the one the
+    /// user is reasoning about (e.g. focus is on the laptop screen, mouse
+    /// is parked on the secondary monitor) and the legacy "screen at mouse
+    /// pointer" heuristic captured the wrong display.
     fn resolve_screenshot_capture(
         cached: Option<ScreenshotCacheEntry>,
         mouse_x: f64,
         mouse_y: f64,
+        preferred_display_id: Option<u32>,
     ) -> BitFunResult<(image::RgbaImage, Screen)> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
+        let target_display_id = preferred_display_id.or_else(|| {
+            Screen::from_point(mx, my)
+                .ok()
+                .map(|s| s.display_info.id)
+        });
 
         if let Some(cache) = cached {
-            let screen_id_match = cache.screen.display_info.id
-                == Screen::from_point(mx, my)
-                    .map(|s| s.display_info.id)
-                    .unwrap_or_default();
+            let screen_id_match = Some(cache.screen.display_info.id) == target_display_id;
             if cache.capture_time.elapsed() < Duration::from_millis(SCREENSHOT_CACHE_TTL_MS)
                 && screen_id_match
             {
@@ -1916,9 +2038,18 @@ end tell"#])
             }
         }
 
-        let screen = Screen::from_point(mx, my)
-            .or_else(|_| Screen::from_point(0, 0))
-            .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?;
+        let screen = if let Some(id) = preferred_display_id {
+            Self::find_screen_by_id(id)
+                .or_else(|| Screen::from_point(mx, my).ok())
+                .or_else(|| Screen::from_point(0, 0).ok())
+                .ok_or_else(|| {
+                    BitFunError::tool("Screen capture init: no display available".to_string())
+                })?
+        } else {
+            Screen::from_point(mx, my)
+                .or_else(|_| Screen::from_point(0, 0))
+                .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?
+        };
         let rgba = screen.capture().map_err(|e| {
             BitFunError::tool(format!(
                 "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
@@ -1926,6 +2057,52 @@ end tell"#])
             ))
         })?;
         Ok((rgba, screen))
+    }
+
+    /// Find a [`Screen`] by its display id from the host's enumeration.
+    fn find_screen_by_id(display_id: u32) -> Option<Screen> {
+        Screen::all()
+            .ok()
+            .and_then(|all| all.into_iter().find(|s| s.display_info.id == display_id))
+    }
+
+    /// Snapshot of all attached displays, with `is_active` / `has_pointer`
+    /// flags resolved relative to `preferred_display_id` and the current
+    /// mouse position.
+    fn enumerate_displays(
+        preferred_display_id: Option<u32>,
+        mouse_x: f64,
+        mouse_y: f64,
+    ) -> Vec<ComputerUseDisplayInfo> {
+        let mx = mouse_x.round() as i32;
+        let my = mouse_y.round() as i32;
+        let pointer_display_id = Screen::from_point(mx, my)
+            .ok()
+            .map(|s| s.display_info.id);
+        let active_id = preferred_display_id.or(pointer_display_id);
+
+        let screens = match Screen::all() {
+            Ok(v) => v,
+            Err(_) => return vec![],
+        };
+        screens
+            .into_iter()
+            .map(|s| {
+                let d = s.display_info;
+                ComputerUseDisplayInfo {
+                    display_id: d.id,
+                    is_primary: d.is_primary,
+                    is_active: Some(d.id) == active_id,
+                    has_pointer: Some(d.id) == pointer_display_id,
+                    origin_x: d.x,
+                    origin_y: d.y,
+                    width_logical: d.width,
+                    height_logical: d.height,
+                    scale_factor: d.scale_factor,
+                    foreground_app: None,
+                }
+            })
+            .collect()
     }
 
     fn chord_includes_return_or_enter(keys: &[String]) -> bool {
@@ -2102,10 +2279,26 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     fn computer_use_interaction_state(&self) -> ComputerUseInteractionState {
-        let s = self.state.lock().unwrap();
-        let last_ref = s.last_shot_refinement;
-        let click_needs_fresh = s.click_needs_fresh_screenshot;
-        let pending_verify = s.pending_verify_screenshot;
+        let (last_ref, click_needs_fresh, pending_verify, last_mutation, preferred_display_id) = {
+            let s = self.state.lock().unwrap();
+            (
+                s.last_shot_refinement,
+                s.click_needs_fresh_screenshot,
+                s.pending_verify_screenshot,
+                s.last_mutation_kind.clone(),
+                s.preferred_display_id,
+            )
+        };
+
+        let (mouse_x, mouse_y) = Self::current_mouse_position();
+        let displays = Self::enumerate_displays(preferred_display_id, mouse_x, mouse_y);
+        let active_display_id = preferred_display_id.or_else(|| {
+            displays
+                .iter()
+                .find(|d| d.has_pointer)
+                .map(|d| d.display_id)
+                .or_else(|| displays.iter().find(|d| d.is_primary).map(|d| d.display_id))
+        });
 
         let (click_ready, screenshot_kind, mut recommended_next_action) =
             match last_ref {
@@ -2149,8 +2342,10 @@ impl ComputerUseHost for DesktopComputerUseHost {
             requires_fresh_screenshot_before_enter: click_needs_fresh,
             recommend_screenshot_to_verify_last_action: pending_verify,
             last_screenshot_kind: screenshot_kind,
-            last_mutation: None,
+            last_mutation,
             recommended_next_action,
+            displays,
+            active_display_id,
         }
     }
 
@@ -2180,7 +2375,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         params: ComputerUseScreenshotParams,
     ) -> BitFunResult<ComputerScreenshot> {
-        let (nav_snapshot, cached, click_needs) = {
+        let (nav_snapshot, cached, click_needs, preferred_display_id) = {
             let s = self
                 .state
                 .lock()
@@ -2189,14 +2384,14 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 s.navigation_focus,
                 s.screenshot_cache.clone(),
                 s.click_needs_fresh_screenshot,
+                s.preferred_display_id,
             )
         };
 
-        // Get current mouse position to select the right screen
         let (mouse_x, mouse_y) = Self::current_mouse_position();
 
-        // Resolve capture from cache or fresh
-        let (rgba, screen) = Self::resolve_screenshot_capture(cached, mouse_x, mouse_y)?;
+        let (rgba, screen) =
+            Self::resolve_screenshot_capture(cached, mouse_x, mouse_y, preferred_display_id)?;
         let (native_w, native_h) = rgba.dimensions();
 
         let mut params = params;
@@ -2266,9 +2461,48 @@ impl ComputerUseHost for DesktopComputerUseHost {
     }
 
     async fn screenshot_peek_full_display(&self) -> BitFunResult<ComputerScreenshot> {
-        let (shot, _map, _) = tokio::task::spawn_blocking(|| {
-            let screen = Screen::from_point(0, 0)
-                .map_err(|e| BitFunError::tool(format!("Screen capture init (peek): {}", e)))?;
+        // Phase 1 fix: previously this captured `Screen::from_point(0, 0)`
+        // (the primary display) and passed an empty SoM list, which broke
+        // `click_label` on multi-monitor setups (wrong screen) and made the
+        // returned image label-less so labels emitted on the *previous* full
+        // screenshot were unrecoverable.
+        //
+        // We now (a) prefer the screen that backs the most recent main
+        // screenshot — that is the frame of reference the model is reasoning
+        // against — falling back to the screen under the mouse, then primary;
+        // and (b) compute SoM elements / UI-tree text just like the main
+        // screenshot path so labels render in the peek image.
+        let (cached_screen, preferred_display_id) = {
+            let s = self.state.lock().ok();
+            s.map(|s| {
+                (
+                    s.screenshot_cache.as_ref().map(|c| c.screen),
+                    s.preferred_display_id,
+                )
+            })
+            .unwrap_or((None, None))
+        };
+        let (mouse_x, mouse_y) = Self::current_mouse_position();
+        let (som_elements, ui_tree_text) = self.enumerate_som_elements().await;
+
+        let (shot, _map, _) = tokio::task::spawn_blocking(move || {
+            let mx = mouse_x.round() as i32;
+            let my = mouse_y.round() as i32;
+            // Phase 2 fix: honor `preferred_display_id` first so a model that
+            // pinned a display via `desktop.focus_display` consistently sees
+            // peek frames from that display, even if the cached screenshot
+            // is from a different one.
+            let pinned_screen =
+                preferred_display_id.and_then(Self::find_screen_by_id);
+            let screen = pinned_screen
+                .or(cached_screen)
+                .or_else(|| Screen::from_point(mx, my).ok())
+                .or_else(|| Screen::from_point(0, 0).ok())
+                .ok_or_else(|| {
+                    BitFunError::tool(
+                        "Screen capture init (peek): no display available".to_string(),
+                    )
+                })?;
             let rgba = screen
                 .capture()
                 .map_err(|e| BitFunError::tool(format!("Screenshot failed (peek): {}", e)))?;
@@ -2277,8 +2511,8 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 None,
                 rgba,
                 screen,
-                vec![], // No SoM labels for peek screenshots
-                None,   // No UI tree text for peek screenshots
+                som_elements,
+                ui_tree_text,
                 false,
             )
         })
@@ -2727,6 +2961,7 @@ tell application "System Events" to get unix id of first process whose frontmost
         .map_err(|e| BitFunError::tool(e.to_string()))??;
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         ComputerUseHost::computer_use_after_committed_ui_action(self);
+        ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::Scroll);
         Ok(())
     }
 
@@ -2736,7 +2971,17 @@ tell application "System Events" to get unix id of first process whose frontmost
         }
         debug!("computer_use: key_chord keys={:?}", keys);
         if Self::chord_includes_return_or_enter(&keys) {
-            Self::computer_use_guard_verified_ui(self)?;
+            // Phase 1 fix: Enter/Return commits whatever has focus (form
+            // submit, send-button, default action), so it is just as
+            // dangerous as a `click` and must clear the **same** guard chain
+            // as `click`. The previous `guard_verified_ui` only blocked
+            // `click_needs_fresh_screenshot`, so a user could fire Enter
+            // after a coarse full-display screenshot without ever taking
+            // the required fine screenshot. Routing through
+            // `computer_use_guard_click_allowed` makes the two paths
+            // consistent and prevents the model from "smuggling" a click
+            // through an Enter key.
+            Self::computer_use_guard_click_allowed(self)?;
         }
         let keys_for_job = keys;
         tokio::task::spawn_blocking(move || {
@@ -2794,6 +3039,7 @@ tell application "System Events" to get unix id of first process whose frontmost
         .map_err(|e| BitFunError::tool(e.to_string()))??;
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         ComputerUseHost::computer_use_after_committed_ui_action(self);
+        ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::KeyChord);
         Ok(())
     }
 
@@ -2813,11 +3059,13 @@ tell application "System Events" to get unix id of first process whose frontmost
         // Typing does not move the pointer; do not set click_needs (would block Enter after search).
         ComputerUseHost::computer_use_after_committed_ui_action(self);
         ComputerUseHost::computer_use_trust_pointer_after_text_input(self);
+        ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::TypeText);
         Ok(())
     }
 
     async fn wait_ms(&self, ms: u64) -> BitFunResult<()> {
         tokio::time::sleep(Duration::from_millis(ms.max(1))).await;
+        ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::Wait);
         Ok(())
     }
 
@@ -2834,6 +3082,17 @@ tell application "System Events" to get unix id of first process whose frontmost
     fn computer_use_after_pointer_mutation(&self) {
         if let Ok(mut s) = self.state.lock() {
             s.transition_after_pointer_mutation();
+            // Default attribution: bare pointer mutations are pointer moves.
+            // Specific mutation kinds (Scroll, KeyChord, TypeText, Drag) are
+            // re-recorded by their own `computer_use_record_mutation` call
+            // so the most recent kind wins.
+            s.record_mutation(ComputerUseLastMutationKind::PointerMove);
+        }
+    }
+
+    fn computer_use_record_mutation(&self, kind: ComputerUseLastMutationKind) {
+        if let Ok(mut s) = self.state.lock() {
+            s.record_mutation(kind);
         }
     }
 
@@ -2931,5 +3190,50 @@ tell application "System Events" to get unix id of first process whose frontmost
         } else {
             vec![]
         }
+    }
+
+    async fn list_displays(&self) -> BitFunResult<Vec<ComputerUseDisplayInfo>> {
+        let preferred = self
+            .state
+            .lock()
+            .ok()
+            .and_then(|s| s.preferred_display_id);
+        let (mx, my) = Self::current_mouse_position();
+        Ok(Self::enumerate_displays(preferred, mx, my))
+    }
+
+    async fn focus_display(&self, display_id: Option<u32>) -> BitFunResult<()> {
+        if let Some(id) = display_id {
+            // Validate against the actual list of attached screens; rejecting
+            // unknown ids early gives the model a clean error to recover from
+            // (rather than silently capturing the wrong display later).
+            let known = Screen::all()
+                .map(|all| all.iter().any(|s| s.display_info.id == id))
+                .unwrap_or(false);
+            if !known {
+                return Err(BitFunError::tool(format!(
+                    "focus_display: unknown display_id {} (call desktop.list_displays first)",
+                    id
+                )));
+            }
+        }
+        if let Ok(mut s) = self.state.lock() {
+            s.preferred_display_id = display_id;
+            // Pinning a new display invalidates any cached screenshot taken
+            // from the old one — drop it so the next screenshot path picks
+            // a fresh frame from the chosen screen.
+            if display_id.is_some() {
+                s.screenshot_cache = None;
+                s.click_needs_fresh_screenshot = true;
+            }
+        }
+        Ok(())
+    }
+
+    fn focused_display_id(&self) -> Option<u32> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|s| s.preferred_display_id)
     }
 }

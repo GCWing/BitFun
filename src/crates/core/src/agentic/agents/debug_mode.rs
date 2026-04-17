@@ -339,7 +339,7 @@ impl Agent for DebugMode {
             "MermaidInteractive".to_string(),
             "Log".to_string(),
             "TerminalControl".to_string(),
-            "ComputerUse".to_string(),
+            "ControlHub".to_string(),
         ]
     }
 

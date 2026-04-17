@@ -294,7 +294,7 @@ Usage notes:
         }
         if !context.map(|c| c.is_remote()).unwrap_or(false) {
             base.push_str(
-                "\n\n**Desktop automation:** Prefer this tool for anything achievable from the **workspace shell** (build, test, git, scripts, CLIs). On **macOS**, `open -a \"AppName\"` launches or foregrounds an app with fewer steps than GUI workflows. When **Computer use** is enabled, use **`ComputerUse`** **`action: locate`** for **named** on-screen controls before guessing coordinates from **`action: screenshot`** alone.",
+                "\n\n**Desktop automation:** Prefer this tool for anything achievable from the **workspace shell** (build, test, git, scripts, CLIs). On **macOS**, `open -a \"AppName\"` launches or foregrounds an app with fewer steps than GUI workflows. When desktop automation is enabled, use **`ControlHub`** with `{ domain: \"desktop\", action: \"locate\" }` for **named** on-screen controls before guessing coordinates from `action: \"screenshot\"` alone.",
             );
         }
         Ok(base)

@@ -35,7 +35,7 @@ impl TeamMode {
                 "AskUserQuestion".to_string(),
                 "Git".to_string(),
                 "TerminalControl".to_string(),
-                "ComputerUse".to_string(),
+                "ControlHub".to_string(),
                 "GetFileDiff".to_string(),
             ],
         }

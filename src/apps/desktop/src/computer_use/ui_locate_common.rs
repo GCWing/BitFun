@@ -30,6 +30,17 @@ pub fn validate_query(q: &UiElementLocateQuery) -> BitFunResult<()> {
 }
 
 fn global_xy_to_native_with_display(d: &DisplayInfo, gx: f64, gy: f64) -> BitFunResult<(u32, u32)> {
+    // Phase 1 fix: `DisplayInfo.width / height` are **logical** points, and
+    // `scale_factor` is the device pixel ratio (2.0 on Retina, 1.5/1.75 on
+    // Windows mixed-DPI, etc.). The screenshot we hand to the model is
+    // captured in **native** pixels, so to translate a global logical point
+    // into the same coordinate space we must scale by `scale_factor`.
+    //
+    // Previously this used `d.width` for the native pixel count, which
+    // collapsed to a no-op transform: clicks landed at the logical
+    // coordinate inside a 2x-resolution image, missing the target by half
+    // the screen on Retina displays. This was the root cause of `locate +
+    // click` falling on the wrong element on multi-display / mixed-DPI Macs.
     let disp_ox = d.x as f64;
     let disp_oy = d.y as f64;
     let disp_w = d.width as f64;
@@ -39,8 +50,13 @@ fn global_xy_to_native_with_display(d: &DisplayInfo, gx: f64, gy: f64) -> BitFun
             "Invalid display geometry for UI locate mapping.".to_string(),
         ));
     }
-    let px_w = d.width as f64;
-    let px_h = d.height as f64;
+    let scale = if d.scale_factor > 0.0 {
+        d.scale_factor as f64
+    } else {
+        1.0
+    };
+    let px_w = disp_w * scale;
+    let px_h = disp_h * scale;
     let cx = ((gx - disp_ox) / disp_w) * px_w;
     let cy = ((gy - disp_oy) / disp_h) * px_h;
     let nx = cx.round().clamp(0.0, px_w - 1.0) as u32;
@@ -293,6 +309,48 @@ mod tests {
     #[test]
     fn role_textfield_alias_matches_axtextarea() {
         assert!(role_substring_matches_ax_role("AXTextArea", "TextField"));
+    }
+
+    /// Build a synthetic `DisplayInfo` for unit tests without going through
+    /// the platform-specific constructors. We only need the fields the
+    /// mapping function reads.
+    fn fake_display(x: i32, y: i32, w: u32, h: u32, scale: f32) -> DisplayInfo {
+        let mut d: DisplayInfo = unsafe { std::mem::zeroed() };
+        d.x = x;
+        d.y = y;
+        d.width = w;
+        d.height = h;
+        d.scale_factor = scale;
+        d
+    }
+
+    #[test]
+    fn maps_global_to_native_on_retina_display() {
+        // 1440×900 logical, 2.0 scale ⇒ 2880×1800 native.
+        let d = fake_display(0, 0, 1440, 900, 2.0);
+        // Center: logical (720, 450) ⇒ native (1440, 900)
+        let (nx, ny) = global_xy_to_native_with_display(&d, 720.0, 450.0).unwrap();
+        assert_eq!((nx, ny), (1440, 900));
+        // Bottom-right corner clamped to last native pixel.
+        let (nx, ny) = global_xy_to_native_with_display(&d, 1440.0, 900.0).unwrap();
+        assert_eq!((nx, ny), (2879, 1799));
+    }
+
+    #[test]
+    fn maps_global_to_native_on_secondary_offset_display_with_fractional_scale() {
+        // Secondary monitor placed to the right of a primary, 1920×1080
+        // logical with 1.5 scale (common Windows config) ⇒ 2880×1620 native.
+        let d = fake_display(1440, 0, 1920, 1080, 1.5);
+        // A point at logical (1440 + 960, 540) = display center.
+        let (nx, ny) = global_xy_to_native_with_display(&d, 2400.0, 540.0).unwrap();
+        assert_eq!((nx, ny), (1440, 810));
+    }
+
+    #[test]
+    fn maps_global_to_native_with_unit_scale_is_identity() {
+        let d = fake_display(0, 0, 800, 600, 1.0);
+        let (nx, ny) = global_xy_to_native_with_display(&d, 100.0, 200.0).unwrap();
+        assert_eq!((nx, ny), (100, 200));
     }
 }
 

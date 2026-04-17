@@ -147,15 +147,12 @@ impl ToolRegistry {
         // MiniApp Agent tool (single InitMiniApp)
         self.register_tool(Arc::new(InitMiniAppTool::new()));
 
-        // SelfControl — operates BitFun's own GUI (kept for backward compatibility)
-        self.register_tool(Arc::new(SelfControlTool::new()));
-
-        // ComputerUse — desktop automation (kept for backward compatibility)
-        self.register_tool(Arc::new(ComputerUseTool::new()));
-
-        // ControlHub — unified control tool that aggregates all control capabilities
-        // (desktop, browser, app, terminal, system) into a single entry point.
-        // New agents should prefer ControlHub over the separate tools above.
+        // ControlHub — sole unified control entry point that aggregates ALL control
+        // capabilities (desktop, browser, app, terminal, system, meta) into a single
+        // tool. SelfControlTool and ComputerUseTool are intentionally NOT registered
+        // here: their implementations are kept as internal modules and reused by
+        // ControlHub, but the model only ever sees one control tool to eliminate
+        // cross-tool selection mistakes.
         self.register_tool(Arc::new(ControlHubTool::new()));
 
         // Playbook — predefined step-by-step operation guides for common tasks.
@@ -206,6 +203,26 @@ mod tests {
     fn registry_includes_cron_tool() {
         let registry = create_tool_registry();
         assert!(registry.get_tool("Cron").is_some());
+    }
+
+    /// Phase 0 contract: ControlHub is the sole control entry point. The
+    /// legacy `SelfControl` and `ComputerUse` tools must NOT be visible to the
+    /// model; their implementations are reused internally only.
+    #[test]
+    fn registry_exposes_controlhub_only_for_control_capabilities() {
+        let registry = create_tool_registry();
+        assert!(
+            registry.get_tool("ControlHub").is_some(),
+            "ControlHub must be registered as the unified control tool"
+        );
+        assert!(
+            registry.get_tool("SelfControl").is_none(),
+            "SelfControl must be down-registered (Phase 0 dedup)"
+        );
+        assert!(
+            registry.get_tool("ComputerUse").is_none(),
+            "ComputerUse must be down-registered (Phase 0 dedup)"
+        );
     }
 
     #[test]

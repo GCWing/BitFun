@@ -10,6 +10,7 @@ pub mod computer_use_mouse_precise_tool;
 pub mod computer_use_mouse_step_tool;
 pub mod computer_use_result;
 pub mod computer_use_tool;
+pub mod control_hub;
 pub mod control_hub_tool;
 pub mod create_plan_tool;
 pub mod cron_tool;

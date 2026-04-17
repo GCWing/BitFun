@@ -1,8 +1,70 @@
 //! Atomic browser actions implemented via CDP commands.
 
-use super::cdp_client::CdpClient;
+use super::cdp_client::{CdpClient, CdpEvent};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{json, Value};
+use tokio::sync::broadcast;
+
+/// Result of waiting for a CDP `Page.lifecycleEvent`.
+enum LifecycleOutcome {
+    /// One of the requested lifecycle names fired in time. Carries the name
+    /// (e.g. `"load"`, `"networkIdle"`) so callers can report which condition
+    /// actually matched.
+    Reached(String),
+    /// Timed out before any of the requested events fired.
+    Timeout,
+    /// Subscription closed (typically: page navigated away or browser quit).
+    Closed,
+}
+
+/// Block until a `Page.lifecycleEvent` whose `name` ∈ `wanted` arrives for the
+/// given `frame_id` (or any frame if `frame_id` is `None`). Bounded by a hard
+/// timeout so a hung page can never wedge the agent.
+async fn wait_for_lifecycle(
+    events: &mut broadcast::Receiver<CdpEvent>,
+    frame_id: Option<&str>,
+    wanted: &[&str],
+    timeout_ms: u64,
+) -> LifecycleOutcome {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return LifecycleOutcome::Timeout;
+        }
+        let recv_fut = events.recv();
+        let evt = match tokio::time::timeout(remaining, recv_fut).await {
+            Err(_) => return LifecycleOutcome::Timeout,
+            Ok(Err(broadcast::error::RecvError::Closed)) => return LifecycleOutcome::Closed,
+            // We deliberately swallow Lagged: lifecycle bursts can outpace
+            // our buffer briefly; the next iteration will catch the next one.
+            Ok(Err(broadcast::error::RecvError::Lagged(_))) => continue,
+            Ok(Ok(evt)) => evt,
+        };
+        if evt.method != "Page.lifecycleEvent" {
+            continue;
+        }
+        let name = evt
+            .params
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if !wanted.contains(&name) {
+            continue;
+        }
+        if let Some(want_frame) = frame_id {
+            let evt_frame = evt
+                .params
+                .get("frameId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if evt_frame != want_frame {
+                continue;
+            }
+        }
+        return LifecycleOutcome::Reached(name.to_string());
+    }
+}
 
 /// High-level browser actions backed by CDP method calls.
 pub struct BrowserActions<'a> {
@@ -17,17 +79,62 @@ impl<'a> BrowserActions<'a> {
     // ── Navigation ─────────────────────────────────────────────────────
 
     pub async fn navigate(&self, url: &str) -> BitFunResult<Value> {
+        // Subscribe **before** issuing the navigate so we can never miss the
+        // `Page.lifecycleEvent` ("load") that fires while we are awaiting the
+        // command response. Page lifecycle events must be enabled explicitly.
+        let _ = self.client.send("Page.enable", None).await;
+        let _ = self
+            .client
+            .send(
+                "Page.setLifecycleEventsEnabled",
+                Some(json!({ "enabled": true })),
+            )
+            .await;
+        let mut events = self.client.subscribe_events();
+
         let result = self
             .client
             .send("Page.navigate", Some(json!({ "url": url })))
             .await?;
-        // Wait for load event
-        let _ = self.client.send("Page.enable", None).await;
-        Ok(json!({
-            "success": true,
+        let frame_id = result
+            .get("frameId")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+
+        // Wait for the matching "load" lifecycle event (or "DOMContentLoaded"
+        // as an early signal). Capped at ~15s so a hung page eventually
+        // surfaces a Timeout error to the model rather than blocking forever.
+        let outcome = wait_for_lifecycle(&mut events, frame_id.as_deref(), &["load"], 15_000).await;
+
+        let mut body = json!({
             "url": url,
-            "frameId": result.get("frameId"),
-        }))
+            "frameId": frame_id,
+        });
+        match outcome {
+            LifecycleOutcome::Reached(name) => {
+                if let Some(obj) = body.as_object_mut() {
+                    obj.insert("success".to_string(), json!(true));
+                    obj.insert("loaded".to_string(), json!(true));
+                    obj.insert("lifecycle_event".to_string(), json!(name));
+                }
+            }
+            LifecycleOutcome::Timeout => {
+                if let Some(obj) = body.as_object_mut() {
+                    obj.insert("success".to_string(), json!(true));
+                    obj.insert("loaded".to_string(), json!(false));
+                    obj.insert(
+                        "warning".to_string(),
+                        json!("navigation timed out before lifecycle 'load' event; page may still be loading"),
+                    );
+                }
+            }
+            LifecycleOutcome::Closed => {
+                return Err(BitFunError::tool(
+                    "Browser closed the CDP connection before page finished loading.".to_string(),
+                ));
+            }
+        }
+        Ok(body)
     }
 
     pub async fn get_url(&self) -> BitFunResult<String> {
@@ -53,37 +160,108 @@ impl<'a> BrowserActions<'a> {
     // ── Snapshot / DOM ─────────────────────────────────────────────────
 
     /// Get an accessibility-tree snapshot of interactive elements.
+    ///
+    /// Phase 3: traversal now descends into **open shadow roots** and
+    /// **same-origin iframes**, which the old flat `document.querySelectorAll`
+    /// path silently skipped. Each element's `frame_path` reports where in
+    /// the frame tree it lives (`""` for top frame,
+    /// `"iframe[src='/foo']"` for an iframe child) and its `scope` reports
+    /// `"document" | "shadow" | "iframe"`. The synthetic `data-cdp-ref`
+    /// attribute is set in the host scope so subsequent `click` / `fill`
+    /// can locate it via the same recursive walk.
     pub async fn snapshot(&self) -> BitFunResult<Value> {
+        self.snapshot_with_options(false).await
+    }
+
+    /// Snapshot variant that can additionally resolve a stable
+    /// **backendNodeId** (CDP `DOM.Node.backendNodeId`) for each element.
+    /// `backendNodeId` is invariant across reflows and JS re-renders within
+    /// the same DOM lifetime, so saving it lets the agent re-target an
+    /// element after a partial mutation without taking a full snapshot.
+    ///
+    /// The call is opt-in (and slightly more expensive) because it costs
+    /// one extra CDP round-trip plus a `DOM.querySelectorAll` walk. When
+    /// `with_backend_node_ids` is `true`, every snapshot element gets a
+    /// `backend_node_id` field; pages where `DOM.getDocument` errors out
+    /// (very rare — e.g. about:blank) silently fall back to no ids.
+    pub async fn snapshot_with_options(
+        &self,
+        with_backend_node_ids: bool,
+    ) -> BitFunResult<Value> {
         let script = r#"
         (function() {
-            const selectors = 'a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="combobox"], [role="option"], [tabindex="0"], [contenteditable="true"]';
-            const els = document.querySelectorAll(selectors);
+            const SEL = 'a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="combobox"], [role="option"], [tabindex="0"], [contenteditable="true"]';
             const items = [];
             let idx = 1;
-            els.forEach(el => {
+
+            function visible(el, win) {
                 const rect = el.getBoundingClientRect();
-                if (rect.width < 2 || rect.height < 2) return;
-                if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) return;
-                const style = window.getComputedStyle(el);
-                if (style.display === 'none' || style.visibility === 'hidden') return;
+                if (rect.width < 2 || rect.height < 2) return null;
+                if (rect.right < 0 || rect.bottom < 0 || rect.left > win.innerWidth || rect.top > win.innerHeight) return null;
+                const style = win.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return null;
+                return rect;
+            }
+
+            function record(el, rect, scope, framePath) {
                 const text = (el.textContent || '').trim().slice(0, 100);
-                const tag = el.tagName.toLowerCase();
-                const type = el.getAttribute('type') || '';
-                const name = el.getAttribute('name') || '';
-                const ariaLabel = el.getAttribute('aria-label') || '';
-                const placeholder = el.placeholder || '';
-                const role = el.getAttribute('role') || '';
-                const href = el.href || '';
-                const id = el.id || '';
                 items.push({
                     ref: '@e' + idx,
-                    tag, type, name, text, ariaLabel, placeholder, role, href, id,
+                    tag: el.tagName.toLowerCase(),
+                    type: el.getAttribute('type') || '',
+                    name: el.getAttribute('name') || '',
+                    text,
+                    ariaLabel: el.getAttribute('aria-label') || '',
+                    placeholder: el.placeholder || '',
+                    role: el.getAttribute('role') || '',
+                    href: el.href || '',
+                    id: el.id || '',
+                    scope,
+                    frame_path: framePath,
                     rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) }
                 });
-                el.setAttribute('data-cdp-ref', '@e' + idx);
+                try { el.setAttribute('data-cdp-ref', '@e' + idx); } catch (_) {}
                 idx++;
+            }
+
+            // Recursive walk: collects from `root` (Document or ShadowRoot)
+            // and recurses into open shadow roots of every descendant. Iframes
+            // are handled by the caller because we need the iframe's own
+            // window for visibility checks.
+            function walk(root, win, scope, framePath) {
+                const els = root.querySelectorAll(SEL);
+                els.forEach(el => {
+                    const rect = visible(el, win);
+                    if (rect) record(el, rect, scope, framePath);
+                });
+                // Open shadow roots
+                const allHosts = root.querySelectorAll('*');
+                allHosts.forEach(h => {
+                    if (h.shadowRoot) {
+                        try { walk(h.shadowRoot, win, 'shadow', framePath); } catch (_) {}
+                    }
+                });
+            }
+
+            walk(document, window, 'document', '');
+
+            // Same-origin iframes
+            const frames = document.querySelectorAll('iframe, frame');
+            frames.forEach((frame, fi) => {
+                let doc = null;
+                try { doc = frame.contentDocument; } catch (_) {}
+                if (!doc) return; // cross-origin: skip silently
+                const subWin = frame.contentWindow;
+                const path = `iframe[${fi}]${frame.src ? `[src="${frame.src.slice(0, 80)}"]` : ''}`;
+                try { walk(doc, subWin, 'iframe', path); } catch (_) {}
             });
-            return JSON.stringify({ url: location.href, title: document.title, elements: items });
+
+            return JSON.stringify({
+                url: location.href,
+                title: document.title,
+                elements: items,
+                features: { shadow_dom_traversed: true, same_origin_iframes_traversed: true },
+            });
         })()
         "#;
         let result = self.evaluate(script).await?;
@@ -92,24 +270,133 @@ impl<'a> BrowserActions<'a> {
             .and_then(|r| r.get("value"))
             .and_then(|v| v.as_str())
             .unwrap_or("{}");
-        let parsed: Value = serde_json::from_str(text).unwrap_or(json!({}));
+        let mut parsed: Value = serde_json::from_str(text).unwrap_or(json!({}));
+
+        if with_backend_node_ids {
+            if let Err(e) = self.attach_backend_node_ids(&mut parsed).await {
+                // Don't fail the snapshot — the elements list is still
+                // useful without backendNodeIds. Surface the failure so the
+                // model can decide whether to retry.
+                if let Value::Object(m) = &mut parsed {
+                    m.insert(
+                        "backend_node_ids_warning".to_string(),
+                        json!(format!("Failed to resolve backendNodeIds: {}", e)),
+                    );
+                }
+            }
+        }
         Ok(parsed)
     }
 
-    /// Get the text content of an element by CSS selector.
-    pub async fn get_text(&self, selector: &str) -> BitFunResult<String> {
+    /// Resolve `backend_node_id` for every snapshot element by walking the
+    /// DOM through CDP. Mutates `parsed["elements"][i]["backend_node_id"]`
+    /// in place. Returns `Err` if the document tree could not be fetched.
+    async fn attach_backend_node_ids(&self, parsed: &mut Value) -> BitFunResult<()> {
+        let doc = self.client.send("DOM.getDocument", None).await?;
+        let root_id = doc
+            .get("root")
+            .and_then(|r| r.get("nodeId"))
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| BitFunError::tool("DOM.getDocument: missing root nodeId".to_string()))?;
+        let qsa = self
+            .client
+            .send(
+                "DOM.querySelectorAll",
+                Some(json!({ "nodeId": root_id, "selector": "[data-cdp-ref]" })),
+            )
+            .await?;
+        let node_ids: Vec<i64> = qsa
+            .get("nodeIds")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|n| n.as_i64()).collect())
+            .unwrap_or_default();
+
+        let mut by_ref: std::collections::HashMap<String, i64> = Default::default();
+        for nid in node_ids {
+            let described = match self
+                .client
+                .send("DOM.describeNode", Some(json!({ "nodeId": nid })))
+                .await
+            {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let backend = described
+                .get("node")
+                .and_then(|n| n.get("backendNodeId"))
+                .and_then(|v| v.as_i64());
+            // Read the data-cdp-ref attribute from the node's attributes
+            // (DOM.describeNode returns flat [name, value, name, value]).
+            let attrs = described
+                .get("node")
+                .and_then(|n| n.get("attributes"))
+                .and_then(|v| v.as_array());
+            let ref_name = attrs.and_then(|a| {
+                a.chunks(2)
+                    .find(|c| c.first().and_then(|n| n.as_str()) == Some("data-cdp-ref"))
+                    .and_then(|c| c.get(1).and_then(|v| v.as_str().map(str::to_string)))
+            });
+            if let (Some(rn), Some(b)) = (ref_name, backend) {
+                by_ref.insert(rn, b);
+            }
+        }
+
+        if let Some(elements) = parsed.get_mut("elements").and_then(|v| v.as_array_mut()) {
+            for el in elements.iter_mut() {
+                let r = el
+                    .get("ref")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+                if let Some(r) = r {
+                    if let Some(b) = by_ref.get(&r) {
+                        if let Value::Object(m) = el {
+                            m.insert("backend_node_id".to_string(), json!(b));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Get the text content of an element by CSS selector or `@eN` ref.
+    ///
+    /// Phase 3: returns `Ok(None)` when the selector matched nothing (so
+    /// ControlHub can surface a `NOT_FOUND` error instead of a misleading
+    /// empty string), and `Ok(Some(""))` when the element was found but
+    /// genuinely empty. The lookup walks shadow roots / same-origin
+    /// iframes, matching the rest of the browser action surface.
+    pub async fn get_text(&self, selector: &str) -> BitFunResult<Option<String>> {
+        let resolve = Self::resolve_element_js(selector);
         let js = format!(
-            r#"(function(){{ const el = document.querySelector('{}'); return el ? (el.textContent || '').trim().slice(0, 5000) : null; }})()"#,
-            selector.replace('\'', "\\'")
+            r#"(function(){{
+                try {{
+                    {resolve}
+                    return JSON.stringify({{ found: true, text: (el.textContent || '').trim().slice(0, 5000) }});
+                }} catch (e) {{
+                    return JSON.stringify({{ found: false, error: String(e && e.message || e) }});
+                }}
+            }})()"#,
+            resolve = resolve
         );
         let result = self.evaluate(&js).await?;
-        let text = result
+        let raw = result
             .get("result")
             .and_then(|r| r.get("value"))
             .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        Ok(text)
+            .unwrap_or("{}");
+        let parsed: Value = serde_json::from_str(raw).unwrap_or(json!({}));
+        if parsed.get("found").and_then(|v| v.as_bool()).unwrap_or(false) {
+            Ok(Some(
+                parsed
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
     // ── Interaction ────────────────────────────────────────────────────
@@ -280,8 +567,38 @@ impl<'a> BrowserActions<'a> {
         }
         if let Some(cond) = condition {
             match cond {
-                "networkidle" | "load" => {
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                "networkidle" | "load" | "domcontentloaded" => {
+                    // Phase 1: replace the previous "sleep 2s and hope" with
+                    // a real `Page.lifecycleEvent` subscription. Lifecycle
+                    // event names per CDP: `load`, `DOMContentLoaded`,
+                    // `networkIdle`, `firstMeaningfulPaint`, etc.
+                    let _ = self.client.send("Page.enable", None).await;
+                    let _ = self
+                        .client
+                        .send(
+                            "Page.setLifecycleEventsEnabled",
+                            Some(json!({ "enabled": true })),
+                        )
+                        .await;
+                    let mut events = self.client.subscribe_events();
+                    let wanted: &[&str] = match cond {
+                        "networkidle" => &["networkIdle"],
+                        "domcontentloaded" => &["DOMContentLoaded", "load"],
+                        _ => &["load"],
+                    };
+                    let outcome = wait_for_lifecycle(&mut events, None, wanted, 15_000).await;
+                    let (success, lifecycle_event, timed_out) = match outcome {
+                        LifecycleOutcome::Reached(n) => (true, Some(n), false),
+                        LifecycleOutcome::Timeout => (false, None, true),
+                        LifecycleOutcome::Closed => (false, None, false),
+                    };
+                    return Ok(json!({
+                        "success": success,
+                        "action": "wait",
+                        "condition": cond,
+                        "lifecycle_event": lifecycle_event,
+                        "timed_out": timed_out,
+                    }));
                 }
                 selector => {
                     for _ in 0..30 {
@@ -358,18 +675,55 @@ impl<'a> BrowserActions<'a> {
     // ── Internal helpers ───────────────────────────────────────────────
 
     /// Generate JS to resolve an element from selector or `@eN` ref.
+    ///
+    /// Phase 3: ref / selector lookup walks open shadow roots and
+    /// same-origin iframes so refs / selectors created by `snapshot()` for
+    /// elements inside a shadow root or iframe actually resolve. The legacy
+    /// `document.querySelector` path returned `null` for any element nested
+    /// inside a shadow root, which made `click @e7` mysteriously fail
+    /// whenever the page used a web-component design system.
     fn resolve_element_js(selector: &str) -> String {
-        if selector.starts_with("@e") {
-            format!(
-                r#"const el = document.querySelector('[data-cdp-ref="{}"]'); if (!el) throw new Error('Ref {} not found — take a fresh snapshot');"#,
-                selector, selector
-            )
+        let attr_selector = if selector.starts_with("@e") {
+            format!(r#"[data-cdp-ref="{}"]"#, selector)
         } else {
-            format!(
-                r#"const el = document.querySelector('{}'); if (!el) throw new Error('Element not found: {}');"#,
-                selector.replace('\'', "\\'"),
-                selector.replace('\'', "\\'")
-            )
-        }
+            selector.to_string()
+        };
+        let escaped = attr_selector.replace('\\', "\\\\").replace('\'', "\\'");
+        format!(
+            r#"
+            const __sel = '{escaped}';
+            function __findIn(root) {{
+                try {{
+                    const direct = root.querySelector(__sel);
+                    if (direct) return direct;
+                }} catch (_) {{}}
+                const all = root.querySelectorAll('*');
+                for (const node of all) {{
+                    if (node.shadowRoot) {{
+                        const hit = __findIn(node.shadowRoot);
+                        if (hit) return hit;
+                    }}
+                }}
+                return null;
+            }}
+            function __findAnywhere() {{
+                const top = __findIn(document);
+                if (top) return top;
+                const frames = document.querySelectorAll('iframe, frame');
+                for (const f of frames) {{
+                    let doc = null;
+                    try {{ doc = f.contentDocument; }} catch (_) {{}}
+                    if (doc) {{
+                        const hit = __findIn(doc);
+                        if (hit) return hit;
+                    }}
+                }}
+                return null;
+            }}
+            const el = __findAnywhere();
+            if (!el) throw new Error('Element not found: ' + __sel + ' — take a fresh snapshot or check shadow/iframe scope');
+            "#,
+            escaped = escaped
+        )
     }
 }

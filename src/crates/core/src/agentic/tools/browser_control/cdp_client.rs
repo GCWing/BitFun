@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpStream;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{broadcast, Mutex, RwLock};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
@@ -40,11 +40,21 @@ pub struct CdpVersionInfo {
     pub web_socket_debugger_url: Option<String>,
 }
 
+/// A single CDP event emitted by the browser (no `id`, has `method` + `params`).
+#[derive(Debug, Clone)]
+pub struct CdpEvent {
+    pub method: String,
+    pub params: Value,
+}
+
 /// A CDP WebSocket client connected to a single page target.
 pub struct CdpClient {
     sink: Arc<Mutex<WsSink>>,
     pending: Arc<RwLock<HashMap<i64, tokio::sync::oneshot::Sender<Value>>>>,
     next_id: AtomicI64,
+    /// Broadcast bus for unsolicited CDP events. Subscribers may filter by
+    /// `method` (e.g. `"Page.lifecycleEvent"`).
+    events: broadcast::Sender<CdpEvent>,
     _reader_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -88,14 +98,33 @@ impl CdpClient {
             Arc::new(RwLock::new(HashMap::new()));
 
         let pending_clone = pending.clone();
-        let reader_handle = tokio::spawn(Self::reader_loop(stream, pending_clone));
+        // Buffer up to 256 events per subscriber. Lifecycle / network events
+        // arrive in bursts during page load; older entries can be dropped from
+        // a subscriber lagging behind without affecting the protocol.
+        let (events_tx, _) = broadcast::channel::<CdpEvent>(256);
+        let events_for_reader = events_tx.clone();
+        let reader_handle = tokio::spawn(Self::reader_loop(stream, pending_clone, events_for_reader));
 
         Ok(Self {
             sink,
             pending,
             next_id: AtomicI64::new(1),
+            events: events_tx,
             _reader_handle: reader_handle,
         })
+    }
+
+    /// Subscribe to *all* CDP events. Filter on `method` at the call site.
+    pub fn subscribe_events(&self) -> broadcast::Receiver<CdpEvent> {
+        self.events.subscribe()
+    }
+
+    /// Returns `true` while the WebSocket reader task is still running.
+    /// `BrowserSessionRegistry` uses this to evict sessions whose tab the
+    /// user closed out-of-band (without going through `browser.close`),
+    /// avoiding a 30-second `CDP timeout` on the next call.
+    pub fn is_connected(&self) -> bool {
+        !self._reader_handle.is_finished()
     }
 
     /// Connect to the first available page on a debug port.
@@ -153,6 +182,7 @@ impl CdpClient {
     async fn reader_loop(
         mut stream: WsStream,
         pending: Arc<RwLock<HashMap<i64, tokio::sync::oneshot::Sender<Value>>>>,
+        events: broadcast::Sender<CdpEvent>,
     ) {
         while let Some(msg_result) = stream.next().await {
             match msg_result {
@@ -166,6 +196,15 @@ impl CdpClient {
                             if let Some(tx) = sender {
                                 let _ = tx.send(val);
                             }
+                        } else if let Some(method) =
+                            val.get("method").and_then(|v| v.as_str()).map(str::to_string)
+                        {
+                            // Unsolicited CDP event — broadcast to subscribers
+                            // (no-op if nobody is listening). Used by
+                            // `BrowserActions::navigate` / `wait` to react
+                            // to `Page.lifecycleEvent` instead of polling.
+                            let params = val.get("params").cloned().unwrap_or(json!({}));
+                            let _ = events.send(CdpEvent { method, params });
                         }
                     }
                 }

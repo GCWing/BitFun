@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -70,7 +71,7 @@ vi.mock('@/shared/utils/logger', () => ({
   }),
 }));
 
-import { SelfControlService } from './SelfControlService';
+import { ModelNotFoundError, SelfControlError, SelfControlService } from './SelfControlService';
 
 describe('SelfControlService', () => {
   beforeEach(() => {
@@ -131,5 +132,70 @@ describe('SelfControlService', () => {
       primary: 'model-fallback',
       fast: 'model-fallback',
     });
+  });
+
+  // ── Phase 1: failure semantics ──────────────────────────────────────────
+  // Prior to Phase 1 these failure paths returned strings like "Element not
+  // found: ..." while the listener still reported success: true. The model
+  // would then act as if the click had landed. Each test below asserts the
+  // operation now throws a SelfControlError so the listener can surface
+  // success: false to the backend.
+
+  it('throws SelfControlError(NOT_FOUND) when click target is missing', async () => {
+    const service = new SelfControlService();
+    await expect(
+      service.executeAction({ action: 'click', selector: '#does-not-exist' }),
+    ).rejects.toMatchObject({ name: 'SelfControlError', code: 'NOT_FOUND' });
+  });
+
+  it('throws SelfControlError(NOT_FOUND) when input target is missing', async () => {
+    const service = new SelfControlService();
+    await expect(
+      service.executeAction({ action: 'input', selector: '#nope', value: 'hi' }),
+    ).rejects.toBeInstanceOf(SelfControlError);
+  });
+
+  it('throws SelfControlError(NOT_FOUND) when read_text target is missing', async () => {
+    const service = new SelfControlService();
+    await expect(
+      service.executeAction({ action: 'read_text', selector: '#nope' }),
+    ).rejects.toBeInstanceOf(SelfControlError);
+  });
+
+  it('throws SelfControlError(MISSING_SESSION) when press_key has no focus and no target_selector', async () => {
+    document.body.focus();
+    const service = new SelfControlService();
+    await expect(
+      service.executeAction({ action: 'press_key', key: 'Enter' }),
+    ).rejects.toMatchObject({ name: 'SelfControlError', code: 'MISSING_SESSION' });
+  });
+
+  it('throws ModelNotFoundError when set_default_model has no match', async () => {
+    resetConfigState({
+      'ai.models': [
+        {
+          id: 'm1',
+          name: 'Real',
+          model_name: 'real-v1',
+          provider: 'p',
+          enabled: true,
+        },
+      ],
+    });
+    const service = new SelfControlService();
+    await expect(
+      service.executeAction({
+        action: 'set_default_model',
+        modelQuery: 'totally-imaginary-model-xyz',
+      }),
+    ).rejects.toBeInstanceOf(ModelNotFoundError);
+  });
+
+  it('throws SelfControlError(INVALID_PARAMS) on unknown action type', async () => {
+    const service = new SelfControlService();
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      service.executeAction({ action: 'totally_unknown' as any }),
+    ).rejects.toMatchObject({ name: 'SelfControlError', code: 'INVALID_PARAMS' });
   });
 });

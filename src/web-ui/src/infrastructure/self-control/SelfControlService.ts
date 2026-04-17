@@ -22,6 +22,45 @@ import { createLogger } from '@/shared/utils/logger';
 
 const logger = createLogger('SelfControlService');
 
+/**
+ * Thrown when a SelfControl action cannot be carried out (target missing,
+ * invalid params, frontend pre-condition unmet, etc.).
+ *
+ * The {@link SelfControlEventListener} catches every Error subclass and
+ * reports `success: false` to the backend, which is the only way the LLM
+ * can learn that an "operation succeeded" actually failed silently.
+ *
+ * Background: prior to Phase 1 these failure paths returned a descriptive
+ * STRING from the DOM primitives (e.g. `"Element not found: ..."`). The
+ * listener wrapped that string into `{ success: true, result }` and the LLM
+ * happily proceeded as if the click had landed.
+ */
+export class SelfControlError extends Error {
+  constructor(
+    message: string,
+    /** Stable machine-readable code (uppercase snake) for caller branching. */
+    readonly code: string = 'FRONTEND_ERROR',
+    /** Optional structured hints attached to the failure. */
+    readonly hints: string[] = [],
+  ) {
+    super(message);
+    this.name = 'SelfControlError';
+  }
+}
+
+/**
+ * Specialisation thrown by `setDefaultModel` / `deleteModel` so that
+ * `executeTask` can fall back to the UI-driven path without parsing the
+ * English error text (the previous `.includes('not found')` heuristic was
+ * fragile and locale-sensitive).
+ */
+export class ModelNotFoundError extends SelfControlError {
+  constructor(message: string, hints: string[] = []) {
+    super(message, 'NOT_FOUND', hints);
+    this.name = 'ModelNotFoundError';
+  }
+}
+
 // Option selectors tried in order when looking for dropdown items
 const DROPDOWN_OPTION_SELECTORS = [
   '.select__option',
@@ -53,6 +92,19 @@ export interface PageState {
   elements: SimplifiedElement[];
   targets: Record<string, string>;
   semanticHints: string[];
+  /**
+   * Phase 3: pagination metadata for `elements`. Always present so the
+   * model can decide whether to fetch the next page (`offset + returned`).
+   */
+  pagination?: {
+    offset: number;
+    limit: number;
+    returned: number;
+    total: number;
+    hasMore: boolean;
+  };
+  /** Best-effort identifier for the originating Tauri webview. */
+  webviewId?: string;
 }
 
 /** Internal normalized action shape used by the dispatcher. */
@@ -69,9 +121,36 @@ export type SelfControlAction =
   | { type: 'list_models'; includeDisabled?: boolean }
   | { type: 'set_default_model'; modelQuery: string; slot?: 'primary' | 'fast' }
   | { type: 'select_option'; selector: string; optionText: string }
-  | { type: 'get_page_state' }
+  | {
+      type: 'get_page_state';
+      /** Pagination — first element index to include (default 0). */
+      offset?: number;
+      /**
+       * Pagination — max elements to include in `elements` (default 60).
+       * Phase 3: the legacy implementation always returned at most 60
+       * elements with no way to get the rest, which made BitFun's own
+       * settings panes (often >60 controls) un-driveable past the first
+       * page. The result now reports `totalElements` and `hasMoreElements`
+       * so the model can page through.
+       */
+      limit?: number;
+    }
+  | {
+      /**
+       * Phase 3: poll the DOM for a selector to appear (e.g. wait for a
+       * modal animation to finish before clicking inside it). Until now
+       * the agent had to fall back to fixed `wait { durationMs }` calls,
+       * which were either too short (race) or too long (slow). Mirrors
+       * Playwright's `waitForSelector` semantics.
+       */
+      type: 'wait_for_selector';
+      selector: string;
+      timeoutMs?: number;
+      /** `'visible'` requires a non-zero bounding rect. */
+      state?: 'attached' | 'visible';
+    }
   | { type: 'wait'; durationMs: number }
-  | { type: 'press_key'; key: string }
+  | { type: 'press_key'; key: string; targetSelector?: string }
   | { type: 'read_text'; selector: string }
   | { type: 'delete_model'; modelQuery: string };
 
@@ -98,6 +177,13 @@ export type SelfControlIncomingAction = Partial<SelfControlAction> & {
   duration_ms?: number;
   includeDisabled?: boolean;
   include_disabled?: boolean;
+  targetSelector?: string;
+  target_selector?: string;
+  offset?: number;
+  limit?: number;
+  timeoutMs?: number;
+  timeout_ms?: number;
+  state?: 'attached' | 'visible';
 };
 
 interface ModelInfo {
@@ -114,7 +200,10 @@ export class SelfControlService {
 
   // ── Region 2: App State ──────────────────────────────────────────────────
 
-  async getPageState(): Promise<PageState> {
+  async getPageState(opts?: { offset?: number; limit?: number }): Promise<PageState> {
+    const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
+    const limit = Math.max(1, Math.floor(opts?.limit ?? 60));
+
     const activeScene = useSceneStore.getState().activeTabId;
     const activeSettingsTab =
       activeScene === 'settings' ? useSettingsStore.getState().activeTab : undefined;
@@ -126,14 +215,95 @@ export class SelfControlService {
       await this.maybeAppendModelSummary(semanticHints);
     }
 
+    const pagedElements = elements.slice(offset, offset + limit);
+    const hasMoreElements = offset + pagedElements.length < elements.length;
+
     return {
       title: document.title,
       activeScene,
       activeSettingsTab,
-      elements: elements.slice(0, 60),
+      elements: pagedElements,
       targets,
       semanticHints,
+      // Phase 3: pagination metadata + a stable webview identifier so the
+      // backend (and the model) can tell which Tauri webview produced the
+      // page state. `webview_id` is best-effort: we use the window name
+      // when available, falling back to a per-tab uuid stored on `window`.
+      pagination: {
+        offset,
+        limit,
+        returned: pagedElements.length,
+        total: elements.length,
+        hasMore: hasMoreElements,
+      },
+      webviewId: this.resolveWebviewId(),
     };
+  }
+
+  /**
+   * Best-effort identifier for the current webview. Tauri exposes this
+   * through `window.__TAURI_INTERNALS__?.metadata?.currentWindow?.label`
+   * but that path isn't part of the public contract — fall back to a
+   * per-tab uuid persisted on `window` so at minimum the value is stable
+   * within a single page lifetime.
+   */
+  private resolveWebviewId(): string {
+    const w = window as unknown as {
+      __BITFUN_WEBVIEW_ID__?: string;
+      __TAURI_INTERNALS__?: {
+        metadata?: { currentWindow?: { label?: string } };
+      };
+    };
+    const tauriLabel = w.__TAURI_INTERNALS__?.metadata?.currentWindow?.label;
+    if (tauriLabel) return tauriLabel;
+    if (!w.__BITFUN_WEBVIEW_ID__) {
+      w.__BITFUN_WEBVIEW_ID__ = `webview-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    return w.__BITFUN_WEBVIEW_ID__;
+  }
+
+  /**
+   * Phase 3: poll the DOM for a selector. Resolves with a JSON summary
+   * when the element is found (`visible` mode also requires non-zero
+   * bounding rect); throws `SelfControlError(code='TIMEOUT')` if the
+   * deadline elapses. Polling cadence is 100 ms — short enough for
+   * snappy feedback, infrequent enough to avoid burning CPU.
+   */
+  async waitForSelector(
+    selector: string,
+    timeoutMs: number = 5000,
+    state: 'attached' | 'visible' = 'visible',
+  ): Promise<string> {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    const requireVisible = state === 'visible';
+
+    while (true) {
+      const el = document.querySelector(selector) as HTMLElement | null;
+      if (el) {
+        if (!requireVisible) {
+          return JSON.stringify({ found: true, selector, state });
+        }
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const cs = window.getComputedStyle(el);
+          if (cs.display !== 'none' && cs.visibility !== 'hidden') {
+            return JSON.stringify({
+              found: true,
+              selector,
+              state,
+              rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+            });
+          }
+        }
+      }
+      if (Date.now() >= deadline) {
+        throw new SelfControlError(
+          `Timed out after ${timeoutMs}ms waiting for selector '${selector}' to be ${state}`,
+          'TIMEOUT',
+        );
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
   }
 
   // ── Dispatcher ───────────────────────────────────────────────────────────
@@ -147,7 +317,18 @@ export class SelfControlService {
         return this.executeTask(action.task, action.params);
 
       case 'get_page_state':
-        return JSON.stringify(await this.getPageState(), null, 2);
+        return JSON.stringify(
+          await this.getPageState({ offset: action.offset, limit: action.limit }),
+          null,
+          2,
+        );
+
+      case 'wait_for_selector':
+        return this.waitForSelector(
+          action.selector,
+          action.timeoutMs ?? 5000,
+          action.state ?? 'visible',
+        );
 
       // Region 2: App State
       case 'open_scene':
@@ -181,12 +362,15 @@ export class SelfControlService {
       case 'wait':
         return this.wait(action.durationMs);
       case 'press_key':
-        return this.pressKey(action.key);
+        return this.pressKey(action.key, action.targetSelector);
       case 'read_text':
         return this.readText(action.selector);
 
       default:
-        return `Unknown action type: ${(action as { type: string }).type}`;
+        throw new SelfControlError(
+          `Unknown action type: ${(action as { type: string }).type}`,
+          'INVALID_PARAMS',
+        );
     }
   }
 
@@ -200,13 +384,21 @@ export class SelfControlService {
       case 'set_fast_model': {
         const slot = task === 'set_primary_model' ? 'primary' : 'fast';
         const modelQuery = params?.modelQuery ?? params?.model ?? '';
-        if (!modelQuery) return `Missing modelQuery for ${task}`;
-
-        const configResult = await this.setDefaultModel(modelQuery, slot);
-        if (!configResult.toLowerCase().includes('not found')) {
-          return configResult;
+        if (!modelQuery) {
+          throw new SelfControlError(`Missing modelQuery for ${task}`, 'INVALID_PARAMS');
         }
-        return this.setDefaultModelViaUI(modelQuery, slot);
+
+        // Try the config-driven path first; on ModelNotFoundError fall back
+        // to the visual UI dropdown. Any other error propagates so the caller
+        // sees the actual reason instead of being misled into the UI fallback.
+        try {
+          return await this.setDefaultModel(modelQuery, slot);
+        } catch (err) {
+          if (err instanceof ModelNotFoundError) {
+            return await this.setDefaultModelViaUI(modelQuery, slot);
+          }
+          throw err;
+        }
       }
 
       case 'open_model_settings': {
@@ -219,12 +411,17 @@ export class SelfControlService {
 
       case 'delete_model': {
         const modelQuery = params?.modelQuery ?? params?.model ?? '';
-        if (!modelQuery) return 'Missing modelQuery for delete_model';
+        if (!modelQuery) {
+          throw new SelfControlError('Missing modelQuery for delete_model', 'INVALID_PARAMS');
+        }
         return this.deleteModel(modelQuery);
       }
 
       default:
-        return `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, open_model_settings, return_to_session, delete_model.`;
+        throw new SelfControlError(
+          `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, open_model_settings, return_to_session, delete_model.`,
+          'INVALID_PARAMS',
+        );
     }
   }
 
@@ -247,6 +444,8 @@ export class SelfControlService {
       optionText: raw.optionText ?? raw.option_text,
       durationMs: raw.durationMs ?? raw.duration_ms,
       includeDisabled: raw.includeDisabled ?? raw.include_disabled,
+      targetSelector: raw.targetSelector ?? raw.target_selector,
+      timeoutMs: raw.timeoutMs ?? raw.timeout_ms,
     } as SelfControlAction;
   }
 
@@ -323,7 +522,10 @@ export class SelfControlService {
     const enabledModels = await this.fetchModels();
 
     if (enabledModels.length === 0) {
-      return 'No enabled models found. Please configure models first.';
+      throw new SelfControlError(
+        'No enabled models found. Please configure models first.',
+        'NOT_FOUND',
+      );
     }
 
     const query = modelQuery.toLowerCase().trim();
@@ -358,10 +560,10 @@ export class SelfControlService {
     }
 
     const available = enabledModels.map((m) => `"${m.displayName}" (ID: ${m.id})`).join(', ');
-    return (
-      `Model "${modelQuery}" not found. Available enabled models: ${available}\n\n` +
-      `Tip: use "list_models" to see exact names, or use task "set_primary_model" to let me try the UI dropdown automatically.`
-    );
+    throw new ModelNotFoundError(`Model "${modelQuery}" not found in enabled models.`, [
+      `Available enabled models: ${available}`,
+      'Use list_models to see exact names, or call execute_task with task="set_primary_model" to let SelfControl try the UI dropdown.',
+    ]);
   }
 
   private async setDefaultModelViaUI(modelQuery: string, slot: 'primary' | 'fast'): Promise<string> {
@@ -373,7 +575,11 @@ export class SelfControlService {
     const trigger = document.querySelector(selector) as HTMLElement | null;
 
     if (!trigger) {
-      return `Could not find ${slot} model selector in the UI. The model setting page may not be fully loaded.`;
+      throw new SelfControlError(
+        `Could not find ${slot} model selector in the UI. The model settings page may not be fully loaded.`,
+        'NOT_FOUND',
+        ['Call get_page_state to verify the settings/models tab is rendered, then retry.'],
+      );
     }
 
     this.flashHighlight(trigger);
@@ -389,7 +595,10 @@ export class SelfControlService {
     if (!target) {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       const optionTexts = options.map((el) => `"${this.extractText(el)}"`).join(', ');
-      return `Model "${modelQuery}" not found in the ${slot} dropdown. Available options: ${optionTexts}`;
+      throw new ModelNotFoundError(
+        `Model "${modelQuery}" not found in the ${slot} dropdown.`,
+        [`Available options: ${optionTexts}`],
+      );
     }
 
     this.flashHighlight(target);
@@ -409,7 +618,7 @@ export class SelfControlService {
   private async deleteModel(modelQuery: string): Promise<string> {
     const allModels = (await configManager.getConfig<any[]>('ai.models')) ?? [];
     if (allModels.length === 0) {
-      return 'No models configured.';
+      throw new SelfControlError('No models configured.', 'NOT_FOUND');
     }
 
     const query = modelQuery.toLowerCase().trim();
@@ -428,7 +637,9 @@ export class SelfControlService {
       const available = allModels
         .map((m) => `"${m.name ?? 'Unknown'}/${m.model_name ?? 'unknown'}" (ID: ${m.id})`)
         .join(', ');
-      return `Model matching "${modelQuery}" not found. Available models: ${available}`;
+      throw new ModelNotFoundError(`Model matching "${modelQuery}" not found.`, [
+        `Available models: ${available}`,
+      ]);
     }
 
     const deletedIds = new Set(matches.map((m) => String(m.id ?? '')));
@@ -478,7 +689,11 @@ export class SelfControlService {
 
   private clickElement(selector: string): string {
     const el = document.querySelector(selector) as HTMLElement | null;
-    if (!el) return `Element not found: ${selector}`;
+    if (!el) {
+      throw new SelfControlError(`Element not found: ${selector}`, 'NOT_FOUND', [
+        'Call get_page_state and use a real selector / data-testid before retrying.',
+      ]);
+    }
     this.flashHighlight(el);
     this.dispatchClick(el);
     return `Clicked element: ${selector}`;
@@ -489,7 +704,7 @@ export class SelfControlService {
     const elements = Array.from(document.querySelectorAll(selector));
     const query = text.toLowerCase().trim();
 
-    const target = elements.find((el) => {
+    const matches = elements.filter((el) => {
       const candidates = [
         this.extractText(el).toLowerCase(),
         (el.getAttribute('aria-label') ?? '').toLowerCase(),
@@ -497,9 +712,35 @@ export class SelfControlService {
         ((el as HTMLInputElement).placeholder ?? '').toLowerCase(),
       ];
       return candidates.some((c) => c.includes(query));
-    }) as HTMLElement | undefined;
+    });
 
-    if (!target) return `Element with text "${text}" not found`;
+    if (matches.length === 0) {
+      throw new SelfControlError(`Element with text "${text}" not found`, 'NOT_FOUND', [
+        'Call get_page_state to see the actual visible labels.',
+        'Or pass `tag` to narrow the search (e.g. tag="button").',
+      ]);
+    }
+
+    // Disambiguate: prefer interactive elements (button/a/role=button/tab/menuitem).
+    const interactive = matches.filter((el) => this.isInteractive(el as HTMLElement));
+    const candidates = interactive.length > 0 ? interactive : matches;
+
+    if (candidates.length > 1) {
+      const previews = candidates
+        .slice(0, 5)
+        .map((el, i) => `${i + 1}: <${el.tagName.toLowerCase()}> "${this.extractText(el).slice(0, 60)}"`)
+        .join(' | ');
+      throw new SelfControlError(
+        `Ambiguous: ${candidates.length} elements match text "${text}".`,
+        'AMBIGUOUS',
+        [
+          `First candidates: ${previews}.`,
+          'Pass `tag` (e.g. "button") to narrow, or use action="click" with a precise CSS selector / data-testid.',
+        ],
+      );
+    }
+
+    const target = candidates[0] as HTMLElement;
     this.flashHighlight(target);
     this.dispatchClick(target);
     return `Clicked element with text: ${text}`;
@@ -507,7 +748,9 @@ export class SelfControlService {
 
   private inputText(selector: string, value: string): string {
     const el = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
-    if (!el) return `Input element not found: ${selector}`;
+    if (!el) {
+      throw new SelfControlError(`Input element not found: ${selector}`, 'NOT_FOUND');
+    }
 
     this.flashHighlight(el);
 
@@ -543,39 +786,68 @@ export class SelfControlService {
       return `Set contenteditable ${selector} to "${value}"`;
     }
 
-    return `Element ${selector} is not an input`;
+    throw new SelfControlError(
+      `Element ${selector} is not a writable input/textarea/contenteditable.`,
+      'INVALID_PARAMS',
+    );
   }
 
-  private scroll(
+  private async scroll(
     selector: string | undefined,
     direction: 'up' | 'down' | 'top' | 'bottom',
-  ): string {
+  ): Promise<string> {
     const el = selector
       ? (document.querySelector(selector) as HTMLElement | null)
       : (document.scrollingElement as HTMLElement | null);
 
-    if (!el) return `Scroll target not found: ${selector ?? 'document'}`;
+    if (!el) {
+      throw new SelfControlError(
+        `Scroll target not found: ${selector ?? 'document'}`,
+        'NOT_FOUND',
+      );
+    }
 
     const scrollAmount = 500;
+    const before = el.scrollTop;
     switch (direction) {
       case 'up':
         el.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
-        return `Scrolled up ${selector ?? 'document'}`;
+        break;
       case 'down':
         el.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-        return `Scrolled down ${selector ?? 'document'}`;
+        break;
       case 'top':
         el.scrollTo({ top: 0, behavior: 'smooth' });
-        return `Scrolled to top ${selector ?? 'document'}`;
+        break;
       case 'bottom':
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-        return `Scrolled to bottom ${selector ?? 'document'}`;
+        break;
+    }
+
+    // Smooth scroll is async; wait until the scroll position settles so the
+    // next action observes the new viewport. Bail out after ~600ms either way
+    // (matches a typical CSS smooth-scroll duration).
+    await this.waitForScrollSettle(el, before);
+    return `Scrolled ${direction} ${selector ?? 'document'} (from=${Math.round(before)} to=${Math.round(el.scrollTop)})`;
+  }
+
+  /** Poll until two consecutive `scrollTop` reads match, capped at 600ms. */
+  private async waitForScrollSettle(el: HTMLElement, _before: number): Promise<void> {
+    const start = performance.now();
+    let last = el.scrollTop;
+    while (performance.now() - start < 600) {
+      await new Promise((r) => setTimeout(r, 60));
+      const cur = el.scrollTop;
+      if (Math.abs(cur - last) < 0.5) return;
+      last = cur;
     }
   }
 
   private async selectOption(selector: string, optionText: string): Promise<string> {
     const trigger = document.querySelector(selector) as HTMLElement | null;
-    if (!trigger) return `Select trigger not found: ${selector}`;
+    if (!trigger) {
+      throw new SelfControlError(`Select trigger not found: ${selector}`, 'NOT_FOUND');
+    }
 
     this.flashHighlight(trigger);
     trigger.click();
@@ -590,7 +862,11 @@ export class SelfControlService {
     if (!target) {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       const optionTexts = options.slice(0, 20).map((el) => `"${this.extractText(el)}"`).join(', ');
-      return `Option "${optionText}" not found in dropdown. Available options: ${optionTexts}`;
+      throw new SelfControlError(
+        `Option "${optionText}" not found in dropdown.`,
+        'NOT_FOUND',
+        [`Available options: ${optionTexts}`],
+      );
     }
 
     this.flashHighlight(target);
@@ -604,21 +880,56 @@ export class SelfControlService {
     return `Waited ${ms}ms`;
   }
 
-  private pressKey(key: string): string {
+  private pressKey(key: string, targetSelector?: string): string {
     const normalized = key.trim();
-    if (!normalized) return 'No key specified';
-    document.dispatchEvent(
+    if (!normalized) {
+      throw new SelfControlError('No key specified', 'INVALID_PARAMS');
+    }
+
+    // Prefer an explicit target → focused element → document. Dispatching key
+    // events on `document` only works if some element already absorbs them;
+    // otherwise the keystroke is silently dropped, which historically caused
+    // the model to think a "Pressed Enter" had submitted a form when it hadn't.
+    let target: EventTarget;
+    if (targetSelector) {
+      const el = document.querySelector(targetSelector) as HTMLElement | null;
+      if (!el) {
+        throw new SelfControlError(
+          `press_key target_selector not found: ${targetSelector}`,
+          'NOT_FOUND',
+        );
+      }
+      el.focus();
+      target = el;
+    } else {
+      const active = document.activeElement;
+      if (!active || active === document.body) {
+        throw new SelfControlError(
+          'press_key requires `target_selector` (or some element to be focused first).',
+          'MISSING_SESSION',
+          [
+            'Pass `target_selector` so the keystroke lands somewhere observable.',
+            'Or call action="click" / action="input" first to focus an input, then retry.',
+          ],
+        );
+      }
+      target = active;
+    }
+
+    target.dispatchEvent(
       new KeyboardEvent('keydown', { key: normalized, bubbles: true, cancelable: true }),
     );
-    document.dispatchEvent(
+    target.dispatchEvent(
       new KeyboardEvent('keyup', { key: normalized, bubbles: true, cancelable: true }),
     );
-    return `Pressed key: ${normalized}`;
+    return `Pressed key: ${normalized}${targetSelector ? ` on ${targetSelector}` : ''}`;
   }
 
   private readText(selector: string): string {
     const el = document.querySelector(selector);
-    if (!el) return `Element not found: ${selector}`;
+    if (!el) {
+      throw new SelfControlError(`Element not found: ${selector}`, 'NOT_FOUND');
+    }
     const text = this.extractText(el).slice(0, 2000);
     return text || '(empty text)';
   }

@@ -8,6 +8,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { SelfControlAPI } from '@/infrastructure/api/service-api/SelfControlAPI';
 import {
   selfControlService,
+  SelfControlError,
   type SelfControlAction,
   type SelfControlIncomingAction,
 } from './SelfControlService';
@@ -47,11 +48,20 @@ export function startSelfControlEventListener(): void {
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error('Self-control action failed', { requestId, error: errorMessage });
+        const code = error instanceof SelfControlError ? error.code : 'FRONTEND_ERROR';
+        const hints = error instanceof SelfControlError ? error.hints : [];
+        const composed =
+          hints.length > 0 ? `[${code}] ${errorMessage}\nHints: ${hints.join(' | ')}` : `[${code}] ${errorMessage}`;
+        logger.error('Self-control action failed', {
+          requestId,
+          code,
+          error: errorMessage,
+          hints,
+        });
         await SelfControlAPI.submitSelfControlResponse({
           requestId,
           success: false,
-          error: errorMessage,
+          error: composed,
         });
       }
     })();

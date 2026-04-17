@@ -428,6 +428,11 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     /// (Cowork-style: observe → act → verify). Desktop sets a pending flag; cleared when `screenshot_display` runs.
     fn computer_use_after_committed_ui_action(&self) {}
 
+    /// Record what the most recent action *was* (Click, Scroll, KeyChord …)
+    /// so the next `interaction_state.last_mutation` reports it. Hosts that
+    /// don't track this can leave the default no-op.
+    fn computer_use_record_mutation(&self, _kind: ComputerUseLastMutationKind) {}
+
     /// After `move_to_text` positioned the pointer with **trusted global OCR coordinates** (not JPEG guesses),
     /// clear the stale-capture guard so the next **`click`** or Enter **`key_chord`** may proceed without another `screenshot`.
     fn computer_use_trust_pointer_after_ocr_move(&self) {}
@@ -512,6 +517,69 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
             "open_app is not available on this host.".to_string(),
         ))
     }
+
+    /// Enumerate all physical displays attached to the host. The returned
+    /// list is what the model sees in `interaction_state.displays` and what
+    /// `ControlHub` exposes via `desktop.list_displays`.
+    ///
+    /// Default: empty (non-desktop hosts can't enumerate displays).
+    async fn list_displays(&self) -> BitFunResult<Vec<ComputerUseDisplayInfo>> {
+        Ok(vec![])
+    }
+
+    /// Pin subsequent screenshots / clicks / locates to the display with
+    /// `display_id`. Pass `None` to clear the preference and fall back to
+    /// "screen under the pointer". Hosts that don't track a preferred
+    /// display can leave the default no-op.
+    ///
+    /// This is the explicit fix for the original bug — instead of guessing
+    /// the target display from the cursor (which is wrong whenever the user
+    /// has the keyboard focus on a different screen), the model can
+    /// announce "I am working on display N" and the host will commit to it.
+    async fn focus_display(&self, _display_id: Option<u32>) -> BitFunResult<()> {
+        Err(BitFunError::tool(
+            "focus_display is not available on this host.".to_string(),
+        ))
+    }
+
+    /// Currently pinned display id, if any. Surfaced to the model via
+    /// `interaction_state.active_display_id`.
+    fn focused_display_id(&self) -> Option<u32> {
+        None
+    }
+}
+
+/// One physical display reported by the desktop host. Returned by
+/// [`ComputerUseHost::list_displays`] and surfaced to the model in
+/// `interaction_state.displays` so it can pick the right screen explicitly
+/// instead of falling back to whichever screen the mouse pointer happens
+/// to be on (the original "computer use 在多屏时搞错操作的屏幕" failure mode).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ComputerUseDisplayInfo {
+    /// Stable per-session id of the display. Pass back to
+    /// [`ComputerUseHost::focus_display`] to pin subsequent screenshots /
+    /// clicks to this screen.
+    pub display_id: u32,
+    /// Whether the OS marks this as the primary display.
+    pub is_primary: bool,
+    /// Whether this is the display ControlHub will currently capture by
+    /// default (matches the host's `preferred_display_id`, falling back to
+    /// the screen under the mouse pointer if no preference is pinned).
+    pub is_active: bool,
+    /// Whether the cursor is on this display right now.
+    pub has_pointer: bool,
+    /// Top-left corner in **global** logical coordinate space.
+    pub origin_x: i32,
+    pub origin_y: i32,
+    /// Logical (DIP) size; native pixels = logical × `scale_factor`.
+    pub width_logical: u32,
+    pub height_logical: u32,
+    pub scale_factor: f32,
+    /// Best-effort name of the foreground window's app on this display, if
+    /// the host can determine it. Useful for the model to confirm it is
+    /// targeting the "right" screen (e.g. the one with the editor).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreground_app: Option<String>,
 }
 
 /// Result of launching an application via [`ComputerUseHost::open_app`].
@@ -596,7 +664,7 @@ pub enum ComputerUseLastMutationKind {
     Locate,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ComputerUseInteractionState {
     pub click_ready: bool,
     pub enter_ready: bool,
@@ -612,6 +680,17 @@ pub struct ComputerUseInteractionState {
     pub last_mutation: Option<ComputerUseLastMutationKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recommended_next_action: Option<String>,
+    /// Snapshot of all displays at the time of this interaction state.
+    /// The model should consult this list before issuing screen-coordinate
+    /// actions on multi-monitor setups so it can disambiguate targets via
+    /// `desktop.focus_display` instead of relying on cursor location.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub displays: Vec<ComputerUseDisplayInfo>,
+    /// Currently pinned display id (set via `desktop.focus_display`).
+    /// `None` means "fall back to whichever screen the mouse is on" — the
+    /// legacy behavior, kept for compatibility but discouraged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_display_id: Option<u32>,
 }
 
 pub type ComputerUseHostRef = std::sync::Arc<dyn ComputerUseHost>;
@@ -631,6 +710,8 @@ mod tests {
             last_screenshot_kind: Some(ComputerUseInteractionScreenshotKind::FullDisplay),
             last_mutation: Some(ComputerUseLastMutationKind::Screenshot),
             recommended_next_action: Some("screenshot_navigate_quadrant".to_string()),
+            displays: vec![],
+            active_display_id: None,
         };
 
         let value = serde_json::to_value(&state).expect("serialize interaction state");

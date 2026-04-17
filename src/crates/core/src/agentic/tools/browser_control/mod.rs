@@ -8,7 +8,9 @@
 pub mod actions;
 pub mod browser_launcher;
 pub mod cdp_client;
+pub mod session_registry;
 
 pub use actions::BrowserActions;
 pub use browser_launcher::BrowserLauncher;
 pub use cdp_client::CdpClient;
+pub use session_registry::{BrowserSession, BrowserSessionRegistry};

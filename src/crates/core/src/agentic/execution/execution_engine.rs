@@ -1720,8 +1720,9 @@ impl ExecutionEngine {
             }
         }
 
-        // Order tools for the model API: terminal → file-ish tools → **`ComputerUse`** (locate /
-        // screenshot / keys) **before** split mouse tools so the list matches “sense then act”.
+        // Order tools for the model API: terminal → file-ish tools → **`ControlHub`**
+        // (unified desktop / browser / app / terminal / system control) last so the
+        // list matches “think with files first, act on UI last”.
         let tool_ordering: HashMap<String, usize> = [
             ("Task", 1),
             ("Bash", 2),
@@ -1738,7 +1739,7 @@ impl ExecutionEngine {
             ("Skill", 13),
             ("Log", 14),
             ("MermaidInteractive", 15),
-            ("ComputerUse", 16),
+            ("ControlHub", 16),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))

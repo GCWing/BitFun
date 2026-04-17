@@ -1,6 +1,8 @@
 export {
   selfControlService,
   SelfControlService,
+  SelfControlError,
+  ModelNotFoundError,
 } from './SelfControlService';
 export type {
   PageState,

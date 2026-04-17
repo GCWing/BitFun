@@ -12,9 +12,21 @@ pub fn build_screenshot_body(
     debug_rel: Option<String>,
     interaction: &ComputerUseInteractionState,
 ) -> Value {
+    // Phase 2: introduce explicit `image_jpeg_*` / `display_native_*` names
+    // so it's unambiguous which dimensions describe the encoded JPEG that
+    // the model sees vs. the underlying display capture in native pixels.
+    // Old names (`image_width`, `native_width`, `display_origin_*`,
+    // `display_width_px`) are kept as aliases for backward compatibility
+    // with prompts and consumers already in production.
     let mut data = json!({
         "success": true,
         "mime_type": shot.mime_type,
+        "image_jpeg_width": shot.image_width,
+        "image_jpeg_height": shot.image_height,
+        "display_native_width": shot.native_width,
+        "display_native_height": shot.native_height,
+        "display_native_origin_x": shot.display_origin_x,
+        "display_native_origin_y": shot.display_origin_y,
         "image_width": shot.image_width,
         "image_height": shot.image_height,
         "display_width_px": shot.image_width,
@@ -56,6 +68,8 @@ mod tests {
             last_screenshot_kind: Some(ComputerUseInteractionScreenshotKind::FullDisplay),
             last_mutation: None,
             recommended_next_action: Some("screenshot_navigate_quadrant".to_string()),
+            displays: vec![],
+            active_display_id: None,
         };
 
         append_interaction_state(&mut body, &interaction);
@@ -109,6 +123,8 @@ mod tests {
             last_screenshot_kind: Some(ComputerUseInteractionScreenshotKind::FullDisplay),
             last_mutation: None,
             recommended_next_action: Some("screenshot_navigate_quadrant".to_string()),
+            displays: vec![],
+            active_display_id: None,
         };
 
         let body = build_screenshot_body(&shot, None, &interaction);
@@ -119,5 +135,16 @@ mod tests {
             body["interaction_state"]["last_screenshot_kind"],
             json!("full_display")
         );
+        // Phase 2: new explicit names plus their legacy aliases must both be
+        // present so old prompts and new prompts can both consume the body.
+        assert_eq!(body["image_jpeg_width"], json!(100));
+        assert_eq!(body["image_jpeg_height"], json!(80));
+        assert_eq!(body["display_native_width"], json!(100));
+        assert_eq!(body["display_native_height"], json!(80));
+        assert_eq!(body["display_native_origin_x"], json!(0));
+        assert_eq!(body["display_native_origin_y"], json!(0));
+        assert_eq!(body["image_width"], body["image_jpeg_width"]);
+        assert_eq!(body["native_width"], body["display_native_width"]);
+        assert_eq!(body["display_origin_x"], body["display_native_origin_x"]);
     }
 }
