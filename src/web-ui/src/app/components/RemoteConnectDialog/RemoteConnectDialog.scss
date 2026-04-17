@@ -3,6 +3,23 @@
 .bitfun-remote-connect {
   display: flex;
   flex-direction: column;
+  min-height: min(336px, calc(100vh - 168px));
+}
+
+.bitfun-remote-connect-overlay {
+  animation: modal-overlay-fade 0.18s ease;
+
+  .modal--large {
+    width: min(540px, 100%);
+    max-width: min(540px, 100%);
+    min-height: min(398px, calc(100vh - 64px));
+    animation: bitfun-remote-connect-dialog-enter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.bitfun-remote-connect-modal__content {
+  display: flex;
+  flex-direction: column;
 }
 
 .bitfun-remote-connect__title-extra {
@@ -153,8 +170,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 24px 24px;
-  gap: 14px;
+  justify-content: flex-start;
+  padding: 18px 20px 20px;
+  gap: 12px;
+  min-height: 248px;
+  box-sizing: border-box;
 }
 
 // ==================== QR box ====================
@@ -236,8 +256,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px;
-  gap: 14px;
+  justify-content: center;
+  padding: 20px;
+  gap: 12px;
+  min-height: 248px;
+  box-sizing: border-box;
 }
 
 // ==================== Hint text ====================
@@ -287,6 +310,35 @@
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-subtle);
+  min-height: 50px;
+  box-sizing: border-box;
+
+  &--ready {
+    animation: bitfun-remote-connect-info-fade-in 0.18s ease-out;
+  }
+
+  &--placeholder {
+    visibility: hidden;
+  }
+
+  &--skeleton {
+    justify-content: center;
+  }
+}
+
+.bitfun-remote-connect__info-meta-skeleton-line {
+  background: var(--element-bg-subtle);
+  border-radius: 4px;
+  height: 10px;
+  animation: bitfun-remote-connect-skeleton-pulse 1.1s ease-in-out infinite;
+
+  &--long {
+    width: 78%;
+  }
+
+  &--medium {
+    width: 66%;
+  }
 }
 
 .bitfun-remote-connect__description-link,
@@ -420,7 +472,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   gap: 12px;
+  min-height: 188px;
+  box-sizing: border-box;
 
   .bitfun-remote-connect__field {
     display: flex;
@@ -523,3 +578,110 @@
   }
 }
 
+// ==================== Initial load skeleton ====================
+
+.bitfun-remote-connect__skeleton {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  flex: 1 1 auto;
+}
+
+.bitfun-remote-connect__skeleton-body {
+  align-items: stretch;
+  width: 100%;
+  max-width: 100%;
+}
+
+.bitfun-remote-connect__skeleton-bone {
+  background: var(--element-bg-subtle);
+  border-radius: 6px;
+  animation: bitfun-remote-connect-skeleton-pulse 1.1s ease-in-out infinite;
+}
+
+.bitfun-remote-connect__skeleton-pill {
+  @extend .bitfun-remote-connect__skeleton-bone;
+
+  &--group {
+    width: 108px;
+    height: 30px;
+    border-radius: 6px;
+  }
+
+  &--subtab {
+    width: 72px;
+    height: 22px;
+    border-radius: 4px;
+  }
+}
+
+.bitfun-remote-connect__skeleton-card {
+  @extend .bitfun-remote-connect__skeleton-bone;
+  width: 100%;
+  min-height: 96px;
+  border-radius: 8px;
+}
+
+.bitfun-remote-connect__skeleton-line {
+  @extend .bitfun-remote-connect__skeleton-bone;
+  height: 10px;
+  width: 100%;
+  border-radius: 4px;
+
+  &--short {
+    width: 42%;
+  }
+
+  &--medium {
+    width: 72%;
+  }
+}
+
+@keyframes bitfun-remote-connect-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.52;
+  }
+}
+
+@keyframes bitfun-remote-connect-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-remote-connect-info-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-remote-connect-overlay .modal--large {
+    animation: none;
+  }
+
+  .bitfun-remote-connect__info-meta-group--ready,
+  .bitfun-remote-connect__info-meta-skeleton-line {
+    animation: none;
+  }
+
+  .bitfun-remote-connect__skeleton-bone {
+    animation: none;
+    opacity: 0.88;
+  }
+}

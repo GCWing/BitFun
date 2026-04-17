@@ -190,7 +190,7 @@ export const AgentDispatchCard: React.FC<ToolCardProps> = React.memo(
         }
         return t('toolCards.agentDispatch.checkingStatus');
       }
-      // create — format mirrors TaskToolDisplay: "AgentType 智能体：SessionName"
+      // create — format mirrors TaskToolDisplay: "AgentType agent: SessionName"
       const agentTypeLabel = agentType || t('toolCards.agentDispatch.agent');
       const sessionLabel = sessionName || t('toolCards.agentDispatch.agent');
       if (status === 'error' || status === 'cancelled') {

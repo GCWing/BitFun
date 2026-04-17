@@ -1,4 +1,4 @@
-//! Weixin (微信) iLink bot integration for Remote Connect.
+//! Weixin (WeChat) iLink bot integration for Remote Connect.
 //!
 //! Uses Tencent iLink HTTP APIs (`getupdates` long-poll, `sendmessage`) documented in
 //! `@tencent-weixin/openclaw-weixin`. Login is QR-based; after login the same 6-digit

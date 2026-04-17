@@ -551,7 +551,7 @@ mod tests {
         // Backspace with multi-byte characters
         // Note: cursor_col tracks bytes, so backspace behavior with multi-byte chars
         // may add padding spaces. This is a known limitation.
-        // "你好世界" (12 bytes) → backspace removes "界" (3 bytes) → "你好世" (9 bytes)
+        // 12 bytes (four CJK chars) → backspace deletes last char (3 bytes) → nine bytes remain
         // cursor_col goes from 12 to 11 (decremented by 1)
         // When adding '！', padding = 11 - 9 = 2 spaces
         let input = "你好世界\x08！";
@@ -565,14 +565,13 @@ mod tests {
     #[test]
     fn test_multibyte_chinese_cursor_truncate() {
         // Cursor movement with truncate - this previously caused panic
-        // "你好世界" (12 bytes for 4 Chinese chars)
+        // 12 bytes = four CJK characters
         // \x1b[5G moves cursor to column 5 (0-based: 4)
         // This would truncate in the middle of the second Chinese character
         // After fix, it should floor to the nearest character boundary
         let input = "你好世界\x1b[5G测试";
-        // cursor moves to column 4, which is in the middle of "好"
-        // floor_char_boundary should adjust to column 3 (end of "你")
-        // Then truncate and append "测试"
+        // Cursor column 4 bisects the second glyph; floor_char_boundary snaps to after the first
+        // Then truncate and append the following run
         let result = strip_ansi(input);
         // Should not panic and handle gracefully
         assert!(!result.is_empty());

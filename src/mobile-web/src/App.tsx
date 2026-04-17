@@ -73,7 +73,7 @@ const AppContent: React.FC = () => {
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  // 全局链接点击处理 - 确保所有外部链接在新标签页打开
+  // Global link click handler — open all external links in a new tab
   useEffect(() => {
     const handleLinkClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -81,7 +81,7 @@ const AppContent: React.FC = () => {
       
       if (link && link.href) {
         const href = link.href;
-        // 检查是否是外部链接 (http/https 且不是当前域名)
+        // http(s) links: open in a new browser tab
         if (href.startsWith('http://') || href.startsWith('https://')) {
           e.preventDefault();
           e.stopPropagation();
@@ -90,7 +90,7 @@ const AppContent: React.FC = () => {
       }
     };
     
-    // 添加全局点击监听
+    // Capture-phase listener so we intercept before in-app navigation
     document.addEventListener('click', handleLinkClick, true);
     
     return () => {

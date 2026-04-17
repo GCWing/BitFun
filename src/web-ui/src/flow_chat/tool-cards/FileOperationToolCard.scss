@@ -71,8 +71,9 @@
   }
 
   /*
-   * Git 轨道在 ToolCardHeader 里位于 .tool-card-extra 内；默认 extra 高度跟子项走，轨道只有图标高，
-   * 竖线与悬停底无法贴齐头部上下内边距、也无法铺到右侧 padding。与头部行同高后再用负 inset 顶满。
+   * Git rail lives under ToolCardHeader in .tool-card-extra; by default extra shrinks to its children so the
+   * rail is only icon-tall and the vertical line / hover baseline cannot span the header padding. Stretch
+   * to the header row height, then use negative inset to fill edge-to-edge.
    */
   .base-tool-card-header .tool-card-extra:has(.file-op-git-rail) {
     align-self: stretch;
@@ -142,7 +143,7 @@
   }
 }
 
-/* Right rail for “查看 Git diff” — aligned with Task tool header rail (TaskToolDisplay). */
+/* Right rail for “View Git diff” — aligned with Task tool header rail (TaskToolDisplay). */
 .file-op-git-rail {
   position: relative;
   display: flex;

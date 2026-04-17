@@ -7,7 +7,7 @@
 
 // Match settings content panel: no modal chrome border on this dialog only
 .modal-overlay.bitfun-about-modal-overlay {
-  // Extra horizontal inset from viewport (左右留白)
+  // Extra horizontal inset from viewport (side margins)
   padding: 24px 32px;
 
   .modal {
@@ -61,19 +61,7 @@
   color: var(--color-text-primary);
   position: relative;
   z-index: 1;
-  animation: about-title-enter 0.5s ease-out 0.1s both;
   line-height: 1.2;
-}
-
-@keyframes about-title-enter {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .bitfun-about-dialog__version-badge {
@@ -86,18 +74,6 @@
   letter-spacing: 0.02em;
   position: relative;
   z-index: 1;
-  animation: about-badge-enter 0.5s ease-out 0.15s both;
-}
-
-@keyframes about-badge-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 // Decorative divider
@@ -108,18 +84,6 @@
   margin-top: 18px;
   position: relative;
   z-index: 1;
-  animation: about-divider-enter 0.6s ease-out 0.2s both;
-}
-
-@keyframes about-divider-enter {
-  from {
-    opacity: 0;
-    width: 0;
-  }
-  to {
-    opacity: 1;
-    width: 60px;
-  }
 }
 
 // ==================== Scrollable area ====================
@@ -131,7 +95,7 @@
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  // Inset rounded panel: side margins + rounded rect (圆角矩形)
+  // Inset rounded panel: side margins + rounded rectangle
   margin: 0 20px;
   padding: 12px 16px 16px;
   border-radius: 12px;
@@ -142,20 +106,8 @@
 
 .bitfun-about-dialog__info-section {
   flex-shrink: 0;
-  // 在 scrollable 剩余高度内垂直居中；内容过高时 margin 让位，仍可滚动
+  // Vertically center within remaining scrollable height; if content overflows, margins yield and scrolling still works
   margin-block: auto;
-  animation: about-section-enter 0.4s ease-out 0.2s both;
-}
-
-@keyframes about-section-enter {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .bitfun-about-dialog__info-card {
@@ -239,7 +191,6 @@
 
 .bitfun-about-dialog__dependencies-section {
   margin-bottom: 16px;
-  animation: about-section-enter 0.4s ease-out 0.25s both;
 }
 
 .bitfun-about-dialog__dependencies-toggle {
@@ -300,18 +251,6 @@
   background: transparent;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  animation: about-list-expand 0.25s ease-out;
-}
-
-@keyframes about-list-expand {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .bitfun-about-dialog__dependencies-grid {
@@ -428,7 +367,6 @@
   padding: 16px 28px 20px;
   text-align: center;
   position: relative;
-  animation: about-section-enter 0.4s ease-out 0.3s both;
 }
 
 .bitfun-about-dialog__license {

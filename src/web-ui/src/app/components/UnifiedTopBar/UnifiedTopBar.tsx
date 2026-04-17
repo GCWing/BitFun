@@ -7,7 +7,7 @@
  * Layout (left → right):
  *   [macOS traffic-lights reserve] [Logo▼ menu: toolbar, about]
  *   [Arrow back button (conditional)] [context title] ─drag─
- *   [search trigger] ─drag─ [📱远程] [_][□][×]
+ *   [search trigger] ─drag─ [📱 Remote] [_][□][×]
  *
  * Unified back button / title logic:
  *   - overlay active          → back closes overlay + overlay scene title

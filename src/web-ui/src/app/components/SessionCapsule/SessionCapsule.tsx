@@ -152,7 +152,7 @@ const SessionCapsule: React.FC = () => {
     [activeBtwSessionData?.childSessionId, activeSessionId, activeTabId]
   );
 
-  /** 所有运行中的会话（与列表排序一致），折叠胶囊内全部展示 */
+  /** All running sessions (same order as the list), shown in full inside the collapsed capsule */
   const runningSessionsOrdered = useMemo((): Session[] => {
     if (runningSessionIds.size === 0) return [];
     return Array.from(flowChatState.sessions.values())
@@ -292,7 +292,7 @@ const SessionCapsule: React.FC = () => {
     >
       {expanded ? (
         <>
-          {/* 第一行：仅搜索框 */}
+          {/* Row 1: search field only */}
           <div className="session-capsule__header">
             <Search
               className="session-capsule__search-input session-capsule__search--pill"
@@ -307,12 +307,12 @@ const SessionCapsule: React.FC = () => {
             />
           </div>
 
-          {/* 任务列表 */}
+          {/* Task list */}
           <div className="session-capsule__list">
             <SessionList listAllSessions listFilterQuery={listFilterQuery} />
           </div>
 
-          {/* 底部：新建会话 + 详情 + 固定展开 */}
+          {/* Footer: new session + details + pin expand */}
           <div className="session-capsule__footer">
             <Tooltip content={t('nav.sessionCapsule.newSessionButton')} placement="top">
               <button

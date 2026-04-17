@@ -2,7 +2,7 @@
 @use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 .font-pref-panel {
-  /* 界面字体：多行区块，标题与说明之间略松一点 */
+  /* UI fonts: multiline block, slightly looser gap between title and description */
   &__row--ui.bitfun-config-page-row--multiline {
     gap: $size-gap-3;
 
@@ -11,7 +11,7 @@
     }
   }
 
-  /* 对话：左右单行，左侧说明区偏宽、右侧控件区保证最小宽度 */
+  /* Chat: single row left/right, wider description on the left, controls keep a minimum width */
   &__row--flow-chat.bitfun-config-page-row:not(.bitfun-config-page-row--multiline) {
     --row-grid-cols: minmax(0, 8fr) minmax(220px, 4fr);
   }
@@ -40,7 +40,7 @@
     min-width: 0;
   }
 
-  /* 第六档「自定义」与右侧步进器保持同一行，整组可随前置按钮换行 */
+  /* Sixth option (Custom) stays on one row with the stepper on the right; the whole group can wrap after leading buttons */
   &__custom-segment-inline {
     display: inline-flex;
     flex-wrap: nowrap;

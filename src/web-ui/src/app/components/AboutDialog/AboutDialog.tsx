@@ -49,7 +49,6 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={t('header.about')}
       showCloseButton={true}
       size="medium"
       overlayClassName="bitfun-about-modal-overlay"

@@ -140,9 +140,9 @@ fn normalize_query(text_query: &str) -> BitFunResult<String> {
 }
 
 /// Normalize for substring / fuzzy matching. Strips **all** Unicode whitespace so that
-/// Vision output like `"尉 怡 青"` or `"尉怡 青"` still matches query `"尉怡青"` (CJK UIs often
-/// insert spaces between glyphs). Latin phrases become `"helloworld"`-style; substring checks
-/// remain meaningful for short tokens.
+/// OCR text with extra spaces between CJK glyphs still matches a contiguous query string
+/// (common when vision inserts spaces between characters). Latin phrases become
+/// `"helloworld"`-style; substring checks remain meaningful for short tokens.
 fn normalize_for_match(s: &str) -> String {
     s.chars()
         .filter(|c| !c.is_whitespace())

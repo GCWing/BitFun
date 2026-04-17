@@ -467,7 +467,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
       // Fallback: render as plain text for computer:// links without handler,
       // or as a regular link for http(s) links.
       if (typeof href === 'string') {
-        // 所有外部链接都在新标签页打开
+        // Open all external links in a new tab
         const isExternalLink = href.startsWith('http://') || href.startsWith('https://');
         if (isExternalLink) {
           return (

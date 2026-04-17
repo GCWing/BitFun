@@ -209,7 +209,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 .bitfun-toolbar-mode__session-menu-scroll {
   flex: 1 1 auto;
   min-height: 0;
-  /* 仅列表区域限高，滚轮 / 触控板滚动 */
+  /* Clamp height on the list area only; scroll via wheel / trackpad */
   max-height: min(240px, 38vh);
   overflow-x: hidden;
   overflow-y: auto;
@@ -282,7 +282,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 0;
   }
 
-  /* 紧凑窗体：列表占剩余高度，内部滚动 */
+  /* Compact sheet: list fills remaining height and scrolls internally */
   .bitfun-toolbar-mode__session-menu-scroll {
     flex: 1 1 auto;
     min-height: 0;
@@ -331,7 +331,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
-/* “+ 编程会话”：圆底加号，对齐侧栏顶栏 */
+/* “+ coding session”: circular plus base, aligned with sidebar top bar */
 .bitfun-toolbar-mode__session-item-icon {
   flex-shrink: 0;
   width: 20px;
