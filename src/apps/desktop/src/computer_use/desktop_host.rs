@@ -9,8 +9,7 @@ use bitfun_core::agentic::tools::computer_use_host::{
     ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
     ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
     OcrRegionNative, ScreenshotCropCenter, SomElement, UiElementLocateQuery, UiElementLocateResult,
-    COMPUTER_USE_POINT_CROP_HALF_DEFAULT, COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
-    COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
+    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use bitfun_core::agentic::tools::computer_use_host::{
@@ -335,6 +334,7 @@ fn compose_computer_use_frame(
     (content, 0, 0)
 }
 
+#[allow(dead_code)] // legacy: crop logic disabled at the entry point in screenshot_display
 fn implicit_confirmation_should_apply(
     click_needs: bool,
     params: &ComputerUseScreenshotParams,
@@ -394,6 +394,7 @@ fn global_to_native_full_pixel_center(
 }
 
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn implicit_global_center_for_confirmation(
     center: ComputerUseImplicitScreenshotCenter,
     mx: f64,
@@ -408,6 +409,7 @@ fn implicit_global_center_for_confirmation(
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 fn implicit_global_center_for_confirmation(
     center: ComputerUseImplicitScreenshotCenter,
     mx: f64,
@@ -1027,6 +1029,13 @@ end tell"#])
 
     /// Enigo on macOS uses Text Input Source / AppKit paths that must run on the main queue.
     /// Tokio `spawn_blocking` threads are not main; dispatch there hits `dispatch_assert_queue_fail`.
+    ///
+    /// On macOS, the main-queue dispatch is also wrapped in an Objective-C
+    /// `@try/@catch` (via `objc2::exception::catch`) so that an `NSException`
+    /// thrown by TSM / HIToolbox / AppKit during keyboard or text input is
+    /// converted into a Rust error instead of propagating across the FFI
+    /// boundary as a "foreign exception" — which would otherwise cause Rust's
+    /// `catch_unwind` to abort the whole process (`SIGABRT`).
     fn run_enigo_job<F, T>(job: F) -> BitFunResult<T>
     where
         F: FnOnce(&mut Enigo) -> BitFunResult<T> + Send,
@@ -1034,7 +1043,7 @@ end tell"#])
     {
         #[cfg(target_os = "macos")]
         {
-            macos::run_on_main_for_enigo(|| Self::with_enigo(job))
+            macos::run_on_main_for_enigo(move || Self::with_enigo(job))
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -2134,17 +2143,56 @@ mod macos {
     }
 
     /// Run work that may call TSM / HIToolbox (enigo keyboard & text) on the main dispatch queue.
-    pub fn run_on_main_for_enigo<F, T>(f: F) -> T
+    ///
+    /// The closure is wrapped in `objc2::exception::catch` so that any
+    /// Objective-C `NSException` thrown by TSM / HIToolbox / AppKit (which
+    /// historically appears as `__rust_foreign_exception` and aborts the
+    /// process when it crosses back into the Rust runtime) is converted into
+    /// a `BitFunError` we can return to the caller. The closure must itself
+    /// return a `BitFunResult<T>` so we can flatten the two error sources
+    /// (ObjC exception + Rust-side error) into one.
+    pub fn run_on_main_for_enigo<F, T>(f: F) -> BitFunResult<T>
     where
-        F: FnOnce() -> T + Send,
+        F: FnOnce() -> BitFunResult<T> + Send,
         T: Send,
     {
+        let work = move || catch_objc_in_main_queue(f);
         unsafe {
             if pthread_main_np() != 0 {
-                f()
+                work()
             } else {
-                Queue::main().exec_sync(f)
+                Queue::main().exec_sync(work)
             }
+        }
+    }
+
+    /// Run a closure under an Objective-C `@try/@catch` and convert any
+    /// `NSException` into a `BitFunError`. Used to wrap calls into AppKit /
+    /// HIToolbox / Accessibility APIs that may throw native exceptions which
+    /// would otherwise propagate as `__rust_foreign_exception` and abort the
+    /// process. Public so non-enigo paths (e.g. AX window-bounds lookup) can
+    /// share the same defense.
+    pub fn catch_objc<F, T>(f: F) -> BitFunResult<T>
+    where
+        F: FnOnce() -> BitFunResult<T>,
+    {
+        catch_objc_in_main_queue(f)
+    }
+
+    fn catch_objc_in_main_queue<F, T>(f: F) -> BitFunResult<T>
+    where
+        F: FnOnce() -> BitFunResult<T>,
+    {
+        use std::panic::AssertUnwindSafe;
+        match objc2::exception::catch(AssertUnwindSafe(f)) {
+            Ok(inner) => inner,
+            Err(Some(exc)) => Err(BitFunError::tool(format!(
+                "Objective-C exception: {}",
+                exc
+            ))),
+            Err(None) => Err(BitFunError::tool(
+                "Objective-C exception (nil)".to_string(),
+            )),
         }
     }
 
@@ -2390,33 +2438,118 @@ impl ComputerUseHost for DesktopComputerUseHost {
 
         let (mouse_x, mouse_y) = Self::current_mouse_position();
 
+        // === Crop policy: full window OR full display, NOTHING ELSE ===
+        //
+        // The historical crop logic (mouse-centered 500×500 implicit
+        // confirmation crop, `crop_center` / `navigate_quadrant` /
+        // `point_crop_half_extent_native` quadrant drilling) is **disabled**
+        // at the entry point. Models always get one of two pictures:
+        //
+        //   1. The **focused application window** (via AX) — used by default
+        //      when AX can resolve it. This is the right view 99% of the
+        //      time: the model can see the entire app it just acted on.
+        //   2. The **full display** — fallback when AX cannot resolve the
+        //      window (no permission, no AX windows, non-macOS).
+        //
+        // All incoming crop / quadrant / implicit-center params are stripped
+        // before they reach the rendering pipeline. The accompanying click
+        // guard (`quadrant_navigation_click_ready`) is also relaxed since
+        // every screenshot now provides full context for click_label /
+        // click_element / move_to_text / mouse_move targeting.
+        let _ = click_needs; // intentionally unused — no more click_needs-gated crop variants
+        let window_target_rect: Option<(f64, f64, f64, f64)> = {
+            #[cfg(target_os = "macos")]
+            {
+                // Wrap the AX call in @try/@catch: a buggy frontmost app
+                // (e.g. one that throws NSAccessibilityException out of an
+                // attribute callback) used to crash the whole process via
+                // __rust_foreign_exception. Now we just fall back to a
+                // full-display screenshot and log the failure.
+                let res = macos::catch_objc(|| {
+                    crate::computer_use::macos_ax_ui::frontmost_window_bounds_global()
+                });
+                match res {
+                    Ok((x, y, w, h)) => Some((x as f64, y as f64, w as f64, h as f64)),
+                    Err(e) => {
+                        debug!(
+                            "Focused-window lookup failed, falling back to full-display capture: {}",
+                            e
+                        );
+                        None
+                    }
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                None
+            }
+        };
+
+        // If the focused window lives on a different display than the cached /
+        // preferred one, override display selection so we capture the correct screen.
+        let effective_pref_display_id = if let Some((wx, wy, ww, wh)) = window_target_rect {
+            let cx_g = wx + ww / 2.0;
+            let cy_g = wy + wh / 2.0;
+            Screen::from_point(cx_g.round() as i32, cy_g.round() as i32)
+                .ok()
+                .map(|s| s.display_info.id)
+                .or(preferred_display_id)
+        } else {
+            preferred_display_id
+        };
+
         let (rgba, screen) =
-            Self::resolve_screenshot_capture(cached, mouse_x, mouse_y, preferred_display_id)?;
+            Self::resolve_screenshot_capture(cached, mouse_x, mouse_y, effective_pref_display_id)?;
         let (native_w, native_h) = rgba.dimensions();
 
-        let mut params = params;
-        let mut implicit_applied = false;
-        if implicit_confirmation_should_apply(click_needs, &params) {
-            let center = params
-                .implicit_confirmation_center
-                .unwrap_or(ComputerUseImplicitScreenshotCenter::Mouse);
-            let (gx, gy) = implicit_global_center_for_confirmation(center, mouse_x, mouse_y);
+        // === Build the ONE allowed param set ===
+        //
+        // Either (a) focused-window crop, or (b) full-display capture. All
+        // model-supplied crop / quadrant / implicit-center fields are
+        // discarded here on purpose so the rendering pipeline can never
+        // produce a mouse-centered 500×500 or a quadrant tile again.
+        let _ = params; // discard incoming crop fields entirely
+        let implicit_applied = false; // legacy flag, always false now
+        let params = if let Some((wx, wy, ww, wh)) = window_target_rect {
+            let cx_g = wx + ww / 2.0;
+            let cy_g = wy + wh / 2.0;
             let (cx, cy) = global_to_native_full_pixel_center(
-                gx,
-                gy,
+                cx_g,
+                cy_g,
                 native_w,
                 native_h,
                 &screen.display_info,
             );
-            params = ComputerUseScreenshotParams {
+            let disp_w = screen.display_info.width as f64;
+            let disp_h = screen.display_info.height as f64;
+            let scale_x = if disp_w > 0.0 {
+                native_w as f64 / disp_w
+            } else {
+                1.0
+            };
+            let scale_y = if disp_h > 0.0 {
+                native_h as f64 / disp_h
+            } else {
+                1.0
+            };
+            // half_extent must cover the longer side of the window in native
+            // pixels (+ 16px visual padding so window edges aren't flush
+            // with the frame). Clamped to the display so we never request
+            // more than what we just captured.
+            let half_native = ((ww * scale_x).max(wh * scale_y) / 2.0).ceil() as u32 + 16;
+            let max_half = (native_w.max(native_h) / 2).max(64);
+            let half_native = half_native.clamp(64, max_half);
+            ComputerUseScreenshotParams {
                 crop_center: Some(ScreenshotCropCenter { x: cx, y: cy }),
                 navigate_quadrant: None,
                 reset_navigation: false,
-                point_crop_half_extent_native: Some(COMPUTER_USE_POINT_CROP_HALF_DEFAULT),
+                point_crop_half_extent_native: Some(half_native),
                 implicit_confirmation_center: None,
-            };
-            implicit_applied = true;
-        }
+                crop_to_focused_window: false,
+            }
+        } else {
+            ComputerUseScreenshotParams::default()
+        };
 
         // Update cache in state
         {
@@ -2535,7 +2668,17 @@ impl ComputerUseHost for DesktopComputerUseHost {
         .map_err(|e| BitFunError::tool(e.to_string()))??;
         let query = text_query.to_string();
         let desktop_matches = tokio::task::spawn_blocking(move || {
-            super::screen_ocr::find_text_matches(&shot, &query)
+            // Vision (`VNRecognizeTextRequest`) can throw `NSException` on
+            // malformed images / OOM. Catch it so OCR failures degrade to
+            // an empty match list instead of aborting the runtime.
+            #[cfg(target_os = "macos")]
+            {
+                macos::catch_objc(|| super::screen_ocr::find_text_matches(&shot, &query))
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                super::screen_ocr::find_text_matches(&shot, &query)
+            }
         })
         .await
         .map_err(|e| BitFunError::tool(e.to_string()))??;
@@ -2647,7 +2790,18 @@ impl ComputerUseHost for DesktopComputerUseHost {
         {
             const SOM_MAX_ELEMENTS: usize = 50;
             tokio::task::spawn_blocking(move || {
-                crate::computer_use::macos_ax_ui::enumerate_interactive_elements(SOM_MAX_ELEMENTS)
+                // AX tree traversal can throw `NSException` from a misbehaving
+                // frontmost app; the @try/@catch wrapper turns that into an
+                // empty SoM list rather than crashing the whole process.
+                macos::catch_objc(|| {
+                    Ok(crate::computer_use::macos_ax_ui::enumerate_interactive_elements(
+                        SOM_MAX_ELEMENTS,
+                    ))
+                })
+                .unwrap_or_else(|e| {
+                    debug!("SoM enumeration suppressed by ObjC catch: {}", e);
+                    (vec![], None)
+                })
             })
             .await
             .unwrap_or_else(|_| (vec![], None))
@@ -3133,20 +3287,11 @@ tell application "System Events" to get unix id of first process whose frontmost
         if s.pointer_trusted_after_ocr_move {
             return Ok(());
         }
-        match s.last_shot_refinement {
-            Some(ComputerUseScreenshotRefinement::RegionAroundPoint { .. }) => {}
-            Some(ComputerUseScreenshotRefinement::QuadrantNavigation {
-                click_ready: true, ..
-            }) => {}
-            // Fresh full-screen JPEG matches the display — valid for image-space `mouse_move` then
-            // guarded `click` as long as `click_needs_fresh_screenshot` is false above.
-            Some(ComputerUseScreenshotRefinement::FullDisplay) => {}
-            _ => {
-                return Err(BitFunError::tool(
-                    "Click refused: use a **fine** screenshot basis — either a **~500×500 point crop** (`screenshot_crop_center_x` / `y` in full-display native pixels) **or** keep drilling with `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` is true in the tool result, then `ComputerUseMousePrecise` / `ComputerUseMouseStep` / **`ComputerUse`** **`mouse_move`** (**`use_screen_coordinates`: true** only) to position, then **`click`**. Or take a **full-screen** `screenshot` (no pointer move since capture), then **`mouse_move`** with globals from tool results, then **`click`**.".to_string(),
-                ));
-            }
-        }
+        // Crop / quadrant-drilling is gone — every screenshot is either the
+        // focused window or the full display, both of which are sufficient
+        // bases for a click. The only remaining guard is the cache freshness
+        // check above (`click_needs_fresh_screenshot`).
+        let _ = s.last_shot_refinement;
         Ok(())
     }
 

@@ -1716,15 +1716,38 @@ impl Tool for ComputerUseTool {
                 Ok(vec![ToolResult::ok(body, Some(summary))])
             }
             "key_chord" => {
-                let keys: Vec<String> = input
-                    .get("keys")
-                    .and_then(|v| v.as_array())
-                    .ok_or_else(|| BitFunError::tool("keys array is required".to_string()))?
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
+                // UX: accept BOTH `keys: ["escape"]` (canonical) AND
+                // `keys: "escape"` / `key: "escape"` (common mistakes from
+                // the model). The wrong-shape variants are silently
+                // coerced — in practice every regression caused by being
+                // strict here costs a full round-trip to fix. Genuine
+                // missing-keys is reported with an explicit example so
+                // the model recovers in one shot.
+                let keys: Vec<String> = match input.get("keys") {
+                    Some(Value::Array(arr)) => arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect(),
+                    Some(Value::String(s)) => vec![s.to_string()],
+                    None => match input.get("key").and_then(|v| v.as_str()) {
+                        Some(s) => vec![s.to_string()],
+                        None => {
+                            return Err(BitFunError::tool(
+                                "[INVALID_PARAMS] key_chord requires `keys` as a JSON array of key names\nHints: example { \"keys\": [\"command\", \"v\"] } | for a single key { \"keys\": [\"return\"] } | use lowercase canonical names: command, control, option, shift, return, escape, tab, space, delete, arrow_up/down/left/right, f1..f12"
+                                    .to_string(),
+                            ));
+                        }
+                    },
+                    _ => {
+                        return Err(BitFunError::tool(
+                            "[INVALID_PARAMS] key_chord `keys` must be a string or array of strings\nHints: example { \"keys\": [\"command\", \"v\"] }".to_string(),
+                        ));
+                    }
+                };
                 if keys.is_empty() {
-                    return Err(BitFunError::tool("keys must not be empty".to_string()));
+                    return Err(BitFunError::tool(
+                        "[INVALID_PARAMS] key_chord `keys` must not be empty\nHints: example { \"keys\": [\"return\"] }".to_string(),
+                    ));
                 }
                 host_ref.key_chord(keys.clone()).await?;
                 let input_coords = json!({ "kind": "key_chord", "keys": keys });

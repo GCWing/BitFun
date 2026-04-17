@@ -30,6 +30,7 @@ pub fn coordinate_mode(input: &Value) -> &str {
         .unwrap_or("image")
 }
 
+#[allow(dead_code)] // kept around for the deprecation shim — no longer wired in
 pub fn parse_screenshot_crop_center(input: &Value) -> BitFunResult<Option<ScreenshotCropCenter>> {
     let xv = input.get("screenshot_crop_center_x");
     let yv = input.get("screenshot_crop_center_y");
@@ -58,6 +59,7 @@ pub fn parse_screenshot_crop_center(input: &Value) -> BitFunResult<Option<Screen
     }
 }
 
+#[allow(dead_code)]
 pub fn parse_screenshot_crop_half_extent_native(input: &Value) -> BitFunResult<Option<u32>> {
     match input.get("screenshot_crop_half_extent_native") {
         None => Ok(None),
@@ -76,12 +78,14 @@ pub fn parse_screenshot_crop_half_extent_native(input: &Value) -> BitFunResult<O
     }
 }
 
+#[allow(dead_code)]
 pub fn input_has_screenshot_crop_fields(input: &Value) -> bool {
     let x = input.get("screenshot_crop_center_x");
     let y = input.get("screenshot_crop_center_y");
     x.is_some_and(|v| !v.is_null()) || y.is_some_and(|v| !v.is_null())
 }
 
+#[allow(dead_code)]
 pub fn parse_screenshot_implicit_center(
     input: &Value,
 ) -> BitFunResult<Option<ComputerUseImplicitScreenshotCenter>> {
@@ -100,6 +104,7 @@ pub fn parse_screenshot_implicit_center(
     }
 }
 
+#[allow(dead_code)]
 pub fn parse_screenshot_navigate_quadrant(
     input: &Value,
 ) -> BitFunResult<Option<ComputerUseNavigateQuadrant>> {
@@ -125,43 +130,46 @@ pub fn parse_screenshot_navigate_quadrant(
     }))
 }
 
-pub fn parse_screenshot_params(input: &Value) -> BitFunResult<(ComputerUseScreenshotParams, bool)> {
-    let navigate = parse_screenshot_navigate_quadrant(input)?;
-    let reset_navigation = input
-        .get("screenshot_reset_navigation")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let implicit_center = parse_screenshot_implicit_center(input)?;
-
-    if navigate.is_some() {
-        let ignored_crop = input_has_screenshot_crop_fields(input);
-        return Ok((
-            ComputerUseScreenshotParams {
-                crop_center: None,
-                navigate_quadrant: navigate,
-                reset_navigation,
-                point_crop_half_extent_native: None,
-                implicit_confirmation_center: implicit_center,
-            },
-            ignored_crop,
-        ));
-    }
-
-    let crop = parse_screenshot_crop_center(input)?;
-    let half = if crop.is_some() {
-        parse_screenshot_crop_half_extent_native(input)?
-    } else {
-        None
+/// Parse `screenshot_window` / `window` truthy flags. Accepts:
+/// - boolean `true`
+/// - string `"focused"`, `"focused_window"`, `"app"`, `"window"` (case-insensitive)
+/// Anything else (including `false` / `null` / missing) → `false`.
+pub fn parse_screenshot_window_flag(input: &Value) -> bool {
+    let raw = input
+        .get("screenshot_window")
+        .or_else(|| input.get("window"));
+    let Some(v) = raw else {
+        return false;
     };
+    if let Some(b) = v.as_bool() {
+        return b;
+    }
+    if let Some(s) = v.as_str() {
+        let n = s.trim().to_ascii_lowercase();
+        return matches!(
+            n.as_str(),
+            "focused" | "focused_window" | "app" | "window" | "true" | "1"
+        );
+    }
+    false
+}
 
+/// Crop / quadrant / implicit-center parameters are **deprecated and silently
+/// ignored** — every screenshot is now either the focused application window
+/// (default, when AX can resolve it) or the full display (fallback). Only
+/// `screenshot_window` / `window` is still honored, as a hint to prefer the
+/// focused window when both branches are available. Old prompts and tests
+/// that pass the legacy fields keep working without erroring out.
+pub fn parse_screenshot_params(input: &Value) -> BitFunResult<(ComputerUseScreenshotParams, bool)> {
+    let crop_to_focused_window = parse_screenshot_window_flag(input);
     Ok((
         ComputerUseScreenshotParams {
-            crop_center: crop,
+            crop_center: None,
             navigate_quadrant: None,
-            reset_navigation,
-            point_crop_half_extent_native: half,
-            implicit_confirmation_center: implicit_center,
+            reset_navigation: false,
+            point_crop_half_extent_native: None,
+            implicit_confirmation_center: None,
+            crop_to_focused_window,
         },
         false,
     ))
@@ -173,7 +181,10 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn screenshot_params_prefer_quadrant_over_crop_fields() {
+    fn screenshot_params_silently_ignore_legacy_quadrant_and_crop_fields() {
+        // Crop / quadrant / reset_navigation are deprecated. The parser must
+        // accept them (no error) and discard them so old prompts keep working
+        // — every screenshot is now full-window or full-display only.
         let input = json!({
             "screenshot_navigate_quadrant": "top_left",
             "screenshot_crop_center_x": 120,
@@ -184,17 +195,14 @@ mod tests {
         let (params, ignored_crop) =
             parse_screenshot_params(&input).expect("parse screenshot params");
 
-        assert_eq!(
-            params.navigate_quadrant,
-            Some(ComputerUseNavigateQuadrant::TopLeft)
-        );
+        assert_eq!(params.navigate_quadrant, None);
         assert_eq!(params.crop_center, None);
-        assert!(params.reset_navigation);
-        assert!(ignored_crop);
+        assert!(!params.reset_navigation);
+        assert!(!ignored_crop);
     }
 
     #[test]
-    fn screenshot_params_parse_crop_half_extent_only_with_crop() {
+    fn screenshot_params_silently_ignore_crop_half_extent() {
         let input = json!({
             "screenshot_crop_center_x": 33,
             "screenshot_crop_center_y": 44,
@@ -204,22 +212,30 @@ mod tests {
         let (params, ignored_crop) =
             parse_screenshot_params(&input).expect("parse screenshot params");
 
-        let crop = params.crop_center.expect("crop center");
-        assert_eq!(crop.x, 33);
-        assert_eq!(crop.y, 44);
-        assert_eq!(params.point_crop_half_extent_native, Some(180));
+        assert_eq!(params.crop_center, None);
+        assert_eq!(params.point_crop_half_extent_native, None);
         assert!(!ignored_crop);
     }
 
     #[test]
-    fn screenshot_params_parse_implicit_center() {
-        let input = json!({
-            "screenshot_implicit_center": "text_caret"
-        });
+    fn screenshot_params_silently_ignore_implicit_center() {
+        let input = json!({ "screenshot_implicit_center": "text_caret" });
         let (params, _) = parse_screenshot_params(&input).expect("parse");
-        assert_eq!(
-            params.implicit_confirmation_center,
-            Some(ComputerUseImplicitScreenshotCenter::TextCaret)
-        );
+        assert_eq!(params.implicit_confirmation_center, None);
+    }
+
+    #[test]
+    fn screenshot_params_honor_window_flag() {
+        let input = json!({ "screenshot_window": true });
+        let (params, _) = parse_screenshot_params(&input).expect("parse");
+        assert!(params.crop_to_focused_window);
+
+        let input = json!({ "window": "focused" });
+        let (params, _) = parse_screenshot_params(&input).expect("parse");
+        assert!(params.crop_to_focused_window);
+
+        let input = json!({});
+        let (params, _) = parse_screenshot_params(&input).expect("parse");
+        assert!(!params.crop_to_focused_window);
     }
 }

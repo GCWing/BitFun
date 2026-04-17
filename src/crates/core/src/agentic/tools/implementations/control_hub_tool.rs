@@ -237,6 +237,111 @@ impl ControlHubTool {
                     Some(format!("{} display(s) detected", count)),
                 )]);
             }
+            // High-leverage UX primitive: paste arbitrary text into the
+            // currently focused input via the system clipboard, optionally
+            // clearing first and submitting after. This collapses the
+            // canonical IM/search flow:
+            //
+            //   clipboard_set + key_chord(cmd+v) + key_chord(return)
+            //
+            // ...into a single tool call. It is also the **only** robust way
+            // to enter CJK / emoji / multi-line text — `type_text` goes
+            // through the per-character key path and is at the mercy of
+            // every IME on the host. This is exactly the pattern Codex
+            // uses (`pbcopy` + cmd+v) to keep WeChat / iMessage flows
+            // smooth.
+            //
+            // Params:
+            //   - text          (required) — text to paste
+            //   - clear_first   (bool, default false) — cmd+a before paste,
+            //                   so the new text REPLACES whatever was there
+            //   - submit        (bool, default false) — press Return after
+            //                   paste; switches to "send the message" mode
+            //   - submit_keys   (array, default ["return"]) — override the
+            //                   submit chord (e.g. ["command","return"] for
+            //                   Slack / multi-line apps)
+            //
+            // Returns the same envelope as a `key_chord` so the model can
+            // chain a verification screenshot exactly as before.
+            "paste" => {
+                let text = params
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "[INVALID_PARAMS] desktop.paste requires 'text'\nHints: example { \"action\":\"paste\", \"text\":\"hello\", \"submit\":true }"
+                                .to_string(),
+                        )
+                    })?;
+                let clear_first = params
+                    .get("clear_first")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let submit = params
+                    .get("submit")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let submit_keys: Vec<String> = match params.get("submit_keys") {
+                    Some(Value::Array(arr)) => arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect(),
+                    Some(Value::String(s)) => vec![s.to_string()],
+                    _ => vec!["return".to_string()],
+                };
+
+                if let Err(e) = clipboard_write(text).await {
+                    return Ok(err_response(
+                        "desktop",
+                        "paste",
+                        ControlHubError::new(
+                            ErrorCode::NotAvailable,
+                            format!("Clipboard write failed: {}", e),
+                        )
+                        .with_hint(
+                            "Fall back to type_text or check that wl-clipboard / xclip is installed (Linux only)",
+                        ),
+                    ));
+                }
+
+                let paste_chord = match std::env::consts::OS {
+                    "macos" => vec!["command".to_string(), "v".to_string()],
+                    _ => vec!["control".to_string(), "v".to_string()],
+                };
+
+                if clear_first {
+                    let select_all = match std::env::consts::OS {
+                        "macos" => vec!["command".to_string(), "a".to_string()],
+                        _ => vec!["control".to_string(), "a".to_string()],
+                    };
+                    host.key_chord(select_all).await?;
+                }
+                host.key_chord(paste_chord).await?;
+                if submit {
+                    host.computer_use_trust_pointer_after_text_input();
+                    host.key_chord(submit_keys.clone()).await?;
+                }
+
+                let summary = match (clear_first, submit) {
+                    (false, false) => format!("Pasted {} chars", text.chars().count()),
+                    (true, false) => format!("Replaced focused field with {} chars", text.chars().count()),
+                    (false, true) => format!("Pasted {} chars and submitted", text.chars().count()),
+                    (true, true) => format!("Replaced + submitted ({} chars)", text.chars().count()),
+                };
+                return Ok(vec![ToolResult::ok(
+                    json!({
+                        "success": true,
+                        "action": "paste",
+                        "char_count": text.chars().count(),
+                        "byte_length": text.len(),
+                        "clear_first": clear_first,
+                        "submitted": submit,
+                        "submit_keys": if submit { Some(submit_keys) } else { None },
+                    }),
+                    Some(summary),
+                )]);
+            }
+
             "focus_display" => {
                 // Accept `null` (or omitted `display_id`) to clear the pin
                 // and fall back to "screen under the pointer". An explicit
@@ -1938,7 +2043,31 @@ for control flow.
 
 ### domain: "desktop"  (Computer Use — only available in the BitFun desktop app)
 - screenshot, click, click_element, click_label, mouse_move, pointer_move_rel,
-  scroll, drag, key_chord, type_text, wait, locate, move_to_text.
+  scroll, drag, key_chord, type_text, paste, wait, locate, move_to_text.
+- **`screenshot`** — exactly two possible outputs: the focused application
+  window (default, via Accessibility) OR the full display (fallback when
+  AX cannot resolve the window). No crop / quadrant / mouse-centered
+  options exist anymore. Old crop parameters (`screenshot_crop_center_x/y`,
+  `screenshot_navigate_quadrant`, `screenshot_reset_navigation`,
+  `screenshot_implicit_center`, `point_crop_half_extent_native`) are
+  silently ignored. The only param that still has meaning is
+  `screenshot_window: true` — and it just reaffirms the default; you
+  rarely need to pass it.
+- **`paste { text, clear_first?, submit?, submit_keys? }`** — STRONGLY PREFER
+  this over `type_text` for any non-trivial input (CJK, emoji, multi-line,
+  contact names, message bodies, anything > ~15 chars). Internally does
+  `clipboard_set` + cmd/ctrl+v, optionally cmd/ctrl+a first to replace
+  existing content, and optionally Return after to submit. Collapses the
+  canonical "type a name into search and press enter" / "send a message"
+  sequence into a single tool call AND avoids every IME failure mode that
+  `type_text` is subject to. Use `submit_keys: ["command","return"]` for
+  Slack-style apps where Return inserts a newline.
+- `type_text` is a fallback for short Latin-only text into a focused input
+  where you have no clipboard helper (Linux without wl-clipboard / xclip).
+  In every other case `paste` is faster and more reliable.
+- `key_chord` accepts EITHER `{"keys":["command","v"]}` (canonical) OR a
+  bare `{"keys":"escape"}` / `{"key":"return"}` for single keys; both
+  shapes are coerced. Modifier names: command, control, option/alt, shift.
 - Multi-display routing (FIRST step on multi-monitor setups):
   * `list_displays` — returns every attached screen with `display_id`,
     `is_primary`, `is_active`, `has_pointer`, origin/size, and `scale_factor`.
@@ -2485,6 +2614,48 @@ mod control_hub_tests {
             map_dispatch_error("browser", "x", mk("something exploded")).code,
             ErrorCode::Internal
         ));
+    }
+
+    #[tokio::test]
+    async fn description_advertises_paste_as_canonical_text_input() {
+        // Regression guard: the prompt-side guidance and the tool-side
+        // description must both surface `paste` so the model picks it
+        // over `type_text` for CJK / emoji / IM messages.
+        let desc = ControlHubTool::new().description().await.unwrap();
+        assert!(
+            desc.contains("`paste"),
+            "description must call out `paste` as a first-class action"
+        );
+        assert!(
+            desc.contains("PREFER")
+                || desc.contains("prefer")
+                || desc.contains("STRONGLY"),
+            "description must steer the model AWAY from type_text for non-trivial input"
+        );
+    }
+
+    #[tokio::test]
+    async fn desktop_paste_without_host_returns_clean_error() {
+        // In `cargo test -p bitfun-core` there is no ComputerUseHost
+        // (desktop runtime not booted). The tool must surface a structured
+        // error rather than panicking, so the model knows desktop control
+        // is unavailable on this transport.
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let err = tool
+            .dispatch(
+                "desktop",
+                "paste",
+                &json!({ "text": "hi", "submit": true }),
+                &ctx,
+            )
+            .await
+            .expect_err("must fail without ComputerUseHost");
+        assert!(
+            err.to_string().contains("Desktop control"),
+            "expected desktop-host availability hint, got: {}",
+            err
+        );
     }
 
     #[tokio::test]

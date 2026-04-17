@@ -809,6 +809,7 @@ unsafe fn try_frontmost_window_element(app: AXUIElementRef) -> Option<AXUIElemen
     first_ax_window_from_ax_windows(app)
 }
 
+#[allow(dead_code)] // legacy: text-caret crop is gone; kept for completeness
 fn is_text_editing_ax_role(role: &str) -> bool {
     matches!(
         role,
@@ -816,6 +817,7 @@ fn is_text_editing_ax_role(role: &str) -> bool {
     )
 }
 
+#[allow(dead_code)]
 unsafe fn ax_focused_element_from_system_wide() -> Option<AXUIElementRef> {
     let sys = AXUIElementCreateSystemWide();
     if sys.is_null() {
@@ -835,6 +837,7 @@ unsafe fn ax_focused_element_from_system_wide() -> Option<AXUIElementRef> {
 
 /// Best-effort global (x, y) for a 500×500 screenshot centered near the focused text field (AX element center).
 /// Returns `None` if no suitable focused text UI; caller should fall back to the mouse position.
+#[allow(dead_code)]
 pub fn global_point_for_text_caret_screenshot(mx: f64, my: f64) -> (f64, f64) {
     unsafe {
         let Some(el) = ax_focused_element_from_system_wide() else {

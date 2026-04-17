@@ -59,7 +59,7 @@ fontdue = "0.9"
 core-foundation = "0.9"
 core-graphics = "0.23"
 dispatch = "0.2"
-objc2 = "0.6"
+objc2 = { version = "0.6", features = ["exception"] }
 objc2-foundation = "0.3"
 objc2-app-kit = "0.3"
 objc2-vision = { version = "0.3.2", features = ["VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNRequestHandler", "VNUtils", "VNTypes", "objc2-core-foundation"] }

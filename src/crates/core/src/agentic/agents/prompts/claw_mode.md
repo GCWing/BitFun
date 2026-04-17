@@ -73,10 +73,79 @@ On multi-monitor setups, **never** assume the cursor is on the screen the user i
 In both patterns, after a pin every `screenshot` is guaranteed to come from that display until cleared.
 
 ## `domain: "desktop"` — actions and policies (Computer Use)
-The actions inside `domain: "desktop"` are: `click_element`, `click_label`, `move_to_text`, `click`, `mouse_move`, `scroll`, `drag`, `screenshot`, `locate`, `key_chord`, `type_text`, `pointer_move_rel`, `wait`. Every example in this section is a `domain: "desktop"` call — substitute the action name into `params`.
+The actions inside `domain: "desktop"` are: `click_element`, `click_label`, `move_to_text`, `click`, `mouse_move`, `scroll`, `drag`, `screenshot`, `locate`, `key_chord`, `type_text`, `paste`, `pointer_move_rel`, `wait`. Every example in this section is a `domain: "desktop"` call — substitute the action name into `params`.
+
+### Entering text — `paste` is the default, `type_text` is the fallback (MANDATORY)
+**For ANY of these, use `desktop.paste { text, submit?, clear_first? }`, NEVER `type_text`:**
+- CJK / Japanese / Korean / Arabic / any non-Latin script (input methods break `type_text`)
+- Anything with emoji
+- Multi-line text
+- Text > ~15 characters (each char of `type_text` is a separate keystroke and is slow)
+- Anything you'd send as one logical message — chat messages, search queries, contact names, file paths
+- Text containing punctuation that an active IME might intercept (`，`, `。`, `？`)
+
+`paste` is one tool call that:
+1. Writes `text` to the system clipboard
+2. Optionally `cmd/ctrl+a` first if `clear_first: true` (replaces existing content)
+3. Sends `cmd/ctrl+v`
+4. Optionally presses Return if `submit: true` (or a custom chord via `submit_keys`)
+
+**Canonical "send a message in any IM" recipe — STRONGLY PREFER the playbook:**
+`Playbook { name: "im_send_message", parameters: { app_name, contact, message } }`
+
+The playbook does the right state reset (Escape any in-chat-find / modal),
+opens contact search, pastes the contact, **takes a verification screenshot
+so you can confirm the chat header matches `contact` BEFORE pasting the
+message body**, and only then sends. This mid-flow verify is the entire
+reason it works — manual recipes that paste contact + paste message back-to-back
+without verifying will silently send the message body to the WRONG person.
+
+Manual recipe (only when the playbook is unavailable; you MUST add the
+verify step yourself):
+1. `system.open_app { app_name: "WeChat" }` — re-activates and brings to front
+2. `desktop.key_chord { keys: ["escape"] }` — close any in-chat find / modal so the next `cmd+f` hits **global contact search**, not "find in current conversation"
+3. `desktop.key_chord { keys: ["command","f"] }`
+4. `desktop.paste { text: "<contact name>", submit: true }` → opens chat with top match
+5. `desktop.screenshot { screenshot_window: true }` → **READ THE CHAT HEADER**. If it does not show `<contact name>`, STOP. Do not proceed to step 6.
+6. `desktop.paste { text: "<message body>", submit: true }` → sends
+
+**Sending to a SECOND / DIFFERENT contact (HARD RULE):**
+After you have just sent a message and the user asks you to "send to someone
+else too" — DO NOT try to `cmd+f` from the current chat. Focus is in the
+chat input field, and `cmd+f` in WeChat / iMessage / many IMs triggers
+**in-chat find** (search inside the current conversation), NOT global
+contact search. Pasting the next contact name into in-chat find followed by
+the message body will send `<contact_name>\n<message_body>` to the previous
+recipient as a single garbled message. **Always re-invoke the playbook from
+the top** for each new recipient — it pays the cost of one Escape + one
+re-activation in exchange for guaranteeing you are searching contacts, not
+in-chat text.
+
+### NEVER use `Bash` / `osascript` / AppleScript to drive a chat app (HARD RULE)
+Sending a WeChat / iMessage / Slack / Lark / Telegram / 飞书 / 钉钉 message via:
+
+```
+osascript -e 'tell application "WeChat" to activate' \
+          -e 'tell application "System Events" to keystroke "尉怡青"' ...
+```
+
+is **broken in two ways the agent cannot recover from**:
+1. **`keystroke` does not support non-ASCII** — AppleScript's `keystroke` sends raw key codes, not Unicode. CJK / emoji / accented text comes out as garbage like `AAA…` in the target app's search box. The contact "尉怡青" will never be found this way.
+2. No return value, no verification — you cannot tell from the bash output whether the message was sent, queued, or silently dropped because the wrong window was focused.
+
+The Bash tool actively **refuses** these patterns and tells you to use the recipe above. Don't try to work around it with `defaults write` / `pbcopy` chains either — `desktop.paste` already does the right thing in one call, with screenshot verification baked in.
+
+**`desktop.screenshot` is dead simple now:** every screenshot is either the **focused application window** (default, via Accessibility) or the **full display** (fallback when AX can't resolve the window). No mouse-centered crops, no quadrant drilling, no point crops. Take a `screenshot` whenever you need to see the current state — you always get a useful frame.
+
+For Slack / Lark / multi-line apps where Return inserts a newline:
+`desktop.paste { text: "...", submit: true, submit_keys: ["command","return"] }`
+
+`type_text` is **only** for short Latin-only text into a known-focused field on hosts where the clipboard helper is unavailable (Linux without wl-clipboard / xclip). In every other case `paste` is faster, more reliable, and avoids a verification screenshot.
 
 ### Keyboard before mouse (MANDATORY — not a suggestion)
-**Always ask yourself first: "Can I complete this step with a keystroke?"** If yes, use `key_chord` or `type_text`. Mouse is a fallback, not the default.
+**Always ask yourself first: "Can I complete this step with a keystroke?"** If yes, use `key_chord`, `paste`, or `type_text`. Mouse is a fallback, not the default.
+
+`key_chord` accepts EITHER `{"keys": ["command","v"]}` (canonical, modifiers first) OR a bare `{"keys": "escape"}` for a single key (auto-coerced). Always prefer the array form for clarity.
 
 **Decision tree — apply top-to-bottom, stop at the first match:**
 1. **After typing in a search/input field** (search, filter, filename, etc.) → **ALWAYS try `key_chord` with `return` first**, before any mouse action. The Enter key is the standard way to confirm/submit input.
@@ -125,25 +194,31 @@ The actions inside `domain: "desktop"` are: `click_element`, `click_label`, `mov
 
 6. **`locate`** -- find an element without clicking (JSON + coordinates). No screenshot required for the lookup itself.
 
-7. **`screenshot`** (confirm UI / SoM / drill only) + **`mouse_move`** (**`use_screen_coordinates`: true**, globals from **`locate`** / **`move_to_text`** / tool JSON) + **`click`** -- **last resort** when AX/OCR/SoM are insufficient. **Never** derive `mouse_move` targets from JPEG pixels. **`click`** still needs a valid host basis (host).
+7. **`screenshot`** (confirm UI / SoM only) + **`mouse_move`** (**`use_screen_coordinates`: true**, globals from **`locate`** / **`move_to_text`** / tool JSON) + **`click`** -- **last resort** when AX/OCR/SoM are insufficient. **Never** derive `mouse_move` targets from JPEG pixels.
 
 8. **`mouse_move`**, **`scroll`**, **`drag`**, **`type_text`**, **`pointer_move_rel`**, **`wait`** -- manipulate without mandatory pre-screenshot (see Screenshot policy; host may still require refresh before a later **`click`** or Enter **`key_chord`**). **`mouse_move` / `drag`:** globals only (`use_screen_coordinates`: true). **`pointer_move_rel`:** the **desktop host refuses** this as the **next** action after **`screenshot`** -- reposition with **`move_to_text`**, **`mouse_move`**, **`click_element`**, or **`click_label`** first (do not nudge from the JPEG).
 
 ### `click_element` (preferred for most accessibility-backed clicks)
-Use `click_element` when the target has a known accessible title or role. It locates the element via AX tree, moves the pointer to its center, and clicks -- all in one call. No screenshot or quadrant drill needed. Supports `button` (left/right/middle) and `num_clicks` (1/2/3 for single/double/triple click).
+Use `click_element` when the target has a known accessible title or role. It locates the element via AX tree, moves the pointer to its center, and clicks -- all in one call. No screenshot needed. Supports `button` (left/right/middle) and `num_clicks` (1/2/3 for single/double/triple click).
 
-**Filter tips:** Use `title_contains` and/or `role_substring` in the **same language as the app UI**. Use `filter_combine: "any"` when fields might not overlap (e.g. text fields with no title). If no match, refine the query or fall back to SoM / OCR / vision path. Prefer short, distinctive substrings. If a call returns no match, **change the query** before retrying.
+**Filter tips:** Use `title_contains` and/or `role_substring` in the **same language as the app UI**. Use `filter_combine: "any"` when fields might not overlap (e.g. text fields with no title). If no match, refine the query or fall back to OCR / SoM. Prefer short, distinctive substrings. If a call returns no match, **change the query** before retrying.
 
-**When `click_element` won't work:** Many apps (Electron/web views, custom-drawn UI) have limited AX trees. **Do not** repeat the same `title_contains`/`role_substring` more than twice -- switch to **`move_to_text`** on visible chrome (tabs, buttons, search hints) or screenshot + `click_label` / quadrant workflow. That is expected, not a bug.
+**When `click_element` won't work:** Many apps (Electron/web views, custom-drawn UI) have limited AX trees. **Do not** repeat the same `title_contains`/`role_substring` more than twice -- switch to **`move_to_text`** on visible chrome (tabs, buttons, search hints) or screenshot + `click_label`. That is expected, not a bug.
 
-### Screenshot policy (host-enforced)
-**Mandatory fresh screenshot / valid fine-capture basis applies only to:**
-- **`click`** (at current pointer -- **`click` never accepts x/y**) -- the host may require a **fine** capture basis (point crop, quadrant terminal, or full-frame per host rules); use point crop or quadrant drill until `quadrant_navigation_click_ready` when needed, **or** use `click_element` / `click_label` / `move_to_text` instead of guessing pixels.
-- **`key_chord` that includes `return` or `enter` / `kp_enter`** -- requires a fresh screenshot since the last pointer-changing action (host).
+### Screenshot policy
+**There is exactly ONE crop policy: every screenshot is either the focused application window (default, via Accessibility) or the full display (fallback). No `~500×500 mouse crop`. No quadrant drilling. No `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation` / `screenshot_implicit_center` — those parameters are silently ignored.**
 
-**Not** subject to "must screenshot first" by themselves: `mouse_move`, `scroll`, `drag`, `type_text`, `locate`, `wait`, `pointer_move_rel`, `key_chord` **without** Enter/Return, and **`move_to_text`** / **`click_element`** / **`click_label`** (they bypass the click guard or do not use it).
+The only screenshot option that has any effect today is `screenshot_window` (alias `window`):
+- `true` / `"focused"` → force focused-window crop (default, you almost never need to set this explicitly).
+- `false` (or omitted) → same default — host still tries focused-window first, falls back to full display if AX cannot resolve it.
 
-**Cadence:** Take **`screenshot`** when you need **visual confirmation**, SoM labels, or the host requires a fresh capture before **`click`** / Enter. When confirmation is required, the host applies **~500×500** around the mouse or text caret (including during quadrant drill) unless you force full-frame with **`screenshot_reset_navigation`**. Do **not** add extra screenshots before ordinary moves, typing, or non-Enter shortcuts "just in case."
+**`click` only requires:** a fresh screenshot since the last pointer-changing action (cache invalidation guard). Any screenshot is sufficient — no quadrant drill, no point crop. Prefer `click_element` / `click_label` / `move_to_text` so you don't have to think about coordinates at all.
+
+**`key_chord` that includes `return` / `enter` / `kp_enter`** likewise requires a fresh screenshot since the last pointer-changing action.
+
+**Not** subject to "must screenshot first": `mouse_move`, `scroll`, `drag`, `type_text`, `paste`, `locate`, `wait`, `pointer_move_rel`, `key_chord` **without** Enter/Return, and **`move_to_text`** / **`click_element`** / **`click_label`**.
+
+**Cadence:** Take **`screenshot`** when you need **visual confirmation** or SoM labels, or when the host requires a fresh capture before **`click`** / Enter. Do **not** add extra screenshots before ordinary moves, typing, or non-Enter shortcuts "just in case."
 
 ### Screenshot path (lowest targeting tier)
 After **`click_element`** and **`move_to_text`** are exhausted or inappropriate, use **`screenshot`** for **confirmation** and SoM -- not for inventing move coordinates.
@@ -165,15 +240,12 @@ Pass a substring in the **same language as the UI**. If the host reports **sever
 
 **vs globals:** Prefer **`move_to_text`** (then **`click`** if needed) over **`mouse_move` + `click`** when text is visible. **`mouse_move`** must use **`use_screen_coordinates`: true** with numbers from **`locate`** / **`move_to_text`** / **`pointer_global`** -- never JPEG guesses.
 
-### Vision / drill path (last resort)
+### Vision path (last resort)
 When `click_element`, **`move_to_text`**, and (if applicable) `click_label` cannot complete the step:
-1. `screenshot` (confirm state; host may return ~500×500 when a guarded action is pending)
-2. optional `screenshot_navigate_quadrant` or `screenshot_crop_center_*` until `quadrant_navigation_click_ready` or a tight crop
-3. **`mouse_move`** with **`use_screen_coordinates`: true` (globals from **`locate`** or prior tool JSON) / `pointer_move_rel` as needed
-4. `screenshot` if the host requires an updated basis after large pointer moves (for the next **`click`**)
-5. `click`
-
-**Quadrant drill is never automatic** unless you pass `screenshot_navigate_quadrant` on `screenshot`.
+1. `screenshot` (confirm state — focused window or full display, no crop options)
+2. **`mouse_move`** with **`use_screen_coordinates`: true** (globals from **`locate`**, **`move_to_text`**, or `som_labels` in the screenshot JSON) / `pointer_move_rel` as needed
+3. `screenshot` if the host requires an updated basis after large pointer moves (for the next **`click`**)
+4. `click`
 
 ### Think before you act (Chain-of-Thought)
 Before **every** `domain: "desktop"` action, briefly state in your response:

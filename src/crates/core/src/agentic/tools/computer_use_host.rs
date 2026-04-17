@@ -53,6 +53,16 @@ pub struct ComputerUseScreenshotParams {
     pub point_crop_half_extent_native: Option<u32>,
     /// For `action: screenshot`: when the host applies an implicit 500×500 crop, use mouse vs text-focus center (see desktop host).
     pub implicit_confirmation_center: Option<ComputerUseImplicitScreenshotCenter>,
+    /// For `action: screenshot`: crop the capture to the **focused window of
+    /// the foreground application** instead of the default mouse-centered
+    /// 500×500 region. The single most useful setting after `system.open_app`,
+    /// `cmd+f`, or any keystroke that may have moved focus inside an app
+    /// without moving the mouse — the model gets the WHOLE application
+    /// window in one shot rather than a stale 500×500 around an unrelated
+    /// pointer position. Falls back to a full-display capture (with a
+    /// `warning`) when the host cannot resolve the focused window (e.g.
+    /// missing AX permission or the app exposes no AX windows).
+    pub crop_to_focused_window: bool,
 }
 
 /// Longest side of the navigation region must be **strictly below** this to allow `click` without a separate point crop (desktop).
@@ -67,8 +77,13 @@ pub const COMPUTER_USE_POINT_CROP_HALF_DEFAULT: u32 = 250;
 /// Minimum **half** extent for point crop (native px) — total region **≥ 128×128** when the display is large enough.
 pub const COMPUTER_USE_POINT_CROP_HALF_MIN: u32 = 64;
 
-/// Maximum **half** extent for point crop (native px) — total region **≤ 500×500**.
-pub const COMPUTER_USE_POINT_CROP_HALF_MAX: u32 = 250;
+/// Maximum **half** extent for point crop (native px). Historically capped at
+/// 250 (= 500×500) to keep the "implicit confirmation" crop tight, but that
+/// crop mode has been removed. The only consumer left is the focused-window
+/// crop path, which legitimately needs to cover the entire window — anywhere
+/// up to the full display in either dimension. Set high enough that
+/// `screenshot_display`'s own per-display clamp is the effective ceiling.
+pub const COMPUTER_USE_POINT_CROP_HALF_MAX: u32 = 16384;
 
 /// Clamp optional model/host request to a valid point-crop half extent.
 #[inline]
