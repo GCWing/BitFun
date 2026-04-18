@@ -8,6 +8,28 @@
   "editProviderSubtitle": "基础服务商参数配置",
   "editSubtitle": "基础模型参数配置",
   "confirmDelete": "确定删除此配置？",
+  "cliAuth": {
+    "sectionTitle": "本机已登录账号",
+    "sectionDescription": "可直接导入本机 Codex CLI / Gemini CLI 已登录账号作为模型使用",
+    "rescan": "重新扫描",
+    "empty": "未检测到本机已登录的 Codex / Gemini CLI 账号，请先在终端完成登录后重新扫描",
+    "import": "导入使用",
+    "refresh": "刷新 Token",
+    "refreshSuccess": "Token 已刷新",
+    "refreshFailed": "刷新失败：{{error}}",
+    "expiresAt": "Token 有效期至 {{time}}",
+    "tokenValid": "Token 已就绪",
+    "accountLine": "账号：{{account}}",
+    "label": "认证方式",
+    "options": {
+      "apiKey": "API Key",
+      "codexCli": "Codex CLI 已登录账号",
+      "geminiCli": "Gemini CLI 已登录账号"
+    },
+    "detected": "将使用本机 {{label}}（账号 {{account}}）",
+    "notDetected": "本机未检测到 {{kind}} 已登录账号，请先在终端完成登录",
+    "unknownAccount": "当前登录账号"
+  },
   "providerSelection": {
     "title": "选择模型提供商",
     "subtitle": "选择一个预设提供商快速配置，或选择自定义完全手动配置",
