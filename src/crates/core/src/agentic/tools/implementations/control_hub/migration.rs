@@ -62,7 +62,6 @@ pub const LEGACY_ACTION_MIGRATIONS: &[LegacyMapping] = &[
     // ── ComputerUse → desktop.* ────────────────────────────────────────
     m(LegacyTool::ComputerUse, "click", "desktop", "click"),
     m(LegacyTool::ComputerUse, "click_element", "desktop", "click_element"),
-    m(LegacyTool::ComputerUse, "click_label", "desktop", "click_label"),
     m(LegacyTool::ComputerUse, "drag", "desktop", "drag"),
     m(LegacyTool::ComputerUse, "key_chord", "desktop", "key_chord"),
     m(LegacyTool::ComputerUse, "locate", "desktop", "locate"),
@@ -158,7 +157,6 @@ mod tests {
             "screenshot",
             "click",
             "click_element",
-            "click_label",
             "mouse_move",
             "scroll",
             "drag",

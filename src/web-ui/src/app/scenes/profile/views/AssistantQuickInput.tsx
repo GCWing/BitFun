@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { IconButton, Textarea } from '@/component-library';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import { useImeEnterGuard } from '@/flow_chat/hooks/useImeEnterGuard';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -37,6 +38,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
   const { setActiveWorkspace } = useWorkspaceContext();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
+  const { isImeEnter, handleCompositionStart, handleCompositionEnd } = useImeEnterGuard();
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
@@ -77,11 +79,12 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
   }, [value, sending, workspacePath, workspaceId, setActiveWorkspace, t]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (isImeEnter(e)) return;
       e.preventDefault();
       void handleSend();
     }
-  }, [handleSend]);
+  }, [handleSend, isImeEnter]);
 
   const placeholder = assistantName
     ? t('input.assistantPlaceholder', { name: assistantName, defaultValue: `Message ${assistantName}…` })
@@ -95,6 +98,8 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           rows={1}
           disabled={sending}

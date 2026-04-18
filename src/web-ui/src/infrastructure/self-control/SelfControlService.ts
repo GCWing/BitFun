@@ -15,6 +15,7 @@
 
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import { configManager } from '@/infrastructure/config';
 import { getModelDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { matchProviderCatalogItemByBaseUrl } from '@/infrastructure/config/services/providerCatalog';
@@ -116,6 +117,7 @@ export type SelfControlAction =
   | { type: 'scroll'; selector?: string; direction: 'up' | 'down' | 'top' | 'bottom' }
   | { type: 'open_scene'; sceneId: string }
   | { type: 'open_settings_tab'; tabId: string }
+  | { type: 'open_miniapp'; miniAppId: string }
   | { type: 'set_config'; key: string; configValue: unknown }
   | { type: 'get_config'; key: string }
   | { type: 'list_models'; includeDisabled?: boolean }
@@ -171,6 +173,9 @@ export type SelfControlIncomingAction = Partial<SelfControlAction> & {
   config_value?: unknown;
   modelQuery?: string;
   model_query?: string;
+  miniAppId?: string;
+  mini_app_id?: string;
+  miniappId?: string;
   optionText?: string;
   option_text?: string;
   durationMs?: number;
@@ -335,6 +340,8 @@ export class SelfControlService {
         return this.openScene(action.sceneId);
       case 'open_settings_tab':
         return this.openSettingsTab(action.tabId);
+      case 'open_miniapp':
+        return this.openMiniApp(action.miniAppId);
 
       // Region 3: Config & Models
       case 'set_config':
@@ -417,9 +424,21 @@ export class SelfControlService {
         return this.deleteModel(modelQuery);
       }
 
+      case 'open_miniapp_gallery': {
+        return this.openScene('miniapps');
+      }
+
+      case 'open_miniapp': {
+        const miniAppId = params?.miniAppId ?? params?.mini_app_id ?? params?.miniappId ?? '';
+        if (!miniAppId) {
+          throw new SelfControlError('Missing miniAppId for open_miniapp', 'INVALID_PARAMS');
+        }
+        return this.openMiniApp(miniAppId);
+      }
+
       default:
         throw new SelfControlError(
-          `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, open_model_settings, return_to_session, delete_model.`,
+          `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, open_model_settings, return_to_session, delete_model, open_miniapp_gallery, open_miniapp.`,
           'INVALID_PARAMS',
         );
     }
@@ -441,6 +460,7 @@ export class SelfControlService {
       tabId: raw.tabId ?? raw.tab_id,
       configValue: raw.configValue ?? raw.config_value,
       modelQuery: raw.modelQuery ?? raw.model_query,
+      miniAppId: raw.miniAppId ?? raw.mini_app_id ?? raw.miniappId,
       optionText: raw.optionText ?? raw.option_text,
       durationMs: raw.durationMs ?? raw.duration_ms,
       includeDisabled: raw.includeDisabled ?? raw.include_disabled,
@@ -458,6 +478,33 @@ export class SelfControlService {
     useSceneStore.getState().openScene('settings' as any);
     useSettingsStore.getState().setActiveTab(tabId as any);
     return `Opened settings tab: ${tabId}`;
+  }
+
+  private openMiniApp(miniAppId: string): string {
+    const id = (miniAppId ?? '').trim();
+    if (!id) {
+      throw new SelfControlError('open_miniapp requires miniAppId', 'INVALID_PARAMS');
+    }
+    const known = useMiniAppStore.getState().apps.find((app) => app.id === id);
+    if (!known) {
+      const available = useMiniAppStore
+        .getState()
+        .apps.map((app) => `"${app.name}" (id=${app.id})`)
+        .join(', ');
+      throw new SelfControlError(
+        `Mini-app id "${id}" is not installed.`,
+        'NOT_FOUND',
+        [
+          available
+            ? `Installed mini-apps: ${available}.`
+            : 'No mini-apps are installed yet.',
+          'Call ControlHub domain="app" action="list_miniapps" first to discover ids.',
+        ],
+      );
+    }
+    useMiniAppStore.getState().openApp(id);
+    useSceneStore.getState().openScene(`miniapp:${id}` as any);
+    return `Opened mini-app "${known.name}" (id=${id})`;
   }
 
   // ── Region 3: Config & Model Operations ──────────────────────────────────

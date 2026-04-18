@@ -25,6 +25,7 @@ import type { FlowChatState } from '../../flow_chat/types/flow-chat';
 import { compareSessionsForDisplay } from '../../flow_chat/utils/sessionOrdering';
 import { ModernFlowChatContainer } from '../../flow_chat/components/modern/ModernFlowChatContainer';
 import { Tooltip, Input } from '@/component-library';
+import { useImeEnterGuard } from '../../flow_chat/hooks/useImeEnterGuard';
 import './FloatingMiniChat.scss';
 
 export const FloatingMiniChat: React.FC = () => {
@@ -37,6 +38,7 @@ export const FloatingMiniChat: React.FC = () => {
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() =>
     flowChatStore.getState()
   );
+  const { isImeEnter, handleCompositionStart, handleCompositionEnd } = useImeEnterGuard();
   const panelRef = useRef<HTMLDivElement>(null);
   const sessionPickerRef = useRef<HTMLDivElement>(null);
 
@@ -139,6 +141,7 @@ export const FloatingMiniChat: React.FC = () => {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
+        if (isImeEnter(e)) return;
         e.preventDefault();
         handleSendMessage();
       }
@@ -151,7 +154,7 @@ export const FloatingMiniChat: React.FC = () => {
         }
       }
     },
-    [handleSendMessage, showSessionPicker, handleClose]
+    [handleSendMessage, showSessionPicker, handleClose, isImeEnter]
   );
 
   // Close session picker when clicking outside it
@@ -301,6 +304,8 @@ export const FloatingMiniChat: React.FC = () => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             placeholder={
               currentStreamState.isStreaming
                 ? t('toolCards.toolbar.aiProcessing')

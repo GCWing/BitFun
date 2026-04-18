@@ -19,7 +19,7 @@ pub fn ensure_pointer_move_uses_screen_coordinates_only(input: &Value) -> BitFun
         return Ok(());
     }
     Err(BitFunError::tool(
-        "Positioning from screenshot pixels (coordinate_mode image/normalized) is disabled: do not guess coordinates from vision. Set use_screen_coordinates: true with global display coordinates from move_to_text (global_center_x/y), locate, click_element, or pointer_image_x/y from the last screenshot JSON; or use move_to_text, click_element, click_label, pointer_move_rel, ComputerUseMouseStep. Screenshots are for confirmation only.".to_string(),
+        "Positioning from screenshot pixels (coordinate_mode image/normalized) is disabled: do not guess coordinates from vision. Set use_screen_coordinates: true with global display coordinates from move_to_text (global_center_x/y), locate, click_element, or pointer_image_x/y from the last screenshot JSON; or use move_to_text, click_element, pointer_move_rel, ComputerUseMouseStep. Screenshots are for confirmation only.".to_string(),
     ))
 }
 

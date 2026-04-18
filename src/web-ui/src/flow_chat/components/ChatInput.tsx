@@ -49,7 +49,6 @@ import { ChatInputPixelPet } from './ChatInputPixelPet';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
-const IME_ENTER_GUARD_MS = 120;
 
 export interface ChatInputProps {
   className?: string;
@@ -193,7 +192,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const richTextInputRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const isImeComposingRef = useRef(false);
-  const lastImeCompositionEndAtRef = useRef(0);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
@@ -1838,11 +1836,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    const isComposing = (e.nativeEvent as KeyboardEvent).isComposing || isImeComposingRef.current;
-    const justFinishedComposition = Date.now() - lastImeCompositionEndAtRef.current < IME_ENTER_GUARD_MS;
-    
+    const nativeEvt = e.nativeEvent as KeyboardEvent;
+    // IME-safe Enter detection (see useImeEnterGuard for the rationale):
+    //  - our own composition flag covers browsers where `isComposing` is flaky
+    //  - `keyCode === 229` is the W3C "composition keyCode" still emitted by
+    //    every evergreen browser while the IME owns the key, even after
+    //    `isComposing` has flipped back to false. Replaces the previous
+    //    120ms time-window guard which would swallow legitimate fast Enters.
+    const isComposing =
+      isImeComposingRef.current
+      || nativeEvt.isComposing
+      || nativeEvt.keyCode === 229;
+
     if (e.key === 'Enter' && !e.shiftKey) {
-      if (isComposing || justFinishedComposition) {
+      if (isComposing) {
         return;
       }
       
@@ -1876,7 +1883,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleImeCompositionEnd = useCallback(() => {
     isImeComposingRef.current = false;
-    lastImeCompositionEndAtRef.current = Date.now();
   }, []);
 
   const handleImageInput = useCallback(() => {

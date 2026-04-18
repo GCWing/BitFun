@@ -1,4 +1,5 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
+use super::bitfun_self_provider::build_bitfun_self_prompt;
 use super::request_context::{RequestContextPolicy, RequestContextSection};
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::agent_memory::{
@@ -22,6 +23,7 @@ const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
+const PLACEHOLDER_BITFUN_SELF: &str = "{BITFUN_SELF}";
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -453,11 +455,25 @@ Do not read from, modify, create, move, or delete files outside this workspace u
             result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
         }
 
+        // Replace {BITFUN_SELF} — preload BitFun's own scene / settings / mini-app
+        // catalog so the model never has to scan the user workspace to figure out
+        // what BitFun itself exposes. Skipped (replaced with empty string) on
+        // remote SSH workspaces because the local app catalog isn't relevant
+        // when tools target a remote host.
+        if result.contains(PLACEHOLDER_BITFUN_SELF) {
+            let bitfun_self = if self.context.remote_execution.is_some() {
+                String::new()
+            } else {
+                build_bitfun_self_prompt().await
+            };
+            result = result.replace(PLACEHOLDER_BITFUN_SELF, &bitfun_self);
+        }
+
         if self.context.supports_image_understanding == Some(false) {
             result.push_str(
                 "\n\n# Computer use (text-only primary model)\n\n\
 The configured **primary model does not accept image inputs**. When using **`ControlHub`** with **`domain: \"desktop\"`** (or **`domain: \"browser\"`**):\n\
-- **Do not** use **`screenshot`** or **`click_label`** (desktop) and **avoid** `domain:\"browser\" action:\"screenshot\"` — the JPEG bytes will be unreadable.\n\
+- **Do not** use **`screenshot`** (desktop) and **avoid** `domain:\"browser\" action:\"screenshot\"` — the JPEG bytes will be unreadable.\n\
 - **ACTION PRIORITY:** 1) Terminal/CLI/system commands (`Bash` tool, or `ControlHub domain:\"system\" action:\"run_script\"`) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**. For browser work prefer `snapshot` → click by `@e*` ref over screenshots.\n\
 - **Never guess coordinates** — always use precise methods (AX, OCR, system coordinates from tool results, or browser snapshot refs).\n",
             );

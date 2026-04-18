@@ -8,7 +8,7 @@ use bitfun_core::agentic::tools::computer_use_host::{
     ComputerUseNavigateQuadrant,
     ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
     ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
-    OcrRegionNative, ScreenshotCropCenter, SomElement, UiElementLocateQuery, UiElementLocateResult,
+    OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery, UiElementLocateResult,
     COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -18,7 +18,6 @@ use bitfun_core::agentic::tools::computer_use_host::{
 use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
-use fontdue::{Font, FontSettings};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, Rgb, RgbImage};
 use log::{debug, warn};
@@ -40,7 +39,7 @@ const SCREENSHOT_CACHE_TTL_MS: u64 = 300;
 const STALE_CAPTURE_TOOL_MESSAGE: &str = "Computer use refused: call **`screenshot`** first. Use a **bare** `screenshot` (do not set `screenshot_reset_navigation`) — the host applies a **~500×500** crop around the **mouse**. Before Return/Enter in a focused text field, set **`screenshot_implicit_center`**: **`text_caret`**. This is required after the pointer moved since the last capture, before **`click`** or before **`key_chord`** that includes Return/Enter.";
 
 /// Relative nudges (`pointer_move_rel`, `ComputerUseMouseStep`) right after a model-driven screenshot are almost always wrong when deltas are guessed from the image; block until a trusted absolute move.
-const VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG: &str = "Computer use refused: do not use `pointer_move_rel` or `ComputerUseMouseStep` immediately after a `screenshot` — nudging from the JPEG is inaccurate. First reposition with `move_to_text`, `click_element`, `click_label`, `locate` + `mouse_move` (`use_screen_coordinates`: true), or `mouse_move` using globals from tool JSON; then relative nudges are allowed if still needed.";
+const VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG: &str = "Computer use refused: do not use `pointer_move_rel` or `ComputerUseMouseStep` immediately after a `screenshot` — nudging from the JPEG is inaccurate. First reposition with `move_to_text`, `click_element`, `locate` + `mouse_move` (`use_screen_coordinates`: true), or `mouse_move` using globals from tool JSON; then relative nudges are allowed if still needed.";
 
 #[derive(Debug, Clone)]
 struct ScreenshotCacheEntry {
@@ -150,182 +149,8 @@ fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
     }
 }
 
-// ── SoM / overlay text: Inter (OFL) via fontdue ──
 
-/// Inter (OFL); variable font from google/fonts OFL tree.
-const COORD_AXIS_FONT_TTF: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
-
-static COORD_AXIS_FONT: OnceLock<Font> = OnceLock::new();
-
-fn coord_axis_font() -> &'static Font {
-    COORD_AXIS_FONT.get_or_init(|| {
-        Font::from_bytes(COORD_AXIS_FONT_TTF, FontSettings::default())
-            .expect("Inter TTF embedded for computer-use SoM/overlay labels")
-    })
-}
-
-/// Alpha-blend grayscale coverage onto `img` (baseline-anchored glyph).
-fn coord_blit_glyph(
-    img: &mut RgbImage,
-    baseline_x: i32,
-    baseline_y: i32,
-    metrics: &fontdue::Metrics,
-    bitmap: &[u8],
-    fg: Rgb<u8>,
-) {
-    let w = metrics.width;
-    let h = metrics.height;
-    if w == 0 || h == 0 {
-        return;
-    }
-    let iw = img.width() as i32;
-    let ih = img.height() as i32;
-    let xmin = metrics.xmin;
-    let ymin = metrics.ymin;
-    for row in 0..h {
-        for col in 0..w {
-            let alpha = bitmap[row * w + col] as u32;
-            if alpha == 0 {
-                continue;
-            }
-            let px = baseline_x + xmin + col as i32;
-            let py = baseline_y + ymin + row as i32;
-            if px < 0 || py < 0 || px >= iw || py >= ih {
-                continue;
-            }
-            let dst = img.get_pixel(px as u32, py as u32);
-            let inv = 255u32.saturating_sub(alpha);
-            let nr = ((fg[0] as u32 * alpha + dst[0] as u32 * inv) / 255).min(255) as u8;
-            let ng = ((fg[1] as u32 * alpha + dst[1] as u32 * inv) / 255).min(255) as u8;
-            let nb = ((fg[2] as u32 * alpha + dst[2] as u32 * inv) / 255).min(255) as u8;
-            img.put_pixel(px as u32, py as u32, Rgb([nr, ng, nb]));
-        }
-    }
-}
-
-/// Axis numerals: synthetic bold via small 2×2 offset stack (still Inter Regular source).
-fn coord_blit_glyph_bold(
-    img: &mut RgbImage,
-    baseline_x: i32,
-    baseline_y: i32,
-    metrics: &fontdue::Metrics,
-    bitmap: &[u8],
-    fg: Rgb<u8>,
-) {
-    coord_blit_glyph(img, baseline_x, baseline_y, metrics, bitmap, fg);
-    coord_blit_glyph(img, baseline_x + 1, baseline_y, metrics, bitmap, fg);
-    coord_blit_glyph(img, baseline_x, baseline_y + 1, metrics, bitmap, fg);
-    coord_blit_glyph(img, baseline_x + 1, baseline_y + 1, metrics, bitmap, fg);
-}
-
-fn coord_measure_str_width(text: &str, px: f32) -> i32 {
-    let font = coord_axis_font();
-    let mut adv = 0f32;
-    for c in text.chars() {
-        adv += font.metrics(c, px).advance_width;
-    }
-    adv.ceil() as i32
-}
-
-/// Left-to-right string on one baseline.
-fn coord_draw_text_h(
-    img: &mut RgbImage,
-    mut baseline_x: i32,
-    baseline_y: i32,
-    text: &str,
-    fg: Rgb<u8>,
-    px: f32,
-) {
-    let font = coord_axis_font();
-    for c in text.chars() {
-        let (m, bmp) = font.rasterize(c, px);
-        coord_blit_glyph_bold(img, baseline_x, baseline_y, &m, &bmp, fg);
-        baseline_x += m.advance_width.ceil() as i32;
-    }
-}
-
-// ── Set-of-Mark (SoM) label rendering ──
-
-/// Badge font size for SoM labels (smaller than axis labels).
-const SOM_LABEL_PX: f32 = 28.0;
-/// Badge background color (bright magenta -- high contrast on most UIs).
-const SOM_BG: Rgb<u8> = Rgb([230, 40, 120]);
-/// Badge text color.
-const SOM_FG: Rgb<u8> = Rgb([255, 255, 255]);
-/// Padding around the label text inside the badge.
-const SOM_PAD_X: i32 = 4;
-const SOM_PAD_Y: i32 = 2;
-
-/// Draw SoM numbered labels on the frame at each element's mapped image position.
-/// `elements`: SoM elements with global coordinates.
-/// `margin_l`, `margin_t`: content area offset in the frame.
-/// `map_fn`: maps global (f64,f64) -> Option<(i32,i32)> in content-area pixel space.
-fn draw_som_labels<F>(
-    frame: &mut RgbImage,
-    elements: &[SomElement],
-    margin_l: u32,
-    margin_t: u32,
-    map_fn: F,
-) where
-    F: Fn(f64, f64) -> Option<(i32, i32)>,
-{
-    let font = coord_axis_font();
-    let (fw, fh) = frame.dimensions();
-
-    for elem in elements {
-        let Some((cx, cy)) = map_fn(elem.global_center_x, elem.global_center_y) else {
-            continue;
-        };
-
-        // Map from content-area space to frame space
-        let img_x = cx + margin_l as i32;
-        let img_y = cy + margin_t as i32;
-
-        // Measure label text width
-        let label_text = elem.label.to_string();
-        let text_w = coord_measure_str_width(&label_text, SOM_LABEL_PX);
-        let (m_rep, _) = font.rasterize('8', SOM_LABEL_PX);
-        let text_h = m_rep.height as i32;
-
-        let badge_w = text_w + SOM_PAD_X * 2 + 2; // +2 for bold offset
-        let badge_h = text_h + SOM_PAD_Y * 2;
-
-        // Position badge at top-left of element's bounds (mapped to image),
-        // but fall back to center if bounds mapping fails
-        let (badge_x, badge_y) = {
-            let bx = elem.bounds_left;
-            let by = elem.bounds_top;
-            if let Some((bix, biy)) = map_fn(bx, by) {
-                (bix + margin_l as i32, biy + margin_t as i32)
-            } else {
-                // Fall back to center
-                (img_x - badge_w / 2, img_y - badge_h / 2)
-            }
-        };
-
-        // Clamp to frame bounds
-        let bx0 = badge_x.max(0).min(fw as i32 - badge_w);
-        let by0 = badge_y.max(0).min(fh as i32 - badge_h);
-
-        // Draw badge background rectangle
-        for dy in 0..badge_h {
-            for dx in 0..badge_w {
-                let px = bx0 + dx;
-                let py = by0 + dy;
-                if px >= 0 && px < fw as i32 && py >= 0 && py < fh as i32 {
-                    frame.put_pixel(px as u32, py as u32, SOM_BG);
-                }
-            }
-        }
-
-        // Draw label text centered in badge
-        let text_x = bx0 + SOM_PAD_X;
-        let baseline_y = by0 + SOM_PAD_Y + text_h - m_rep.ymin.max(0);
-        coord_draw_text_h(frame, text_x, baseline_y, &label_text, SOM_FG, SOM_LABEL_PX);
-    }
-}
-
-/// Returns the capture bitmap unchanged (no grid, rulers, or margins). Pointer and SoM overlays are applied later.
+/// Returns the capture bitmap unchanged (no grid, rulers, or margins). Pointer overlays are applied later.
 fn compose_computer_use_frame(
     content: RgbImage,
     _ruler_origin_x: u32,
@@ -419,10 +244,20 @@ fn implicit_global_center_for_confirmation(
     (mx, my)
 }
 
-/// JPEG quality for computer-use screenshots. Native display resolution is preserved (no downscale)
-/// so `coordinate_mode` \"image\" pixel indices match the screen capture 1:1. Very large displays
-/// increase request payload size; if the API rejects the image, lower quality or split workflows may be needed.
-const JPEG_QUALITY: u8 = 75;
+/// JPEG quality for computer-use screenshots. Visually near-lossless tier; combined with the
+/// adaptive byte-budget downscale below, oversize captures are halved until they fit
+/// [`SCREENSHOT_MAX_BYTES`] so the model API receives a manageable payload without sacrificing
+/// quality on small/medium app windows.
+const JPEG_QUALITY: u8 = 85;
+
+/// Soft byte budget for a single screenshot JPEG sent to the model. When the encoded image
+/// exceeds this, the host halves the resolution (Lanczos3) and re-encodes, looping until it fits
+/// or the long edge falls below [`SCREENSHOT_MIN_LONG_EDGE`].
+const SCREENSHOT_MAX_BYTES: usize = 3 * 1024 * 1024;
+
+/// Hard floor on the long edge during the byte-budget downscale loop, so a pathological
+/// capture cannot be reduced to an unreadable thumbnail just to fit the budget.
+const SCREENSHOT_MIN_LONG_EDGE: u32 = 512;
 
 #[inline]
 fn clamp_center_to_native(cx: u32, cy: u32, nw: u32, nh: u32) -> (u32, u32) {
@@ -744,7 +579,7 @@ struct ComputerUseSessionMutableState {
     /// Cached full-screen screenshot for fast consecutive crops.
     screenshot_cache: Option<ScreenshotCacheEntry>,
     /// After `screenshot`, block `pointer_move_rel` / `ComputerUseMouseStep` until an absolute move
-    /// from AX/OCR/globals (`mouse_move`, `move_to_text`, `click_element`, `click_label`) clears this.
+    /// from AX/OCR/globals (`mouse_move`, `move_to_text`, `click_element`) clears this.
     block_vision_pixel_nudge_after_screenshot: bool,
     /// After click / key / type / scroll / drag: recommend a **`screenshot`** to confirm UI state (Cowork verify).
     /// Cleared on the next successful `screenshot_display`.
@@ -1214,8 +1049,8 @@ end tell"#])
         Ok(buf)
     }
 
-    /// JPEG for OCR only: **no** pointer/SoM overlay — raw capture pixels.
-    const OCR_RAW_JPEG_QUALITY: u8 = 75;
+    /// JPEG for OCR only: **no** pointer overlay — raw capture pixels.
+    const OCR_RAW_JPEG_QUALITY: u8 = 85;
 
     /// Build [`ComputerScreenshot`] from a raw RGB crop; image pixels map 1:1 to `native_*` at `display_origin_*`.
     fn raw_shot_from_rgb_crop(
@@ -1250,7 +1085,6 @@ end tell"#])
                 width: iw,
                 height: ih,
             }),
-            som_labels: vec![],
             implicit_confirmation_crop_applied: false,
             ui_tree_text: None,
         })
@@ -1318,7 +1152,7 @@ end tell"#])
         })
     }
 
-    /// Capture **raw** display pixels (no pointer/SoM overlay), cropped to `region` intersected with the chosen display.
+    /// Capture **raw** display pixels (no pointer overlay), cropped to `region` intersected with the chosen display.
     ///
     /// `region` and [`DisplayInfo::width`]/[`height`] are **global logical points** (CG / AX). The framebuffer
     /// is **physical pixels** on Retina; intersect in point space, then map to pixels like [`MacPointerGeo`].
@@ -1441,7 +1275,6 @@ end tell"#])
         nav_in: Option<ComputerUseNavFocus>,
         rgba: image::RgbaImage,
         screen: Screen,
-        som_elements: Vec<SomElement>,
         ui_tree_text: Option<String>,
         implicit_confirmation_crop_applied: bool,
     ) -> BitFunResult<(ComputerScreenshot, PointerMap, Option<ComputerUseNavFocus>)> {
@@ -1701,64 +1534,31 @@ end tell"#])
             }
         };
 
-        // Draw SoM (Set-of-Mark) numbered labels on the frame
-        if !som_elements.is_empty() {
-            #[cfg(target_os = "macos")]
-            {
-                let geo = macos_map_geo;
-                draw_som_labels(&mut frame, &som_elements, margin_l, margin_t, |gx, gy| {
-                    geo.global_to_view_pixel(gx, gy, content_w, content_h)
-                });
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                // On non-macOS: map global -> content pixel using the linear mapping
-                draw_som_labels(&mut frame, &som_elements, margin_l, margin_t, |gx, gy| {
-                    let ox = map_origin_x as f64;
-                    let oy = map_origin_y as f64;
-                    let nw = map_native_w as f64;
-                    let nh = map_native_h as f64;
-                    if nw <= 0.0 || nh <= 0.0 {
-                        return None;
-                    }
-                    let rx = (gx - ox) / nw * content_w as f64;
-                    let ry = (gy - oy) / nh * content_h as f64;
-                    if rx < 0.0 || ry < 0.0 || rx >= content_w as f64 || ry >= content_h as f64 {
-                        return None;
-                    }
-                    Some((rx.round() as i32, ry.round() as i32))
-                });
-            }
+        // Adaptive byte-budget downscale: encode at JPEG_QUALITY first, then halve the resolution
+        // (Lanczos3) and re-encode while the payload exceeds SCREENSHOT_MAX_BYTES. Small/medium
+        // app-window captures keep native resolution; only oversize full-screen / multi-monitor
+        // captures get reduced. Stops once another halve would push the long edge below
+        // SCREENSHOT_MIN_LONG_EDGE to avoid producing an unreadable thumbnail.
+        let mut current_frame = frame;
+        let mut jpeg_bytes = Self::encode_jpeg(&current_frame, JPEG_QUALITY)?;
+        let mut vision_scale: f64 = 1.0;
+        while jpeg_bytes.len() > SCREENSHOT_MAX_BYTES
+            && current_frame.width().max(current_frame.height()) / 2 >= SCREENSHOT_MIN_LONG_EDGE
+        {
+            let new_w = (current_frame.width() / 2).max(1);
+            let new_h = (current_frame.height() / 2).max(1);
+            let dyn_img = DynamicImage::ImageRgb8(current_frame);
+            current_frame = dyn_img
+                .resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3)
+                .to_rgb8();
+            vision_scale *= 2.0;
+            jpeg_bytes = Self::encode_jpeg(&current_frame, JPEG_QUALITY)?;
         }
-
-        // High-resolution downscale (inspired by TuriX-CUA): reduce >4K images for model API efficiency.
-        let (final_frame, vision_scale, pointer_image_x, pointer_image_y) = {
-            let max_dim = frame.width().max(frame.height());
-            let scale_factor: u32 = if max_dim >= 7680 {
-                4
-            } else if max_dim > 2200 {
-                2
-            } else {
-                1
-            };
-            if scale_factor > 1 {
-                let new_w = (frame.width() / scale_factor).max(1);
-                let new_h = (frame.height() / scale_factor).max(1);
-                let dyn_img = DynamicImage::ImageRgb8(frame);
-                let resized =
-                    dyn_img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
-                let scaled_pointer_x = pointer_image_x.map(|px| px / scale_factor as i32);
-                let scaled_pointer_y = pointer_image_y.map(|py| py / scale_factor as i32);
-                (
-                    resized.to_rgb8(),
-                    scale_factor as f64,
-                    scaled_pointer_x,
-                    scaled_pointer_y,
-                )
-            } else {
-                (frame, 1.0_f64, pointer_image_x, pointer_image_y)
-            }
-        };
+        let pointer_image_x =
+            pointer_image_x.map(|px| (f64::from(px) / vision_scale).round() as i32);
+        let pointer_image_y =
+            pointer_image_y.map(|py| (f64::from(py) / vision_scale).round() as i32);
+        let final_frame = current_frame;
 
         let (image_w, image_h) = final_frame.dimensions();
         let image_content_rect = ComputerUseImageContentRect {
@@ -1767,7 +1567,6 @@ end tell"#])
             width: image_w,
             height: image_h,
         };
-        let jpeg_bytes = Self::encode_jpeg(&final_frame, JPEG_QUALITY)?;
 
         let point_crop_half_extent_native = params
             .crop_center
@@ -1790,7 +1589,6 @@ end tell"#])
             navigation_native_rect: shot_navigation_rect,
             quadrant_navigation_click_ready,
             image_content_rect: Some(image_content_rect),
-            som_labels: som_elements,
             implicit_confirmation_crop_applied,
             ui_tree_text,
         };
@@ -2249,7 +2047,7 @@ mod macos {
 
 impl DesktopComputerUseHost {
     /// Perform a physical click at the current pointer without running [`ComputerUseHost::computer_use_guard_click_allowed`].
-    /// Used after `mouse_move_global_f64` when coordinates came from AX, OCR, or SoM (not from vision model image coords).
+    /// Used after `mouse_move_global_f64` when coordinates came from AX or OCR (not from vision model image coords).
     async fn mouse_click_at_current_pointer(&self, button: &str) -> BitFunResult<()> {
         let button = button.to_string();
         tokio::task::spawn_blocking(move || {
@@ -2454,7 +2252,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         // All incoming crop / quadrant / implicit-center params are stripped
         // before they reach the rendering pipeline. The accompanying click
         // guard (`quadrant_navigation_click_ready`) is also relaxed since
-        // every screenshot now provides full context for click_label /
+        // every screenshot now provides full context for
         // click_element / move_to_text / mouse_move targeting.
         let _ = click_needs; // intentionally unused — no more click_needs-gated crop variants
         let window_target_rect: Option<(f64, f64, f64, f64)> = {
@@ -2564,8 +2362,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             });
         }
 
-        // Enumerate SoM elements (AX tree walk) for label overlay
-        let (som_elements, ui_tree_text) = self.enumerate_som_elements().await;
+        let ui_tree_text = self.enumerate_ui_tree_text().await;
 
         let (shot, map, nav_out) = tokio::task::spawn_blocking(move || {
             Self::screenshot_sync_tool_with_capture(
@@ -2573,7 +2370,6 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 nav_snapshot,
                 rgba,
                 screen,
-                som_elements,
                 ui_tree_text,
                 implicit_applied,
             )
@@ -2595,16 +2391,10 @@ impl ComputerUseHost for DesktopComputerUseHost {
 
     async fn screenshot_peek_full_display(&self) -> BitFunResult<ComputerScreenshot> {
         // Phase 1 fix: previously this captured `Screen::from_point(0, 0)`
-        // (the primary display) and passed an empty SoM list, which broke
-        // `click_label` on multi-monitor setups (wrong screen) and made the
-        // returned image label-less so labels emitted on the *previous* full
-        // screenshot were unrecoverable.
-        //
-        // We now (a) prefer the screen that backs the most recent main
+        // (the primary display) which broke confirmation flows on multi-monitor
+        // setups. We now prefer the screen that backs the most recent main
         // screenshot — that is the frame of reference the model is reasoning
-        // against — falling back to the screen under the mouse, then primary;
-        // and (b) compute SoM elements / UI-tree text just like the main
-        // screenshot path so labels render in the peek image.
+        // against — falling back to the screen under the mouse, then primary.
         let (cached_screen, preferred_display_id) = {
             let s = self.state.lock().ok();
             s.map(|s| {
@@ -2616,7 +2406,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             .unwrap_or((None, None))
         };
         let (mouse_x, mouse_y) = Self::current_mouse_position();
-        let (som_elements, ui_tree_text) = self.enumerate_som_elements().await;
+        let ui_tree_text = self.enumerate_ui_tree_text().await;
 
         let (shot, _map, _) = tokio::task::spawn_blocking(move || {
             let mx = mouse_x.round() as i32;
@@ -2644,7 +2434,6 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 None,
                 rgba,
                 screen,
-                som_elements,
                 ui_tree_text,
                 false,
             )
@@ -2785,30 +2574,30 @@ impl ComputerUseHost for DesktopComputerUseHost {
         }
     }
 
-    async fn enumerate_som_elements(&self) -> (Vec<SomElement>, Option<String>) {
+    async fn enumerate_ui_tree_text(&self) -> Option<String> {
         #[cfg(target_os = "macos")]
         {
-            const SOM_MAX_ELEMENTS: usize = 50;
+            const UI_TREE_MAX_ELEMENTS: usize = 50;
             tokio::task::spawn_blocking(move || {
                 // AX tree traversal can throw `NSException` from a misbehaving
-                // frontmost app; the @try/@catch wrapper turns that into an
-                // empty SoM list rather than crashing the whole process.
+                // frontmost app; the @try/@catch wrapper turns that into a
+                // missing UI-tree text rather than crashing the whole process.
                 macos::catch_objc(|| {
-                    Ok(crate::computer_use::macos_ax_ui::enumerate_interactive_elements(
-                        SOM_MAX_ELEMENTS,
+                    Ok(crate::computer_use::macos_ax_ui::enumerate_ui_tree_text(
+                        UI_TREE_MAX_ELEMENTS,
                     ))
                 })
                 .unwrap_or_else(|e| {
-                    debug!("SoM enumeration suppressed by ObjC catch: {}", e);
-                    (vec![], None)
+                    debug!("UI-tree enumeration suppressed by ObjC catch: {}", e);
+                    None
                 })
             })
             .await
-            .unwrap_or_else(|_| (vec![], None))
+            .unwrap_or(None)
         }
         #[cfg(not(target_os = "macos"))]
         {
-            (vec![], None)
+            None
         }
     }
 

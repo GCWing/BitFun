@@ -96,13 +96,13 @@ impl ComputerUseTool {
         Self
     }
 
-    /// Tool description when the primary model is **text-only** (no `screenshot` / `click_label` / JPEG workflow).
+    /// Tool description when the primary model is **text-only** (no `screenshot` / JPEG workflow).
     fn description_text_only() -> String {
         let os = Self::host_os_label();
         let keys = Self::key_chord_os_hint();
         format!(
             "Desktop automation (host OS: {}). {} \
-The **primary model cannot consume images** in tool results — **do not** use **`screenshot`** or **`click_label`**.\n\
+The **primary model cannot consume images** in tool results — **do not** use **`screenshot`**.\n\
 **ACTION PRIORITY (CRITICAL):** Always think in this order:\n\
 1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`), shell automation. Most efficient.\n\
 2. **Keyboard shortcuts second** — Use **`key_chord`** / **`type_text`** for system/app shortcuts, navigation keys.\n\
@@ -115,7 +115,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
         )
     }
 
-    /// JSON Schema without `screenshot`, `click_label`, or screenshot-only fields.
+    /// JSON Schema without `screenshot` or screenshot-only fields.
     fn input_schema_text_only() -> Value {
         json!({
             "type": "object",
@@ -123,7 +123,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
                 "action": {
                     "type": "string",
                     "enum": ["click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "open_app", "run_apple_script"],
-                    "description": "The action to perform. **Primary model is text-only — no `screenshot` or `click_label`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. 4) Only when above fail: `click_element` (AX) → `move_to_text` (OCR, use `move_to_text_match_index` when multiple hits listed) → `mouse_move` (**`use_screen_coordinates`: true** with globals) + `click`. Never guess coordinates."
+                    "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. 4) Only when above fail: `click_element` (AX) → `move_to_text` (OCR, use `move_to_text_match_index` when multiple hits listed) → `mouse_move` (**`use_screen_coordinates`: true** with globals) + `click`. Never guess coordinates."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
                 "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -490,14 +490,6 @@ The **primary model cannot consume images** in tool results — **do not** use *
             (Some(_), Some(_)) => "The JPEG includes a **synthetic red cursor with gray border** marking the **actual mouse position** on this bitmap (not the OS arrow). The **tip** is the true hotspot for **visual confirmation** only — **do not** use JPEG pixel indices for `mouse_move`; use `use_screen_coordinates: true` with globals from tool results (`pointer_global`, `move_to_text` global_center_*, `locate`, AX) or `move_to_text` / `click_element`.",
             _ => "No pointer overlay in this JPEG (pointer_image_x/y null): the cursor is not on this bitmap (e.g. another display). Do not infer position from the image; use global coordinates with `use_screen_coordinates: true`, or move the pointer onto this display and screenshot again.",
         };
-        let som_note = if shot.som_labels.is_empty() {
-            "No Set-of-Mark labels on this screenshot.".to_string()
-        } else {
-            format!(
-                "Set-of-Mark labels are overlaid on the screenshot: use `click_label` with a label number from 1..={}. Prefer this over raw coordinate clicks when the target has a visible label.",
-                shot.som_labels.len()
-            )
-        };
         let mut data = json!({
             "success": true,
             "mime_type": shot.mime_type,
@@ -519,12 +511,11 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "quadrant_navigation_click_ready": shot.quadrant_navigation_click_ready,
             "implicit_confirmation_crop_applied": shot.implicit_confirmation_crop_applied,
             "debug_screenshot_path": debug_rel,
-            "som_label_note": som_note,
             "ui_tree_text": shot.ui_tree_text,
         });
         let shortcut_policy = format!(
             "**Verify step:** after **`click`**, **`key_chord`**, **`type_text`**, **`scroll`**, or **`drag`**, check **`interaction_state.recommend_screenshot_to_verify_last_action`** — when true, call **`screenshot`** next to confirm UI state (Cowork-style). \
-**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move; no prior `screenshot` for targeting) → **`click_label`** if SoM exists on a shot → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation and navigation — do not guess move targets from JPEG pixels.** **`click`** never moves the pointer. **Host-only mandatory screenshot:** before **`click`** or Enter **`key_chord`** when the pointer changed since the last capture — **not** before `mouse_move`, `scroll`, `type_text`, `locate`, `wait`, or non-Enter `key_chord`. **Valid basis for a guarded `click`:** `FullDisplay`, `quadrant_navigation_click_ready`, or point crop; or bare **`screenshot`** after a pointer-changing action (**~500×500** implicit confirmation around mouse/caret). **`mouse_move`** must use **global** coordinates (from `move_to_text` global_center_*, `locate`, AX, or `pointer_global`). **Bare confirmation `screenshot`:** whenever the host still requires a capture before **`click`** or Enter **`key_chord`** (`requires_fresh_screenshot_*`), a bare `screenshot` (no crop / no reset) is **~500×500** centered on **mouse** (`screenshot_implicit_center` default `mouse`) — **including during quadrant drill** and the **first** such capture in a session. Before Enter in a text field, set **`screenshot_implicit_center`: `text_caret`**. Use **`screenshot_reset_navigation`**: true for a **full-screen** capture instead. **If AX failed:** try **`move_to_text`** before a long screenshot drill. **Optional refinement** for tiny targets: `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px) or point crop. Small moves: **ComputerUseMouseStep** over tiny **ComputerUseMousePrecise** (screen globals only).",
+**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move; no prior `screenshot` for targeting) → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation and navigation — do not guess move targets from JPEG pixels.** **`click`** never moves the pointer. **Host-only mandatory screenshot:** before **`click`** or Enter **`key_chord`** when the pointer changed since the last capture — **not** before `mouse_move`, `scroll`, `type_text`, `locate`, `wait`, or non-Enter `key_chord`. **Valid basis for a guarded `click`:** `FullDisplay`, `quadrant_navigation_click_ready`, or point crop; or bare **`screenshot`** after a pointer-changing action (**~500×500** implicit confirmation around mouse/caret). **`mouse_move`** must use **global** coordinates (from `move_to_text` global_center_*, `locate`, AX, or `pointer_global`). **Bare confirmation `screenshot`:** whenever the host still requires a capture before **`click`** or Enter **`key_chord`** (`requires_fresh_screenshot_*`), a bare `screenshot` (no crop / no reset) is **~500×500** centered on **mouse** (`screenshot_implicit_center` default `mouse`) — **including during quadrant drill** and the **first** such capture in a session. Before Enter in a text field, set **`screenshot_implicit_center`: `text_caret`**. Use **`screenshot_reset_navigation`**: true for a **full-screen** capture instead. **If AX failed:** try **`move_to_text`** before a long screenshot drill. **Optional refinement** for tiny targets: `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px) or point crop. Small moves: **ComputerUseMouseStep** over tiny **ComputerUseMousePrecise** (screen globals only).",
             COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE
         );
         let region_crop_size_note = shot
@@ -583,26 +574,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
                 "hierarchical_navigation".to_string(),
                 hierarchical_navigation,
             );
-            if !shot.som_labels.is_empty() {
-                let som_labels = shot
-                    .som_labels
-                    .iter()
-                    .map(|e| {
-                        json!({
-                            "label": e.label,
-                            "role": e.role,
-                            "title": e.title,
-                            "identifier": e.identifier,
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                obj.insert("som_labels".to_string(), Value::Array(som_labels));
-                obj.insert(
-                    "recommended_next_for_click_targeting".to_string(),
-                    Value::String("click_label".to_string()),
-                );
-            } else if shot.screenshot_crop_center.is_none() && !shot.quadrant_navigation_click_ready
-            {
+            if shot.screenshot_crop_center.is_none() && !shot.quadrant_navigation_click_ready {
                 if Self::shot_covers_full_display(shot) {
                     obj.insert(
                         "recommended_next_for_click_targeting".to_string(),
@@ -676,7 +648,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
             let nx = shot.native_width.saturating_sub(1);
             let ny = shot.native_height.saturating_sub(1);
             format!(
-                "Full screenshot {}x{} (vision_scale={}). **Display native** range **0..={}** x **0..={}** (JPEG matches this rect for **confirmation**). **Targeting:** prefer **`move_to_text`** when text is visible; **`screenshot` + SoM/quad** is lowest priority. If SoM labels are visible, prefer `click_label`. **`mouse_move`** uses **`use_screen_coordinates`: true** with globals from tools — **not** JPEG guesses; then **`click`** when allowed (see `interaction_state`). **Only** guarded **`click`** / Enter **`key_chord`** need a fresh capture after pointer moves (see shortcut_policy).{}.{}",
+                "Full screenshot {}x{} (vision_scale={}). **Display native** range **0..={}** x **0..={}** (JPEG matches this rect for **confirmation**). **Targeting:** prefer **`move_to_text`** when text is visible; **`screenshot` + quad** is lowest priority. **`mouse_move`** uses **`use_screen_coordinates`: true** with globals from tools — **not** JPEG guesses; then **`click`** when allowed (see `interaction_state`). **Only** guarded **`click`** / Enter **`key_chord`** need a fresh capture after pointer moves (see shortcut_policy).{}.{}",
                 shot.image_width,
                 shot.image_height,
                 shot.vision_scale,
@@ -1003,17 +975,16 @@ impl Tool for ComputerUseTool {
 **ACTION PRIORITY (CRITICAL):** Always think in this order before choosing an action:\n\
 1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`, AppleScript), shell automation. This is the MOST EFFICIENT approach.\n\
 2. **Keyboard shortcuts second** — Use **`key_chord`** for system shortcuts, app shortcuts, navigation keys (Enter, Escape, Tab, Space, Arrow keys). Prefer over mouse when equivalent.\n\
-3. **Precise UI control last** — Only when above methods fail: use **`click_element`** (AX/accessibility) → **`move_to_text`** (OCR) → **`click_label`** (SoM) → **`mouse_move`** + **`click`** (coordinate-based, last resort).\n\
+3. **Precise UI control last** — Only when above methods fail: use **`click_element`** (AX/accessibility) → **`move_to_text`** (OCR) → **`mouse_move`** + **`click`** (coordinate-based, last resort).\n\
 **Screenshot usage:** **`screenshot`** is ONLY for observing/confirming UI state and extracting text/information — NEVER use screenshot coordinates to control mouse movement. Always use precise methods (AX, OCR, system coordinates) for targeting.\n\
 **Cowork-style loop:** **`screenshot`** (observe) → **one** action → **`screenshot`** (verify). Use **`wait`** if UI animates. When **`interaction_state.recommend_screenshot_to_verify_last_action`** is true, call **`screenshot`** next. \
 **`click_element`:** Accessibility tree (AX/UIA/AT-SPI) locate + click. Provide `title_contains` / `role_substring` / `identifier_contains`. On macOS, **`TextArea`** and **`TextField`** match both `AXTextArea` and `AXTextField` (many chat apps use TextField for compose). If several text fields match, the host deprioritizes known **search** controls (e.g. WeChat `_SC_SEARCH_FIELD`) and prefers **lower** on-screen fields (composer). Bypasses coordinate screenshot guard. \
-**`move_to_text`:** OCR-match visible text (`text_query`) and **move the pointer** to it (no click, no keys); **no prior `screenshot` required for targeting** (host captures **raw** pixels for Vision — no agent screenshot overlays; on macOS defaults to the **frontmost window** unless **`ocr_region_native`** overrides). Matching **strips whitespace** between CJK glyphs and allows **small edit distance** when Vision mis-reads one character. The host **trusts** the resulting globals — **next `click`** does **not** require an extra `screenshot` (same as AX). If **several** hits match, the host returns **preview JPEGs + accessibility** per candidate — pick **`move_to_text_match_index`** (1-based) and call **`move_to_text` again** with the same query/region, or narrow with **`ocr_region_native`**. When **`click_label`** lists a results table (`AXTable`), prefer **`click_label`** on that label over guessing OCR row text. Use **`click`** afterward if you need a mouse press. Prefer after `click_element` misses when text is visible. \
-**`click_label`:** After `screenshot` with `som_labels`, click by label number. Bypasses coordinate guard. \
+**`move_to_text`:** OCR-match visible text (`text_query`) and **move the pointer** to it (no click, no keys); **no prior `screenshot` required for targeting** (host captures **raw** pixels for Vision — no agent screenshot overlays; on macOS defaults to the **frontmost window** unless **`ocr_region_native`** overrides). Matching **strips whitespace** between CJK glyphs and allows **small edit distance** when Vision mis-reads one character. The host **trusts** the resulting globals — **next `click`** does **not** require an extra `screenshot` (same as AX). If **several** hits match, the host returns **preview JPEGs + accessibility** per candidate — pick **`move_to_text_match_index`** (1-based) and call **`move_to_text` again** with the same query/region, or narrow with **`ocr_region_native`**. Use **`click`** afterward if you need a mouse press. Prefer after `click_element` misses when text is visible. \
 **`click`:** Press at **current pointer only** — **never** pass `x`, `y`, `coordinate_mode`, or `use_screen_coordinates`. Position first with **`move_to_text`**, **`mouse_move`** (**globals only**), or **`click_element`**. After pointer moves, **`screenshot`** again before the next guarded **`click`** when the host requires it. \
 **`mouse_move` / `drag`:** **`use_screen_coordinates`: true** required — global coordinates from **`move_to_text`**, **`locate`**, AX, or **`pointer_global`**; never JPEG pixel guesses. \
-**`scroll` / `type_text` / `pointer_move_rel` / `wait` / `locate`:** No mandatory pre-screenshot by themselves. **`pointer_move_rel`** (and **ComputerUseMouseStep**) are **blocked immediately after `screenshot`** until **`move_to_text`**, **`mouse_move`** (globals), **`click_element`**, or **`click_label`** — do not nudge from the JPEG. \
+**`scroll` / `type_text` / `pointer_move_rel` / `wait` / `locate`:** No mandatory pre-screenshot by themselves. **`pointer_move_rel`** (and **ComputerUseMouseStep**) are **blocked immediately after `screenshot`** until **`move_to_text`**, **`mouse_move`** (globals), or **`click_element`** — do not nudge from the JPEG. \
 **`key_chord`:** Press key combination; prefer over **`click`** when shortcuts or **Enter**/**Escape**/**Tab** suffice. **Mandatory fresh screenshot only** when chord includes Return/Enter. \
-**`screenshot`:** JPEG for **confirmation** (optional pointer + SoM). When the host requires a fresh capture before **`click`** or Enter **`key_chord`**, a bare `screenshot` is **~500×500** around the **mouse** or **caret** (also during quadrant drill). Use **`screenshot_reset_navigation`**: true to force **full-screen** for wide context. \
+**`screenshot`:** JPEG for **confirmation** (optional pointer overlay). When the host requires a fresh capture before **`click`** or Enter **`key_chord`**, a bare `screenshot` is **~500×500** around the **mouse** or **caret** (also during quadrant drill). Use **`screenshot_reset_navigation`**: true to force **full-screen** for wide context. \
 **`type_text`:** Type text; prefer clipboard for long content. Does **not** move the pointer — **Enter** **`key_chord`** may follow without a mandatory `screenshot` unless you moved the pointer since the last capture. If **`screenshot`** shows the correct chat is already open and the input may be focused, **try `type_text` first** before spending steps on `click_element` / `move_to_text`.",
             os, keys,
         ))
@@ -1039,8 +1010,8 @@ impl Tool for ComputerUseTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["screenshot", "click_element", "click_label", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "open_app", "run_apple_script"],
-                    "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. 4) Only when above fail: `click_element` (AX) → `move_to_text` (OCR, move pointer only) → `click_label` (SoM) → `mouse_move` (globals only, **`use_screen_coordinates`: true**) + `click` (last resort). **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
+                    "enum": ["screenshot", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "open_app", "run_apple_script"],
+                    "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. 4) Only when above fail: `click_element` (AX) → `move_to_text` (OCR, move pointer only) → `mouse_move` (globals only, **`use_screen_coordinates`: true**) + `click` (last resort). **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
                 "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -1057,7 +1028,6 @@ impl Tool for ComputerUseTool {
                 "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: keys in order — **modifiers first**, then the main key (e.g. `[\"command\",\"f\"]`). Desktop host waits after pressing modifiers so shortcuts register (important on macOS with IME). Modifiers: command, control, shift, alt/option. Arrows: `up`, `down`, … Host may require a fresh screenshot before Return/Enter when the pointer is stale." },
                 "text": { "type": "string", "description": "For `type_text`: text to type. Prefer clipboard paste (key_chord) for long content." },
                 "ms": { "type": "integer", "description": "For `wait`: duration in milliseconds." },
-                "label": { "type": "integer", "minimum": 1, "description": "For `click_label`: 1-based Set-of-Mark label number from the latest screenshot." },
                 "text_query": { "type": "string", "description": "For `move_to_text`: visible text to OCR-match on screen (case-insensitive substring)." },
                 "move_to_text_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_text`: **1-based** index from `candidates[].match_index` after a **disambiguation** response (multiple OCR hits). Omit on the first pass; set when choosing which hit to move to." },
                 "ocr_region_native": {
@@ -1249,79 +1219,6 @@ impl Tool for ComputerUseTool {
                 Ok(vec![ToolResult::ok(body, Some(summary))])
             }
 
-            "click_label" => {
-                if !context.primary_model_supports_image_understanding() {
-                    return Err(BitFunError::tool(
-                        "click_label requires Set-of-Mark labels from a screenshot; the primary model is text-only. Use `click_element`, `move_to_text`, `locate`, or `mouse_move` with globals from tool JSON, then `click`.".to_string(),
-                    ));
-                }
-                let label = input.get("label").and_then(|v| v.as_u64()).ok_or_else(|| {
-                    BitFunError::tool("click_label requires integer field `label`.".to_string())
-                })? as u32;
-                if label == 0 {
-                    return Err(BitFunError::tool(
-                        "click_label label must be >= 1.".to_string(),
-                    ));
-                }
-                let button = input
-                    .get("button")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("left");
-                let num_clicks = input
-                    .get("num_clicks")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(1)
-                    .clamp(1, 3) as u32;
-
-                let latest_shot = host_ref.screenshot_peek_full_display().await?;
-                let matched = latest_shot
-                    .som_labels
-                    .iter()
-                    .find(|e| e.label == label)
-                    .cloned()
-                    .ok_or_else(|| BitFunError::tool(format!(
-                        "No SoM label {} found. Take a fresh screenshot first and use one of the returned som_labels.",
-                        label
-                    )))?;
-
-                host_ref
-                    .mouse_move_global_f64(matched.global_center_x, matched.global_center_y)
-                    .await?;
-                host_ref.computer_use_guard_click_allowed_relaxed()?;
-                for _ in 0..num_clicks {
-                    host_ref.mouse_click_authoritative(button).await?;
-                }
-
-                let input_coords = json!({
-                    "kind": "click_label",
-                    "label": label,
-                    "button": button,
-                    "num_clicks": num_clicks,
-                });
-                let body = computer_use_augment_result_json(
-                    host_ref,
-                    json!({
-                        "success": true,
-                        "action": "click_label",
-                        "label": label,
-                        "matched_role": matched.role,
-                        "matched_title": matched.title,
-                        "matched_identifier": matched.identifier,
-                        "global_center_x": matched.global_center_x,
-                        "global_center_y": matched.global_center_y,
-                        "button": button,
-                        "num_clicks": num_clicks,
-                    }),
-                    Some(input_coords),
-                )
-                .await;
-                let summary = format!(
-                    "SoM click_label: label={} role={} at ({:.0}, {:.0}).",
-                    label, matched.role, matched.global_center_x, matched.global_center_y
-                );
-                Ok(vec![ToolResult::ok(body, Some(summary))])
-            }
-
             "move_to_text" => {
                 let text_query = input
                     .get("text_query")
@@ -1346,7 +1243,7 @@ impl Tool for ComputerUseTool {
                             .await?;
                     if matches.is_empty() {
                         return Err(BitFunError::tool(format!(
-                            "move_to_text found no visible OCR match for {:?}. Take a fresh screenshot and try a shorter or more distinctive substring, or use click_label / click_element.",
+                            "move_to_text found no visible OCR match for {:?}. Take a fresh screenshot and try a shorter or more distinctive substring, or use click_element.",
                             text_query
                         )));
                     }

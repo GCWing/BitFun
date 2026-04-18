@@ -1045,11 +1045,43 @@ impl ControlHubTool {
                     "description": "Delete a configured model.",
                     "params": { "modelQuery": "fuzzy match on model display name or id" },
                 },
+                {
+                    "name": "open_miniapp_gallery",
+                    "description": "Open the Mini App gallery scene (lists installed mini-apps).",
+                    "params": {},
+                },
+                {
+                    "name": "open_miniapp",
+                    "description": "Open a specific installed mini-app by its id (use list_miniapps to discover ids).",
+                    "params": { "miniAppId": "id of the mini app to open" },
+                },
             ]);
             return Ok(vec![ToolResult::ok(
                 json!({ "tasks": tasks }),
-                Some("5 named tasks available for app.execute_task".to_string()),
+                Some("7 named tasks available for app.execute_task".to_string()),
             )]);
+        }
+
+        // ── BitFun self-introspection (no frontend round-trip) ─────────
+        // These actions answer "what does BitFun itself expose?" so the
+        // model never needs to fall back to filesystem-scanning the user's
+        // workspace to guess at the app's own capabilities.
+        if action == "list_miniapps" {
+            let include_runtime = params
+                .get("includeRuntime")
+                .or_else(|| params.get("include_runtime"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            return Self::handle_list_miniapps(include_runtime).await;
+        }
+        if action == "list_scenes" {
+            return Ok(vec![Self::scenes_tool_result()]);
+        }
+        if action == "list_settings_tabs" {
+            return Ok(vec![Self::settings_tabs_tool_result()]);
+        }
+        if action == "app_self_describe" {
+            return Self::handle_app_self_describe().await;
         }
 
         let mut sc_input = params.clone();
@@ -1058,6 +1090,200 @@ impl ControlHubTool {
         }
         let sc_tool = super::self_control_tool::SelfControlTool::new();
         sc_tool.call_impl(&sc_input, context).await
+    }
+
+    // ── BitFun self-introspection helpers ─────────────────────────────
+
+    /// Static catalog of scenes the user can navigate to from the BitFun
+    /// shell. Mirrors the entries in
+    /// `src/web-ui/src/app/scenes/registry.ts::SCENE_TAB_REGISTRY`.
+    /// Kept here as a static list so `app.list_scenes` can answer with
+    /// zero frontend round-trip; the e2e suite asserts this list stays
+    /// in sync with the TS registry.
+    fn scene_catalog() -> Vec<(&'static str, &'static str, &'static str)> {
+        vec![
+            ("welcome", "Welcome", "欢迎使用"),
+            ("session", "Session (chat)", "会话"),
+            ("terminal", "Terminal", "终端"),
+            ("git", "Git", "Git"),
+            ("settings", "Settings", "设置"),
+            ("file-viewer", "File Viewer", "文件查看"),
+            ("profile", "Profile", "个人资料"),
+            ("agents", "Agents", "智能体"),
+            ("skills", "Skills", "技能"),
+            ("miniapps", "Mini App Gallery", "小应用"),
+            ("browser", "Browser", "浏览器"),
+            ("mermaid", "Mermaid Editor", "Mermaid 图表"),
+            ("assistant", "Assistant", "助理"),
+            ("insights", "Insights", "洞察"),
+            ("shell", "Shell", "Shell"),
+            ("panel-view", "Panel View", "面板视图"),
+        ]
+    }
+
+    /// Settings tab catalog. Keep in sync with the settings store registry.
+    fn settings_tab_catalog() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("basics", "Basic preferences (language, theme, etc.)"),
+            ("models", "AI models (add / edit / set defaults / delete)"),
+            ("session-config", "Default session behavior"),
+            ("agents", "Agent management"),
+            ("skills", "Skill packages"),
+            ("tools", "Built-in tools and MCP servers"),
+            ("about", "About BitFun"),
+        ]
+    }
+
+    fn scenes_tool_result() -> ToolResult {
+        let scenes: Vec<Value> = Self::scene_catalog()
+            .into_iter()
+            .map(|(id, label_en, label_zh)| {
+                json!({ "id": id, "labelEn": label_en, "labelZh": label_zh })
+            })
+            .collect();
+        let count = scenes.len();
+        ToolResult::ok(
+            json!({ "scenes": scenes }),
+            Some(format!("{count} scenes available; pass any `id` to action `open_scene`. Mini-app scenes use id `miniapp:<appId>` (see app.list_miniapps).")),
+        )
+    }
+
+    fn settings_tabs_tool_result() -> ToolResult {
+        let tabs: Vec<Value> = Self::settings_tab_catalog()
+            .into_iter()
+            .map(|(id, desc)| json!({ "id": id, "description": desc }))
+            .collect();
+        let count = tabs.len();
+        ToolResult::ok(
+            json!({ "tabs": tabs }),
+            Some(format!(
+                "{count} settings tabs available; pass any `id` to action `open_settings_tab`."
+            )),
+        )
+    }
+
+    async fn handle_list_miniapps(include_runtime: bool) -> BitFunResult<Vec<ToolResult>> {
+        let manager = match crate::miniapp::try_get_global_miniapp_manager() {
+            Some(m) => m,
+            None => {
+                return Ok(vec![ToolResult::ok(
+                    json!({ "miniapps": [], "available": false }),
+                    Some("MiniApp subsystem is not initialized in this build.".to_string()),
+                )]);
+            }
+        };
+
+        let metas = manager
+            .list()
+            .await
+            .map_err(|e| BitFunError::tool(format!("Failed to list mini-apps: {e}")))?;
+
+        let entries: Vec<Value> = metas
+            .iter()
+            .map(|meta| {
+                let mut obj = serde_json::Map::new();
+                obj.insert("id".to_string(), json!(meta.id));
+                obj.insert("name".to_string(), json!(meta.name));
+                obj.insert("description".to_string(), json!(meta.description));
+                obj.insert("icon".to_string(), json!(meta.icon));
+                obj.insert("category".to_string(), json!(meta.category));
+                obj.insert("tags".to_string(), json!(meta.tags));
+                obj.insert("version".to_string(), json!(meta.version));
+                obj.insert("updatedAt".to_string(), json!(meta.updated_at));
+                obj.insert(
+                    "openSceneId".to_string(),
+                    json!(format!("miniapp:{}", meta.id)),
+                );
+                if include_runtime {
+                    obj.insert(
+                        "runtime".to_string(),
+                        json!({
+                            "sourceRevision": meta.runtime.source_revision,
+                            "depsRevision": meta.runtime.deps_revision,
+                            "depsDirty": meta.runtime.deps_dirty,
+                            "workerRestartRequired": meta.runtime.worker_restart_required,
+                        }),
+                    );
+                }
+                Value::Object(obj)
+            })
+            .collect();
+
+        let count = entries.len();
+        let preview: String = metas
+            .iter()
+            .take(5)
+            .map(|m| format!("{} (id={})", m.name, m.id))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let summary = if count == 0 {
+            "No mini-apps installed.".to_string()
+        } else if count <= 5 {
+            format!("{count} mini-app(s) installed: {preview}.")
+        } else {
+            format!("{count} mini-app(s) installed; first 5: {preview}…")
+        };
+
+        Ok(vec![ToolResult::ok(
+            json!({ "miniapps": entries, "count": count, "available": true }),
+            Some(format!(
+                "{summary} To open one: execute_task task=open_miniapp params={{ miniAppId: <id> }}, or open_scene sceneId=miniapp:<id>."
+            )),
+        )])
+    }
+
+    async fn handle_app_self_describe() -> BitFunResult<Vec<ToolResult>> {
+        let scenes: Vec<Value> = Self::scene_catalog()
+            .into_iter()
+            .map(|(id, label_en, label_zh)| {
+                json!({ "id": id, "labelEn": label_en, "labelZh": label_zh })
+            })
+            .collect();
+        let settings_tabs: Vec<Value> = Self::settings_tab_catalog()
+            .into_iter()
+            .map(|(id, desc)| json!({ "id": id, "description": desc }))
+            .collect();
+
+        let (miniapps, miniapp_available, miniapp_count): (Vec<Value>, bool, usize) =
+            match crate::miniapp::try_get_global_miniapp_manager() {
+                Some(manager) => match manager.list().await {
+                    Ok(metas) => {
+                        let count = metas.len();
+                        let entries = metas
+                            .iter()
+                            .map(|m| {
+                                json!({
+                                    "id": m.id,
+                                    "name": m.name,
+                                    "description": m.description,
+                                    "category": m.category,
+                                    "openSceneId": format!("miniapp:{}", m.id),
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        (entries, true, count)
+                    }
+                    Err(_) => (vec![], true, 0),
+                },
+                None => (vec![], false, 0),
+            };
+
+        let summary = format!(
+            "BitFun self-describe: {} scenes, {} settings tabs, {} mini-app(s) installed.",
+            scenes.len(),
+            settings_tabs.len(),
+            miniapp_count,
+        );
+
+        Ok(vec![ToolResult::ok(
+            json!({
+                "scenes": scenes,
+                "settingsTabs": settings_tabs,
+                "miniapps": miniapps,
+                "miniappSubsystemAvailable": miniapp_available,
+            }),
+            Some(summary),
+        )])
     }
 
     // ── Terminal domain ────────────────────────────────────────────────
@@ -2042,7 +2268,7 @@ for control flow.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
 ### domain: "desktop"  (Computer Use — only available in the BitFun desktop app)
-- screenshot, click, click_element, click_label, mouse_move, pointer_move_rel,
+- screenshot, click, click_element, mouse_move, pointer_move_rel,
   scroll, drag, key_chord, type_text, paste, wait, locate, move_to_text.
 - **`screenshot`** — exactly two possible outputs: the focused application
   window (default, via Accessibility) OR the full display (fallback when
@@ -2091,24 +2317,34 @@ for control flow.
   directly — `interaction_state.displays.length === 1` is your signal.
 
 ### domain: "app"  (BitFun's own GUI via the SelfControl bridge)
-- get_page_state, wait_for_selector, click, click_by_text, input, scroll,
-  open_scene, open_settings_tab, set_config, get_config, list_models,
-  set_default_model, delete_model, execute_task, list_tasks, select_option,
-  wait, press_key, read_text.
-- `list_tasks` returns the catalog of named recipes accepted by
-  `execute_task` (each with `name`, `description`, `params`). Call it
-  ONCE if you don't already know the task name — it is a pure-Rust action
-  with no UI round-trip.
-- `get_page_state` now supports `{ offset, limit }` pagination (default
-  `offset=0, limit=60`) and returns `pagination` + `webview_id` so you
-  can page through long settings panels and tell which webview produced
-  the response.
+- Introspection (pure-Rust, no UI round-trip — call these BEFORE bash/fs):
+  * `app_self_describe` — one-shot snapshot: `{ scenes, settingsTabs, miniapps, miniappSubsystemAvailable }`. Use this whenever the user asks "what can BitFun do / what's installed / what scenes are there / what mini-apps are available" — DO NOT scan the user's workspace directories looking for app features, those directories are USER files, not BitFun installations.
+  * `list_miniapps { includeRuntime?: bool }` — installed mini-apps with `id / name / description / icon / category / openSceneId`.
+  * `list_scenes` — all scene ids you can pass to `open_scene` (plus dynamic `miniapp:<id>` for installed mini-apps).
+  * `list_settings_tabs` — all tab ids you can pass to `open_settings_tab`.
+  * `list_tasks` — catalog of named recipes for `execute_task`.
+- Navigation / mutation: get_page_state, wait_for_selector, click,
+  click_by_text, input, scroll, open_scene, open_settings_tab, set_config,
+  get_config, list_models, set_default_model, delete_model, execute_task,
+  select_option, wait, press_key, read_text.
+- `get_page_state` supports `{ offset, limit }` pagination (default
+  `offset=0, limit=60`) and returns `pagination` + `webview_id` so you can
+  page through long settings panels and tell which webview produced the
+  response.
 - `wait_for_selector` (`{ selector, timeoutMs?, state? }`) blocks until
   the element appears (state `'visible'` also waits for a non-zero box).
   Errors with `code='TIMEOUT'`. Prefer it over a fixed `wait { durationMs }`
   when the right delay isn't known.
-- For well-known requests (e.g. "set Kimi as the main model"), prefer
-  `execute_task` with the matching task name over manual click/input sequences.
+- For well-known requests, prefer `execute_task` recipes:
+  * "set Kimi as the main model" → `set_primary_model { modelQuery: "kimi" }`
+  * "open the mini app gallery / show me installed mini apps" → first
+    `list_miniapps`, then `execute_task task=open_miniapp_gallery`
+    (or `open_miniapp { miniAppId: "<id>" }` to open a specific one).
+- HARD RULE: when the user asks "BitFun 里有哪些 X" / "what mini-apps /
+  scenes / settings does BitFun have" — answer with `app.app_self_describe`
+  or the targeted `list_*` action. NEVER answer this kind of question by
+  running `Bash` `ls` against the user's workspace; that path is for
+  user files, not BitFun's own catalog.
 
 ### domain: "terminal"
 - list_sessions, kill (`terminal_session_id`), interrupt (`terminal_session_id`).
@@ -2489,6 +2725,102 @@ mod control_hub_tests {
                 .and_then(|v| v.as_str()),
             Some("browser")
         );
+    }
+
+    #[tokio::test]
+    async fn app_list_scenes_returns_known_scene_ids() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("app", "list_scenes", &json!({}), &ctx)
+            .await
+            .expect("list_scenes should succeed");
+        let payload = results.first().unwrap().content();
+        let arr = payload.get("scenes").and_then(|v| v.as_array()).unwrap();
+        let ids: Vec<&str> = arr
+            .iter()
+            .filter_map(|s| s.get("id").and_then(|v| v.as_str()))
+            .collect();
+        for must_have in ["session", "settings", "miniapps", "welcome"] {
+            assert!(
+                ids.iter().any(|id| *id == must_have),
+                "scene `{must_have}` missing from list_scenes catalog: {ids:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn app_list_settings_tabs_returns_models_tab() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("app", "list_settings_tabs", &json!({}), &ctx)
+            .await
+            .expect("list_settings_tabs should succeed");
+        let payload = results.first().unwrap().content();
+        let arr = payload.get("tabs").and_then(|v| v.as_array()).unwrap();
+        assert!(arr.iter().any(|t| t.get("id").and_then(|v| v.as_str()) == Some("models")));
+    }
+
+    #[tokio::test]
+    async fn app_list_miniapps_returns_unavailable_when_subsystem_absent() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("app", "list_miniapps", &json!({}), &ctx)
+            .await
+            .expect("list_miniapps should succeed even without subsystem");
+        let payload = results.first().unwrap().content();
+        // Without a global MiniAppManager the action must succeed-with-empty
+        // and signal availability=false, NOT error out — otherwise the model
+        // would assume the action itself is broken.
+        assert_eq!(
+            payload.get("available").and_then(|v| v.as_bool()),
+            Some(false)
+        );
+        let arr = payload.get("miniapps").and_then(|v| v.as_array()).unwrap();
+        assert!(arr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn app_self_describe_includes_scenes_settings_and_miniapps_keys() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("app", "app_self_describe", &json!({}), &ctx)
+            .await
+            .expect("app_self_describe should succeed");
+        let payload = results.first().unwrap().content();
+        for key in ["scenes", "settingsTabs", "miniapps", "miniappSubsystemAvailable"] {
+            assert!(
+                payload.get(key).is_some(),
+                "self-describe payload missing `{key}`: {payload}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn app_list_tasks_includes_open_miniapp_recipes() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("app", "list_tasks", &json!({}), &ctx)
+            .await
+            .expect("list_tasks should succeed");
+        let payload = results.first().unwrap().content();
+        let names: Vec<String> = payload
+            .get("tasks")
+            .and_then(|v| v.as_array())
+            .unwrap()
+            .iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .collect();
+        for required in ["open_miniapp_gallery", "open_miniapp", "set_primary_model"] {
+            assert!(
+                names.iter().any(|n| n == required),
+                "task `{required}` missing from execute_task catalog: {names:?}"
+            );
+        }
     }
 
     #[tokio::test]
