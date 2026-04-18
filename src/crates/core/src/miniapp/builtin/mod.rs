@@ -31,7 +31,7 @@ pub struct BuiltinApp {
 pub const BUILTIN_APPS: &[BuiltinApp] = &[
     BuiltinApp {
         id: "builtin-gomoku",
-        version: 4,
+        version: 7,
         meta_json: include_str!("assets/gomoku/meta.json"),
         html: include_str!("assets/gomoku/index.html"),
         css: include_str!("assets/gomoku/style.css"),
@@ -41,7 +41,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-daily-divination",
-        version: 3,
+        version: 10,
         meta_json: include_str!("assets/divination/meta.json"),
         html: include_str!("assets/divination/index.html"),
         css: include_str!("assets/divination/style.css"),
@@ -51,12 +51,22 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-regex-playground",
-        version: 4,
+        version: 12,
         meta_json: include_str!("assets/regex-playground/meta.json"),
         html: include_str!("assets/regex-playground/index.html"),
         css: include_str!("assets/regex-playground/style.css"),
         ui_js: include_str!("assets/regex-playground/ui.js"),
         worker_js: include_str!("assets/regex-playground/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+    BuiltinApp {
+        id: "builtin-coding-selfie",
+        version: 16,
+        meta_json: include_str!("assets/coding-selfie/meta.json"),
+        html: include_str!("assets/coding-selfie/index.html"),
+        css: include_str!("assets/coding-selfie/style.css"),
+        ui_js: include_str!("assets/coding-selfie/ui.js"),
+        worker_js: include_str!("assets/coding-selfie/worker.js"),
         esm_dependencies_json: "[]",
     },
 ];

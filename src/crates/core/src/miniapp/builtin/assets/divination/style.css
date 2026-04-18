@@ -133,93 +133,206 @@ button { font-family: inherit; cursor: pointer; }
   justify-content: center;
 }
 
-/* ── Reveal (back of card) ───────────────────────────── */
-.reveal {
+/* ── Draw stage — spread of card backs to choose from ──── */
+.draw-stage {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 18px;
   margin: auto;
+  width: 100%;
+  max-width: 880px;
 }
-.card-back {
-  width: 240px;
-  height: 360px;
+.draw-stage__title {
+  text-align: center;
+  margin-bottom: 4px;
+}
+.draw-stage__greeting {
+  margin: 0;
+  font-family: var(--d-serif);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 12px;
+  padding-left: 12px; /* compensate letter-spacing on first letter */
+  color: var(--d-gold-bright);
+  text-shadow: 0 0 18px rgba(240,198,116,0.30);
+  animation: greetingFade 1.2s ease both;
+}
+.draw-stage__subtitle {
+  margin: 8px 0 0;
+  font-family: var(--d-serif);
+  font-size: 13.5px;
+  letter-spacing: 3px;
+  color: var(--d-text-soft);
+  animation: greetingFade 1.6s ease both .2s;
+}
+.draw-stage__tip {
+  margin: 0;
+  font-family: var(--d-serif);
+  font-size: 11.5px;
+  letter-spacing: 1.5px;
+  color: var(--d-text-mute);
+  text-align: center;
+  animation: greetingFade 1.8s ease both .4s;
+}
+@keyframes greetingFade {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* The fan of card backs. Cards visually overlap; hover/focus lifts them. */
+.card-spread {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  perspective: 1600px;
+  margin: 26px 0 6px;
+  min-height: 320px;
+  padding: 30px 20px 50px;
+}
+.card-pick {
+  --w: 168px;
+  --h: 248px;
+  width: var(--w);
+  height: var(--h);
+  margin: 0 -32px;
   border-radius: 14px;
   position: relative;
-  border: 1px solid rgba(212,175,55,0.45);
-  background:
-    radial-gradient(circle at 50% 35%, rgba(157,78,221,0.35), transparent 70%),
-    linear-gradient(160deg, #1d1438 0%, #2c1054 50%, #160a2c 100%);
-  box-shadow:
-    0 30px 80px -20px rgba(0,0,0,0.7),
-    0 0 0 1px rgba(212,175,55,0.18) inset,
-    0 0 80px rgba(157,78,221,0.20) inset,
-    0 0 30px rgba(212,175,55,0.10);
   cursor: pointer;
   outline: none;
   overflow: hidden;
-  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease;
-}
-.card-back:hover {
-  transform: translateY(-6px) rotate(-1deg);
+  border: 1px solid rgba(212,175,55,0.45);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(157,78,221,0.40), transparent 70%),
+    linear-gradient(160deg, #1d1438 0%, #2c1054 50%, #160a2c 100%);
   box-shadow:
-    0 36px 90px -20px rgba(157,78,221,0.55),
-    0 0 0 1px rgba(212,175,55,0.30) inset,
-    0 0 60px rgba(212,175,55,0.20);
+    0 24px 60px -22px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(212,175,55,0.16) inset,
+    0 0 60px rgba(157,78,221,0.18) inset;
+  transform: translateY(var(--y, 0)) rotate(var(--rot, 0deg));
+  transform-origin: 50% 100%;
+  transition:
+    transform .38s cubic-bezier(.2,.8,.2,1),
+    box-shadow .38s ease,
+    opacity .45s ease,
+    filter .35s ease;
+  opacity: 0;
+  animation: cardEnterFan .55s cubic-bezier(.2,.8,.2,1) both;
+  animation-delay: var(--enter-delay, 0ms);
 }
-.card-back:focus-visible { box-shadow: 0 0 0 3px var(--d-gold); }
-.card-back__pattern {
-  position: absolute; inset: 12px;
+@keyframes cardEnterFan {
+  from {
+    opacity: 0;
+    transform: translateY(60px) rotate(0deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(var(--y, 0)) rotate(var(--rot, 0deg)) scale(1);
+  }
+}
+.card-pick:hover,
+.card-pick:focus-visible {
+  transform: translateY(calc(var(--y, 0px) - 28px)) rotate(0deg) scale(1.02);
+  z-index: 99 !important;
+  box-shadow:
+    0 38px 80px -22px rgba(157,78,221,0.55),
+    0 0 0 1px rgba(212,175,55,0.36) inset,
+    0 0 60px rgba(212,175,55,0.22);
+  filter: brightness(1.08);
+}
+.card-pick:focus-visible {
+  outline: 2px solid var(--d-gold-bright);
+  outline-offset: 4px;
+}
+.card-pick__pattern {
+  position: absolute; inset: 10px;
   border-radius: 8px;
   border: 1px solid rgba(212,175,55,0.30);
   background-image:
     radial-gradient(circle at 50% 50%, rgba(212,175,55,0.06) 0, transparent 40%),
     repeating-linear-gradient(45deg, rgba(212,175,55,0.04) 0 4px, transparent 4px 9px);
 }
-.card-back__pattern::before, .card-back__pattern::after {
-  /* gilded corner ornaments */
+.card-pick__pattern::before, .card-pick__pattern::after {
   content: '';
   position: absolute;
-  width: 22px; height: 22px;
+  width: 18px; height: 18px;
   border: 1px solid var(--d-gold);
   opacity: 0.7;
 }
-.card-back__pattern::before { top: 8px; left: 8px; border-right: 0; border-bottom: 0; }
-.card-back__pattern::after  { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
-
-.card-back__inner {
+.card-pick__pattern::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+.card-pick__pattern::after  { bottom: 6px; right: 6px; border-left: 0; border-top: 0; }
+.card-pick__inner {
   position: absolute; inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 18px;
-  text-align: center;
+  display: flex; align-items: center; justify-content: center;
 }
-.card-back__symbol {
+.card-pick__symbol {
   font-family: var(--d-serif);
-  font-size: 84px;
-  background: linear-gradient(135deg, #f0c674 0%, #d4af37 50%, #c084fc 100%);
+  font-size: 60px;
+  line-height: 1;
+  background: linear-gradient(135deg, #f0c674 0%, #d4af37 55%, #c084fc 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 14px rgba(212,175,55,0.45));
-  animation: pulse 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(212,175,55,0.45));
+  opacity: 0.92;
 }
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 0.95; }
-  50% { transform: scale(1.06); opacity: 1; }
+/* Subtle moving sheen across the back. */
+.card-pick__shine {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255,255,255,0.10) 50%,
+    transparent 65%
+  );
+  background-size: 220% 220%;
+  background-position: 100% 0;
+  animation: sheen 4.2s ease-in-out infinite;
+  mix-blend-mode: screen;
 }
-.card-back__hint {
-  font-family: var(--d-serif);
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: rgba(243,232,255,0.78);
-  padding: 0 24px;
+@keyframes sheen {
+  0%, 100% { background-position: 130% 0; opacity: 0.0; }
+  35%      { opacity: 0.55; }
+  60%      { background-position: -30% 0; opacity: 0; }
 }
-.reveal__tip {
-  font-family: var(--d-serif);
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  color: var(--d-text-mute);
-  text-align: center;
+
+/* Selected card: rises and glows. */
+.card-pick.is-chosen {
+  transform: translateY(-44px) rotate(0deg) scale(1.08);
+  z-index: 200 !important;
+  box-shadow:
+    0 60px 120px -28px rgba(157,78,221,0.70),
+    0 0 0 1px rgba(212,175,55,0.55) inset,
+    0 0 80px rgba(212,175,55,0.35),
+    0 0 140px rgba(157,78,221,0.45);
+  filter: brightness(1.18) saturate(1.1);
+  animation: chosenPulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes chosenPulse {
+  from { box-shadow: 0 60px 120px -28px rgba(157,78,221,0.70),
+                     0 0 0 1px rgba(212,175,55,0.55) inset,
+                     0 0 80px rgba(212,175,55,0.35),
+                     0 0 140px rgba(157,78,221,0.45); }
+  to   { box-shadow: 0 70px 140px -28px rgba(157,78,221,0.85),
+                     0 0 0 1px rgba(240,198,116,0.75) inset,
+                     0 0 110px rgba(240,198,116,0.55),
+                     0 0 180px rgba(157,78,221,0.65); }
+}
+.card-pick.is-chosen .card-pick__symbol {
+  animation: symPulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes symPulse {
+  from { transform: scale(1);    filter: drop-shadow(0 0 10px rgba(212,175,55,0.45)); }
+  to   { transform: scale(1.12); filter: drop-shadow(0 0 22px rgba(240,198,116,0.85)); }
+}
+
+/* Discarded cards fade and drift away. */
+.card-pick.is-discarded {
+  opacity: 0;
+  transform: translateY(80px) rotate(var(--rot, 0deg)) scale(0.85);
+  filter: blur(4px);
+  pointer-events: none;
 }
 
 /* ── Result ──────────────────────────────────────────── */
@@ -230,9 +343,36 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%;
   max-width: 980px;
   align-items: start;
-  animation: rise .55s ease;
 }
-@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Card flips/rises in from where the chosen back was. */
+.result-stage.is-active .card-front {
+  animation: cardEnter .75s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92) rotateY(-22deg);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotateY(0);
+    filter: none;
+  }
+}
+
+/* Right-side panels cascade in. */
+.result-stage.is-active .result__panels > * {
+  animation: panelRise .55s cubic-bezier(.2,.8,.2,1) both;
+}
+.result-stage.is-active .result__panels > *:nth-child(1) { animation-delay: .28s; }
+.result-stage.is-active .result__panels > *:nth-child(2) { animation-delay: .44s; }
+.result-stage.is-active .result__panels > *:nth-child(3) { animation-delay: .60s; }
+@keyframes panelRise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ── Card front ──────────────────────────────────────── */
 .card-front {
@@ -338,6 +478,27 @@ button { font-family: inherit; cursor: pointer; }
   padding: 0 12px;
   position: relative; z-index: 1;
 }
+.card-front__insight {
+  text-align: center;
+  font-family: var(--d-serif);
+  font-size: 11.5px;
+  letter-spacing: 1.2px;
+  color: rgba(240,198,116,0.78);
+  line-height: 1.6;
+  margin: 12px 0 0;
+  padding: 8px 14px 0;
+  border-top: 1px dashed rgba(212,175,55,0.28);
+  position: relative; z-index: 1;
+}
+.card-front__insight-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--d-gold);
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+.card-front__insight-text { display: block; }
 
 /* ── Right panels: stay arcane ───────────────────────── */
 .result__panels { display: flex; flex-direction: column; gap: 16px; }
@@ -382,15 +543,16 @@ button { font-family: inherit; cursor: pointer; }
 .fortunes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .fortune {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: minmax(64px, max-content) minmax(40px, 1fr) auto;
   gap: 12px;
   align-items: center;
 }
 .fortune__label {
   font-family: var(--d-serif);
   font-size: 14px;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
   color: var(--d-text-soft);
+  white-space: nowrap;
 }
 .fortune__bar {
   height: 4px;
@@ -554,4 +716,14 @@ button { font-family: inherit; cursor: pointer; }
   .result { grid-template-columns: 1fr; }
   .card-front { min-height: 320px; }
   .panel-row { grid-template-columns: 1fr; }
+  .card-pick { --w: 132px; --h: 196px; margin: 0 -42px; }
+  .card-pick__symbol { font-size: 48px; }
+  .card-spread { min-height: 250px; padding: 24px 14px 40px; }
+  .draw-stage__greeting { font-size: 22px; letter-spacing: 8px; padding-left: 8px; }
+  .draw-stage__subtitle { font-size: 12.5px; letter-spacing: 2px; }
+}
+@media (max-width: 460px) {
+  .card-pick { --w: 110px; --h: 162px; margin: 0 -50px; border-radius: 11px; }
+  .card-pick__symbol { font-size: 38px; }
+  .card-spread { min-height: 210px; }
 }

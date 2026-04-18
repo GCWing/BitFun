@@ -133,6 +133,7 @@ impl MiniAppStorage {
             permissions: meta.permissions,
             ai_context: meta.ai_context,
             runtime: meta.runtime,
+            i18n: meta.i18n,
         })
     }
 

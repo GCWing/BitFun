@@ -1,0 +1,703 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  color-scheme: dark;
+  --cs-bg: #020617;
+  --cs-bg-grad: radial-gradient(ellipse at top, rgba(34, 197, 94, 0.06), transparent 60%), radial-gradient(ellipse at bottom right, rgba(56, 189, 248, 0.04), transparent 50%), #020617;
+  --cs-card: #0a1120;
+  --cs-card-2: #0f172a;
+  --cs-border: rgba(148, 163, 184, 0.10);
+  --cs-border-strong: rgba(148, 163, 184, 0.18);
+  --cs-text: #f1f5f9;
+  --cs-text-2: #cbd5e1;
+  --cs-text-muted: #64748b;
+  --cs-accent: #22c55e;
+  --cs-accent-2: #16a34a;
+  --cs-accent-soft: rgba(34, 197, 94, 0.12);
+  --cs-accent-glow: 0 0 20px rgba(34, 197, 94, 0.18);
+  --cs-add: #22c55e;
+  --cs-del: #f87171;
+  --cs-warn: #fbbf24;
+  --cs-radius: 12px;
+  --cs-radius-sm: 8px;
+  --cs-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --cs-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+[data-theme-type="light"] {
+  color-scheme: light;
+  --cs-bg: #f8fafc;
+  --cs-bg-grad: radial-gradient(ellipse at top, rgba(34, 197, 94, 0.08), transparent 60%), #f8fafc;
+  --cs-card: #ffffff;
+  --cs-card-2: #f1f5f9;
+  --cs-border: rgba(15, 23, 42, 0.08);
+  --cs-border-strong: rgba(15, 23, 42, 0.14);
+  --cs-text: #0f172a;
+  --cs-text-2: #334155;
+  --cs-text-muted: #64748b;
+  --cs-accent: #16a34a;
+  --cs-accent-2: #15803d;
+  --cs-accent-soft: rgba(22, 163, 74, 0.10);
+  --cs-accent-glow: 0 0 0 transparent;
+  --cs-del: #dc2626;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--cs-bg-grad);
+  color: var(--cs-text);
+  font-family: var(--cs-sans);
+  font-size: clamp(10.5px, 1.7vh, 13px);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
+  overflow: hidden;
+}
+
+.cs-mono,
+.cs-stat-num,
+.cs-streak-num,
+.cs-donut-value,
+.cs-chip-mono,
+.cs-hours-axis,
+.cs-commit-hash {
+  font-family: var(--cs-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Shell: full viewport, no chrome, no scroll ──── */
+.cs-shell {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  padding: clamp(6px, 1vh, 10px) clamp(8px, 1vw, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1vh, 8px);
+  overflow: hidden;
+}
+
+/* ─── Bento Grid: 4 rows, all proportional ────────── */
+.cs-bento {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* Row 1 hero+streak | Row 2 stats | Row 3 donut+hours | Row 4 heatmap+commits */
+  grid-template-rows:
+    minmax(0, 1.25fr)
+    minmax(0, 0.9fr)
+    minmax(0, 1.4fr)
+    minmax(0, 2.4fr);
+  gap: clamp(6px, 1vh, 8px);
+  min-height: 0;
+}
+
+.cs-tile {
+  background: var(--cs-card);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: clamp(8px, 1.3vh, 13px) clamp(10px, 1.5vw, 14px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 180ms ease;
+}
+.cs-tile:hover { border-color: var(--cs-border-strong); }
+
+.cs-tile-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(9px, 1.3vh, 10.5px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-text-muted);
+  margin-bottom: clamp(4px, 0.8vh, 8px);
+  flex-shrink: 0;
+}
+.cs-tile-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.cs-tile-head-left { display: inline-flex; align-items: center; gap: 6px; }
+.cs-tile-ic { color: var(--cs-accent); flex-shrink: 0; }
+.cs-tile-hint {
+  font-size: clamp(9.5px, 1.25vh, 11px);
+  color: var(--cs-text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--cs-mono);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ─── Hero Tile (8 cols) ──────────────────────────── */
+.cs-tile-hero {
+  grid-column: span 8;
+  padding: clamp(10px, 1.5vh, 16px) clamp(14px, 1.8vw, 20px);
+  background:
+    radial-gradient(circle at 80% 0%, rgba(34, 197, 94, 0.10), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(56, 189, 248, 0.06), transparent 50%),
+    var(--cs-card);
+  justify-content: center;
+}
+.cs-hero-glow {
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 60%;
+  height: 180%;
+  background: radial-gradient(ellipse, rgba(34, 197, 94, 0.10), transparent 60%);
+  pointer-events: none;
+  filter: blur(10px);
+}
+.cs-hero-greeting {
+  margin: clamp(2px, 0.4vh, 5px) 0 clamp(2px, 0.4vh, 4px);
+  font-size: clamp(16px, 3.2vh, 26px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--cs-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-hero-subtitle {
+  margin: 0;
+  color: var(--cs-text-2);
+  font-size: clamp(10.5px, 1.55vh, 13px);
+  max-width: 60ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  min-height: 0;
+}
+.cs-hero-author {
+  margin-top: clamp(4px, 0.8vh, 10px);
+  font-size: clamp(9.5px, 1.3vh, 11.5px);
+  color: var(--cs-text-muted);
+  font-family: var(--cs-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Bottom meta footer (replaces in-hero chips) ─── */
+.cs-meta-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 clamp(4px, 0.6vw, 8px);
+  font-size: clamp(9.5px, 1.2vh, 11px);
+  font-family: var(--cs-mono);
+  color: var(--cs-text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-meta-chip svg { color: var(--cs-accent); flex-shrink: 0; }
+.cs-meta-time svg { color: var(--cs-text-muted); }
+.cs-meta-sep { color: var(--cs-text-muted); opacity: 0.5; }
+.cs-meta-brand {
+  margin-left: auto;
+  color: var(--cs-text-muted);
+  letter-spacing: 0.06em;
+  font-family: var(--cs-sans);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.cs-meta-repo { font-weight: 500; color: var(--cs-text-2); }
+
+/* ─── Streak Tile (4 cols) ────────────────────────── */
+.cs-tile-streak {
+  grid-column: span 4;
+  background:
+    linear-gradient(140deg, rgba(34, 197, 94, 0.08), transparent 70%),
+    var(--cs-card);
+  border-color: rgba(34, 197, 94, 0.18);
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(8px, 1.5vw, 14px);
+}
+.cs-tile-streak .cs-tile-head { margin-bottom: 0; flex-shrink: 0; }
+.cs-tile-streak .cs-streak-num {
+  font-size: clamp(28px, 5.5vh, 48px);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--cs-accent);
+  text-shadow: var(--cs-accent-glow);
+  letter-spacing: -0.04em;
+}
+.cs-streak-unit {
+  font-family: var(--cs-mono);
+  font-size: clamp(9px, 1.2vh, 10.5px);
+  letter-spacing: 0.2em;
+  color: var(--cs-text-muted);
+}
+.cs-streak-foot {
+  margin-left: auto;
+  font-size: clamp(10px, 1.4vh, 11.5px);
+  color: var(--cs-text-2);
+  text-align: right;
+  max-width: 50%;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ─── Stat Tiles (3 cols each) ────────────────────── */
+.cs-tile-stat { grid-column: span 3; justify-content: center; }
+.cs-stat-num {
+  font-size: clamp(18px, 3.4vh, 26px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--cs-text);
+  margin-top: 0;
+}
+.cs-stat-diff {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: clamp(14px, 2.6vh, 20px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-stat-diff .cs-add { color: var(--cs-add); text-shadow: var(--cs-accent-glow); }
+.cs-stat-diff .cs-del { color: var(--cs-del); }
+.cs-stat-diff .cs-sep { color: var(--cs-text-muted); font-size: 0.7em; opacity: 0.5; }
+.cs-stat-foot {
+  margin-top: auto;
+  padding-top: clamp(2px, 0.5vh, 6px);
+  font-size: clamp(9.5px, 1.3vh, 11px);
+  color: var(--cs-text-muted);
+  font-family: var(--cs-mono);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cs-stat-foot.up { color: var(--cs-add); }
+.cs-stat-foot.down { color: var(--cs-del); }
+.cs-stat-foot svg { width: 10px; height: 10px; flex-shrink: 0; }
+
+/* ─── Donut Tile (5 cols) ─────────────────────────── */
+.cs-tile-donut { grid-column: span 5; min-height: 0; }
+.cs-donut-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.6vw, 16px);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.cs-donut-wrap {
+  position: relative;
+  width: clamp(60px, 11vh, 100px);
+  height: clamp(60px, 11vh, 100px);
+  flex: 0 0 auto;
+}
+.cs-donut { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+.cs-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.cs-donut-value {
+  font-size: clamp(15px, 2.6vh, 20px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--cs-text);
+}
+.cs-donut-label {
+  font-size: clamp(7px, 0.95vh, 9px);
+  letter-spacing: 0.12em;
+  color: var(--cs-text-muted);
+  text-transform: uppercase;
+  margin-top: 2px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+.cs-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 0.4vh, 4px);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  align-self: center;
+}
+.cs-legend-row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: clamp(10px, 1.45vh, 12px);
+  color: var(--cs-text-2);
+  min-width: 0;
+}
+.cs-legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
+.cs-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.cs-legend-pct {
+  font-family: var(--cs-mono);
+  color: var(--cs-text-muted);
+  font-size: clamp(9.5px, 1.3vh, 11px);
+}
+
+/* ─── Hours Tile (7 cols) ─────────────────────────── */
+.cs-tile-hours { grid-column: span 7; }
+.cs-hours {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  align-items: end;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  padding-top: 4px;
+  border-bottom: 1px solid var(--cs-border);
+  padding-bottom: 4px;
+}
+.cs-hour-bar {
+  background: var(--cs-card-2);
+  border-radius: 2px;
+  min-height: 4px;
+  transition: background 180ms ease;
+  position: relative;
+}
+.cs-hour-bar.has { background: var(--cs-accent-soft); }
+.cs-hour-bar.has::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--cs-accent), var(--cs-accent-2));
+  border-radius: 2px;
+  opacity: 0.85;
+}
+.cs-hour-bar.peak::after { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5); opacity: 1; }
+.cs-hour-bar:hover { filter: brightness(1.2); }
+.cs-hours-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: clamp(8.5px, 1.1vh, 10px);
+  color: var(--cs-text-muted);
+  flex-shrink: 0;
+}
+.cs-style-badge {
+  margin-top: clamp(4px, 0.7vh, 8px);
+  padding: clamp(4px, 0.8vh, 8px) clamp(8px, 1.2vw, 12px);
+  border-radius: var(--cs-radius-sm);
+  background: var(--cs-card-2);
+  border: 1px solid var(--cs-border);
+  font-size: clamp(10px, 1.4vh, 12px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.cs-style-badge-label {
+  color: var(--cs-text-muted);
+  font-size: clamp(8.5px, 1.1vh, 10px);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cs-style-badge-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--cs-text);
+}
+.cs-style-badge-value svg { color: var(--cs-accent); }
+
+/* ─── Heatmap Tile (6 cols, side-by-side with commits) ─ */
+.cs-tile-heatmap { grid-column: span 6; padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.5vw, 14px); }
+/* Multi-band container: stacks N rows of week-bands and ALWAYS fills
+   the tile edge-to-edge. JS picks the band count whose cell aspect is
+   closest to 1:1; cells are then stretched (rectangular if needed) so
+   no horizontal/vertical whitespace is left. */
+.cs-heatmap-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 6px;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.cs-heatmap {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+}
+.cs-heat-cell {
+  border-radius: 2px;
+  background: var(--cs-card-2);
+  transition: outline-color 120ms ease;
+  outline: 1px solid transparent;
+  outline-offset: 1px;
+  min-width: 0;
+  min-height: 0;
+}
+.cs-heat-cell:hover { outline-color: var(--cs-accent); }
+.cs-heat-empty { background: transparent; pointer-events: none; }
+.cs-heat-0 { background: var(--cs-card-2); }
+.cs-heat-1 { background: rgba(34, 197, 94, 0.25); }
+.cs-heat-2 { background: rgba(34, 197, 94, 0.45); }
+.cs-heat-3 { background: rgba(34, 197, 94, 0.7); }
+.cs-heat-4 { background: var(--cs-accent); box-shadow: 0 0 10px rgba(34, 197, 94, 0.35); }
+
+.cs-heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: clamp(3px, 0.6vh, 6px);
+  font-size: clamp(9.5px, 1.25vh, 10.5px);
+  color: var(--cs-text-muted);
+  flex-shrink: 0;
+}
+.cs-heatmap-legend .cs-heat-cell {
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  aspect-ratio: auto;
+}
+
+/* ─── Commits Tile (6 cols) ───────────────────────── */
+.cs-tile-commits { grid-column: span 6; padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.5vw, 14px); }
+.cs-commits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.cs-commit {
+  display: grid;
+  grid-template-columns: clamp(48px, 6vw, 60px) 1fr auto auto;
+  align-items: center;
+  gap: clamp(6px, 1vw, 10px);
+  padding: clamp(3px, 0.6vh, 6px) clamp(6px, 1vw, 10px);
+  border-radius: var(--cs-radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 140ms ease, border-color 140ms ease;
+  flex-shrink: 0;
+}
+.cs-commit:hover {
+  background: var(--cs-card-2);
+  border-color: var(--cs-border);
+}
+.cs-commit-hash {
+  font-size: clamp(9.5px, 1.3vh, 11px);
+  color: var(--cs-accent);
+  background: var(--cs-accent-soft);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 500;
+}
+.cs-commit-subject {
+  font-size: clamp(11px, 1.55vh, 13px);
+  color: var(--cs-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.cs-commit-time {
+  font-size: clamp(9.5px, 1.25vh, 11px);
+  color: var(--cs-text-muted);
+  font-family: var(--cs-mono);
+  white-space: nowrap;
+}
+.cs-commit-stat {
+  font-size: clamp(9.5px, 1.3vh, 11px);
+  font-family: var(--cs-mono);
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.cs-commit-stat .cs-add { color: var(--cs-add); }
+.cs-commit-stat .cs-del { color: var(--cs-del); }
+.cs-commits-empty {
+  text-align: center;
+  padding: 14px 12px;
+  color: var(--cs-text-muted);
+  font-size: 12.5px;
+}
+
+/* ─── Empty / loading state ───────────────────────── */
+.cs-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: var(--cs-radius);
+  background: var(--cs-card);
+  border: 1px solid var(--cs-border);
+  flex: 1;
+}
+.cs-empty.is-error { border-color: rgba(248, 113, 113, 0.25); }
+.cs-empty.is-loading .cs-empty-art { color: var(--cs-accent); }
+.cs-empty.is-loading .cs-empty-art svg { animation: cs-spin 1s linear infinite; }
+.cs-empty-art {
+  color: var(--cs-text-muted);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--cs-card-2);
+  border: 1px solid var(--cs-border);
+}
+.cs-empty-art svg { width: 20px; height: 20px; }
+.cs-empty-text { min-width: 0; flex: 1; }
+.cs-empty-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cs-text);
+}
+.cs-empty-desc {
+  margin: 3px 0 0;
+  color: var(--cs-text-muted);
+  font-size: 12px;
+  font-family: var(--cs-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-empty.is-error .cs-empty-art { color: var(--cs-del); }
+
+/* ─── Adaptive: gracefully shed less-essential tiles ──
+   The dashboard prefers to fit on a single screen on ANY aspect ratio.
+   When space gets tight we hide optional blocks instead of overflowing. */
+
+/* Short viewports: drop hours tile, let donut span full row width. */
+@media (max-height: 560px) {
+  .cs-hero-subtitle { -webkit-line-clamp: 1; }
+  .cs-streak-foot { -webkit-line-clamp: 1; }
+  .cs-tile-hours { display: none; }
+  .cs-tile-donut { grid-column: span 12; }
+  .cs-tile-donut .cs-donut-row { justify-content: flex-start; }
+}
+/* Very short viewports: also drop the 4th stat (langs) — donut already
+   conveys language info; hero greeting compresses further. */
+@media (max-height: 460px) {
+  .cs-tile-langs-stat { display: none; }
+  .cs-tile-stat { grid-column: span 4; }
+  .cs-bento {
+    grid-template-rows:
+      minmax(0, 1.1fr)
+      minmax(0, 0.8fr)
+      minmax(0, 1.2fr)
+      minmax(0, 2.2fr);
+  }
+}
+/* Tiny viewports: drop donut entirely, focus on stats + heatmap + commits. */
+@media (max-height: 380px) {
+  .cs-tile-donut { display: none; }
+  .cs-bento {
+    grid-template-rows:
+      minmax(0, 1.1fr)
+      minmax(0, 0.9fr)
+      minmax(0, 2.5fr);
+  }
+}
+
+/* Narrow viewports (e.g. embedded in side panel): single column stack. */
+@media (max-width: 760px) {
+  .cs-tile-hero,
+  .cs-tile-streak,
+  .cs-tile-donut,
+  .cs-tile-hours,
+  .cs-tile-heatmap,
+  .cs-tile-commits { grid-column: span 12; }
+  .cs-tile-stat { grid-column: span 6; }
+  html, body { overflow: auto; }
+  .cs-shell { height: auto; min-height: 100vh; }
+  .cs-bento { grid-template-rows: none; }
+}
+@media (max-width: 480px) {
+  .cs-tile-stat { grid-column: span 12; }
+  .cs-commit { grid-template-columns: clamp(44px, 12vw, 52px) 1fr auto; }
+  .cs-commit-time { display: none; }
+}
+
+/* ─── Motion ──────────────────────────────────────── */
+@keyframes cs-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cs-tile { animation: cs-fade-up 280ms ease both; }
+.cs-tile:nth-child(2) { animation-delay: 30ms; }
+.cs-tile:nth-child(3) { animation-delay: 60ms; }
+.cs-tile:nth-child(4) { animation-delay: 80ms; }
+.cs-tile:nth-child(5) { animation-delay: 100ms; }
+.cs-tile:nth-child(6) { animation-delay: 120ms; }
+.cs-tile:nth-child(7) { animation-delay: 140ms; }
+.cs-tile:nth-child(8) { animation-delay: 160ms; }
+.cs-tile:nth-child(9) { animation-delay: 180ms; }
+
+@keyframes cs-spin { to { transform: rotate(360deg); } }
+.cs-spin { animation: cs-spin 900ms linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-tile, .cs-spin { animation: none !important; transition: none !important; }
+}

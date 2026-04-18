@@ -45,9 +45,13 @@ pub fn build_bridge_script(
   }}
 
   let _theme = {theme_esc};
+  // Default to en-US until the host pushes the real locale via 'bitfun:event'.
+  // The script below proactively requests it on startup.
+  let _locale = 'en-US';
 
   const app = {{
     get theme() {{ return _theme; }},
+    get locale() {{ return _locale; }},
     appId: {app_id_esc},
     appDataDir: {app_data_esc},
     workspaceDir: {workspace_esc},
@@ -115,10 +119,25 @@ pub fn build_bridge_script(
       readText:  () => _rpc('clipboard.readText', {{}}),
     }},
 
-    _lifecycleHandlers: {{ activate: [], deactivate: [], themeChange: [] }},
-    onActivate:   (fn) => app._lifecycleHandlers.activate.push(fn),
-    onDeactivate: (fn) => app._lifecycleHandlers.deactivate.push(fn),
+    _lifecycleHandlers: {{ activate: [], deactivate: [], themeChange: [], localeChange: [] }},
+    onActivate:    (fn) => app._lifecycleHandlers.activate.push(fn),
+    onDeactivate:  (fn) => app._lifecycleHandlers.deactivate.push(fn),
     onThemeChange: (fn) => app._lifecycleHandlers.themeChange.push(fn),
+    /// Subscribe to host locale changes. Callback receives the locale id (e.g. "zh-CN").
+    onLocaleChange: (fn) => app._lifecycleHandlers.localeChange.push(fn),
+
+    /// Pick the best-matching string from an i18n table for the current locale.
+    /// Resolution: current → en-US → zh-CN → first value → fallback.
+    /// Usage: app.t({{'en-US':'Hello','zh-CN':'你好'}}, 'Hello')
+    t: (table, fallback) => {{
+      if (!table || typeof table !== 'object') return fallback != null ? fallback : '';
+      if (table[_locale]) return table[_locale];
+      if (table['en-US']) return table['en-US'];
+      if (table['zh-CN']) return table['zh-CN'];
+      const keys = Object.keys(table);
+      if (keys.length) return table[keys[0]];
+      return fallback != null ? fallback : '';
+    }},
 
     _eventHandlers: {{}},
     on:  (event, fn) => {{ (app._eventHandlers[event] = app._eventHandlers[event] || []).push(fn); }},
@@ -140,6 +159,13 @@ pub fn build_bridge_script(
         }}
         app._lifecycleHandlers.themeChange.forEach(f => f(payload));
         (app._eventHandlers[event] || []).forEach(f => f(payload));
+      }} else if (event === 'localeChange') {{
+        if (payload && typeof payload === 'object' && typeof payload.locale === 'string') {{
+          _locale = payload.locale;
+          document.documentElement.setAttribute('lang', _locale);
+        }}
+        app._lifecycleHandlers.localeChange.forEach(f => f(_locale));
+        (app._eventHandlers[event] || []).forEach(f => f(_locale));
       }} else if (event === 'ai:stream') {{
         // Route AI stream chunks to the registered callbacks
         if (payload && payload.streamId) {{
@@ -172,6 +198,7 @@ pub fn build_bridge_script(
   window.app = app;
   document.documentElement.setAttribute('data-theme-type', _theme);
   window.parent.postMessage({{ method: 'bitfun/request-theme' }}, '*');
+  window.parent.postMessage({{ method: 'bitfun/request-locale' }}, '*');
 }})();
 "#,
         app_id_esc = app_id_esc,

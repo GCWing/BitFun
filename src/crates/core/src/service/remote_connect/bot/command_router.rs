@@ -69,12 +69,6 @@ pub struct BotChatState {
     #[serde(skip)]
     pub pending_invalid_count: u8,
 
-    /// Pending file downloads awaiting user confirmation.
-    /// Key: short token embedded in the download button callback.
-    /// Value: absolute file path on the desktop.  Not persisted.
-    #[serde(skip)]
-    pub pending_files: std::collections::HashMap<String, String>,
-
     /// Commands corresponding to the items in the most recent menu, used so
     /// numeric replies (`1` ~ `last_menu_commands.len()`) work without
     /// platform-native buttons.  Not persisted.
@@ -94,7 +88,6 @@ impl BotChatState {
             pending_action: None,
             pending_expires_at: 0,
             pending_invalid_count: 0,
-            pending_files: std::collections::HashMap::new(),
             last_menu_commands: Vec::new(),
         }
     }

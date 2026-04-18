@@ -85,6 +85,17 @@ export interface MiniAppRuntimeState {
   ui_recompile_required: boolean;
 }
 
+export interface MiniAppLocaleStrings {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}
+
+export interface MiniAppI18n {
+  /** Map of locale id (e.g. "zh-CN", "en-US") to per-locale string overrides. */
+  locales: Record<string, MiniAppLocaleStrings>;
+}
+
 export interface MiniAppMeta {
   id: string;
   name: string;
@@ -97,6 +108,8 @@ export interface MiniAppMeta {
   updated_at: number;
   permissions: MiniAppPermissions;
   runtime?: MiniAppRuntimeState;
+  /** Optional per-locale overrides for `name` / `description` / `tags`. */
+  i18n?: MiniAppI18n;
 }
 
 export interface MiniApp extends MiniAppMeta {

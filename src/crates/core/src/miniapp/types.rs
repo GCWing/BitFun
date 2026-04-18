@@ -1,6 +1,7 @@
 //! MiniApp types — data model and permissions (V2: ESM UI + Node Worker).
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// ESM dependency for Import Map (browser UI).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +108,31 @@ pub struct AiPermissions {
     pub rate_limit_per_minute: Option<u32>,
 }
 
+/// Per-locale overrides for user-facing strings (gallery name / description / tags).
+///
+/// Lives optionally in `meta.json` as `i18n.locales[<locale-id>]`. Whichever fields are
+/// present override the top-level `name`/`description`/`tags`; missing fields fall back
+/// to the top-level value (which itself acts as the default / fallback locale).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MiniAppLocaleStrings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+}
+
+/// MiniApp i18n bundle.
+///
+/// Map key is a locale id (e.g. `"zh-CN"`, `"en-US"`). The frontend picks the best
+/// match using `currentLanguage → "en-US" → "zh-CN" → top-level name/description`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MiniAppI18n {
+    #[serde(default)]
+    pub locales: HashMap<String, MiniAppLocaleStrings>,
+}
+
 /// AI context for iteration (stored in meta, not in compiled HTML).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MiniAppAiContext {
@@ -159,6 +185,10 @@ pub struct MiniApp {
 
     #[serde(default)]
     pub runtime: MiniAppRuntimeState,
+
+    /// Optional per-locale overrides for `name` / `description` / `tags`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i18n: Option<MiniAppI18n>,
 }
 
 /// MiniApp metadata only (for list views; no source/compiled_html).
@@ -180,6 +210,9 @@ pub struct MiniAppMeta {
     pub ai_context: Option<MiniAppAiContext>,
     #[serde(default)]
     pub runtime: MiniAppRuntimeState,
+    /// Optional per-locale overrides for `name` / `description` / `tags`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i18n: Option<MiniAppI18n>,
 }
 
 impl From<&MiniApp> for MiniAppMeta {
@@ -197,6 +230,7 @@ impl From<&MiniApp> for MiniAppMeta {
             permissions: app.permissions.clone(),
             ai_context: app.ai_context.clone(),
             runtime: app.runtime.clone(),
+            i18n: app.i18n.clone(),
         }
     }
 }

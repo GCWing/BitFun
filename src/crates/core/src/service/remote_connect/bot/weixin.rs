@@ -23,7 +23,7 @@ use tokio::sync::RwLock;
 use super::command_router::{
     complete_im_bot_pairing, current_bot_language, execute_forwarded_turn, handle_command,
     parse_command, welcome_message, BotChatState, BotInteractionHandler,
-    BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
+    BotInteractiveRequest, BotMessageSender, HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 use crate::service::remote_connect::remote_server::ImageAttachment;
@@ -169,6 +169,15 @@ struct UploadedMediaInfo {
     aeskey_hex: String,
     file_size_plain: u64,
     file_size_cipher: usize,
+}
+
+/// Result of `ilink/bot/getuploadurl`: the server may return either a
+/// pre-built complete CDN URL (`upload_full_url`, preferred) or just the
+/// `upload_param` to be combined with `cdn_base_url` and `filekey`.
+#[derive(Debug, Clone)]
+struct UploadUrlResult {
+    upload_full_url: Option<String>,
+    upload_param: Option<String>,
 }
 
 // ── QR login session store (in-memory, same role as OpenClaw installer) ─────
@@ -717,8 +726,22 @@ impl WeixinBot {
         DEFAULT_CDN_BASE_URL
     }
 
-    async fn fetch_weixin_cdn_bytes(&self, encrypted_query_param: &str) -> Result<Vec<u8>> {
-        let url = build_cdn_download_url(self.cdn_base_url(), encrypted_query_param);
+    /// Download CDN bytes.  Prefers `full_url` (when the server pre-builds the
+    /// complete URL, matching `@tencent-weixin/openclaw-weixin@2.x`'s
+    /// `CDNMedia.full_url`); otherwise falls back to building the URL from
+    /// `encrypted_query_param`.
+    async fn fetch_weixin_cdn_bytes(
+        &self,
+        encrypted_query_param: &str,
+        full_url: Option<&str>,
+    ) -> Result<Vec<u8>> {
+        let url = match full_url
+            .map(str::trim)
+            .filter(|s: &&str| !s.is_empty())
+        {
+            Some(u) => u.to_string(),
+            None => build_cdn_download_url(self.cdn_base_url(), encrypted_query_param),
+        };
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
             .build()?;
@@ -738,6 +761,7 @@ impl WeixinBot {
             .as_str()
             .filter(|s| !s.is_empty())
             .ok_or_else(|| anyhow!("image: missing encrypt_query_param"))?;
+        let full_url = img["media"]["full_url"].as_str();
 
         let key: Option<[u8; 16]> = if let Some(hex_s) =
             img["aeskey"].as_str().filter(|s| !s.is_empty())
@@ -755,7 +779,7 @@ impl WeixinBot {
             None
         };
 
-        let enc = self.fetch_weixin_cdn_bytes(param).await?;
+        let enc = self.fetch_weixin_cdn_bytes(param, full_url).await?;
         match key {
             Some(k) => decrypt_aes_128_ecb_pkcs7(&enc, &k),
             None => Ok(enc),
@@ -826,7 +850,10 @@ impl WeixinBot {
         (attachments, skipped)
     }
 
-    /// `ilink/bot/getuploadurl` — returns `upload_param` for CDN POST.
+    /// `ilink/bot/getuploadurl` — returns either `upload_full_url` (preferred,
+    /// when the server pre-builds the complete CDN URL) and/or
+    /// `upload_param` (legacy, requires client-side URL composition).
+    /// Mirrors `getUploadUrl` in `@tencent-weixin/openclaw-weixin@2.x`.
     #[allow(clippy::too_many_arguments)]
     async fn ilink_get_upload_url(
         &self,
@@ -837,7 +864,7 @@ impl WeixinBot {
         rawfilemd5: &str,
         filesize: usize,
         aeskey_hex: &str,
-    ) -> Result<String> {
+    ) -> Result<UploadUrlResult> {
         let body = json!({
             "filekey": filekey,
             "media_type": media_type,
@@ -857,11 +884,22 @@ impl WeixinBot {
             )
             .await?;
         let v: Value = serde_json::from_str(&raw)?;
-        v["upload_param"]
-            .as_str()
-            .map(|s| s.to_string())
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| anyhow!("getuploadurl: missing upload_param"))
+        let pick = |k: &str| -> Option<String> {
+            v[k].as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        let upload_full_url = pick("upload_full_url");
+        let upload_param = pick("upload_param");
+        if upload_full_url.is_none() && upload_param.is_none() {
+            return Err(anyhow!(
+                "getuploadurl: missing both upload_full_url and upload_param"
+            ));
+        }
+        Ok(UploadUrlResult {
+            upload_full_url,
+            upload_param,
+        })
     }
 
     async fn post_weixin_cdn_upload(&self, cdn_url: &str, ciphertext: &[u8]) -> Result<String> {
@@ -930,7 +968,7 @@ impl WeixinBot {
         rand::thread_rng().fill_bytes(&mut filekey_raw);
         let filekey = hex::encode(filekey_raw);
 
-        let upload_param = self
+        let url_resp = self
             .ilink_get_upload_url(
                 to_user_id,
                 &filekey,
@@ -942,7 +980,15 @@ impl WeixinBot {
             )
             .await?;
 
-        let cdn_url = build_cdn_upload_url(self.cdn_base_url(), &upload_param, &filekey);
+        let cdn_url = if let Some(full) = url_resp.upload_full_url.as_deref() {
+            full.to_string()
+        } else if let Some(param) = url_resp.upload_param.as_deref() {
+            build_cdn_upload_url(self.cdn_base_url(), param, &filekey)
+        } else {
+            return Err(anyhow!(
+                "getuploadurl: missing both upload_full_url and upload_param"
+            ));
+        };
         debug!(
             "weixin CDN upload: media_type={media_type} rawsize={rawsize} cipher_len={}",
             ciphertext.len()
@@ -1069,80 +1115,6 @@ impl WeixinBot {
             .await?;
         info!("Weixin file sent to peer={peer_id} name={}", content.name);
         Ok(())
-    }
-
-    fn expired_download_message(language: BotLanguage) -> &'static str {
-        if language.is_chinese() {
-            "这个下载链接已过期，请重新让助手发送一次。"
-        } else {
-            "This download link has expired. Please ask the agent again."
-        }
-    }
-
-    fn sending_file_message(language: BotLanguage, file_name: &str) -> String {
-        if language.is_chinese() {
-            format!("正在发送“{file_name}”……")
-        } else {
-            format!("Sending \"{file_name}\"…")
-        }
-    }
-
-    fn send_file_failed_message(language: BotLanguage, file_name: &str, error: &str) -> String {
-        if language.is_chinese() {
-            format!("无法发送“{file_name}”：{error}")
-        } else {
-            format!("Could not send \"{file_name}\": {error}")
-        }
-    }
-
-    async fn handle_download_request(
-        &self,
-        peer_id: &str,
-        token: &str,
-        workspace_root: Option<String>,
-    ) {
-        let (path, language) = {
-            let mut states = self.chat_states.write().await;
-            let state = states.get_mut(peer_id);
-            let language = current_bot_language().await;
-            let path = state.and_then(|s| s.pending_files.remove(token));
-            (path, language)
-        };
-
-        match path {
-            None => {
-                let _ = self
-                    .send_text(peer_id, Self::expired_download_message(language))
-                    .await;
-            }
-            Some(path) => {
-                let file_name = std::path::Path::new(&path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("file")
-                    .to_string();
-                let _ = self
-                    .send_text(peer_id, &Self::sending_file_message(language, &file_name))
-                    .await;
-                let root = workspace_root.as_deref().map(std::path::Path::new);
-                match self.send_workspace_file_to_peer(peer_id, &path, root).await {
-                    Ok(()) => info!("Weixin file delivered to {peer_id}: {path}"),
-                    Err(e) => {
-                        warn!("Weixin file send failed: {e}");
-                        let _ = self
-                            .send_text(
-                                peer_id,
-                                &Self::send_file_failed_message(
-                                    language,
-                                    &file_name,
-                                    &e.to_string(),
-                                ),
-                            )
-                            .await;
-                    }
-                }
-            }
-        }
     }
 
     async fn get_updates_once(&self, buf: &str, timeout: Duration) -> Result<Value> {
@@ -1347,25 +1319,61 @@ impl WeixinBot {
         }
     }
 
+    /// Scan `text` for downloadable file references and push each matching
+    /// file directly to the peer via the iLink CDN pipeline.  Files exceeding
+    /// `MAX_WEIXIN_FILE_BYTES` are skipped with a brief notice; per-file
+    /// failures are reported as plain-text replies.
     async fn notify_files_ready(&self, peer_id: &str, text: &str) {
-        let language = super::locale::current_bot_language().await;
-        let result = {
-            let mut states = self.chat_states.write().await;
-            let state = states.entry(peer_id.to_string()).or_insert_with(|| {
-                let mut s = BotChatState::new(peer_id.to_string());
-                s.paired = true;
-                s
-            });
-            let workspace_root = state.current_workspace.clone();
-            super::prepare_file_download_actions(
-                text,
-                state,
-                workspace_root.as_deref().map(std::path::Path::new),
-                language,
-            )
+        let language = current_bot_language().await;
+        let workspace_root = {
+            let states = self.chat_states.read().await;
+            states
+                .get(peer_id)
+                .and_then(|s| s.current_workspace.clone())
         };
-        if let Some(result) = result {
-            self.send_handle_result(peer_id, &result).await;
+        let files = super::collect_auto_push_files(
+            text,
+            workspace_root.as_deref().map(std::path::Path::new),
+        );
+        if files.is_empty() {
+            return;
+        }
+
+        let intro = super::auto_push_intro(language, files.len());
+        if let Err(e) = self.send_text(peer_id, &intro).await {
+            warn!("Weixin auto-push intro failed for peer {peer_id}: {e}");
+        }
+
+        let root_path = workspace_root.as_deref().map(std::path::Path::new);
+        for file in files {
+            if file.size > MAX_WEIXIN_FILE_BYTES {
+                let notice = super::auto_push_skip_too_large_message(
+                    language,
+                    &file.name,
+                    file.size,
+                    MAX_WEIXIN_FILE_BYTES,
+                );
+                let _ = self.send_text(peer_id, &notice).await;
+                continue;
+            }
+            match self
+                .send_workspace_file_to_peer(peer_id, &file.abs_path, root_path)
+                .await
+            {
+                Ok(()) => info!(
+                    "Weixin auto-pushed file to peer {peer_id}: {}",
+                    file.abs_path
+                ),
+                Err(e) => {
+                    warn!(
+                        "Weixin auto-push failed for {} to peer {peer_id}: {e}",
+                        file.name
+                    );
+                    let notice =
+                        super::auto_push_failed_message(language, &file.name, &e.to_string());
+                    let _ = self.send_text(peer_id, &notice).await;
+                }
+            }
         }
     }
 
@@ -1639,16 +1647,6 @@ impl WeixinBot {
                 "Please send the 6-digit pairing code."
             };
             let _ = self.send_text(&peer_id, err).await;
-            return;
-        }
-
-        let trimmed = text.trim();
-        if let Some(stripped) = trimmed.strip_prefix("download_file:") {
-            let token = stripped.trim().to_string();
-            let workspace_root = state.current_workspace.clone();
-            drop(states);
-            self.handle_download_request(&peer_id, &token, workspace_root)
-                .await;
             return;
         }
 

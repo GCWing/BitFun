@@ -182,6 +182,7 @@ impl MiniAppManager {
             permissions,
             ai_context,
             runtime,
+            i18n: None,
         };
 
         self.storage.save(&app).await?;

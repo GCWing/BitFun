@@ -27,6 +27,7 @@ import {
 } from '@/app/components';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
+import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useMiniAppStore } from '../miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
@@ -45,7 +46,7 @@ const MiniAppGalleryView: React.FC = () => {
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
   const { workspacePath } = useCurrentWorkspace();
   const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
-  const { t } = useI18n('scenes/miniapp');
+  const { t, currentLanguage } = useI18n('scenes/miniapp');
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -71,15 +72,23 @@ const MiniAppGalleryView: React.FC = () => {
   const filtered = useMemo(() => {
     return apps.filter((app) => {
       const keyword = search.toLowerCase();
+      // Search across the localized strings + raw fallback so users can search
+      // either the displayed text OR the author's original wording.
+      const localizedName = pickLocalizedString(app, currentLanguage, 'name').toLowerCase();
+      const localizedDesc = pickLocalizedString(app, currentLanguage, 'description').toLowerCase();
+      const localizedTags = pickLocalizedTags(app, currentLanguage).map((t) => t.toLowerCase());
       const matchSearch =
         !search ||
+        localizedName.includes(keyword) ||
+        localizedDesc.includes(keyword) ||
         app.name.toLowerCase().includes(keyword) ||
         app.description.toLowerCase().includes(keyword) ||
+        localizedTags.some((tag) => tag.includes(keyword)) ||
         app.tags.some((tag) => tag.toLowerCase().includes(keyword));
       const matchCategory = categoryFilter === 'all' || app.category === categoryFilter;
       return matchSearch && matchCategory;
     });
-  }, [apps, search, categoryFilter]);
+  }, [apps, search, categoryFilter, currentLanguage]);
 
   const handleOpenApp = useCallback(
     (appId: string) => {
@@ -298,9 +307,9 @@ const MiniAppGalleryView: React.FC = () => {
         onClose={() => setSelectedApp(null)}
         icon={selectedApp ? renderMiniAppIcon(selectedApp.icon || 'box', 24) : <Box size={24} />}
         iconGradient={selectedApp ? getMiniAppIconGradient(selectedApp.icon || 'box') : undefined}
-        title={selectedApp?.name ?? ''}
+        title={selectedApp ? pickLocalizedString(selectedApp, currentLanguage, 'name') : ''}
         badges={selectedApp?.category ? <Badge variant="info">{selectedApp.category}</Badge> : null}
-        description={selectedApp?.description}
+        description={selectedApp ? pickLocalizedString(selectedApp, currentLanguage, 'description') : undefined}
         meta={selectedApp ? <span>v{selectedApp.version}</span> : null}
         actions={selectedApp ? (
           <>
@@ -321,16 +330,19 @@ const MiniAppGalleryView: React.FC = () => {
           </>
         ) : null}
       >
-        {selectedApp?.tags.length ? (
-          <div className="miniapp-gallery__detail-tags">
-            {selectedApp.tags.map((tag) => (
-              <span key={tag} className="miniapp-gallery__detail-tag">
-                <Tag size={11} />
-                {tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        {selectedApp ? (() => {
+          const detailTags = pickLocalizedTags(selectedApp, currentLanguage);
+          return detailTags.length ? (
+            <div className="miniapp-gallery__detail-tags">
+              {detailTags.map((tag) => (
+                <span key={tag} className="miniapp-gallery__detail-tag">
+                  <Tag size={11} />
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null;
+        })() : null}
       </GalleryDetailModal>
 
       <ConfirmDialog

@@ -1,6 +1,96 @@
 // Gomoku — built-in MiniApp.
 // Pure-frontend 15x15 Gomoku with PvP + simple PvE AI; persists win stats via app.storage.
 
+// ── i18n ──────────────────────────────────────────────
+// Static labels go through `applyStaticI18n()` (driven by data-i18n attrs in HTML).
+// Dynamic strings flow through `t(key)` and re-render on `app.onLocaleChange`.
+const I18N = {
+  'zh-CN': {
+    title: '五子棋',
+    subtitle: '先连成五子者胜',
+    modeAria: '对战模式',
+    modePvp: '双人对战',
+    modePve: '人机对弈',
+    boardAria: '棋盘',
+    currentTurn: '当前回合',
+    undo: '悔棋',
+    restart: '重新开始',
+    record: '战绩',
+    blackWins: '黑棋胜',
+    whiteWins: '白棋胜',
+    aiWins: 'AI 胜',
+    moves: '手数',
+    noMoves: '尚未落子',
+    playAgain: '再来一局',
+    turnBlack: '黑棋',
+    turnWhite: '白棋',
+    pveYouTurn: '你（黑棋）',
+    pveAiTurn: 'AI 思考中…',
+    pveYouHint: '点击棋盘任意交叉点落子',
+    pveWaitHint: '请稍候',
+    placeHint: '点击棋盘任意交叉点落子',
+    resultBlack: '黑棋胜',
+    resultWhite: '白棋胜',
+    resultLine: '连成五子',
+    pveYouWinTitle: '你赢了！',
+    pveYouWinSub: '稳如老 G',
+    pveAiWinTitle: 'AI 获胜',
+    pveAiWinSub: '再战一局，把场子赢回来',
+  },
+  'en-US': {
+    title: 'Gomoku',
+    subtitle: 'First to five in a row wins',
+    modeAria: 'Battle mode',
+    modePvp: 'PvP',
+    modePve: 'PvE',
+    boardAria: 'Board',
+    currentTurn: 'Current turn',
+    undo: 'Undo',
+    restart: 'Restart',
+    record: 'Record',
+    blackWins: 'Black wins',
+    whiteWins: 'White wins',
+    aiWins: 'AI wins',
+    moves: 'Moves',
+    noMoves: 'No moves yet',
+    playAgain: 'Play again',
+    turnBlack: 'Black',
+    turnWhite: 'White',
+    pveYouTurn: 'You (Black)',
+    pveAiTurn: 'AI is thinking…',
+    pveYouHint: 'Click any intersection to place a stone',
+    pveWaitHint: 'Please wait',
+    placeHint: 'Click any intersection to place a stone',
+    resultBlack: 'Black wins',
+    resultWhite: 'White wins',
+    resultLine: 'Five in a row',
+    pveYouWinTitle: 'You won!',
+    pveYouWinSub: 'Smooth play.',
+    pveAiWinTitle: 'AI wins',
+    pveAiWinSub: 'One more round — earn it back.',
+  },
+};
+
+function currentLocale() {
+  return (window.app && window.app.locale) || 'en-US';
+}
+
+function t(key) {
+  const lang = currentLocale();
+  return (I18N[lang] && I18N[lang][key]) || I18N['en-US'][key] || key;
+}
+
+function applyStaticI18n() {
+  document.documentElement.setAttribute('lang', currentLocale());
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    const key = node.getAttribute('data-i18n');
+    const attr = node.getAttribute('data-i18n-attr');
+    const value = t(key);
+    if (attr) node.setAttribute(attr, value);
+    else node.textContent = value;
+  });
+}
+
 const SIZE = 15;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const VIEWBOX = 600;
@@ -56,6 +146,13 @@ async function init() {
   await loadStats();
   buildBoardSvg();
   bindEvents();
+  applyStaticI18n();
+  if (window.app && typeof window.app.onLocaleChange === 'function') {
+    window.app.onLocaleChange(() => {
+      applyStaticI18n();
+      render();
+    });
+  }
   render();
 }
 
@@ -391,17 +488,21 @@ function renderTurn() {
   const isWhite = state.current === WHITE;
   dom.turnStone.classList.toggle('is-white', isWhite);
   if (state.mode === 'pve') {
-    dom.turnName.textContent = isWhite ? 'AI 思考中…' : '你（黑棋）';
-    dom.turnHint.textContent = isWhite ? '请稍候' : '点击棋盘任意交叉点落子';
+    dom.turnName.textContent = isWhite ? t('pveAiTurn') : t('pveYouTurn');
+    dom.turnHint.textContent = isWhite ? t('pveWaitHint') : t('pveYouHint');
   } else {
-    dom.turnName.textContent = isWhite ? '白棋' : '黑棋';
-    dom.turnHint.textContent = '点击棋盘任意交叉点落子';
+    dom.turnName.textContent = isWhite ? t('turnWhite') : t('turnBlack');
+    dom.turnHint.textContent = t('placeHint');
   }
 }
 
 function renderHistory() {
   if (state.history.length === 0) {
-    dom.history.innerHTML = '<span class="history__empty">尚未落子</span>';
+    dom.history.innerHTML = '';
+    const span = document.createElement('span');
+    span.className = 'history__empty';
+    span.textContent = t('noMoves');
+    dom.history.appendChild(span);
     return;
   }
   dom.history.innerHTML = '';
@@ -434,11 +535,11 @@ function renderResult() {
   dom.resultOverlay.hidden = false;
   const isBlack = state.winner === BLACK;
   if (state.mode === 'pve') {
-    dom.resultTitle.textContent = isBlack ? '你赢了！' : 'AI 获胜';
-    dom.resultSub.textContent = isBlack ? '稳如老 G' : '再战一局，把场子赢回来';
+    dom.resultTitle.textContent = isBlack ? t('pveYouWinTitle') : t('pveAiWinTitle');
+    dom.resultSub.textContent = isBlack ? t('pveYouWinSub') : t('pveAiWinSub');
   } else {
-    dom.resultTitle.textContent = isBlack ? '黑棋胜' : '白棋胜';
-    dom.resultSub.textContent = '连成五子';
+    dom.resultTitle.textContent = isBlack ? t('resultBlack') : t('resultWhite');
+    dom.resultSub.textContent = t('resultLine');
   }
   dom.resultIcon.textContent = isBlack ? '●' : '○';
   dom.resultIcon.style.color = '';

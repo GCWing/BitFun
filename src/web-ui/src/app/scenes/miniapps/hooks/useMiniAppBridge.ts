@@ -12,6 +12,7 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { buildMiniAppThemeVars } from '../utils/buildMiniAppThemeVars';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { useI18n } from '@/infrastructure/i18n';
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -33,10 +34,13 @@ export function useMiniAppBridge(
 ) {
   const { workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
+  const { currentLanguage } = useI18n('scenes/miniapp');
   const themeRef = useRef(currentTheme);
   themeRef.current = currentTheme;
   const workspacePathRef = useRef(workspacePath);
   workspacePathRef.current = workspacePath;
+  const localeRef = useRef(currentLanguage);
+  localeRef.current = currentLanguage;
 
   const appIdRef = useRef(app.id);
   useLayoutEffect(() => {
@@ -64,6 +68,19 @@ export function useMiniAppBridge(
         if (payload && iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage(
             { type: 'bitfun:event', event: 'themeChange', payload },
+            '*',
+          );
+        }
+        return;
+      }
+
+      if (method === 'bitfun/request-locale') {
+        // Reply with the current locale id (e.g. "zh-CN" / "en-US"). The MiniApp
+        // can use this both as the initial value and to look up its own i18n bundle.
+        reply({ locale: localeRef.current });
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            { type: 'bitfun:event', event: 'localeChange', payload: { locale: localeRef.current } },
             '*',
           );
         }
@@ -162,6 +179,16 @@ export function useMiniAppBridge(
       '*',
     );
   }, [currentTheme, iframeRef]);
+
+  // Push locale changes to the iframe so MiniApps can re-render their UI strings
+  // without reloading. MiniApps subscribe via `app.on('localeChange', fn)`.
+  useEffect(() => {
+    if (!iframeRef.current?.contentWindow) return;
+    iframeRef.current.contentWindow.postMessage(
+      { type: 'bitfun:event', event: 'localeChange', payload: { locale: currentLanguage } },
+      '*',
+    );
+  }, [currentLanguage, iframeRef]);
 
   // Listen for AI stream events from Tauri and forward them to the iframe.
   useEffect(() => {

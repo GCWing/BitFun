@@ -200,6 +200,57 @@ body {
 - iframe 加载后 bridge 会向宿主发送 `bitfun/request-theme`，宿主回推当前主题变量，iframe 内 `_applyThemeVars` 写入 `:root`。
 - 主应用切换主题时，宿主会向 iframe 发送 `themeChange` 事件，bridge 更新变量并触发 `onThemeChange` 回调。
 
+## 国际化（i18n）
+
+MiniApp 框架在 V2 之后内置 i18n 支持，开发者**必须**为多语言用户考虑两类文案：
+
+1. **Gallery 元数据**（`name` / `description` / `tags`）—— 在 `meta.json` 顶层加 `i18n.locales` 块，宿主 Gallery / Card / Scene 标题自动按当前语言挑选。
+2. **应用内文案**（HTML / JS 中的所有可见字符串）—— 通过 `window.app.locale`、`window.app.onLocaleChange(fn)` 与 `window.app.t(table, fallback)` 实现。
+
+### `meta.json` 多语言示例
+
+```json
+{
+  "id": "your-app",
+  "name": "默认名（兜底）",
+  "description": "默认描述",
+  "tags": ["默认标签"],
+  "i18n": {
+    "locales": {
+      "zh-CN": { "name": "中文名", "description": "中文描述", "tags": ["中文"] },
+      "en-US": { "name": "English Name", "description": "English desc", "tags": ["en"] }
+    }
+  }
+}
+```
+
+回退顺序：`current` → `en-US` → `zh-CN` → 顶层默认值。
+
+### `window.app` i18n 运行时 API
+
+| 成员 | 说明 |
+|------|------|
+| `app.locale` | 当前语言 ID（如 `'zh-CN'` / `'en-US'`），随宿主切换更新 |
+| `app.onLocaleChange(fn)` | 注册语言切换回调，参数为新 locale 字符串 |
+| `app.t(table, fallback)` | 从 `{ 'zh-CN': '...', 'en-US': '...' }` 表挑选字符串；解析顺序：current → en-US → zh-CN → 表的第一项 → fallback |
+
+### HTML 静态文案：`data-i18n` 约定
+
+宿主不强制要求该写法，但推荐 MiniApp 内部统一约定：
+
+- `<span data-i18n="key">默认</span>` —— 切换语言时 `applyStaticI18n()` 读取 `data-i18n` 并替换 `textContent`
+- `<div data-i18n="ariaKey" data-i18n-attr="aria-label">...</div>` —— 设置某个属性而非文本
+
+参考 `builtin/assets/gomoku/ui.js` 等内置应用的 `I18N` 表 + `applyStaticI18n()` + `app.onLocaleChange` 三件套即可复用。
+
+### 编写自检清单
+
+- [ ] `meta.json` 已加 `i18n.locales`（至少 `zh-CN` / `en-US`）
+- [ ] HTML 中静态文案均带 `data-i18n` 属性
+- [ ] JS 内动态拼接的字符串使用 `app.t()` 或自有 `I18N` 表
+- [ ] 注册了 `app.onLocaleChange`，切换语言时重新渲染（包括动态列表、aria-label、title）
+- [ ] 持久化数据（`app.storage`）保存语言无关的索引/键，而非已翻译的字符串
+
 ## 开发约定
 
 ### 新增 Agent 工具

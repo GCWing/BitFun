@@ -88,6 +88,7 @@ app.appId        // string — 当前 MiniApp 的 ID
 app.appDataDir   // string — 应用数据目录绝对路径
 app.workspaceDir // string — 当前工作区路径
 app.theme        // 'dark' | 'light' — 当前主题
+app.locale       // string — 当前语言 ID（如 'zh-CN' / 'en-US'），随宿主切换更新
 app.platform     // 'win32' | 'darwin' | 'linux'
 app.mode         // 'hosted'
 ```
@@ -268,7 +269,29 @@ app.onDeactivate(() => { /* Tab 切走 */ });
 app.onThemeChange((payload) => {
   // payload: { type: 'dark'|'light', vars: { '--bitfun-bg': '...', ... } }
 });
+app.onLocaleChange((locale) => {
+  // locale: 新的语言 ID 字符串（如 'zh-CN' / 'en-US'）
+});
 ```
+
+## 国际化 i18n
+
+### `app.t(table, fallback)` — 多语言字符串挑选
+
+```javascript
+const label = app.t({ 'zh-CN': '保存', 'en-US': 'Save' }, 'Save');
+```
+
+挑选顺序：`app.locale` → `'en-US'` → `'zh-CN'` → 表的第一个值 → `fallback`。适合在 JS 里就地写少量翻译。
+
+更完整的做法（推荐）：
+
+1. 在 `meta.json` 顶层加 `i18n.locales` 块翻译 `name` / `description` / `tags`，宿主 Gallery 自动按当前语言显示。
+2. 在 HTML 静态文案上加 `data-i18n="key"`（可选 `data-i18n-attr="aria-label"` 翻译属性）。
+3. 在 `ui.js` 中维护 `I18N` 字典，封装 `t(key)` 与 `applyStaticI18n()`，并 `app.onLocaleChange(...)` 时重新渲染动态内容。
+4. `app.storage` 持久化的字段保存语言无关的索引/键，避免存了翻译后字符串导致切换语言失效。
+
+参考实现：`builtin/assets/gomoku/ui.js`、`builtin/assets/regex-playground/ui.js`。
 
 ## 自定义事件
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Square, Trash2 } from 'lucide-react';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
+import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppCard.scss';
 
@@ -24,7 +25,10 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
   onDelete,
   onStop,
 }) => {
-  const { t } = useI18n('scenes/miniapp');
+  const { t, currentLanguage } = useI18n('scenes/miniapp');
+  const localizedName = pickLocalizedString(app, currentLanguage, 'name');
+  const localizedDescription = pickLocalizedString(app, currentLanguage, 'description');
+  const localizedTags = pickLocalizedTags(app, currentLanguage);
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(app.id);
@@ -62,7 +66,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && handleOpenDetails()}
-      aria-label={app.name}
+      aria-label={localizedName}
     >
       {/* Header with icon and title */}
       <div className="miniapp-card__header">
@@ -72,7 +76,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
           </div>
         </div>
         <div className="miniapp-card__title-group">
-          <span className="miniapp-card__name">{app.name}</span>
+          <span className="miniapp-card__name">{localizedName}</span>
           <span className="miniapp-card__version">v{app.version}</span>
         </div>
         {isRunning && <span className="miniapp-card__run-dot" />}
@@ -80,14 +84,14 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
 
       {/* Body: description + tags */}
       <div className="miniapp-card__body">
-        {app.description ? (
+        {localizedDescription ? (
           <div className="miniapp-card__desc">
-            <span className="miniapp-card__desc-inner">{app.description}</span>
+            <span className="miniapp-card__desc-inner">{localizedDescription}</span>
           </div>
         ) : null}
-        {app.tags.length > 0 ? (
+        {localizedTags.length > 0 ? (
           <div className="miniapp-card__tags">
-            {app.tags.slice(0, 3).map((tag) => (
+            {localizedTags.slice(0, 3).map((tag) => (
               <span key={tag} className="miniapp-card__tag">{tag}</span>
             ))}
           </div>

@@ -163,11 +163,10 @@ pub struct BotStrings {
 
     pub thinking_label: &'static str,
 
-    pub file_intro_one: &'static str,
-    pub file_intro_many_fmt: &'static str,
-    pub file_download_expired: &'static str,
-    pub file_sending_prefix: &'static str,
-    pub file_send_failed_prefix: &'static str,
+    pub auto_push_intro_one: &'static str,
+    pub auto_push_intro_many_fmt: &'static str,
+    pub auto_push_skip_too_large_fmt: &'static str,
+    pub auto_push_failed_fmt: &'static str,
 }
 
 const STRINGS_ZH: BotStrings = BotStrings {
@@ -303,11 +302,10 @@ const STRINGS_ZH: BotStrings = BotStrings {
 
     thinking_label: "思考中",
 
-    file_intro_one: "已生成 1 个文件，可点击下方按钮下载。",
-    file_intro_many_fmt: "已生成 {n} 个文件，可点击下方按钮下载。",
-    file_download_expired: "下载链接已过期，请重新让助手生成一次。",
-    file_sending_prefix: "正在发送：",
-    file_send_failed_prefix: "发送文件失败：",
+    auto_push_intro_one: "正在为你发送 1 个文件……",
+    auto_push_intro_many_fmt: "正在为你发送 {n} 个文件……",
+    auto_push_skip_too_large_fmt: "已跳过「{name}」：{size} 超过 {limit} 上限，请改用桌面端获取。",
+    auto_push_failed_fmt: "发送「{name}」失败：{err}",
 };
 
 const STRINGS_EN: BotStrings = BotStrings {
@@ -443,11 +441,10 @@ Common commands:
 
     thinking_label: "Thinking",
 
-    file_intro_one: "1 file is ready. Tap to download.",
-    file_intro_many_fmt: "{n} files are ready. Tap to download.",
-    file_download_expired: "Download link expired. Ask the assistant to generate it again.",
-    file_sending_prefix: "Sending: ",
-    file_send_failed_prefix: "Failed to send file: ",
+    auto_push_intro_one: "Sending 1 file for you…",
+    auto_push_intro_many_fmt: "Sending {n} files for you…",
+    auto_push_skip_too_large_fmt: "Skipping \"{name}\": {size} exceeds the {limit} limit. Please grab it from BitFun Desktop instead.",
+    auto_push_failed_fmt: "Failed to send \"{name}\": {err}",
 };
 
 pub fn strings_for(language: BotLanguage) -> &'static BotStrings {

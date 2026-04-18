@@ -1,0 +1,153 @@
+<div class="cs-shell" id="root">
+  <section class="cs-empty is-loading" id="empty" role="status" aria-live="polite">
+    <div class="cs-empty-art" id="empty-icon" aria-hidden="true"></div>
+    <div class="cs-empty-text">
+      <p class="cs-empty-title" id="empty-title">正在扫描你的代码足迹</p>
+      <p class="cs-empty-desc" id="empty-desc">…</p>
+    </div>
+  </section>
+
+  <main class="cs-bento" id="content" hidden>
+    <!-- HERO TILE -->
+    <section class="cs-tile cs-tile-hero" aria-labelledby="hero-greeting">
+      <div class="cs-hero-glow" aria-hidden="true"></div>
+      <h1 class="cs-hero-greeting" id="hero-greeting" data-i18n="title">每日编码快照</h1>
+      <p class="cs-hero-subtitle" id="hero-subtitle" data-i18n="subtitle">扫描你的本地 Git 仓库，凝结成一张今天的编码画像。</p>
+      <div class="cs-hero-author" id="hero-author"></div>
+    </section>
+
+    <!-- STREAK TILE -->
+    <section class="cs-tile cs-tile-streak" aria-labelledby="streak-label">
+      <div class="cs-tile-head">
+        <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+        <span id="streak-label" data-i18n="streakLabel">连续编码</span>
+      </div>
+      <div class="cs-streak-num" id="streak-num">0</div>
+      <div class="cs-streak-unit" data-i18n="streakUnit">DAYS</div>
+      <div class="cs-streak-foot" id="streak-foot"></div>
+    </section>
+
+    <!-- STAT TILES -->
+    <section class="cs-tile cs-tile-stat">
+      <div class="cs-tile-head">
+        <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+        <span data-i18n="todayCommits">今日提交</span>
+      </div>
+      <div class="cs-stat-num" id="stat-commits">0</div>
+      <div class="cs-stat-foot" id="stat-commits-delta"></div>
+    </section>
+
+    <section class="cs-tile cs-tile-stat">
+      <div class="cs-tile-head">
+        <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span data-i18n="codeChanges">代码变动</span>
+      </div>
+      <div class="cs-stat-num cs-stat-diff">
+        <span class="cs-add" id="stat-add">+0</span>
+        <span class="cs-sep">/</span>
+        <span class="cs-del" id="stat-del">-0</span>
+      </div>
+      <div class="cs-stat-foot" id="stat-net"></div>
+    </section>
+
+    <section class="cs-tile cs-tile-stat">
+      <div class="cs-tile-head">
+        <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 18 3-3-3-3"/><path d="m13 18 3-3-3-3"/></svg>
+        <span data-i18n="filesTouched">涉及文件</span>
+      </div>
+      <div class="cs-stat-num" id="stat-files">0</div>
+      <div class="cs-stat-foot" data-i18n="touchedToday">touched today</div>
+    </section>
+
+    <section class="cs-tile cs-tile-stat cs-tile-optional cs-tile-langs-stat">
+      <div class="cs-tile-head">
+        <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span data-i18n="languagesUsed">使用语言</span>
+      </div>
+      <div class="cs-stat-num" id="stat-langs">0</div>
+      <div class="cs-stat-foot" id="stat-langs-list">--</div>
+    </section>
+
+    <!-- DONUT TILE -->
+    <section class="cs-tile cs-tile-donut" aria-labelledby="donut-title">
+      <div class="cs-tile-head">
+        <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+        <span id="donut-title" data-i18n="donutTitle">本周语言分布</span>
+      </div>
+      <div class="cs-donut-row">
+        <div class="cs-donut-wrap">
+          <svg class="cs-donut" viewBox="0 0 120 120" id="donut" aria-hidden="true"></svg>
+          <div class="cs-donut-center">
+            <div class="cs-donut-value cs-mono" id="donut-total">0</div>
+            <div class="cs-donut-label" data-i18n="commits">commits</div>
+          </div>
+        </div>
+        <ul class="cs-legend" id="lang-legend"></ul>
+      </div>
+    </section>
+
+    <!-- HOURS TILE -->
+    <section class="cs-tile cs-tile-hours cs-tile-optional" aria-labelledby="hours-title">
+      <div class="cs-tile-head cs-tile-head-row">
+        <span class="cs-tile-head-left">
+          <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span id="hours-title" data-i18n="hoursTitle">24 小时活跃节律</span>
+        </span>
+        <span class="cs-tile-hint" data-i18n="thisWeek">本周</span>
+      </div>
+      <div class="cs-hours" id="hours" role="img" data-i18n-attr="aria-label" data-i18n="hoursAria"></div>
+      <div class="cs-hours-axis">
+        <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+      </div>
+      <div class="cs-style-badge" id="style-badge"></div>
+    </section>
+
+    <!-- HEATMAP TILE -->
+    <section class="cs-tile cs-tile-heatmap" aria-labelledby="heatmap-title">
+      <div class="cs-tile-head cs-tile-head-row">
+        <span class="cs-tile-head-left">
+          <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span id="heatmap-title" data-i18n="heatmapTitle">编码热力</span>
+        </span>
+        <span class="cs-tile-hint" id="heatmap-hint"></span>
+      </div>
+      <div class="cs-heatmap-body" id="heatmap-body" role="img" data-i18n-attr="aria-label" data-i18n="heatmapAria"></div>
+      <div class="cs-heatmap-legend">
+        <span data-i18n="less">少</span>
+        <span class="cs-heat-cell cs-heat-0"></span>
+        <span class="cs-heat-cell cs-heat-1"></span>
+        <span class="cs-heat-cell cs-heat-2"></span>
+        <span class="cs-heat-cell cs-heat-3"></span>
+        <span class="cs-heat-cell cs-heat-4"></span>
+        <span data-i18n="more">多</span>
+      </div>
+    </section>
+
+    <!-- COMMITS TILE -->
+    <section class="cs-tile cs-tile-commits" aria-labelledby="commits-title">
+      <div class="cs-tile-head cs-tile-head-row">
+        <span class="cs-tile-head-left">
+          <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+          <span id="commits-title" data-i18n="commitsTitle">今日提交</span>
+        </span>
+        <span class="cs-tile-hint" id="commits-hint"></span>
+      </div>
+      <ul class="cs-commits" id="commits-list"></ul>
+    </section>
+  </main>
+
+  <footer class="cs-meta-footer" id="meta-footer" aria-label="snapshot context">
+    <span class="cs-meta-chip cs-meta-repo">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+      <span id="meta-repo">--</span>
+    </span>
+    <span class="cs-meta-sep" aria-hidden="true">·</span>
+    <span class="cs-meta-chip" id="meta-date">--</span>
+    <span class="cs-meta-sep" aria-hidden="true">·</span>
+    <span class="cs-meta-chip cs-meta-time">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+      <span id="meta-time">--:--</span>
+    </span>
+    <span class="cs-meta-brand" aria-hidden="true" data-i18n="brand">每日编码快照</span>
+  </footer>
+</div>

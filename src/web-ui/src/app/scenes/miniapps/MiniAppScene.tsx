@@ -15,6 +15,7 @@ import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useMiniAppStore } from './miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
+import { pickLocalizedString } from './utils/pickLocalizedString';
 import './MiniAppScene.scss';
 
 const log = createLogger('MiniAppScene');
@@ -31,7 +32,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const { themeType } = useTheme();
   const { workspacePath } = useCurrentWorkspace();
   const { closeScene } = useSceneManager();
-  const { t } = useI18n('scenes/miniapp');
+  const { t, currentLanguage } = useI18n('scenes/miniapp');
 
   const [app, setApp] = useState<MiniApp | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,7 +122,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
       <div className="miniapp-scene__header">
         <div className="miniapp-scene__header-center">
           {app ? (
-            <span className="miniapp-scene__title">{app.name}</span>
+            <span className="miniapp-scene__title">{pickLocalizedString(app, currentLanguage, 'name')}</span>
           ) : (
             <span className="miniapp-scene__title miniapp-scene__title--loading">Mini App</span>
           )}

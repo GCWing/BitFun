@@ -25,6 +25,9 @@ type FeishuWsStream =
 type FeishuWsWrite = futures::stream::SplitSink<FeishuWsStream, WsMessage>;
 type SharedFeishuWsWrite = Arc<RwLock<FeishuWsWrite>>;
 
+/// Feishu IM file-upload hard limit (30 MB).
+const MAX_FEISHU_FILE_BYTES: u64 = 30 * 1024 * 1024;
+
 // ── Minimal protobuf codec for Feishu WebSocket binary protocol ─────────
 
 mod pb {
@@ -297,30 +300,6 @@ impl FeishuBot {
         }
     }
 
-    fn expired_download_message(language: BotLanguage) -> &'static str {
-        if language.is_chinese() {
-            "这个下载链接已过期，请重新让助手发送一次。"
-        } else {
-            "This download link has expired. Please ask the agent again."
-        }
-    }
-
-    fn sending_file_message(language: BotLanguage, file_name: &str) -> String {
-        if language.is_chinese() {
-            format!("正在发送“{file_name}”……")
-        } else {
-            format!("Sending \"{file_name}\"…")
-        }
-    }
-
-    fn send_file_failed_message(language: BotLanguage, file_name: &str, error: &str) -> String {
-        if language.is_chinese() {
-            format!("无法发送“{file_name}”：{error}")
-        } else {
-            format!("Could not send \"{file_name}\": {error}")
-        }
-    }
-
     pub fn new(config: FeishuConfig) -> Self {
         Self {
             config,
@@ -577,13 +556,12 @@ impl FeishuBot {
     }
 
     /// Upload a local file to Feishu and return its `file_key`.
-    ///
-    /// Files larger than 30 MB are rejected (Feishu IM file-upload limit).
+    /// Caller is expected to pre-check size against `MAX_FEISHU_FILE_BYTES`.
     async fn upload_file_to_feishu(&self, file_path: &str) -> Result<String> {
         let token = self.get_access_token().await?;
 
-        const MAX_SIZE: u64 = 30 * 1024 * 1024; // Unified 30 MB cap (Feishu API hard limit)
-        let content = super::read_workspace_file(file_path, MAX_SIZE, None).await?;
+        let content =
+            super::read_workspace_file(file_path, MAX_FEISHU_FILE_BYTES, None).await?;
 
         // Feishu uses its own file_type enum rather than MIME types.
         let ext = std::path::Path::new(&content.name)
@@ -655,75 +633,55 @@ impl FeishuBot {
         Ok(())
     }
 
-    /// Scan `text` for downloadable file links (`computer://`, `file://`, and
-    /// markdown hyperlinks to local files), store them as pending downloads and
-    /// send an interactive card with one download button per file.
+    /// Scan `text` for downloadable file references and push every matching
+    /// file directly to the Feishu chat as a `file` message.  Files exceeding
+    /// `MAX_FEISHU_FILE_BYTES` are skipped with a brief notice; per-file
+    /// failures are reported as plain-text replies.
     async fn notify_files_ready(&self, chat_id: &str, text: &str) {
-        let language = super::locale::current_bot_language().await;
-        let result = {
-            let mut states = self.chat_states.write().await;
-            let state = states.entry(chat_id.to_string()).or_insert_with(|| {
-                let mut s = BotChatState::new(chat_id.to_string());
-                s.paired = true;
-                s
-            });
-            let workspace_root = state.current_workspace.clone();
-            super::prepare_file_download_actions(
-                text,
-                state,
-                workspace_root.as_deref().map(std::path::Path::new),
-                language,
-            )
+        let language = current_bot_language().await;
+        let workspace_root = {
+            let states = self.chat_states.read().await;
+            states
+                .get(chat_id)
+                .and_then(|s| s.current_workspace.clone())
         };
-        if let Some(result) = result {
-            if let Err(e) = self.send_handle_result(chat_id, &result).await {
-                warn!("Failed to send file notification to Feishu: {e}");
-            }
+        let files = super::collect_auto_push_files(
+            text,
+            workspace_root.as_deref().map(std::path::Path::new),
+        );
+        if files.is_empty() {
+            return;
         }
-    }
 
-    /// Handle a `download_file:<token>` action: look up the pending file and
-    /// upload it to Feishu.  Sends a plain-text error if the token has expired
-    /// or the transfer fails.
-    async fn handle_download_request(&self, chat_id: &str, token: &str) {
-        let (path, language) = {
-            let mut states = self.chat_states.write().await;
-            let state = states.get_mut(chat_id);
-            let language = current_bot_language().await;
-            let path = state.and_then(|s| s.pending_files.remove(token));
-            (path, language)
-        };
+        let intro = super::auto_push_intro(language, files.len());
+        if let Err(e) = self.send_message(chat_id, &intro).await {
+            warn!("Feishu auto-push intro failed for chat {chat_id}: {e}");
+        }
 
-        match path {
-            None => {
-                let _ = self
-                    .send_message(chat_id, Self::expired_download_message(language))
-                    .await;
+        for file in files {
+            if file.size > MAX_FEISHU_FILE_BYTES {
+                let notice = super::auto_push_skip_too_large_message(
+                    language,
+                    &file.name,
+                    file.size,
+                    MAX_FEISHU_FILE_BYTES,
+                );
+                let _ = self.send_message(chat_id, &notice).await;
+                continue;
             }
-            Some(path) => {
-                let file_name = std::path::Path::new(&path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("file")
-                    .to_string();
-                let _ = self
-                    .send_message(chat_id, &Self::sending_file_message(language, &file_name))
-                    .await;
-                match self.send_file_to_feishu_chat(chat_id, &path).await {
-                    Ok(()) => info!("Sent file to Feishu chat {chat_id}: {path}"),
-                    Err(e) => {
-                        warn!("Failed to send file to Feishu: {e}");
-                        let _ = self
-                            .send_message(
-                                chat_id,
-                                &Self::send_file_failed_message(
-                                    language,
-                                    &file_name,
-                                    &e.to_string(),
-                                ),
-                            )
-                            .await;
-                    }
+            match self.send_file_to_feishu_chat(chat_id, &file.abs_path).await {
+                Ok(()) => info!(
+                    "Feishu auto-pushed file to chat {chat_id}: {}",
+                    file.abs_path
+                ),
+                Err(e) => {
+                    warn!(
+                        "Feishu auto-push failed for {} in chat {chat_id}: {e}",
+                        file.name
+                    );
+                    let notice =
+                        super::auto_push_failed_message(language, &file.name, &e.to_string());
+                    let _ = self.send_message(chat_id, &notice).await;
                 }
             }
         }
@@ -1517,14 +1475,6 @@ impl FeishuBot {
             self.send_message(chat_id, Self::enter_pairing_code_message(language))
                 .await
                 .ok();
-            return;
-        }
-
-        // Intercept file download callbacks before normal command routing.
-        if let Some(stripped) = text.strip_prefix("download_file:") {
-            let token = stripped.trim().to_string();
-            drop(states);
-            self.handle_download_request(chat_id, &token).await;
             return;
         }
 
