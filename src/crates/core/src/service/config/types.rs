@@ -892,6 +892,31 @@ pub struct AIModelConfig {
     /// fields, then apply custom JSON).
     #[serde(default)]
     pub custom_request_body_mode: Option<String>,
+
+    /// Authentication source for this model. Defaults to a static API key for
+    /// backward compatibility; selecting a CLI source causes the AI client
+    /// factory to look up `~/.codex/auth.json` or `~/.gemini/...` at request
+    /// time and inject the resolved Bearer token / extra headers.
+    #[serde(default)]
+    pub auth: AuthConfig,
+}
+
+/// Where to obtain the runtime auth material for an `AIModelConfig`.
+///
+/// Stored on disk as `{"type":"api_key"}` / `{"type":"codex_cli"}` /
+/// `{"type":"gemini_cli"}`; the concrete sub-mode (apikey vs OAuth) is
+/// auto-detected from the CLI's on-disk state at resolution time so the user
+/// only has to choose "use Codex CLI" once.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AuthConfig {
+    /// Use the inline `api_key` string (default; legacy behavior).
+    #[default]
+    ApiKey,
+    /// Reuse `~/.codex/auth.json` (apikey or ChatGPT-login).
+    CodexCli,
+    /// Reuse `~/.gemini/.env` or `~/.gemini/oauth_creds.json`.
+    GeminiCli,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -924,6 +949,8 @@ struct AIModelConfigCompat {
     thinking_budget_tokens: Option<u32>,
     custom_request_body: Option<String>,
     custom_request_body_mode: Option<String>,
+    #[serde(default)]
+    auth: AuthConfig,
 }
 
 impl From<AIModelConfigCompat> for AIModelConfig {
@@ -965,6 +992,7 @@ impl From<AIModelConfigCompat> for AIModelConfig {
             thinking_budget_tokens: value.thinking_budget_tokens,
             custom_request_body: value.custom_request_body,
             custom_request_body_mode: value.custom_request_body_mode,
+            auth: value.auth,
         }
     }
 }
@@ -1355,6 +1383,7 @@ impl Default for AIModelConfig {
             thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
+            auth: AuthConfig::ApiKey,
         }
     }
 }

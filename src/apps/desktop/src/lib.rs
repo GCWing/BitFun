@@ -348,6 +348,8 @@ pub async fn run() {
             test_ai_connection,
             test_ai_config_connection,
             list_ai_models_by_config,
+            discover_cli_credentials,
+            refresh_cli_credential,
             initialize_ai,
             set_agent_model,
             get_agent_models,

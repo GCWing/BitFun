@@ -58,6 +58,16 @@ pub(crate) fn resolve_models_url(client: &AIClient) -> String {
 
 pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo>> {
     let url = resolve_models_url(client);
+
+    // Codex CLI's ChatGPT backend (`chatgpt.com/backend-api/codex`) hosts a
+    // private, non-OpenAI-shaped `/models` endpoint that returns
+    // `{ "models": [{ "slug": "...", "display_name": "..." }, ...] }`. Detect
+    // and route it through a dedicated parser instead of the public OpenAI
+    // schema (which would yield zero models because of the envelope mismatch).
+    if url.contains("chatgpt.com/backend-api/codex") {
+        return list_codex_chatgpt_models(client, &url).await;
+    }
+
     let response = apply_headers(client, client.client.get(&url))
         .send()
         .await?
@@ -75,6 +85,77 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
             .collect(),
     ))
 }
+
+#[derive(Debug, Deserialize)]
+struct CodexBackendModelsResponse {
+    #[serde(default)]
+    models: Vec<CodexBackendModelEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexBackendModelEntry {
+    slug: String,
+    /// Returned by the backend but unused — see comment in the mapping below
+    /// (display_name is dropped to avoid duplicate-looking entries).
+    #[allow(dead_code)]
+    #[serde(default)]
+    display_name: Option<String>,
+    /// Codex backend marks deprecated/internal slugs with `visibility = "hide"`.
+    /// We only surface entries the CLI itself shows (`list`).
+    #[serde(default)]
+    visibility: Option<String>,
+}
+
+/// `chatgpt.com/backend-api/codex/models` returns each model's
+/// `minimal_client_version`, and only emits entries whose minimum is satisfied
+/// by the `client_version` query param. Sending BitFun's own
+/// `CARGO_PKG_VERSION` (e.g. `"0.2.3"`) makes the backend hide every modern
+/// model and only return the legacy `gpt-5.2` (whose minimum is `0.0.1`). We
+/// mirror a current Codex CLI release so the model picker matches what the
+/// user sees in `codex /model`. Bump this when codex CLI bumps further.
+const CODEX_CLIENT_VERSION_HEADER: &str = "0.121.0";
+
+async fn list_codex_chatgpt_models(
+    client: &AIClient,
+    base_models_url: &str,
+) -> Result<Vec<RemoteModelInfo>> {
+    let separator = if base_models_url.contains('?') { '&' } else { '?' };
+    let url = format!(
+        "{base_models_url}{separator}client_version={version}",
+        version = CODEX_CLIENT_VERSION_HEADER
+    );
+
+    let response = apply_headers(client, client.client.get(&url))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let payload: CodexBackendModelsResponse = response.json().await?;
+
+    let filtered: Vec<RemoteModelInfo> = payload
+        .models
+        .into_iter()
+        .filter(|model| {
+            model
+                .visibility
+                .as_deref()
+                .map(|v| v.eq_ignore_ascii_case("list"))
+                .unwrap_or(true)
+        })
+        .map(|model| RemoteModelInfo {
+            id: model.slug,
+            // Codex backend's `display_name` is often the same slug with
+            // different casing (e.g. `gpt-5.4-mini` vs `GPT-5.4-Mini`). The
+            // BitFun model picker renders display_name + slug stacked, which
+            // looks like duplicate names. Drop display_name so each entry is a
+            // single line keyed only by the canonical slug.
+            display_name: None,
+        })
+        .collect();
+
+    Ok(dedupe_remote_models(filtered))
+}
+
 
 pub(crate) fn extract_tool_name(tool: &serde_json::Value) -> String {
     tool.get("function")

@@ -7,6 +7,10 @@
 //! 4. Provide global singleton access
 
 use crate::infrastructure::ai::{build_stream_options, AIClient};
+use crate::infrastructure::cli_credentials::{
+    self, codex::CodexResolver, gemini::GeminiResolver, CredentialResolver,
+};
+use crate::service::config::types::AuthConfig;
 use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::AIConfig;
@@ -167,8 +171,9 @@ impl AIClientFactory {
             })
             .ok_or_else(|| anyhow!("Model configuration not found: {}", normalized_model_id))?;
 
-        let ai_config = AIConfig::try_from(model_config.clone())
+        let mut ai_config = AIConfig::try_from(model_config.clone())
             .map_err(|e| anyhow!("AI configuration conversion failed: {}", e))?;
+        apply_cli_credential(&model_config.auth, &mut ai_config).await?;
 
         let proxy_config = if global_config.ai.proxy.enabled {
             Some(global_config.ai.proxy.clone())
@@ -274,6 +279,50 @@ pub async fn get_global_ai_client_factory() -> BitFunResult<Arc<AIClientFactory>
 
 pub async fn initialize_global_ai_client_factory() -> BitFunResult<()> {
     AIClientFactory::initialize_global().await
+}
+
+/// Resolve a CLI-credential `AuthConfig` and overlay it onto the runtime
+/// `AIConfig`. No-op when `auth == AuthConfig::ApiKey`.
+pub async fn apply_cli_credential(auth: &AuthConfig, ai_config: &mut AIConfig) -> Result<()> {
+    let resolved = match auth {
+        AuthConfig::ApiKey => return Ok(()),
+        AuthConfig::CodexCli => CodexResolver.resolve().await?,
+        AuthConfig::GeminiCli => GeminiResolver.resolve().await?,
+    };
+
+    ai_config.api_key = resolved.api_key;
+    if let Some(base) = resolved.base_url {
+        ai_config.base_url = base;
+    }
+    if let Some(req) = resolved.request_url {
+        ai_config.request_url = req;
+    }
+    if let Some(format) = resolved.format {
+        ai_config.format = format;
+    }
+    if !resolved.extra_headers.is_empty() {
+        let merged = match ai_config.custom_headers.take() {
+            Some(mut existing) => {
+                for (k, v) in resolved.extra_headers {
+                    existing.insert(k, v);
+                }
+                existing
+            }
+            None => resolved.extra_headers,
+        };
+        ai_config.custom_headers = Some(merged);
+        // Default to merge so adapter-specific headers (Authorization etc.) are
+        // still applied alongside the injected ones.
+        if ai_config.custom_headers_mode.is_none() {
+            ai_config.custom_headers_mode = Some("merge".to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Discover all locally-available CLI credentials (Codex, Gemini, ...).
+pub async fn discover_cli_credentials() -> Vec<cli_credentials::DiscoveredCredential> {
+    cli_credentials::discover_all().await
 }
 
 #[cfg(test)]

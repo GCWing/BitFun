@@ -810,13 +810,22 @@ pub async fn test_ai_config_connection(
         bitfun_core::service::config::types::ModelCategory::Multimodal
     );
 
-    let ai_config = match request.config.try_into() {
+    let auth = request.config.auth.clone();
+    let mut ai_config: bitfun_core::util::types::AIConfig = match request.config.try_into() {
         Ok(config) => config,
         Err(e) => {
             error!("Failed to convert AI config: {}", e);
             return Err(format!("Failed to convert configuration: {}", e));
         }
     };
+
+    if let Err(e) =
+        bitfun_core::infrastructure::ai::client_factory::apply_cli_credential(&auth, &mut ai_config)
+            .await
+    {
+        error!("Failed to resolve CLI credential during test: {}", e);
+        return Err(format!("Failed to resolve CLI credential: {}", e));
+    }
 
     let ai_client = bitfun_core::infrastructure::ai::AIClient::new(ai_config);
 
@@ -897,10 +906,14 @@ pub async fn list_ai_models_by_config(
     request: ListAIModelsByConfigRequest,
 ) -> Result<Vec<bitfun_core::util::types::RemoteModelInfo>, String> {
     let config_name = request.config.name.clone();
-    let ai_config = request
+    let auth = request.config.auth.clone();
+    let mut ai_config: bitfun_core::util::types::AIConfig = request
         .config
         .try_into()
         .map_err(|e| format!("Failed to convert configuration: {}", e))?;
+    bitfun_core::infrastructure::ai::client_factory::apply_cli_credential(&auth, &mut ai_config)
+        .await
+        .map_err(|e| format!("Failed to resolve CLI credential: {}", e))?;
     let ai_client = bitfun_core::infrastructure::ai::AIClient::new(ai_config);
 
     ai_client.list_models().await.map_err(|e| {
@@ -2728,4 +2741,37 @@ pub async fn stop_file_watch(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn get_watched_paths() -> Result<Vec<String>, String> {
     file_watch::get_watched_paths().await
+}
+
+#[tauri::command]
+pub async fn discover_cli_credentials() -> Result<Vec<bitfun_core::infrastructure::cli_credentials::DiscoveredCredential>, String> {
+    Ok(bitfun_core::infrastructure::cli_credentials::discover_all().await)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshCliCredentialRequest {
+    pub kind: bitfun_core::infrastructure::cli_credentials::CliCredentialKind,
+}
+
+#[tauri::command]
+pub async fn refresh_cli_credential(
+    request: RefreshCliCredentialRequest,
+) -> Result<bitfun_core::infrastructure::cli_credentials::DiscoveredCredential, String> {
+    use bitfun_core::infrastructure::cli_credentials::{
+        codex::CodexResolver, gemini::GeminiResolver, CliCredentialKind, CredentialResolver,
+    };
+    // Force a refresh by calling resolve(), then re-discover for the latest metadata.
+    let resolved = match request.kind {
+        CliCredentialKind::Codex => CodexResolver.resolve().await,
+        CliCredentialKind::Gemini => GeminiResolver.resolve().await,
+    };
+    if let Err(e) = resolved {
+        return Err(format!("Refresh failed: {}", e));
+    }
+    let discovered = bitfun_core::infrastructure::cli_credentials::discover_all().await;
+    discovered
+        .into_iter()
+        .find(|c| c.kind == request.kind)
+        .ok_or_else(|| "Credential not found after refresh".to_string())
 }
