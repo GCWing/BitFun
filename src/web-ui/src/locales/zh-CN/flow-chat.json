@@ -445,6 +445,10 @@
       "preparing": "准备获取差异",
       "failed": "获取差异失败"
     },
+    "generativeWidget": {
+      "headerTooltip": "生成式UI",
+      "exportFileNamePrefix": "BitFun-GenerativeUI"
+    },
     "git": {
       "title": "Git",
       "commandFailed": "Git命令失败",

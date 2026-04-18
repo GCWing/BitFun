@@ -453,6 +453,10 @@
       "preparing": "Preparing diff",
       "failed": "Diff failed"
     },
+    "generativeWidget": {
+      "headerTooltip": "Generative UI",
+      "exportFileNamePrefix": "BitFun-GenerativeUI"
+    },
     "git": {
       "title": "Git",
       "commandFailed": "Git command failed",
