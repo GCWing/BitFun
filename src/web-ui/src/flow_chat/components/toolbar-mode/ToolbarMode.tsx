@@ -32,6 +32,7 @@ import { createLogger } from '@/shared/utils/logger';
 const log = createLogger('ToolbarMode');
 import { ModernFlowChatContainer } from '../modern/ModernFlowChatContainer';
 import { Tooltip } from '@/component-library';
+import { useImeEnterGuard } from '../../hooks/useImeEnterGuard';
 import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {
@@ -46,6 +47,7 @@ export const ToolbarMode: React.FC = () => {
   
   const [showInput, setShowInput] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const { isImeEnter, handleCompositionStart, handleCompositionEnd } = useImeEnterGuard();
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [showHeaderOverflowMenu, setShowHeaderOverflowMenu] = useState(false);
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => 
@@ -282,6 +284,7 @@ export const ToolbarMode: React.FC = () => {
   
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      if (isImeEnter(e)) return;
       e.preventDefault();
       handleSendMessage();
     }
@@ -297,7 +300,7 @@ export const ToolbarMode: React.FC = () => {
         handleExpand();
       }
     }
-  }, [handleSendMessage, showInput, showSessionPicker, showHeaderOverflowMenu, handleExpand]);
+  }, [handleSendMessage, showInput, showSessionPicker, showHeaderOverflowMenu, handleExpand, isImeEnter]);
 
   const sessionMenuContent = useMemo(
     () => (
@@ -502,6 +505,8 @@ export const ToolbarMode: React.FC = () => {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
               placeholder={currentStreamState.isStreaming ? t('toolCards.toolbar.aiProcessing') : t('toolCards.toolbar.inputMessage')}
               disabled={currentStreamState.isStreaming}
             />
@@ -537,6 +542,8 @@ export const ToolbarMode: React.FC = () => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
                 placeholder={t('input.placeholder')}
                 autoFocus
               />

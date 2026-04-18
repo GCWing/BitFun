@@ -36,21 +36,13 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
   }
 }
 
+// macOS only (Windows always renders WindowControls on the right).
+// Keep the tabs flush with the SceneViewport edge below — symmetric with the left side.
 .bitfun-scene-bar--no-controls {
-  padding-right: $size-gap-3;
+  padding-right: 0;
 
   .bitfun-scene-bar__tabs {
-    padding-right: calc(#{$size-gap-2} + 4px);
-  }
-}
-
-// On macOS the cube button is fixed at the top-right corner.
-// Reserve extra space so the right-side scene tab (Settings/Model) does not crowd it.
-.bitfun-app-layout--macos .bitfun-scene-bar--no-controls {
-  padding-right: 36px;
-
-  .bitfun-scene-bar__tabs {
-    padding-right: 16px;
+    padding-right: 2px;
   }
 }
 
