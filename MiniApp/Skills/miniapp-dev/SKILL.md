@@ -20,7 +20,8 @@ src/crates/core/src/miniapp/
 ├── storage.rs             # ui.js, worker.js, package.json, esm_dependencies.json
 ├── compiler.rs            # Import Map + Runtime Adapter 注入 + ESM
 ├── bridge_builder.rs      # window.app 生成 + build_import_map()
-├── permission_policy.rs   # resolve_policy() → JSON 策略供 Worker 启动
+├── permission_policy.rs   # resolve_policy() → JSON 策略供 Worker 启动 / host_dispatch 复用
+├── host_dispatch.rs       # 宿主直连分发 fs/shell/os/net（无需 Bun/Node Worker）
 ├── runtime_detect.rs      # detect_runtime() Bun/Node
 ├── js_worker.rs           # 单进程 stdin/stderr JSON-RPC
 ├── js_worker_pool.rs      # 池管理 + install_deps
@@ -37,7 +38,7 @@ src/apps/desktop/src/api/miniapp_api.rs
 - 应用管理: `list_miniapps`, `get_miniapp`, `create_miniapp`, `update_miniapp`, `delete_miniapp`
 - 存储/授权: `get/set_miniapp_storage`, `grant_miniapp_workspace`, `grant_miniapp_path`
 - 版本: `get_miniapp_versions`, `rollback_miniapp`
-- Worker/Runtime: `miniapp_runtime_status`, `miniapp_worker_call`, `miniapp_worker_stop`, `miniapp_install_deps`, `miniapp_recompile`
+- Worker/Runtime: `miniapp_runtime_status`, `miniapp_worker_call`, `miniapp_host_call`, `miniapp_worker_stop`, `miniapp_install_deps`, `miniapp_recompile`
 - 对话框由前端 Bridge 用 Tauri dialog 插件处理，无单独后端命令
 
 ### Agent 工具
@@ -100,14 +101,68 @@ MiniAppPermissions { fs?, shell?, net?, node? }  // node 替代 env/compute
 iframe 内 window.app.call(method, params)
   → postMessage({ method: 'worker.call', params: { method, params } })
   → useMiniAppBridge 监听
-  → miniAppAPI.workerCall(appId, method, params)
-  → Tauri invoke('miniapp_worker_call')
-  → JsWorkerPool → Worker 进程 stdin → stderr 响应
-  → 结果回 iframe
+  ├─ 框架原语 (fs.* / shell.* / os.* / net.*)：
+  │   ├─ node.enabled = false  → miniAppAPI.hostCall → Tauri invoke('miniapp_host_call')
+  │   │                          → bitfun_core::miniapp::host_dispatch（纯 Rust，无需 Bun/Node）
+  │   └─ node.enabled = true   → miniAppAPI.workerCall → Tauri invoke('miniapp_worker_call')
+  │                              → JsWorkerPool（保留旧路径，允许 worker.js 覆写 fs/shell 等）
+  ├─ 自定义方法：始终走 worker.call → JsWorkerPool（要求 node.enabled = true 且 worker.js 导出）
+  └─ storage.* (node.enabled = false 时)：直接走 get/set_miniapp_storage 命令
 
 dialog.open / dialog.save / dialog.message
   → postMessage → useMiniAppBridge 直接调 @tauri-apps/plugin-dialog
 ```
+
+### 何时使用「无 Node 模式」（推荐）
+
+只要小应用的后端能力可以用 `fs.*` / `shell.*` / `os.*` / `net.*` 完成（例如调用 `git` 拉数据、读写工作区文件、抓取 HTTP API），就把 `permissions.node.enabled` 设为 `false`：
+
+- 不依赖 Bun/Node 安装环境，bundle 后即点即用，避免 "JS Worker pool not initialized" 类问题；
+- 安全与性能与 Worker 路径完全等价（同一份 `permission_policy`，Rust 直接执行）；
+- 仍然可以使用 `app.shell.exec / fs.* / net.fetch / os.info / storage.get|set` 全部框架原语。
+
+什么时候需要 `node.enabled = true`：
+
+- 需要写 `worker.js` 自定义方法（CPU 密集 / 长流程 / 复杂解析等）；
+- 需要 `npm_dependencies` 安装第三方 npm 包；
+- 需要在 worker 内长期持有连接、缓存、状态。
+
+> 走「无 Node 模式」时，**禁止** 调用 `app.call('myCustomMethod', …)`，宿主会显式报错；只能调用框架原语和 `app.storage.*`。
+
+## 能力边界（重要）
+
+MiniApp 框架**只暴露下列能力**，没有任何"通用 BitFun 后端通道"。设计 / 生成新小应用前请先比对，能力不在表内的需求请走相应替代方案，**不要假设有 `app.bitfun.*` / `app.workspace.*` / `app.git.*` / `app.session.*` 之类的接口存在。**
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 文件系统 | `app.fs.*` | 受 `permissions.fs.read/write` 路径白名单限制 |
+| 子进程 / 命令行 | `app.shell.exec` | 受 `permissions.shell.allow` 命令名白名单限制 |
+| HTTP | `app.net.fetch` | 受 `permissions.net.allow` 域名白名单限制 |
+| 系统信息 | `app.os.info` | 仅 platform / cpus / homedir / tmpdir 等只读字段 |
+| KV 存储 | `app.storage.get/set` | 每个小应用独立的 `storage.json`，跨会话保留 |
+| AI | `app.ai.complete / chat / cancel / getModels` | 复用宿主 AIClient，受 `permissions.ai`（含 `allowed_models` / 速率限制） |
+| 对话框 | `app.dialog.open/save/message` | Tauri dialog 插件 |
+| 剪贴板 | `app.clipboard.readText/writeText` | 宿主 navigator.clipboard |
+| 自定义后端 | `app.call('xxx', …)` + `worker.js` | 仅 `node.enabled = true` 时可用，自己实现业务逻辑 |
+| 主题 / i18n | `app.theme` / `app.locale` / `app.onThemeChange` / `app.onLocaleChange` / `app.t(...)` | 见对应章节 |
+
+### 框架**不**直接暴露的 BitFun 后端能力（截至本文档）
+
+下面这些 BitFun 内部服务，目前**没有**给小应用开放调用通道：
+
+- WorkspaceService（结构化工作区索引、统一搜索）
+- GitService（结构化 status / diff / blame，区别于裸 `git` 命令）
+- TerminalService（创建/读写交互式终端）
+- Session / AgenticSystem（启动 Agent 会话、消费工具调用与流式事件）
+- LSP / Snapshot / Mermaid / Skills / Browser API / Computer Use / Config 等
+
+需要这类能力时的合规姿势：
+
+1. **能用裸命令行解决的**（如 git）→ 在 `permissions.shell.allow` 里加命令名，用 `app.shell.exec` 包一层（参考 `builtin-coding-selfie/ui.js` 的 `scanGitWorkspace`）；
+2. **只是要读 BitFun 工作区内的文件**（如某些项目元数据） → 把 `{workspace}` 加到 `permissions.fs.read`，自己用 `app.fs.*` 读 + 在前端解析；
+3. **必须真调用某个内部服务** → 暂不支持，先记录到需求池。**不要**自己起一个 worker 去模拟服务行为，会和真正的 service 行为漂移。
+
+> 维护者：以后若新增 `app.bitfun.*` / `app.workspace.*` 这类宿主直通通道，请同步更新本节，避免"文档说没有、代码偷偷加了"的不一致。
 
 ## window.app 运行时 API
 

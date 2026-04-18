@@ -51,7 +51,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-regex-playground",
-        version: 12,
+        version: 13,
         meta_json: include_str!("assets/regex-playground/meta.json"),
         html: include_str!("assets/regex-playground/index.html"),
         css: include_str!("assets/regex-playground/style.css"),
@@ -61,7 +61,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-coding-selfie",
-        version: 16,
+        version: 17,
         meta_json: include_str!("assets/coding-selfie/meta.json"),
         html: include_str!("assets/coding-selfie/index.html"),
         css: include_str!("assets/coding-selfie/style.css"),

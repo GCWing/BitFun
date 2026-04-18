@@ -12,7 +12,7 @@
     "fs": { "read": ["{appdata}", "{workspace}"], "write": ["{appdata}"] },
     "shell": { "allow": ["git"] },
     "net": { "allow": [] },
-    "node": { "enabled": true, "max_memory_mb": 256, "timeout_ms": 20000 }
+    "node": { "enabled": false }
   },
   "ai_context": null,
   "i18n": {

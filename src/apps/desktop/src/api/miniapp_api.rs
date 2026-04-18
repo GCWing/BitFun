@@ -3,8 +3,8 @@
 use crate::api::app_state::AppState;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::miniapp::{
-    InstallResult as CoreInstallResult, MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions,
-    MiniAppSource,
+    dispatch_host, is_host_primitive, InstallResult as CoreInstallResult, MiniApp,
+    MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppSource,
 };
 use bitfun_core::service::config::types::GlobalConfig;
 use bitfun_core::util::types::Message;
@@ -122,6 +122,17 @@ pub struct GetMiniAppRequest {
 pub struct MiniAppWorkerCallRequest {
     pub app_id: String,
     pub method: String,
+    pub params: Value,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppHostCallRequest {
+    pub app_id: String,
+    pub method: String,
+    #[serde(default)]
     pub params: Value,
     #[serde(default)]
     pub workspace_path: Option<String>,
@@ -523,6 +534,51 @@ pub async fn miniapp_worker_call(
         .await;
     }
     Ok(result)
+}
+
+/// Host-side framework primitive RPC.
+///
+/// Routes `fs.*` / `shell.*` / `os.*` / `net.*` calls directly to the Rust
+/// implementation in `bitfun_core::miniapp::host_dispatch`, no Bun/Node Worker
+/// required. Used for MiniApps with `permissions.node.enabled = false` (and as
+/// the future migration target for everyone, since these calls don't actually
+/// need a JS sandbox).
+#[tauri::command]
+pub async fn miniapp_host_call(
+    state: State<'_, AppState>,
+    request: MiniAppHostCallRequest,
+) -> Result<Value, String> {
+    if !is_host_primitive(&request.method) {
+        return Err(format!(
+            "method '{}' is not a host primitive (only fs.*/shell.*/os.*/net.* are supported)",
+            request.method
+        ));
+    }
+    let app = state
+        .miniapp_manager
+        .get(&request.app_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    let app_data_dir = state
+        .miniapp_manager
+        .path_manager()
+        .miniapp_dir(&request.app_id);
+    let granted = state
+        .miniapp_manager
+        .granted_paths_for_app(&request.app_id)
+        .await;
+    dispatch_host(
+        &app.permissions,
+        &request.app_id,
+        &app_data_dir,
+        workspace_root.as_deref(),
+        &granted,
+        &request.method,
+        request.params,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

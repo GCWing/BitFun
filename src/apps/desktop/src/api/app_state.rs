@@ -158,9 +158,19 @@ impl AppState {
             log::warn!("Failed to seed built-in miniapps: {}", e);
         }
 
-        let worker_host_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("worker_host.js");
+        let worker_host_path = match resolve_worker_host_path() {
+            Some(p) => {
+                log::info!("Resolved worker_host.js at: {}", p.display());
+                p
+            }
+            None => {
+                log::warn!(
+                    "worker_host.js not found in any candidate location; \
+                     MiniApp Workers will not start"
+                );
+                std::path::PathBuf::from("worker_host.js")
+            }
+        };
         let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path)
             .ok()
             .map(Arc::new);
@@ -489,4 +499,51 @@ impl AppState {
     pub async fn is_remote_workspace(&self) -> bool {
         self.remote_workspace.read().await.is_some()
     }
+}
+
+/// Try every layout we know about for `worker_host.js`, dev or bundled:
+///   1. `CARGO_MANIFEST_DIR/resources/worker_host.js` — `cargo run` / `tauri dev`.
+///   2. `<exe_dir>/resources/worker_host.js` — generic side-by-side bundle.
+///   3. `<exe_dir>/../Resources/resources/worker_host.js` — macOS `.app` (Tauri
+///      copies bundle.resources into `Contents/Resources/`).
+///   4. `<exe_dir>/../Resources/worker_host.js` — flat macOS layout fallback.
+///   5. `<exe_dir>/../lib/<bin>/resources/worker_host.js` — typical Linux deb/AppImage.
+///   6. `<exe_dir>/../share/<bin>/resources/worker_host.js` — alt Linux layout.
+fn resolve_worker_host_path() -> Option<std::path::PathBuf> {
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+
+    candidates.push(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("worker_host.js"),
+    );
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(exe_dir.join("resources").join("worker_host.js"));
+            if let Some(parent) = exe_dir.parent() {
+                candidates
+                    .push(parent.join("Resources").join("resources").join("worker_host.js"));
+                candidates.push(parent.join("Resources").join("worker_host.js"));
+                if let Some(bin_name) = exe.file_name().and_then(|s| s.to_str()) {
+                    candidates.push(
+                        parent
+                            .join("lib")
+                            .join(bin_name)
+                            .join("resources")
+                            .join("worker_host.js"),
+                    );
+                    candidates.push(
+                        parent
+                            .join("share")
+                            .join(bin_name)
+                            .join("resources")
+                            .join("worker_host.js"),
+                    );
+                }
+            }
+        }
+    }
+
+    candidates.into_iter().find(|p| p.exists())
 }

@@ -245,6 +245,29 @@ export class MiniAppAPI {
     }
   }
 
+  /**
+   * Host-side framework primitive call (no Bun/Node Worker required).
+   *
+   * Method must be in the `fs.* / shell.* / os.* / net.*` namespace; the host
+   * dispatch will reject anything else. Used for MiniApps with
+   * `permissions.node.enabled = false`, and transparently invoked by the
+   * iframe bridge for those apps.
+   */
+  async hostCall(
+    appId: string,
+    method: string,
+    params: Record<string, unknown>,
+    workspacePath?: string,
+  ): Promise<unknown> {
+    try {
+      return await api.invoke('miniapp_host_call', {
+        request: { appId, method, params, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_host_call', error, { appId, method, workspacePath });
+    }
+  }
+
   async workerStop(appId: string): Promise<void> {
     try {
       await api.invoke('miniapp_worker_stop', { appId });

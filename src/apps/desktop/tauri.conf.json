@@ -17,7 +17,8 @@
       "icons/icon.png"
     ],
     "resources": {
-      "../../mobile-web/dist": "mobile-web/dist"
+      "../../mobile-web/dist": "mobile-web/dist",
+      "resources/worker_host.js": "resources/worker_host.js"
     },
     "linux": {
       "deb": {

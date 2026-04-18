@@ -674,6 +674,7 @@ pub async fn run() {
             api::miniapp_api::grant_miniapp_path,
             api::miniapp_api::miniapp_runtime_status,
             api::miniapp_api::miniapp_worker_call,
+            api::miniapp_api::miniapp_host_call,
             api::miniapp_api::miniapp_worker_stop,
             api::miniapp_api::miniapp_worker_list_running,
             api::miniapp_api::miniapp_install_deps,

@@ -4,6 +4,27 @@
 
 > **实际全局对象为 `window.app`**（非 `window.__BITFUN__`），以下各节均基于 `window.app`。
 
+## 能力边界（先看这一节）
+
+MiniApp **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"。生成代码前请先确认你需要的能力在表内：
+
+- `app.fs.*` —— 文件系统（受 `permissions.fs.read/write` 限制）
+- `app.shell.exec` —— 子进程命令行（受 `permissions.shell.allow` 命令名白名单限制）
+- `app.net.fetch` —— HTTP 请求（受 `permissions.net.allow` 域名白名单限制）
+- `app.os.info` —— 只读系统信息
+- `app.storage.get/set` —— 每应用独立 KV 存储
+- `app.ai.complete / chat / cancel / getModels` —— 复用宿主 AI（无需 API Key）
+- `app.dialog.open/save/message` —— 文件对话框
+- `app.clipboard.readText/writeText` —— 剪贴板
+- `app.call('xxx', ...)` + `worker.js` —— 自定义 Node 后端（仅 `node.enabled = true` 时）
+- `app.theme / locale / on*` —— 主题与 i18n
+
+**框架不暴露**的 BitFun 后端能力（截至当前版本）：WorkspaceService（结构化搜索 / 索引）、GitService（结构化 status/diff/blame）、TerminalService、Session/AgenticSystem、LSP / Snapshot / Mermaid / Skills / Browser / Computer Use / Config 等。需要这些能力时：
+
+1. 能用裸命令行解决就用 `app.shell.exec`（如 git → 在 `permissions.shell.allow` 加 `"git"`，参考 `builtin-coding-selfie`）；
+2. 只是要读 BitFun 工作区里的文件就用 `app.fs.*`（把 `{workspace}` 加到 `permissions.fs.read`）；
+3. 必须真正调用某个内部服务 → 暂不支持，请先记录到需求池，**不要**自己 hack 一个 worker 去模拟服务行为。
+
 ## 标准 Node.js API（通过 require() shim）
 
 ### fs/promises
@@ -159,6 +180,8 @@ const info = await app.os.info(); // { platform, homedir, tmpdir, ... }
 ```javascript
 const result = await app.call('myWorkerMethod', { key: 'value' });
 ```
+
+> **要求 `permissions.node.enabled = true`**。`node.enabled = false` 时只能调用框架原语（`app.fs.* / shell.* / net.* / os.* / storage.*`），调用任何自定义方法会得到明确的错误提示。
 
 ---
 
@@ -357,6 +380,27 @@ const savePath = await app.dialog.save({
   }
 }
 ```
+
+### 无 Node 模式：`node.enabled = false`
+
+如果你的小应用只用 `app.fs.* / app.shell.* / app.net.fetch / app.os.info / app.storage.*`（即不需要在 `worker.js` 里自定义任何方法、也不需要安装 npm 依赖），把 `node.enabled` 设为 `false`：
+
+```json
+{
+  "permissions": {
+    "fs":   { "read": ["{workspace}", "{appdata}"], "write": ["{appdata}"] },
+    "shell": { "allow": ["git"] },
+    "node": { "enabled": false }
+  }
+}
+```
+
+宿主会把这些框架原语直接路由到 Rust 实现（`bitfun_core::miniapp::host_dispatch`），完全不需要 Bun/Node 运行时；权限策略与 Worker 路径共用同一份 `resolve_policy`，行为完全等价。在这种模式下：
+
+- `app.shell.exec` / `app.fs.*` / `app.net.fetch` / `app.os.info` / `app.storage.get|set` —— 全部可用；
+- `app.call('myCustomMethod', …)` —— **不可用**（宿主会显式报错），需要走完整的 Worker 路径请把 `node.enabled` 设回 `true` 并提供 `worker.js`。
+
+推荐：所有"只是包一下 git/curl/系统命令"的开发者工具型小应用都使用此模式，避免 bundle 后宿主缺少 Bun/Node 时的运行时报错。
 
 路径变量:
 - `{appdata}` — `{user_data_dir}/miniapps/{app_id}/data/`，始终可读写

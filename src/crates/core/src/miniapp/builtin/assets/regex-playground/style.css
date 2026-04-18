@@ -550,7 +550,25 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 }
 
 /* ── Library ────────────────────────────────────────── */
-.library { display: flex; flex-direction: column; gap: 6px; }
+/* library-card 自身限制最大高度，内部列表独立滚动，
+ * 避免常用模式条目过多时把 side-col 撑高、把速查和替换预览挤出视口。 */
+.library-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 0 1 auto;
+}
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: clamp(160px, 30vh, 320px);
+  overflow-y: auto;
+  padding-right: 4px;
+  /* 让滚动条与卡片边距更协调 */
+  margin-right: -2px;
+}
+.ref-card { flex: 0 0 auto; }
 .lib-item {
   background: var(--rx-bg-2);
   border: 1px solid var(--rx-border);

@@ -43,9 +43,17 @@ export function useMiniAppBridge(
   localeRef.current = currentLanguage;
 
   const appIdRef = useRef(app.id);
+  // Whether this app opts out of the JS Worker. When true, framework primitive
+  // calls (fs.*/shell.*/os.*/net.*) are routed to the host directly via
+  // `miniapp_host_call`, so the app does not require Bun/Node at runtime.
+  // `storage.*` and any custom user RPC method still go through `worker.call`,
+  // but for `node.enabled = false` apps `storage.*` is served by the manager
+  // (no worker), and any non-namespaced custom call will fail with a clear error.
+  const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
   useLayoutEffect(() => {
     appIdRef.current = app.id;
-  }, [app.id]);
+    nodeDisabledRef.current = app.permissions?.node?.enabled === false;
+  }, [app.id, app.permissions?.node?.enabled]);
 
   useLayoutEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -89,10 +97,60 @@ export function useMiniAppBridge(
 
       try {
         if (method === 'worker.call') {
+          const innerMethod = (params.method as string) ?? '';
+          const innerParams = (params.params as Record<string, unknown>) ?? {};
+          const ns = innerMethod.split('.')[0];
+          const isHostPrimitive = ns === 'fs' || ns === 'shell' || ns === 'os' || ns === 'net';
+          const isStorage = ns === 'storage';
+
+          // For node-disabled apps, framework primitives go to the host directly
+          // (no Bun/Node Worker required). Storage is served by the manager.
+          // For node-enabled apps, keep the legacy path so user `worker.js` exports
+          // (including overrides of fs/shell) continue to work.
+          if (nodeDisabledRef.current) {
+            if (isHostPrimitive) {
+              const result = await miniAppAPI.hostCall(
+                appId,
+                innerMethod,
+                innerParams,
+                workspacePathRef.current || undefined,
+              );
+              reply(result);
+              return;
+            }
+            if (isStorage) {
+              const subName = innerMethod.split('.')[1];
+              const key = String(innerParams.key ?? '');
+              if (subName === 'get') {
+                const value = await api.invoke('get_miniapp_storage', { appId, key });
+                reply(value ?? null);
+                return;
+              }
+              if (subName === 'set') {
+                await api.invoke('set_miniapp_storage', {
+                  appId,
+                  key,
+                  value: innerParams.value ?? null,
+                });
+                reply(null);
+                return;
+              }
+              replyError(`Unknown storage method: ${innerMethod}`);
+              return;
+            }
+            // Custom user RPC for an app without a worker — fail loudly so the dev
+            // sees what's wrong instead of getting a generic worker-pool error.
+            replyError(
+              `MiniApp '${appId}' has node.enabled=false; cannot call custom worker method '${innerMethod}'. ` +
+                `Either set node.enabled=true and ship a worker.js, or use a host primitive (fs.*/shell.*/os.*/net.*).`,
+            );
+            return;
+          }
+
           const result = await miniAppAPI.workerCall(
             appId,
-            (params.method as string) ?? '',
-            (params.params as Record<string, unknown>) ?? {},
+            innerMethod,
+            innerParams,
             workspacePathRef.current || undefined,
           );
           reply(result);
