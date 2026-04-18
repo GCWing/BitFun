@@ -115,7 +115,7 @@ const THEME_VAR_NAMES = [
   '--font-mono',
 ] as const;
 
-function readWidgetThemePayload(): WidgetThemePayload | null {
+export function readWidgetThemePayload(): WidgetThemePayload | null {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return null;
   }
@@ -138,7 +138,7 @@ function readWidgetThemePayload(): WidgetThemePayload | null {
   };
 }
 
-const SHELL_HTML = `<!DOCTYPE html>
+export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -832,7 +832,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
         className="bitfun-generative-widget-frame__iframe"
         style={{ width: '100%', minWidth: '100%' }}
         sandbox="allow-scripts allow-forms allow-modals allow-popups"
-        srcDoc={SHELL_HTML}
+        srcDoc={GENERATIVE_WIDGET_SHELL_HTML}
         onLoad={() => setIsLoaded(true)}
       />
     </div>
