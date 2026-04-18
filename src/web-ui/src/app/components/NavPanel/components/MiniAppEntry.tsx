@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
-import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
-import { renderMiniAppIcon, getMiniAppIconGradient } from '@/app/scenes/miniapps/utils/miniAppIcons';
+import { useLiveAppStore } from '@/app/scenes/apps/live-app/liveAppStore';
+import { renderLiveAppIcon, getLiveAppIconGradient } from '@/app/scenes/apps/live-app/liveAppIcons';
 
 const MAX_VISIBLE_RUNNING_APPS = 3;
 
@@ -21,8 +21,8 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
   onOpenMiniApp,
 }) => {
   const { t } = useI18n('common');
-  const apps = useMiniAppStore((state) => state.apps);
-  const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
+  const apps = useLiveAppStore((state) => state.apps);
+  const runningWorkerIds = useLiveAppStore((state) => state.runningWorkerIds);
 
   const runningApps = useMemo(() => {
     const appMap = new Map(apps.map((app) => [app.id, app]));
@@ -83,7 +83,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                         'bitfun-nav-panel__miniapp-bubble',
                         isAppActive && 'is-active',
                       ].filter(Boolean).join(' ')}
-                      style={{ background: getMiniAppIconGradient(app.icon || 'box') }}
+                      style={{ background: getLiveAppIconGradient(app.icon || 'box') }}
                       onClick={(event) => {
                         event.stopPropagation();
                         onOpenMiniApp(app.id);
@@ -100,7 +100,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                         }
                       }}
                     >
-                      {renderMiniAppIcon(app.icon || 'box', 14)}
+                      {renderLiveAppIcon(app.icon || 'box', 14)}
                     </span>
                   </Tooltip>
                 );

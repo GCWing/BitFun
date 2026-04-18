@@ -32,10 +32,11 @@ import zhCNNotifications from '../../../locales/zh-CN/notifications.json';
 import zhCNComponents from '../../../locales/zh-CN/components.json';
 
 import zhCNScenesCapabilities from '../../../locales/zh-CN/scenes/capabilities.json';
-import zhCNScenesAgents from '../../../locales/zh-CN/scenes/agents.json';
+import zhCNScenesApps from '../../../locales/zh-CN/scenes/apps.json';
+import zhCNScenesSubagents from '../../../locales/zh-CN/scenes/subagents.json';
 import zhCNScenesProfile from '../../../locales/zh-CN/scenes/profile.json';
 import zhCNScenesSkills from '../../../locales/zh-CN/scenes/skills.json';
-import zhCNScenesMiniapp from '../../../locales/zh-CN/scenes/miniapp.json';
+import zhCNScenesTools from '../../../locales/zh-CN/scenes/tools.json';
 import zhCNPanelsFiles from '../../../locales/zh-CN/panels/files.json';
 import zhCNPanelsGit from '../../../locales/zh-CN/panels/git.json';
 import zhCNPanelsTerminal from '../../../locales/zh-CN/panels/terminal.json';
@@ -43,7 +44,6 @@ import zhCNPanelsTerminal from '../../../locales/zh-CN/panels/terminal.json';
 import zhCNSettingsAiModel from '../../../locales/zh-CN/settings/ai-model.json';
 import zhCNSettingsAgenticTools from '../../../locales/zh-CN/settings/agentic-tools.json';
 import zhCNSettingsMcp from '../../../locales/zh-CN/settings/mcp.json';
-import zhCNSettingsMcpTools from '../../../locales/zh-CN/settings/mcp-tools.json';
 import zhCNSettingsBasics from '../../../locales/zh-CN/settings/basics.json';
 import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.json';
 import zhCNSettingsSessionConfig from '../../../locales/zh-CN/settings/session-config.json';
@@ -62,10 +62,11 @@ import enUSNotifications from '../../../locales/en-US/notifications.json';
 import enUSComponents from '../../../locales/en-US/components.json';
 
 import enUSScenesCapabilities from '../../../locales/en-US/scenes/capabilities.json';
-import enUSScenesAgents from '../../../locales/en-US/scenes/agents.json';
+import enUSScenesApps from '../../../locales/en-US/scenes/apps.json';
+import enUSScenesSubagents from '../../../locales/en-US/scenes/subagents.json';
 import enUSScenesProfile from '../../../locales/en-US/scenes/profile.json';
 import enUSScenesSkills from '../../../locales/en-US/scenes/skills.json';
-import enUSScenesMiniapp from '../../../locales/en-US/scenes/miniapp.json';
+import enUSScenesTools from '../../../locales/en-US/scenes/tools.json';
 import enUSPanelsFiles from '../../../locales/en-US/panels/files.json';
 import enUSPanelsGit from '../../../locales/en-US/panels/git.json';
 import enUSPanelsTerminal from '../../../locales/en-US/panels/terminal.json';
@@ -73,7 +74,6 @@ import enUSPanelsTerminal from '../../../locales/en-US/panels/terminal.json';
 import enUSSettingsAiModel from '../../../locales/en-US/settings/ai-model.json';
 import enUSSettingsAgenticTools from '../../../locales/en-US/settings/agentic-tools.json';
 import enUSSettingsMcp from '../../../locales/en-US/settings/mcp.json';
-import enUSSettingsMcpTools from '../../../locales/en-US/settings/mcp-tools.json';
 import enUSSettingsBasics from '../../../locales/en-US/settings/basics.json';
 import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.json';
 import enUSSettingsSessionConfig from '../../../locales/en-US/settings/session-config.json';
@@ -99,10 +99,11 @@ const resources = {
     components: zhCNComponents,
     
     'scenes/capabilities': zhCNScenesCapabilities,
-    'scenes/agents': zhCNScenesAgents,
+    'scenes/apps': zhCNScenesApps,
+    'scenes/subagents': zhCNScenesSubagents,
     'scenes/profile': zhCNScenesProfile,
     'scenes/skills': zhCNScenesSkills,
-    'scenes/miniapp': zhCNScenesMiniapp,
+    'scenes/tools': zhCNScenesTools,
     'panels/files': zhCNPanelsFiles,
     'panels/git': zhCNPanelsGit,
     'panels/terminal': zhCNPanelsTerminal,
@@ -110,7 +111,6 @@ const resources = {
     'settings/ai-model': zhCNSettingsAiModel,
     'settings/agentic-tools': zhCNSettingsAgenticTools,
     'settings/mcp': zhCNSettingsMcp,
-    'settings/mcp-tools': zhCNSettingsMcpTools,
     'settings/basics': zhCNSettingsBasics,
     'settings/ai-features': zhCNSettingsAiFeatures,
     'settings/session-config': zhCNSettingsSessionConfig,
@@ -130,10 +130,11 @@ const resources = {
     components: enUSComponents,
     
     'scenes/capabilities': enUSScenesCapabilities,
-    'scenes/agents': enUSScenesAgents,
+    'scenes/apps': enUSScenesApps,
+    'scenes/subagents': enUSScenesSubagents,
     'scenes/profile': enUSScenesProfile,
     'scenes/skills': enUSScenesSkills,
-    'scenes/miniapp': enUSScenesMiniapp,
+    'scenes/tools': enUSScenesTools,
     'panels/files': enUSPanelsFiles,
     'panels/git': enUSPanelsGit,
     'panels/terminal': enUSPanelsTerminal,
@@ -141,7 +142,6 @@ const resources = {
     'settings/ai-model': enUSSettingsAiModel,
     'settings/agentic-tools': enUSSettingsAgenticTools,
     'settings/mcp': enUSSettingsMcp,
-    'settings/mcp-tools': enUSSettingsMcpTools,
     'settings/basics': enUSSettingsBasics,
     'settings/ai-features': enUSSettingsAiFeatures,
     'settings/session-config': enUSSettingsSessionConfig,
@@ -184,10 +184,11 @@ export class I18nService {
           'components',
           
           'scenes/capabilities',
-          'scenes/agents',
+          'scenes/apps',
+          'scenes/subagents',
           'scenes/profile',
           'scenes/skills',
-          'scenes/miniapp',
+          'scenes/tools',
           'panels/files',
           'panels/git',
           'panels/terminal',
@@ -195,7 +196,6 @@ export class I18nService {
           'settings/ai-model',
           'settings/agentic-tools',
           'settings/mcp',
-          'settings/mcp-tools',
           'settings/basics',
           'settings/ai-features',
           'settings/debug',

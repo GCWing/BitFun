@@ -12,10 +12,11 @@ import {
   CircleUserRound,
   Users,
   Puzzle,
-  Boxes,
+  Wrench,
   User,
   ExternalLink,
   LayoutDashboard,
+  Bot,
 } from 'lucide-react';
 import type { OverlaySceneDef, OverlaySceneId } from './types';
 
@@ -45,10 +46,16 @@ export const OVERLAY_SCENE_REGISTRY: OverlaySceneDef[] = [
     Icon: CircleUserRound,
   },
   {
-    id: 'agents',
-    label: 'Agents',
-    labelKey: 'scenes.agents',
+    id: 'apps',
+    label: 'Apps',
+    labelKey: 'scenes.apps',
     Icon: Users,
+  },
+  {
+    id: 'subagents',
+    label: 'SubAgents',
+    labelKey: 'scenes.subagents',
+    Icon: Bot,
   },
   {
     id: 'skills',
@@ -57,10 +64,10 @@ export const OVERLAY_SCENE_REGISTRY: OverlaySceneDef[] = [
     Icon: Puzzle,
   },
   {
-    id: 'miniapps',
-    label: 'Mini App',
-    labelKey: 'scenes.miniApps',
-    Icon: Boxes,
+    id: 'tools',
+    label: 'Tools',
+    labelKey: 'scenes.tools',
+    Icon: Wrench,
   },
   {
     id: 'assistant',
@@ -89,8 +96,8 @@ export const OVERLAY_SCENE_REGISTRY: OverlaySceneDef[] = [
 ];
 
 export function getOverlayDef(id: OverlaySceneId): OverlaySceneDef | undefined {
-  if (typeof id === 'string' && id.startsWith('miniapp:')) {
-    const appId = id.slice('miniapp:'.length);
+  if (typeof id === 'string' && id.startsWith('live-app:')) {
+    const appId = id.slice('live-app:'.length);
     return { id, label: appId, Icon: Puzzle };
   }
   return OVERLAY_SCENE_REGISTRY.find(d => d.id === id);

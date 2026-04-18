@@ -64,8 +64,10 @@ export default defineConfig(({ mode, command }) => {
       ],
     },
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri` and `apps`
-      ignored: ["**/src-tauri/**", "**/apps/**"],
+      // 3. tell Vite to ignore watching `src-tauri` and the Rust apps directory.
+      // Note: "**/apps/**" is intentionally NOT used here — it would also match
+      // src/web-ui/src/app/scenes/apps/ and break HMR for that scene.
+      ignored: ["**/src-tauri/**", "**/src/apps/**"],
       // Increase polling interval for stability (especially on Windows)
       usePolling: true,
       interval: 100,

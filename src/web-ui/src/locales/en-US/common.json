@@ -94,7 +94,8 @@
       "terminal": "Shell",
       "git": "Git",
       "miniApps": "Run AApp",
-      "driveAApp": "Drive AApp"
+      "driveAApp": "Drive AApp",
+      "subAgent": "SubAgent"
     },
     "tooltips": {
       "persona": "Nursery — create and manage all assistant instances",
@@ -112,6 +113,7 @@
       "workspace": "Workspace",
       "sessions": "Tasks",
       "agentApp": "AApp",
+      "devKit": "Dev Kit",
       "shell": "Shell",
       "assistantSessions": "Assistant tasks"
     },
@@ -842,9 +844,10 @@
     "settings": "Settings",
     "fileViewer": "File Viewer",
     "projectContext": "Profile",
-    "agents": "Agents",
+    "apps": "Apps",
+    "subagents": "SubAgents",
     "skills": "Skills",
-    "miniApps": "Mini App",
+    "tools": "Tools",
     "mermaidEditor": "Mermaid",
     "assistant": "Assistant",
     "shell": "Shell",

@@ -131,8 +131,8 @@
   flex-direction: row;
   align-items: stretch;
   min-width: 0;
-  /* Tall enough that expanding/collapsing Agent App sublist does not resize the card; extra space flexes above Dispatcher row */
-  min-height: 400px;
+  /* Tall enough that expanding Agent App + Dev Kit sublists does not resize the card; extra space flexes above Dispatcher row */
+  min-height: 460px;
   padding: 0;
   overflow: hidden;
   background: var(--color-bg-elevated, #1e1e22);
@@ -451,6 +451,22 @@
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+    pointer-events: auto;
+
+    &:hover {
+      color: var(--color-text-secondary);
+      background: transparent;
+
+      svg {
+        opacity: 0.7;
+      }
+    }
+  }
+
+  &.is-placeholder,
+  &.is-placeholder:disabled {
+    opacity: 0.4;
+    cursor: default;
     pointer-events: auto;
 
     &:hover {

@@ -135,7 +135,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           <button
             type="button"
             className="miniapp-open-btn"
-            onClick={() => openOverlay(`miniapp:${appId}` as OverlaySceneId)}
+            onClick={() => openOverlay(`live-app:${appId}` as OverlaySceneId)}
             title={t('toolCards.initMiniApp.openInMiniAppTitle')}
           >
             <ExternalLink size={12} />

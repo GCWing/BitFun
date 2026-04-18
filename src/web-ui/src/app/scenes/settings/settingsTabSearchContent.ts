@@ -62,14 +62,6 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/debug', key: 'sections.templates' },
     { ns: 'settings/debug', key: 'templates.description' },
   ],
-
-  'mcp-tools': [
-    { ns: 'settings/mcp-tools', key: 'title' },
-    { ns: 'settings/mcp-tools', key: 'subtitle' },
-    { ns: 'settings/mcp', key: 'section.serverList.title' },
-    { ns: 'settings/mcp', key: 'section.serverList.description' },
-  ],
-
   editor: [
     { ns: 'settings/editor', key: 'title' },
     { ns: 'settings/editor', key: 'subtitle' },

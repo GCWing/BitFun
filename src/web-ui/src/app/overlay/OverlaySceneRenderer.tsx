@@ -18,11 +18,12 @@ import AssistantScene from '../scenes/assistant/AssistantScene';
 const TerminalScene     = lazy(() => import('../scenes/terminal/TerminalScene'));
 const FileViewerScene   = lazy(() => import('../scenes/file-viewer/FileViewerScene'));
 const ProfileScene      = lazy(() => import('../scenes/profile/ProfileScene'));
-const AgentsScene       = lazy(() => import('../scenes/agents/AgentsScene'));
+import AppsScene from '../scenes/apps/AppsScene';
+const SubagentsScene    = lazy(() => import('../scenes/subagents/SubagentsScene'));
 const SkillsScene       = lazy(() => import('../scenes/skills/SkillsScene'));
-const MiniAppGalleryScene = lazy(() => import('../scenes/miniapps/MiniAppGalleryScene'));
+const ToolsScene        = lazy(() => import('../scenes/tools/ToolsScene'));
 const ShellScene        = lazy(() => import('../scenes/shell/ShellScene'));
-const MiniAppScene      = lazy(() => import('../scenes/miniapps/MiniAppScene'));
+const LiveAppScene      = lazy(() => import('../scenes/apps/LiveAppScene'));
 const PanelViewScene    = lazy(() => import('../scenes/panel-view/PanelViewScene'));
 const TaskDetailScene   = lazy(() => import('../scenes/task-detail/TaskDetailScene'));
 
@@ -67,12 +68,14 @@ function renderOverlayScene(id: OverlaySceneId, workspacePath?: string): React.R
       return <FileViewerScene workspacePath={workspacePath} />;
     case 'profile':
       return <ProfileScene />;
-    case 'agents':
-      return <AgentsScene />;
+    case 'apps':
+      return <AppsScene />;
+    case 'subagents':
+      return <SubagentsScene />;
     case 'skills':
       return <SkillsScene />;
-    case 'miniapps':
-      return <MiniAppGalleryScene />;
+    case 'tools':
+      return <ToolsScene />;
     case 'assistant':
       return <AssistantScene workspacePath={workspacePath} />;
     case 'shell':
@@ -82,8 +85,8 @@ function renderOverlayScene(id: OverlaySceneId, workspacePath?: string): React.R
     case 'task-detail':
       return <TaskDetailScene />;
     default:
-      if (typeof id === 'string' && id.startsWith('miniapp:')) {
-        return <MiniAppScene appId={id.slice('miniapp:'.length)} />;
+      if (typeof id === 'string' && id.startsWith('live-app:')) {
+        return <LiveAppScene appId={id.slice('live-app:'.length)} />;
       }
       return null;
   }

@@ -13,8 +13,9 @@
  * The panel is position:fixed so it floats over all content.
  * Collapse/expand state is persisted in localStorage.
  *
- * When an overlay that owns its own session entry-point (settings, shell) is active,
- * the capsule hides entirely — the UnifiedTopBar icon opens a centered SessionListDialog instead.
+ * The floating capsule is only visible on the base Agent scene (activeOverlay === null).
+ * When any overlay is active (settings, tools, shell, miniapps, ...) the capsule hides
+ * entirely — the UnifiedTopBar's task-list icon opens a centered SessionListDialog instead.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -58,8 +59,6 @@ const getSessionListTitle = (session: Session): string =>
 
 const STORAGE_KEY = 'bitfun.sessionCapsule.expanded';
 const STORAGE_PINNED = 'bitfun.sessionCapsule.pinned';
-
-const OVERLAYS_WITH_DIALOG: Array<string | null> = ['settings', 'shell'];
 
 function readExpandedFromStorage(): boolean {
   try {
@@ -108,7 +107,8 @@ const SessionCapsule: React.FC = () => {
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const usesDialog = OVERLAYS_WITH_DIALOG.includes(activeOverlay);
+  // Capsule is only visible on the base Agent scene; every overlay uses SessionListDialog instead.
+  const usesDialog = activeOverlay !== null;
 
   useEffect(() => {
     const unsub = flowChatStore.subscribe((s) => setFlowChatState(s));
@@ -275,7 +275,7 @@ const SessionCapsule: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOverlay]);
 
-  // In settings / shell: session list is opened via SessionListDialog — hide capsule entirely.
+  // In any overlay scene: session list is opened via SessionListDialog — hide capsule entirely.
   if (usesDialog) return null;
 
   const hasRunning = !expanded && runningSessionsOrdered.length > 0;

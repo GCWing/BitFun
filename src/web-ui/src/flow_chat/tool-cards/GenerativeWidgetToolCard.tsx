@@ -79,6 +79,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
   }, [liveParams, resultData?.title, toolCall?.input]);
 
   const isFailed = status === 'error' || toolResult?.success === false;
+  const failureText = toolResult?.error || 'Widget rendering failed.';
   const widgetId = resultData?.widget_id || toolCall?.id || toolItem.id;
   const hasRenderableWidget = widgetCode.trim().length > 0 && !isFailed;
 
@@ -132,36 +133,43 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
   const header = (
     <ToolCardHeader
       content={
-        <div className="generative-widget-card__header-line">
-          <div className="generative-widget-card__header-title-wrap">
-            <Tooltip content={t('toolCards.generativeWidget.headerTooltip')}>
-              <span className="generative-widget-card__header-label">{`${title}\uFF1A`}</span>
+        isFailed ? (
+          <div className="generative-widget-card__header-line generative-widget-card__header-line--failure">
+            <div className="generative-widget-card__header-title-wrap">
+              <Tooltip content={t('toolCards.generativeWidget.headerTooltip')}>
+                <span className="generative-widget-card__header-label">{`${title}\uFF1A`}</span>
+              </Tooltip>
+              <span className="generative-widget-card__header-failure-text">{failureText}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="generative-widget-card__header-line">
+            <div className="generative-widget-card__header-title-wrap">
+              <Tooltip content={t('toolCards.generativeWidget.headerTooltip')}>
+                <span className="generative-widget-card__header-label">{`${title}\uFF1A`}</span>
+              </Tooltip>
+            </div>
+            <Tooltip
+              content={isExporting ? t('exportImage.exporting') : t('exportImage.exportToImage')}
+              placement="top"
+            >
+              <button
+                type="button"
+                className="generative-widget-card__export-image-btn"
+                onClick={handleExportImage}
+                disabled={isExporting}
+                aria-label={t('exportImage.exportToImage')}
+              >
+                {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
+              </button>
             </Tooltip>
           </div>
-          <Tooltip
-            content={isExporting ? t('exportImage.exporting') : t('exportImage.exportToImage')}
-            placement="top"
-          >
-            <button
-              type="button"
-              className="generative-widget-card__export-image-btn"
-              onClick={handleExportImage}
-              disabled={isExporting}
-              aria-label={t('exportImage.exportToImage')}
-            >
-              {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
-            </button>
-          </Tooltip>
-        </div>
+        )
       }
     />
   );
 
-  const previewInner = isFailed ? (
-    <div className="generative-widget-card__placeholder generative-widget-card__placeholder--error">
-      {toolResult?.error || 'Widget rendering failed.'}
-    </div>
-  ) : widgetCode.trim().length > 0 ? (
+  const previewInner = isFailed ? null : widgetCode.trim().length > 0 ? (
     <div className="generative-widget-card__preview">
       <GenerativeWidgetFrame
         widgetId={widgetId}
@@ -189,7 +197,6 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem }) 
         className="generative-widget-card"
         header={header}
         expandedContent={expandedBody}
-        errorContent={expandedBody}
         isFailed={isFailed}
       />
       {shouldRenderExportClone && hasRenderableWidget && (

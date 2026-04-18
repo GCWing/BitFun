@@ -11,7 +11,6 @@
       "basics": "语言、主题、日志、终端 Shell 与开机启动。",
       "models": "AI 模型、API 密钥、供应商与代理。",
       "sessionConfig": "会话行为、工具与超时。",
-      "mcpTools": "MCP 服务器与工具集成。",
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
       "keyboard": "快捷键与键位。"
@@ -26,7 +25,6 @@
       "models": "模型",
       "sessionConfig": "会话配置",
       "skills": "技能",
-      "mcpTools": "MCP",
       "agents": "智能体",
       "editor": "编辑器",
       "lsp": "语言服务",

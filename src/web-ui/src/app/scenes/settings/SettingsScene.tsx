@@ -19,7 +19,6 @@ import SettingsNav from './SettingsNav';
 import './SettingsScene.scss';
 import AIModelConfig from '../../../infrastructure/config/components/AIModelConfig';
 import SessionConfig from '../../../infrastructure/config/components/SessionConfig';
-import McpToolsConfig from '../../../infrastructure/config/components/McpToolsConfig';
 import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
 import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig';
 
@@ -41,7 +40,6 @@ const SettingsScene: React.FC = () => {
       case 'basics':           Content = BasicsConfig;     break;
       case 'models':           Content = AIModelConfig;    break;
       case 'session-config':   Content = SessionConfig;    break;
-      case 'mcp-tools':        Content = McpToolsConfig;   break;
       case 'editor':           Content = EditorConfig;     break;
     }
   }

@@ -94,7 +94,8 @@
       "terminal": "Shell",
       "git": "Git",
       "miniApps": "运行应用",
-      "driveAApp": "驱动应用"
+      "driveAApp": "驱动应用",
+      "subAgent": "SubAgent"
     },
     "tooltips": {
       "persona": "助理 — 创建与管理所有助理实例",
@@ -112,6 +113,7 @@
       "workspace": "工作区",
       "sessions": "任务",
       "agentApp": "智能应用",
+      "devKit": "开发套件",
       "shell": "Shell",
       "assistantSessions": "助理任务"
     },
@@ -842,9 +844,10 @@
     "settings": "设置",
     "fileViewer": "文件查看",
     "projectContext": "项目概况",
-    "agents": "智能体",
+    "apps": "应用",
+    "subagents": "SubAgent",
     "skills": "技能",
-    "miniApps": "小应用",
+    "tools": "工具箱",
     "mermaidEditor": "Mermaid 图表",
     "assistant": "助理",
     "shell": "Shell",

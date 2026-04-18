@@ -1,0 +1,361 @@
+{
+  "page": {
+    "title": "Tools",
+    "subtitle": "Tools are the smallest unit of action an agent can take. Built-in tools ship with BitFun; MCP tools come from external services you connect.",
+    "learnMore": "How agents use tools"
+  },
+  "sidebar": {
+    "builtin": "Built-in",
+    "mcp": "MCP",
+    "manageServers": "Manage MCP servers",
+    "noServers": "No MCP servers",
+    "toolsUnder": "{{count}} tools"
+  },
+  "categories": {
+    "all": "All",
+    "file": "File",
+    "navigate": "Navigate",
+    "shell": "Shell",
+    "web": "Web",
+    "desktop": "Desktop",
+    "plan": "Plan",
+    "session": "Session",
+    "interact": "Interact",
+    "delegate": "Delegate",
+    "mcpMeta": "MCP Meta"
+  },
+  "permissions": {
+    "read": "Read",
+    "write": "Write",
+    "danger": "Dangerous"
+  },
+  "filters": {
+    "allPermissions": "All levels",
+    "enabledOnly": "Enabled only"
+  },
+  "search": {
+    "placeholder": "Search tools…"
+  },
+  "list": {
+    "countSuffix": "{{count}} tools",
+    "emptyAll": "No tools match your filters.",
+    "emptyCategory": "No tools in this category."
+  },
+  "detail": {
+    "selectHint": "Select a tool on the left to see its documentation.",
+    "langToggleZh": "中文",
+    "langToggleEn": "EN",
+    "sections": {
+      "what": "What it does",
+      "when": "When to use",
+      "whenNot": "When not to use",
+      "inputs": "Inputs",
+      "outputs": "Outputs",
+      "related": "Related tools",
+      "notes": "Notes"
+    },
+    "sourceBuiltin": "Built-in",
+    "sourceMcp": "MCP · {{server}}",
+    "inputsNone": "No explicit inputs.",
+    "outputsNone": "Returns a structured result.",
+    "relatedNone": "No directly related tools.",
+    "notesNone": "No additional notes."
+  },
+  "mcp": {
+    "header": {
+      "serversTotal": "{{count}} servers",
+      "toolsTotal": "{{count}} tools",
+      "errors": "{{count}} error"
+    },
+    "actions": {
+      "add": "Add Server",
+      "refresh": "Refresh",
+      "editConfig": "Edit Config"
+    },
+    "empty": {
+      "title": "No MCP servers yet",
+      "hint": "Add an MCP server to extend available tools.",
+      "cta": "Add MCP Server"
+    },
+    "server": {
+      "toolsSection": "Tools ({{count}})",
+      "configSection": "Configuration",
+      "noTools": "This server has not exposed any tools yet.",
+      "start": "Start",
+      "stop": "Stop",
+      "restart": "Restart",
+      "delete": "Delete",
+      "deleteConfirmTitle": "Delete MCP server?",
+      "deleteConfirmMessage": "\"{{id}}\" will be removed. This cannot be undone.",
+      "transport": "Transport",
+      "url": "URL",
+      "command": "Command"
+    },
+    "editor": {
+      "title": "MCP JSON Configuration",
+      "hint": "Use the standard mcpServers format. Saving will restart affected servers.",
+      "examples": {
+        "localProcess": "Local process (stdio)",
+        "remoteService": "Remote service (sse)"
+      },
+      "save": "Save",
+      "cancel": "Cancel",
+      "saveSuccess": "MCP configuration saved.",
+      "saveFailed": "Failed to save MCP configuration: {{error}}",
+      "loadFailed": "Failed to load MCP configuration: {{error}}"
+    }
+  },
+  "builtin": {
+    "AgentDispatch": {
+      "name": "AgentDispatch",
+      "summary": "Route a user request to the best-matching agent.",
+      "what": "Inspects the current request and routes it to the most suitable agent (Code, Cowork, QA, etc.) in Dispatcher mode. Returns the chosen agent and rationale.",
+      "when": ["Unclear which agent should handle a new task", "Multi-intent message needs triage"],
+      "whenNot": ["You already know which agent to use", "Single-turn quick answers that do not need routing"],
+      "related": [
+        { "name": "Task", "note": "Actually hand off a bounded sub-task to a subagent." }
+      ],
+      "notes": "Dispatcher-only; usually not enabled in ordinary worker agents."
+    },
+    "LS": {
+      "name": "LS",
+      "summary": "List entries in a directory.",
+      "what": "Lists files and subdirectories at a given path. Useful as the first step of project exploration.",
+      "when": ["Getting a quick overview of a folder", "Before deciding which files to read"],
+      "whenNot": ["Searching by name pattern — use Glob", "Searching by content — use Grep"],
+      "related": [
+        { "name": "Glob", "note": "Match paths by pattern (**/*.ts)." },
+        { "name": "Grep", "note": "Search inside file contents." }
+      ]
+    },
+    "Read": {
+      "name": "Read",
+      "summary": "Read the content of a file.",
+      "what": "Reads a file from the workspace and returns its content with line numbers. Supports offset/limit for large files.",
+      "when": ["Inspecting source before editing", "Citing exact code in responses"],
+      "whenNot": ["Binary files are best previewed by the file viewer", "Full-tree search — use Grep"],
+      "related": [
+        { "name": "Edit", "note": "Modify precise regions after reading." },
+        { "name": "Grep", "note": "Search first to locate the lines to read." }
+      ]
+    },
+    "Glob": {
+      "name": "Glob",
+      "summary": "Find files by glob pattern.",
+      "what": "Matches paths using glob syntax such as **/*.tsx. Returns files sorted by modification time.",
+      "when": ["Finding files by name/extension", "Narrowing the search space before Grep"],
+      "whenNot": ["Searching file contents — use Grep"],
+      "related": [
+        { "name": "Grep", "note": "Run content search on the matched subset." }
+      ]
+    },
+    "Grep": {
+      "name": "Grep",
+      "summary": "Search file contents with ripgrep.",
+      "what": "Runs a ripgrep search across the workspace. Supports regex, file filters, case options, and context lines.",
+      "when": ["Locating symbols or keywords", "Auditing usages before a refactor"],
+      "whenNot": ["You only need filenames — use Glob", "Single-file quick scan — use Read"],
+      "related": [
+        { "name": "Glob", "note": "Limit the file set first." },
+        { "name": "Read", "note": "Open a specific match to see full context." }
+      ]
+    },
+    "Write": {
+      "name": "Write",
+      "summary": "Create or fully overwrite a file.",
+      "what": "Writes the given content to a file, creating it if necessary. Previous content is replaced.",
+      "when": ["Creating a new file", "Generating a file from scratch"],
+      "whenNot": ["Editing an existing file partially — use Edit", "Modifying binaries"],
+      "related": [
+        { "name": "Edit", "note": "Safer for local edits to existing files." },
+        { "name": "GetFileDiff", "note": "Review changes after writing." }
+      ],
+      "notes": "Destructive by design — always confirm intent before use."
+    },
+    "Edit": {
+      "name": "Edit",
+      "summary": "Apply exact string replacement to a file.",
+      "what": "Replaces an exact, unique string inside a file. Preserves surrounding content and original line endings.",
+      "when": ["Precise local edits", "Renaming or patching a specific region"],
+      "whenNot": ["Rewriting large portions — prefer Write", "Changes where anchors are not unique"],
+      "related": [
+        { "name": "Read", "note": "Read first to craft a unique anchor." },
+        { "name": "GetFileDiff", "note": "Inspect the change set." }
+      ]
+    },
+    "Delete": {
+      "name": "Delete",
+      "summary": "Delete a file from the workspace.",
+      "what": "Removes a file path. Fails gracefully if the path does not exist.",
+      "when": ["Removing generated or obsolete files"],
+      "whenNot": ["Uncertain whether the file is still referenced"],
+      "related": [
+        { "name": "Grep", "note": "Search for references before deleting." }
+      ],
+      "notes": "Irreversible — prefer a commit before batch deletes."
+    },
+    "Bash": {
+      "name": "Bash",
+      "summary": "Run a shell command in a workspace terminal.",
+      "what": "Executes a shell command and streams stdout/stderr. Supports background mode for long-running processes.",
+      "when": ["Running build/test commands", "Invoking CLIs (git, pnpm, cargo)"],
+      "whenNot": ["File operations available as dedicated tools — prefer Read/Edit/LS"],
+      "related": [
+        { "name": "TerminalControl", "note": "Manage running terminal sessions." }
+      ],
+      "notes": "Can affect the host system — treat as dangerous and confirm destructive commands."
+    },
+    "TerminalControl": {
+      "name": "TerminalControl",
+      "summary": "Manage long-running terminal sessions.",
+      "what": "Reads output, writes input, and terminates background terminals started by Bash.",
+      "when": ["Interacting with a dev server", "Polling a long-running process"],
+      "whenNot": ["One-shot commands — just use Bash"],
+      "related": [
+        { "name": "Bash", "note": "Start the terminal first." }
+      ]
+    },
+    "SessionControl": {
+      "name": "SessionControl",
+      "summary": "Control flow of the current agent session.",
+      "what": "Pauses, resumes, or ends the current session under well-defined conditions.",
+      "when": ["Explicit user hand-back", "Terminating after a final answer"],
+      "whenNot": ["Ordinary turns — the coordinator handles flow automatically"]
+    },
+    "SessionMessage": {
+      "name": "SessionMessage",
+      "summary": "Post a structured message to the session transcript.",
+      "what": "Emits a first-class message (status, notice, summary) into the current session for the user to see.",
+      "when": ["Publishing intermediate milestones", "Sharing a structured summary"],
+      "whenNot": ["Normal assistant replies — just answer"]
+    },
+    "SessionHistory": {
+      "name": "SessionHistory",
+      "summary": "Recall earlier turns in the session.",
+      "what": "Returns a condensed view of earlier messages in the current session.",
+      "when": ["Context compaction", "Referring to a past decision"],
+      "whenNot": ["Looking outside the current session — use project search tools"]
+    },
+    "TodoWrite": {
+      "name": "TodoWrite",
+      "summary": "Maintain a structured todo list for the current task.",
+      "what": "Creates or updates an ordered list of todos with states (pending / in_progress / completed / cancelled).",
+      "when": ["Tasks with 3+ steps", "Long multi-file refactors"],
+      "whenNot": ["Trivial single-step tasks"],
+      "related": [
+        { "name": "CreatePlan", "note": "For larger plans that deserve a document." }
+      ]
+    },
+    "Cron": {
+      "name": "Cron",
+      "summary": "Schedule recurring or delayed jobs.",
+      "what": "Creates, lists and deletes scheduled jobs that fire prompts into a session at a given time or interval.",
+      "when": ["Daily briefings", "Interval-based polling tasks"],
+      "whenNot": ["One-off immediate actions"]
+    },
+    "Task": {
+      "name": "Task",
+      "summary": "Delegate a bounded sub-task to a subagent.",
+      "what": "Launches a specialized subagent with its own prompt and scope. Returns the subagent's final result.",
+      "when": ["Parallelizable research", "Clearly scoped sub-problems"],
+      "whenNot": ["Work that needs tight back-and-forth with the user"],
+      "related": [
+        { "name": "AgentDispatch", "note": "Route before delegating when the target is ambiguous." }
+      ]
+    },
+    "Skill": {
+      "name": "Skill",
+      "summary": "Invoke an installed skill (recipe).",
+      "what": "Runs a registered skill profile that bundles prompts, tool policies and knowledge.",
+      "when": ["Repeatable workflows that already have a skill"],
+      "whenNot": ["One-off work that does not justify a skill"]
+    },
+    "AskUserQuestion": {
+      "name": "AskUserQuestion",
+      "summary": "Ask the user a multiple-choice question.",
+      "what": "Prompts the user with a structured question and discrete options; blocks further tool calls until answered.",
+      "when": ["Ambiguous requirements", "Choosing between alternatives"],
+      "whenNot": ["You can safely make an assumption and proceed"]
+    },
+    "WebSearch": {
+      "name": "WebSearch",
+      "summary": "Search the web.",
+      "what": "Runs a web search and returns a list of results with titles and snippets.",
+      "when": ["Fresh external information", "Library or API references"],
+      "whenNot": ["Project-internal questions — use Grep"]
+    },
+    "WebFetch": {
+      "name": "WebFetch",
+      "summary": "Fetch a URL as readable text.",
+      "what": "Downloads a webpage and returns it as markdown. Useful after WebSearch picks the best link.",
+      "when": ["Reading an article or docs page", "Extracting structured text from a URL"],
+      "whenNot": ["Binary assets or files behind auth"],
+      "related": [
+        { "name": "WebSearch", "note": "Find the URL first, then fetch it." }
+      ]
+    },
+    "ListMCPResources": {
+      "name": "ListMCPResources",
+      "summary": "List resources exposed by an MCP server.",
+      "what": "Discovers the resources (files, datasets, documents) an MCP server exposes for reading.",
+      "when": ["Exploring what an MCP server offers"]
+    },
+    "ReadMCPResource": {
+      "name": "ReadMCPResource",
+      "summary": "Read an MCP resource's content.",
+      "what": "Fetches the content of a resource exposed by an MCP server."
+    },
+    "ListMCPPrompts": {
+      "name": "ListMCPPrompts",
+      "summary": "List prompt templates exposed by an MCP server.",
+      "what": "Discovers the prompt templates an MCP server offers for use by the agent."
+    },
+    "GetMCPPrompt": {
+      "name": "GetMCPPrompt",
+      "summary": "Render an MCP prompt template.",
+      "what": "Renders a server-supplied prompt template with the given arguments."
+    },
+    "GenerativeUI": {
+      "name": "GenerativeUI",
+      "summary": "Render a live interactive widget in the chat.",
+      "what": "Produces a small interactive UI (form, choice widget, progress card) directly inline in the conversation.",
+      "when": ["Asking for structured input beyond yes/no", "Showing progress of a long operation"]
+    },
+    "GetFileDiff": {
+      "name": "GetFileDiff",
+      "summary": "Get the unified diff for a file.",
+      "what": "Returns the unified diff between the workspace version and a given baseline for a file."
+    },
+    "Log": {
+      "name": "Log",
+      "summary": "Append a structured log entry.",
+      "what": "Writes a structured log entry for later inspection. Useful for debugging complex agent runs."
+    },
+    "CreatePlan": {
+      "name": "CreatePlan",
+      "summary": "Create a plan document for a task.",
+      "what": "Creates or updates a plan markdown document describing the goals, steps and risks of a task.",
+      "related": [
+        { "name": "TodoWrite", "note": "Convert plan steps into runtime todos." }
+      ]
+    },
+    "CodeReview": {
+      "name": "CodeReview",
+      "summary": "Submit a code review against recent changes.",
+      "what": "Runs a code review pass over the recent diff and returns findings."
+    },
+    "InitMiniApp": {
+      "name": "InitMiniApp",
+      "summary": "Initialize a new MiniApp scaffold.",
+      "what": "Bootstraps a new MiniApp project with a default template."
+    },
+    "ComputerUse": {
+      "name": "ComputerUse",
+      "summary": "Automate the desktop (mouse, keyboard, screenshots).",
+      "what": "Unified desktop automation: click, mouse move, scroll, drag, screenshot, locate-on-screen, key chord, type text, wait.",
+      "when": ["Driving a GUI app that has no API", "Taking screenshots as evidence"],
+      "whenNot": ["Anything reachable via CLI or filesystem"],
+      "notes": "Can affect any application on the host — treat as dangerous and confirm before destructive actions."
+    }
+  }
+}

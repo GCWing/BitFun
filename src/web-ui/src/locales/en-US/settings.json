@@ -11,7 +11,6 @@
       "basics": "Language, theme, logging, terminal shell, and launch at login.",
       "models": "AI models, API keys, providers, and proxy.",
       "sessionConfig": "Session behavior, tools, and timeouts.",
-      "mcpTools": "MCP servers and tool integrations.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
       "keyboard": "Shortcuts and key bindings."
@@ -26,7 +25,6 @@
       "models": "Models",
       "sessionConfig": "Session Config",
       "skills": "Skills",
-      "mcpTools": "MCP",
       "agents": "Agents",
       "editor": "Editor",
       "lsp": "LSP",

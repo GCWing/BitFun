@@ -37,11 +37,12 @@ export type I18nNamespace =
   | 'components'
   | 'panels/git'
   | 'panels/terminal'
-  | 'scenes/miniapp'
   | 'scenes/capabilities'
-  | 'scenes/agents'
+  | 'scenes/apps'
+  | 'scenes/subagents'
   | 'scenes/profile'
-  | 'scenes/skills';      
+  | 'scenes/skills'
+  | 'scenes/tools';      
 
  
 export interface I18nConfig {

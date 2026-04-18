@@ -1,0 +1,127 @@
+{
+  "tabs": {
+    "label": "应用类型",
+    "agent-app": "智能体应用",
+    "live-app": "灵动应用",
+    "bridge-app": "桥接应用",
+    "searchPlaceholder": {
+      "agent-app": "搜索智能体应用…",
+      "live-app": "搜索灵动应用…",
+      "bridge-app": "搜索桥接应用…"
+    }
+  },
+  "hero": {
+    "title": "打造自己专属的 Agentic OS",
+    "subtitle": "智能体应用、灵动应用与桥接应用，是 Agentic OS 的三类一等公民。选择并配置它们，让整个系统按你的方式运转。"
+  },
+  "page": {
+    "newAgentApp": "新建",
+    "newBridgeApp": "新建",
+    "heroTitle": "打造属于你的 Agentic OS",
+    "heroSubtitle": "智能体应用是 Agentic OS 的一等公民。选择并配置智能体应用，让整个系统按你的方式工作。",
+    "searchPlaceholder": "搜索智能体应用…",
+    "sectionTitle": "智能体应用",
+    "empty": "暂未检测到可用的智能体应用",
+    "containsAgents": "包含 {{count}} 个 Agent",
+    "directAgentDetail": "打开后直达 Agent 详情",
+    "bannerPrompt": "打开 {{name}}，进入它的应用工作流"
+  },
+  "apps": {
+    "badges": {
+      "modeApp": "多智能体",
+      "standaloneAgentApp": "单智能体"
+    },
+    "coding": {
+      "name": "编程应用",
+      "description": "由 Agentic、Plan 与 Debug 组成的编程模式应用，覆盖实现、规划与排障。"
+    },
+    "cowork": {
+      "name": "Cowork",
+      "description": "面向办公协作的独立 Agent 应用，适合整理需求、起草内容与推进日常工作。"
+    },
+    "claw": {
+      "name": "Claw",
+      "description": "面向个人助理与持续协作场景的独立 Agent 应用，保留上下文与偏好。"
+    }
+  },
+  "appDetail": {
+    "bannerPrompt": "此应用包含的 Agent 会按应用工作流协同工作",
+    "includedAgentsTitle": "包含的 Agent",
+    "includedAgentsSubtitle": "点击任一 Agent 查看其能力、工具与 Skills 配置"
+  },
+  "agent": {
+    "noDescription": "暂无描述",
+    "badges": {
+      "agent": "Agent",
+      "userAgent": "用户 Agent",
+      "projectAgent": "项目 Agent",
+      "disabled": "已禁用"
+    },
+    "sections": {
+      "capabilities": "能力",
+      "tools": "工具",
+      "skills": "Skills"
+    },
+    "actions": {
+      "editTools": "管理工具",
+      "editSkills": "管理 Skills",
+      "resetTools": "重置默认",
+      "cancel": "取消",
+      "save": "保存"
+    },
+    "meta": {
+      "enabled": "启用状态",
+      "readonly": "只读模式"
+    },
+    "skillGroups": {
+      "computerUse": "Computer Use",
+      "office": "Office",
+      "meta": "Meta",
+      "team": "Team",
+      "superpowers": "Superpowers",
+      "other": "其他"
+    }
+  },
+  "liveApp": {
+    "title": "灵动应用",
+    "subtitle": "以用户为中心、由 Agent 按需生成的可交互应用。每个灵动应用都拥有持久身份——它会生长、演化，随时可复用。",
+    "searchPlaceholder": "搜索灵动应用...",
+    "importFromFolder": "从文件夹导入",
+    "running": "已启动",
+    "allApps": "全部应用",
+    "noRunningApps": "暂无运行中的应用",
+    "all": "全部",
+    "count": "{{count}} 个",
+    "selectFolderTitle": "选择灵动应用目录（需包含 meta.json 与 source/）",
+    "empty": {
+      "generate": "边聊边生成，马上可用。和 AI 对话生成第一个灵动应用吧。",
+      "noMatch": "没有匹配的应用。"
+    },
+    "card": {
+      "start": "启动",
+      "stop": "停止",
+      "delete": "删除"
+    },
+    "detail": {
+      "stop": "停止",
+      "delete": "删除",
+      "open": "打开"
+    },
+    "confirmDelete": {
+      "title": "删除 \"{{name}}\"？",
+      "message": "此操作不可撤销，应用及其所有数据将被永久删除。",
+      "confirm": "删除",
+      "cancel": "取消"
+    },
+    "scene": {
+      "loading": "加载中…",
+      "loadFailed": "加载失败：{{error}}",
+      "retry": "重试",
+      "reload": "重新加载"
+    }
+  },
+  "bridgeApp": {
+    "title": "桥接应用",
+    "comingSoon": "桥接应用在传统 GUI 应用之上叠加操作 Agent，将存量软件接入 Agentic OS 生态。即将推出。"
+  }
+}

@@ -56,6 +56,31 @@
   width: 100%;
 }
 
+.generative-widget-card__header-line--failure {
+  align-items: flex-start;
+
+  .generative-widget-card__header-title-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 4px;
+  }
+
+  .generative-widget-card__header-label {
+    flex-shrink: 0;
+  }
+
+  .generative-widget-card__header-failure-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 400;
+    color: #fca5a5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
 .generative-widget-card__header-title-wrap {
   min-width: 0;
   flex: 1;

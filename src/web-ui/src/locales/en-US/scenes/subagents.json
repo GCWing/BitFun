@@ -1,0 +1,112 @@
+{
+  "page": {
+    "title": "SubAgents",
+    "subtitle": "Browse, manage, and maintain the SubAgents that top-level Agents can call.",
+    "searchPlaceholder": "Search name, description, or model",
+    "newSubagent": "New SubAgent",
+    "refresh": "Refresh"
+  },
+  "sidebar": {
+    "all": "All",
+    "ready": "Callable",
+    "readonly": "Readonly",
+    "sources": "Sources",
+    "builtin": "Built-in",
+    "user": "User",
+    "project": "Project"
+  },
+  "list": {
+    "resultCount": "{{count}} results",
+    "empty": "No SubAgents match the current filters",
+    "noDescription": "No description yet"
+  },
+  "detail": {
+    "empty": "Select a SubAgent to view details",
+    "noDescription": "This SubAgent does not have a role description yet.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "availabilityHint": "When enabled, top-level Agents and orchestration flows can keep referencing it. When disabled, the definition stays but should not be scheduled.",
+    "readonlyHint": "This is a readonly SubAgent, better suited for search, analysis, and organization tasks.",
+    "writeHint": "This SubAgent can run write-capable tasks and is better suited for execution-heavy work.",
+    "toolCount": "{{count}} tools configured",
+    "defaultToolsFallback": "No custom tool set is configured. The default tool set will be used.",
+    "callReady": "This SubAgent is currently ready to be called by higher-level Agents.",
+    "callBlocked": "This SubAgent is currently disabled and should not be called by higher-level Agents.",
+    "sections": {
+      "availability": "Availability",
+      "positioning": "Positioning",
+      "tools": "Tool Scope",
+      "calling": "Calling Status"
+    }
+  },
+  "editor": {
+    "createTitle": "Create SubAgent",
+    "createSubtitle": "Define the minimum setup first, then refine it after creation.",
+    "editTitle": "Edit SubAgent",
+    "editSubtitle": "Update description, prompt, tool scope, and availability.",
+    "cancel": "Cancel",
+    "create": "Create",
+    "save": "Save",
+    "readonlyOn": "Readonly tasks only",
+    "readonlyOff": "Write-capable tasks allowed",
+    "enabledOn": "Enabled",
+    "enabledOff": "Disabled",
+    "noTools": "No tool choices are available right now. The default tool set will be used after save.",
+    "fields": {
+      "name": "Name",
+      "level": "Level",
+      "readonly": "Readonly Mode",
+      "enabled": "Enabled",
+      "description": "Role Description",
+      "prompt": "System Prompt",
+      "tools": "Tool Scope"
+    },
+    "levels": {
+      "user": "User",
+      "project": "Project"
+    },
+    "placeholders": {
+      "name": "Start with a letter, then use letters, numbers, underscores, or hyphens",
+      "description": "Describe what this SubAgent is responsible for",
+      "prompt": "Describe what it is good at, where its boundaries are, and how it should collaborate"
+    },
+    "validation": {
+      "nameRequired": "Please enter a name",
+      "nameFormat": "The name must start with a letter and contain only letters, numbers, underscores, or hyphens",
+      "descriptionRequired": "Please enter a role description",
+      "promptRequired": "Please enter a system prompt",
+      "projectWorkspaceRequired": "Project-level SubAgents require an open workspace"
+    }
+  },
+  "badges": {
+    "builtin": "Built-in",
+    "user": "User",
+    "project": "Project",
+    "readonly": "Readonly",
+    "disabled": "Disabled"
+  },
+  "readiness": {
+    "ready": "Ready to call",
+    "incomplete": "Needs more definition",
+    "disabled": "Not callable"
+  },
+  "deleteDialog": {
+    "title": "Delete SubAgent",
+    "message": "Are you sure you want to delete \"{{name}}\"? This cannot be undone."
+  },
+  "messages": {
+    "loadDetailFailed": "Failed to load detail: ",
+    "toggleFailed": "Failed to change status: ",
+    "enabledSuccess": "{{name}} enabled",
+    "disabledSuccess": "{{name}} disabled",
+    "deleteSuccess": "{{name}} deleted",
+    "deleteFailed": "Delete failed: ",
+    "createSuccess": "{{name}} created",
+    "createFailed": "Create failed: ",
+    "updateSuccess": "{{name}} saved",
+    "updateFailed": "Save failed: "
+  },
+  "status": {
+    "loading": "Loading..."
+  }
+}

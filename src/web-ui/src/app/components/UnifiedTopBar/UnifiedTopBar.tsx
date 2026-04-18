@@ -20,7 +20,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Info, PictureInPicture2, Search, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Info, ListChecks, PictureInPicture2, Search, FolderOpen } from 'lucide-react';
 import { Modal, Tooltip, WindowControls } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
@@ -36,6 +36,7 @@ import {
 } from '../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { useHeaderStore } from '../../stores/headerStore';
+import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import SessionListDialog from '../SessionListDialog/SessionListDialog';
 import { getOverlayDef } from '../../overlay/overlayRegistry';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
@@ -79,6 +80,7 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
   const { warning } = useNotification();
   const closeOverlay = useOverlayStore((s) => s.closeOverlay);
   const sessionContext = useHeaderStore((s) => s.sessionContext);
+  const openSessionListDialog = useSessionCapsuleStore((s) => s.openSessionListDialog);
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
   const hasOverlay = activeOverlay !== null;
 
@@ -383,6 +385,20 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
               document.body
             )}
         </div>
+
+        {hasOverlay && (
+          <Tooltip content={t('nav.sessionCapsule.openTaskList')} placement="bottom" followCursor>
+            <button
+              type="button"
+              className="unified-top-bar__task-list-btn"
+              onClick={openSessionListDialog}
+              aria-label={t('nav.sessionCapsule.openTaskList')}
+              data-testid="unified-top-bar-task-list"
+            >
+              <ListChecks size={14} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
 
         {showContextNav && (
           <div className="unified-top-bar__context-nav">

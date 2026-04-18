@@ -175,7 +175,8 @@
     min-width: 0;
   }
 
-  &__back-btn {
+  &__back-btn,
+  &__task-list-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -369,6 +370,7 @@
 @media (prefers-reduced-motion: reduce) {
   .unified-top-bar {
     &__back-btn,
+    &__task-list-btn,
     &__search-trigger {
       transition: none;
     }

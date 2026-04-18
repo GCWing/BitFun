@@ -9,7 +9,6 @@ export type ConfigTab =
   | 'basics'
   | 'models'
   | 'session-config'
-  | 'mcp-tools'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -115,12 +114,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'partner',
           '伙伴',
         ],
-      },
-      {
-        id: 'mcp-tools',
-        labelKey: 'configCenter.tabs.mcpTools',
-        descriptionKey: 'configCenter.tabDescriptions.mcpTools',
-        keywords: ['mcp', 'server', 'plugin', 'stdio', 'sse', 'tools'],
       },
     ],
   },

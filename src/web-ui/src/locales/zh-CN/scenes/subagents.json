@@ -1,0 +1,112 @@
+{
+  "page": {
+    "title": "SubAgent",
+    "subtitle": "集中查看、管理和维护可供顶层 Agent 调用的 SubAgent。",
+    "searchPlaceholder": "搜索名称、描述或模型",
+    "newSubagent": "新建 SubAgent",
+    "refresh": "刷新"
+  },
+  "sidebar": {
+    "all": "全部",
+    "ready": "可调用",
+    "readonly": "只读",
+    "sources": "来源",
+    "builtin": "内置",
+    "user": "用户级",
+    "project": "项目级"
+  },
+  "list": {
+    "resultCount": "{{count}} 个结果",
+    "empty": "当前筛选下没有 SubAgent",
+    "noDescription": "暂无说明"
+  },
+  "detail": {
+    "empty": "选择一个 SubAgent 查看详情",
+    "noDescription": "这个 SubAgent 还没有填写职责说明。",
+    "edit": "编辑",
+    "delete": "删除",
+    "availabilityHint": "启用后，顶层 Agent 或编排流程可以继续引用它；停用后保留定义但不建议调度。",
+    "readonlyHint": "当前为只读型 SubAgent，更适合检索、分析、整理等场景。",
+    "writeHint": "当前允许执行带写入能力的任务，适合更强的执行型场景。",
+    "toolCount": "已配置 {{count}} 个工具能力",
+    "defaultToolsFallback": "未单独指定工具，将沿用默认工具集。",
+    "callReady": "当前状态允许被上层 Agent 调用。",
+    "callBlocked": "当前已停用，不建议被上层 Agent 调用。",
+    "sections": {
+      "availability": "可用性",
+      "positioning": "角色定位",
+      "tools": "工具范围",
+      "calling": "调用状态"
+    }
+  },
+  "editor": {
+    "createTitle": "新建 SubAgent",
+    "createSubtitle": "先填写最小定义，创建后即可继续补充和调整。",
+    "editTitle": "编辑 SubAgent",
+    "editSubtitle": "修改描述、提示词、工具范围和启用状态。",
+    "cancel": "取消",
+    "create": "创建",
+    "save": "保存",
+    "readonlyOn": "仅执行只读任务",
+    "readonlyOff": "允许执行带写入能力的任务",
+    "enabledOn": "已启用",
+    "enabledOff": "已停用",
+    "noTools": "当前没有可选工具，保存后将使用默认工具集。",
+    "fields": {
+      "name": "名称",
+      "level": "级别",
+      "readonly": "只读模式",
+      "enabled": "启用状态",
+      "description": "职责说明",
+      "prompt": "系统提示词",
+      "tools": "工具范围"
+    },
+    "levels": {
+      "user": "用户级",
+      "project": "项目级"
+    },
+    "placeholders": {
+      "name": "字母开头，可包含字母、数字、下划线和连字符",
+      "description": "用一句话描述这个 SubAgent 负责什么",
+      "prompt": "输入系统提示词，说明它擅长什么、边界是什么、如何协作"
+    },
+    "validation": {
+      "nameRequired": "请输入名称",
+      "nameFormat": "名称需以字母开头，并只包含字母、数字、下划线和连字符",
+      "descriptionRequired": "请输入职责说明",
+      "promptRequired": "请输入系统提示词",
+      "projectWorkspaceRequired": "项目级 SubAgent 需要先打开工作区"
+    }
+  },
+  "badges": {
+    "builtin": "内置",
+    "user": "用户级",
+    "project": "项目级",
+    "readonly": "只读",
+    "disabled": "已停用"
+  },
+  "readiness": {
+    "ready": "可直接调用",
+    "incomplete": "定义待补充",
+    "disabled": "暂不可调用"
+  },
+  "deleteDialog": {
+    "title": "删除 SubAgent",
+    "message": "确定要删除“{{name}}”吗？删除后将无法恢复。"
+  },
+  "messages": {
+    "loadDetailFailed": "加载详情失败：",
+    "toggleFailed": "切换状态失败：",
+    "enabledSuccess": "已启用 {{name}}",
+    "disabledSuccess": "已停用 {{name}}",
+    "deleteSuccess": "已删除 {{name}}",
+    "deleteFailed": "删除失败：",
+    "createSuccess": "已创建 {{name}}",
+    "createFailed": "创建失败：",
+    "updateSuccess": "已保存 {{name}}",
+    "updateFailed": "保存失败："
+  },
+  "status": {
+    "loading": "加载中..."
+  }
+}

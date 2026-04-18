@@ -14,14 +14,15 @@ export type OverlaySceneId =
   | 'settings'
   | 'file-viewer'
   | 'profile'
-  | 'agents'
+  | 'apps'
+  | 'subagents'
   | 'skills'
-  | 'miniapps'
+  | 'tools'
   | 'assistant'
   | 'shell'
   | 'panel-view'
   | 'task-detail'
-  | `miniapp:${string}`;
+  | `live-app:${string}`;
 
 /** Full scene identifier — base or overlay. */
 export type SceneId = 'session' | OverlaySceneId;

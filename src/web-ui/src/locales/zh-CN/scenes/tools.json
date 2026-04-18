@@ -1,0 +1,361 @@
+{
+  "page": {
+    "title": "工具箱",
+    "subtitle": "工具是 Agent 执行具体动作的最小单位。Built-in 由系统提供，MCP 来自你接入的外部服务。",
+    "learnMore": "了解 Agent 如何装配工具"
+  },
+  "sidebar": {
+    "builtin": "内置",
+    "mcp": "MCP",
+    "manageServers": "管理 MCP Server",
+    "noServers": "暂无 MCP Server",
+    "toolsUnder": "{{count}} 个工具"
+  },
+  "categories": {
+    "all": "全部",
+    "file": "文件",
+    "navigate": "导航检索",
+    "shell": "终端",
+    "web": "网络",
+    "desktop": "桌面操作",
+    "plan": "规划",
+    "session": "会话",
+    "interact": "人机交互",
+    "delegate": "委派",
+    "mcpMeta": "MCP 元工具"
+  },
+  "permissions": {
+    "read": "只读",
+    "write": "写入",
+    "danger": "高风险"
+  },
+  "filters": {
+    "allPermissions": "全部权限",
+    "enabledOnly": "仅已启用"
+  },
+  "search": {
+    "placeholder": "搜索工具…"
+  },
+  "list": {
+    "countSuffix": "共 {{count}} 项",
+    "emptyAll": "没有匹配当前筛选条件的工具。",
+    "emptyCategory": "该分类下没有工具。"
+  },
+  "detail": {
+    "selectHint": "在左侧选择一个工具，查看其说明。",
+    "langToggleZh": "中文",
+    "langToggleEn": "EN",
+    "sections": {
+      "what": "功能说明",
+      "when": "何时使用",
+      "whenNot": "不适用场景",
+      "inputs": "输入",
+      "outputs": "输出",
+      "related": "相邻工具",
+      "notes": "注意事项"
+    },
+    "sourceBuiltin": "内置",
+    "sourceMcp": "MCP · {{server}}",
+    "inputsNone": "无显式输入。",
+    "outputsNone": "返回结构化结果。",
+    "relatedNone": "暂无直接相关的工具。",
+    "notesNone": "无额外注意事项。"
+  },
+  "mcp": {
+    "header": {
+      "serversTotal": "{{count}} 个 Server",
+      "toolsTotal": "{{count}} 个 Tool",
+      "errors": "{{count}} 异常"
+    },
+    "actions": {
+      "add": "添加 Server",
+      "refresh": "刷新",
+      "editConfig": "编辑配置"
+    },
+    "empty": {
+      "title": "还没有 MCP Server",
+      "hint": "添加一个 MCP Server 以扩展可用工具。",
+      "cta": "添加 MCP Server"
+    },
+    "server": {
+      "toolsSection": "工具（{{count}}）",
+      "configSection": "配置",
+      "noTools": "该 Server 当前未暴露任何工具。",
+      "start": "启动",
+      "stop": "停止",
+      "restart": "重启",
+      "delete": "删除",
+      "deleteConfirmTitle": "删除 MCP Server？",
+      "deleteConfirmMessage": "将移除 \"{{id}}\"，此操作不可撤销。",
+      "transport": "传输",
+      "url": "URL",
+      "command": "命令"
+    },
+    "editor": {
+      "title": "MCP JSON 配置",
+      "hint": "请使用标准 mcpServers 格式。保存后会重启相关 Server。",
+      "examples": {
+        "localProcess": "本地进程（stdio）",
+        "remoteService": "远程服务（sse）"
+      },
+      "save": "保存",
+      "cancel": "取消",
+      "saveSuccess": "MCP 配置已保存。",
+      "saveFailed": "保存 MCP 配置失败：{{error}}",
+      "loadFailed": "加载 MCP 配置失败：{{error}}"
+    }
+  },
+  "builtin": {
+    "AgentDispatch": {
+      "name": "AgentDispatch",
+      "summary": "将用户请求路由给最匹配的 Agent。",
+      "what": "在 Dispatcher 模式下分析当前请求，将其分派给最合适的 Agent（Code、Cowork、QA 等），返回所选 Agent 及理由。",
+      "when": ["不确定应由哪个 Agent 处理新任务", "多意图消息需要分流"],
+      "whenNot": ["已经明确使用哪个 Agent", "不需要路由的单轮快速回答"],
+      "related": [
+        { "name": "Task", "note": "真正将子任务派发给 Subagent 执行。" }
+      ],
+      "notes": "仅在 Dispatcher 中启用；普通工作型 Agent 通常不开放。"
+    },
+    "LS": {
+      "name": "LS",
+      "summary": "列出目录内容。",
+      "what": "列出指定路径下的文件和子目录，常作为项目探索的第一步。",
+      "when": ["快速浏览某个目录", "在决定要读哪些文件前"],
+      "whenNot": ["按名称模式搜索——用 Glob", "按内容搜索——用 Grep"],
+      "related": [
+        { "name": "Glob", "note": "按模式匹配路径（如 **/*.ts）。" },
+        { "name": "Grep", "note": "在文件内容中搜索。" }
+      ]
+    },
+    "Read": {
+      "name": "Read",
+      "summary": "读取文件内容。",
+      "what": "读取工作区内的文件并带行号返回。支持 offset/limit 处理大文件。",
+      "when": ["编辑前先查看源码", "在回答中精确引用代码"],
+      "whenNot": ["二进制文件请用文件查看器", "全工程检索——用 Grep"],
+      "related": [
+        { "name": "Edit", "note": "读取后再对精确位置进行修改。" },
+        { "name": "Grep", "note": "先定位，再 Read 指定区域。" }
+      ]
+    },
+    "Glob": {
+      "name": "Glob",
+      "summary": "按 glob 模式查找文件。",
+      "what": "使用 glob 语法匹配路径，如 **/*.tsx。结果按修改时间排序。",
+      "when": ["按名称或后缀找文件", "在 Grep 前缩小搜索范围"],
+      "whenNot": ["搜索文件内容——用 Grep"],
+      "related": [
+        { "name": "Grep", "note": "在匹配到的子集中做内容搜索。" }
+      ]
+    },
+    "Grep": {
+      "name": "Grep",
+      "summary": "使用 ripgrep 搜索文件内容。",
+      "what": "在工作区内执行 ripgrep 搜索。支持正则、文件过滤、大小写选项与上下文行。",
+      "when": ["定位符号或关键字", "重构前审计使用位置"],
+      "whenNot": ["只需要文件名——用 Glob", "只扫单个文件——用 Read"],
+      "related": [
+        { "name": "Glob", "note": "先限定文件集合。" },
+        { "name": "Read", "note": "打开具体命中位置查看完整上下文。" }
+      ]
+    },
+    "Write": {
+      "name": "Write",
+      "summary": "新建或整体覆盖一个文件。",
+      "what": "将给定内容写入文件；若不存在则创建。原有内容会被整体替换。",
+      "when": ["新建文件", "从零生成文件"],
+      "whenNot": ["对已有文件做局部修改——用 Edit", "二进制文件"],
+      "related": [
+        { "name": "Edit", "note": "对已有文件进行局部编辑更安全。" },
+        { "name": "GetFileDiff", "note": "写入后查看改动。" }
+      ],
+      "notes": "具破坏性——使用前请确认意图。"
+    },
+    "Edit": {
+      "name": "Edit",
+      "summary": "对文件执行精确字符串替换。",
+      "what": "替换文件中唯一匹配的字符串，保留周边内容与原有行尾符。",
+      "when": ["精确的局部修改", "重命名或打补丁"],
+      "whenNot": ["大段重写——用 Write", "锚点不唯一时"],
+      "related": [
+        { "name": "Read", "note": "先读取以构造唯一锚点。" },
+        { "name": "GetFileDiff", "note": "查看改动集。" }
+      ]
+    },
+    "Delete": {
+      "name": "Delete",
+      "summary": "删除工作区中的文件。",
+      "what": "移除指定路径；若不存在则平和失败。",
+      "when": ["删除生成物或过时文件"],
+      "whenNot": ["不确定是否仍有引用时"],
+      "related": [
+        { "name": "Grep", "note": "删除前先搜索引用。" }
+      ],
+      "notes": "不可逆——批量删除前建议先 commit。"
+    },
+    "Bash": {
+      "name": "Bash",
+      "summary": "在工作区终端执行 shell 命令。",
+      "what": "执行 shell 命令并实时输出 stdout/stderr，支持后台模式运行长任务。",
+      "when": ["执行构建/测试命令", "调用 CLI（git、pnpm、cargo）"],
+      "whenNot": ["有专用文件工具时优先使用 Read/Edit/LS"],
+      "related": [
+        { "name": "TerminalControl", "note": "管理已运行的终端会话。" }
+      ],
+      "notes": "可能影响宿主系统——视为高风险，破坏性命令请先确认。"
+    },
+    "TerminalControl": {
+      "name": "TerminalControl",
+      "summary": "管理长时间运行的终端会话。",
+      "what": "读取输出、写入输入，或终止由 Bash 启动的后台终端。",
+      "when": ["与开发服务器交互", "轮询长任务"],
+      "whenNot": ["一次性命令——直接用 Bash"],
+      "related": [
+        { "name": "Bash", "note": "先启动终端。" }
+      ]
+    },
+    "SessionControl": {
+      "name": "SessionControl",
+      "summary": "控制当前 Agent 会话的流程。",
+      "what": "在明确条件下暂停、恢复或结束当前会话。",
+      "when": ["显式交还给用户", "给出最终答案后结束"],
+      "whenNot": ["常规轮次——由协调器自动处理"]
+    },
+    "SessionMessage": {
+      "name": "SessionMessage",
+      "summary": "向会话记录中发布一条结构化消息。",
+      "what": "向当前会话写入一条头等消息（状态、通知、总结）以展示给用户。",
+      "when": ["发布阶段性进展", "分享结构化总结"],
+      "whenNot": ["常规助手回复——直接回答即可"]
+    },
+    "SessionHistory": {
+      "name": "SessionHistory",
+      "summary": "回看会话中的历史轮次。",
+      "what": "返回当前会话中较早消息的精简视图。",
+      "when": ["上下文压缩", "回溯过去的决策"],
+      "whenNot": ["跨会话搜索——使用项目级搜索工具"]
+    },
+    "TodoWrite": {
+      "name": "TodoWrite",
+      "summary": "为当前任务维护一个结构化 Todo 列表。",
+      "what": "创建或更新一个带状态（pending / in_progress / completed / cancelled）的有序 Todo 列表。",
+      "when": ["3 步及以上的任务", "多文件长重构"],
+      "whenNot": ["单步简单任务"],
+      "related": [
+        { "name": "CreatePlan", "note": "更大型的任务建议先出 Plan 文档。" }
+      ]
+    },
+    "Cron": {
+      "name": "Cron",
+      "summary": "调度周期性或延后任务。",
+      "what": "创建、列出、删除定时任务：按时间或间隔将 prompt 发送到会话。",
+      "when": ["每日简报", "周期性轮询任务"],
+      "whenNot": ["一次性立即执行"]
+    },
+    "Task": {
+      "name": "Task",
+      "summary": "将有边界的子任务派发给 Subagent。",
+      "what": "以独立的 prompt 与边界启动一个专门的 Subagent，返回其最终结果。",
+      "when": ["可并行的研究类子任务", "边界清晰的子问题"],
+      "whenNot": ["需要与用户紧密来回的工作"],
+      "related": [
+        { "name": "AgentDispatch", "note": "当目标不明确时先路由。" }
+      ]
+    },
+    "Skill": {
+      "name": "Skill",
+      "summary": "调用已安装的 Skill（配方）。",
+      "what": "执行已注册的 Skill 配置，包含 prompt、工具策略和知识。",
+      "when": ["已有 Skill 的可复用工作流"],
+      "whenNot": ["没必要沉淀为 Skill 的一次性工作"]
+    },
+    "AskUserQuestion": {
+      "name": "AskUserQuestion",
+      "summary": "向用户抛出一个多选问题。",
+      "what": "以结构化选择题形式向用户提问，回答前阻塞后续工具调用。",
+      "when": ["需求含糊", "多种方案需要抉择"],
+      "whenNot": ["可以安全假设并继续时"]
+    },
+    "WebSearch": {
+      "name": "WebSearch",
+      "summary": "网页搜索。",
+      "what": "执行网页搜索，返回一组标题与摘要。",
+      "when": ["需要最新外部信息", "查阅库或 API 参考"],
+      "whenNot": ["项目内部问题——用 Grep"]
+    },
+    "WebFetch": {
+      "name": "WebFetch",
+      "summary": "抓取 URL 并转成可读文本。",
+      "what": "下载网页并转为 markdown 文本。常与 WebSearch 配合使用。",
+      "when": ["阅读文章或文档页面", "从 URL 提取结构化文本"],
+      "whenNot": ["二进制资源或需登录的内容"],
+      "related": [
+        { "name": "WebSearch", "note": "先搜索确定 URL，再抓取。" }
+      ]
+    },
+    "ListMCPResources": {
+      "name": "ListMCPResources",
+      "summary": "列出某个 MCP Server 暴露的资源。",
+      "what": "探查 MCP Server 提供的资源（文件、数据集、文档）。",
+      "when": ["探索某个 MCP Server 的能力"]
+    },
+    "ReadMCPResource": {
+      "name": "ReadMCPResource",
+      "summary": "读取某个 MCP 资源的内容。",
+      "what": "获取 MCP Server 上某个资源的内容。"
+    },
+    "ListMCPPrompts": {
+      "name": "ListMCPPrompts",
+      "summary": "列出 MCP Server 暴露的 Prompt 模板。",
+      "what": "发现 MCP Server 对外提供的 prompt 模板。"
+    },
+    "GetMCPPrompt": {
+      "name": "GetMCPPrompt",
+      "summary": "渲染一个 MCP Prompt 模板。",
+      "what": "以给定参数渲染 Server 提供的 prompt 模板。"
+    },
+    "GenerativeUI": {
+      "name": "GenerativeUI",
+      "summary": "在对话中渲染交互式控件。",
+      "what": "在对话内嵌入一个小型交互 UI（表单、选择控件、进度卡）。",
+      "when": ["需要超出 Yes/No 的结构化输入", "展示长任务的进度"]
+    },
+    "GetFileDiff": {
+      "name": "GetFileDiff",
+      "summary": "获取文件的 unified diff。",
+      "what": "返回某文件当前工作区版本与基线之间的 unified diff。"
+    },
+    "Log": {
+      "name": "Log",
+      "summary": "追加一条结构化日志。",
+      "what": "写入结构化日志条目，便于排查复杂 Agent 运行过程。"
+    },
+    "CreatePlan": {
+      "name": "CreatePlan",
+      "summary": "为任务创建 Plan 文档。",
+      "what": "创建或更新一份 markdown 计划文档，描述任务目标、步骤与风险。",
+      "related": [
+        { "name": "TodoWrite", "note": "把 Plan 步骤转为运行时 Todo。" }
+      ]
+    },
+    "CodeReview": {
+      "name": "CodeReview",
+      "summary": "对近期改动执行代码审查。",
+      "what": "对最近的 diff 运行一次代码审查，返回发现的问题。"
+    },
+    "InitMiniApp": {
+      "name": "InitMiniApp",
+      "summary": "初始化一个 MiniApp 项目骨架。",
+      "what": "用默认模板初始化一个新的 MiniApp 项目。"
+    },
+    "ComputerUse": {
+      "name": "ComputerUse",
+      "summary": "自动化桌面（鼠标、键盘、截图）。",
+      "what": "统一的桌面自动化：点击、鼠标移动、滚动、拖拽、截图、屏幕定位、键位组合、输入文本、等待。",
+      "when": ["操作没有 API 的 GUI 应用", "截图作为执行证据"],
+      "whenNot": ["可通过 CLI 或文件系统完成的事情"],
+      "notes": "可影响宿主上任何应用——视为高风险，破坏性动作前先确认。"
+    }
+  }
+}

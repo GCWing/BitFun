@@ -8,10 +8,11 @@ import {
   User,
   AppWindow,
   ChevronDown,
-  Users,
-  MonitorPlay,
   Puzzle,
   Settings,
+  Code2,
+  Wrench,
+  Bot,
 } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -19,7 +20,6 @@ import { useOverlayManager } from '../../hooks/useOverlayManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
-import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openDispatcherSession } from '@/flow_chat/services/openDispatcherSession';
 import { WorkspaceKind } from '@/shared/types';
@@ -35,8 +35,6 @@ const WorkspaceFooterActions: React.FC = () => {
   const { t } = useI18n('common');
   const { openOverlay, toggleOverlay } = useOverlayManager();
   const { switchLeftPanelTab } = useApp();
-
-  useMiniAppCatalogSync();
 
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
   const setSelectedAssistantWorkspaceId = useMyAgentStore(state => state.setSelectedAssistantWorkspaceId);
@@ -68,11 +66,11 @@ const WorkspaceFooterActions: React.FC = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
-  const [isAgentAppsSubmenuOpen, setIsAgentAppsSubmenuOpen] = useState(false);
+  const [isDevKitSubmenuOpen, setIsDevKitSubmenuOpen] = useState(false);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
-    setIsAgentAppsSubmenuOpen(false);
+    setIsDevKitSubmenuOpen(false);
     setTimeout(() => {
       setMenuOpen(false);
       setMenuClosing(false);
@@ -149,9 +147,9 @@ const WorkspaceFooterActions: React.FC = () => {
     switchLeftPanelTab,
   ]);
 
-  const handleOpenAgents = useCallback(() => {
+  const handleOpenApps = useCallback(() => {
     closeMenu();
-    openOverlay('agents');
+    openOverlay('apps');
   }, [closeMenu, openOverlay]);
 
   const handleOpenSkills = useCallback(() => {
@@ -159,20 +157,27 @@ const WorkspaceFooterActions: React.FC = () => {
     openOverlay('skills');
   }, [closeMenu, openOverlay]);
 
+  const handleOpenTools = useCallback(() => {
+    closeMenu();
+    openOverlay('tools');
+  }, [closeMenu, openOverlay]);
+
+  const handleOpenSubagents = useCallback(() => {
+    closeMenu();
+    openOverlay('subagents');
+  }, [closeMenu, openOverlay]);
+
   const handleOpenSettings = useCallback(() => {
     closeMenu();
     openOverlay('settings');
   }, [closeMenu, openOverlay]);
 
-  const handleOpenMiniApps = useCallback(() => {
-    closeMenu();
-    openOverlay('miniapps');
-  }, [closeMenu, openOverlay]);
-
   const isAssistantActive = activeOverlay === 'assistant';
-  const isAgentsActive = activeOverlay === 'agents';
+  const isAppsActive = activeOverlay === 'apps'
+    || (typeof activeOverlay === 'string' && activeOverlay.startsWith('live-app:'));
   const isSkillsActive = activeOverlay === 'skills';
-  const isMiniAppsActive = activeOverlay === 'miniapps' || (typeof activeOverlay === 'string' && activeOverlay.startsWith('miniapp:'));
+  const isToolsActive = activeOverlay === 'tools';
+  const isSubagentsActive = activeOverlay === 'subagents';
   const isSettingsActive = activeOverlay === 'settings';
   const isShellActive = activeOverlay === 'shell';
 
@@ -223,64 +228,63 @@ const WorkspaceFooterActions: React.FC = () => {
 
                     <button
                       type="button"
-                      className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--expandable${isAgentAppsSubmenuOpen ? ' is-open' : ''}`}
+                      className={`bitfun-nav-panel__footer-menu-item${isAppsActive ? ' is-active' : ''}`}
                       role="menuitem"
-                      aria-expanded={isAgentAppsSubmenuOpen}
-                      onClick={() => setIsAgentAppsSubmenuOpen(value => !value)}
+                      onClick={handleOpenApps}
                     >
                       <AppWindow size={14} />
                       <span>{t('nav.sections.agentApp')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--expandable${isDevKitSubmenuOpen ? ' is-open' : ''}`}
+                      role="menuitem"
+                      aria-expanded={isDevKitSubmenuOpen}
+                      onClick={() => setIsDevKitSubmenuOpen(value => !value)}
+                    >
+                      <Code2 size={14} />
+                      <span>{t('nav.sections.devKit')}</span>
                       <ChevronDown
                         size={13}
-                        className={`bitfun-nav-panel__footer-menu-chevron${isAgentAppsSubmenuOpen ? ' is-open' : ''}`}
+                        className={`bitfun-nav-panel__footer-menu-chevron${isDevKitSubmenuOpen ? ' is-open' : ''}`}
                         aria-hidden="true"
                       />
                     </button>
 
-                    <div className={`bitfun-nav-panel__footer-menu-sublist${isAgentAppsSubmenuOpen ? ' is-open' : ''}`}>
+                    <div className={`bitfun-nav-panel__footer-menu-sublist${isDevKitSubmenuOpen ? ' is-open' : ''}`}>
                       <div>
                         <button
                           type="button"
-                          className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isAgentsActive ? ' is-active' : ''}`}
+                          className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isSkillsActive ? ' is-active' : ''}`}
                           role="menuitem"
-                          onClick={handleOpenAgents}
+                          onClick={handleOpenSkills}
                         >
-                          <Users size={13} />
-                          <span>{t('nav.items.agents')}</span>
+                          <Puzzle size={13} />
+                          <span>{t('nav.items.skills')}</span>
                         </button>
 
                         <button
                           type="button"
-                          className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isMiniAppsActive ? ' is-active' : ''}`}
+                          className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isToolsActive ? ' is-active' : ''}`}
                           role="menuitem"
-                          onClick={handleOpenMiniApps}
+                          onClick={handleOpenTools}
                         >
-                          <AppWindow size={13} />
-                          <span>{t('nav.items.miniApps')}</span>
+                          <Wrench size={13} />
+                          <span>{t('nav.items.tools')}</span>
                         </button>
 
                         <button
                           type="button"
-                          className="bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub is-disabled"
+                          className={`bitfun-nav-panel__footer-menu-item bitfun-nav-panel__footer-menu-item--sub${isSubagentsActive ? ' is-active' : ''}`}
                           role="menuitem"
-                          disabled
+                          onClick={handleOpenSubagents}
                         >
-                          <MonitorPlay size={13} />
-                          <span>{t('nav.items.driveAApp')}</span>
-                          <span className="bitfun-nav-panel__top-action-badge">{t('nav.badges.comingSoon')}</span>
+                          <Bot size={13} />
+                          <span>{t('nav.items.subAgent')}</span>
                         </button>
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      className={`bitfun-nav-panel__footer-menu-item${isSkillsActive ? ' is-active' : ''}`}
-                      role="menuitem"
-                      onClick={handleOpenSkills}
-                    >
-                      <Puzzle size={14} />
-                      <span>{t('nav.items.skills')}</span>
-                    </button>
 
                     <div className="bitfun-nav-panel__footer-menu-divider" />
 
