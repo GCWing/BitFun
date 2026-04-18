@@ -3,7 +3,7 @@ import type { OverlaySceneId } from '@/app/overlay/types';
 import { useOverlayStore } from '@/app/stores/overlayStore';
 
 export interface UseGallerySceneAutoRefreshOptions {
-  /** Overlay scene id (e.g. 'skills', 'agents', 'miniapps'). */
+  /** Overlay scene id (e.g. 'skills', 'agents', 'apps'). */
   sceneId: OverlaySceneId;
   /** Reload lists; may be async. */
   refetch: () => void | Promise<void>;

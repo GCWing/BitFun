@@ -1,166 +1,86 @@
-# MiniApp 系统架构详解
+# Live App（灵动应用）系统架构详解
 
 ## 数据流全景
 
 ```
-AI 对话 → GenerateMiniApp Tool → MiniAppManager::create()
+AI 对话 → InitLiveApp 工具 → LiveAppManager::create()
   → storage.rs 持久化 source + meta.json
-  → compiler.rs 生成 compiled_html（注入 Bridge）
-  → emit miniapp-created 事件
-  → 前端 useMiniAppCatalogSync 监听 → 刷新 MiniAppGalleryView
-  → 用户点击「打开」→ MiniAppScene → MiniAppRunner
+  → compiler.rs 生成 compiled_html（注入 window.app Bridge）
+  → emit liveapp-created 事件
+  → 前端 useLiveAppCatalogSync 监听 → 刷新应用列表
+  → 用户点击「打开」→ LiveAppScene → LiveAppRunner
   → <iframe srcDoc={compiled_html}>
-  → Bridge Script 拦截 require/fetch → postMessage
-  → useMiniAppBridge 路由 → Tauri Commands → Rust 服务
+  → Bridge：window.app → postMessage
+  → useLiveAppBridge 路由 → Tauri live_app_* 命令 → Rust LiveApp 服务
 ```
 
-## 全局 MiniAppManager
+## 全局 LiveAppManager
 
-`manager.rs` 使用 `OnceCell<Arc<MiniAppManager>>` 实现全局单例:
+`manager.rs` 使用 `OnceLock<Arc<LiveAppManager>>` 实现全局单例:
 
 ```rust
-static GLOBAL_MINIAPP_MANAGER: OnceCell<Arc<MiniAppManager>> = OnceCell::new();
+static GLOBAL_LIVE_APP_MANAGER: OnceLock<Arc<LiveAppManager>> = OnceLock::new();
 
-// 在 app_state.rs 启动时初始化
-initialize_global_miniapp_manager(miniapp_manager.clone());
+// 在 app_state 启动时初始化
+initialize_global_live_app_manager(live_app_manager.clone());
 
 // Agent 工具中通过此函数获取
-try_get_global_miniapp_manager() -> Option<Arc<MiniAppManager>>
+try_get_global_live_app_manager() -> Option<Arc<LiveAppManager>>
 ```
 
-Workspace path 由 `commands.rs` 中 `open_workspace`/`close_workspace` 同步更新:
-```rust
-state.miniapp_manager.set_workspace_path(Some(workspace_info.root_path.clone())).await;
-```
+Workspace path 由工作区打开/关闭流程同步到 manager（`set_workspace_path`）。
 
 ## 存储结构
 
+用户数据根目录为 `liveapps`（若仅有历史目录 `miniapps` 且无 `liveapps`，启动时会一次性重命名迁移）:
+
 ```
-{user_data_dir}/miniapps/
+{user_data_dir}/liveapps/
 └── {app_id}/
-    ├── meta.json         # MiniAppMeta（不含 source/compiled）
+    ├── meta.json         # LiveAppMeta（不含完整 source 快照说明见 storage）
     ├── source/
-    │   ├── index.html
-    │   ├── style.css
-    │   └── script.js
-    ├── compiled.html     # 完整可运行 HTML
+    │   ├── index.html, style.css, ui.js, worker.js, package.json, …
+    ├── compiled.html     # 可运行 HTML（注入 Bridge）
     └── versions/
         └── v{N}.json     # 历史版本快照
 ```
 
 ## 编译流程 (compiler.rs)
 
-`compile(app_id, source, permissions, theme)` 步骤:
+`compile(...)` 负责 Import Map、Runtime Adapter（`window.app`）、CSP、ESM 注入等；详见源码与 `bridge_builder.rs`。
 
-1. `build_csp_content(permissions)` — 基于 net.allow 生成 CSP
-2. `build_bridge_script(app_id, config)` — 生成 require/fetch shim
-3. `build_scroll_boundary_script()` — 阻止外层滚动穿透
-4. 组装 HTML:
-   - `<meta http-equiv="Content-Security-Policy">`
-   - CSS 变量（`--bg`, `--fg` 等主题变量）
-   - 用户 CSS（`<style>` 内联）
-   - CDN 依赖（`<script>/<link>` 标签）
-   - Bridge Script（在用户 JS 之前）
-   - 用户 JS（`<script>` 内联）
+## Bridge Builder（V2）
 
-## Bridge Builder 详解
+`bridge_builder.rs` 生成面向 iframe 的 **window.app** 适配层；用户 UI 为 ESM（`ui.js`），逻辑在独立 JS Worker（Bun/Node）中，经 JSON-RPC 与宿主通信。旧版 `require`/`__BITFUN__` shim 已弃用。
 
-`bridge_builder.rs` 生成的 Bridge Script 包含:
+## 权限策略
 
-### require() shim
-- `fs/promises` — 所有方法映射为 `_rpc('fs.{method}', params)`
-- `path` — 纯 JS 实现（join/resolve/dirname/basename/extname/parse）
-- `child_process` — `exec` 映射为 `_rpc('shell.exec', params)`
-- `os` — 纯 JS 实现（platform/homedir/tmpdir/cpus/hostname）
-- `crypto` — 映射 `window.crypto`
+`permission_policy.rs`：`resolve_policy(...)` 生成传给 Worker 启动参数的策略 JSON；Worker 内按策略拦截越权。路径占位符如 `{appdata}`、`{workspace}` 等由策略解析。
 
-### fetch() 代理
-- `/api/*` 路径 → `_rpc('internal.fetch', ...)`
-- `http(s)://` → `_rpc('net.fetch', ...)` 绕过 CORS
-- 其他（data: URL 等）→ 原始 fetch
+## Tauri 命令
 
-### __BITFUN__ 全局对象
-- `appId`, `appDataDir`, `workspaceDir`, `theme`
-- `showOpenDialog(opts)` → `_rpc('dialog.open', opts)`
-- `showSaveDialog(opts)` → `_rpc('dialog.save', opts)`
-- `showMessageBox(opts)` → `_rpc('dialog.message', opts)`
-
-### _rpc() 通道
-```javascript
-function _rpc(method, params) {
-  return new Promise((resolve, reject) => {
-    const id = ++_rpcId;
-    _pending.set(id, { resolve, reject });
-    parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
-  });
-}
-```
-
-## Permission Guard 实现
-
-`permission_guard.rs` 核心逻辑:
-
-### 路径权限
-1. 规范化路径（canonicalize + 防路径穿越）
-2. 将路径变量 `{appdata}`, `{workspace}` 解析为绝对路径
-3. 检查请求路径是否在某个已声明 scope 下
-4. `{appdata}` 自动允许，`{workspace}` 首次弹窗确认
-
-### Shell 权限
-检查命令是否在 `permissions.shell.allow` 白名单中（按命令名前缀匹配）。
-
-### 网络权限
-检查请求 URL 域名是否在 `permissions.net.allow` 中（`*` 表示全部允许）。
-
-## Tauri Command 参数约定
-
-所有 Bridge 调用使用统一请求结构:
-
-```rust
-#[derive(Deserialize)]
-struct MiniAppFsRequest {
-    app_id: String,
-    op: String,        // "readFile" | "writeFile" | "readdir" | ...
-    params: Value,     // JSON 参数
-}
-```
-
-返回统一 `Result<Value, String>`，前端通过 `invoke()` 调用。
+前端通过 `invoke` 调用 `src/apps/desktop/src/api/live_app_api.rs` 中注册的命令，例如：`list_live_apps`、`get_live_app`、`create_live_app`、`update_live_app`、`delete_live_app`、`get_live_app_storage` / `set_live_app_storage`、`grant_live_app_workspace` / `grant_live_app_path`、`get_live_app_versions`、`rollback_live_app`、`live_app_runtime_status`、`live_app_worker_call`、`live_app_worker_stop`、`live_app_install_deps`、`live_app_recompile` 等。
 
 ## 前端状态管理
 
-### miniAppStore (Zustand)
-```typescript
-{
-  apps: MiniAppMeta[],               // 画廊列表
-  loading: boolean,
-  openedAppIds: string[],            // 当前已打开的 MiniApp scene
-  runningWorkerIds: string[],        // 当前运行中的 worker
-  openApp(id),
-  closeApp(id),
-  setRunningWorkerIds(ids),
-  markWorkerRunning(id),
-  markWorkerStopped(id),
-}
-```
+### liveAppStore（Zustand）
+
+`src/web-ui/src/app/scenes/apps/live-app/liveAppStore.ts`：应用列表、打开的应用、运行中的 worker 等与灵动应用画廊/场景共享。
 
 ### 事件驱动刷新
-`useMiniAppCatalogSync` hook:
-- 组件挂载时加载列表和运行中的 worker
-- 监听 `miniapp-created`, `miniapp-updated`, `miniapp-deleted`, `miniapp-worker-restarted`, `miniapp-worker-stopped`
-- 事件触发时统一刷新 store，导航入口与画廊共享同一份状态
+
+`useLiveAppCatalogSync`：
+
+- 挂载时加载列表与运行中的 worker  
+- 监听 `liveapp-created`、`liveapp-updated`、`liveapp-deleted`、`liveapp-worker-restarted`、`liveapp-worker-stopped`  
+- 统一刷新 store  
 
 ## 工具卡片集成
 
-`MiniAppToolDisplay.tsx` 注册在 `flow_chat/tool-cards/index.ts`:
+`InitLiveAppToolDisplay.tsx` 在 `flow_chat/tool-cards/index.ts` 注册，工具名为 **`InitLiveApp`**：
 
 ```typescript
-TOOL_CARD_CONFIGS.set('GenerateMiniApp', { icon: Wrench, displayName: '生成 MiniApp', ... });
-TOOL_CARD_CONFIGS.set('EditMiniApp', { icon: Edit3, displayName: '编辑 MiniApp', ... });
-TOOL_CARD_CONFIGS.set('ListMiniApps', { icon: List, displayName: '列出 MiniApp', ... });
+TOOL_CARD_CONFIGS['InitLiveApp'] = { displayName: 'Init Live App', ... };
 ```
 
-卡片支持:
-- 流式显示工具调用状态
-- 完成后显示应用名/ID/数量
-- "Open in Mini App" 按钮直达 `sceneManager.openScene(\`miniapp:${appId}\`)`
+卡片支持流式状态、完成后的应用信息，以及「在灵动应用中打开」等操作（如 `openOverlay(\`live-app:${appId}\`)`）。

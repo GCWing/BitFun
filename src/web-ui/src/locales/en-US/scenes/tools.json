@@ -344,10 +344,10 @@
       "summary": "Submit a code review against recent changes.",
       "what": "Runs a code review pass over the recent diff and returns findings."
     },
-    "InitMiniApp": {
-      "name": "InitMiniApp",
-      "summary": "Initialize a new MiniApp scaffold.",
-      "what": "Bootstraps a new MiniApp project with a default template."
+    "InitLiveApp": {
+      "name": "InitLiveApp",
+      "summary": "Initialize a new Live App scaffold.",
+      "what": "Bootstraps a new Live App project with a default template."
     },
     "ComputerUse": {
       "name": "ComputerUse",

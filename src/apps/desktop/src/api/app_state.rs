@@ -3,7 +3,7 @@
 use bitfun_core::agentic::side_question::SideQuestionRuntime;
 use bitfun_core::agentic::{agents, tools};
 use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
-use bitfun_core::miniapp::{initialize_global_miniapp_manager, JsWorkerPool, MiniAppManager};
+use bitfun_core::live_app::{initialize_global_live_app_manager, JsWorkerPool, LiveAppManager};
 use bitfun_core::service::remote_ssh::{
     init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
@@ -68,7 +68,7 @@ pub struct AppState {
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub token_usage_service: Arc<token_usage::TokenUsageService>,
-    pub miniapp_manager: Arc<MiniAppManager>,
+    pub live_app_manager: Arc<LiveAppManager>,
     pub js_worker_pool: Option<Arc<JsWorkerPool>>,
     pub statistics: Arc<RwLock<AppStatistics>>,
     pub macos_edit_menu_mode: Arc<RwLock<crate::macos_menubar::EditMenuMode>>,
@@ -138,8 +138,8 @@ impl AppState {
                 })?,
         );
 
-        let miniapp_manager = Arc::new(MiniAppManager::new(path_manager.clone()));
-        initialize_global_miniapp_manager(miniapp_manager.clone());
+        let live_app_manager = Arc::new(LiveAppManager::new(path_manager.clone()));
+        initialize_global_live_app_manager(live_app_manager.clone());
 
         let worker_host_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources")
@@ -261,7 +261,7 @@ impl AppState {
             agent_registry,
             mcp_service,
             token_usage_service,
-            miniapp_manager,
+            live_app_manager,
             js_worker_pool,
             statistics,
             macos_edit_menu_mode: Arc::new(RwLock::new(crate::macos_menubar::EditMenuMode::System)),

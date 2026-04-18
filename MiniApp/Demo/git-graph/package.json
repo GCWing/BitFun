@@ -1,5 +1,5 @@
 {
-  "name": "miniapp-git-graph",
+  "name": "live-app-git-graph",
   "private": true,
   "scripts": {
     "build": "node source/build.js"

@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — bootstrap: bind events, init resizer, restore last repo, theme subscription.
+ * Git Graph Live App — bootstrap: bind events, init resizer, restore last repo, theme subscription.
  */
 (function () {
   window.__GG = window.__GG || {};

@@ -105,7 +105,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
   { name: 'Task',          category: 'delegate', permission: 'write',  Icon: Users },
   { name: 'Skill',         category: 'delegate', permission: 'write',  Icon: Boxes },
   { name: 'CodeReview',    category: 'delegate', permission: 'read',   Icon: ShieldCheck },
-  { name: 'InitMiniApp',   category: 'delegate', permission: 'write',  Icon: Boxes },
+  { name: 'InitLiveApp',   category: 'delegate', permission: 'write',  Icon: Boxes },
 
   // MCP meta tools (built-in helpers that inspect MCP capabilities)
   { name: 'ListMCPResources', category: 'mcpMeta', permission: 'read', Icon: Plug },

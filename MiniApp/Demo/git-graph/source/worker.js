@@ -1,4 +1,4 @@
-// Git Graph MiniApp — Worker (Node.js/Bun). Uses simple-git npm package.
+// Git Graph Live App — Worker (Node.js/Bun). Uses simple-git npm package.
 // Methods are invoked via app.call('git.log', params) etc. from the UI.
 
 const simpleGit = require('simple-git');

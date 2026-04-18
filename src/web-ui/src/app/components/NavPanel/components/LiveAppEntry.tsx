@@ -7,18 +7,18 @@ import { renderLiveAppIcon, getLiveAppIconGradient } from '@/app/scenes/apps/liv
 
 const MAX_VISIBLE_RUNNING_APPS = 3;
 
-interface MiniAppEntryProps {
+interface LiveAppEntryProps {
   isActive: boolean;
-  activeMiniAppId?: string | null;
-  onOpenMiniApps: () => void;
-  onOpenMiniApp: (appId: string) => void;
+  activeLiveAppId?: string | null;
+  onOpenLiveApps: () => void;
+  onOpenLiveApp: (appId: string) => void;
 }
 
-const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
+const LiveAppEntry: React.FC<LiveAppEntryProps> = ({
   isActive,
-  activeMiniAppId = null,
-  onOpenMiniApps,
-  onOpenMiniApp,
+  activeLiveAppId = null,
+  onOpenLiveApps,
+  onOpenLiveApp,
 }) => {
   const { t } = useI18n('common');
   const apps = useLiveAppStore((state) => state.apps);
@@ -30,63 +30,63 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
       .map((id) => appMap.get(id))
       .filter((app): app is NonNullable<typeof app> => !!app);
 
-    if (!activeMiniAppId) {
+    if (!activeLiveAppId) {
       return list;
     }
 
     return [...list].sort((a, b) => {
-      if (a.id === activeMiniAppId) return -1;
-      if (b.id === activeMiniAppId) return 1;
+      if (a.id === activeLiveAppId) return -1;
+      if (b.id === activeLiveAppId) return 1;
       return 0;
     });
-  }, [activeMiniAppId, apps, runningWorkerIds]);
+  }, [activeLiveAppId, apps, runningWorkerIds]);
 
   const visibleApps = runningApps.slice(0, MAX_VISIBLE_RUNNING_APPS);
   const overflowCount = Math.max(0, runningApps.length - visibleApps.length);
 
   return (
-    <div className="bitfun-nav-panel__miniapp-entry-wrap">
+    <div className="bitfun-nav-panel__live-app-entry-wrap">
       <div
         className={[
-          'bitfun-nav-panel__miniapp-entry',
+          'bitfun-nav-panel__live-app-entry',
           isActive && 'is-active',
           runningApps.length > 0 && 'has-running-apps',
         ].filter(Boolean).join(' ')}
-        onClick={onOpenMiniApps}
+        onClick={onOpenLiveApps}
         onKeyDown={(event) => {
           if (event.currentTarget !== event.target) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            onOpenMiniApps();
+            onOpenLiveApps();
           }
         }}
         role="button"
         tabIndex={0}
-        aria-label={t('nav.items.miniApps')}
+        aria-label={t('nav.items.liveApps')}
       >
-        <span className="bitfun-nav-panel__miniapp-entry-lead-icon" aria-hidden>
+        <span className="bitfun-nav-panel__live-app-entry-lead-icon" aria-hidden>
           <LayoutGrid size={15} />
         </span>
-        <span className="bitfun-nav-panel__miniapp-entry-main">
-          <span className="bitfun-nav-panel__miniapp-entry-title">{t('nav.items.miniApps')}</span>
+        <span className="bitfun-nav-panel__live-app-entry-main">
+          <span className="bitfun-nav-panel__live-app-entry-title">{t('nav.items.liveApps')}</span>
         </span>
 
-        <span className="bitfun-nav-panel__miniapp-entry-apps">
+        <span className="bitfun-nav-panel__live-app-entry-apps">
           {visibleApps.length > 0 ? (
             <>
               {visibleApps.map((app) => {
-                const isAppActive = app.id === activeMiniAppId;
+                const isAppActive = app.id === activeLiveAppId;
                 return (
                   <Tooltip key={app.id} content={app.name} placement="right">
                     <span
                       className={[
-                        'bitfun-nav-panel__miniapp-bubble',
+                        'bitfun-nav-panel__live-app-bubble',
                         isAppActive && 'is-active',
                       ].filter(Boolean).join(' ')}
                       style={{ background: getLiveAppIconGradient(app.icon || 'box') }}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onOpenMiniApp(app.id);
+                        onOpenLiveApp(app.id);
                       }}
                       onMouseDown={(event) => event.stopPropagation()}
                       role="button"
@@ -96,7 +96,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           event.stopPropagation();
-                          onOpenMiniApp(app.id);
+                          onOpenLiveApp(app.id);
                         }
                       }}
                     >
@@ -106,7 +106,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                 );
               })}
               {overflowCount > 0 ? (
-                <span className="bitfun-nav-panel__miniapp-bubble bitfun-nav-panel__miniapp-bubble--more">
+                <span className="bitfun-nav-panel__live-app-bubble bitfun-nav-panel__live-app-bubble--more">
                   +{overflowCount}
                 </span>
               ) : null}
@@ -118,4 +118,4 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
   );
 };
 
-export default MiniAppEntry;
+export default LiveAppEntry;

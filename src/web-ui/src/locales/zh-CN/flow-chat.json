@@ -491,16 +491,16 @@
       "blame": "追溯",
       "cherryPick": "挑选"
     },
-    "initMiniApp": {
-      "title": "小应用",
+    "initLiveApp": {
+      "title": "灵动应用",
       "operationInit": "初始化",
       "skeletonReady": "已初始化",
       "creatingShort": "…",
       "untitled": "（未命名）",
       "failed": "失败",
-      "createFailed": "无法创建小应用",
-      "openInMiniApp": "在小应用中打开",
-      "openInMiniAppTitle": "在小应用场景中打开",
+      "createFailed": "无法创建灵动应用",
+      "openInLiveApp": "在灵动应用中打开",
+      "openInLiveAppTitle": "在灵动应用场景中打开",
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "应用：{{name}}"

@@ -38,7 +38,7 @@ import { GetFileDiffDisplay } from './GetFileDiffDisplay';
 import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
-import { InitMiniAppDisplay } from './MiniAppToolDisplay';
+import { InitLiveAppDisplay } from './InitLiveAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
 import { BtwMarkerCard } from './BtwMarkerCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
@@ -314,14 +314,14 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#10b981' // Teal, classic terminal color
   },
 
-  // MiniApp tool
-  'InitMiniApp': {
-    toolName: 'InitMiniApp',
-    displayName: 'Init Mini App',
+  // Live App
+  'InitLiveApp': {
+    toolName: 'InitLiveApp',
+    displayName: 'Init Live App',
     icon: 'APP',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
-    description: 'Create Mini App skeleton for editing',
+    description: 'Create Live App skeleton for editing',
     displayMode: 'standard',
     primaryColor: '#7c8cef'
   },
@@ -391,8 +391,8 @@ export const TOOL_CARD_COMPONENTS = {
   // Bash tool
   'Bash': TerminalToolCard,
 
-  // MiniApp tool
-  'InitMiniApp': InitMiniAppDisplay,
+  // Live App
+  'InitLiveApp': InitLiveAppDisplay,
 
   // Generative widget tool
   'GenerativeUI': GenerativeWidgetToolCard,

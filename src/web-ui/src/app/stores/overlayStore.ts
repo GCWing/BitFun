@@ -21,7 +21,7 @@ import type { OverlaySceneId } from '../overlay/types';
 
 /** Only overlays with a registered scene-nav sync the legacy NavPanel layer. */
 function resolveNavSceneId(id: OverlaySceneId): OverlaySceneId | null {
-  if (typeof id === 'string' && id.startsWith('miniapp:')) return null;
+  if (typeof id === 'string' && id.startsWith('live-app:')) return null;
   return getSceneNav(id) ? id : null;
 }
 

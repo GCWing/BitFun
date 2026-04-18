@@ -1,18 +1,18 @@
 /**
- * InitMiniApp tool display — matches GitToolDisplay / BaseToolCard patterns.
+ * InitLiveApp tool display — matches GitToolDisplay / BaseToolCard patterns.
  */
 
 @use './_tool-card-common.scss';
 
-.base-tool-card-wrapper.miniapp-tool-display .base-tool-card--header-expandable .base-tool-card-header {
+.base-tool-card-wrapper.init-live-app-tool-display .base-tool-card--header-expandable .base-tool-card-header {
   cursor: pointer;
 }
 
-.base-tool-card-wrapper.miniapp-tool-display .base-tool-card:not(.base-tool-card--header-expandable) .base-tool-card-header {
+.base-tool-card-wrapper.init-live-app-tool-display .base-tool-card:not(.base-tool-card--header-expandable) .base-tool-card-header {
   cursor: default;
 }
 
-.base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {
+.base-tool-card-wrapper.init-live-app-tool-display .init-live-app-result-footer {
   margin-left: -10px;
   margin-right: -10px;
   margin-bottom: -10px;
@@ -20,16 +20,16 @@
   border-radius: 0 0 7px 7px;
 }
 
-.miniapp-tool-display {
-  .miniapp-icon {
+.init-live-app-tool-display {
+  .init-live-app-icon {
     color: var(--color-text-secondary);
   }
 
-  .tool-card-icon.miniapp-icon {
+  .tool-card-icon.init-live-app-icon {
     color: var(--color-text-secondary);
   }
 
-  .miniapp-tool-info {
+  .init-live-app-tool-info {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -80,20 +80,20 @@
     }
   }
 
-  .miniapp-result-container {
+  .init-live-app-result-container {
     padding: 0;
     display: flex;
     flex-direction: column;
   }
 
-  .miniapp-result-rows {
+  .init-live-app-result-rows {
     padding: 8px 10px 0;
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  .miniapp-result-row {
+  .init-live-app-result-row {
     display: flex;
     align-items: baseline;
     gap: 8px;
@@ -101,7 +101,7 @@
     line-height: 1.3;
   }
 
-  .miniapp-result-label {
+  .init-live-app-result-label {
     font-size: 10px;
     font-weight: 600;
     color: var(--color-text-muted);
@@ -110,7 +110,7 @@
     flex-shrink: 0;
   }
 
-  .miniapp-result-value {
+  .init-live-app-result-value {
     font-family: var(--tool-card-font-mono);
     font-size: 11px;
     color: var(--color-text-primary);
@@ -122,7 +122,7 @@
     line-height: 1.2;
   }
 
-  .miniapp-result-footer {
+  .init-live-app-result-footer {
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -135,7 +135,7 @@
     border-top: 1px solid var(--border-subtle);
   }
 
-  .miniapp-open-btn {
+  .init-live-app-open-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;

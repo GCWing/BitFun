@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — worker call wrapper.
+ * Git Graph Live App — worker call wrapper.
  */
 (function () {
   window.__GG = window.__GG || {};

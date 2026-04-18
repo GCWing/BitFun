@@ -1,16 +1,16 @@
-//! MiniApp compiler — assemble source (html/css/ui_js) + Import Map + Runtime Adapter + CSP into compiled_html.
+//! Live App compiler — assemble source (html/css/ui_js) + Import Map + Runtime Adapter + CSP into compiled_html.
 
-use crate::miniapp::bridge_builder::{
-    build_bridge_script, build_csp_content, build_import_map, build_miniapp_default_theme_css,
+use crate::live_app::bridge_builder::{
+    build_bridge_script, build_csp_content, build_import_map, build_live_app_default_theme_css,
     scroll_boundary_script,
 };
-use crate::miniapp::types::{MiniAppPermissions, MiniAppSource};
+use crate::live_app::types::{LiveAppPermissions, LiveAppSource};
 use crate::util::errors::{BitFunError, BitFunResult};
 
-/// Compile MiniApp source into full HTML with Import Map, Runtime Adapter, and CSP injected.
+/// Compile Live App source into full HTML with Import Map, Runtime Adapter, and CSP injected.
 pub fn compile(
-    source: &MiniAppSource,
-    permissions: &MiniAppPermissions,
+    source: &LiveAppSource,
+    permissions: &LiveAppPermissions,
     app_id: &str,
     app_data_dir: &str,
     workspace_dir: &str,
@@ -31,7 +31,7 @@ pub fn compile(
         csp.replace('"', "&quot;")
     );
     let scroll = scroll_boundary_script();
-    let theme_default_style = build_miniapp_default_theme_css();
+    let theme_default_style = build_live_app_default_theme_css();
     let import_map = build_import_map(&source.esm_dependencies);
     let style_tag = if source.css.is_empty() {
         String::new()

@@ -1,6 +1,6 @@
 //! Permission policy — resolve manifest permissions to JSON policy for JS Worker.
 
-use crate::miniapp::types::{MiniAppPermissions, PathScope};
+use crate::live_app::types::{LiveAppPermissions, PathScope};
 use serde_json::{Map, Value};
 use std::path::Path;
 
@@ -8,7 +8,7 @@ use std::path::Path;
 /// Path variables {appdata}, {workspace}, {home} are resolved to absolute paths.
 /// `granted_paths` are user-granted paths (e.g. from grant_path) to include in read+write.
 pub fn resolve_policy(
-    perms: &MiniAppPermissions,
+    perms: &LiveAppPermissions,
     app_id: &str,
     app_data_dir: &Path,
     workspace_dir: Option<&Path>,

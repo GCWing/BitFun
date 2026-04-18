@@ -72,7 +72,7 @@ BitFun offers two modes for different scenarios:
 
 > It grows on its own.
 
-Supports Skills, MCP (including MCP App), and custom Agents; also on-demand Mini Apps (from one line of requirements to a runnable UI, with one-click packaging into a desktop app).
+Supports Skills, MCP (including MCP App), and custom Agents; also on-demand Live Apps (from one line of requirements to a runnable UI, with one-click packaging into a desktop app).
 
 ---
 

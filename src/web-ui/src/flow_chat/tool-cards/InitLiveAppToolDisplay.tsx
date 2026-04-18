@@ -1,5 +1,5 @@
 /**
- * MiniAppToolDisplay — InitMiniApp result; layout aligned with GitToolDisplay (BaseToolCard).
+ * InitLiveAppToolDisplay — InitLiveApp tool result; layout aligned with GitToolDisplay (BaseToolCard).
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,9 +10,9 @@ import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useOverlayManager } from '@/app/hooks/useOverlayManager';
 import type { OverlaySceneId } from '@/app/overlay/types';
-import './MiniAppToolDisplay.scss';
+import './InitLiveAppToolDisplay.scss';
 
-export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
+export const InitLiveAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolResult, partialParams, isParamsStreaming, toolCall } = toolItem;
   const { openOverlay } = useOverlayManager();
@@ -46,7 +46,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     (e: React.MouseEvent) => {
       if (!hasExpandableDetails) return;
       const target = e.target as HTMLElement;
-      if (target.closest('.miniapp-action-buttons')) return;
+      if (target.closest('.init-live-app-action-buttons')) return;
       toggleExpanded();
     },
     [hasExpandableDetails, toggleExpanded]
@@ -56,17 +56,17 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
     if (toolResult && 'error' in toolResult && toolResult.error) {
       return String(toolResult.error);
     }
-    return t('toolCards.initMiniApp.createFailed');
+    return t('toolCards.initLiveApp.createFailed');
   };
 
   const commandText = useMemo(() => {
     if (isLoading) {
-      return name || t('toolCards.initMiniApp.creatingShort');
+      return name || t('toolCards.initLiveApp.creatingShort');
     }
     if (isFailed) {
-      return name || t('toolCards.initMiniApp.untitled');
+      return name || t('toolCards.initLiveApp.untitled');
     }
-    return name || appId || t('toolCards.initMiniApp.untitled');
+    return name || appId || t('toolCards.initLiveApp.untitled');
   }, [appId, isFailed, isLoading, name, t]);
 
   const renderStatusIcon = () => {
@@ -79,16 +79,16 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const renderHeader = () => (
     <ToolCardHeader
       icon={<AppWindow size={16} />}
-      iconClassName="miniapp-icon"
-      action={`${t('toolCards.initMiniApp.title')}:`}
+      iconClassName="init-live-app-icon"
+      action={`${t('toolCards.initLiveApp.title')}:`}
       content={
-        <span className="miniapp-tool-info">
+        <span className="init-live-app-tool-info">
           <span className="operation-tag">
             {isLoading
-              ? t('toolCards.initMiniApp.operationInit')
+              ? t('toolCards.initLiveApp.operationInit')
               : isFailed
-                ? t('toolCards.initMiniApp.operationInit')
-                : t('toolCards.initMiniApp.skeletonReady')}
+                ? t('toolCards.initLiveApp.operationInit')
+                : t('toolCards.initLiveApp.skeletonReady')}
           </span>
           <span className="command-text">{commandText}</span>
         </span>
@@ -102,7 +102,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
           )}
           {isFailed && (
             <div className="error-indicator">
-              <span className="error-text">{t('toolCards.initMiniApp.failed')}</span>
+              <span className="error-text">{t('toolCards.initLiveApp.failed')}</span>
             </div>
           )}
         </>
@@ -114,32 +114,32 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const renderExpandedSuccess = () => {
     if (!appId) return null;
     return (
-      <div className="miniapp-result-container">
-        <div className="miniapp-result-rows">
-          <div className="miniapp-result-row">
-            <span className="miniapp-result-label">{t('toolCards.initMiniApp.labelAppId')}</span>
-            <span className="miniapp-result-value" title={appId}>
+      <div className="init-live-app-result-container">
+        <div className="init-live-app-result-rows">
+          <div className="init-live-app-result-row">
+            <span className="init-live-app-result-label">{t('toolCards.initLiveApp.labelAppId')}</span>
+            <span className="init-live-app-result-value" title={appId}>
               {appId}
             </span>
           </div>
           {path ? (
-            <div className="miniapp-result-row">
-              <span className="miniapp-result-label">{t('toolCards.initMiniApp.labelPath')}</span>
-              <span className="miniapp-result-value" title={path}>
+            <div className="init-live-app-result-row">
+              <span className="init-live-app-result-label">{t('toolCards.initLiveApp.labelPath')}</span>
+              <span className="init-live-app-result-value" title={path}>
                 {path}
               </span>
             </div>
           ) : null}
         </div>
-        <div className="miniapp-result-footer miniapp-action-buttons">
+        <div className="init-live-app-result-footer init-live-app-action-buttons">
           <button
             type="button"
-            className="miniapp-open-btn"
+            className="init-live-app-open-btn"
             onClick={() => openOverlay(`live-app:${appId}` as OverlaySceneId)}
-            title={t('toolCards.initMiniApp.openInMiniAppTitle')}
+            title={t('toolCards.initLiveApp.openInLiveAppTitle')}
           >
             <ExternalLink size={12} />
-            <span>{t('toolCards.initMiniApp.openInMiniApp')}</span>
+            <span>{t('toolCards.initLiveApp.openInLiveApp')}</span>
           </button>
         </div>
       </div>
@@ -151,7 +151,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
       <div className="error-message">{getErrorMessage()}</div>
       {name ? (
         <div className="error-meta">
-          <span className="error-operation">{t('toolCards.initMiniApp.nameLabel', { name })}</span>
+          <span className="error-operation">{t('toolCards.initLiveApp.nameLabel', { name })}</span>
         </div>
       ) : null}
     </div>
@@ -173,7 +173,7 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
         status={status}
         isExpanded={isExpanded}
         onClick={hasExpandableDetails ? handleCardClick : undefined}
-        className="miniapp-tool-display"
+        className="init-live-app-tool-display"
         header={renderHeader()}
         expandedContent={isExpanded ? renderDetailsWhenExpanded() : null}
         headerExpandAffordance={hasExpandableDetails}

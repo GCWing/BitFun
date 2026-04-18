@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — theme adapter: read --branch-* and node stroke from CSS for graph colors.
+ * Git Graph Live App — theme adapter: read --branch-* and node stroke from CSS for graph colors.
  */
 (function () {
   window.__GG = window.__GG || {};

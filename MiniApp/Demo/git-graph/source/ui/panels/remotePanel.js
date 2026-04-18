@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — remote panel.
+ * Git Graph Live App — remote panel.
  */
 (function () {
   window.__GG = window.__GG || {};

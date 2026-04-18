@@ -24,7 +24,7 @@ pub mod grep_tool;
 pub mod log_tool;
 pub mod ls_tool;
 pub mod mcp_tools;
-pub mod miniapp_init_tool;
+pub mod live_app_init_tool;
 pub mod session_control_tool;
 pub mod session_history_tool;
 pub mod session_message_tool;
@@ -59,7 +59,7 @@ pub use ls_tool::LSTool;
 pub use mcp_tools::{
     GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool,
 };
-pub use miniapp_init_tool::InitMiniAppTool;
+pub use live_app_init_tool::InitLiveAppTool;
 pub use session_control_tool::SessionControlTool;
 pub use session_history_tool::SessionHistoryTool;
 pub use session_message_tool::SessionMessageTool;

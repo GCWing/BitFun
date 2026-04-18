@@ -1,6 +1,6 @@
-# MiniApp API 参考
+# Live App API 参考
 
-此文档定义 AI 生成的 MiniApp 代码中可用的全部 API，供 Agent 工具 system prompt 或调试时参考。
+此文档定义 AI 生成的 Live App 代码中可用的全部 API，供 Agent 工具 system prompt 或调试时参考。
 
 > **实际全局对象为 `window.app`**（非 `window.__BITFUN__`），以下各节均基于 `window.app`。
 
@@ -70,7 +70,7 @@ const crypto = require('crypto');
 
 ## 标准浏览器 API
 
-MiniApp 运行在 iframe 中，完整支持:
+Live App 运行在 iframe 中，完整支持:
 - DOM、CSS（含 CSS 变量 `--bitfun-bg`, `--bitfun-text`, `--bitfun-accent` 等）
 - Canvas 2D / WebGL
 - Web Audio
@@ -79,12 +79,12 @@ MiniApp 运行在 iframe 中，完整支持:
 
 ## `window.app` — 全局 Runtime Adapter
 
-MiniApp 中所有与宿主通信的 API 均通过 `window.app` 暴露。
+Live App 中所有与宿主通信的 API 均通过 `window.app` 暴露。
 
 ### 基本属性
 
 ```javascript
-app.appId        // string — 当前 MiniApp 的 ID
+app.appId        // string — 当前 Live App 的 ID
 app.appDataDir   // string — 应用数据目录绝对路径
 app.workspaceDir // string — 当前工作区路径
 app.theme        // 'dark' | 'light' — 当前主题
@@ -215,7 +215,7 @@ cancelButton.onclick = () => handle.cancel();
 
 ### `app.ai.getModels()` — 查询可用模型
 
-返回当前 MiniApp 权限范围内可用的模型列表（不含 API Key 等敏感信息）。
+返回当前 Live App 权限范围内可用的模型列表（不含 API Key 等敏感信息）。
 
 ```javascript
 const models = await app.ai.getModels();
@@ -336,7 +336,7 @@ const savePath = await app.dialog.save({
 ```
 
 路径变量:
-- `{appdata}` — `{user_data_dir}/miniapps/{app_id}/data/`，始终可读写
+- `{appdata}` — `{user_data_dir}/liveapps/{app_id}/data/`，始终可读写
 - `{workspace}` — 当前打开的工作区路径
 - `{user-selected}` — 用户通过 app.dialog.open/save 选择的路径
 - `{home}` — 用户主目录（高风险）

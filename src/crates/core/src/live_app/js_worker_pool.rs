@@ -1,8 +1,8 @@
 //! JS Worker pool — LRU pool, get_or_spawn, call, stop_all, install_deps.
 
-use crate::miniapp::js_worker::JsWorker;
-use crate::miniapp::runtime_detect::{detect_runtime, DetectedRuntime};
-use crate::miniapp::types::{NodePermissions, NpmDep};
+use crate::live_app::js_worker::JsWorker;
+use crate::live_app::runtime_detect::{detect_runtime, DetectedRuntime};
+use crate::live_app::types::{NodePermissions, NpmDep};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -114,10 +114,10 @@ impl JsWorkerPool {
             self.evict_lru(&mut guard).await;
         }
 
-        let app_dir = self.path_manager.miniapp_dir(app_id);
+        let app_dir = self.path_manager.live_app_dir(app_id);
         if !app_dir.exists() {
             return Err(BitFunError::NotFound(format!(
-                "MiniApp dir not found: {}",
+                "Live App dir not found: {}",
                 app_id
             )));
         }
@@ -242,7 +242,7 @@ impl JsWorkerPool {
 
     pub fn has_installed_deps(&self, app_id: &str) -> bool {
         self.path_manager
-            .miniapp_dir(app_id)
+            .live_app_dir(app_id)
             .join("node_modules")
             .exists()
     }
@@ -253,7 +253,7 @@ impl JsWorkerPool {
         app_id: &str,
         _deps: &[NpmDep],
     ) -> BitFunResult<InstallResult> {
-        let app_dir = self.path_manager.miniapp_dir(app_id);
+        let app_dir = self.path_manager.live_app_dir(app_id);
         let package_json = app_dir.join("package.json");
         if !package_json.exists() {
             return Ok(InstallResult {
@@ -264,10 +264,10 @@ impl JsWorkerPool {
         }
 
         let (cmd, args): (&str, &[&str]) = match self.runtime.kind {
-            crate::miniapp::runtime_detect::RuntimeKind::Bun => {
+            crate::live_app::runtime_detect::RuntimeKind::Bun => {
                 ("bun", &["install", "--production"][..])
             }
-            crate::miniapp::runtime_detect::RuntimeKind::Node => {
+            crate::live_app::runtime_detect::RuntimeKind::Node => {
                 if which::which("pnpm").is_ok() {
                     ("pnpm", &["install", "--prod"][..])
                 } else {

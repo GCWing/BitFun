@@ -1,10 +1,10 @@
-//! InitMiniApp tool — create a new MiniApp skeleton; AI then uses generic file tools to edit.
+//! InitLiveApp tool — create a new Live App skeleton; AI then uses generic file tools to edit.
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
-use crate::miniapp::try_get_global_miniapp_manager;
-use crate::miniapp::types::{
-    FsPermissions, MiniAppPermissions, MiniAppSource, NetPermissions, ShellPermissions,
+use crate::live_app::try_get_global_live_app_manager;
+use crate::live_app::types::{
+    FsPermissions, LiveAppPermissions, LiveAppSource, NetPermissions, ShellPermissions,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -30,7 +30,7 @@ const SKELETON_WORKER_JS: &str = r#"// Node.js Worker — export methods callabl
 // };
 "#;
 
-const SKELETON_CSS: &str = r#"/* MiniApp skeleton — uses host theme via --bitfun-* variables */
+const SKELETON_CSS: &str = r#"/* Live App skeleton — uses host theme via --bitfun-* variables */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif);
@@ -42,34 +42,34 @@ body {
 #app { min-height: 100vh; }
 "#;
 
-pub struct InitMiniAppTool;
+pub struct InitLiveAppTool;
 
-impl InitMiniAppTool {
+impl InitLiveAppTool {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Default for InitMiniAppTool {
+impl Default for InitLiveAppTool {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl Tool for InitMiniAppTool {
+impl Tool for InitLiveAppTool {
     fn name(&self) -> &str {
-        "InitMiniApp"
+        "InitLiveApp"
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Create a new MiniApp skeleton in the Toolbox. After creation, use Read/Write/Edit file tools to modify the source files directly.
+        Ok(r#"Create a new Live App skeleton in the Toolbox. After creation, use Read/Write/Edit file tools to modify the source files directly.
 
 Input: name, description, icon, category. The tool creates the app directory and skeleton files:
 - manifest (meta.json), source/index.html, source/style.css, source/ui.js, source/worker.js,
   package.json, storage.json.
 
-Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app. The MiniApp uses window.app (app.fs, app.call, app.dialog, etc.) — see miniapp-dev skill for API reference."#
+Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app. The Live App uses window.app (app.fs, app.call, app.dialog, etc.) — see the Live App API reference at MiniApp/Skills/miniapp-dev/api-reference.md in this repository."#
             .to_string())
     }
 
@@ -112,8 +112,8 @@ Returns app_id and the app root directory. Use the root directory and file names
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let manager = try_get_global_miniapp_manager()
-            .ok_or_else(|| BitFunError::tool("MiniAppManager not initialized".to_string()))?;
+        let manager = try_get_global_live_app_manager()
+            .ok_or_else(|| BitFunError::tool("LiveAppManager not initialized".to_string()))?;
 
         let name = input
             .get("name")
@@ -136,7 +136,7 @@ Returns app_id and the app root directory. Use the root directory and file names
             .unwrap_or("utility")
             .to_string();
 
-        let source = MiniAppSource {
+        let source = LiveAppSource {
             html: SKELETON_HTML.to_string(),
             css: SKELETON_CSS.to_string(),
             ui_js: SKELETON_UI_JS.to_string(),
@@ -145,7 +145,7 @@ Returns app_id and the app root directory. Use the root directory and file names
             npm_dependencies: Vec::new(),
         };
 
-        let permissions = MiniAppPermissions {
+        let permissions = LiveAppPermissions {
             fs: Some(FsPermissions {
                 read: Some(vec!["{appdata}".to_string(), "{workspace}".to_string()]),
                 write: Some(vec!["{appdata}".to_string()]),
@@ -173,10 +173,10 @@ Returns app_id and the app root directory. Use the root directory and file names
                 context.workspace_root(),
             )
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to create MiniApp: {}", e)))?;
+            .map_err(|e| BitFunError::tool(format!("Failed to create Live App: {}", e)))?;
 
         let path_manager = manager.path_manager();
-        let app_dir = path_manager.miniapp_dir(&app.id);
+        let app_dir = path_manager.live_app_dir(&app.id);
         let app_dir_str = app_dir.to_string_lossy().to_string();
         let source_dir = app_dir.join("source");
 
@@ -190,13 +190,13 @@ Returns app_id and the app root directory. Use the root directory and file names
         });
 
         let _ = emit_global_event(BackendEvent::Custom {
-            event_name: "miniapp-created".to_string(),
+            event_name: "liveapp-created".to_string(),
             payload: json!({ "id": app.id, "name": app.name }),
         })
         .await;
 
         let result_text = format!(
-            "MiniApp '{}' skeleton created. app_id: {}. Root directory: {}. Use Read/Write/Edit tools with files under this root, then open in Toolbox to run.",
+            "Live App '{}' skeleton created. app_id: {}. Root directory: {}. Use Read/Write/Edit tools with files under this root, then open in Toolbox to run.",
             app.name, app.id, app_dir_str
         );
 

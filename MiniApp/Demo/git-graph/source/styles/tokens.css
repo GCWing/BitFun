@@ -1,4 +1,4 @@
-/* Git Graph MiniApp — theme tokens (host --bitfun-* when running in BitFun) */
+/* Git Graph Live App — theme tokens (host --bitfun-* when running in BitFun) */
 :root {
   --bg:          var(--bitfun-bg, #0d1117);
   --bg-surface:  var(--bitfun-bg-secondary, #161b22);

@@ -4,11 +4,11 @@
  * and handles all postMessage RPC via useLiveAppBridge.
  */
 import React, { useRef } from 'react';
-import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
+import type { LiveApp } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { useLiveAppBridge } from '../hooks/useLiveAppBridge';
 
 interface LiveAppRunnerProps {
-  app: MiniApp;
+  app: LiveApp;
 }
 
 const LiveAppRunner: React.FC<LiveAppRunnerProps> = ({ app }) => {

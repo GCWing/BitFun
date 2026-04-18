@@ -4,9 +4,9 @@
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
-import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
+import type { LiveApp } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
@@ -33,7 +33,7 @@ const LiveAppScene: React.FC<LiveAppSceneProps> = ({ appId }) => {
   const { closeScene } = useSceneManager();
   const { t } = useI18n('scenes/apps');
 
-  const [app, setApp] = useState<MiniApp | null>(null);
+  const [app, setApp] = useState<LiveApp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState(0);
@@ -50,7 +50,7 @@ const LiveAppScene: React.FC<LiveAppSceneProps> = ({ appId }) => {
     setError(null);
     try {
       const theme = themeType ?? 'dark';
-      const loaded = await miniAppAPI.getMiniApp(id, theme, workspacePath || undefined);
+      const loaded = await liveAppAPI.getLiveApp(id, theme, workspacePath || undefined);
       setApp(loaded);
     } catch (err) {
       log.error('Failed to load live app', err);
@@ -70,31 +70,31 @@ const LiveAppScene: React.FC<LiveAppSceneProps> = ({ appId }) => {
     const tabId = `live-app:${appId}` as OverlaySceneId;
     const shouldHandle = (payload?: { id?: string }) => payload?.id === appId;
 
-    const unlistenUpdated = api.listen<{ id?: string }>('miniapp-updated', (payload) => {
+    const unlistenUpdated = api.listen<{ id?: string }>('liveapp-updated', (payload) => {
       if (shouldHandle(payload)) {
         setKey((value) => value + 1);
         void load(appId);
       }
     });
-    const unlistenRecompiled = api.listen<{ id?: string }>('miniapp-recompiled', (payload) => {
+    const unlistenRecompiled = api.listen<{ id?: string }>('liveapp-recompiled', (payload) => {
       if (shouldHandle(payload)) {
         setKey((value) => value + 1);
         void load(appId);
       }
     });
-    const unlistenRolledBack = api.listen<{ id?: string }>('miniapp-rolled-back', (payload) => {
+    const unlistenRolledBack = api.listen<{ id?: string }>('liveapp-rolled-back', (payload) => {
       if (shouldHandle(payload)) {
         setKey((value) => value + 1);
         void load(appId);
       }
     });
-    const unlistenRestarted = api.listen<{ id?: string }>('miniapp-worker-restarted', (payload) => {
+    const unlistenRestarted = api.listen<{ id?: string }>('liveapp-worker-restarted', (payload) => {
       if (shouldHandle(payload)) {
         setKey((value) => value + 1);
         void load(appId);
       }
     });
-    const unlistenDeleted = api.listen<{ id?: string }>('miniapp-deleted', (payload) => {
+    const unlistenDeleted = api.listen<{ id?: string }>('liveapp-deleted', (payload) => {
       if (shouldHandle(payload)) {
         closeScene(tabId);
       }

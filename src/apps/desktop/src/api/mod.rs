@@ -16,7 +16,7 @@ pub mod editor_ai_api;
 pub mod i18n_api;
 pub mod mcp_api;
 pub mod project_detection_api;
-pub mod miniapp_api;
+pub mod live_app_api;
 pub mod path_target;
 pub mod remote_connect_api;
 pub mod runtime_api;

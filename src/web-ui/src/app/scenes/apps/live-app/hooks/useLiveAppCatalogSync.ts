@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect } from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { useLiveAppStore } from '../liveAppStore';
 
@@ -19,7 +19,7 @@ export function useLiveAppCatalogSync() {
   const refreshApps = useCallback(async () => {
     setLoading(true);
     try {
-      const apps = await miniAppAPI.listMiniApps();
+      const apps = await liveAppAPI.listLiveApps();
       setApps(apps);
     } catch (error) {
       log.error('Failed to load live apps', error);
@@ -30,7 +30,7 @@ export function useLiveAppCatalogSync() {
 
   const refreshRunningWorkers = useCallback(async () => {
     try {
-      const running = await miniAppAPI.workerListRunning();
+      const running = await liveAppAPI.workerListRunning();
       setRunningWorkerIds(running);
     } catch (error) {
       log.error('Failed to load running live app workers', error);
@@ -41,24 +41,24 @@ export function useLiveAppCatalogSync() {
     void refreshApps();
     void refreshRunningWorkers();
 
-    const unlistenCreated = api.listen('miniapp-created', () => {
+    const unlistenCreated = api.listen('liveapp-created', () => {
       void refreshApps();
     });
-    const unlistenUpdated = api.listen('miniapp-updated', () => {
+    const unlistenUpdated = api.listen('liveapp-updated', () => {
       void refreshApps();
     });
-    const unlistenDeleted = api.listen<{ id?: string }>('miniapp-deleted', (payload) => {
+    const unlistenDeleted = api.listen<{ id?: string }>('liveapp-deleted', (payload) => {
       if (payload?.id) {
         markWorkerStopped(payload.id);
       }
       void refreshApps();
     });
-    const unlistenRestarted = api.listen<{ id?: string }>('miniapp-worker-restarted', (payload) => {
+    const unlistenRestarted = api.listen<{ id?: string }>('liveapp-worker-restarted', (payload) => {
       if (payload?.id) {
         markWorkerRunning(payload.id);
       }
     });
-    const unlistenStopped = api.listen<{ id?: string }>('miniapp-worker-stopped', (payload) => {
+    const unlistenStopped = api.listen<{ id?: string }>('liveapp-worker-stopped', (payload) => {
       if (payload?.id) {
         markWorkerStopped(payload.id);
       }

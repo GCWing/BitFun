@@ -14,7 +14,7 @@ export interface NpmDep {
   version: string;
 }
 
-export interface MiniAppSource {
+export interface LiveAppSource {
   html: string;
   css: string;
   ui_js: string;
@@ -23,7 +23,7 @@ export interface MiniAppSource {
   npm_dependencies: NpmDep[];
 }
 
-export interface MiniAppPermissions {
+export interface LiveAppPermissions {
   fs?: { read?: string[]; write?: string[] };
   shell?: { allow?: string[] };
   net?: { allow?: string[] };
@@ -77,7 +77,7 @@ export interface AiModelInfo {
   isDefault: boolean;
 }
 
-export interface MiniAppRuntimeState {
+export interface LiveAppRuntimeState {
   source_revision: string;
   deps_revision: string;
   deps_dirty: boolean;
@@ -85,7 +85,7 @@ export interface MiniAppRuntimeState {
   ui_recompile_required: boolean;
 }
 
-export interface MiniAppMeta {
+export interface LiveAppMeta {
   id: string;
   name: string;
   description: string;
@@ -95,12 +95,12 @@ export interface MiniAppMeta {
   version: number;
   created_at: number;
   updated_at: number;
-  permissions: MiniAppPermissions;
-  runtime?: MiniAppRuntimeState;
+  permissions: LiveAppPermissions;
+  runtime?: LiveAppRuntimeState;
 }
 
-export interface MiniApp extends MiniAppMeta {
-  source: MiniAppSource;
+export interface LiveApp extends LiveAppMeta {
+  source: LiveAppSource;
   compiled_html: string;
   ai_context?: {
     original_prompt: string;
@@ -109,25 +109,25 @@ export interface MiniApp extends MiniAppMeta {
   };
 }
 
-export interface CreateMiniAppRequest {
+export interface CreateLiveAppRequest {
   name: string;
   description: string;
   icon?: string;
   category?: string;
   tags?: string[];
-  source: MiniAppSource;
-  permissions?: MiniAppPermissions;
+  source: LiveAppSource;
+  permissions?: LiveAppPermissions;
   ai_context?: { original_prompt: string };
 }
 
-export interface UpdateMiniAppRequest {
+export interface UpdateLiveAppRequest {
   name?: string;
   description?: string;
   icon?: string;
   category?: string;
   tags?: string[];
-  source?: MiniAppSource;
-  permissions?: MiniAppPermissions;
+  source?: LiveAppSource;
+  permissions?: LiveAppPermissions;
 }
 
 export interface RuntimeStatus {
@@ -148,72 +148,72 @@ export interface RecompileResult {
   warnings?: string[];
 }
 
-// ─── API ─────────────────────────────────────────────────────────────────────
+// ─── API (Tauri commands `live_app_*` / `list_live_apps`, etc.) ─
 
-export class MiniAppAPI {
-  async listMiniApps(): Promise<MiniAppMeta[]> {
+export class LiveAppAPI {
+  async listLiveApps(): Promise<LiveAppMeta[]> {
     try {
-      return await api.invoke('list_miniapps', {});
+      return await api.invoke('list_live_apps', {});
     } catch (error) {
-      throw createTauriCommandError('list_miniapps', error);
+      throw createTauriCommandError('list_live_apps', error);
     }
   }
 
-  async getMiniApp(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
+  async getLiveApp(appId: string, theme?: string, workspacePath?: string): Promise<LiveApp> {
     try {
-      return await api.invoke('get_miniapp', {
+      return await api.invoke('get_live_app', {
         request: { appId, theme: theme ?? undefined, workspacePath }
       });
     } catch (error) {
-      throw createTauriCommandError('get_miniapp', error, { appId, workspacePath });
+      throw createTauriCommandError('get_live_app', error, { appId, workspacePath });
     }
   }
 
-  async createMiniApp(req: CreateMiniAppRequest, workspacePath?: string): Promise<MiniApp> {
+  async createLiveApp(req: CreateLiveAppRequest, workspacePath?: string): Promise<LiveApp> {
     try {
-      return await api.invoke('create_miniapp', { request: { ...req, workspacePath } });
+      return await api.invoke('create_live_app', { request: { ...req, workspacePath } });
     } catch (error) {
-      throw createTauriCommandError('create_miniapp', error, { workspacePath });
+      throw createTauriCommandError('create_live_app', error, { workspacePath });
     }
   }
 
-  async updateMiniApp(appId: string, req: UpdateMiniAppRequest, workspacePath?: string): Promise<MiniApp> {
+  async updateLiveApp(appId: string, req: UpdateLiveAppRequest, workspacePath?: string): Promise<LiveApp> {
     try {
-      return await api.invoke('update_miniapp', { appId, request: { ...req, workspacePath } });
+      return await api.invoke('update_live_app', { appId, request: { ...req, workspacePath } });
     } catch (error) {
-      throw createTauriCommandError('update_miniapp', error, { appId, workspacePath });
+      throw createTauriCommandError('update_live_app', error, { appId, workspacePath });
     }
   }
 
-  async deleteMiniApp(appId: string): Promise<void> {
+  async deleteLiveApp(appId: string): Promise<void> {
     try {
-      await api.invoke('delete_miniapp', { appId });
+      await api.invoke('delete_live_app', { appId });
     } catch (error) {
-      throw createTauriCommandError('delete_miniapp', error, { appId });
+      throw createTauriCommandError('delete_live_app', error, { appId });
     }
   }
 
-  async getMiniAppVersions(appId: string): Promise<number[]> {
+  async getLiveAppVersions(appId: string): Promise<number[]> {
     try {
-      return await api.invoke('get_miniapp_versions', { appId });
+      return await api.invoke('get_live_app_versions', { appId });
     } catch (error) {
-      throw createTauriCommandError('get_miniapp_versions', error);
+      throw createTauriCommandError('get_live_app_versions', error);
     }
   }
 
-  async rollbackMiniApp(appId: string, version: number): Promise<MiniApp> {
+  async rollbackLiveApp(appId: string, version: number): Promise<LiveApp> {
     try {
-      return await api.invoke('rollback_miniapp', { appId, version });
+      return await api.invoke('rollback_live_app', { appId, version });
     } catch (error) {
-      throw createTauriCommandError('rollback_miniapp', error);
+      throw createTauriCommandError('rollback_live_app', error);
     }
   }
 
   async runtimeStatus(): Promise<RuntimeStatus> {
     try {
-      return await api.invoke('miniapp_runtime_status', {});
+      return await api.invoke('live_app_runtime_status', {});
     } catch (error) {
-      throw createTauriCommandError('miniapp_runtime_status', error);
+      throw createTauriCommandError('live_app_runtime_status', error);
     }
   }
 
@@ -224,65 +224,65 @@ export class MiniAppAPI {
     workspacePath?: string,
   ): Promise<unknown> {
     try {
-      return await api.invoke('miniapp_worker_call', {
+      return await api.invoke('live_app_worker_call', {
         request: { appId, method, params, workspacePath }
       });
     } catch (error) {
-      throw createTauriCommandError('miniapp_worker_call', error, { appId, method, workspacePath });
+      throw createTauriCommandError('live_app_worker_call', error, { appId, method, workspacePath });
     }
   }
 
   async workerStop(appId: string): Promise<void> {
     try {
-      await api.invoke('miniapp_worker_stop', { appId });
+      await api.invoke('live_app_worker_stop', { appId });
     } catch (error) {
-      throw createTauriCommandError('miniapp_worker_stop', error);
+      throw createTauriCommandError('live_app_worker_stop', error);
     }
   }
 
   async workerListRunning(): Promise<string[]> {
     try {
-      return await api.invoke('miniapp_worker_list_running', {});
+      return await api.invoke('live_app_worker_list_running', {});
     } catch (error) {
-      throw createTauriCommandError('miniapp_worker_list_running', error);
+      throw createTauriCommandError('live_app_worker_list_running', error);
     }
   }
 
   async installDeps(appId: string): Promise<InstallResult> {
     try {
-      return await api.invoke('miniapp_install_deps', { appId });
+      return await api.invoke('live_app_install_deps', { appId });
     } catch (error) {
-      throw createTauriCommandError('miniapp_install_deps', error);
+      throw createTauriCommandError('live_app_install_deps', error);
     }
   }
 
   async recompile(appId: string, theme?: string, workspacePath?: string): Promise<RecompileResult> {
     try {
-      return await api.invoke('miniapp_recompile', {
+      return await api.invoke('live_app_recompile', {
         request: { appId, theme: theme ?? undefined, workspacePath }
       });
     } catch (error) {
-      throw createTauriCommandError('miniapp_recompile', error, { appId, workspacePath });
+      throw createTauriCommandError('live_app_recompile', error, { appId, workspacePath });
     }
   }
 
-  async importFromPath(path: string, workspacePath?: string): Promise<MiniApp> {
+  async importFromPath(path: string, workspacePath?: string): Promise<LiveApp> {
     try {
-      return await api.invoke('miniapp_import_from_path', {
+      return await api.invoke('live_app_import_from_path', {
         request: { path, workspacePath }
       });
     } catch (error) {
-      throw createTauriCommandError('miniapp_import_from_path', error, { path, workspacePath });
+      throw createTauriCommandError('live_app_import_from_path', error, { path, workspacePath });
     }
   }
 
-  async syncFromFs(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
+  async syncFromFs(appId: string, theme?: string, workspacePath?: string): Promise<LiveApp> {
     try {
-      return await api.invoke('miniapp_sync_from_fs', {
+      return await api.invoke('live_app_sync_from_fs', {
         request: { appId, theme: theme ?? undefined, workspacePath }
       });
     } catch (error) {
-      throw createTauriCommandError('miniapp_sync_from_fs', error, { appId, workspacePath });
+      throw createTauriCommandError('live_app_sync_from_fs', error, { appId, workspacePath });
     }
   }
 
@@ -290,7 +290,7 @@ export class MiniAppAPI {
 
   async aiComplete(appId: string, prompt: string, options?: AiCompleteOptions): Promise<AiCompleteResult> {
     try {
-      return await api.invoke('miniapp_ai_complete', {
+      return await api.invoke('live_app_ai_complete', {
         request: {
           appId,
           prompt,
@@ -301,7 +301,7 @@ export class MiniAppAPI {
         }
       });
     } catch (error) {
-      throw createTauriCommandError('miniapp_ai_complete', error, { appId });
+      throw createTauriCommandError('live_app_ai_complete', error, { appId });
     }
   }
 
@@ -312,7 +312,7 @@ export class MiniAppAPI {
     options?: AiChatOptions,
   ): Promise<AiChatStartedResult> {
     try {
-      return await api.invoke('miniapp_ai_chat', {
+      return await api.invoke('live_app_ai_chat', {
         request: {
           appId,
           messages,
@@ -324,25 +324,25 @@ export class MiniAppAPI {
         }
       });
     } catch (error) {
-      throw createTauriCommandError('miniapp_ai_chat', error, { appId, streamId });
+      throw createTauriCommandError('live_app_ai_chat', error, { appId, streamId });
     }
   }
 
   async aiCancel(appId: string, streamId: string): Promise<void> {
     try {
-      await api.invoke('miniapp_ai_cancel', { request: { appId, streamId } });
+      await api.invoke('live_app_ai_cancel', { request: { appId, streamId } });
     } catch (error) {
-      throw createTauriCommandError('miniapp_ai_cancel', error, { appId, streamId });
+      throw createTauriCommandError('live_app_ai_cancel', error, { appId, streamId });
     }
   }
 
   async aiListModels(appId: string): Promise<AiModelInfo[]> {
     try {
-      return await api.invoke('miniapp_ai_list_models', { request: { appId } });
+      return await api.invoke('live_app_ai_list_models', { request: { appId } });
     } catch (error) {
-      throw createTauriCommandError('miniapp_ai_list_models', error, { appId });
+      throw createTauriCommandError('live_app_ai_list_models', error, { appId });
     }
   }
 }
 
-export const miniAppAPI = new MiniAppAPI();
+export const liveAppAPI = new LiveAppAPI();

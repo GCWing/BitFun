@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — shared state, constants, DOM helpers.
+ * Git Graph Live App — shared state, constants, DOM helpers.
  */
 (function () {
   window.__GG = window.__GG || {};

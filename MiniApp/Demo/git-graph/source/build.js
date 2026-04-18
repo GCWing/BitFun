@@ -1,6 +1,6 @@
 /**
- * Git Graph MiniApp — build: concatenate source/ui/*.js → ui.js, source/styles/*.css → style.css.
- * Run from miniapps/git-graph: node source/build.js
+ * Git Graph Live App — build: concatenate source/ui/*.js → ui.js, source/styles/*.css → style.css.
+ * Run from MiniApp/Demo/git-graph (or your liveapps/{app_id} folder): node source/build.js
  */
 const fs = require('fs');
 const path = require('path');

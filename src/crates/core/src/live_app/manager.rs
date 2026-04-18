@@ -1,10 +1,10 @@
-//! MiniApp manager — CRUD, version management, compile on save (V2: no permission guard, policy for Worker).
+//! Live App manager — CRUD, version management, compile on save (V2: no permission guard, policy for Worker).
 
-use crate::miniapp::compiler::compile;
-use crate::miniapp::permission_policy::resolve_policy;
-use crate::miniapp::storage::MiniAppStorage;
-use crate::miniapp::types::{
-    MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
+use crate::live_app::compiler::compile;
+use crate::live_app::permission_policy::resolve_policy;
+use crate::live_app::storage::LiveAppStorage;
+use crate::live_app::types::{
+    LiveApp, LiveAppAiContext, LiveAppMeta, LiveAppPermissions, LiveAppRuntimeState, LiveAppSource,
 };
 use crate::util::errors::BitFunResult;
 use chrono::Utc;
@@ -14,29 +14,29 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-static GLOBAL_MINIAPP_MANAGER: OnceLock<Arc<MiniAppManager>> = OnceLock::new();
+static GLOBAL_LIVE_APP_MANAGER: OnceLock<Arc<LiveAppManager>> = OnceLock::new();
 
-/// Initialize the global MiniAppManager (called once at startup from Tauri app_state).
-pub fn initialize_global_miniapp_manager(manager: Arc<MiniAppManager>) {
-    let _ = GLOBAL_MINIAPP_MANAGER.set(manager);
+/// Initialize the global LiveAppManager (called once at startup from Tauri app_state).
+pub fn initialize_global_live_app_manager(manager: Arc<LiveAppManager>) {
+    let _ = GLOBAL_LIVE_APP_MANAGER.set(manager);
 }
 
-/// Get the global MiniAppManager, returning None if not initialized.
-pub fn try_get_global_miniapp_manager() -> Option<Arc<MiniAppManager>> {
-    GLOBAL_MINIAPP_MANAGER.get().cloned()
+/// Get the global LiveAppManager, returning None if not initialized.
+pub fn try_get_global_live_app_manager() -> Option<Arc<LiveAppManager>> {
+    GLOBAL_LIVE_APP_MANAGER.get().cloned()
 }
 
-/// MiniApp manager: create, read, update, delete, list, compile, rollback.
-pub struct MiniAppManager {
-    storage: MiniAppStorage,
+/// Live App manager: create, read, update, delete, list, compile, rollback.
+pub struct LiveAppManager {
+    storage: LiveAppStorage,
     path_manager: Arc<crate::infrastructure::PathManager>,
     /// User-granted paths per app (for resolve_policy).
     granted_paths: RwLock<HashMap<String, Vec<PathBuf>>>,
 }
 
-impl MiniAppManager {
+impl LiveAppManager {
     pub fn new(path_manager: Arc<crate::infrastructure::PathManager>) -> Self {
-        let storage = MiniAppStorage::new(path_manager.clone());
+        let storage = LiveAppStorage::new(path_manager.clone());
         Self {
             storage,
             path_manager,
@@ -48,7 +48,7 @@ impl MiniAppManager {
         format!("src:{version}:{updated_at}")
     }
 
-    fn build_deps_revision(source: &MiniAppSource) -> String {
+    fn build_deps_revision(source: &LiveAppSource) -> String {
         let mut deps: Vec<String> = source
             .npm_dependencies
             .iter()
@@ -61,11 +61,11 @@ impl MiniAppManager {
     fn build_runtime_state(
         version: u32,
         updated_at: i64,
-        source: &MiniAppSource,
+        source: &LiveAppSource,
         deps_dirty: bool,
         worker_restart_required: bool,
-    ) -> MiniAppRuntimeState {
-        MiniAppRuntimeState {
+    ) -> LiveAppRuntimeState {
+        LiveAppRuntimeState {
             source_revision: Self::build_source_revision(version, updated_at),
             deps_revision: Self::build_deps_revision(source),
             deps_dirty,
@@ -74,7 +74,7 @@ impl MiniAppManager {
         }
     }
 
-    fn ensure_runtime_state(app: &mut MiniApp) -> bool {
+    fn ensure_runtime_state(app: &mut LiveApp) -> bool {
         let mut changed = false;
         if app.runtime.source_revision.is_empty() {
             app.runtime.source_revision = Self::build_source_revision(app.version, app.updated_at);
@@ -88,7 +88,7 @@ impl MiniAppManager {
         changed
     }
 
-    pub fn build_worker_revision(&self, app: &MiniApp, policy_json: &str) -> String {
+    pub fn build_worker_revision(&self, app: &LiveApp, policy_json: &str) -> String {
         format!(
             "{}::{}::{}",
             app.runtime.source_revision, app.runtime.deps_revision, policy_json
@@ -104,12 +104,12 @@ impl MiniAppManager {
     pub fn compile_source(
         &self,
         app_id: &str,
-        source: &MiniAppSource,
-        permissions: &MiniAppPermissions,
+        source: &LiveAppSource,
+        permissions: &LiveAppPermissions,
         theme: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
-        let app_data_dir = self.path_manager.miniapp_dir(app_id);
+        let app_data_dir = self.path_manager.live_app_dir(app_id);
         let app_data_dir_str = app_data_dir.to_string_lossy().to_string();
         let workspace_dir = Self::workspace_dir_string(workspace_root);
 
@@ -123,8 +123,8 @@ impl MiniAppManager {
         )
     }
 
-    /// List all MiniApp metadata.
-    pub async fn list(&self) -> BitFunResult<Vec<MiniAppMeta>> {
+    /// List all LiveApp metadata.
+    pub async fn list(&self) -> BitFunResult<Vec<LiveAppMeta>> {
         let ids = self.storage.list_app_ids().await?;
         let mut metas = Vec::with_capacity(ids.len());
         for id in ids {
@@ -136,8 +136,8 @@ impl MiniAppManager {
         Ok(metas)
     }
 
-    /// Get full MiniApp by id.
-    pub async fn get(&self, app_id: &str) -> BitFunResult<MiniApp> {
+    /// Get full LiveApp by id.
+    pub async fn get(&self, app_id: &str) -> BitFunResult<LiveApp> {
         let mut app = self.storage.load(app_id).await?;
         if Self::ensure_runtime_state(&mut app) {
             self.storage.save(&app).await?;
@@ -145,7 +145,7 @@ impl MiniAppManager {
         Ok(app)
     }
 
-    /// Create a new MiniApp (generates id, sets created_at/updated_at, compiles).
+    /// Create a new LiveApp (generates id, sets created_at/updated_at, compiles).
     #[allow(clippy::too_many_arguments)]
     pub async fn create(
         &self,
@@ -154,11 +154,11 @@ impl MiniAppManager {
         icon: String,
         category: String,
         tags: Vec<String>,
-        source: MiniAppSource,
-        permissions: MiniAppPermissions,
-        ai_context: Option<MiniAppAiContext>,
+        source: LiveAppSource,
+        permissions: LiveAppPermissions,
+        ai_context: Option<LiveAppAiContext>,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<MiniApp> {
+    ) -> BitFunResult<LiveApp> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp_millis();
 
@@ -167,7 +167,7 @@ impl MiniAppManager {
         let runtime =
             Self::build_runtime_state(1, now, &source, !source.npm_dependencies.is_empty(), true);
 
-        let app = MiniApp {
+        let app = LiveApp {
             id: id.clone(),
             name,
             description,
@@ -188,7 +188,7 @@ impl MiniAppManager {
         Ok(app)
     }
 
-    /// Update existing MiniApp (increment version, recompile, save).
+    /// Update existing LiveApp (increment version, recompile, save).
     #[allow(clippy::too_many_arguments)]
     pub async fn update(
         &self,
@@ -198,11 +198,11 @@ impl MiniAppManager {
         icon: Option<String>,
         category: Option<String>,
         tags: Option<Vec<String>>,
-        source: Option<MiniAppSource>,
-        permissions: Option<MiniAppPermissions>,
-        ai_context: Option<MiniAppAiContext>,
+        source: Option<LiveAppSource>,
+        permissions: Option<LiveAppPermissions>,
+        ai_context: Option<LiveAppAiContext>,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<MiniApp> {
+    ) -> BitFunResult<LiveApp> {
         let mut app = self.storage.load(app_id).await?;
         let previous_app = app.clone();
         let source_changed = source.is_some();
@@ -263,13 +263,13 @@ impl MiniAppManager {
         Ok(app)
     }
 
-    /// Delete MiniApp and its directory.
+    /// Delete LiveApp and its directory.
     pub async fn delete(&self, app_id: &str) -> BitFunResult<()> {
         self.granted_paths.write().await.remove(app_id);
         self.storage.delete(app_id).await
     }
 
-    /// Get the path manager (for external callers that need paths like miniapp_dir).
+    /// Get the path manager (for external callers that need paths like `live_app_dir`).
     pub fn path_manager(&self) -> &Arc<crate::infrastructure::PathManager> {
         &self.path_manager
     }
@@ -278,10 +278,10 @@ impl MiniAppManager {
     pub async fn resolve_policy_for_app(
         &self,
         app_id: &str,
-        permissions: &MiniAppPermissions,
+        permissions: &LiveAppPermissions,
         workspace_root: Option<&Path>,
     ) -> serde_json::Value {
-        let app_data_dir = self.path_manager.miniapp_dir(app_id);
+        let app_data_dir = self.path_manager.live_app_dir(app_id);
         let gp = self.granted_paths.read().await;
         let granted = gp.get(app_id).map(|v| v.as_slice()).unwrap_or(&[]);
         resolve_policy(permissions, app_id, &app_data_dir, workspace_root, granted)
@@ -315,7 +315,7 @@ impl MiniAppManager {
         self.storage.save_app_storage(app_id, key, value).await
     }
 
-    pub async fn mark_deps_installed(&self, app_id: &str) -> BitFunResult<MiniApp> {
+    pub async fn mark_deps_installed(&self, app_id: &str) -> BitFunResult<LiveApp> {
         let mut app = self.storage.load(app_id).await?;
         Self::ensure_runtime_state(&mut app);
         app.runtime.deps_dirty = false;
@@ -324,7 +324,7 @@ impl MiniAppManager {
         Ok(app)
     }
 
-    pub async fn clear_worker_restart_required(&self, app_id: &str) -> BitFunResult<MiniApp> {
+    pub async fn clear_worker_restart_required(&self, app_id: &str) -> BitFunResult<LiveApp> {
         let mut app = self.storage.load(app_id).await?;
         Self::ensure_runtime_state(&mut app);
         if app.runtime.worker_restart_required {
@@ -340,7 +340,7 @@ impl MiniAppManager {
     }
 
     /// Rollback app to a previous version (loads version snapshot, saves as current).
-    pub async fn rollback(&self, app_id: &str, version: u32) -> BitFunResult<MiniApp> {
+    pub async fn rollback(&self, app_id: &str, version: u32) -> BitFunResult<LiveApp> {
         let current = self.storage.load(app_id).await?;
         let mut app = self.storage.load_version(app_id, version).await?;
         let now = Utc::now().timestamp_millis();
@@ -366,7 +366,7 @@ impl MiniAppManager {
         app_id: &str,
         theme: &str,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<MiniApp> {
+    ) -> BitFunResult<LiveApp> {
         let mut app = self.storage.load(app_id).await?;
         app.compiled_html =
             self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?;
@@ -382,7 +382,7 @@ impl MiniAppManager {
         app_id: &str,
         theme: &str,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<MiniApp> {
+    ) -> BitFunResult<LiveApp> {
         let previous_app = self.storage.load(app_id).await?;
         let mut app = previous_app.clone();
         app.source = self.storage.load_source_only(app_id).await?;
@@ -405,12 +405,12 @@ impl MiniAppManager {
         Ok(app)
     }
 
-    /// Import a MiniApp from a directory (e.g. miniapps/my-app). Copies meta, source, package.json, storage into a new app id and recompiles.
+    /// Import a Live App from a directory (e.g. liveapps/my-app). Copies meta, source, package.json, storage into a new app id and recompiles.
     pub async fn import_from_path(
         &self,
         source_path: PathBuf,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<MiniApp> {
+    ) -> BitFunResult<LiveApp> {
         use crate::util::errors::BitFunError;
 
         let src = source_path.as_path();
@@ -448,7 +448,7 @@ impl MiniAppManager {
         let meta_content = tokio::fs::read_to_string(&meta_path)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read meta.json: {}", e)))?;
-        let mut meta: MiniAppMeta = serde_json::from_str(&meta_content)
+        let mut meta: LiveAppMeta = serde_json::from_str(&meta_content)
             .map_err(|e| BitFunError::parse(format!("Invalid meta.json: {}", e)))?;
 
         let id = Uuid::new_v4().to_string();
@@ -457,7 +457,7 @@ impl MiniAppManager {
         meta.created_at = now;
         meta.updated_at = now;
 
-        let dest_dir = self.path_manager.miniapp_dir(&id);
+        let dest_dir = self.path_manager.live_app_dir(&id);
         let dest_source = dest_dir.join("source");
         tokio::fs::create_dir_all(&dest_source)
             .await
@@ -497,7 +497,7 @@ impl MiniAppManager {
                 .map_err(|e| BitFunError::io(format!("Failed to copy package.json: {}", e)))?;
         } else {
             let pkg = serde_json::json!({
-                "name": format!("miniapp-{}", id),
+                "name": format!("liveapp-{}", id),
                 "private": true,
                 "dependencies": {}
             });

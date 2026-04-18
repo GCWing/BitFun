@@ -1,4 +1,4 @@
-//! MiniApp export engine — export to Electron or Tauri standalone app (skeleton).
+//! Live App export engine — export to Electron or Tauri standalone app (skeleton).
 
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde::{Deserialize, Serialize};
@@ -38,15 +38,15 @@ pub struct ExportResult {
     pub duration_ms: Option<u64>,
 }
 
-/// Export engine: check prerequisites and export MiniApp to standalone app.
-pub struct MiniAppExporter {
+/// Export engine: check prerequisites and export Live App to standalone app.
+pub struct LiveAppExporter {
     #[allow(dead_code)]
     path_manager: Arc<crate::infrastructure::PathManager>,
     #[allow(dead_code)]
     templates_dir: PathBuf,
 }
 
-impl MiniAppExporter {
+impl LiveAppExporter {
     pub fn new(
         path_manager: Arc<crate::infrastructure::PathManager>,
         templates_dir: PathBuf,
@@ -59,11 +59,11 @@ impl MiniAppExporter {
 
     /// Check if export is possible (runtime, electron-builder, etc.).
     pub async fn check(&self, _app_id: &str) -> BitFunResult<ExportCheckResult> {
-        let runtime = crate::miniapp::runtime_detect::detect_runtime();
+        let runtime = crate::live_app::runtime_detect::detect_runtime();
         let runtime_str = runtime.as_ref().map(|r| {
             match r.kind {
-                crate::miniapp::runtime_detect::RuntimeKind::Bun => "bun",
-                crate::miniapp::runtime_detect::RuntimeKind::Node => "node",
+                crate::live_app::runtime_detect::RuntimeKind::Bun => "bun",
+                crate::live_app::runtime_detect::RuntimeKind::Node => "node",
             }
             .to_string()
         });
@@ -79,7 +79,7 @@ impl MiniAppExporter {
         })
     }
 
-    /// Export the MiniApp to a standalone application.
+    /// Export the Live App to a standalone application.
     pub async fn export(
         &self,
         _app_id: &str,

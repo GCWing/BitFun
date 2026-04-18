@@ -499,16 +499,16 @@
       "blame": "Blame",
       "cherryPick": "Cherry-pick"
     },
-    "initMiniApp": {
-      "title": "Mini App",
+    "initLiveApp": {
+      "title": "Live App",
       "operationInit": "Init",
       "skeletonReady": "Ready",
       "creatingShort": "…",
       "untitled": "(unnamed)",
       "failed": "Failed",
-      "createFailed": "Could not create Mini App",
-      "openInMiniApp": "Open in Mini App",
-      "openInMiniAppTitle": "Open in Mini App",
+      "createFailed": "Could not create Live App",
+      "openInLiveApp": "Open in Live App",
+      "openInLiveAppTitle": "Open in Live App",
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "App: {{name}}"

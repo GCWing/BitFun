@@ -14,7 +14,7 @@
  * Collapse/expand state is persisted in localStorage.
  *
  * The floating capsule is only visible on the base Agent scene (activeOverlay === null).
- * When any overlay is active (settings, tools, shell, miniapps, ...) the capsule hides
+ * When any overlay is active (settings, tools, shell, live apps, ...) the capsule hides
  * entirely — the UnifiedTopBar's task-list icon opens a centered SessionListDialog instead.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — commit list, context menus, git actions, loadRepo.
+ * Git Graph Live App — commit list, context menus, git actions, loadRepo.
  */
 (function () {
   window.__GG = window.__GG || {};

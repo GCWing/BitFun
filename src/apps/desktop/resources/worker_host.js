@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * MiniApp JS Worker host — runs in Bun or Node.js.
+ * Live App JS Worker host — runs in Bun or Node.js.
  * stdin: JSON-RPC requests (one per line)
  * stderr: JSON-RPC responses (one per line)
  * stdout: user console.log (forwarded to host)
  *
  * Usage: node worker_host.js '<policy_json>'
- * Cwd: MiniApp app directory (contains source/worker.js, package.json, storage.json)
+ * Cwd: Live App app directory (contains source/worker.js, package.json, storage.json)
  */
 
 const fs = require('fs');
@@ -24,8 +24,8 @@ function rpcSend(obj) {
 }
 
 /**
- * Emit a push event to the MiniApp iframe (no request id, no reply expected).
- * The host process will forward this to the iframe via "miniapp://worker-event:{appId}".
+ * Emit a push event to the Live App iframe (no request id, no reply expected).
+ * The host process will forward this to the iframe via "liveapp://worker-event:{appId}".
  *
  * @param {string} event - Event name (e.g. 'progress', 'status')
  * @param {any} data - Event payload

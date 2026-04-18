@@ -2,17 +2,17 @@
  * Live App scene store — app catalog + lifecycle state.
  */
 import { create } from 'zustand';
-import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
+import type { LiveAppMeta } from '@/infrastructure/api/service-api/LiveAppAPI';
 
 interface LiveAppState {
-  apps: MiniAppMeta[];
+  apps: LiveAppMeta[];
   loading: boolean;
   /** App IDs whose scenes are currently open in the viewport. */
   openedAppIds: string[];
   /** App IDs whose JS workers are currently running. */
   runningWorkerIds: string[];
 
-  setApps: (apps: MiniAppMeta[]) => void;
+  setApps: (apps: LiveAppMeta[]) => void;
   setLoading: (loading: boolean) => void;
   openApp: (id: string) => void;
   closeApp: (id: string) => void;

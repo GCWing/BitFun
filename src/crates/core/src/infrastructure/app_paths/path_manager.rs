@@ -249,14 +249,21 @@ impl PathManager {
         self.user_cron_dir().join("jobs.json")
     }
 
-    /// Get miniapps root directory: ~/.config/bitfun/data/miniapps/
-    pub fn miniapps_dir(&self) -> PathBuf {
-        self.user_data_dir().join("miniapps")
+    /// Live Apps root: `~/.config/bitfun/data/liveapps/`.
+    /// If the legacy `miniapps` folder exists and `liveapps` does not, it is renamed once.
+    pub fn live_apps_dir(&self) -> PathBuf {
+        let root = self.user_data_dir();
+        let live = root.join("liveapps");
+        let legacy = root.join("miniapps");
+        if !live.exists() && legacy.exists() {
+            let _ = std::fs::rename(&legacy, &live);
+        }
+        live
     }
 
-    /// Get directory for a specific miniapp: ~/.config/bitfun/data/miniapps/{app_id}/
-    pub fn miniapp_dir(&self, app_id: &str) -> PathBuf {
-        self.miniapps_dir().join(app_id)
+    /// Per-app data: `~/.config/bitfun/data/liveapps/{app_id}/`
+    pub fn live_app_dir(&self, app_id: &str) -> PathBuf {
+        self.live_apps_dir().join(app_id)
     }
 
     /// Get logs directory: ~/.config/bitfun/logs/
@@ -409,7 +416,7 @@ impl PathManager {
             self.cache_root(),
             self.user_data_dir(),
             self.user_cron_dir(),
-            self.miniapps_dir(),
+            self.live_apps_dir(),
             self.logs_dir(),
             self.temp_dir(),
         ];

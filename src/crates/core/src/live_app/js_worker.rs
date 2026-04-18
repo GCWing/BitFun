@@ -1,7 +1,7 @@
 //! JS Worker — single child process (Bun/Node) with stdin/stderr JSON-RPC.
 
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
-use crate::miniapp::runtime_detect::DetectedRuntime;
+use crate::live_app::runtime_detect::DetectedRuntime;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
@@ -112,7 +112,7 @@ impl JsWorker {
                         "event": event_name,
                         "data": data,
                     });
-                    let event_full_name = format!("miniapp://worker-event:{}", app_id);
+                    let event_full_name = format!("liveapp://worker-event:{}", app_id);
                     let _ = emit_global_event(BackendEvent::Custom {
                         event_name: event_full_name,
                         payload,

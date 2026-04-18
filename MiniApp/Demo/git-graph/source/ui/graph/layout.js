@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — global topology graph layout (Vertex/Branch/determinePath).
+ * Git Graph Live App — global topology graph layout (Vertex/Branch/determinePath).
  * Outputs per-row drawInfo compatible with renderRowSvg: { lane, lanesBefore, parentLanes }.
  */
 (function () {

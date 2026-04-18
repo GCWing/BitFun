@@ -5,9 +5,9 @@
  * Also handles bitfun/request-theme and pushes theme changes to the iframe.
  */
 import { useLayoutEffect, useRef, useEffect, RefObject } from 'react';
-import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { open as dialogOpen, save as dialogSave, message as dialogMessage } from '@tauri-apps/plugin-dialog';
-import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
+import type { LiveApp } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { buildLiveAppThemeVars } from '../buildLiveAppThemeVars';
@@ -29,7 +29,7 @@ interface AiStreamPayload {
 
 export function useLiveAppBridge(
   iframeRef: RefObject<HTMLIFrameElement>,
-  app: MiniApp,
+  app: LiveApp,
 ) {
   const { workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
@@ -72,7 +72,7 @@ export function useLiveAppBridge(
 
       try {
         if (method === 'worker.call') {
-          const result = await miniAppAPI.workerCall(
+          const result = await liveAppAPI.workerCall(
             appId,
             (params.method as string) ?? '',
             (params.params as Record<string, unknown>) ?? {},
@@ -95,7 +95,7 @@ export function useLiveAppBridge(
         }
 
         if (method === 'ai.complete') {
-          const result = await miniAppAPI.aiComplete(appId, (params.prompt as string) ?? '', {
+          const result = await liveAppAPI.aiComplete(appId, (params.prompt as string) ?? '', {
             systemPrompt: params.systemPrompt as string | undefined,
             model: params.model as string | undefined,
             maxTokens: params.maxTokens as number | undefined,
@@ -105,7 +105,7 @@ export function useLiveAppBridge(
           return;
         }
         if (method === 'ai.chat') {
-          const result = await miniAppAPI.aiChat(
+          const result = await liveAppAPI.aiChat(
             appId,
             (params.messages as { role: 'user' | 'assistant'; content: string }[]) ?? [],
             (params.streamId as string) ?? '',
@@ -120,12 +120,12 @@ export function useLiveAppBridge(
           return;
         }
         if (method === 'ai.cancel') {
-          await miniAppAPI.aiCancel(appId, (params.streamId as string) ?? '');
+          await liveAppAPI.aiCancel(appId, (params.streamId as string) ?? '');
           reply(null);
           return;
         }
         if (method === 'ai.getModels') {
-          const models = await miniAppAPI.aiListModels(appId);
+          const models = await liveAppAPI.aiListModels(appId);
           reply(models);
           return;
         }
@@ -163,7 +163,7 @@ export function useLiveAppBridge(
 
   useEffect(() => {
     const currentAppId = app.id;
-    const unlisten = api.listen<AiStreamPayload>('miniapp://ai-stream', (payload) => {
+    const unlisten = api.listen<AiStreamPayload>('liveapp://ai-stream', (payload) => {
       if (!iframeRef.current?.contentWindow) return;
       if (payload.appId !== currentAppId) return;
       iframeRef.current.contentWindow.postMessage(
@@ -187,7 +187,7 @@ export function useLiveAppBridge(
 
   useEffect(() => {
     const currentAppId = app.id;
-    const eventName = `miniapp://worker-event:${currentAppId}`;
+    const eventName = `liveapp://worker-event:${currentAppId}`;
     const unlisten = api.listen<{ appId: string; event: string; data: unknown }>(
       eventName,
       (payload) => {

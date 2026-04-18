@@ -1,6 +1,6 @@
 /* ui/state.js */
 /**
- * Git Graph MiniApp — shared state, constants, DOM helpers.
+ * Git Graph Live App — shared state, constants, DOM helpers.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -115,7 +115,7 @@
 
 /* ui/theme.js */
 /**
- * Git Graph MiniApp — theme adapter: read --branch-* and node stroke from CSS for graph colors.
+ * Git Graph Live App — theme adapter: read --branch-* and node stroke from CSS for graph colors.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -148,7 +148,7 @@
 
 /* ui/graph/layout.js */
 /**
- * Git Graph MiniApp — global topology graph layout (Vertex/Branch/determinePath).
+ * Git Graph Live App — global topology graph layout (Vertex/Branch/determinePath).
  * Outputs per-row drawInfo compatible with renderRowSvg: { lane, lanesBefore, parentLanes }.
  */
 (function () {
@@ -434,7 +434,7 @@
 
 /* ui/graph/renderRowSvg.js */
 /**
- * Git Graph MiniApp — build SVG for one commit row (theme-aware colors).
+ * Git Graph Live App — build SVG for one commit row (theme-aware colors).
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -541,7 +541,7 @@
 
 /* ui/services/gitClient.js */
 /**
- * Git Graph MiniApp — worker call wrapper.
+ * Git Graph Live App — worker call wrapper.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -555,7 +555,7 @@
 
 /* ui/components/contextMenu.js */
 /**
- * Git Graph MiniApp — context menu.
+ * Git Graph Live App — context menu.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -604,7 +604,7 @@
 
 /* ui/components/modal.js */
 /**
- * Git Graph MiniApp — modal dialog.
+ * Git Graph Live App — modal dialog.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -643,7 +643,7 @@
 
 /* ui/components/findWidget.js */
 /**
- * Git Graph MiniApp — find widget and branch filter dropdown.
+ * Git Graph Live App — find widget and branch filter dropdown.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -750,7 +750,7 @@
 
 /* ui/panels/remotePanel.js */
 /**
- * Git Graph MiniApp — remote panel.
+ * Git Graph Live App — remote panel.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -845,7 +845,7 @@
 
 /* ui/panels/detailPanel.js */
 /**
- * Git Graph MiniApp — detail panel (commit / compare).
+ * Git Graph Live App — detail panel (commit / compare).
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -1106,7 +1106,7 @@
 
 /* ui/main.js */
 /**
- * Git Graph MiniApp — commit list, context menus, git actions, loadRepo.
+ * Git Graph Live App — commit list, context menus, git actions, loadRepo.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -1787,7 +1787,7 @@
 
 /* ui/bootstrap.js */
 /**
- * Git Graph MiniApp — bootstrap: bind events, init resizer, restore last repo, theme subscription.
+ * Git Graph Live App — bootstrap: bind events, init resizer, restore last repo, theme subscription.
  */
 (function () {
   window.__GG = window.__GG || {};

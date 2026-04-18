@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — modal dialog.
+ * Git Graph Live App — modal dialog.
  */
 (function () {
   window.__GG = window.__GG || {};

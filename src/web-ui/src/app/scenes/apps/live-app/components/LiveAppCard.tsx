@@ -1,15 +1,15 @@
 import React from 'react';
 import { Play, Square, Trash2 } from 'lucide-react';
-import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
+import type { LiveAppMeta } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { renderLiveAppIcon } from '../liveAppIcons';
 import { useI18n } from '@/infrastructure/i18n';
 import './LiveAppCard.scss';
 
 interface LiveAppCardProps {
-  app: MiniAppMeta;
+  app: LiveAppMeta;
   index?: number;
   isRunning?: boolean;
-  onOpenDetails: (app: MiniAppMeta) => void;
+  onOpenDetails: (app: LiveAppMeta) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onStop?: (id: string) => void;

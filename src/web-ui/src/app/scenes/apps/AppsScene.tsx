@@ -35,8 +35,8 @@ import { useTranslation } from 'react-i18next';
 import { Badge, Button, ConfirmDialog, Search } from '@/component-library';
 import { GalleryDetailModal } from '@/app/components';
 import { open } from '@tauri-apps/plugin-dialog';
-import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
-import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
+import type { LiveAppMeta } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { useOverlayManager } from '@/app/hooks/useOverlayManager';
 import { useOverlayStore } from '@/app/stores/overlayStore';
 import type { OverlaySceneId } from '@/app/overlay/types';
@@ -126,7 +126,7 @@ const AppsHomeView: React.FC = () => {
   const { openOverlay, activeOverlay } = useOverlayManager();
 
   const [liveSearch, setLiveSearch]           = useState('');
-  const [selectedLiveApp, setSelectedLiveApp] = useState<MiniAppMeta | null>(null);
+  const [selectedLiveApp, setSelectedLiveApp] = useState<LiveAppMeta | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const runningIdSet = useMemo(() => new Set(runningWorkerIds), [runningWorkerIds]);
@@ -159,7 +159,7 @@ const AppsHomeView: React.FC = () => {
 
   const handleStopLiveApp = async (appId: string) => {
     const overlayId = `live-app:${appId}` as OverlaySceneId;
-    try { await miniAppAPI.workerStop(appId); } catch (e) { log.warn('Stop failed', e); }
+    try { await liveAppAPI.workerStop(appId); } catch (e) { log.warn('Stop failed', e); }
     finally {
       markStopped(appId);
       if (openTabIds.has(overlayId)) useOverlayStore?.getState().closeOverlay();
@@ -171,7 +171,7 @@ const AppsHomeView: React.FC = () => {
     const appId = pendingDeleteId;
     setPendingDeleteId(null);
     try {
-      await miniAppAPI.deleteMiniApp(appId);
+      await liveAppAPI.deleteLiveApp(appId);
       if (selectedLiveApp?.id === appId) setSelectedLiveApp(null);
       setLiveApps(liveApps.filter((a) => a.id !== appId));
       markStopped(appId);
@@ -186,7 +186,7 @@ const AppsHomeView: React.FC = () => {
       const path = Array.isArray(selected) ? selected[0] : selected;
       if (!path) return;
       setLiveLoading(true);
-      const app = await miniAppAPI.importFromPath(path, workspacePath || undefined);
+      const app = await liveAppAPI.importFromPath(path, workspacePath || undefined);
       setLiveApps([app, ...liveApps]);
       handleOpenLiveApp(app.id);
     } catch (e) { log.error('Import failed', e); }
@@ -196,7 +196,7 @@ const AppsHomeView: React.FC = () => {
   const refetchLive = useCallback(async () => {
     setLiveLoading(true);
     try {
-      const [apps, running] = await Promise.all([miniAppAPI.listMiniApps(), miniAppAPI.workerListRunning()]);
+      const [apps, running] = await Promise.all([liveAppAPI.listLiveApps(), liveAppAPI.workerListRunning()]);
       setLiveApps(apps);
       setRunningIds(running);
     } finally { setLiveLoading(false); }
@@ -508,9 +508,9 @@ const AgentAppRow: React.FC<{ app: AppCardModel; onOpen: (app: AppCardModel) => 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LiveAppRow: React.FC<{
-  app: MiniAppMeta;
+  app: LiveAppMeta;
   isRunning: boolean;
-  onOpenDetails: (app: MiniAppMeta) => void;
+  onOpenDetails: (app: LiveAppMeta) => void;
   onOpen: (id: string) => void;
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => void;

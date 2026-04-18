@@ -34,7 +34,7 @@ import { ContextCompressionDisplay } from '@/flow_chat/tool-cards/ContextCompres
 import { SkillDisplay } from '@/flow_chat/tool-cards/SkillDisplay';
 import { AskUserQuestionCard } from '@/flow_chat/tool-cards/AskUserQuestionCard';
 import { CreatePlanDisplay } from '@/flow_chat/tool-cards/CreatePlanDisplay';
-import { InitMiniAppDisplay } from '@/flow_chat/tool-cards/MiniAppToolDisplay';
+import { InitLiveAppDisplay } from '@/flow_chat/tool-cards/InitLiveAppToolDisplay';
 import type { FlowToolItem, FlowThinkingItem } from '@/flow_chat/types/flow-chat';
 import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards';
 import { ModelThinkingDisplay } from '@/flow_chat/tool-cards/ModelThinkingDisplay';
@@ -1796,49 +1796,49 @@ console.log(user.greet());`);
         ),
       },
       {
-        id: 'init-miniapp-card',
-        name: 'InitMiniApp - 小应用创建',
-        description: '创建 Mini App 骨架后的工具卡片（InitMiniApp）',
+        id: 'init-live-app-card',
+        name: 'InitLiveApp - 灵动应用创建',
+        description: '创建 Live App 骨架后的工具卡片（InitLiveApp）',
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>InitMiniApp - 执行中</h3>
-            <InitMiniAppDisplay
+            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>InitLiveApp - 执行中</h3>
+            <InitLiveAppDisplay
               toolItem={createMockToolItem(
-                'InitMiniApp',
+                'InitLiveApp',
                 { name: 'Weather Dashboard', description: 'A small weather widget' },
                 undefined,
                 'running'
               )}
-              config={TOOL_CARD_CONFIGS['InitMiniApp']}
+              config={TOOL_CARD_CONFIGS['InitLiveApp']}
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>InitMiniApp - 参数流式</h3>
-            <InitMiniAppDisplay
+            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>InitLiveApp - 参数流式</h3>
+            <InitLiveAppDisplay
               toolItem={
                 {
-                  ...createMockToolItem('InitMiniApp', {}, undefined, 'streaming'),
+                  ...createMockToolItem('InitLiveApp', {}, undefined, 'streaming'),
                   isParamsStreaming: true,
-                  partialParams: { name: 'My Mini App' },
+                  partialParams: { name: 'My Live App' },
                 } as FlowToolItem
               }
-              config={TOOL_CARD_CONFIGS['InitMiniApp']}
+              config={TOOL_CARD_CONFIGS['InitLiveApp']}
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>InitMiniApp - 创建成功</h3>
-            <InitMiniAppDisplay
+            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>InitLiveApp - 创建成功</h3>
+            <InitLiveAppDisplay
               toolItem={createMockToolItem(
-                'InitMiniApp',
+                'InitLiveApp',
                 { name: 'Weather Dashboard' },
                 {
-                  app_id: 'ma-preview-001',
-                  path: '.bitfun/miniapps/ma-preview-001',
+                  app_id: 'la-preview-001',
+                  path: '.bitfun/liveapps/la-preview-001',
                 },
                 'completed'
               )}
-              config={TOOL_CARD_CONFIGS['InitMiniApp']}
+              config={TOOL_CARD_CONFIGS['InitLiveApp']}
               sessionId="preview-session"
             />
           </div>

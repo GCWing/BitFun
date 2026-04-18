@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — detail panel (commit / compare).
+ * Git Graph Live App — detail panel (commit / compare).
  */
 (function () {
   window.__GG = window.__GG || {};

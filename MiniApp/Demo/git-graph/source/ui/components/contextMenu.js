@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — context menu.
+ * Git Graph Live App — context menu.
  */
 (function () {
   window.__GG = window.__GG || {};

@@ -1,6 +1,6 @@
-//! MiniApp storage — persist and load MiniApp data under user data dir (V2: ui.js, worker.js, package.json).
+//! Live App storage — persist and load under user data dir (V2: ui.js, worker.js, package.json).
 
-use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource, NpmDep};
+use crate::live_app::types::{LiveApp, LiveAppMeta, LiveAppSource, NpmDep};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json;
 use std::path::PathBuf;
@@ -18,18 +18,18 @@ const COMPILED_HTML: &str = "compiled.html";
 const STORAGE_JSON: &str = "storage.json";
 const VERSIONS_DIR: &str = "versions";
 
-/// MiniApp storage service (file-based under path_manager.miniapps_dir).
-pub struct MiniAppStorage {
+/// Live App storage service (file-based under `path_manager.live_apps_dir()`).
+pub struct LiveAppStorage {
     path_manager: Arc<crate::infrastructure::PathManager>,
 }
 
-impl MiniAppStorage {
+impl LiveAppStorage {
     pub fn new(path_manager: Arc<crate::infrastructure::PathManager>) -> Self {
         Self { path_manager }
     }
 
     fn app_dir(&self, app_id: &str) -> PathBuf {
-        self.path_manager.miniapp_dir(app_id)
+        self.path_manager.live_app_dir(app_id)
     }
 
     fn meta_path(&self, app_id: &str) -> PathBuf {
@@ -60,7 +60,7 @@ impl MiniAppStorage {
         let source = self.source_dir(app_id);
         tokio::fs::create_dir_all(&dir).await.map_err(|e| {
             BitFunError::io(format!(
-                "Failed to create miniapp dir {}: {}",
+                "Failed to create live app dir {}: {}",
                 dir.display(),
                 e
             ))
@@ -75,20 +75,20 @@ impl MiniAppStorage {
         Ok(())
     }
 
-    /// List all app IDs (directories under miniapps_dir).
+    /// List all app IDs (directories under `live_apps_dir`).
     pub async fn list_app_ids(&self) -> BitFunResult<Vec<String>> {
-        let root = self.path_manager.miniapps_dir();
+        let root = self.path_manager.live_apps_dir();
         if !root.exists() {
             return Ok(Vec::new());
         }
         let mut ids = Vec::new();
         let mut read_dir = tokio::fs::read_dir(&root)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to read miniapps dir: {}", e)))?;
+            .map_err(|e| BitFunError::io(format!("Failed to read liveapps dir: {}", e)))?;
         while let Some(entry) = read_dir
             .next_entry()
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to read miniapps entry: {}", e)))?
+            .map_err(|e| BitFunError::io(format!("Failed to read liveapps entry: {}", e)))?
         {
             let path = entry.path();
             if path.is_dir() {
@@ -102,23 +102,23 @@ impl MiniAppStorage {
         Ok(ids)
     }
 
-    /// Load full MiniApp by id (meta + source + compiled_html).
-    pub async fn load(&self, app_id: &str) -> BitFunResult<MiniApp> {
+    /// Load full Live App by id (meta + source + compiled_html).
+    pub async fn load(&self, app_id: &str) -> BitFunResult<LiveApp> {
         let meta_path = self.meta_path(app_id);
         let meta_content = tokio::fs::read_to_string(&meta_path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                BitFunError::NotFound(format!("MiniApp not found: {}", app_id))
+                BitFunError::NotFound(format!("Live App not found: {}", app_id))
             } else {
                 BitFunError::io(format!("Failed to read meta: {}", e))
             }
         })?;
-        let meta: MiniAppMeta = serde_json::from_str(&meta_content)
+        let meta: LiveAppMeta = serde_json::from_str(&meta_content)
             .map_err(|e| BitFunError::parse(format!("Invalid meta.json: {}", e)))?;
 
         let source = self.load_source(app_id).await?;
         let compiled_html = self.load_compiled_html(app_id).await?;
 
-        Ok(MiniApp {
+        Ok(LiveApp {
             id: meta.id,
             name: meta.name,
             description: meta.description,
@@ -137,11 +137,11 @@ impl MiniAppStorage {
     }
 
     /// Load only metadata (for list views).
-    pub async fn load_meta(&self, app_id: &str) -> BitFunResult<MiniAppMeta> {
+    pub async fn load_meta(&self, app_id: &str) -> BitFunResult<LiveAppMeta> {
         let meta_path = self.meta_path(app_id);
         let content = tokio::fs::read_to_string(&meta_path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                BitFunError::NotFound(format!("MiniApp not found: {}", app_id))
+                BitFunError::NotFound(format!("Live App not found: {}", app_id))
             } else {
                 BitFunError::io(format!("Failed to read meta: {}", e))
             }
@@ -150,7 +150,7 @@ impl MiniAppStorage {
             .map_err(|e| BitFunError::parse(format!("Invalid meta.json: {}", e)))
     }
 
-    async fn load_source(&self, app_id: &str) -> BitFunResult<MiniAppSource> {
+    async fn load_source(&self, app_id: &str) -> BitFunResult<LiveAppSource> {
         let sd = self.source_dir(app_id);
         let html = tokio::fs::read_to_string(sd.join(INDEX_HTML))
             .await
@@ -176,7 +176,7 @@ impl MiniAppStorage {
 
         let npm_dependencies = self.load_npm_dependencies(app_id).await?;
 
-        Ok(MiniAppSource {
+        Ok(LiveAppSource {
             html,
             css,
             ui_js,
@@ -187,7 +187,7 @@ impl MiniAppStorage {
     }
 
     /// Load only source files and package dependencies from disk.
-    pub async fn load_source_only(&self, app_id: &str) -> BitFunResult<MiniAppSource> {
+    pub async fn load_source_only(&self, app_id: &str) -> BitFunResult<LiveAppSource> {
         self.load_source(app_id).await
     }
 
@@ -227,11 +227,11 @@ impl MiniAppStorage {
         })
     }
 
-    /// Save full MiniApp (meta, source files, compiled.html).
-    pub async fn save(&self, app: &MiniApp) -> BitFunResult<()> {
+    /// Save full Live App (meta, source files, compiled.html).
+    pub async fn save(&self, app: &LiveApp) -> BitFunResult<()> {
         self.ensure_app_dir(&app.id).await?;
 
-        let meta = MiniAppMeta::from(app);
+        let meta = LiveAppMeta::from(app);
         let meta_path = self.meta_path(&app.id);
         let meta_json = serde_json::to_string_pretty(&meta).map_err(BitFunError::from)?;
         tokio::fs::write(&meta_path, meta_json)
@@ -276,7 +276,7 @@ impl MiniAppStorage {
             dependencies.insert(d.name.clone(), serde_json::Value::String(d.version.clone()));
         }
         let pkg = serde_json::json!({
-            "name": format!("miniapp-{}", app_id),
+            "name": format!("liveapp-{}", app_id),
             "private": true,
             "dependencies": dependencies
         });
@@ -293,7 +293,7 @@ impl MiniAppStorage {
         &self,
         app_id: &str,
         version: u32,
-        app: &MiniApp,
+        app: &LiveApp,
     ) -> BitFunResult<()> {
         let versions_dir = self.app_dir(app_id).join(VERSIONS_DIR);
         tokio::fs::create_dir_all(&versions_dir)
@@ -340,13 +340,13 @@ impl MiniAppStorage {
         Ok(())
     }
 
-    /// Delete MiniApp directory entirely.
+    /// Delete Live App directory entirely.
     pub async fn delete(&self, app_id: &str) -> BitFunResult<()> {
         let dir = self.app_dir(app_id);
         if dir.exists() {
             tokio::fs::remove_dir_all(&dir)
                 .await
-                .map_err(|e| BitFunError::io(format!("Failed to delete miniapp dir: {}", e)))?;
+                .map_err(|e| BitFunError::io(format!("Failed to delete live app dir: {}", e)))?;
         }
         Ok(())
     }
@@ -379,7 +379,7 @@ impl MiniAppStorage {
     }
 
     /// Load a specific version snapshot.
-    pub async fn load_version(&self, app_id: &str, version: u32) -> BitFunResult<MiniApp> {
+    pub async fn load_version(&self, app_id: &str, version: u32) -> BitFunResult<LiveApp> {
         let p = self.version_path(app_id, version);
         let c = tokio::fs::read_to_string(&p).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {

@@ -1,10 +1,10 @@
-//! MiniApp API — Tauri commands for MiniApp CRUD, JS Worker, and dialog.
+//! Live App API — Tauri commands for CRUD, JS Worker, and dialog.
 
 use crate::api::app_state::AppState;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
-use bitfun_core::miniapp::{
-    InstallResult as CoreInstallResult, MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions,
-    MiniAppSource,
+use bitfun_core::live_app::{
+    InstallResult as CoreInstallResult, LiveApp, LiveAppAiContext, LiveAppMeta, LiveAppPermissions,
+    LiveAppSource,
 };
 use bitfun_core::service::config::types::GlobalConfig;
 use bitfun_core::util::types::Message;
@@ -22,24 +22,24 @@ use tauri::{AppHandle, Emitter, State};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateMiniAppRequest {
+pub struct CreateLiveAppRequest {
     pub name: String,
     pub description: String,
     pub icon: String,
     pub category: String,
     #[serde(default)]
     pub tags: Vec<String>,
-    pub source: MiniAppSourceDto,
+    pub source: LiveAppSourceDto,
     #[serde(default)]
-    pub permissions: MiniAppPermissions,
-    pub ai_context: Option<MiniAppAiContext>,
+    pub permissions: LiveAppPermissions,
+    pub ai_context: Option<LiveAppAiContext>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppSourceDto {
+pub struct LiveAppSourceDto {
     pub html: String,
     pub css: String,
     #[serde(default)]
@@ -65,16 +65,16 @@ pub struct NpmDepDto {
     pub version: String,
 }
 
-impl From<MiniAppSourceDto> for MiniAppSource {
-    fn from(d: MiniAppSourceDto) -> Self {
-        MiniAppSource {
+impl From<LiveAppSourceDto> for LiveAppSource {
+    fn from(d: LiveAppSourceDto) -> Self {
+        LiveAppSource {
             html: d.html,
             css: d.css,
             ui_js: d.ui_js,
             esm_dependencies: d
                 .esm_dependencies
                 .into_iter()
-                .map(|x| bitfun_core::miniapp::EsmDep {
+                .map(|x| bitfun_core::live_app::EsmDep {
                     name: x.name,
                     version: x.version,
                     url: x.url,
@@ -84,7 +84,7 @@ impl From<MiniAppSourceDto> for MiniAppSource {
             npm_dependencies: d
                 .npm_dependencies
                 .into_iter()
-                .map(|x| bitfun_core::miniapp::NpmDep {
+                .map(|x| bitfun_core::live_app::NpmDep {
                     name: x.name,
                     version: x.version,
                 })
@@ -95,22 +95,22 @@ impl From<MiniAppSourceDto> for MiniAppSource {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateMiniAppRequest {
+pub struct UpdateLiveAppRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub icon: Option<String>,
     pub category: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub source: Option<MiniAppSourceDto>,
-    pub permissions: Option<MiniAppPermissions>,
-    pub ai_context: Option<MiniAppAiContext>,
+    pub source: Option<LiveAppSourceDto>,
+    pub permissions: Option<LiveAppPermissions>,
+    pub ai_context: Option<LiveAppAiContext>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GetMiniAppRequest {
+pub struct GetLiveAppRequest {
     pub app_id: String,
     pub theme: Option<String>,
     #[serde(default)]
@@ -119,7 +119,7 @@ pub struct GetMiniAppRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppWorkerCallRequest {
+pub struct LiveAppWorkerCallRequest {
     pub app_id: String,
     pub method: String,
     pub params: Value,
@@ -129,7 +129,7 @@ pub struct MiniAppWorkerCallRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppRecompileRequest {
+pub struct LiveAppRecompileRequest {
     pub app_id: String,
     pub theme: Option<String>,
     #[serde(default)]
@@ -138,7 +138,7 @@ pub struct MiniAppRecompileRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppImportFromPathRequest {
+pub struct LiveAppImportFromPathRequest {
     pub path: String,
     #[serde(default)]
     pub workspace_path: Option<String>,
@@ -146,7 +146,7 @@ pub struct MiniAppImportFromPathRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppSyncFromFsRequest {
+pub struct LiveAppSyncFromFsRequest {
     pub app_id: String,
     pub theme: Option<String>,
     #[serde(default)]
@@ -168,7 +168,7 @@ pub struct RecompileResult {
     pub warnings: Option<Vec<String>>,
 }
 
-fn miniapp_payload(app: &MiniApp, reason: &str) -> Value {
+fn live_app_payload(app: &LiveApp, reason: &str) -> Value {
     json!({
         "id": app.id,
         "name": app.name,
@@ -185,7 +185,7 @@ fn miniapp_payload(app: &MiniApp, reason: &str) -> Value {
     })
 }
 
-async fn emit_miniapp_event(event_name: &str, payload: Value) {
+async fn emit_live_app_event(event_name: &str, payload: Value) {
     let _ = emit_global_event(BackendEvent::Custom {
         event_name: event_name.to_string(),
         payload,
@@ -200,13 +200,13 @@ fn workspace_root_from_input(workspace_path: Option<&str>) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-async fn maybe_stop_worker(state: &State<'_, AppState>, app: &MiniApp) {
+async fn maybe_stop_worker(state: &State<'_, AppState>, app: &LiveApp) {
     if app.runtime.worker_restart_required {
         if let Some(ref pool) = state.js_worker_pool {
             pool.stop(&app.id).await;
         }
-        emit_miniapp_event(
-            "miniapp-worker-stopped",
+        emit_live_app_event(
+            "liveapp-worker-stopped",
             json!({ "id": app.id, "reason": "pending-restart" }),
         )
         .await;
@@ -216,7 +216,7 @@ async fn maybe_stop_worker(state: &State<'_, AppState>, app: &MiniApp) {
 async fn ensure_worker_dependencies(
     state: &State<'_, AppState>,
     app_id: &str,
-    app: &mut MiniApp,
+    app: &mut LiveApp,
 ) -> Result<bool, String> {
     let pool = state
         .js_worker_pool
@@ -240,46 +240,46 @@ async fn ensure_worker_dependencies(
             install.stdout
         };
         return Err(format!(
-            "MiniApp dependencies install failed for {app_id}: {}",
+            "Live App dependencies install failed for {app_id}: {}",
             details.trim()
         ));
     }
 
     pool.stop(app_id).await;
     *app = state
-        .miniapp_manager
+        .live_app_manager
         .mark_deps_installed(app_id)
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(app, "deps-installed")).await;
+    emit_live_app_event("liveapp-updated", live_app_payload(app, "deps-installed")).await;
     Ok(true)
 }
 
 // ============== App management commands ==============
 
 #[tauri::command]
-pub async fn list_miniapps(state: State<'_, AppState>) -> Result<Vec<MiniAppMeta>, String> {
+pub async fn list_live_apps(state: State<'_, AppState>) -> Result<Vec<LiveAppMeta>, String> {
     state
-        .miniapp_manager
+        .live_app_manager
         .list()
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn get_miniapp(
+pub async fn get_live_app(
     state: State<'_, AppState>,
-    request: GetMiniAppRequest,
-) -> Result<MiniApp, String> {
+    request: GetLiveAppRequest,
+) -> Result<LiveApp, String> {
     let mut app = state
-        .miniapp_manager
+        .live_app_manager
         .get(&request.app_id)
         .await
         .map_err(|e| e.to_string())?;
 
     let theme_type = request.theme.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
-    match state.miniapp_manager.compile_source(
+    match state.live_app_manager.compile_source(
         &request.app_id,
         &app.source,
         &app.permissions,
@@ -287,20 +287,20 @@ pub async fn get_miniapp(
         workspace_root.as_deref(),
     ) {
         Ok(html) => app.compiled_html = html,
-        Err(e) => log::warn!("get_miniapp: recompile failed, using cached: {}", e),
+        Err(e) => log::warn!("get_live_app: recompile failed, using cached: {}", e),
     }
     Ok(app)
 }
 
 #[tauri::command]
-pub async fn create_miniapp(
+pub async fn create_live_app(
     state: State<'_, AppState>,
-    request: CreateMiniAppRequest,
-) -> Result<MiniApp, String> {
-    let source: MiniAppSource = request.source.into();
+    request: CreateLiveAppRequest,
+) -> Result<LiveApp, String> {
+    let source: LiveAppSource = request.source.into();
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .create(
             request.name,
             request.description,
@@ -314,19 +314,19 @@ pub async fn create_miniapp(
         )
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event("miniapp-created", miniapp_payload(&app, "create")).await;
+    emit_live_app_event("liveapp-created", live_app_payload(&app, "create")).await;
     Ok(app)
 }
 
 #[tauri::command]
-pub async fn update_miniapp(
+pub async fn update_live_app(
     state: State<'_, AppState>,
     app_id: String,
-    request: UpdateMiniAppRequest,
-) -> Result<MiniApp, String> {
+    request: UpdateLiveAppRequest,
+) -> Result<LiveApp, String> {
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .update(
             &app_id,
             request.name,
@@ -342,22 +342,22 @@ pub async fn update_miniapp(
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "update")).await;
+    emit_live_app_event("liveapp-updated", live_app_payload(&app, "update")).await;
     Ok(app)
 }
 
 #[tauri::command]
-pub async fn delete_miniapp(state: State<'_, AppState>, app_id: String) -> Result<(), String> {
+pub async fn delete_live_app(state: State<'_, AppState>, app_id: String) -> Result<(), String> {
     if let Some(ref pool) = state.js_worker_pool {
         pool.stop(app_id.as_str()).await;
     }
     state
-        .miniapp_manager
+        .live_app_manager
         .delete(&app_id)
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event(
-        "miniapp-deleted",
+    emit_live_app_event(
+        "liveapp-deleted",
         json!({ "id": app_id, "reason": "delete" }),
     )
     .await;
@@ -365,78 +365,78 @@ pub async fn delete_miniapp(state: State<'_, AppState>, app_id: String) -> Resul
 }
 
 #[tauri::command]
-pub async fn get_miniapp_versions(
+pub async fn get_live_app_versions(
     state: State<'_, AppState>,
     app_id: String,
 ) -> Result<Vec<u32>, String> {
     state
-        .miniapp_manager
+        .live_app_manager
         .list_versions(&app_id)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn rollback_miniapp(
+pub async fn rollback_live_app(
     state: State<'_, AppState>,
     app_id: String,
     version: u32,
-) -> Result<MiniApp, String> {
+) -> Result<LiveApp, String> {
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .rollback(&app_id, version)
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-rolled-back", miniapp_payload(&app, "rollback")).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "rollback")).await;
+    emit_live_app_event("liveapp-rolled-back", live_app_payload(&app, "rollback")).await;
+    emit_live_app_event("liveapp-updated", live_app_payload(&app, "rollback")).await;
     Ok(app)
 }
 
 #[tauri::command]
-pub async fn get_miniapp_storage(
+pub async fn get_live_app_storage(
     state: State<'_, AppState>,
     app_id: String,
     key: String,
 ) -> Result<Value, String> {
     state
-        .miniapp_manager
+        .live_app_manager
         .get_storage(&app_id, &key)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn set_miniapp_storage(
+pub async fn set_live_app_storage(
     state: State<'_, AppState>,
     app_id: String,
     key: String,
     value: Value,
 ) -> Result<(), String> {
     state
-        .miniapp_manager
+        .live_app_manager
         .set_storage(&app_id, &key, value)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn grant_miniapp_workspace(
+pub async fn grant_live_app_workspace(
     state: State<'_, AppState>,
     app_id: String,
 ) -> Result<(), String> {
-    state.miniapp_manager.grant_workspace(&app_id).await;
+    state.live_app_manager.grant_workspace(&app_id).await;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn grant_miniapp_path(
+pub async fn grant_live_app_path(
     state: State<'_, AppState>,
     app_id: String,
     path: String,
 ) -> Result<(), String> {
     state
-        .miniapp_manager
+        .live_app_manager
         .grant_path(&app_id, PathBuf::from(path))
         .await;
     Ok(())
@@ -445,7 +445,7 @@ pub async fn grant_miniapp_path(
 // ============== JS Worker & Runtime ==============
 
 #[tauri::command]
-pub async fn miniapp_runtime_status(state: State<'_, AppState>) -> Result<RuntimeStatus, String> {
+pub async fn live_app_runtime_status(state: State<'_, AppState>) -> Result<RuntimeStatus, String> {
     let Some(ref pool) = state.js_worker_pool else {
         return Ok(RuntimeStatus {
             available: false,
@@ -458,8 +458,8 @@ pub async fn miniapp_runtime_status(state: State<'_, AppState>) -> Result<Runtim
     Ok(RuntimeStatus {
         available: true,
         kind: Some(match info.kind {
-            bitfun_core::miniapp::RuntimeKind::Bun => "bun".to_string(),
-            bitfun_core::miniapp::RuntimeKind::Node => "node".to_string(),
+            bitfun_core::live_app::RuntimeKind::Bun => "bun".to_string(),
+            bitfun_core::live_app::RuntimeKind::Node => "node".to_string(),
         }),
         version: Some(info.version.clone()),
         path: Some(info.path.to_string_lossy().to_string()),
@@ -467,9 +467,9 @@ pub async fn miniapp_runtime_status(state: State<'_, AppState>) -> Result<Runtim
 }
 
 #[tauri::command]
-pub async fn miniapp_worker_call(
+pub async fn live_app_worker_call(
     state: State<'_, AppState>,
-    request: MiniAppWorkerCallRequest,
+    request: LiveAppWorkerCallRequest,
 ) -> Result<Value, String> {
     let pool = state
         .js_worker_pool
@@ -477,19 +477,19 @@ pub async fn miniapp_worker_call(
         .ok_or_else(|| "JS Worker pool not initialized".to_string())?;
     let was_running = pool.is_running(&request.app_id).await;
     let mut app = state
-        .miniapp_manager
+        .live_app_manager
         .get(&request.app_id)
         .await
         .map_err(|e| e.to_string())?;
     let deps_installed = ensure_worker_dependencies(&state, &request.app_id, &mut app).await?;
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let policy = state
-        .miniapp_manager
+        .live_app_manager
         .resolve_policy_for_app(&request.app_id, &app.permissions, workspace_root.as_deref())
         .await;
     let policy_json = serde_json::to_string(&policy).map_err(|e| e.to_string())?;
     let worker_revision = state
-        .miniapp_manager
+        .live_app_manager
         .build_worker_revision(&app, &policy_json);
     let should_emit_restart = !was_running || deps_installed || app.runtime.worker_restart_required;
     let result = pool
@@ -505,13 +505,13 @@ pub async fn miniapp_worker_call(
         .map_err(|e| e.to_string())?;
     if should_emit_restart {
         let app = state
-            .miniapp_manager
+            .live_app_manager
             .clear_worker_restart_required(&request.app_id)
             .await
             .map_err(|e| e.to_string())?;
-        emit_miniapp_event(
-            "miniapp-worker-restarted",
-            miniapp_payload(
+        emit_live_app_event(
+            "liveapp-worker-restarted",
+            live_app_payload(
                 &app,
                 if deps_installed {
                     "deps-installed"
@@ -526,12 +526,12 @@ pub async fn miniapp_worker_call(
 }
 
 #[tauri::command]
-pub async fn miniapp_worker_stop(state: State<'_, AppState>, app_id: String) -> Result<(), String> {
+pub async fn live_app_worker_stop(state: State<'_, AppState>, app_id: String) -> Result<(), String> {
     if let Some(ref pool) = state.js_worker_pool {
         pool.stop(&app_id).await;
     }
-    emit_miniapp_event(
-        "miniapp-worker-stopped",
+    emit_live_app_event(
+        "liveapp-worker-stopped",
         json!({ "id": app_id, "reason": "manual-stop" }),
     )
     .await;
@@ -539,7 +539,7 @@ pub async fn miniapp_worker_stop(state: State<'_, AppState>, app_id: String) -> 
 }
 
 #[tauri::command]
-pub async fn miniapp_worker_list_running(
+pub async fn live_app_worker_list_running(
     state: State<'_, AppState>,
 ) -> Result<Vec<String>, String> {
     let Some(ref pool) = state.js_worker_pool else {
@@ -549,7 +549,7 @@ pub async fn miniapp_worker_list_running(
 }
 
 #[tauri::command]
-pub async fn miniapp_install_deps(
+pub async fn live_app_install_deps(
     state: State<'_, AppState>,
     app_id: String,
 ) -> Result<CoreInstallResult, String> {
@@ -558,7 +558,7 @@ pub async fn miniapp_install_deps(
         .as_ref()
         .ok_or_else(|| "JS Worker pool not initialized".to_string())?;
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .get(&app_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -569,29 +569,29 @@ pub async fn miniapp_install_deps(
     if install.success {
         pool.stop(&app_id).await;
         let app = state
-            .miniapp_manager
+            .live_app_manager
             .mark_deps_installed(&app_id)
             .await
             .map_err(|e| e.to_string())?;
-        emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "deps-installed")).await;
+        emit_live_app_event("liveapp-updated", live_app_payload(&app, "deps-installed")).await;
     }
     Ok(install)
 }
 
 #[tauri::command]
-pub async fn miniapp_recompile(
+pub async fn live_app_recompile(
     state: State<'_, AppState>,
-    request: MiniAppRecompileRequest,
+    request: LiveAppRecompileRequest,
 ) -> Result<RecompileResult, String> {
     let theme_type = request.theme.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .recompile(&request.app_id, theme_type, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event("miniapp-recompiled", miniapp_payload(&app, "recompile")).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "recompile")).await;
+    emit_live_app_event("liveapp-recompiled", live_app_payload(&app, "recompile")).await;
+    emit_live_app_event("liveapp-updated", live_app_payload(&app, "recompile")).await;
     Ok(RecompileResult {
         success: true,
         warnings: None,
@@ -599,47 +599,47 @@ pub async fn miniapp_recompile(
 }
 
 #[tauri::command]
-pub async fn miniapp_dialog_message(
+pub async fn live_app_dialog_message(
     _state: State<'_, AppState>,
     _app_id: String,
     _options: Value,
 ) -> Result<Value, String> {
-    // Tauri dialog is handled by frontend useMiniAppBridge via @tauri-apps/plugin-dialog.
+    // Tauri dialog is handled by frontend useLiveAppBridge via @tauri-apps/plugin-dialog.
     // This command can be used if we want backend to show message box; for now return not implemented.
     Err("Use dialog from frontend bridge".to_string())
 }
 
 #[tauri::command]
-pub async fn miniapp_import_from_path(
+pub async fn live_app_import_from_path(
     state: State<'_, AppState>,
-    request: MiniAppImportFromPathRequest,
-) -> Result<MiniApp, String> {
+    request: LiveAppImportFromPathRequest,
+) -> Result<LiveApp, String> {
     let path_buf = PathBuf::from(&request.path);
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .import_from_path(path_buf, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-created", miniapp_payload(&app, "import")).await;
+    emit_live_app_event("liveapp-created", live_app_payload(&app, "import")).await;
     Ok(app)
 }
 
 #[tauri::command]
-pub async fn miniapp_sync_from_fs(
+pub async fn live_app_sync_from_fs(
     state: State<'_, AppState>,
-    request: MiniAppSyncFromFsRequest,
-) -> Result<MiniApp, String> {
+    request: LiveAppSyncFromFsRequest,
+) -> Result<LiveApp, String> {
     let theme_type = request.theme.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .sync_from_fs(&request.app_id, theme_type, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "sync-from-fs")).await;
+    emit_live_app_event("liveapp-updated", live_app_payload(&app, "sync-from-fs")).await;
     Ok(app)
 }
 
@@ -693,13 +693,13 @@ fn check_rate_limit(app_id: &str, rate_limit_per_minute: u32) -> Result<(), Stri
 /// Returns the resolved model id (may be "primary" / "fast") to pass to AIClientFactory.
 fn validate_model(
     model: Option<&str>,
-    ai_perms: &bitfun_core::miniapp::AiPermissions,
+    ai_perms: &bitfun_core::live_app::AiPermissions,
 ) -> Result<String, String> {
     let requested = model.unwrap_or("primary");
     if let Some(ref allowed) = ai_perms.allowed_models {
         if !allowed.is_empty() && !allowed.iter().any(|m| m == requested) {
             return Err(format!(
-                "Model '{}' is not allowed by this MiniApp's AI permissions",
+                "Model '{}' is not allowed by this Live App's AI permissions",
                 requested
             ));
         }
@@ -711,14 +711,14 @@ fn validate_model(
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiChatMessage {
+pub struct LiveAppAiChatMessage {
     pub role: String,
     pub content: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiCompleteRequest {
+pub struct LiveAppAiCompleteRequest {
     pub app_id: String,
     pub prompt: String,
     #[serde(default)]
@@ -733,14 +733,14 @@ pub struct MiniAppAiCompleteRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiCompleteResponse {
+pub struct LiveAppAiCompleteResponse {
     pub text: String,
-    pub usage: Option<MiniAppAiUsage>,
+    pub usage: Option<LiveAppAiUsage>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiUsage {
+pub struct LiveAppAiUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
@@ -748,9 +748,9 @@ pub struct MiniAppAiUsage {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiChatRequest {
+pub struct LiveAppAiChatRequest {
     pub app_id: String,
-    pub messages: Vec<MiniAppAiChatMessage>,
+    pub messages: Vec<LiveAppAiChatMessage>,
     pub stream_id: String,
     #[serde(default)]
     pub system_prompt: Option<String>,
@@ -764,26 +764,26 @@ pub struct MiniAppAiChatRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiChatStartedResponse {
+pub struct LiveAppAiChatStartedResponse {
     pub stream_id: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiCancelRequest {
+pub struct LiveAppAiCancelRequest {
     pub app_id: String,
     pub stream_id: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiListModelsRequest {
+pub struct LiveAppAiListModelsRequest {
     pub app_id: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MiniAppAiModelInfo {
+pub struct LiveAppAiModelInfo {
     pub id: String,
     pub name: String,
     pub provider: String,
@@ -806,7 +806,7 @@ struct AiStreamChunkPayload {
 
 fn build_messages_for_ai(
     system_prompt: Option<&str>,
-    chat_messages: &[MiniAppAiChatMessage],
+    chat_messages: &[LiveAppAiChatMessage],
 ) -> Vec<Message> {
     let mut msgs = Vec::new();
     if let Some(sp) = system_prompt {
@@ -830,12 +830,12 @@ fn build_messages_for_ai(
 
 /// Non-streaming AI completion — waits for the full response before returning.
 #[tauri::command]
-pub async fn miniapp_ai_complete(
+pub async fn live_app_ai_complete(
     state: State<'_, AppState>,
-    request: MiniAppAiCompleteRequest,
-) -> Result<MiniAppAiCompleteResponse, String> {
+    request: LiveAppAiCompleteRequest,
+) -> Result<LiveAppAiCompleteResponse, String> {
     let app = state
-        .miniapp_manager
+        .live_app_manager
         .get(&request.app_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -844,10 +844,10 @@ pub async fn miniapp_ai_complete(
         .permissions
         .ai
         .as_ref()
-        .ok_or("AI access is not enabled for this MiniApp")?;
+        .ok_or("AI access is not enabled for this Live App")?;
 
     if !ai_perms.enabled {
-        return Err("AI access is not enabled for this MiniApp".to_string());
+        return Err("AI access is not enabled for this Live App".to_string());
     }
 
     let rate_limit = ai_perms.rate_limit_per_minute.unwrap_or(0);
@@ -863,7 +863,7 @@ pub async fn miniapp_ai_complete(
 
     let messages = build_messages_for_ai(
         request.system_prompt.as_deref(),
-        &[MiniAppAiChatMessage {
+        &[LiveAppAiChatMessage {
             role: "user".to_string(),
             content: request.prompt.clone(),
         }],
@@ -876,7 +876,7 @@ pub async fn miniapp_ai_complete(
 
     let mut stream = stream_response.stream;
     let mut full_text = String::new();
-    let mut usage: Option<MiniAppAiUsage> = None;
+    let mut usage: Option<LiveAppAiUsage> = None;
 
     while let Some(chunk_result) = stream.next().await {
         match chunk_result {
@@ -885,7 +885,7 @@ pub async fn miniapp_ai_complete(
                     full_text.push_str(&text);
                 }
                 if let Some(u) = chunk.usage {
-                    usage = Some(MiniAppAiUsage {
+                    usage = Some(LiveAppAiUsage {
                         prompt_tokens: u.prompt_token_count,
                         completion_tokens: u.candidates_token_count,
                         total_tokens: u.total_token_count,
@@ -898,19 +898,19 @@ pub async fn miniapp_ai_complete(
         }
     }
 
-    Ok(MiniAppAiCompleteResponse {
+    Ok(LiveAppAiCompleteResponse {
         text: full_text,
         usage,
     })
 }
 
-/// Streaming AI chat — returns immediately, emits chunks via "miniapp://ai-stream" events.
+/// Streaming AI chat — returns immediately, emits chunks via "liveapp://ai-stream" events.
 #[tauri::command]
-pub async fn miniapp_ai_chat(
+pub async fn live_app_ai_chat(
     app: AppHandle,
     state: State<'_, AppState>,
-    request: MiniAppAiChatRequest,
-) -> Result<MiniAppAiChatStartedResponse, String> {
+    request: LiveAppAiChatRequest,
+) -> Result<LiveAppAiChatStartedResponse, String> {
     if request.stream_id.trim().is_empty() {
         return Err("streamId is required".to_string());
     }
@@ -918,20 +918,20 @@ pub async fn miniapp_ai_chat(
         return Err("messages must not be empty".to_string());
     }
 
-    let miniapp = state
-        .miniapp_manager
+    let live_app = state
+        .live_app_manager
         .get(&request.app_id)
         .await
         .map_err(|e| e.to_string())?;
 
-    let ai_perms = miniapp
+    let ai_perms = live_app
         .permissions
         .ai
         .as_ref()
-        .ok_or("AI access is not enabled for this MiniApp")?;
+        .ok_or("AI access is not enabled for this Live App")?;
 
     if !ai_perms.enabled {
-        return Err("AI access is not enabled for this MiniApp".to_string());
+        return Err("AI access is not enabled for this Live App".to_string());
     }
 
     let rate_limit = ai_perms.rate_limit_per_minute.unwrap_or(0);
@@ -968,7 +968,7 @@ pub async fn miniapp_ai_chat(
     tokio::spawn(async move {
         let mut stream = stream_response.stream;
         let mut full_text = String::new();
-        let mut last_usage: Option<MiniAppAiUsage> = None;
+        let mut last_usage: Option<LiveAppAiUsage> = None;
 
         while let Some(chunk_result) = stream.next().await {
             // Check cancellation
@@ -998,13 +998,13 @@ pub async fn miniapp_ai_chat(
                                 "reasoningContent": chunk.reasoning_content,
                             }),
                         };
-                        if let Err(e) = app_handle.emit("miniapp://ai-stream", &payload) {
+                        if let Err(e) = app_handle.emit("liveapp://ai-stream", &payload) {
                             log::warn!("Failed to emit AI stream chunk: {}", e);
                         }
                     }
 
                     if let Some(u) = chunk.usage {
-                        last_usage = Some(MiniAppAiUsage {
+                        last_usage = Some(LiveAppAiUsage {
                             prompt_tokens: u.prompt_token_count,
                             completion_tokens: u.candidates_token_count,
                             total_tokens: u.total_token_count,
@@ -1024,7 +1024,7 @@ pub async fn miniapp_ai_chat(
                         payload_type: "error".to_string(),
                         data: json!({ "message": e.to_string() }),
                     };
-                    let _ = app_handle.emit("miniapp://ai-stream", &payload);
+                    let _ = app_handle.emit("liveapp://ai-stream", &payload);
                     // Clean up registry
                     let mut registry = ai_stream_registry()
                         .lock()
@@ -1052,7 +1052,7 @@ pub async fn miniapp_ai_chat(
                 "usage": usage_val,
             }),
         };
-        let _ = app_handle.emit("miniapp://ai-stream", &done_payload);
+        let _ = app_handle.emit("liveapp://ai-stream", &done_payload);
 
         // Clean up registry
         let mut registry = ai_stream_registry()
@@ -1061,16 +1061,16 @@ pub async fn miniapp_ai_chat(
         registry.remove(&stream_id);
     });
 
-    Ok(MiniAppAiChatStartedResponse {
+    Ok(LiveAppAiChatStartedResponse {
         stream_id: request.stream_id,
     })
 }
 
 /// Cancel an ongoing AI stream.
 #[tauri::command]
-pub async fn miniapp_ai_cancel(
+pub async fn live_app_ai_cancel(
     _state: State<'_, AppState>,
-    request: MiniAppAiCancelRequest,
+    request: LiveAppAiCancelRequest,
 ) -> Result<(), String> {
     let mut registry = ai_stream_registry()
         .lock()
@@ -1083,26 +1083,26 @@ pub async fn miniapp_ai_cancel(
     Ok(())
 }
 
-/// List AI models available to a MiniApp (no sensitive fields).
+/// List AI models available to a Live App (no sensitive fields).
 #[tauri::command]
-pub async fn miniapp_ai_list_models(
+pub async fn live_app_ai_list_models(
     state: State<'_, AppState>,
-    request: MiniAppAiListModelsRequest,
-) -> Result<Vec<MiniAppAiModelInfo>, String> {
-    let miniapp = state
-        .miniapp_manager
+    request: LiveAppAiListModelsRequest,
+) -> Result<Vec<LiveAppAiModelInfo>, String> {
+    let live_app = state
+        .live_app_manager
         .get(&request.app_id)
         .await
         .map_err(|e| e.to_string())?;
 
-    let ai_perms = miniapp
+    let ai_perms = live_app
         .permissions
         .ai
         .as_ref()
-        .ok_or("AI access is not enabled for this MiniApp")?;
+        .ok_or("AI access is not enabled for this Live App")?;
 
     if !ai_perms.enabled {
-        return Err("AI access is not enabled for this MiniApp".to_string());
+        return Err("AI access is not enabled for this Live App".to_string());
     }
 
     let global_config = state
@@ -1122,7 +1122,7 @@ pub async fn miniapp_ai_list_models(
 
     let allowed = ai_perms.allowed_models.as_deref().unwrap_or(&[]);
 
-    let models: Vec<MiniAppAiModelInfo> = global_config
+    let models: Vec<LiveAppAiModelInfo> = global_config
         .ai
         .models
         .iter()
@@ -1141,7 +1141,7 @@ pub async fn miniapp_ai_list_models(
                 })
             }
         })
-        .map(|m| MiniAppAiModelInfo {
+        .map(|m| LiveAppAiModelInfo {
             id: m.id.clone(),
             name: m.name.clone(),
             provider: m.provider.clone(),

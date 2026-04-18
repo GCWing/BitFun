@@ -344,10 +344,10 @@
       "summary": "对近期改动执行代码审查。",
       "what": "对最近的 diff 运行一次代码审查，返回发现的问题。"
     },
-    "InitMiniApp": {
-      "name": "InitMiniApp",
-      "summary": "初始化一个 MiniApp 项目骨架。",
-      "what": "用默认模板初始化一个新的 MiniApp 项目。"
+    "InitLiveApp": {
+      "name": "InitLiveApp",
+      "summary": "初始化一个灵动应用（Live App）项目骨架。",
+      "what": "用默认模板初始化一个新的灵动应用项目。"
     },
     "ComputerUse": {
       "name": "ComputerUse",

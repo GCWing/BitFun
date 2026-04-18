@@ -93,7 +93,7 @@
       "tools": "工具",
       "terminal": "Shell",
       "git": "Git",
-      "miniApps": "运行应用",
+      "liveApps": "灵动应用",
       "driveAApp": "驱动应用",
       "subAgent": "SubAgent"
     },
@@ -892,7 +892,7 @@
     "quickStart": "开始",
     "heroBadge": "BitFun Workspace",
     "heroTitle": "真实工作台，而不只是一个聊天框",
-    "heroDescription": "有个性，有记忆，帮你做事的 AI 助理。会话流与小应用围绕同一个工作流协同展开，AI 在做事，不只是回答。",
+    "heroDescription": "有个性，有记忆，帮你做事的 AI 助理。会话流与灵动应用围绕同一个工作流协同展开，AI 在做事，不只是回答。",
     "newCodeSession": "新建 Code 会话",
     "newCodeSessionDesc": "开始代码任务、调试问题，或打开一个项目进入开发状态",
     "newCoworkSession": "新建 Cowork 会话",

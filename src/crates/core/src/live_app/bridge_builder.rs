@@ -1,6 +1,6 @@
 //! Bridge script builder — generate window.app Runtime Adapter (BitFun Hosted) for iframe.
 
-use crate::miniapp::types::{EsmDep, MiniAppPermissions};
+use crate::live_app::types::{EsmDep, LiveAppPermissions};
 use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
@@ -214,7 +214,7 @@ pub fn build_import_map(deps: &[EsmDep]) -> String {
 }
 
 /// Build CSP meta content from permissions (net.allow → connect-src).
-pub fn build_csp_content(permissions: &MiniAppPermissions) -> String {
+pub fn build_csp_content(permissions: &LiveAppPermissions) -> String {
     let net_allow = permissions
         .net
         .as_ref()
@@ -250,7 +250,7 @@ pub fn scroll_boundary_script() -> &'static str {
     r#"<script>(()=>{const s=(e)=>{for(let n=e.target;n;n=n.parentNode){if(!(n instanceof Element))continue;if(n===document.documentElement||n===document.body)continue;const o=window.getComputedStyle(n).overflowY;if(o==='hidden'||o==='visible')continue;if(e.deltaY<0&&n.scrollTop>0)return false;if(e.deltaY>0&&n.scrollTop+n.clientHeight<n.scrollHeight)return false;}return true};window.addEventListener('wheel',e=>{if(!e.defaultPrevented&&s(e))window.parent.postMessage({jsonrpc:'2.0',method:'bitfun/sandbox-wheel',params:{deltaX:e.deltaX,deltaY:e.deltaY,deltaZ:e.deltaZ,deltaMode:e.deltaMode}},'*')},{passive:true});})();</script>"#
 }
 
-/// Default dark theme CSS variables for MiniApp iframe (avoids flash before host sends theme).
-pub fn build_miniapp_default_theme_css() -> &'static str {
+/// Default dark theme CSS variables for Live App iframe (avoids flash before host sends theme).
+pub fn build_live_app_default_theme_css() -> &'static str {
     r#"<style id="bitfun-theme-default">:root{--bitfun-bg:#121214;--bitfun-bg-secondary:#18181a;--bitfun-bg-tertiary:#121214;--bitfun-bg-elevated:#18181a;--bitfun-text:#e8e8e8;--bitfun-text-secondary:#b0b0b0;--bitfun-text-muted:#858585;--bitfun-accent:#60a5fa;--bitfun-accent-hover:#3b82f6;--bitfun-success:#34d399;--bitfun-warning:#f59e0b;--bitfun-error:#ef4444;--bitfun-info:#E1AB80;--bitfun-border:#2e2e32;--bitfun-border-subtle:#27272a;--bitfun-element-bg:#27272a;--bitfun-element-hover:#3f3f46;--bitfun-radius:6px;--bitfun-radius-lg:10px;--bitfun-font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;--bitfun-font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;--bitfun-scrollbar-thumb:rgba(255,255,255,0.12);}</style>"#
 }

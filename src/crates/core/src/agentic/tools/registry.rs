@@ -139,8 +139,8 @@ impl ToolRegistry {
         // Code review submit tool
         self.register_tool(Arc::new(CodeReviewTool::new()));
 
-        // MiniApp Agent tool (single InitMiniApp)
-        self.register_tool(Arc::new(InitMiniAppTool::new()));
+        // Live App tool (InitLiveApp)
+        self.register_tool(Arc::new(InitLiveAppTool::new()));
 
         // All desktop automation consolidated into ComputerUse (click_element, click, mouse_move,
         // scroll, drag, screenshot, locate, key_chord, type_text, pointer_move_rel, wait).

@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — find widget and branch filter dropdown.
+ * Git Graph Live App — find widget and branch filter dropdown.
  */
 (function () {
   window.__GG = window.__GG || {};

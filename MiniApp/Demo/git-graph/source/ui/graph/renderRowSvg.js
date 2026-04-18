@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — build SVG for one commit row (theme-aware colors).
+ * Git Graph Live App — build SVG for one commit row (theme-aware colors).
  */
 (function () {
   window.__GG = window.__GG || {};

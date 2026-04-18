@@ -11,7 +11,7 @@ const NAV_ENTRY_SELECTORS = [
   '.bitfun-nav-panel__workspace-item-name-btn',
   '.bitfun-nav-panel__inline-item',
   '.bitfun-nav-panel__workspace-create-main',
-  '.bitfun-nav-panel__miniapp-entry',
+  '.bitfun-nav-panel__live-app-entry',
 ];
 
 async function getNavigationEntries() {

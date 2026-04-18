@@ -93,7 +93,7 @@
       "tools": "Tools",
       "terminal": "Shell",
       "git": "Git",
-      "miniApps": "Run AApp",
+      "liveApps": "Live App",
       "driveAApp": "Drive AApp",
       "subAgent": "SubAgent"
     },
@@ -892,7 +892,7 @@
     "quickStart": "Start",
     "heroBadge": "BitFun Workspace",
     "heroTitle": "A real workspace, not just a chat box",
-    "heroDescription": "An AI assistant with personality, memory, and real execution power. Sessions and mini apps all work around the same workflow, so AI is doing work, not just replying.",
+    "heroDescription": "An AI assistant with personality, memory, and real execution power. Sessions and live apps all work around the same workflow, so AI is doing work, not just replying.",
     "newCodeSession": "New Code Session",
     "newCodeSessionDesc": "Start coding, debug issues, or open a project and jump straight into building",
     "newCoworkSession": "New Cowork Session",
