@@ -496,14 +496,14 @@ const AIModelConfig: React.FC = () => {
     }))
   );
 
-  const resetRemoteModelDiscovery = () => {
+  const resetRemoteModelDiscovery = useCallback(() => {
     setRemoteModelOptions([]);
     setIsFetchingRemoteModels(false);
     setRemoteModelsError(null);
     setHasAttemptedRemoteFetch(false);
     lastRemoteFetchSignatureRef.current = null;
     activeRemoteFetchSignatureRef.current = null;
-  };
+  }, []);
 
   const syncSelectedModelDrafts = (
     modelNames: string[],
