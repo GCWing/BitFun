@@ -16,6 +16,7 @@ import {
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
 import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate } from '../types';
 import {
@@ -70,6 +71,7 @@ const SessionConfig: React.FC = () => {
   const [browserVersion, setBrowserVersion] = useState<string | null>(null);
   const [browserPageCount, setBrowserPageCount] = useState(0);
   const [browserControlBusy, setBrowserControlBusy] = useState(false);
+  const [platform, setPlatform] = useState<string>('');
 
   // ── Debug mode config state ──────────────────────────────────────────────
   const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
@@ -148,6 +150,12 @@ const SessionConfig: React.FC = () => {
         const ok = await refreshComputerUseStatus();
         if (!ok) setComputerUseEnabled(computerUseCfg ?? false);
         await refreshBrowserControlStatus();
+        try {
+          const info = await systemAPI.getSystemInfo();
+          setPlatform(info.platform || '');
+        } catch (error) {
+          log.warn('getSystemInfo failed', error);
+        }
       } else {
         setComputerUseEnabled(computerUseCfg ?? false);
       }
@@ -693,7 +701,7 @@ const SessionConfig: React.FC = () => {
             <>
               <ConfigPageRow
                 label={t('browserControl.status')}
-                description={t('browserControl.statusDesc')}
+                description={t('browserControl.statusDesc') || undefined}
                 align="center"
                 balanced
               >
@@ -702,16 +710,29 @@ const SessionConfig: React.FC = () => {
                   style={{
                     display: 'flex',
                     flexDirection: 'row',
-                    flexWrap: 'nowrap',
+                    flexWrap: 'wrap',
                     alignItems: 'center',
                     justifyContent: 'flex-end',
                     gap: 8,
+                    minWidth: 0,
                   }}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span className={browserCdpAvailable ? 'bitfun-func-agent-config__perm-status--granted' : undefined}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      minWidth: 0,
+                      maxWidth: '100%',
+                    }}
+                    title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
+                  >
+                    <span
+                      className={browserCdpAvailable ? 'bitfun-func-agent-config__perm-status--granted' : undefined}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                    >
                       {browserCdpAvailable
-                        ? `${browserKind}${browserVersion ? ` (${browserVersion})` : ''} — ${browserPageCount} ${t('browserControl.tabs')}`
+                        ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
                         : t('browserControl.notConnected')}
                     </span>
                     <IconButton
@@ -739,23 +760,25 @@ const SessionConfig: React.FC = () => {
                   )}
                 </div>
               </ConfigPageRow>
-              <ConfigPageRow
-                label={t('browserControl.createLauncher')}
-                description={t('browserControl.createLauncherDesc')}
-                align="center"
-              >
-                <div className="bitfun-func-agent-config__row-control">
-                  <Button
-                    className="bitfun-func-agent-config__row-action-btn"
-                    size="small"
-                    variant="secondary"
-                    disabled={browserControlBusy}
-                    onClick={() => void handleBrowserControlCreateLauncher()}
-                  >
-                    {t('browserControl.createLauncher')}
-                  </Button>
-                </div>
-              </ConfigPageRow>
+              {platform === 'macos' && (
+                <ConfigPageRow
+                  label={t('browserControl.createLauncher')}
+                  description={t('browserControl.createLauncherDesc')}
+                  align="center"
+                >
+                  <div className="bitfun-func-agent-config__row-control">
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={browserControlBusy}
+                      onClick={() => void handleBrowserControlCreateLauncher()}
+                    >
+                      {t('browserControl.createLauncher')}
+                    </Button>
+                  </div>
+                </ConfigPageRow>
+              )}
             </>
           ) : null}
         </ConfigPageSection>

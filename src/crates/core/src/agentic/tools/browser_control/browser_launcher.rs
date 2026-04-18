@@ -189,20 +189,7 @@ impl BrowserLauncher {
 
         #[cfg(target_os = "windows")]
         {
-            match kind {
-                BrowserKind::Chrome => {
-                    r"C:\Program Files\Google\Chrome\Application\chrome.exe".into()
-                }
-                BrowserKind::Edge => {
-                    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe".into()
-                }
-                BrowserKind::Brave => {
-                    r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe".into()
-                }
-                BrowserKind::Chromium => "chromium.exe".into(),
-                BrowserKind::Arc => "arc.exe".into(),
-                BrowserKind::Unknown(name) => name.clone(),
-            }
+            Self::windows_browser_executable(kind)
         }
 
         #[cfg(target_os = "linux")]
@@ -216,6 +203,105 @@ impl BrowserLauncher {
                 BrowserKind::Unknown(name) => name.clone(),
             }
         }
+    }
+
+    /// Windows: resolve a browser's executable path by probing common install
+    /// locations (Program Files / Program Files (x86) / per-user LocalAppData)
+    /// and then falling back to the registry "App Paths" entry.
+    #[cfg(target_os = "windows")]
+    fn windows_browser_executable(kind: &BrowserKind) -> String {
+        let (rel_paths, app_paths_key, fallback_cmd) = match kind {
+            BrowserKind::Chrome => (
+                vec![
+                    r"Google\Chrome\Application\chrome.exe",
+                ],
+                Some("chrome.exe"),
+                "chrome.exe",
+            ),
+            BrowserKind::Edge => (
+                vec![
+                    r"Microsoft\Edge\Application\msedge.exe",
+                ],
+                Some("msedge.exe"),
+                "msedge.exe",
+            ),
+            BrowserKind::Brave => (
+                vec![
+                    r"BraveSoftware\Brave-Browser\Application\brave.exe",
+                ],
+                Some("brave.exe"),
+                "brave.exe",
+            ),
+            BrowserKind::Chromium => (
+                vec![r"Chromium\Application\chrome.exe"],
+                None,
+                "chromium.exe",
+            ),
+            BrowserKind::Arc => (
+                vec![r"Arc\Arc.exe"],
+                None,
+                "arc.exe",
+            ),
+            BrowserKind::Unknown(name) => return name.clone(),
+        };
+
+        let env_roots = [
+            std::env::var("ProgramFiles").ok(),
+            std::env::var("ProgramFiles(x86)").ok(),
+            std::env::var("ProgramW6432").ok(),
+            std::env::var("LOCALAPPDATA").ok(),
+        ];
+
+        for root_opt in &env_roots {
+            if let Some(root) = root_opt {
+                for rel in &rel_paths {
+                    let candidate = format!(r"{}\{}", root.trim_end_matches('\\'), rel);
+                    if std::path::Path::new(&candidate).exists() {
+                        debug!("Found browser at {}", candidate);
+                        return candidate;
+                    }
+                }
+            }
+        }
+
+        // App Paths registry fallback: HKLM/HKCU \Software\Microsoft\Windows
+        // \CurrentVersion\App Paths\<exe>  default value points to the .exe.
+        if let Some(exe_name) = app_paths_key {
+            for root in &["HKCU", "HKLM"] {
+                let key = format!(
+                    r"{}\Software\Microsoft\Windows\CurrentVersion\App Paths\{}",
+                    root, exe_name
+                );
+                let output = Command::new("reg")
+                    .args(["query", &key, "/ve"])
+                    .output()
+                    .ok();
+                if let Some(out) = output {
+                    let text = String::from_utf8_lossy(&out.stdout);
+                    // Line looks like:  (Default)    REG_SZ    C:\Path\to\app.exe
+                    for line in text.lines() {
+                        let lower = line.to_ascii_lowercase();
+                        if lower.contains("reg_sz") {
+                            if let Some(idx) = lower.find("reg_sz") {
+                                let value = line[idx + "REG_SZ".len()..].trim();
+                                let unquoted = value.trim_matches('"').trim();
+                                if !unquoted.is_empty()
+                                    && std::path::Path::new(unquoted).exists()
+                                {
+                                    debug!(
+                                        "Resolved {} via App Paths: {}",
+                                        exe_name, unquoted
+                                    );
+                                    return unquoted.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        fallback_cmd.into()
     }
 
     /// Launch the browser with the CDP debug port flag.
@@ -278,16 +364,40 @@ impl BrowserLauncher {
 
     /// Check if a browser process is currently running.
     fn is_browser_running(kind: &BrowserKind) -> bool {
-        let process_names = match kind {
-            BrowserKind::Chrome => vec!["Google Chrome", "chrome"],
-            BrowserKind::Edge => vec!["Microsoft Edge", "msedge"],
-            BrowserKind::Brave => vec!["Brave Browser", "brave"],
+        // Per-platform process names.
+        // macOS / Linux match against the executable filename via `pgrep -f`.
+        // Windows must use the *.exe image name as it appears in `tasklist`.
+        #[cfg(target_os = "macos")]
+        let process_names: Vec<&str> = match kind {
+            BrowserKind::Chrome => vec!["Google Chrome"],
+            BrowserKind::Edge => vec!["Microsoft Edge"],
+            BrowserKind::Brave => vec!["Brave Browser"],
             BrowserKind::Arc => vec!["Arc"],
-            BrowserKind::Chromium => vec!["Chromium", "chromium"],
+            BrowserKind::Chromium => vec!["Chromium"],
             BrowserKind::Unknown(_) => return false,
         };
 
-        #[cfg(target_os = "macos")]
+        #[cfg(target_os = "linux")]
+        let process_names: Vec<&str> = match kind {
+            BrowserKind::Chrome => vec!["chrome", "google-chrome"],
+            BrowserKind::Edge => vec!["msedge", "microsoft-edge"],
+            BrowserKind::Brave => vec!["brave", "brave-browser"],
+            BrowserKind::Arc => vec!["arc"],
+            BrowserKind::Chromium => vec!["chromium", "chromium-browser"],
+            BrowserKind::Unknown(_) => return false,
+        };
+
+        #[cfg(target_os = "windows")]
+        let process_names: Vec<&str> = match kind {
+            BrowserKind::Chrome => vec!["chrome.exe"],
+            BrowserKind::Edge => vec!["msedge.exe"],
+            BrowserKind::Brave => vec!["brave.exe"],
+            BrowserKind::Arc => vec!["arc.exe"],
+            BrowserKind::Chromium => vec!["chrome.exe", "chromium.exe"],
+            BrowserKind::Unknown(_) => return false,
+        };
+
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             for name in &process_names {
                 let output = Command::new("pgrep").args(["-f", name]).output().ok();
@@ -302,27 +412,17 @@ impl BrowserLauncher {
 
         #[cfg(target_os = "windows")]
         {
-            for name in &process_names {
+            for image in &process_names {
+                let filter = format!("IMAGENAME eq {}", image);
                 let output = Command::new("tasklist")
-                    .args(["/FI", &format!("IMAGENAME eq {}.exe", name)])
+                    .args(["/FI", &filter, "/NH", "/FO", "CSV"])
                     .output()
                     .ok();
                 if let Some(out) = output {
                     let text = String::from_utf8_lossy(&out.stdout);
-                    if text.contains(name) {
-                        return true;
-                    }
-                }
-            }
-            false
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            for name in &process_names {
-                let output = Command::new("pgrep").args(["-f", name]).output().ok();
-                if let Some(out) = output {
-                    if out.status.success() && !out.stdout.is_empty() {
+                    // tasklist prints "INFO: No tasks ..." when nothing matches;
+                    // otherwise the first CSV column contains the image name.
+                    if text.to_ascii_lowercase().contains(&image.to_ascii_lowercase()) {
                         return true;
                     }
                 }
