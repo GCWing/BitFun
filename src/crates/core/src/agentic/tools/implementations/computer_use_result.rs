@@ -110,7 +110,6 @@ mod tests {
                 width: 98,
                 height: 76,
             }),
-            som_labels: vec![],
             implicit_confirmation_crop_applied: false,
             ui_tree_text: None,
         };

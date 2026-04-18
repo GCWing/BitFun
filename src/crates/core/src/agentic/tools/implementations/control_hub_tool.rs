@@ -2042,7 +2042,7 @@ for control flow.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
 ### domain: "desktop"  (Computer Use — only available in the BitFun desktop app)
-- screenshot, click, click_element, click_label, mouse_move, pointer_move_rel,
+- screenshot, click, click_element, mouse_move, pointer_move_rel,
   scroll, drag, key_chord, type_text, paste, wait, locate, move_to_text.
 - **`screenshot`** — exactly two possible outputs: the focused application
   window (default, via Accessibility) OR the full display (fallback when

@@ -186,10 +186,6 @@ pub struct ComputerScreenshot {
     /// Screen capture rectangle in JPEG pixel coordinates (offset zero when there is no frame padding); `ComputerUseMousePrecise` maps this rect to the display.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_content_rect: Option<ComputerUseImageContentRect>,
-    /// Set-of-Mark labels: numbered interactive elements overlaid on the screenshot.
-    /// When non-empty, the model can use `click_label` with a label number instead of coordinates.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub som_labels: Vec<SomElement>,
     /// Condensed text representation of the UI tree, focusing on interactive elements (inspired by TuriX-CUA).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_tree_text: Option<String>,
@@ -321,7 +317,7 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
             .await
     }
 
-    /// OCR on **raw display pixels** (no pointer/SoM overlay). Desktop captures only the relevant region:
+    /// OCR on **raw display pixels** (no pointer overlay). Desktop captures only the relevant region:
     /// optional `region_native`, else on macOS the frontmost window from Accessibility, else the primary display.
     /// Default returns a "not implemented" error. Desktop overrides with Vision (macOS), WinRT OCR (Windows), or Tesseract (Linux).
     async fn ocr_find_text_matches(
@@ -391,7 +387,7 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     /// On desktop, enforces the vision fine-screenshot guard (unlike [`mouse_click_authoritative`](Self::mouse_click_authoritative)).
     async fn mouse_click(&self, button: &str) -> BitFunResult<()>;
 
-    /// Click at the current pointer after the host has moved it to a **trusted** target (`click_element`, `click_label`, `move_to_text`).
+    /// Click at the current pointer after the host has moved it to a **trusted** target (`click_element`, `move_to_text`).
     /// Skips the vision fine-screenshot / stale-pointer guard that [`mouse_click`](Self::mouse_click) applies after a pointer move.
     /// Default: delegates to [`mouse_click`](Self::mouse_click).
     async fn mouse_click_authoritative(&self, button: &str) -> BitFunResult<()> {
@@ -492,11 +488,10 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
         ))
     }
 
-    /// Enumerate all visible interactive UI elements for Set-of-Mark (SoM) overlay.
-    /// Returns elements suitable for numbered label annotation on screenshots.
-    /// Default: empty (no SoM support).
-    async fn enumerate_som_elements(&self) -> (Vec<SomElement>, Option<String>) {
-        (vec![], None)
+    /// Enumerate the condensed UI tree text representation for the screenshot context.
+    /// Default: no UI tree text.
+    async fn enumerate_ui_tree_text(&self) -> Option<String> {
+        None
     }
 
     /// Record a completed action for loop detection and history tracking.
@@ -606,37 +601,6 @@ pub struct OpenAppResult {
     pub process_id: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_message: Option<String>,
-}
-
-/// A visible interactive UI element discovered via the accessibility tree,
-/// used for Set-of-Mark (SoM) numbered label overlay on screenshots.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SomElement {
-    /// 1-based label number rendered on the screenshot.
-    pub label: u32,
-    /// AX role (e.g. "AXButton", "AXTextField").
-    pub role: String,
-    /// AX title (visible label text), if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    /// AX identifier, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub identifier: Option<String>,
-    /// AX value, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-    /// AX description, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// Global screen center X (host pointer space).
-    pub global_center_x: f64,
-    /// Global screen center Y (host pointer space).
-    pub global_center_y: f64,
-    /// Element bounds in global screen space.
-    pub bounds_left: f64,
-    pub bounds_top: f64,
-    pub bounds_width: f64,
-    pub bounds_height: f64,
 }
 
 /// Whether the latest screenshot JPEG was the full display, a point crop, or a quadrant-drill region.

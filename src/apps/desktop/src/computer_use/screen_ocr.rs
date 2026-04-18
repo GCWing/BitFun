@@ -399,7 +399,7 @@ pub fn crop_shot_to_ocr_region(
     let cropped_view = image::imageops::crop_imm(&rgb, px0, py0, crop_w, crop_h);
     let cropped = cropped_view.to_image();
 
-    const OCR_CROP_JPEG_QUALITY: u8 = 75;
+    const OCR_CROP_JPEG_QUALITY: u8 = 85;
     let mut buf = Vec::new();
     let mut enc = JpegEncoder::new_with_quality(&mut buf, OCR_CROP_JPEG_QUALITY);
     enc.encode(
@@ -449,7 +449,6 @@ pub fn crop_shot_to_ocr_region(
             width: cropped.width(),
             height: cropped.height(),
         }),
-        som_labels: vec![],
         implicit_confirmation_crop_applied: false,
         ui_tree_text: None,
     })

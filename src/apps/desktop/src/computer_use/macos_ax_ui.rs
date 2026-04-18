@@ -4,7 +4,7 @@
 
 use crate::computer_use::ui_locate_common;
 use bitfun_core::agentic::tools::computer_use_host::{
-    OcrAccessibilityHit, SomElement, UiElementLocateQuery, UiElementLocateResult,
+    OcrAccessibilityHit, UiElementLocateQuery, UiElementLocateResult,
 };
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use core_foundation::array::{CFArray, CFArrayRef};
@@ -456,7 +456,7 @@ pub fn locate_ui_element_center(
 
     if candidates.is_empty() {
         return Err(BitFunError::tool(
-            "No accessibility element matched in the frontmost app. Tips: `role_substring` **`TextArea`** also matches **`AXTextField`** (WeChat compose is often TextField). Use `filter_combine: \"any\"` for OR matching; match UI language; ensure the target app is focused. For chat apps, if the conversation is already open, **`type_text`** may work without clicking. Or use `move_to_text` / `screenshot` + `click_label`."
+            "No accessibility element matched in the frontmost app. Tips: `role_substring` **`TextArea`** also matches **`AXTextField`** (WeChat compose is often TextField). Use `filter_combine: \"any\"` for OR matching; match UI language; ensure the target app is focused. For chat apps, if the conversation is already open, **`type_text`** may work without clicking. Or use `move_to_text` / `screenshot`."
                 .to_string(),
         ));
     }
@@ -542,16 +542,14 @@ unsafe fn is_ax_interactive(elem: AXUIElementRef, role: &str) -> bool {
     has_interactive
 }
 
-/// Enumerate all visible interactive elements in the frontmost app's AX tree.
-/// Returns up to `max_elements` SomElement entries with 1-based label numbers.
-pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, Option<String>) {
-    let pid = match frontmost_pid() {
-        Ok(p) => p,
-        Err(_) => return (vec![], None),
-    };
+/// Enumerate visible interactive elements in the frontmost app's AX tree
+/// and return a condensed text representation of the UI for context (no
+/// numbered labels rendered on the screenshot).
+pub fn enumerate_ui_tree_text(max_elements: usize) -> Option<String> {
+    let pid = frontmost_pid().ok()?;
     let root = unsafe { AXUIElementCreateApplication(pid) };
     if root.is_null() {
-        return (vec![], None);
+        return None;
     }
 
     let win_bounds = frontmost_window_bounds_global().ok();
@@ -561,12 +559,22 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
         depth: u32,
     }
 
+    struct InteractiveElement {
+        label: u32,
+        role: String,
+        title: Option<String>,
+        value: Option<String>,
+        description: Option<String>,
+        bounds_width: f64,
+        bounds_height: f64,
+    }
+
     let mut queue = VecDeque::new();
     queue.push_back(BfsItem { ax: root, depth: 0 });
     let max_depth: u32 = 30;
     let max_nodes: usize = 8_000;
     let mut visited: usize = 0;
-    let mut results: Vec<SomElement> = Vec::new();
+    let mut results: Vec<InteractiveElement> = Vec::new();
 
     while let Some(cur) = queue.pop_front() {
         if cur.depth > max_depth || results.len() >= max_elements {
@@ -588,17 +596,14 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
             break;
         }
 
-        let (role_s, title_s, id_s) = unsafe { read_role_title_id(cur.ax) };
+        let (role_s, title_s, _id_s) = unsafe { read_role_title_id(cur.ax) };
         let role = role_s.as_deref().unwrap_or("");
 
-        // Check if this element is interactive and visible
         if unsafe { is_ax_interactive(cur.ax, role) } {
             let hidden = unsafe { is_ax_hidden(cur.ax) };
             if !hidden {
                 if let Some((gx, gy, bl, bt, bw, bh)) = unsafe { element_frame_global(cur.ax) } {
-                    // Filter: reasonable size (not a giant container, not tiny)
                     if bw >= 4.0 && bh >= 4.0 && bw <= 2000.0 && bh <= 1000.0 {
-                        // Filter: on-screen (intersect with main window bounds if available, else gx >= 0)
                         let mut on_screen = gx >= 0.0 && gy >= 0.0;
                         if let Some((wx, wy, ww, wh)) = win_bounds {
                             let wx_f = wx as f64;
@@ -613,17 +618,12 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
                         if on_screen {
                             let (val_s, desc_s) = unsafe { read_value_desc(cur.ax) };
                             let label = results.len() as u32 + 1;
-                            results.push(SomElement {
+                            results.push(InteractiveElement {
                                 label,
                                 role: role.to_string(),
                                 title: title_s.clone().filter(|s| !s.is_empty()),
-                                identifier: id_s.clone().filter(|s| !s.is_empty()),
                                 value: val_s.filter(|s| !s.is_empty()),
                                 description: desc_s.filter(|s| !s.is_empty()),
-                                global_center_x: gx,
-                                global_center_y: gy,
-                                bounds_left: bl,
-                                bounds_top: bt,
                                 bounds_width: bw,
                                 bounds_height: bh,
                             });
@@ -644,7 +644,6 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
             }
         }
 
-        // Enqueue children
         let children_ref = unsafe { ax_copy_attr(cur.ax, "AXChildren") };
         let next_depth = cur.depth + 1;
         unsafe {
@@ -676,6 +675,9 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
         }
     }
 
+    if results.is_empty() {
+        return None;
+    }
     let mut ui_tree_lines = Vec::new();
     for el in &results {
         let mut attrs = String::new();
@@ -699,13 +701,7 @@ pub fn enumerate_interactive_elements(max_elements: usize) -> (Vec<SomElement>, 
             attrs.trim_start()
         ));
     }
-    let ui_tree_text = if ui_tree_lines.is_empty() {
-        None
-    } else {
-        Some(ui_tree_lines.join("\n"))
-    };
-
-    (results, ui_tree_text)
+    Some(ui_tree_lines.join("\n"))
 }
 
 unsafe fn ax_parent_context_line(elem: AXUIElementRef) -> Option<String> {
@@ -759,7 +755,7 @@ pub fn accessibility_hit_at_global_point(gx: f64, gy: f64) -> Option<OcrAccessib
 // ── Raw OCR: frontmost window bounds (separate from agent screenshot pipeline) ─────────────────
 
 /// Bounds of the foreground app's focused or main window in global screen coordinates (same space as pointer / screen capture).
-/// Used to crop **raw** pixels for Vision OCR without pointer/SoM overlays from the agent screenshot path.
+/// Used to crop **raw** pixels for Vision OCR without pointer overlays from the agent screenshot path.
 pub fn frontmost_window_bounds_global() -> BitFunResult<(i32, i32, u32, u32)> {
     let pid = frontmost_pid()?;
     let app = unsafe { AXUIElementCreateApplication(pid) };
