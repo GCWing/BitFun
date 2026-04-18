@@ -95,18 +95,20 @@ click UI elements, set models, or perform any action inside the BitFun app itsel
 
 Available actions (use EXACTLY one of these for the "action" field):
 - "execute_task": Run a high-level task. Requires "task" field.
-  Valid tasks: "set_primary_model", "set_fast_model", "open_model_settings", "return_to_session", "delete_model".
+  Valid tasks: "set_primary_model", "set_fast_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp".
   Example: { "action": "execute_task", "task": "open_model_settings" }
   Example: { "action": "execute_task", "task": "delete_model", "params": { "modelQuery": "OpenRouter" } }
   Example: { "action": "execute_task", "task": "set_primary_model", "params": { "modelQuery": "kimi" } }
+  Example: { "action": "execute_task", "task": "open_miniapp", "params": { "miniAppId": "<id from list_miniapps>" } }
   CRITICAL: "open_model_settings" is a TASK, not an action. Do NOT use { "action": "open_model_settings" }.
 - "get_page_state": Returns the current page state including active scene, interactive elements, semantic hints, and quick-action targets.
 - "click": Clicks an element by CSS selector. Requires "selector".
 - "click_by_text": Clicks an element containing the given text. Requires "text". Optional "tag".
 - "input": Sets the value of an input element. Requires "selector" and "value".
 - "scroll": Scrolls the page or an element. Optional "selector", requires "direction" (up, down, top, bottom).
-- "open_scene": Opens a scene by ID. Requires "sceneId" (e.g., "settings", "session", "welcome").
+- "open_scene": Opens a scene by ID. Requires "sceneId" (e.g., "settings", "session", "welcome", "miniapps", or "miniapp:<id>" for a specific mini-app).
 - "open_settings_tab": Opens the settings scene and switches to a tab. Requires "tabId".
+- "open_miniapp": Opens a specific installed mini-app. Requires "miniAppId" (use ControlHub domain="app" action="list_miniapps" to discover).
 - "set_config": Sets a config value by key. Requires "key" and "configValue".
 - "get_config": Gets a config value by key. Requires "key".
 - "list_models": Lists all configured models with their display names, providers, and IDs. Optional "includeDisabled" (boolean).
@@ -121,7 +123,8 @@ Guidelines:
 1. For well-known requests (e.g., "set Kimi as the main model"), ALWAYS prefer "execute_task" with "set_primary_model".
 2. When a page changes, use "wait" with ~300-500ms before the next action to let UI settle.
 3. For unknown UI tasks, use "get_page_state" first, read the "semanticHints" field, then decide.
-4. After completing the user's request, return to the session scene with "return_to_session" task or open_scene "session"."#
+4. After completing the user's request, return to the session scene with "return_to_session" task or open_scene "session".
+5. For "what mini-apps are installed / show the gallery", call ControlHub domain="app" action="list_miniapps" first (it is pure-Rust, no UI round-trip), THEN open_miniapp_gallery or open_miniapp."#
                 .to_string(),
         )
     }
@@ -141,6 +144,7 @@ Guidelines:
                         "scroll",
                         "open_scene",
                         "open_settings_tab",
+                        "open_miniapp",
                         "set_config",
                         "get_config",
                         "list_models",
@@ -155,8 +159,12 @@ Guidelines:
                 },
                 "task": {
                     "type": "string",
-                    "enum": ["set_primary_model", "set_fast_model", "open_model_settings", "return_to_session", "delete_model"],
+                    "enum": ["set_primary_model", "set_fast_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp"],
                     "description": "Task name when using execute_task."
+                },
+                "miniAppId": {
+                    "type": "string",
+                    "description": "Mini-app id (use ControlHub domain=\"app\" action=\"list_miniapps\" to discover) for open_miniapp action / task."
                 },
                 "params": {
                     "type": "object",

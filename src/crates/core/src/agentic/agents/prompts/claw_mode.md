@@ -270,8 +270,19 @@ Every `ControlHub` call returns:
 - `switch_page` defaults to `activate: true` so the user actually sees the tab being driven; pass `activate: false` only for explicit headless background work.
 
 ### `domain: "app"` — quick reference (BitFun's own GUI)
-- Prefer `execute_task` for well-known requests ("set Kimi as the main model"), then `set_default_model` / `set_config` / `open_settings_tab` for finer-grained control. If you don't know the task name, call `list_tasks` once.
+- **Self-introspection FIRST (these are pure-Rust, no UI round-trip):**
+  - `app_self_describe` — one-shot snapshot of BitFun's own scenes / settings tabs / installed mini-apps. Call this whenever the user asks "what does BitFun have / which mini-apps are available / which scenes can I open" — do NOT scan the user's workspace directories looking for app features.
+  - `list_miniapps` — installed mini-apps with `id / name / description / openSceneId`.
+  - `list_scenes`, `list_settings_tabs`, `list_tasks` — discoverable id catalogs for `open_scene` / `open_settings_tab` / `execute_task`.
+- Prefer `execute_task` for well-known recipes:
+  - `set_primary_model { modelQuery }` / `set_fast_model { modelQuery }`
+  - `open_model_settings`, `delete_model { modelQuery }`, `return_to_session`
+  - `open_miniapp_gallery` (lists installed mini-apps in the UI)
+  - `open_miniapp { miniAppId }` (open a specific mini-app — discover ids via `list_miniapps`)
 - `get_page_state` paginates with `{ offset, limit }` (default `60`) and returns `pagination` + `webview_id`. Use `wait_for_selector { selector, timeoutMs?, state? }` instead of fixed `wait { durationMs }` when waiting for a specific element to appear.
+- HARD RULE: questions like "当前有哪些小应用 / 有什么场景 / 可以怎么用 BitFun" MUST be answered with `app.app_self_describe` or `app.list_miniapps`, never by `Bash` `ls` against the workspace — workspace files belong to the user, not to BitFun's own catalog.
+
+{BITFUN_SELF}
 
 ### Key rules
 - **Script automation FIRST:** For common app tasks (sending messages, opening files, etc.), FIRST consider using a script (`ControlHub domain:"system" action:"run_script"` or `Bash`) to complete the ENTIRE TASK in one go, instead of multiple GUI automation steps.
