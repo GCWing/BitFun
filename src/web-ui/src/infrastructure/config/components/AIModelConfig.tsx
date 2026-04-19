@@ -62,8 +62,8 @@ function createModelDraft(
     configId: overrides?.configId ?? baseConfig?.id,
     modelName: trimmedModelName,
     category: overrides?.category ?? baseConfig?.category ?? 'general_chat',
-    contextWindow: overrides?.contextWindow ?? baseConfig?.context_window ?? 128000,
-    maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens ?? 8192,
+    contextWindow: overrides?.contextWindow ?? baseConfig?.context_window ?? 200000,
+    maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens ?? 32000,
     reasoningMode: overrides?.reasoningMode ?? getEffectiveReasoningMode(baseConfig),
     reasoningEffort: overrides?.reasoningEffort ?? baseConfig?.reasoning_effort,
     thinkingBudgetTokens: overrides?.thinkingBudgetTokens ?? baseConfig?.thinking_budget_tokens,
@@ -488,8 +488,8 @@ const AIModelConfig: React.FC = () => {
   const createDraftsFromConfigs = (configs: AIModelConfigType[]) => (
     configs.map(config => createModelDraft(config.model_name, config, {
       configId: config.id,
-      contextWindow: config.context_window || 128000,
-      maxTokens: config.max_tokens || 8192,
+      contextWindow: config.context_window || 200000,
+      maxTokens: config.max_tokens || 32000,
       reasoningMode: getEffectiveReasoningMode(config),
       reasoningEffort: config.reasoning_effort,
       thinkingBudgetTokens: config.thinking_budget_tokens,
@@ -680,8 +680,8 @@ const AIModelConfig: React.FC = () => {
       base_url: resolvedBaseUrl,
       request_url: config.request_url || resolveRequestUrl(resolvedBaseUrl, resolvedProvider, resolvedModelName),
       model_name: resolvedModelName,
-      context_window: config.context_window || 128000,
-      max_tokens: config.max_tokens || 8192,
+      context_window: config.context_window || 200000,
+      max_tokens: config.max_tokens || 32000,
       temperature: config.temperature,
       top_p: config.top_p,
       enabled: config.enabled ?? true,
@@ -803,7 +803,7 @@ const AIModelConfig: React.FC = () => {
       model_name: '',
       enabled: true,
       context_window: 200000,
-      max_tokens: 8192,
+      max_tokens: 32000,
       category: 'general_chat',
       capabilities: ['text_chat', 'function_calling'],
       recommended_for: [],
@@ -854,8 +854,8 @@ const AIModelConfig: React.FC = () => {
       model_name: defaultModel,
       provider: primaryConfiguredModel?.provider || template.format,
       enabled: true,
-      context_window: 128000,
-      max_tokens: 8192,
+      context_window: 200000,
+      max_tokens: 32000,
       category: 'general_chat',
       capabilities: ['text_chat', 'function_calling'],
       recommended_for: [],
@@ -866,8 +866,8 @@ const AIModelConfig: React.FC = () => {
       configuredProviderModels.length > 0
         ? createDraftsFromConfigs(configuredProviderModels)
         : (defaultModel ? [createModelDraft(defaultModel, {
-            context_window: 128000,
-            max_tokens: 8192,
+            context_window: 200000,
+            max_tokens: 32000,
             reasoning_mode: DEFAULT_REASONING_MODE,
           })] : [])
     );
@@ -890,8 +890,8 @@ const AIModelConfig: React.FC = () => {
       model_name: '',
       provider: 'openai',  
       enabled: true,
-      context_window: 128000,
-      max_tokens: 8192,  
+      context_window: 200000,
+      max_tokens: 32000,  
       
       category: 'general_chat',
       capabilities: ['text_chat'],
@@ -922,8 +922,8 @@ const AIModelConfig: React.FC = () => {
       model_name: '',
       provider: config.provider,
       enabled: true,
-      context_window: config.context_window || 128000,
-      max_tokens: config.max_tokens || 8192,
+      context_window: config.context_window || 200000,
+      max_tokens: config.max_tokens || 32000,
       category: config.category || 'general_chat',
       capabilities: config.capabilities || getCapabilitiesByCategory(config.category || 'general_chat'),
       recommended_for: config.recommended_for || [],
@@ -953,8 +953,8 @@ const AIModelConfig: React.FC = () => {
     setEditingConfig({ ...config, name: getProviderDisplayName(config) });
     setSelectedModelDrafts([
       createModelDraft(config.model_name, config, {
-        contextWindow: config.context_window || 128000,
-        maxTokens: config.max_tokens || 8192,
+        contextWindow: config.context_window || 200000,
+        maxTokens: config.max_tokens || 32000,
         reasoningMode: getEffectiveReasoningMode(config),
         reasoningEffort: config.reasoning_effort,
         thinkingBudgetTokens: config.thinking_budget_tokens,
