@@ -1124,6 +1124,21 @@ impl ControlHubTool {
                     "params": { "modelQuery": "fuzzy match on model display name or id" },
                 },
                 {
+                    "name": "enable_model",
+                    "description": "Enable a configured model that is currently disabled (pure config write — no UI navigation needed). If the model is already enabled, returns a no-op message.",
+                    "params": { "modelQuery": "fuzzy match on model display name or id" },
+                },
+                {
+                    "name": "disable_model",
+                    "description": "Disable a configured model. If the disabled model is the current primary/fast default, the default is automatically rolled forward to the next enabled model.",
+                    "params": { "modelQuery": "fuzzy match on model display name or id" },
+                },
+                {
+                    "name": "toggle_model",
+                    "description": "Flip a model's enabled flag (enabled ⇄ disabled). Same default-rollover behaviour as disable_model when the toggled model was the active primary/fast.",
+                    "params": { "modelQuery": "fuzzy match on model display name or id" },
+                },
+                {
                     "name": "open_miniapp_gallery",
                     "description": "Open the Mini App gallery scene (lists installed mini-apps).",
                     "params": {},
@@ -1134,9 +1149,10 @@ impl ControlHubTool {
                     "params": { "miniAppId": "id of the mini app to open" },
                 },
             ]);
+            let count = tasks.as_array().map(|a| a.len()).unwrap_or(0);
             return Ok(vec![ToolResult::ok(
                 json!({ "tasks": tasks }),
-                Some("7 named tasks available for app.execute_task".to_string()),
+                Some(format!("{count} named tasks available for app.execute_task")),
             )]);
         }
 

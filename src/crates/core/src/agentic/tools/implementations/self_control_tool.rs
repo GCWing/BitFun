@@ -95,21 +95,23 @@ click UI elements, set models, or perform any action inside the BitFun app itsel
 
 Available actions (use EXACTLY one of these for the "action" field):
 - "execute_task": Run a high-level task. Requires "task" field.
-  Valid tasks: "set_primary_model", "set_fast_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp".
+  Valid tasks: "set_primary_model", "set_fast_model", "enable_model", "disable_model", "toggle_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp".
   Example: { "action": "execute_task", "task": "open_model_settings" }
+  Example: { "action": "execute_task", "task": "enable_model", "params": { "modelQuery": "kimi" } }
+  Example: { "action": "execute_task", "task": "disable_model", "params": { "modelQuery": "doubao-lite" } }
   Example: { "action": "execute_task", "task": "delete_model", "params": { "modelQuery": "OpenRouter" } }
   Example: { "action": "execute_task", "task": "set_primary_model", "params": { "modelQuery": "kimi" } }
   Example: { "action": "execute_task", "task": "open_miniapp", "params": { "miniAppId": "<id from list_miniapps>" } }
   CRITICAL: "open_model_settings" is a TASK, not an action. Do NOT use { "action": "open_model_settings" }.
-- "get_page_state": Returns the current page state including active scene, interactive elements, semantic hints, and quick-action targets.
-- "click": Clicks an element by CSS selector. Requires "selector".
-- "click_by_text": Clicks an element containing the given text. Requires "text". Optional "tag".
-- "input": Sets the value of an input element. Requires "selector" and "value".
-- "scroll": Scrolls the page or an element. Optional "selector", requires "direction" (up, down, top, bottom).
+- "get_page_state": Returns the current page state including active scene, interactive elements, semantic hints, and quick-action targets. Each element carries a `selector` field that can be pasted directly into action="click". Optional "scope" (one of "auto" | "main" | "document" | <CSS-selector>); default "auto" prefers <main> and transparently widens when needed. Optional "includeOffscreen" (boolean | "auto", default "auto" — automatically true for the settings scene so the model list / MCP list rows below the viewport fold are visible).
+- "click": Clicks an element by CSS selector. Requires non-empty "selector". For text-based targeting use click_by_text instead.
+- "click_by_text": Clicks an element containing the given text. Requires "text" (also accepted as "query" / "label" / "searchText"). Optional "tag", optional "scope" (one of "auto" | "main" | "document" | <CSS-selector for a container>; default "auto" — searches inside <main> first, then widens to whole document on miss). Use "main" to avoid matching the global nav/sidebar/scene-tab bar. On AMBIGUOUS errors the response includes ready-to-use per-candidate selectors.
+- "input": Sets the value of an input element. Requires "selector" and "value" (also accepted as "text" / "inputValue" / "content"). Missing "value" returns INVALID_PARAMS — no silent success.
+- "scroll": Scrolls the page or an element. Optional "selector", requires "direction" ∈ {up, down, top, bottom}. As a convenience you may pass numeric "deltaY" instead (positive ⇒ down, negative ⇒ up); a missing/invalid direction returns INVALID_PARAMS — no silent success.
 - "open_scene": Opens a scene by ID. Requires "sceneId" (e.g., "settings", "session", "welcome", "miniapps", or "miniapp:<id>" for a specific mini-app).
 - "open_settings_tab": Opens the settings scene and switches to a tab. Requires "tabId".
 - "open_miniapp": Opens a specific installed mini-app. Requires "miniAppId" (use ControlHub domain="app" action="list_miniapps" to discover).
-- "set_config": Sets a config value by key. Requires "key" and "configValue".
+- "set_config": Sets a config value by key. Requires "key" and the value (accepted as "configValue", or any of the aliases "value" / "config_value" / "data" / "payload" — they all map to the same field, BUT only for this action; "value"/"text" are NOT cross-aliased on other actions).
 - "get_config": Gets a config value by key. Requires "key".
 - "list_models": Lists all configured models with their display names, providers, and IDs. Optional "includeDisabled" (boolean).
 - "set_default_model": Directly sets the default model by config search. Falls back to UI if not found. Requires "modelQuery". Optional "slot" ("primary" or "fast").
@@ -121,10 +123,16 @@ Available actions (use EXACTLY one of these for the "action" field):
 
 Guidelines:
 1. For well-known requests (e.g., "set Kimi as the main model"), ALWAYS prefer "execute_task" with "set_primary_model".
-2. When a page changes, use "wait" with ~300-500ms before the next action to let UI settle.
-3. For unknown UI tasks, use "get_page_state" first, read the "semanticHints" field, then decide.
-4. After completing the user's request, return to the session scene with "return_to_session" task or open_scene "session".
-5. For "what mini-apps are installed / show the gallery", call ControlHub domain="app" action="list_miniapps" first (it is pure-Rust, no UI round-trip), THEN open_miniapp_gallery or open_miniapp."#
+2. To enable / disable / toggle a configured model, prefer execute_task with "enable_model" / "disable_model" / "toggle_model" — this is a pure config write and works from any scene without losing chat context. Only fall back to UI clicks when the user explicitly asks for the visual flow.
+3. When a page changes, use "wait" with ~300-500ms before the next action to let UI settle.
+4. For unknown UI tasks, use "get_page_state" first, read the "semanticHints" field, then decide.
+5. After completing the user's request, return to the session scene with "return_to_session" task or open_scene "session".
+6. For "what mini-apps are installed / show the gallery", call ControlHub domain="app" action="list_miniapps" first (it is pure-Rust, no UI round-trip), THEN open_miniapp_gallery or open_miniapp.
+
+Failure modes you should expect (and not retry blindly):
+- INVALID_PARAMS: required field missing or wrong type. Read the error hints — they list the canonical field name AND its accepted aliases for this exact action.
+- NOT_FOUND: selector / model / mini-app does not exist. Call get_page_state (or list_models / list_miniapps) before retrying with a guess.
+- AMBIGUOUS: multiple candidates matched. The hint contains per-candidate concrete selectors — pick one and re-issue with action="click"."#
                 .to_string(),
         )
     }
@@ -159,8 +167,8 @@ Guidelines:
                 },
                 "task": {
                     "type": "string",
-                    "enum": ["set_primary_model", "set_fast_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp"],
-                    "description": "Task name when using execute_task."
+                    "enum": ["set_primary_model", "set_fast_model", "enable_model", "disable_model", "toggle_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp"],
+                    "description": "Task name when using execute_task. enable_model / disable_model / toggle_model are pure config writes (no UI navigation)."
                 },
                 "miniAppId": {
                     "type": "string",
@@ -176,15 +184,25 @@ Guidelines:
                 },
                 "text": {
                     "type": "string",
-                    "description": "Text content to match for click_by_text."
+                    "description": "Dual-purpose, scoped per action: (1) the search text for click_by_text (canonical field); (2) accepted alias for the `value` field on the `input` action (also: inputValue, input_value, content). NOT cross-aliased to other actions — the frontend resolves aliases per action so the same surface name can mean different things."
                 },
                 "value": {
-                    "type": "string",
-                    "description": "Value to set for input actions."
+                    "description": "Dual-purpose, scoped per action: (1) the string value for the `input` action (canonical; aliases: text / inputValue / input_value / content); (2) accepted alias for `configValue` on the `set_config` action (also: config_value / data / payload). Pass any JSON value for set_config; pass a string for input."
+                },
+                "deltaY": {
+                    "type": "number",
+                    "description": "Optional convenience input for the scroll action. When `direction` is missing, deltaY>0 derives `down` and deltaY<0 derives `up`. Magnitude is otherwise ignored — each scroll action moves a fixed step."
+                },
+                "includeOffscreen": {
+                    "description": "Optional for get_page_state. boolean | \"auto\" (default \"auto\" — automatically true on the settings scene). When true, elements outside the current viewport are also enumerated (necessary for the model list / MCP list which usually live below the fold)."
                 },
                 "tag": {
                     "type": "string",
-                    "description": "Optional HTML tag to restrict click_by_text."
+                    "description": "Optional HTML tag to restrict click_by_text (e.g. \"button\")."
+                },
+                "scope": {
+                    "type": "string",
+                    "description": "Optional search scope for click_by_text / get_page_state. One of \"auto\" (default — try <main>, fall back to whole document), \"main\" (strictly inside <main data-testid=\"app-main-content\">), \"document\" (whole document, legacy behavior), or a CSS selector for a custom container element."
                 },
                 "direction": {
                     "type": "string",
@@ -204,11 +222,11 @@ Guidelines:
                     "description": "Config key for get_config / set_config."
                 },
                 "configValue": {
-                    "description": "Config value for set_config."
+                    "description": "Config value for set_config (canonical). Alias-equivalent to `value` / `config_value` / `data` / `payload`, but ONLY for the set_config action — `value` on the `input` action means something different (the input text)."
                 },
                 "modelQuery": {
                     "type": "string",
-                    "description": "Model name or ID to search for when using set_default_model, delete_model, or delete_model task (e.g., \"doubao pro\", \"gpt-4o\")."
+                    "description": "Model name or ID to search for when using set_default_model, delete_model, or the enable_model / disable_model / toggle_model tasks (e.g., \"doubao pro\", \"gpt-4o\", \"kimi\"). Fuzzy-matched against display name, model_name, provider, base_url, id."
                 },
                 "slot": {
                     "type": "string",
