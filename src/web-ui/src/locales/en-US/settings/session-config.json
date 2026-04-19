@@ -9,7 +9,7 @@
     },
     "agentCompanion": {
       "title": "Agent companion",
-      "subtitle": "Show a pixel-style companion animation in the collapsed chat input.",
+      "subtitle": "Show BitFun companion in the collapsed chat input.",
       "enable": "Show Agent companion"
     }
   },

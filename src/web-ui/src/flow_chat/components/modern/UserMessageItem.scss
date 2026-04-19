@@ -5,9 +5,9 @@
 .user-message-item {
   padding: 0.5rem 1rem;
   background: var(--element-bg-medium);
-  border: 1px solid var(--border-medium);
+  border: none;
   border-radius: 8px;
-  margin: 0 3rem 1rem 3rem;
+  margin: 0 3rem 0.5rem 3rem;
   transition: all 0.2s ease;
   animation: slideInUp 0.3s ease;
   position: relative;
@@ -83,8 +83,7 @@
 // Failed state.
 .user-message-item--failed {
   background: transparent;
-  border-style: dashed;
-  border-color: var(--border-medium, #555);
+  border: none;
   box-shadow: none;
   
   .user-message-item__content {

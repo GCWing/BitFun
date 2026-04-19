@@ -201,7 +201,8 @@
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
-    min-width: 168px;
+    min-width: 200px;
+    max-width: min(280px, calc(100vw - 24px));
     padding: 6px;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
@@ -227,6 +228,18 @@
     transition:
       color $motion-fast $easing-standard,
       background $motion-fast $easing-standard;
+
+    > svg {
+      flex-shrink: 0;
+    }
+
+    > span {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     &:hover {
       color: var(--color-text-primary);

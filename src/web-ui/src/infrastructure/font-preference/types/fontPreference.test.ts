@@ -47,11 +47,11 @@ describe('resolveFontSizeTokens', () => {
 });
 
 describe('resolveFlowChatFontSizeTokens', () => {
-  it('lift mode bumps UI base by 1px', () => {
+  it('lift mode now matches UI base (previously +1)', () => {
     const pref = { ...DEFAULT_FONT_PREFERENCE, flowChat: { mode: 'lift' as const } };
     const uiBase = PRESET_UI_BASE_PX[pref.uiSize.level as Exclude<typeof pref.uiSize.level, 'custom'>];
     const tokens = resolveFlowChatFontSizeTokens(pref);
-    expect(tokens.base).toBe(`${Math.min(20, uiBase + 1)}px`);
+    expect(tokens.base).toBe(`${Math.min(20, uiBase)}px`);
   });
 
   it('sync mode matches UI tokens exactly', () => {

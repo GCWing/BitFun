@@ -1182,7 +1182,7 @@ impl Default for AIExperienceConfig {
             enable_session_title_generation: true,
             enable_welcome_panel_ai_analysis: false,
             enable_visual_mode: false,
-            enable_agent_companion: false,
+            enable_agent_companion: true,
         }
     }
 }

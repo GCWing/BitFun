@@ -1,8 +1,13 @@
 /* Regex Playground — developer-tool theme.
  * Design system reference:
- *   palette  ─ "Code dark + run green"  (#0F172A / #1E293B / #334155 / #22C55E / #F8FAFC)
- *   type     ─ JetBrains Mono (code) + IBM Plex Sans (UI), system fallbacks
- *   pattern  ─ bento-style cards on a calm dark surface
+ *   palette  ─ Inherits BitFun host theme (--bitfun-* tokens) so it reads
+ *              as a native panel under both bitfun-dark and bitfun-light.
+ *              Local --rx-* tokens are derived from the host vars with
+ *              standalone-safe fallbacks matching the default dark theme.
+ *   accent   ─ host primary (cool blue / slate) for focus & active states;
+ *              warning amber as the secondary "match" highlight.
+ *   type     ─ system mono (code) + system sans (UI), follows --bitfun-font-*
+ *   pattern  ─ bento-style cards on calm host surfaces
  *   motion   ─ 150-300ms color-shift micro-interactions, no scale jumps
  */
 
@@ -15,31 +20,38 @@ body, html { margin: 0; padding: 0; height: 100%; }
 [hidden] { display: none !important; }
 
 :root {
-  --rx-bg: #0a0f1a;
-  --rx-bg-2: #0e1422;
-  --rx-surface: #131a2a;
-  --rx-surface-2: #1a2236;
-  --rx-surface-3: #222b42;
-  --rx-border: #1e2638;
-  --rx-border-strong: #2c3852;
-  --rx-border-bright: #3b4866;
+  /* Surfaces — drive everything off host bg tokens so the playground tracks
+   * BitFun light/dark automatically. Fallbacks mirror the default dark theme. */
+  --rx-bg:        var(--bitfun-bg,            #0e0e10);
+  --rx-bg-2:      var(--bitfun-bg-tertiary,   #121214);
+  --rx-surface:   var(--bitfun-bg-secondary,  #1c1c1f);
+  --rx-surface-2: var(--bitfun-element-bg,    rgba(255,255,255,0.06));
+  --rx-surface-3: var(--bitfun-element-hover, rgba(255,255,255,0.10));
 
-  --rx-text: #f1f5f9;
-  --rx-text-soft: #c8d1e0;
-  --rx-text-mute: #7e8aa3;
-  --rx-text-dim: #5b6680;
+  --rx-border:        var(--bitfun-border-subtle, rgba(255,255,255,0.10));
+  --rx-border-strong: var(--bitfun-border,        rgba(255,255,255,0.18));
+  --rx-border-bright: var(--bitfun-border,        rgba(255,255,255,0.28));
 
-  --rx-accent: #22c55e;          /* "run green" — primary */
-  --rx-accent-soft: rgba(34,197,94,0.14);
-  --rx-accent-strong: #4ade80;
-  --rx-match: #f59e0b;            /* warm match highlight */
+  --rx-text:      var(--bitfun-text,           #e8e8e8);
+  --rx-text-soft: var(--bitfun-text-secondary, #b0b0b0);
+  --rx-text-mute: var(--bitfun-text-muted,     #858585);
+  --rx-text-dim:  var(--bitfun-text-muted,     #6a6a6a);
+
+  /* Accent — follows host primary (blue in dark, slate in light) instead of
+   * the previous saturated "run green" which clashed with BitFun's neutral palette. */
+  --rx-accent:        var(--bitfun-accent,       #60a5fa);
+  --rx-accent-strong: var(--bitfun-accent-hover, #3b82f6);
+  --rx-accent-soft:   rgba(96,165,250,0.14);
+
+  /* Semantic colors — pulled from host so they harmonize with the rest of BitFun. */
+  --rx-match:      var(--bitfun-warning, #f59e0b);            /* warm match highlight */
   --rx-match-soft: rgba(245,158,11,0.18);
-  --rx-error: #ef4444;
-  --rx-info: #38bdf8;
-  --rx-group: #c4a8ff;
-  --rx-string: #86efac;
+  --rx-error:      var(--bitfun-error,   #ef4444);
+  --rx-info:       var(--bitfun-info,    #E1AB80);
+  --rx-group:      #b39dff;                                    /* capture-group accent */
+  --rx-string:     var(--bitfun-success, #34d399);
 
-  --rx-radius: 10px;
+  --rx-radius:    var(--bitfun-radius,    8px);
   --rx-radius-sm: 6px;
   --rx-shadow-card: 0 1px 0 rgba(255,255,255,0.025) inset, 0 4px 14px -8px rgba(0,0,0,0.55);
   --rx-shadow-elevated: 0 1px 0 rgba(255,255,255,0.035) inset, 0 16px 32px -18px rgba(0,0,0,0.7);
@@ -51,6 +63,22 @@ body, html { margin: 0; padding: 0; height: 100%; }
 
   --rx-dur: 200ms;
   --rx-ease: cubic-bezier(.2,.8,.2,1);
+}
+
+/* Light-theme local overrides — host already swaps --bitfun-* tokens, but a
+ * few decorative pieces (rgba accent washes, capture-group badge, code chips)
+ * benefit from sturdier alpha / hue picks against a near-white surface. */
+[data-theme-type="light"] {
+  --rx-accent-soft: rgba(71,85,105,0.10);
+  --rx-match-soft:  rgba(192,140,66,0.18);
+  --rx-group:       #6b5a89;
+  --rx-shadow-card:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 1px 2px rgba(15,23,42,0.06),
+    0 4px 14px -8px rgba(15,23,42,0.10);
+  --rx-shadow-elevated:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 12px 32px -18px rgba(15,23,42,0.20);
 }
 
 body {
@@ -65,9 +93,11 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* Page wash: very faint accent halos on the host background — keeps the
+   * surface feeling alive without introducing a competing hue. */
   background:
-    radial-gradient(1000px 500px at 90% -10%, rgba(34,197,94,0.06), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(56,189,248,0.04), transparent 55%),
+    radial-gradient(1000px 500px at 90% -10%, rgba(96,165,250,0.05), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(139,92,246,0.035), transparent 55%),
     var(--rx-bg);
 }
 
@@ -78,7 +108,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   justify-content: space-between;
   padding: 11px 18px;
   border-bottom: 1px solid var(--rx-border);
-  background: rgba(10,15,26,0.80);
+  background: color-mix(in srgb, var(--rx-bg) 80%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   position: sticky;
@@ -90,11 +120,13 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   width: 32px; height: 32px;
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(34,197,94,0.20), rgba(56,189,248,0.10));
-  border: 1px solid rgba(34,197,94,0.32);
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--rx-accent) 22%, transparent),
+      color-mix(in srgb, var(--rx-accent) 8%,  transparent));
+  border: 1px solid color-mix(in srgb, var(--rx-accent) 36%, transparent);
   display: grid; place-items: center;
   color: var(--rx-accent-strong);
-  box-shadow: 0 4px 14px rgba(34,197,94,0.18);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--rx-accent) 18%, transparent);
   flex-shrink: 0;
 }
 .brand__text { min-width: 0; }
@@ -140,8 +172,16 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   background: currentColor;
   box-shadow: 0 0 8px currentColor;
 }
-.status--ok   { color: var(--rx-accent-strong); border-color: rgba(74,222,128,0.40); }
-.status--err  { color: var(--rx-error); border-color: rgba(239,68,68,0.40); background: rgba(239,68,68,0.08); }
+.status--ok {
+  color: var(--rx-string);
+  border-color: color-mix(in srgb, var(--rx-string) 40%, transparent);
+  background: color-mix(in srgb, var(--rx-string) 8%, transparent);
+}
+.status--err {
+  color: var(--rx-error);
+  border-color: color-mix(in srgb, var(--rx-error) 40%, transparent);
+  background: color-mix(in srgb, var(--rx-error) 8%, transparent);
+}
 .status--idle { color: var(--rx-text-dim); }
 
 /* ── Layout ─────────────────────────────────────────── */
@@ -219,7 +259,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 }
 .pattern-row:focus-within {
   border-color: var(--rx-accent);
-  box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rx-accent) 22%, transparent);
 }
 .slash {
   color: var(--rx-match);
@@ -262,9 +302,9 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 }
 .flag:hover { color: var(--rx-text-soft); border-color: var(--rx-border-bright); }
 .flag.is-active {
-  background: rgba(34,197,94,0.14);
+  background: color-mix(in srgb, var(--rx-accent) 16%, transparent);
   color: var(--rx-accent-strong);
-  border-color: rgba(34,197,94,0.55);
+  border-color: color-mix(in srgb, var(--rx-accent) 55%, transparent);
 }
 .pattern-error {
   margin-top: 8px;
@@ -272,7 +312,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   font-size: 11.5px;
   color: var(--rx-error);
   padding: 8px 12px;
-  background: rgba(239,68,68,0.08);
+  background: color-mix(in srgb, var(--rx-error) 8%, transparent);
   border-left: 2px solid var(--rx-error);
   border-radius: 0 4px 4px 0;
 }
@@ -366,11 +406,12 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   color: transparent;
   border-radius: 2px;
   padding: 1px 0;
-  box-shadow: 0 0 0 1px rgba(245,158,11,0.55);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--rx-match) 55%, transparent);
 }
 .editor .highlight mark.is-active {
-  background: rgba(34,197,94,0.30);
-  box-shadow: 0 0 0 1px var(--rx-accent), 0 0 8px rgba(34,197,94,0.45);
+  background: color-mix(in srgb, var(--rx-accent) 30%, transparent);
+  box-shadow: 0 0 0 1px var(--rx-accent),
+              0 0 8px color-mix(in srgb, var(--rx-accent) 45%, transparent);
 }
 
 /* ── Matches list — git-grep / rg style ─────────────── */
@@ -441,7 +482,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .match:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 1px; }
 .match.is-active {
   background: var(--rx-accent-soft);
-  border-color: rgba(34,197,94,0.35);
+  border-color: color-mix(in srgb, var(--rx-accent) 38%, transparent);
   border-left-color: var(--rx-accent);
 }
 .match__index {
@@ -476,8 +517,8 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   font-family: var(--rx-mono);
   font-size: 10.5px;
   color: var(--rx-group);
-  background: rgba(196,168,255,0.12);
-  border: 1px solid rgba(196,168,255,0.32);
+  background: color-mix(in srgb, var(--rx-group) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rx-group) 36%, transparent);
   padding: 1px 7px;
   border-radius: 3px;
   white-space: nowrap;
@@ -531,7 +572,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .replace-input::placeholder { color: var(--rx-text-dim); }
 .replace-input:focus {
   border-color: var(--rx-accent);
-  box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rx-accent) 22%, transparent);
 }
 .replace-output {
   margin: 10px 0 0;
@@ -622,8 +663,13 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 /* ── Scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(34,197,94,0.18); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(34,197,94,0.32); }
+::-webkit-scrollbar-thumb {
+  background: var(--bitfun-scrollbar-thumb, rgba(255,255,255,0.14));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bitfun-scrollbar-thumb-hover, rgba(255,255,255,0.26));
+}
 
 /* ── Reduced motion ─────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
@@ -660,4 +706,24 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   .brand__subtitle { display: none; }
   .match { grid-template-columns: 28px 56px minmax(0, 1fr) auto; gap: 6px; }
   .match__groups { margin-left: 40px; }
+}
+
+/* ── Light theme adaptation ─────────────────────────────────────────────
+ * The host (see bridge_builder.rs) writes [data-theme-type="light"] on <html>
+ * AND repaints all --bitfun-* CSS variables. Because every --rx-* token above
+ * already proxies through var(--bitfun-…), most of the playground re-tints
+ * automatically. Only a handful of decorative pieces — page wash, frosted
+ * topbar tint — need an explicit ivory pass. */
+[data-theme-type="light"] .rx {
+  background:
+    radial-gradient(1000px 500px at 90% -10%, rgba(71,85,105,0.05), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(124,58,237,0.04), transparent 55%),
+    var(--rx-bg);
+}
+[data-theme-type="light"] .topbar {
+  background: color-mix(in srgb, var(--rx-bg) 85%, transparent);
+  border-bottom-color: var(--rx-border);
+}
+[data-theme-type="light"] .pattern-error {
+  color: #b91c1c;
 }

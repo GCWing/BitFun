@@ -257,16 +257,22 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         });
         return;
       }
-      await flowChatManager.createChatSession(
+      const newSessionId = await flowChatManager.createChatSession(
         {
           workspacePath: workspace.rootPath,
           ...(isRemoteWorkspace(workspace) && workspace.connectionId
             ? { remoteConnectionId: workspace.connectionId }
             : {}),
+          ...(isRemoteWorkspace(workspace) && workspace.sshHost
+            ? { remoteSshHost: workspace.sshHost }
+            : {}),
         },
         resolvedMode
       );
-      await setActiveWorkspace(workspace.id);
+      await openMainSession(newSessionId, {
+        workspaceId: workspace.id,
+        activateWorkspace: setActiveWorkspace,
+      });
     } catch (error) {
       notificationService.error(
         error instanceof Error ? error.message : t('nav.workspaces.createSessionFailed'),

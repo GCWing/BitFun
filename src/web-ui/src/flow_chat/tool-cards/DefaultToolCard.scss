@@ -20,8 +20,9 @@
 
 .default-tool-card {
   .compact-tool-card {
-    min-height: 28px;
-    padding-right: 10px !important;
+    min-height: 0;
+    padding: 0 !important;
+    line-height: 1.65;
   }
 
   .compact-card-action {
@@ -50,14 +51,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 28px;
-    height: 18px;
+    min-width: 0;
+    height: auto;
     padding: 0 6px;
     border: 1px solid var(--border-subtle);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+    background: transparent;
     color: var(--color-text-muted);
     font-size: 10px;
+    line-height: 1.4;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -120,7 +122,7 @@
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
     font-size: 11px;
-    line-height: 1.5;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-break: break-word;
     overflow: auto;
@@ -134,7 +136,7 @@
     background: rgba(239, 68, 68, 0.08);
     color: var(--color-error);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-break: break-word;
   }

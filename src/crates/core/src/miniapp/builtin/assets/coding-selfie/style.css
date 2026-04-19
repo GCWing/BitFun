@@ -1,45 +1,70 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Coding Selfie — daily coding snapshot.
+ * Design system reference:
+ *   palette  ─ Inherits BitFun host theme (--bitfun-* tokens). Surfaces,
+ *              text and borders all proxy through host vars so the dashboard
+ *              reads as a native BitFun panel under both bitfun-dark and
+ *              bitfun-light. Standalone fallbacks mirror the default dark
+ *              theme (#0e0e10 / #e8e8e8 / #60a5fa).
+ *   accent   ─ host primary (cool blue / slate) for hero/streak/heatmap
+ *              accents. Diff stats keep semantic green/red so additions and
+ *              deletions stay glanceable.
+ */
 
 :root {
   color-scheme: dark;
-  --cs-bg: #020617;
-  --cs-bg-grad: radial-gradient(ellipse at top, rgba(34, 197, 94, 0.06), transparent 60%), radial-gradient(ellipse at bottom right, rgba(56, 189, 248, 0.04), transparent 50%), #020617;
-  --cs-card: #0a1120;
-  --cs-card-2: #0f172a;
-  --cs-border: rgba(148, 163, 184, 0.10);
-  --cs-border-strong: rgba(148, 163, 184, 0.18);
-  --cs-text: #f1f5f9;
-  --cs-text-2: #cbd5e1;
-  --cs-text-muted: #64748b;
-  --cs-accent: #22c55e;
-  --cs-accent-2: #16a34a;
-  --cs-accent-soft: rgba(34, 197, 94, 0.12);
-  --cs-accent-glow: 0 0 20px rgba(34, 197, 94, 0.18);
-  --cs-add: #22c55e;
-  --cs-del: #f87171;
-  --cs-warn: #fbbf24;
-  --cs-radius: 12px;
-  --cs-radius-sm: 8px;
-  --cs-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --cs-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  --cs-bg:        var(--bitfun-bg,           #0e0e10);
+  --cs-card:      var(--bitfun-bg-secondary, #1c1c1f);
+  --cs-card-2:    var(--bitfun-bg-tertiary,  #121214);
+
+  --cs-border:        var(--bitfun-border-subtle, rgba(255, 255, 255, 0.10));
+  --cs-border-strong: var(--bitfun-border,        rgba(255, 255, 255, 0.18));
+
+  --cs-text:       var(--bitfun-text,           #e8e8e8);
+  --cs-text-2:     var(--bitfun-text-secondary, #b0b0b0);
+  --cs-text-muted: var(--bitfun-text-muted,     #858585);
+
+  /* Primary accent now follows the host (cool blue in dark, slate in light)
+   * so the dashboard stops fighting BitFun's neutral palette. The previous
+   * "run green" is preserved as a secondary semantic color (--cs-add). */
+  --cs-accent:      var(--bitfun-accent,       #60a5fa);
+  --cs-accent-2:    var(--bitfun-accent-hover, #3b82f6);
+  --cs-accent-soft: rgba(96, 165, 250, 0.14);
+  --cs-accent-glow: 0 0 20px rgba(96, 165, 250, 0.20);
+
+  /* Diff / activity semantics — kept on green/red regardless of host accent
+   * because additions and deletions must stay universally readable. */
+  --cs-add:  var(--bitfun-success, #34d399);
+  --cs-del:  var(--bitfun-error,   #f87171);
+  --cs-warn: var(--bitfun-warning, #f59e0b);
+
+  /* RGB triplet of the host accent — used by .cs-heat-* gradients to mix
+   * tinted alpha steps without hardcoding the brand color. Updated by the
+   * light-theme block below. */
+  --cs-accent-rgb: 96, 165, 250;
+  --cs-add-rgb:    52, 211, 153;
+
+  --cs-bg-grad:
+    radial-gradient(ellipse at top,         rgba(var(--cs-accent-rgb), 0.05), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(139,92,246, 0.04),           transparent 50%),
+    var(--cs-bg);
+
+  --cs-radius:    var(--bitfun-radius-lg, 12px);
+  --cs-radius-sm: var(--bitfun-radius,    8px);
+  --cs-mono: var(--bitfun-font-mono, ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace);
+  --cs-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif);
 }
 
 [data-theme-type="light"] {
   color-scheme: light;
-  --cs-bg: #f8fafc;
-  --cs-bg-grad: radial-gradient(ellipse at top, rgba(34, 197, 94, 0.08), transparent 60%), #f8fafc;
-  --cs-card: #ffffff;
-  --cs-card-2: #f1f5f9;
-  --cs-border: rgba(15, 23, 42, 0.08);
-  --cs-border-strong: rgba(15, 23, 42, 0.14);
-  --cs-text: #0f172a;
-  --cs-text-2: #334155;
-  --cs-text-muted: #64748b;
-  --cs-accent: #16a34a;
-  --cs-accent-2: #15803d;
-  --cs-accent-soft: rgba(22, 163, 74, 0.10);
+  /* Sturdier alpha & a slightly muted glow on near-white surfaces. */
+  --cs-accent-soft: rgba(71, 85, 105, 0.10);
   --cs-accent-glow: 0 0 0 transparent;
-  --cs-del: #dc2626;
+  --cs-accent-rgb: 71, 85, 105;
+  --cs-add-rgb:    91, 154, 111;
+  --cs-bg-grad:
+    radial-gradient(ellipse at top, rgba(var(--cs-accent-rgb), 0.06), transparent 60%),
+    var(--cs-bg);
 }
 
 * { box-sizing: border-box; }
@@ -150,8 +175,8 @@ html, body {
   grid-column: span 8;
   padding: clamp(10px, 1.5vh, 16px) clamp(14px, 1.8vw, 20px);
   background:
-    radial-gradient(circle at 80% 0%, rgba(34, 197, 94, 0.10), transparent 55%),
-    radial-gradient(circle at 0% 100%, rgba(56, 189, 248, 0.06), transparent 50%),
+    radial-gradient(circle at 80% 0%, rgba(var(--cs-accent-rgb), 0.10), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(139, 92, 246, 0.05),       transparent 50%),
     var(--cs-card);
   justify-content: center;
 }
@@ -161,7 +186,7 @@ html, body {
   right: -20%;
   width: 60%;
   height: 180%;
-  background: radial-gradient(ellipse, rgba(34, 197, 94, 0.10), transparent 60%);
+  background: radial-gradient(ellipse, rgba(var(--cs-accent-rgb), 0.10), transparent 60%);
   pointer-events: none;
   filter: blur(10px);
 }
@@ -237,9 +262,9 @@ html, body {
 .cs-tile-streak {
   grid-column: span 4;
   background:
-    linear-gradient(140deg, rgba(34, 197, 94, 0.08), transparent 70%),
+    linear-gradient(140deg, rgba(var(--cs-accent-rgb), 0.10), transparent 70%),
     var(--cs-card);
-  border-color: rgba(34, 197, 94, 0.18);
+  border-color: rgba(var(--cs-accent-rgb), 0.22);
   flex-direction: row;
   align-items: center;
   gap: clamp(8px, 1.5vw, 14px);
@@ -416,7 +441,7 @@ html, body {
   border-radius: 2px;
   opacity: 0.85;
 }
-.cs-hour-bar.peak::after { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5); opacity: 1; }
+.cs-hour-bar.peak::after { box-shadow: 0 0 12px rgba(var(--cs-accent-rgb), 0.45); opacity: 1; }
 .cs-hour-bar:hover { filter: brightness(1.2); }
 .cs-hours-axis {
   display: flex;
@@ -491,10 +516,13 @@ html, body {
 .cs-heat-cell:hover { outline-color: var(--cs-accent); }
 .cs-heat-empty { background: transparent; pointer-events: none; }
 .cs-heat-0 { background: var(--cs-card-2); }
-.cs-heat-1 { background: rgba(34, 197, 94, 0.25); }
-.cs-heat-2 { background: rgba(34, 197, 94, 0.45); }
-.cs-heat-3 { background: rgba(34, 197, 94, 0.7); }
-.cs-heat-4 { background: var(--cs-accent); box-shadow: 0 0 10px rgba(34, 197, 94, 0.35); }
+.cs-heat-1 { background: rgba(var(--cs-accent-rgb), 0.25); }
+.cs-heat-2 { background: rgba(var(--cs-accent-rgb), 0.45); }
+.cs-heat-3 { background: rgba(var(--cs-accent-rgb), 0.70); }
+.cs-heat-4 {
+  background: var(--cs-accent);
+  box-shadow: 0 0 10px rgba(var(--cs-accent-rgb), 0.35);
+}
 
 .cs-heatmap-legend {
   display: flex;
@@ -591,7 +619,7 @@ html, body {
   border: 1px solid var(--cs-border);
   flex: 1;
 }
-.cs-empty.is-error { border-color: rgba(248, 113, 113, 0.25); }
+.cs-empty.is-error { border-color: color-mix(in srgb, var(--cs-del) 30%, transparent); }
 .cs-empty.is-loading .cs-empty-art { color: var(--cs-accent); }
 .cs-empty.is-loading .cs-empty-art svg { animation: cs-spin 1s linear infinite; }
 .cs-empty-art {

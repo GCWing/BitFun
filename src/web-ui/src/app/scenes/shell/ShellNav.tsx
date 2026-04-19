@@ -30,8 +30,15 @@ import ShellNavEntryItem from './components/ShellNavEntryItem';
 import ShellNavWorkspaceSwitcher from './components/ShellNavWorkspaceSwitcher';
 import './ShellNav.scss';
 
+function extractShortVersion(version?: string): string {
+  if (!version) return '';
+  const match = version.match(/\d+(?:\.\d+){1,2}/);
+  return match ? match[0] : '';
+}
+
 function formatShellMenuLabel(shell: ShellInfo, isDefault: boolean, defaultBadgeLabel: string): string {
-  const base = shell.version ? `${shell.name} (${shell.version})` : shell.name;
+  const shortVersion = extractShortVersion(shell.version);
+  const base = shortVersion ? `${shell.name} ${shortVersion}` : shell.name;
   return isDefault ? `${base} · ${defaultBadgeLabel}` : base;
 }
 

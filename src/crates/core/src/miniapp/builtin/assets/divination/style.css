@@ -40,15 +40,26 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ── Stage canvas ────────────────────────────────────── */
 .div-app {
+  /* `--scene-tone` follows the day's card so the entire room is monochromatic.
+   * Defaults to deep violet; JS injects the chosen card's tone[0] once revealed. */
+  --scene-tone: var(--card-tone-1, #5b21b6);
+  --scene-tone-deep: var(--card-tone-2, #150a2a);
   position: relative;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background:
-    radial-gradient(1200px 600px at 50% -15%, rgba(157, 78, 221, 0.22), transparent 60%),
-    radial-gradient(800px 500px at 100% 100%, rgba(212, 175, 55, 0.10), transparent 60%),
-    var(--d-bg);
+    radial-gradient(1400px 700px at 50% -20%,
+      color-mix(in srgb, var(--scene-tone) 28%, transparent),
+      transparent 60%),
+    radial-gradient(900px 600px at 100% 110%,
+      color-mix(in srgb, var(--scene-tone) 18%, transparent),
+      transparent 65%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--scene-tone-deep) 75%, #050314),
+      #050314 75%);
+  transition: background 1.4s ease;
 }
 /* Starfield: a quiet layer of pinpoint stars + a brighter sparkle layer. */
 .div-app::before, .div-app::after {
@@ -80,14 +91,29 @@ button { font-family: inherit; cursor: pointer; }
 .aurora {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.35;
+  filter: blur(110px);
   pointer-events: none;
-  animation: drift 24s ease-in-out infinite alternate;
+  animation: drift 28s ease-in-out infinite alternate;
+  transition: background 1.4s ease;
 }
-.aurora--1 { width: 480px; height: 480px; left: -120px; top: -100px; background: radial-gradient(circle, #7c3aed, transparent 70%); }
-.aurora--2 { width: 520px; height: 520px; right: -160px; top: 30%; background: radial-gradient(circle, #c026d3, transparent 70%); animation-delay: -8s; }
-.aurora--3 { width: 460px; height: 460px; left: 30%; bottom: -160px; background: radial-gradient(circle, #d4af37, transparent 75%); animation-delay: -14s; opacity: 0.22; }
+.aurora--1 {
+  width: 520px; height: 520px; left: -140px; top: -120px;
+  opacity: 0.32;
+  background: radial-gradient(circle, var(--scene-tone, #6d28d9), transparent 70%);
+}
+.aurora--2 {
+  width: 560px; height: 560px; right: -180px; top: 35%;
+  opacity: 0.22;
+  background: radial-gradient(circle, var(--scene-tone, #6d28d9), transparent 70%);
+  animation-delay: -10s;
+}
+/* The third aurora stays gold to keep a touch of warm contrast across themes. */
+.aurora--3 {
+  width: 440px; height: 440px; left: 35%; bottom: -200px;
+  opacity: 0.10;
+  background: radial-gradient(circle, #d4af37, transparent 75%);
+  animation-delay: -16s;
+}
 @keyframes drift { 0% { transform: translate(0,0) scale(1); } 100% { transform: translate(40px,-30px) scale(1.06); } }
 
 /* ── Header ──────────────────────────────────────────── */
@@ -97,28 +123,44 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--d-line);
+  padding: 12px 24px;
   background:
-    linear-gradient(180deg, rgba(10,6,23,0.85), rgba(10,6,23,0.55));
+    linear-gradient(180deg, rgba(10,6,23,0.92), rgba(10,6,23,0.55));
   backdrop-filter: blur(14px);
 }
+.header::after {
+  content: '';
+  position: absolute;
+  left: 24px; right: 24px; bottom: 0;
+  height: 1px;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(212,175,55,0.10) 8%,
+      rgba(212,175,55,0.55) 50%,
+      rgba(212,175,55,0.10) 92%,
+      transparent 100%);
+}
 .header__title {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 12px;
   font-family: var(--d-serif);
   font-weight: 500;
   font-size: 15px;
-  letter-spacing: 4px;
+  letter-spacing: 5px;
   color: var(--d-gold-bright);
-  text-shadow: 0 0 12px rgba(240,198,116,0.25);
+  text-shadow: 0 0 14px rgba(240,198,116,0.28);
+  text-transform: uppercase;
+  padding-left: 5px;
 }
-.header__title svg { color: var(--d-gold); filter: drop-shadow(0 0 6px rgba(212,175,55,0.4)); }
+.header__title svg { color: var(--d-gold); filter: drop-shadow(0 0 6px rgba(212,175,55,0.45)); }
 .header__date {
   font-family: var(--d-serif);
   font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--d-text-soft);
+  letter-spacing: 3px;
+  color: var(--d-gold);
   font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 /* ── Stage ───────────────────────────────────────────── */
@@ -513,12 +555,18 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ── Result ──────────────────────────────────────────── */
 .result {
+  /* `--accent` is the bright tone of the day, derived from the chosen card.
+   * Cascades to fortune fills + mantra glow so the page reads as one palette. */
+  --accent: var(--card-tone-1, #6d28d9);
+  --accent-soft: color-mix(in srgb, var(--accent) 30%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 55%, transparent);
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
+  grid-template-columns: 288px 1fr;
+  gap: 28px;
   width: 100%;
-  max-width: 980px;
+  max-width: 1040px;
   align-items: start;
+  padding: 4px 4px;
 }
 
 /* Card flips/rises in from where the chosen back was. */
@@ -554,294 +602,389 @@ button { font-family: inherit; cursor: pointer; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Card front ──────────────────────────────────────── */
+/* ── Card front ─────────────────────────────────────────
+ * Tarot card aspect ~ 5:8. Natural height (no stretch),
+ * deep cosmic background, single hairline gold border, no
+ * heavy corner brackets — the whole point is restraint. */
 .card-front {
   position: relative;
   border-radius: 14px;
-  padding: 16px 16px 18px;
-  border: 1px solid rgba(212,175,55,0.45);
-  background: linear-gradient(160deg, var(--card-tone-1, #2a1d44) 0%, var(--card-tone-2, #1d1b2e) 100%);
+  padding: 24px 22px 22px;
+  border: 1px solid rgba(212,175,55,0.40);
+  background:
+    radial-gradient(140% 60% at 50% 0%, rgba(240,198,116,0.10), transparent 55%),
+    radial-gradient(120% 80% at 50% 100%, rgba(157,78,221,0.20), transparent 55%),
+    linear-gradient(168deg, var(--card-tone-1, #2a1d44) 0%, var(--card-tone-2, #160a2c) 100%);
   box-shadow:
-    0 30px 80px -20px rgba(0,0,0,0.65),
-    0 0 0 1px rgba(212,175,55,0.18) inset,
-    0 0 50px rgba(212,175,55,0.10);
+    0 30px 80px -22px rgba(0,0,0,0.72),
+    0 0 0 1px rgba(212,175,55,0.16) inset,
+    0 0 40px rgba(157,78,221,0.18) inset;
   color: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+/* Single inner hairline frame — replaces the busy 8-corner brackets. */
 .card-front::after {
   content: '';
-  position: absolute; inset: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(212,175,55,0.28);
+  position: absolute; inset: 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(212,175,55,0.20);
   pointer-events: none;
-}
-/* Gilded corner flourishes */
-.card-front::before {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border-radius: 8px;
-  pointer-events: none;
-  background:
-    linear-gradient(to right, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) top left/100% 1px no-repeat,
-    linear-gradient(to bottom, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) top left/1px 100% no-repeat,
-    linear-gradient(to left, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) top right/100% 1px no-repeat,
-    linear-gradient(to bottom, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) top right/1px 100% no-repeat,
-    linear-gradient(to right, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) bottom left/100% 1px no-repeat,
-    linear-gradient(to top, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) bottom left/1px 100% no-repeat,
-    linear-gradient(to left, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) bottom right/100% 1px no-repeat,
-    linear-gradient(to top, var(--d-gold) 0, var(--d-gold) 18px, transparent 18px) bottom right/1px 100% no-repeat;
-  opacity: 0.85;
 }
 .card-front__top {
   display: flex; align-items: center; justify-content: space-between;
   font-family: var(--d-serif);
-  font-size: 10.5px; letter-spacing: 3px; text-transform: uppercase;
-  color: rgba(255,255,255,0.7);
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--d-gold);
   position: relative; z-index: 1;
+  padding: 0 2px;
 }
+.card-front__index { font-variant-numeric: tabular-nums; opacity: 0.85; }
 .card-front__tag {
-  background: rgba(212,175,55,0.18);
   color: var(--d-gold-bright);
-  border: 1px solid rgba(212,175,55,0.5);
-  padding: 2px 9px; border-radius: 999px;
-  letter-spacing: 1.5px;
-  font-size: 10px;
-  text-transform: none;
+  border: 1px solid rgba(212,175,55,0.55);
+  background: rgba(20,12,40,0.45);
+  padding: 3px 12px;
+  border-radius: 999px;
+  letter-spacing: 2px;
+  font-size: 9.5px;
+  text-transform: uppercase;
   font-family: var(--d-serif);
 }
 .card-front__art {
   font-family: var(--d-serif);
-  font-size: 70px;
+  font-size: 92px;
   line-height: 1;
   text-align: center;
-  margin: 14px 0 8px;
-  background: linear-gradient(135deg, #fff 0%, var(--d-gold-bright) 60%, var(--d-gold) 100%);
+  margin: 28px auto 22px;
+  width: 120px; height: 120px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #fff 0%, var(--d-gold-bright) 55%, var(--d-gold) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45)) drop-shadow(0 0 18px rgba(212,175,55,0.3));
+  filter:
+    drop-shadow(0 4px 14px rgba(0,0,0,0.55))
+    drop-shadow(0 0 26px rgba(240,198,116,0.45));
   position: relative; z-index: 1;
   animation: artFloat 5s ease-in-out infinite alternate;
 }
+/* Soft circular glow behind the glyph + slowly rotating hairline ring. */
+.card-front__art::before {
+  content: '';
+  position: absolute; inset: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(240,198,116,0.18) 0%,
+    rgba(157,78,221,0.10) 40%,
+    transparent 70%);
+  z-index: -1;
+}
+.card-front__art::after {
+  content: '';
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(212,175,55,0.30);
+  animation: ringSpin 70s linear infinite;
+  z-index: -1;
+}
 @keyframes artFloat {
-  from { transform: translateY(0);    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45)) drop-shadow(0 0 14px rgba(212,175,55,0.30)); }
-  to   { transform: translateY(-4px); filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)) drop-shadow(0 0 26px rgba(240,198,116,0.55)); }
+  from { transform: translateY(0);    filter: drop-shadow(0 4px 14px rgba(0,0,0,0.55)) drop-shadow(0 0 18px rgba(212,175,55,0.30)); }
+  to   { transform: translateY(-3px); filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55)) drop-shadow(0 0 32px rgba(240,198,116,0.55)); }
 }
 .card-front__name {
   font-family: var(--d-serif);
-  font-size: 22px;
-  font-weight: 500;
+  font-size: 24px;
+  font-weight: 400;
   text-align: center;
-  margin: 0 0 4px;
-  letter-spacing: 8px;
+  margin: 0 0 12px;
+  letter-spacing: 14px;
+  padding-left: 14px; /* offset letter-spacing on first glyph */
   color: var(--d-gold-bright);
   position: relative; z-index: 1;
 }
 .card-front__keyword {
   text-align: center;
-  color: rgba(255,255,255,0.78);
+  color: rgba(255,255,255,0.80);
   font-family: var(--d-serif);
-  font-size: 12px;
-  letter-spacing: 3px;
-  margin: 0 0 10px;
+  font-size: 11.5px;
+  letter-spacing: 5px;
+  margin: 0 0 18px;
   position: relative; z-index: 1;
+  text-transform: uppercase;
 }
-.card-front__keyword::before, .card-front__keyword::after {
-  content: '✦'; color: var(--d-gold); margin: 0 8px; font-size: 9px;
+.card-front__keyword::before,
+.card-front__keyword::after {
+  content: '';
+  display: inline-block;
+  width: 24px; height: 1px;
+  vertical-align: middle;
+  margin: 0 12px;
+  background: linear-gradient(90deg, transparent, var(--d-gold), transparent);
 }
 .card-front__quote {
   text-align: center;
   font-family: var(--d-serif);
   font-style: italic;
-  font-size: 12.5px;
-  color: rgba(255,255,255,0.88);
-  line-height: 1.6;
-  margin: auto 0 0;
-  padding: 0 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.92);
+  line-height: 1.7;
+  margin: 6px 0 0;
+  padding: 0 6px;
   position: relative; z-index: 1;
 }
+.card-front__quote::before,
+.card-front__quote::after {
+  font-family: var(--d-serif);
+  color: var(--d-gold);
+  font-size: 24px;
+  line-height: 0;
+  vertical-align: -8px;
+  opacity: 0.7;
+}
+.card-front__quote::before { content: '“'; margin-right: 4px; }
+.card-front__quote::after  { content: '”'; margin-left: 4px; }
 .card-front__insight {
   text-align: center;
   font-family: var(--d-serif);
-  font-size: 11px;
-  letter-spacing: 1.2px;
-  color: rgba(240,198,116,0.78);
-  line-height: 1.55;
-  margin: 8px 0 0;
-  padding: 6px 10px 0;
-  border-top: 1px dashed rgba(212,175,55,0.28);
+  font-size: 11.5px;
+  letter-spacing: 0.6px;
+  color: rgba(240,198,116,0.85);
+  line-height: 1.6;
+  margin: 22px 0 0;
+  padding: 14px 6px 0;
+  border-top: 1px solid rgba(212,175,55,0.20);
   position: relative; z-index: 1;
 }
 .card-front__insight-label {
   display: block;
   font-size: 9.5px;
-  letter-spacing: 3px;
+  letter-spacing: 4px;
   color: var(--d-gold);
-  opacity: 0.75;
-  margin-bottom: 3px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+  text-transform: uppercase;
 }
 .card-front__insight-text { display: block; }
 
-/* ── Right panels: stay arcane ───────────────────────── */
-.result__panels { display: flex; flex-direction: column; gap: 10px; }
+/* ── Right column ─────────────────────────────────────
+ * Reading sheet — everything on one airy parchment, no
+ * boxes-within-boxes. Sections separated by hairlines and
+ * generous whitespace, like a real ritual page. */
+.result__panels {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  min-width: 0;
+  padding: 10px 6px 4px;
+}
+/* No panel box — sections render as bare typography. */
 .panel {
   position: relative;
-  background:
-    linear-gradient(180deg, rgba(45,28,80,0.55), rgba(21,16,43,0.70));
-  border: 1px solid var(--d-line);
-  border-radius: 12px;
-  padding: 10px 14px 12px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 0 0 1px rgba(212,175,55,0.06) inset, 0 8px 22px -10px rgba(0,0,0,0.6);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
-/* gilded micro-corners */
-.panel::before, .panel::after {
-  content: '';
-  position: absolute;
-  width: 12px; height: 12px;
-  border: 1px solid var(--d-gold);
-  opacity: 0.55;
-  pointer-events: none;
-}
-.panel::before { top: 4px; left: 4px; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; }
-.panel::after  { bottom: 4px; right: 4px; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+.panel::before, .panel::after { content: none; }
 
+/* Section title: small caps + thin gold rule running to the right edge.
+ * Implemented with flex: title group on the left, hairline rule fills rest. */
 .panel__title {
   font-family: var(--d-serif);
   font-size: 11px;
-  color: var(--d-gold-bright);
+  color: var(--d-gold);
   text-transform: uppercase;
-  letter-spacing: 4px;
-  margin-bottom: 8px;
-  display: flex; align-items: center; gap: 8px;
-  padding-bottom: 5px;
-  border-bottom: 1px dashed var(--d-line);
+  letter-spacing: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  font-weight: 500;
 }
-.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.dot--good { background: var(--d-gold-bright); box-shadow: 0 0 8px rgba(240,198,116,0.7); }
-.dot--bad  { background: var(--d-bad); box-shadow: 0 0 8px rgba(176,48,80,0.7); }
+.panel__title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg,
+    rgba(212,175,55,0.45) 0,
+    rgba(212,175,55,0.06) 70%,
+    transparent 100%);
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot--good { background: var(--d-gold-bright); box-shadow: 0 0 8px rgba(240,198,116,0.85); }
+.dot--bad  { background: var(--d-bad);          box-shadow: 0 0 8px rgba(176,48,80,0.85); }
 
-/* Fortune matrix — five-stars with golden glow, no SaaS bars */
-.fortunes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* ── Fortune matrix ─ aligned three-column grid.
+ * Fixed label / stars widths so all bars share the same start/end X. */
+.fortunes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .fortune {
   display: grid;
-  grid-template-columns: minmax(48px, max-content) minmax(40px, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: 56px 1fr 100px;
+  column-gap: 18px;
   align-items: center;
 }
 .fortune__label {
   font-family: var(--d-serif);
-  font-size: 12.5px;
-  letter-spacing: 2px;
-  color: var(--d-text-soft);
+  font-size: 13.5px;
+  letter-spacing: 5px;
+  color: var(--d-text);
   white-space: nowrap;
 }
 .fortune__bar {
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(212,175,55,0.12);
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
   overflow: hidden;
   position: relative;
 }
 .fortune__fill {
   position: absolute; left: 0; top: 0; bottom: 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--d-rose-deep), var(--d-gold-bright));
-  box-shadow: 0 0 10px rgba(240,198,116,0.45);
-  transition: width .9s cubic-bezier(.2,.8,.2,1);
+  border-radius: 999px;
+  background: var(--d-gold-bright);
+  transition: width 1.1s cubic-bezier(.2,.8,.2,1);
 }
 .fortune__stars {
   font-family: var(--d-serif);
   font-size: 14px;
-  letter-spacing: 3px;
+  letter-spacing: 4px;
   color: var(--d-gold-bright);
-  text-shadow: 0 0 8px rgba(240,198,116,0.4);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-align: right;
 }
-.fortune__stars .ghost { color: rgba(212,175,55,0.22); text-shadow: none; }
+.fortune__stars .ghost { color: rgba(255,255,255,0.16); }
 
-.panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.suit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+/* ── DO / DON'T as twin elegant lists ── */
+.panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.suit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .suit li {
   font-family: var(--d-serif);
   font-size: 13px;
-  letter-spacing: 1px;
-  padding: 5px 10px 5px 22px;
-  border-radius: 6px;
-  background: rgba(20,12,40,0.55);
-  border: 1px solid rgba(212,175,55,0.10);
+  letter-spacing: 1.5px;
+  padding: 10px 4px 10px 24px;
   position: relative;
   color: var(--d-text);
+  line-height: 1.45;
+  border-bottom: 1px solid rgba(212,175,55,0.08);
 }
+.suit li:last-child { border-bottom: 0; }
 .suit li::before {
   position: absolute;
-  left: 8px; top: 50%; transform: translateY(-50%);
+  left: 2px; top: 12px;
+  font-size: 11px;
+  line-height: 1;
+}
+.panel--good .suit li::before {
+  content: '✦';
+  color: var(--d-gold-bright);
+  text-shadow: 0 0 6px rgba(240,198,116,0.55);
+}
+.panel--bad .suit li {
+  color: rgba(243,232,255,0.78);
+  border-bottom-color: rgba(176,48,80,0.18);
+}
+.panel--bad .suit li::before {
+  content: '✕';
+  color: var(--d-bad);
+  font-weight: 700;
   font-size: 11px;
 }
-.panel--good .suit li {
-  background: linear-gradient(180deg, rgba(212,175,55,0.10), rgba(212,175,55,0.04));
-  border-color: rgba(212,175,55,0.32);
-}
-.panel--good .suit li::before { content: '✦'; color: var(--d-gold-bright); }
-.panel--bad .suit li {
-  background: linear-gradient(180deg, rgba(176,48,80,0.14), rgba(176,48,80,0.04));
-  border-color: rgba(176,48,80,0.40);
-  color: rgba(243,232,255,0.85);
-}
-.panel--bad .suit li::before { content: '✕'; color: var(--d-bad); font-weight: 600; }
 
-/* Lucky cells — sealed parchment look — single row of four. */
+/* ── Lucky omens ─ even three columns on top, mantra below as a hero quote */
 .lucky {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 18px;
+  row-gap: 22px;
+  align-items: stretch;
 }
 .lucky__cell {
-  background: linear-gradient(180deg, rgba(212,175,55,0.06), rgba(20,12,40,0.55));
-  border: 1px solid rgba(212,175,55,0.22);
-  padding: 8px 10px;
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
   position: relative;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* Vertical hairline rule between the three top cells */
+.lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+  padding-left: 18px;
+  border-left: 1px solid rgba(212,175,55,0.14);
+  margin-left: -18px;
+}
+.lucky__cell--mantra {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding-top: 22px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(212,175,55,0.16);
+  gap: 12px;
+  align-items: center;
 }
 .lucky__label {
   font-family: var(--d-serif);
-  font-size: 10px;
+  font-size: 9.5px;
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 4px;
   color: var(--d-gold);
-  margin-bottom: 4px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.lucky__cell--mantra .lucky__label {
+  letter-spacing: 5px;
+  color: var(--d-gold);
 }
 .lucky__value {
   font-family: var(--d-serif);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 400;
   letter-spacing: 1px;
   color: var(--d-text);
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 10px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 .lucky__swatch {
-  width: 14px; height: 14px;
+  width: 12px; height: 12px;
   border-radius: 50%;
-  border: 1px solid rgba(212,175,55,0.55);
-  box-shadow: 0 0 10px rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.25);
   display: inline-block;
   flex-shrink: 0;
 }
 .lucky__value--mantra {
-  font-size: 11.5px;
+  font-size: 13px;
   font-style: italic;
+  font-weight: 400;
   color: var(--d-text-soft);
-  letter-spacing: 0.4px;
+  letter-spacing: 0.6px;
   white-space: normal;
-  line-height: 1.35;
+  line-height: 1.6;
+  text-align: center;
+  padding: 0 16px;
+  display: block;
+  max-width: 560px;
 }
+.lucky__value--mantra::before,
+.lucky__value--mantra::after {
+  font-family: var(--d-serif);
+  color: var(--d-gold);
+  font-size: 22px;
+  line-height: 0;
+  vertical-align: -8px;
+  opacity: 0.5;
+}
+.lucky__value--mantra::before { content: '“'; margin-right: 6px; }
+.lucky__value--mantra::after  { content: '”'; margin-left: 6px; }
 
 /* ── Footer ──────────────────────────────────────────── */
 .footer {
@@ -850,14 +993,26 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 20px;
-  border-top: 1px solid var(--d-line);
-  background: linear-gradient(0deg, rgba(10,6,23,0.85), rgba(10,6,23,0.55));
+  padding: 10px 24px;
+  background: linear-gradient(0deg, rgba(10,6,23,0.92), rgba(10,6,23,0.55));
+}
+.footer::before {
+  content: '';
+  position: absolute;
+  left: 24px; right: 24px; top: 0;
+  height: 1px;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(212,175,55,0.10) 8%,
+      rgba(212,175,55,0.55) 50%,
+      rgba(212,175,55,0.10) 92%,
+      transparent 100%);
 }
 .footer__hint {
   font-family: var(--d-serif);
   font-size: 11.5px;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.8px;
   color: var(--d-text-mute);
   font-style: italic;
 }
@@ -904,11 +1059,19 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 880px) {
-  .lucky { grid-template-columns: repeat(2, 1fr); }
+  .lucky { grid-template-columns: 1fr 1fr; }
+  .lucky__cell--mantra { grid-column: 1 / -1; }
+  .lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+    padding-left: 0;
+    border-left: 0;
+    margin-left: 0;
+  }
+  .lucky__cell:nth-child(2) { padding-left: 18px; border-left: 1px solid rgba(212,175,55,0.14); }
 }
 @media (max-width: 720px) {
   .result { grid-template-columns: 1fr; }
   .panel-row { grid-template-columns: 1fr; }
+  .fortune { grid-template-columns: 40px 1fr 84px; gap: 10px; }
   .card-pick { --w: 132px; --h: 196px; margin: 0 -42px; }
   .card-pick__symbol { font-size: 48px; }
   .card-spread { min-height: 220px; padding: 18px 12px 32px; }
@@ -924,3 +1087,277 @@ button { font-family: inherit; cursor: pointer; }
   .sigil-ring__rune { font-size: 11px; letter-spacing: 8px; }
   .sigil-ring__rune--inner { font-size: 9px; letter-spacing: 6px; }
 }
+
+/* ── Light theme adaptation ─────────────────────────────────────────────
+ * The host writes [data-theme-type="light"] on <html> via the bridge.
+ * Aesthetic: deep tarot cards laid on warm parchment. Cards & their gold
+ * filigree stay dark/luminous; only the surrounding "room" flips to ivory.
+ * This keeps the ritual feeling while integrating with a light app shell.
+ */
+[data-theme-type="light"] {
+  --d-bg:        #f3eada;
+  --d-bg-deep:   #e8dcc0;
+  --d-panel:     #fbf5e6;
+  --d-panel-2:   #f3eada;
+  --d-line:      rgba(120, 90, 28, 0.32);
+  --d-line-soft: rgba(120, 90, 28, 0.16);
+  --d-gold:        #8a6a1f;
+  --d-gold-bright: #b58a2a;
+  --d-rose:        #6b21a8;
+  --d-rose-deep:   #4c1d95;
+  --d-text:        #2a1d10;
+  --d-text-soft:   #5b4a36;
+  --d-text-mute:   #8a7a62;
+  --d-good:        #15803d;
+  --d-bad:         #9b1c3a;
+}
+[data-theme-type="light"] body { background: #e8dcc0; color: var(--d-text); }
+/* Page canvas: scene tone becomes a watercolor wash on parchment, not a flood. */
+[data-theme-type="light"] .div-app {
+  background:
+    radial-gradient(1400px 700px at 50% -20%,
+      color-mix(in srgb, var(--scene-tone) 14%, transparent),
+      transparent 60%),
+    radial-gradient(900px 600px at 100% 110%,
+      color-mix(in srgb, var(--scene-tone) 10%, transparent),
+      transparent 65%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--scene-tone) 6%, #f3eada),
+      #e8dcc0 75%);
+}
+/* Hide the white-pinpoint starfield on light bg (it would look like dust). */
+[data-theme-type="light"] .div-app::before,
+[data-theme-type="light"] .div-app::after { opacity: 0; }
+/* Soften the auroras to faint watercolor pools on parchment. */
+[data-theme-type="light"] .aurora--1 { opacity: 0.16; mix-blend-mode: multiply; }
+[data-theme-type="light"] .aurora--2 { opacity: 0.12; mix-blend-mode: multiply; }
+[data-theme-type="light"] .aurora--3 { opacity: 0.10; mix-blend-mode: multiply; }
+/* Header / footer: cream wash + slightly stronger gold rule. */
+[data-theme-type="light"] .header {
+  background: linear-gradient(180deg, rgba(243,234,218,0.94), rgba(243,234,218,0.55));
+}
+[data-theme-type="light"] .footer {
+  background: linear-gradient(0deg, rgba(243,234,218,0.94), rgba(243,234,218,0.55));
+}
+[data-theme-type="light"] .header__title,
+[data-theme-type="light"] .header__date { text-shadow: none; }
+[data-theme-type="light"] .header__title svg {
+  filter: drop-shadow(0 0 4px rgba(138,106,31,0.35));
+}
+/* Greetings + draw stage: dark gold ink instead of glowing gold. */
+[data-theme-type="light"] .draw-stage__greeting {
+  color: var(--d-gold);
+  text-shadow: none;
+}
+[data-theme-type="light"] .draw-stage__subtitle { color: var(--d-text-soft); }
+[data-theme-type="light"] .draw-stage__tip       { color: var(--d-text-mute); }
+/* Sigil ring: parchment-friendly opacity + subtle ink instead of glow. */
+[data-theme-type="light"] .sigil-ring {
+  opacity: 0.45;
+  filter: drop-shadow(0 0 6px rgba(138,106,31,0.18));
+}
+/* Result panels: panels themselves have no background, so on parchment the
+ * gold rules + ink text just work. Fix the spots that were tuned for dark bg. */
+[data-theme-type="light"] .panel__title { color: var(--d-gold); }
+[data-theme-type="light"] .panel__title::after {
+  background: linear-gradient(90deg,
+    rgba(120,90,28,0.45) 0%,
+    rgba(120,90,28,0.10) 70%,
+    transparent 100%);
+}
+[data-theme-type="light"] .fortune__label,
+[data-theme-type="light"] .lucky__label    { color: var(--d-text-soft); }
+[data-theme-type="light"] .lucky__value    { color: var(--d-text); }
+[data-theme-type="light"] .suit li         { color: var(--d-text); border-bottom-color: rgba(120,90,28,0.18); }
+[data-theme-type="light"] .panel--bad .suit li {
+  color: rgba(43,30,18,0.85);
+  border-bottom-color: rgba(155,28,58,0.22);
+}
+[data-theme-type="light"] .lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+  border-left-color: rgba(120,90,28,0.18);
+}
+/* Mantra: script-on-parchment look. */
+[data-theme-type="light"] .lucky__value--mantra { color: var(--d-text); }
+[data-theme-type="light"] .lucky__value--mantra::before,
+[data-theme-type="light"] .lucky__value--mantra::after { color: var(--d-gold); }
+/* Fortune bar: white-on-dark track + ghost stars need ink-on-cream. */
+[data-theme-type="light"] .fortune__bar       { background: rgba(120,90,28,0.18); }
+[data-theme-type="light"] .fortune__fill      { background: var(--d-gold); }
+[data-theme-type="light"] .fortune__stars     { color: var(--d-gold); }
+[data-theme-type="light"] .fortune__stars .ghost { color: rgba(120,90,28,0.22); }
+/* Footer hint ink. */
+[data-theme-type="light"] .footer__hint { color: var(--d-text-soft); }
+
+/* ── Light theme — Card front ─────────────────────────────────────────
+ * On parchment, a deep saturated card looks pasted-on. We re-skin the
+ * card-front as a tinted vellum panel: the day's scene tone provides a
+ * watercolor wash; text becomes ink; gold filigree deepens to brass.
+ * The card is still clearly a "card" (raised, framed) but breathes the
+ * same warm air as the rest of the page. */
+[data-theme-type="light"] .card-front {
+  border-color: rgba(120,90,28,0.45);
+  background:
+    radial-gradient(140% 60% at 50% 0%, rgba(255,255,255,0.55), transparent 55%),
+    radial-gradient(120% 80% at 50% 100%,
+      color-mix(in srgb, var(--card-tone-2, #150a2a) 18%, transparent),
+      transparent 55%),
+    linear-gradient(168deg,
+      color-mix(in srgb, var(--card-tone-1, #5b21b6) 22%, #fbf5e6) 0%,
+      color-mix(in srgb, var(--card-tone-2, #150a2a) 14%, #ece1c7) 100%);
+  box-shadow:
+    0 24px 60px -22px rgba(70, 50, 20, 0.35),
+    0 0 0 1px rgba(120,90,28,0.18) inset,
+    0 0 30px rgba(120,90,28,0.10) inset;
+  color: var(--d-text);
+}
+[data-theme-type="light"] .card-front::after {
+  border-color: rgba(120,90,28,0.30);
+}
+[data-theme-type="light"] .card-front__top    { color: var(--d-gold); }
+[data-theme-type="light"] .card-front__tag    {
+  color: var(--d-gold-bright);
+  background: rgba(255,255,255,0.55);
+  border-color: rgba(120,90,28,0.45);
+}
+/* Glyph: take the day's primary tone instead of white→gold. */
+[data-theme-type="light"] .card-front__art {
+  background: linear-gradient(135deg,
+    var(--card-tone-1, #5b21b6) 0%,
+    color-mix(in srgb, var(--card-tone-2, #150a2a) 70%, var(--d-gold)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 2px 4px rgba(70,50,20,0.18))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--card-tone-1, #5b21b6) 35%, transparent));
+}
+[data-theme-type="light"] .card-front__art::before {
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--card-tone-1, #5b21b6) 16%, transparent) 0%,
+    rgba(120,90,28,0.06) 40%,
+    transparent 70%);
+}
+[data-theme-type="light"] .card-front__art::after {
+  border-color: rgba(120,90,28,0.30);
+}
+[data-theme-type="light"] .card-front__name {
+  color: color-mix(in srgb, var(--card-tone-2, #150a2a) 70%, var(--d-gold));
+}
+[data-theme-type="light"] .card-front__keyword { color: var(--d-text-soft); }
+[data-theme-type="light"] .card-front__quote   { color: var(--d-text); }
+[data-theme-type="light"] .card-front__insight {
+  color: color-mix(in srgb, var(--card-tone-2, #150a2a) 60%, var(--d-text-soft));
+  border-top-color: rgba(120,90,28,0.28);
+}
+[data-theme-type="light"] .card-front__insight-label { color: var(--d-gold); }
+/* Card flip animation re-uses the glyph art-float drop-shadow which assumed
+ * a dark background; soften so it doesn't feel like a hot spot on parchment. */
+[data-theme-type="light"] .card-front__art {
+  animation: artFloatLight 5s ease-in-out infinite alternate;
+}
+@keyframes artFloatLight {
+  from { transform: translateY(0);
+    filter: drop-shadow(0 2px 4px rgba(70,50,20,0.18))
+            drop-shadow(0 0 14px rgba(120,90,28,0.18)); }
+  to   { transform: translateY(-3px);
+    filter: drop-shadow(0 4px 8px rgba(70,50,20,0.22))
+            drop-shadow(0 0 22px rgba(120,90,28,0.28)); }
+}
+
+/* ── Light theme — Card backs (draw stage) ─────────────────────────────
+ * Re-skin the fan of card backs as warm vellum cards with deep-gold
+ * filigree, instead of deep purple slabs floating on parchment. */
+[data-theme-type="light"] .card-pick {
+  border-color: rgba(120,90,28,0.55);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255,255,255,0.45), transparent 70%),
+    linear-gradient(160deg, #faf2dd 0%, #ecdfbe 50%, #d9c89a 100%);
+  box-shadow:
+    0 22px 50px -22px rgba(70,50,20,0.45),
+    0 0 0 1px rgba(120,90,28,0.22) inset,
+    0 0 40px rgba(120,90,28,0.10) inset;
+}
+[data-theme-type="light"] .card-pick:hover,
+[data-theme-type="light"] .card-pick:focus-visible {
+  box-shadow:
+    0 32px 60px -22px rgba(120,90,28,0.45),
+    0 0 0 1px rgba(120,90,28,0.50) inset,
+    0 0 40px rgba(181,138,42,0.30);
+  filter: brightness(1.04);
+}
+[data-theme-type="light"] .card-pick__pattern {
+  border-color: rgba(120,90,28,0.40);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(120,90,28,0.10) 0, transparent 40%),
+    repeating-linear-gradient(45deg,
+      rgba(120,90,28,0.08) 0 4px,
+      transparent 4px 9px);
+}
+[data-theme-type="light"] .card-pick__pattern::before,
+[data-theme-type="light"] .card-pick__pattern::after {
+  border-color: var(--d-gold);
+  opacity: 0.85;
+}
+/* Symbol on the back: deeper gold gradient instead of gold→purple. */
+[data-theme-type="light"] .card-pick__symbol {
+  background: linear-gradient(135deg,
+    #b58a2a 0%, #8a6a1f 55%, #6b4f15 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(70,50,20,0.25))
+          drop-shadow(0 0 8px rgba(181,138,42,0.35));
+  opacity: 0.95;
+}
+/* Sheen across the back: keep but tone down (mix-blend looks weird on cream). */
+[data-theme-type="light"] .card-pick__shine {
+  background: linear-gradient(115deg,
+    transparent 35%,
+    rgba(255,250,235,0.55) 50%,
+    transparent 65%);
+  mix-blend-mode: normal;
+}
+/* Chosen / pulse animation: replace purple/gold halos with warm amber halos. */
+[data-theme-type="light"] .card-pick.is-chosen {
+  box-shadow:
+    0 50px 100px -28px rgba(181,138,42,0.55),
+    0 0 0 1px rgba(120,90,28,0.65) inset,
+    0 0 70px rgba(181,138,42,0.40),
+    0 0 130px rgba(181,138,42,0.30);
+  animation: chosenPulseLight 1.2s ease-in-out infinite alternate;
+}
+@keyframes chosenPulseLight {
+  from { box-shadow:
+           0 50px 100px -28px rgba(181,138,42,0.55),
+           0 0 0 1px rgba(120,90,28,0.65) inset,
+           0 0 70px rgba(181,138,42,0.40),
+           0 0 130px rgba(181,138,42,0.30); }
+  to   { box-shadow:
+           0 60px 120px -28px rgba(181,138,42,0.75),
+           0 0 0 1px rgba(181,138,42,0.85) inset,
+           0 0 100px rgba(240,200,120,0.55),
+           0 0 170px rgba(181,138,42,0.45); }
+}
+/* Burst + reveal flash: shift from purple/gold cosmic flare to warm amber. */
+[data-theme-type="light"] .draw-burst {
+  background: radial-gradient(circle,
+    rgba(255,250,235,0.95) 0%,
+    rgba(240,200,120,0.85) 18%,
+    rgba(181,138,42,0.55) 45%,
+    transparent 70%);
+}
+[data-theme-type="light"] .draw-burst::before {
+  border-color: rgba(181,138,42,0.65);
+  box-shadow: 0 0 24px rgba(181,138,42,0.45);
+}
+[data-theme-type="light"] .draw-burst::after {
+  border-color: rgba(120,90,28,0.55);
+  box-shadow: 0 0 24px rgba(120,90,28,0.35);
+}
+[data-theme-type="light"] .draw-veil {
+  background: radial-gradient(circle at 50% 50%,
+    rgba(240,200,120,0.30),
+    rgba(181,138,42,0.10) 35%,
+    transparent 70%);
+}
+

@@ -13,6 +13,7 @@ import React, { useCallback, useState } from 'react';
 import { ArrowUp, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { IconButton, Textarea } from '@/component-library';
+import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { useImeEnterGuard } from '@/flow_chat/hooks/useImeEnterGuard';
@@ -107,9 +108,12 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
           variant="default"
         />
         <div className="aqi__footer">
-          <span className="aqi__hint">
-            {t('input.sendHint', { defaultValue: 'Enter to send · Shift+Enter for new line' })}
-          </span>
+          <div className="aqi__footer-left">
+            <ModelSelector currentMode="Claw" className="aqi__model" />
+            <span className="aqi__hint">
+              {t('input.sendHint', { defaultValue: 'Enter to send · Shift+Enter for new line' })}
+            </span>
+          </div>
           <IconButton
             type="button"
             variant="success"

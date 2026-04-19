@@ -162,9 +162,14 @@
   justify-self: stretch;
 
   > .bitfun-input-wrapper,
-  > .select {
+  > .select,
+  > .bitfun-number-input {
     width: 100%;
     min-width: 0;
+  }
+
+  > .bitfun-number-input .bitfun-number-input__input {
+    text-align: left;
   }
 }
 

@@ -85,6 +85,19 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     }
 
     const trimmedMessage = message.trim();
+    // Strip inline `#img:<name>` tags from the AI-bound text. The rich text
+    // editor inserts these when an image is pasted, but the named file does
+    // not exist on disk; image bytes are sent out-of-band via `imageContexts`
+    // below. Leaving the placeholder in the prompt misleads the model into
+    // looking up a non-existent file. The display message keeps the tag so
+    // the UI can still render the inline pill.
+    const stripImageTags = (text: string): string =>
+      text
+        .replace(/#img:[^\s\n]+\s?/g, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    const aiTrimmedMessage = stripImageTags(trimmedMessage);
     let sessionId = currentSessionId;
     log.debug('Send message initiated', {
       textLength: trimmedMessage.length,
@@ -151,7 +164,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         }
       }
 
-      let fullMessage = trimmedMessage;
+      let fullMessage = aiTrimmedMessage;
       const displayMessage = options?.displayMessage?.trim() || trimmedMessage;
 
       if (contexts.length > 0) {
@@ -196,7 +209,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
           }
         }).filter(Boolean).join('\n');
 
-        fullMessage = `${fullContextSection}\n\n${trimmedMessage}`;
+        fullMessage = `${fullContextSection}\n\n${aiTrimmedMessage}`;
       }
 
       // Always pass imageContexts to the backend; the coordinator decides

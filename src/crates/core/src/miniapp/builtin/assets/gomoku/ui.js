@@ -22,6 +22,8 @@ const I18N = {
     moves: '手数',
     noMoves: '尚未落子',
     playAgain: '再来一局',
+    reviewBoard: '查看对局',
+    showResult: '查看结果',
     turnBlack: '黑棋',
     turnWhite: '白棋',
     pveYouTurn: '你（黑棋）',
@@ -54,6 +56,8 @@ const I18N = {
     moves: 'Moves',
     noMoves: 'No moves yet',
     playAgain: 'Play again',
+    reviewBoard: 'Review board',
+    showResult: 'Show result',
     turnBlack: 'Black',
     turnWhite: 'White',
     pveYouTurn: 'You (Black)',
@@ -114,6 +118,7 @@ const state = {
   winLine: null,
   hover: null,
   busy: false,
+  resultDismissed: false,
   stats: { black: 0, white: 0, ai: 0 },
 };
 
@@ -135,6 +140,8 @@ const dom = {
   resultTitle: document.getElementById('result-title'),
   resultSub: document.getElementById('result-sub'),
   resultRestart: document.getElementById('result-restart'),
+  resultReview: document.getElementById('result-review'),
+  resultReopen: document.getElementById('result-reopen'),
 };
 
 function createBoard() {
@@ -173,20 +180,7 @@ function buildBoardSvg() {
   const svg = dom.board;
   svg.innerHTML = '';
 
-  const defs = el('defs');
-  defs.innerHTML = `
-    <radialGradient id="g-black" cx="35%" cy="32%" r="60%">
-      <stop offset="0%" stop-color="#5a5a64"/>
-      <stop offset="60%" stop-color="#1c1c20"/>
-      <stop offset="100%" stop-color="#050507"/>
-    </radialGradient>
-    <radialGradient id="g-white" cx="35%" cy="32%" r="60%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="70%" stop-color="#e2e2e8"/>
-      <stop offset="100%" stop-color="#b8b8c0"/>
-    </radialGradient>
-  `;
-  svg.appendChild(defs);
+  // Flat fills are applied via CSS variables; no SVG <defs> needed.
 
   // Grid lines
   const grid = el('g', { class: 'grid' });
@@ -233,6 +227,14 @@ function bindEvents() {
   dom.btnUndo.addEventListener('click', undo);
   dom.btnRestart.addEventListener('click', restart);
   dom.resultRestart.addEventListener('click', restart);
+  dom.resultReview.addEventListener('click', () => {
+    state.resultDismissed = true;
+    renderResult();
+  });
+  dom.resultReopen.addEventListener('click', () => {
+    state.resultDismissed = false;
+    renderResult();
+  });
 
   dom.board.addEventListener('mousemove', onHover);
   dom.board.addEventListener('mouseleave', () => { state.hover = null; renderHover(); });
@@ -327,6 +329,7 @@ function restart() {
   state.winLine = null;
   state.hover = null;
   state.busy = false;
+  state.resultDismissed = false;
   render();
 }
 
@@ -531,8 +534,13 @@ function renderStats() {
 }
 
 function renderResult() {
-  if (!state.winner) { dom.resultOverlay.hidden = true; return; }
-  dom.resultOverlay.hidden = false;
+  if (!state.winner) {
+    dom.resultOverlay.hidden = true;
+    dom.resultReopen.hidden = true;
+    return;
+  }
+  dom.resultOverlay.hidden = state.resultDismissed;
+  dom.resultReopen.hidden = !state.resultDismissed;
   const isBlack = state.winner === BLACK;
   if (state.mode === 'pve') {
     dom.resultTitle.textContent = isBlack ? t('pveYouWinTitle') : t('pveAiWinTitle');

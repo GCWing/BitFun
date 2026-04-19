@@ -2,10 +2,12 @@
 
 const $ = (id) => document.getElementById(id);
 
-// Single-accent palette: greens for the brand, neutral muted for "other".
+// Categorical palette for the language donut. Leading color matches the
+// BitFun host accent (cool blue) so the dominant language reads as primary;
+// remaining hues are kept distinct enough to differentiate up to ~10 langs.
 const LANG_COLORS = [
-  '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#a855f7',
-  '#ec4899', '#f59e0b', '#ef4444', '#14b8a6', '#eab308',
+  '#60a5fa', '#8b5cf6', '#34d399', '#f59e0b', '#06b6d4',
+  '#ec4899', '#ef4444', '#14b8a6', '#eab308', '#a78bfa',
 ];
 
 // Lucide-style inline SVG strings.

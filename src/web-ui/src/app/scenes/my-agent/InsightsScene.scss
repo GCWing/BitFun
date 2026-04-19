@@ -4,19 +4,30 @@
 // Design tokens
 // ============================================================
 
-$ins-blue:   var(--color-accent-500);   // #60a5fa
-$ins-green:  #6eb88c;
+// Accent / semantic colors (theme-aware via tokens; fallback values keep
+// dark-only consumers happy if tokens are missing).
+$ins-blue:   var(--color-accent-500);
+$ins-green:  var(--color-success, #6eb88c);
 $ins-red:    var(--color-error);
-$ins-orange: #c9944d;
+$ins-orange: var(--color-warning, #c9944d);
 
-$ins-blue-bg:  var(--color-accent-100);   // rgba(96,165,250,0.08)
-$ins-green-bg: rgba(110, 184, 140, 0.08);
+$ins-blue-bg:  var(--color-accent-100);
+$ins-green-bg: var(--color-success-bg, rgba(110, 184, 140, 0.10));
 $ins-red-bg:   var(--color-error-bg);
 
-$ins-surface:       var(--color-bg-quaternary); // #202024, clearly above scene #16161a
-$ins-surface-hover: var(--color-bg-quaternary); // same base, border differentiates hover
-$ins-border:        rgba(255, 255, 255, 0.10);
-$ins-border-hover:  rgba(255, 255, 255, 0.22);
+// Surfaces & borders — must work on both light & dark themes.
+// Using `--color-bg-elevated` keeps cards crisp on white scenes (dark theme
+// elevated is still slightly above the scene bg so it reads as a card).
+$ins-surface:       var(--color-bg-quaternary);
+$ins-surface-soft:  var(--element-bg-subtle);
+$ins-surface-hover: var(--element-bg-soft);
+$ins-border:        var(--border-base);
+$ins-border-hover:  var(--border-medium);
+
+// Hover tint that flips with theme: blends toward primary text color
+// (dark on light theme, light on dark theme), so it always reads correctly.
+$ins-tint-1: color-mix(in srgb, var(--color-bg-quaternary) 92%, var(--color-text-primary) 8%);
+$ins-tint-2: color-mix(in srgb, var(--color-bg-quaternary) 86%, var(--color-text-primary) 14%);
 
 // Spacing: 4 / 8 / 14 / 22 / 40
 $ins-xs: 4px;
@@ -155,14 +166,14 @@ $ins-label:   12px;
   @extend %ins-btn;
   background: $ins-blue-bg;
   color: $ins-blue;
-  &:hover { background: rgba(96, 165, 250, 0.15); }
+  &:hover { background: var(--color-accent-200); }
 }
 
 .insights-scene__cancel-btn {
   @extend %ins-btn;
   background: $ins-red-bg;
   color: $ins-red;
-  &:hover { background: rgba(199, 112, 112, 0.15); }
+  &:hover { background: var(--color-error-border, $ins-red-bg); }
 }
 
 // Error / progress
@@ -257,7 +268,7 @@ $ins-label:   12px;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  border: 1px solid transparent;
+  border: 1px solid $ins-border;
   transition:
     background 0.2s cubic-bezier(0.25, 1, 0.5, 1),
     border-color 0.2s cubic-bezier(0.25, 1, 0.5, 1),
@@ -266,9 +277,9 @@ $ins-label:   12px;
   will-change: transform, box-shadow;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-bg-quaternary) 100%, white 4%);
+    background: $ins-tint-1;
     border-color: $ins-border-hover;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
     transform: translateY(-1px);
   }
 
@@ -455,13 +466,13 @@ $ins-label:   12px;
   overflow-y: auto;
   overflow-x: hidden;
 
-  &::-webkit-scrollbar { width: 5px; }
+  &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.10);
+    background: var(--border-base);
     border-radius: 3px;
   }
-  &::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.20); }
+  &::-webkit-scrollbar-thumb:hover { background: var(--border-medium); }
 }
 
 // Report body column
@@ -487,10 +498,18 @@ $ins-label:   12px;
 
   &__title {
     margin: 0;
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 700;
     letter-spacing: -0.035em;
     line-height: 1.2;
+    background: linear-gradient(
+      135deg,
+      var(--color-text-primary) 0%,
+      color-mix(in srgb, var(--color-text-primary) 70%, $ins-blue 30%) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
     color: var(--color-text-primary);
   }
 }
@@ -504,13 +523,16 @@ $ins-label:   12px;
   position: sticky;
   top: 0;
   align-self: flex-start;
-  width: 136px;
+  width: 184px;
   flex-shrink: 0;
   padding: $ins-lg $ins-md $ins-lg 0;
   display: flex;
   flex-direction: column;
   gap: 0;
   box-sizing: border-box;
+  border-left: 1px solid $ins-border;
+  margin-left: $ins-lg;
+  padding-left: $ins-md;
 
   // Section group label (reserved) - keeps structure flexible
   &__group-label {
@@ -528,44 +550,47 @@ $ins-label:   12px;
     display: flex;
     align-items: center;
     gap: $ins-sm;
-    padding: 5px $ins-sm 5px $ins-md;
+    padding: 6px $ins-sm 6px $ins-md;
     border: none;
     background: transparent;
     color: var(--color-text-muted);
     font-size: $ins-small;
     text-align: left;
     cursor: pointer;
-    transition: color 0.15s;
+    transition: color 0.15s, background 0.15s;
     border-radius: $ins-r-sm;
-    line-height: 1.3;
+    line-height: 1.35;
 
-    // Active indicator dot on left edge
+    // Active indicator pill on left edge
     &::before {
       content: '';
       position: absolute;
-      left: 4px;
-      top: 50%;
-      transform: translateY(-50%) scale(0);
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      border-radius: 2px;
       background: $ins-blue;
-      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s;
+      transform: scaleY(0);
+      transform-origin: center;
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s;
       opacity: 0;
     }
 
-    svg { display: none; } // icons hidden - text-only minimal nav
+    svg { display: none; }
 
     &:hover {
       color: var(--color-text-secondary);
-      background: $ins-surface;
+      background: $ins-surface-soft;
     }
 
     &.is-active {
       color: var(--color-text-primary);
+      font-weight: 600;
+      background: $ins-blue-bg;
 
       &::before {
-        transform: translateY(-50%) scale(1);
+        transform: scaleY(1);
         opacity: 1;
       }
     }
@@ -590,7 +615,7 @@ $ins-label:   12px;
 
 %ins-section-heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: $ins-sm;
   font-size: 18px;
   font-weight: 700;
@@ -599,7 +624,17 @@ $ins-label:   12px;
   margin: 0 0 $ins-lg;
   padding: 0;
 
-  &::before { display: none; }
+  // Small accent bar on the left of every section heading
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: $ins-blue;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
 }
 
 .insights-section h3 { @extend %ins-section-heading; }
@@ -711,7 +746,7 @@ $ins-label:   12px;
 
   &:hover {
     border-color: $ins-border-hover;
-    background: color-mix(in srgb, var(--color-bg-quaternary) 100%, white 4%);
+    background: $ins-tint-1;
   }
 
   &__value {
@@ -781,7 +816,7 @@ $ins-label:   12px;
   &__track {
     flex: 1;
     height: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    background: $ins-surface-soft;
     border-radius: 4px;
     margin: 0 $ins-sm;
     overflow: hidden;
@@ -791,7 +826,7 @@ $ins-label:   12px;
     height: 100%;
     border-radius: 4px;
     transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-    opacity: 0.65;
+    opacity: 0.85;
   }
 
   &__value {
@@ -816,7 +851,7 @@ $ins-label:   12px;
 
   &:hover {
     border-color: $ins-border-hover;
-    background: color-mix(in srgb, var(--color-bg-quaternary) 100%, white 3%);
+    background: $ins-tint-1;
   }
 }
 
@@ -1006,7 +1041,7 @@ $ins-label:   12px;
 // Highlight block: must-read conclusions, key findings
 // Use sparingly - 1-2 per report maximum
 .insights-highlight-block {
-  background: rgba(255, 255, 255, 0.05);
+  background: $ins-surface-soft;
   border-radius: $ins-r;
   padding: $ins-md $ins-lg;
   margin-bottom: $ins-md;
@@ -1091,7 +1126,8 @@ $ins-label:   12px;
     font-size: 11px;
     font-weight: 500;
     color: var(--color-text-muted);
-    background: rgba(255, 255, 255, 0.06);
+    background: $ins-surface-soft;
+    border: 1px solid $ins-border;
     border-radius: $ins-r-sm;
     padding: 2px 7px;
     letter-spacing: 0.02em;
@@ -1247,16 +1283,17 @@ $ins-label:   12px;
     justify-content: center;
     width: 24px;
     height: 24px;
-    border: none;
+    border: 1px solid $ins-border;
     border-radius: $ins-r-sm;
-    background: rgba(255, 255, 255, 0.08);
+    background: $ins-surface;
     color: var(--color-text-muted);
     cursor: pointer;
     opacity: 0;   // hidden until row hover
-    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.14);
+      background: $ins-surface-hover;
+      border-color: $ins-border-hover;
       color: var(--color-text-primary);
     }
   }
@@ -1281,18 +1318,22 @@ $ins-label:   12px;
 
   &:hover { border-color: $ins-border-hover; }
 
-  // left: large muted index number
+  // left: large index number — distinct accent so it actually reads as a number
   &__index {
-    font-size: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: -0.04em;
-    color: var(--color-text-muted);
-    opacity: 0.25;
+    letter-spacing: 0;
+    color: $ins-blue;
     line-height: 1;
     flex-shrink: 0;
     width: 24px;
-    text-align: right;
-    padding-top: 2px;
+    height: 24px;
+    border-radius: 50%;
+    background: $ins-blue-bg;
+    border: 1px solid color-mix(in srgb, $ins-blue 25%, transparent);
   }
 
   &__body {
@@ -1357,16 +1398,15 @@ $ins-label:   12px;
     box-sizing: border-box;
     padding: $ins-lg $ins-xl;
     border-radius: $ins-r-lg;
-    border: 1px solid $ins-border;
-    // subtle accent wash — distinct from stats / other cards, still theme-token
-    background: var(--color-accent-100);
+    border: 1px solid color-mix(in srgb, $ins-blue 28%, transparent);
+    background: $ins-blue-bg;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
 
     &:hover {
-      border-color: $ins-border-hover;
-      background: color-mix(in srgb, var(--color-accent-100) 100%, white 6%);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+      border-color: color-mix(in srgb, $ins-blue 45%, transparent);
+      background: var(--color-accent-200, $ins-blue-bg);
+      box-shadow: var(--shadow-sm, 0 4px 12px rgba(0, 0, 0, 0.10));
     }
   }
 

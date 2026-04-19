@@ -92,6 +92,18 @@
     gap: $size-gap-3;
   }
 
+  &__footer-left {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  &__model {
+    flex-shrink: 0;
+  }
+
   &__hint {
     font-size: var(--font-size-2xs);
     color: var(--color-text-muted);

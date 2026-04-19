@@ -17,7 +17,7 @@ const CONFIG_PATH = 'app.ai_experience';
 const defaultSettings: AIExperienceSettings = {
   enable_session_title_generation: true,
   enable_visual_mode: false,
-  enable_agent_companion: false,
+  enable_agent_companion: true,
 };
 
  

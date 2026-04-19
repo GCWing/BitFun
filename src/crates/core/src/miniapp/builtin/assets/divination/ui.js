@@ -10,30 +10,59 @@
 // stored "drawn" state. Visual fields (symbol/tone) are shared.
 
 // ── Cards: shared visuals + per-locale strings ───────────────────────────
+// Hue-balanced palette across 24 cards. Each `tone` is [primary, deep-bg] —
+// primary drives accents (fortune bars, scene tint), deep-bg is the card
+// background gradient endpoint. Hues are spread roughly uniformly around the
+// wheel (red → orange → gold → lime → teal → cyan → blue → indigo → violet
+// → magenta → rose) while still nodding to each card's symbolism.
 const CARD_VISUALS = [
-  { symbol: '✦', tone: ['#5b21b6', '#1e1b4b'] },
-  { symbol: '✶', tone: ['#1e3a8a', '#0c1230'] },
-  { symbol: '✺', tone: ['#9a3412', '#2a0e0a'] },
-  { symbol: '☾', tone: ['#1e293b', '#0f172a'] },
-  { symbol: '☄', tone: ['#4c1d95', '#1f0a3d'] },
-  { symbol: '◆', tone: ['#7f1d1d', '#260a0a'] },
-  { symbol: '∞', tone: ['#065f46', '#04241c'] },
-  { symbol: '✧', tone: ['#0e7490', '#06262e'] },
-  { symbol: '❀', tone: ['#14532d', '#031708'] },
-  { symbol: '⊛', tone: ['#1e40af', '#0a163b'] },
-  { symbol: '✦', tone: ['#92400e', '#2d1305'] },
-  { symbol: '◌', tone: ['#3730a3', '#0f0e2c'] },
-  { symbol: '☼', tone: ['#155e75', '#03222b'] },
-  { symbol: '✉', tone: ['#166534', '#03200d'] },
-  { symbol: '♪', tone: ['#581c87', '#1a0830'] },
-  { symbol: '⚔', tone: ['#9f1239', '#2c0710'] },
+  // 0  命运之轮 — amethyst (270°)
+  { symbol: '✦', tone: ['#6d28d9', '#1a0936'] },
+  // 1  星辰指引 — sapphire (220°)
+  { symbol: '✶', tone: ['#1e3a8a', '#08112e'] },
+  // 2  熔炉之心 — molten orange (18°)
+  { symbol: '✺', tone: ['#c2410c', '#2a0a02'] },
+  // 3  寂静之钟 — slate (215°, low-sat)
+  { symbol: '☾', tone: ['#475569', '#0c121b'] },
+  // 4  银河书简 — deep indigo (250°)
+  { symbol: '☄', tone: ['#4338ca', '#0d0a2e'] },
+  // 5  红宝匠人 — ruby (350°)
+  { symbol: '◆', tone: ['#be123c', '#2c0612'] },
+  // 6  青铜之蛇 — bronze (35°)
+  { symbol: '∞', tone: ['#92400e', '#261105'] },
+  // 7  光之回响 — cyan (188°)
+  { symbol: '✧', tone: ['#0891b2', '#031f29'] },
+  // 8  苔藓低语 — moss (90°)
+  { symbol: '❀', tone: ['#65a30d', '#121e02'] },
+  // 9  星海罗盘 — steel blue (210°)
+  { symbol: '⊛', tone: ['#1d4ed8', '#06163a'] },
+  // 10 黄昏炉火 — amber (28°)
+  { symbol: '✦', tone: ['#b45309', '#2a1106'] },
+  // 11 悬浮之环 — jade (170°)
+  { symbol: '◌', tone: ['#0f766e', '#03221f'] },
+  // 12 镜面湖 — aqua (198°)
+  { symbol: '☼', tone: ['#0369a1', '#031c33'] },
+  // 13 深林信使 — forest (135°)
+  { symbol: '✉', tone: ['#15803d', '#051a0d'] },
+  // 14 夜之提琴 — violet (285°)
+  { symbol: '♪', tone: ['#7e22ce', '#1c0830'] },
+  // 15 黎明铸铁 — crimson (358°)
+  { symbol: '⚔', tone: ['#b91c1c', '#260606'] },
+  // 16 极光之纱 — aurora teal-green (160°)
   { symbol: '✤', tone: ['#0d9488', '#02322f'] },
-  { symbol: '✎', tone: ['#3f3f46', '#101013'] },
-  { symbol: '∽', tone: ['#0369a1', '#021c33'] },
-  { symbol: '♥', tone: ['#86198f', '#2a0833'] },
-  { symbol: '✦', tone: ['#a16207', '#2c1a05'] },
-  { symbol: '✿', tone: ['#be185d', '#310a1f'] },
-  { symbol: '✝', tone: ['#0f766e', '#02211f'] },
+  // 17 羽落之笔 — graphite (220°, near-neutral)
+  { symbol: '✎', tone: ['#52525b', '#0d0d10'] },
+  // 18 潮汐之环 — ocean (235°)
+  { symbol: '∽', tone: ['#1e40af', '#08123a'] },
+  // 19 紫晶圣杯 — magenta (305°)
+  { symbol: '♥', tone: ['#a21caf', '#2a072d'] },
+  // 20 金色齿轮 — gold (45°)
+  { symbol: '✦', tone: ['#a16207', '#2a1805'] },
+  // 21 晨曦之翼 — rose (335°)
+  { symbol: '✿', tone: ['#be185d', '#2c0a1c'] },
+  // 22 寒星之刃 — frost steel-cyan (200°, low-sat)
+  { symbol: '✝', tone: ['#0e7490', '#03161c'] },
+  // 23 月光石阶 — midnight (245°)
   { symbol: '☽', tone: ['#312e81', '#0a0928'] },
 ];
 
@@ -807,6 +836,23 @@ function applyStaticI18n() {
 // ── Card-back symbols (purely cosmetic; the actual fortune is fixed by date) ──
 const BACK_SYMBOLS = ['✦', '✶', '☾', '✧', '☄', '✺', '◌', '☼', '✤'];
 
+function applySceneTone(tone) {
+  // Dye the entire scene (background, aurora, card, accents) with the day's
+  // card tone so the room feels monochromatic — no clash between purple bg
+  // and a blue card. tone[0] is the bright accent, tone[1] is deep shadow.
+  const root = document.querySelector('.div-app') || document.body;
+  root.style.setProperty('--card-tone-1', tone[0]);
+  root.style.setProperty('--card-tone-2', tone[1]);
+  if (dom.cardFront) {
+    dom.cardFront.style.setProperty('--card-tone-1', tone[0]);
+    dom.cardFront.style.setProperty('--card-tone-2', tone[1]);
+  }
+  if (dom.resultStage) {
+    dom.resultStage.style.setProperty('--card-tone-1', tone[0]);
+    dom.resultStage.style.setProperty('--card-tone-2', tone[1]);
+  }
+}
+
 async function init() {
   applyStaticI18n();
   const today = dateKey();
@@ -926,10 +972,17 @@ function onPick(chosen, today, alreadyDrawn) {
     }
   }
   chosen.classList.add('is-chosen');
+  // Pre-compute the day's card so we can start the scene-tone transition
+  // in lockstep with the burst+flip animation. CSS will animate `.div-app`
+  // background over ~1.4s, so by the time the result is revealed the room
+  // is already breathing the new card's color.
+  const indices = generateFortuneIndices(today);
+  const tone = CARD_VISUALS[indices.cardIdx].tone;
   // After the lift settles, trigger the flip-into-burst sequence.
   setTimeout(() => {
     spawnBurst(chosen);
     chosen.classList.add('is-flipping');
+    applySceneTone(tone);
   }, 380);
   setTimeout(() => revealResult(today, alreadyDrawn), 1280);
 }
@@ -961,7 +1014,7 @@ function paintResult(f) {
   dom.cardArt.textContent = f.card.symbol;
   dom.cardName.textContent = f.card.name;
   dom.cardKeyword.textContent = f.card.keyword;
-  dom.cardQuote.textContent = `"${f.quote}"`;
+  dom.cardQuote.textContent = f.quote;
   if (dom.cardInsight) {
     dom.cardInsight.innerHTML = '';
     const label = document.createElement('span');
@@ -973,8 +1026,7 @@ function paintResult(f) {
     dom.cardInsight.appendChild(label);
     dom.cardInsight.appendChild(text);
   }
-  dom.cardFront.style.setProperty('--card-tone-1', f.card.tone[0]);
-  dom.cardFront.style.setProperty('--card-tone-2', f.card.tone[1]);
+  applySceneTone(f.card.tone);
 
   dom.fortunes.innerHTML = '';
   for (const item of f.fortunes) {
@@ -998,7 +1050,7 @@ function paintResult(f) {
   dom.luckyColorName.textContent = f.color.name;
   dom.luckyNumber.textContent = String(f.luckyNumber);
   dom.luckyHour.textContent = f.hour;
-  dom.luckyMantra.textContent = `"${f.mantra}"`;
+  dom.luckyMantra.textContent = f.mantra;
 }
 
 function escapeHtml(s) {

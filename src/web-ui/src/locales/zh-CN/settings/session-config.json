@@ -9,7 +9,7 @@
     },
     "agentCompanion": {
       "title": "Agent 伙伴",
-      "subtitle": "在收起的会话输入框中显示像素风格伙伴动画。",
+      "subtitle": "在收起的会话输入框中显示BitFun伙伴。",
       "enable": "显示 Agent 伙伴"
     }
   },

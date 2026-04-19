@@ -35,9 +35,13 @@
               <div class="result-card__icon" id="result-icon">★</div>
               <div class="result-card__title" id="result-title">黑棋胜</div>
               <div class="result-card__sub" id="result-sub">连成五子</div>
-              <button id="result-restart" class="btn btn--primary" type="button" data-i18n="playAgain">再来一局</button>
+              <div class="result-card__actions">
+                <button id="result-review" class="btn" type="button" data-i18n="reviewBoard">查看对局</button>
+                <button id="result-restart" class="btn btn--primary" type="button" data-i18n="playAgain">再来一局</button>
+              </div>
             </div>
           </div>
+          <button id="result-reopen" class="result-reopen" type="button" hidden data-i18n="showResult">查看结果</button>
         </div>
       </section>
 

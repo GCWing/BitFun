@@ -9,6 +9,30 @@ use std::process::Command;
 /// Default CDP debug port.
 pub const DEFAULT_CDP_PORT: u16 = 9222;
 
+/// Windows: suppress the brief console window that flashes when a GUI process
+/// spawns a console subprocess (e.g. `reg.exe`, `tasklist.exe`).
+/// Equivalent to passing `CREATE_NO_WINDOW` (0x08000000) to CreateProcess.
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Build a `Command` that on Windows is configured with `CREATE_NO_WINDOW`
+/// so no console window briefly pops up. On other platforms behaves like
+/// `Command::new`.
+fn silent_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = cmd;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd
+    }
+}
+
 /// Known browser identifiers and their executable paths per platform.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BrowserKind {
@@ -75,7 +99,7 @@ impl BrowserLauncher {
 
     #[cfg(target_os = "macos")]
     fn detect_default_browser_macos() -> BitFunResult<BrowserKind> {
-        let output = Command::new("defaults")
+        let output = silent_command("defaults")
             .args([
                 "read",
                 "com.apple.LaunchServices/com.apple.launchservices.secure",
@@ -118,7 +142,7 @@ impl BrowserLauncher {
 
     #[cfg(target_os = "windows")]
     fn detect_default_browser_windows() -> BitFunResult<BrowserKind> {
-        let output = Command::new("reg")
+        let output = silent_command("reg")
             .args([
                 "query",
                 r"HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice",
@@ -144,7 +168,7 @@ impl BrowserLauncher {
 
     #[cfg(target_os = "linux")]
     fn detect_default_browser_linux() -> BitFunResult<BrowserKind> {
-        let output = Command::new("xdg-settings")
+        let output = silent_command("xdg-settings")
             .args(["get", "default-web-browser"])
             .output()
             .ok();
@@ -272,7 +296,7 @@ impl BrowserLauncher {
                     r"{}\Software\Microsoft\Windows\CurrentVersion\App Paths\{}",
                     root, exe_name
                 );
-                let output = Command::new("reg")
+                let output = silent_command("reg")
                     .args(["query", &key, "/ve"])
                     .output()
                     .ok();
@@ -360,7 +384,7 @@ impl BrowserLauncher {
             "Launching {} with CDP on port {} (user_data_dir={:?})",
             kind, port, user_data_dir
         );
-        let result = Command::new(&exe).arg(&flag).args(&extra).spawn();
+        let result = silent_command(&exe).arg(&flag).args(&extra).spawn();
 
         match result {
             Ok(_child) => {
@@ -424,7 +448,7 @@ impl BrowserLauncher {
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             for name in &process_names {
-                let output = Command::new("pgrep").args(["-f", name]).output().ok();
+                let output = silent_command("pgrep").args(["-f", name]).output().ok();
                 if let Some(out) = output {
                     if out.status.success() && !out.stdout.is_empty() {
                         return true;
@@ -438,7 +462,7 @@ impl BrowserLauncher {
         {
             for image in &process_names {
                 let filter = format!("IMAGENAME eq {}", image);
-                let output = Command::new("tasklist")
+                let output = silent_command("tasklist")
                     .args(["/FI", &filter, "/NH", "/FO", "CSV"])
                     .output()
                     .ok();
