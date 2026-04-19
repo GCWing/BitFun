@@ -8,6 +8,7 @@ use crate::agentic::core::{
 };
 use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
+    normalize_remote_workspace_path, remote_workspace_session_mirror_dir,
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
@@ -187,7 +188,26 @@ impl PersistenceManager {
         &self.runtime_service
     }
 
+    /// Resolve the on-disk sessions directory for `workspace_path`.
+    ///
+    /// For local workspaces this delegates to `PathManager::project_sessions_dir`,
+    /// which slugifies the workspace root under `~/.bitfun/projects/`.
+    ///
+    /// For remote SSH workspaces, callers (notably `desktop_effective_session_storage_path`)
+    /// pass an already-resolved mirror path under `~/.bitfun/remote_ssh/{host}/{path}/sessions`.
+    /// In that case we MUST use the path as-is; otherwise the slug pipeline would treat the
+    /// mirror path as a workspace root and write/read to a bogus
+    /// `~/.bitfun/projects/<slug-of-mirror-path>/sessions/` location.
     fn project_sessions_dir(&self, workspace_path: &Path) -> PathBuf {
+        let remote_mirror_root = PathManager::remote_ssh_mirror_root();
+        if workspace_path.starts_with(&remote_mirror_root) {
+            // Already resolved: either the mirror runtime root, the mirror sessions dir,
+            // or a session sub-dir. Treat the path as the sessions root directly.
+            // (Inputs that already include a trailing `sessions` segment stay correct;
+            // inputs at the mirror runtime root would historically fall back to the
+            // legacy slug, but no current call-site uses that shape.)
+            return workspace_path.to_path_buf();
+        }
         self.path_manager.project_sessions_dir(workspace_path)
     }
 
@@ -2147,6 +2167,178 @@ impl PersistenceManager {
                 .await?;
         }
         Ok(())
+    }
+
+    /// Migrate sessions that were saved to the wrong on-disk location prior to the fix.
+    ///
+    /// Two failure modes existed for remote SSH workspaces:
+    ///
+    /// 1. The frontend-saved sessions for a remote workspace went through
+    ///    `desktop_effective_session_storage_path`, which returns
+    ///    `~/.bitfun/remote_ssh/{host}/{path}/sessions`. That path was then
+    ///    re-slugified by `PathManager::project_sessions_dir` and ended up at
+    ///    `~/.bitfun/projects/<slug-of-mirror-path>/sessions/`.
+    /// 2. The coordinator's safety-net writer did not pass remote SSH info, so
+    ///    the raw remote POSIX root (e.g. `/root/lwb/repo/BitFun`) was treated
+    ///    as a local workspace and slugified to
+    ///    `~/.bitfun/projects/<slug-of-remote-root>/sessions/Recovered Session…`.
+    ///
+    /// This routine scans `~/.bitfun/projects/*/sessions/` for any session whose
+    /// `metadata.json` records a non-`localhost` `workspaceHostname`, and moves
+    /// the session directory to the correct mirror dir at
+    /// `~/.bitfun/remote_ssh/{host}/{normalized path}/sessions/`.
+    /// Empty source `sessions` and project dirs are removed afterwards.
+    ///
+    /// Safe to call repeatedly; sessions already at the destination are left in place.
+    pub async fn migrate_misplaced_remote_sessions(&self) {
+        let projects_root = self.path_manager.projects_root();
+        let mut project_iter = match fs::read_dir(&projects_root).await {
+            Ok(it) => it,
+            Err(e) if e.kind() == ErrorKind::NotFound => return,
+            Err(e) => {
+                warn!(
+                    "migrate_misplaced_remote_sessions: cannot read {}: {}",
+                    projects_root.display(),
+                    e
+                );
+                return;
+            }
+        };
+
+        let mut moved_total: usize = 0;
+        let mut scanned_projects: usize = 0;
+
+        while let Ok(Some(project_entry)) = project_iter.next_entry().await {
+            let project_dir = project_entry.path();
+            let sessions_dir = project_dir.join("sessions");
+            if !sessions_dir.is_dir() {
+                continue;
+            }
+            scanned_projects += 1;
+
+            let mut session_iter = match fs::read_dir(&sessions_dir).await {
+                Ok(it) => it,
+                Err(_) => continue,
+            };
+
+            let mut moved_in_project: usize = 0;
+            let mut session_count: usize = 0;
+            while let Ok(Some(session_entry)) = session_iter.next_entry().await {
+                let session_dir = session_entry.path();
+                if !session_dir.is_dir() {
+                    continue;
+                }
+                session_count += 1;
+
+                let metadata_path = session_dir.join("metadata.json");
+                let raw = match fs::read(&metadata_path).await {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                let stored: StoredSessionMetadataFile = match serde_json::from_slice(&raw) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let metadata = stored.metadata;
+                let hostname = metadata
+                    .workspace_hostname
+                    .as_deref()
+                    .map(str::trim)
+                    .unwrap_or("");
+                let workspace_path = metadata
+                    .workspace_path
+                    .as_deref()
+                    .map(str::trim)
+                    .unwrap_or("");
+                if workspace_path.is_empty() {
+                    continue;
+                }
+                // Only handle records that are clearly remote workspaces.
+                if hostname.is_empty()
+                    || hostname == LOCAL_WORKSPACE_SSH_HOST
+                    || hostname == "_unresolved"
+                {
+                    continue;
+                }
+
+                let target_sessions_dir = remote_workspace_session_mirror_dir(
+                    hostname,
+                    &normalize_remote_workspace_path(workspace_path),
+                );
+                let target_dir = target_sessions_dir.join(&metadata.session_id);
+                if target_dir.exists() {
+                    // Destination already populated — drop the legacy copy.
+                    if let Err(e) = fs::remove_dir_all(&session_dir).await {
+                        warn!(
+                            "migrate_misplaced_remote_sessions: failed to remove duplicate {}: {}",
+                            session_dir.display(),
+                            e
+                        );
+                    } else {
+                        moved_in_project += 1;
+                    }
+                    continue;
+                }
+
+                if let Err(e) = fs::create_dir_all(&target_sessions_dir).await {
+                    warn!(
+                        "migrate_misplaced_remote_sessions: cannot create {}: {}",
+                        target_sessions_dir.display(),
+                        e
+                    );
+                    continue;
+                }
+                if let Err(e) = fs::rename(&session_dir, &target_dir).await {
+                    warn!(
+                        "migrate_misplaced_remote_sessions: failed to move {} -> {}: {}",
+                        session_dir.display(),
+                        target_dir.display(),
+                        e
+                    );
+                    continue;
+                }
+                info!(
+                    "migrate_misplaced_remote_sessions: moved session {} from {} to {}",
+                    metadata.session_id,
+                    session_dir.display(),
+                    target_dir.display()
+                );
+                moved_in_project += 1;
+
+                // Force the destination index to rebuild on next read.
+                let dest_index = target_sessions_dir.join("index.json");
+                if dest_index.exists() {
+                    let _ = fs::remove_file(&dest_index).await;
+                }
+            }
+
+            // If we drained every session from this legacy project dir, clean it up so
+            // it doesn't keep showing as an empty entry under ~/.bitfun/projects/.
+            if moved_in_project > 0 && moved_in_project == session_count {
+                let _ = fs::remove_file(sessions_dir.join("index.json")).await;
+                let _ = fs::remove_dir(&sessions_dir).await;
+                // Best-effort: only drop the project dir if it is now empty.
+                if let Ok(mut leftover) = fs::read_dir(&project_dir).await {
+                    if leftover
+                        .next_entry()
+                        .await
+                        .map(|e| e.is_none())
+                        .unwrap_or(false)
+                    {
+                        let _ = fs::remove_dir(&project_dir).await;
+                    }
+                }
+            }
+
+            moved_total += moved_in_project;
+        }
+
+        if moved_total > 0 {
+            info!(
+                "migrate_misplaced_remote_sessions: relocated {} session(s) across {} project dir(s)",
+                moved_total, scanned_projects
+            );
+        }
     }
 }
 

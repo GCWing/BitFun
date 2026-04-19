@@ -143,6 +143,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     selectFile,
     expandFolder,
     expandFolderLazy,
+    expandFolderEnsure,
   } = useFileSystem({
     rootPath: workspacePath,
     autoLoad: true,
@@ -355,24 +356,24 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     if (!data.path || !workspacePath) {
       return;
     }
-    
+
     log.debug('Navigating to path', { path: data.path, scrollIntoView: data.scrollIntoView });
-    
+
     const normalizedTarget = data.path.replace(/\\/g, '/');
     const normalizedWorkspace = workspacePath.replace(/\\/g, '/');
-    
+
     let relativePath = normalizedTarget;
     if (normalizedTarget.toLowerCase().startsWith(normalizedWorkspace.toLowerCase())) {
       relativePath = normalizedTarget.slice(normalizedWorkspace.length).replace(/^\//, '');
     }
-    
+
     const parts = relativePath.split('/').filter(Boolean);
     let currentPath = normalizedWorkspace;
     const isWindowsPath = workspacePath.includes('\\');
-    
+
     const targetPaths = new Set<string>();
     targetPaths.add(isWindowsPath ? normalizedWorkspace.replace(/\//g, '\\') : normalizedWorkspace);
-    
+
     let finalExpandPath = '';
     const pathsToExpand: string[] = [];
     for (const part of parts) {
@@ -382,31 +383,40 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       targetPaths.add(expandPath);
       pathsToExpand.push(expandPath);
     }
-    
+
     expandedFolders.forEach(folderPath => {
       if (!targetPaths.has(folderPath)) {
         expandFolder(folderPath, false);
       }
     });
-    
-    for (const expandPath of pathsToExpand) {
-      expandFolder(expandPath, true);
-    }
-    
-    if (data.scrollIntoView && finalExpandPath) {
-      setTimeout(() => {
-        const escapedPath = finalExpandPath.replace(/\\/g, '\\\\');
-        const targetElement = document.querySelector(`[data-file-path="${escapedPath}"]`);
-        if (targetElement) {
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          targetElement.classList.add('bitfun-file-explorer__node-content--highlighted');
-          setTimeout(() => {
-            targetElement.classList.remove('bitfun-file-explorer__node-content--highlighted');
-          }, 2000);
+
+    const performScroll = () => {
+      if (!data.scrollIntoView || !finalExpandPath) {
+        return;
+      }
+      const escapedPath = finalExpandPath.replace(/\\/g, '\\\\');
+      const targetElement = document.querySelector(`[data-file-path="${escapedPath}"]`);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.classList.add('bitfun-file-explorer__node-content--highlighted');
+        setTimeout(() => {
+          targetElement.classList.remove('bitfun-file-explorer__node-content--highlighted');
+        }, 2000);
+      }
+    };
+
+    void (async () => {
+      for (const expandPath of pathsToExpand) {
+        try {
+          await expandFolderEnsure(expandPath);
+        } catch (err) {
+          log.warn('Failed to expand path during navigation', { expandPath, err });
+          break;
         }
-      }, 300);
-    }
-  }, [workspacePath, expandFolder, expandedFolders]);
+      }
+      setTimeout(performScroll, 100);
+    })();
+  }, [workspacePath, expandFolder, expandFolderEnsure, expandedFolders]);
 
   const getParentDirectory = useCallback((filePath: string): string => {
     return dirnameAbsolutePath(filePath);
@@ -692,6 +702,18 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     onFileSelect?.(filePath, fileName);
   }, [selectFile, onFileSelect]);
 
+  const handleSearchFolderNavigate = useCallback((folderPath: string, _folderName: string) => {
+    if (onViewModeChange) {
+      onViewModeChange('tree');
+    } else {
+      setInternalViewMode('tree');
+    }
+    selectFile(folderPath);
+    setTimeout(() => {
+      handleNavigateToPath({ path: folderPath, scrollIntoView: true });
+    }, 0);
+  }, [onViewModeChange, selectFile, handleNavigateToPath]);
+
   const handleClearSearch = useCallback(() => {
     clearSearch();
   }, [clearSearch]);
@@ -887,6 +909,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                   results={searchResults}
                   searchQuery={searchQuery}
                   onFileSelect={handleSearchResultSelect}
+                  onFolderNavigate={handleSearchFolderNavigate}
                   workspacePath={workspacePath}
                   className="bitfun-files-panel__search-results"
                 />

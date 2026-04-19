@@ -170,9 +170,9 @@ html, body {
   white-space: nowrap;
 }
 
-/* ─── Hero Tile (8 cols) ──────────────────────────── */
+/* ─── Hero Tile (9 cols ~ 3/4 width) ───────────────── */
 .cs-tile-hero {
-  grid-column: span 8;
+  grid-column: span 9;
   padding: clamp(10px, 1.5vh, 16px) clamp(14px, 1.8vw, 20px);
   background:
     radial-gradient(circle at 80% 0%, rgba(var(--cs-accent-rgb), 0.10), transparent 55%),
@@ -314,38 +314,54 @@ html, body {
 }
 .cs-meta-repo { font-weight: 500; color: var(--cs-text-2); }
 
-/* ─── Streak Tile (4 cols) ────────────────────────── */
+/* ─── Streak Tile (3 cols ~ 1/4 width, compact vertical) ─ */
 .cs-tile-streak {
-  grid-column: span 4;
+  grid-column: span 3;
   background:
     linear-gradient(140deg, rgba(var(--cs-accent-rgb), 0.10), transparent 70%),
     var(--cs-card);
   border-color: rgba(var(--cs-accent-rgb), 0.22);
-  flex-direction: row;
-  align-items: center;
-  gap: clamp(8px, 1.5vw, 14px);
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  grid-template-rows: auto 1fr auto;
+  column-gap: clamp(6px, 0.8vw, 10px);
+  row-gap: clamp(2px, 0.5vh, 6px);
 }
-.cs-tile-streak .cs-tile-head { margin-bottom: 0; flex-shrink: 0; }
+.cs-tile-streak .cs-tile-head {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin-bottom: 0;
+}
 .cs-tile-streak .cs-streak-num {
-  font-size: clamp(28px, 5.5vh, 48px);
+  grid-column: 1;
+  grid-row: 2;
+  font-size: clamp(22px, 4.4vh, 36px);
   font-weight: 600;
   line-height: 1;
   color: var(--cs-accent);
   text-shadow: var(--cs-accent-glow);
   letter-spacing: -0.04em;
+  align-self: end;
 }
 .cs-streak-unit {
+  grid-column: 2;
+  grid-row: 2;
   font-family: var(--cs-mono);
-  font-size: clamp(9px, 1.2vh, 10.5px);
-  letter-spacing: 0.2em;
+  font-size: clamp(8.5px, 1.05vh, 10px);
+  letter-spacing: 0.18em;
   color: var(--cs-text-muted);
+  white-space: nowrap;
+  align-self: end;
+  padding-bottom: clamp(2px, 0.4vh, 4px);
 }
 .cs-streak-foot {
-  margin-left: auto;
-  font-size: clamp(10px, 1.4vh, 11.5px);
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-left: 0;
+  font-size: clamp(9.5px, 1.2vh, 11px);
   color: var(--cs-text-2);
-  text-align: right;
-  max-width: 50%;
+  text-align: left;
+  max-width: 100%;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -391,8 +407,8 @@ html, body {
 .cs-stat-foot.down { color: var(--cs-del); }
 .cs-stat-foot svg { width: 10px; height: 10px; flex-shrink: 0; }
 
-/* ─── Donut Tile (5 cols) ─────────────────────────── */
-.cs-tile-donut { grid-column: span 5; min-height: 0; }
+/* ─── Donut Tile (6 cols ~ 1/2 width) ──────────────── */
+.cs-tile-donut { grid-column: span 6; min-height: 0; }
 .cs-donut-row {
   display: flex;
   align-items: center;
@@ -403,8 +419,8 @@ html, body {
 }
 .cs-donut-wrap {
   position: relative;
-  width: clamp(60px, 11vh, 100px);
-  height: clamp(60px, 11vh, 100px);
+  width: clamp(80px, 16vh, 150px);
+  height: clamp(80px, 16vh, 150px);
   flex: 0 0 auto;
 }
 .cs-donut { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
@@ -418,7 +434,7 @@ html, body {
   pointer-events: none;
 }
 .cs-donut-value {
-  font-size: clamp(15px, 2.6vh, 20px);
+  font-size: clamp(18px, 3.2vh, 28px);
   font-weight: 600;
   letter-spacing: -0.03em;
   color: var(--cs-text);
@@ -448,7 +464,7 @@ html, body {
 }
 .cs-legend-row {
   display: grid;
-  grid-template-columns: 8px 1fr auto;
+  grid-template-columns: 8px minmax(0, 1fr) minmax(40px, 1.4fr) auto;
   gap: 8px;
   align-items: center;
   font-size: clamp(10px, 1.45vh, 12px);
@@ -462,14 +478,29 @@ html, body {
   white-space: nowrap;
   min-width: 0;
 }
+.cs-legend-bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--cs-card-2);
+  overflow: hidden;
+  position: relative;
+}
+.cs-legend-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 220ms ease;
+}
 .cs-legend-pct {
   font-family: var(--cs-mono);
   color: var(--cs-text-muted);
   font-size: clamp(9.5px, 1.3vh, 11px);
 }
 
-/* ─── Hours Tile (7 cols) ─────────────────────────── */
-.cs-tile-hours { grid-column: span 7; }
+/* ─── Hours Tile (6 cols ~ 1/2 width) ──────────────── */
+.cs-tile-hours { grid-column: span 6; }
 .cs-hours {
   display: grid;
   grid-template-columns: repeat(24, 1fr);
@@ -578,6 +609,23 @@ html, body {
 .cs-heat-4 {
   background: var(--cs-accent);
   box-shadow: 0 0 10px rgba(var(--cs-accent-rgb), 0.35);
+}
+
+/* Custom hover tooltip for heatmap cells (replaces native title delay). */
+.cs-heat-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--cs-card);
+  border: 1px solid var(--cs-border-strong);
+  color: var(--cs-text);
+  font-family: var(--cs-mono);
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .cs-heatmap-legend {

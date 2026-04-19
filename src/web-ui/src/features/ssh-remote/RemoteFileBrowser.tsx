@@ -112,12 +112,28 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   const [transferBusy, setTransferBusy] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
+  // One-shot retry: when the SSH session was torn down by a transient network
+  // blip, the backend transparently reconnects on the next call but the
+  // already-in-flight request still fails. Retrying once gives the recovery
+  // path a chance to succeed before surfacing an error to the user.
   const loadDirectory = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
+    const fetchOnce = () => sshApi.readDir(connectionId, path);
     try {
-      const result = await sshApi.readDir(connectionId, path);
-      // Sort: directories first, then by name
+      let result;
+      try {
+        result = await fetchOnce();
+      } catch (firstErr) {
+        // Brief pause lets the backend complete its reconnect handshake before
+        // we hammer it again.
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        try {
+          result = await fetchOnce();
+        } catch {
+          throw firstErr;
+        }
+      }
       result.sort((a, b) => {
         if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
         return a.name.localeCompare(b.name);
@@ -478,6 +494,14 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
           {error && (
             <div className="remote-file-browser__error">
               <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => loadDirectory(currentPath)}
+                title={t('actions.retry') || 'Retry'}
+                style={{ marginLeft: 'auto', marginRight: 8 }}
+              >
+                <RefreshCw size={14} />
+              </button>
               <button onClick={() => setError(null)}>×</button>
             </div>
           )}

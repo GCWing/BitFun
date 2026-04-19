@@ -121,8 +121,8 @@ const I18N = {
     loadingTitleFirst: '正在扫描你的代码足迹',
     errNoWs: '还没有打开工作区',
     errNoWsDesc: '请先在 BitFun 侧边栏选择一个 Git 仓库的工作区。',
-    errNotGit: '当前工作区不是 Git 仓库',
-    errNotGitDesc: (p) => `${p} · 执行 git init 或切换到 Git 仓库`,
+    errNotGit: '当前工作区不是 Git 仓库或远程工作区',
+    errNotGitDesc: (p) => `${p} · 执行 git init 或切换到本地 Git 仓库`,
     errNoWsShort: '未检测到工作区',
     errNoWsShortDesc: '请先打开一个工作区',
     errScan: '扫描失败',
@@ -215,8 +215,8 @@ const I18N = {
     loadingTitleFirst: 'Scanning your code footprint',
     errNoWs: 'No workspace open',
     errNoWsDesc: 'Open a Git repo workspace from the BitFun sidebar first.',
-    errNotGit: 'Workspace is not a Git repo',
-    errNotGitDesc: (p) => `${p} · run \`git init\` or switch to a Git repo`,
+    errNotGit: 'Workspace is not a local Git repo (or it is a remote workspace)',
+    errNotGitDesc: (p) => `${p} · run \`git init\` or switch to a local Git repo`,
     errNoWsShort: 'No workspace detected',
     errNoWsShortDesc: 'Open a workspace first',
     errScan: 'Scan failed',
@@ -362,14 +362,24 @@ function renderDonut(langs) {
 
   const legend = $('lang-legend');
   legend.innerHTML = '';
+  // The bar widths are normalized to the dominant slice (max), so the leading
+  // language always shows a full bar — this reads as a per-language ranking
+  // chart rather than each slice being scaled against the full pie (which
+  // would leave bars visually identical to the percentage text).
+  const maxWeight = Math.max(1, ...slices.map((s) => s.weight));
   slices.forEach((s, i) => {
     const li = document.createElement('li');
     li.className = 'cs-legend-row';
     const color = s.isOther ? 'rgba(148,163,184,0.35)' : LANG_COLORS[i % LANG_COLORS.length];
+    const pct = (s.weight / total) * 100;
+    const barPct = (s.weight / maxWeight) * 100;
+    const safeName = escapeHtml(s.name);
+    const safeAttr = escapeAttr(s.name);
     li.innerHTML = `
       <span class="cs-legend-swatch" style="background:${color}"></span>
-      <span class="cs-legend-name" title="${s.name}">${s.name}</span>
-      <span class="cs-legend-pct">${(s.weight / total * 100).toFixed(1)}%</span>
+      <span class="cs-legend-name" title="${safeAttr}">${safeName}</span>
+      <span class="cs-legend-bar" aria-hidden="true"><i style="width:${barPct.toFixed(1)}%;background:${color}"></i></span>
+      <span class="cs-legend-pct">${pct.toFixed(1)}%</span>
     `;
     legend.appendChild(li);
   });
@@ -421,17 +431,25 @@ function renderHeatmap(heatmap) {
     return;
   }
 
-  const counts = heatmap.map((d) => d.count);
-  const max = Math.max(1, ...counts);
+  // Align the data so the cell grid is exactly N full Sun→Sat weeks (no
+  // leading partial week, only trailing padding to finish the current week).
+  // Without this we'd land on 53 columns total, which forces fitHeatmap to
+  // use bands with one orphan week column at the end of the second row. By
+  // dropping the partial leading week we always render an even 52-week grid
+  // that splits cleanly into 2 rows × 26 columns.
   const firstDate = new Date(heatmap[0].date + 'T00:00:00');
-  const leadingEmpty = firstDate.getDay();
-
-  for (let i = 0; i < leadingEmpty; i++) {
-    _heatmapCells.push({ empty: true });
+  const firstDay = firstDate.getDay();
+  const dropLeading = firstDay === 0 ? 0 : 7 - firstDay;
+  const aligned = dropLeading > 0 ? heatmap.slice(dropLeading) : heatmap;
+  if (!aligned.length) {
+    $('heatmap-hint').textContent = '';
+    return;
   }
+  const counts = aligned.map((d) => d.count);
+  const max = Math.max(1, ...counts);
 
   let total = 0, activeDays = 0;
-  heatmap.forEach((d) => {
+  aligned.forEach((d) => {
     const ratio = d.count / max;
     let lvl = 0;
     if (d.count > 0) {
@@ -445,7 +463,7 @@ function renderHeatmap(heatmap) {
     if (d.count > 0) activeDays += 1;
   });
 
-  const lastDate = new Date(heatmap[heatmap.length - 1].date + 'T00:00:00');
+  const lastDate = new Date(aligned[aligned.length - 1].date + 'T00:00:00');
   const trailing = 6 - lastDate.getDay();
   for (let i = 0; i < trailing; i++) _heatmapCells.push({ empty: true });
 
@@ -503,12 +521,90 @@ function fitHeatmap() {
         cell.className = 'cs-heat-cell cs-heat-empty';
       } else {
         cell.className = `cs-heat-cell cs-heat-${c.lvl}`;
-        cell.title = t('perCellTitle')(c.date, c.count);
+        cell.dataset.date = c.date;
+        cell.dataset.count = String(c.count);
       }
       grid.appendChild(cell);
     });
     body.appendChild(grid);
   }
+  ensureHeatmapTooltip();
+}
+
+// Lightweight shared tooltip for heatmap cells. Native `title` has a long
+// activation delay and inconsistent styling across platforms; this overlay
+// shows immediately on hover with the formatted date + commit count.
+let _heatTooltipEl = null;
+let _heatTooltipBound = false;
+
+function ensureHeatmapTooltip() {
+  const tile = document.querySelector('.cs-tile-heatmap');
+  if (!tile) return;
+  if (!_heatTooltipEl) {
+    _heatTooltipEl = document.createElement('div');
+    _heatTooltipEl.className = 'cs-heat-tooltip';
+    _heatTooltipEl.setAttribute('hidden', '');
+    document.body.appendChild(_heatTooltipEl);
+  }
+  if (_heatTooltipBound) return;
+  _heatTooltipBound = true;
+  const body = $('heatmap-body');
+  if (!body) return;
+  body.addEventListener('mouseover', onHeatHover);
+  body.addEventListener('mousemove', onHeatMove);
+  body.addEventListener('mouseleave', hideHeatTooltip);
+  body.addEventListener('mouseout', (ev) => {
+    const to = ev.relatedTarget;
+    if (!to || !body.contains(to)) hideHeatTooltip();
+  });
+}
+
+function onHeatHover(ev) {
+  const cell = ev.target.closest('.cs-heat-cell');
+  if (!cell || cell.classList.contains('cs-heat-empty')) {
+    hideHeatTooltip();
+    return;
+  }
+  const date = cell.dataset.date;
+  const count = parseInt(cell.dataset.count || '0', 10);
+  if (!date) return;
+  _heatTooltipEl.textContent = t('perCellTitle')(fmtDate(date + 'T00:00:00'), count);
+  _heatTooltipEl.removeAttribute('hidden');
+  positionHeatTooltip(ev);
+}
+
+function onHeatMove(ev) {
+  if (!_heatTooltipEl || _heatTooltipEl.hasAttribute('hidden')) return;
+  const cell = ev.target.closest('.cs-heat-cell');
+  if (!cell || cell.classList.contains('cs-heat-empty')) {
+    hideHeatTooltip();
+    return;
+  }
+  // Refresh content if the cursor moved to a new cell.
+  const date = cell.dataset.date;
+  const count = parseInt(cell.dataset.count || '0', 10);
+  if (date) {
+    const txt = t('perCellTitle')(fmtDate(date + 'T00:00:00'), count);
+    if (_heatTooltipEl.textContent !== txt) _heatTooltipEl.textContent = txt;
+  }
+  positionHeatTooltip(ev);
+}
+
+function positionHeatTooltip(ev) {
+  if (!_heatTooltipEl) return;
+  const pad = 12;
+  const w = _heatTooltipEl.offsetWidth || 160;
+  const h = _heatTooltipEl.offsetHeight || 28;
+  let x = ev.clientX + pad;
+  let y = ev.clientY - h - pad;
+  if (x + w + 4 > window.innerWidth) x = ev.clientX - w - pad;
+  if (y < 4) y = ev.clientY + pad;
+  _heatTooltipEl.style.left = `${Math.max(4, x)}px`;
+  _heatTooltipEl.style.top = `${Math.max(4, y)}px`;
+}
+
+function hideHeatTooltip() {
+  if (_heatTooltipEl) _heatTooltipEl.setAttribute('hidden', '');
 }
 
 let _heatmapRO = null;

@@ -216,6 +216,24 @@ export class ExplorerController {
     await this.resolveDirectory(folderPath, true);
   }
 
+  async expandFolderEnsure(folderPath: string): Promise<void> {
+    const currentExpanded = expandedFoldersContains(this.model.getExpandedFolders(), folderPath);
+    if (!currentExpanded) {
+      this.model.expand(folderPath, true);
+      this.emit();
+    }
+
+    const node = this.model.getNode(folderPath);
+    const needsResolve =
+      !node ||
+      (node.kind === 'directory' &&
+        (node.childrenState === 'unresolved' || node.childrenState === 'error' || node.stale));
+
+    if (needsResolve) {
+      await this.resolveDirectory(folderPath, true);
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
     this.stopWatchers();

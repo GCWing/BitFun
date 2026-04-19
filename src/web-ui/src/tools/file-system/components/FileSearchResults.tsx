@@ -21,6 +21,7 @@ interface FileSearchResultsProps {
   results: FileSearchResultGroup[];
   searchQuery: string;
   onFileSelect: (filePath: string, fileName: string) => void;
+  onFolderNavigate?: (folderPath: string, folderName: string) => void;
   workspacePath?: string;
   className?: string;
 }
@@ -300,6 +301,7 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   results,
   searchQuery,
   onFileSelect,
+  onFolderNavigate,
   workspacePath,
   className = ''
 }) => {
@@ -409,9 +411,13 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   }, [workspacePath]);
 
   const handleFileClick = useCallback((target: SearchResultTarget) => {
+    if (target.isDirectory) {
+      onFolderNavigate?.(target.path, target.name);
+      return;
+    }
     onFileSelect(target.path, target.name);
     openResultTarget(target);
-  }, [onFileSelect, openResultTarget]);
+  }, [onFileSelect, openResultTarget, onFolderNavigate]);
 
   const handleLineClick = useCallback((target: SearchResultTarget, lineNumber?: number) => {
     onFileSelect(target.path, target.name);

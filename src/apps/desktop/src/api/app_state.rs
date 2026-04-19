@@ -141,6 +141,16 @@ impl AppState {
         };
         let path_manager = workspace_service.path_manager().clone();
 
+        // One-time migration: relocate remote SSH sessions that were misplaced under
+        // `~/.bitfun/projects/<slug>/sessions/` (caused by the workspace runtime layout
+        // refactor) back to the canonical
+        // `~/.bitfun/remote_ssh/{host}/{path}/sessions/` mirror dirs. Idempotent.
+        if let Ok(persistence) =
+            bitfun_core::agentic::persistence::PersistenceManager::new(path_manager.clone())
+        {
+            persistence.migrate_misplaced_remote_sessions().await;
+        }
+
         let announcement_scheduler = Arc::new(
             announcement::AnnouncementScheduler::new(&path_manager)
                 .await
