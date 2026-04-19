@@ -202,7 +202,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const model = allModels.find(m => m.id === configuredModelId);
     return model ? configuredModelId : 'auto';
   }, [allModels, currentMode, agentModels, defaultModels]);
-
+  
   const currentModel = useMemo((): ModelInfo | null => {
     const modelId = getCurrentModelId();
 

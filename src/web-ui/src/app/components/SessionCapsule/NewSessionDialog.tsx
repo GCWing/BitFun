@@ -14,6 +14,10 @@ import {
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
+import {
+  clearDeferredNewSessionWorkspace,
+  markDeferredNewSessionWorkspace,
+} from '@/app/utils/deferredWorkspaceSession';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
 import { isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
@@ -25,6 +29,7 @@ const log = createLogger('NewSessionDialog');
 
 const LS_AGENT = 'bitfun.newSessionDialog.agent';
 const LS_WORKSPACE = 'bitfun.newSessionDialog.workspaceId';
+const BROWSED_WORKSPACE_VALUE = '__browsed_workspace__';
 
 export type NewSessionAgentChoice = 'agentic' | 'Cowork' | 'Design' | 'Claw';
 
@@ -61,6 +66,26 @@ function pickDefaultWorkspaceId(
     return current.id;
   }
   return opened[0]?.id ?? null;
+}
+
+function normalizeWorkspacePath(path: string): string {
+  return path.trim().replace(/\\/g, '/');
+}
+
+function findOpenedWorkspaceByPath(
+  openedWorkspaces: WorkspaceInfo[],
+  path: string
+): WorkspaceInfo | undefined {
+  const normalizedPath = normalizeWorkspacePath(path);
+  return openedWorkspaces.find(
+    workspace => normalizeWorkspacePath(workspace.rootPath) === normalizedPath
+  );
+}
+
+function getBrowsedWorkspaceLabel(path: string): string {
+  const segments = path.split(/[\\/]+/).filter(Boolean);
+  const name = segments[segments.length - 1] || path;
+  return `${name} (${path})`;
 }
 
 function resolveModeFromChoice(agentChoice: NewSessionAgentChoice): 'agentic' | 'Cowork' | 'Design' | 'Claw' {
@@ -133,6 +158,7 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
 
   const [agentChoice, setAgentChoice] = useState<NewSessionAgentChoice>('agentic');
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [browsedWorkspacePath, setBrowsedWorkspacePath] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const resetDefaults = useCallback(() => {
@@ -154,6 +180,7 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
     const fromSession = sessionModeToChoice(active?.mode);
 
     setAgentChoice(initialAgentChoice ?? storedAgent ?? fromSession);
+    setBrowsedWorkspacePath(null);
     setWorkspaceId(
       pickDefaultWorkspaceId(openedWorkspacesList, recentWorkspaces, currentWorkspace, storedWs)
     );
@@ -172,11 +199,18 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
       if (ra !== rb) return ra - rb;
       return getWorkspaceDisplayName(a).localeCompare(getWorkspaceDisplayName(b));
     });
-    return sorted.map(w => ({
+    const options = sorted.map(w => ({
       label: getWorkspaceDisplayName(w),
       value: w.id,
     }));
-  }, [openedWorkspacesList, recentWorkspaces]);
+    if (browsedWorkspacePath) {
+      options.unshift({
+        label: getBrowsedWorkspaceLabel(browsedWorkspacePath),
+        value: BROWSED_WORKSPACE_VALUE,
+      });
+    }
+    return options;
+  }, [browsedWorkspacePath, openedWorkspacesList, recentWorkspaces]);
 
   const agentOptions = useMemo(
     () => [
@@ -208,8 +242,15 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
         title: t('header.selectProjectDirectory'),
       });
       if (selected && typeof selected === 'string') {
-        const ws = await openWorkspace(selected);
-        setWorkspaceId(ws.id);
+        const openedWorkspace = findOpenedWorkspaceByPath(openedWorkspacesList, selected);
+        if (openedWorkspace) {
+          setBrowsedWorkspacePath(null);
+          setWorkspaceId(openedWorkspace.id);
+          return;
+        }
+
+        setBrowsedWorkspacePath(selected);
+        setWorkspaceId(BROWSED_WORKSPACE_VALUE);
       }
     } catch (e) {
       log.error('Browse workspace failed', e);
@@ -218,17 +259,32 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
         { duration: 3000 }
       );
     }
-  }, [openWorkspace, t]);
+  }, [openedWorkspacesList, t]);
 
   const handleConfirm = useCallback(async () => {
-    const workspace = openedWorkspacesList.find(w => w.id === workspaceId);
-    if (!workspace) {
+    let workspace = openedWorkspacesList.find(w => w.id === workspaceId);
+    const shouldOpenBrowsedWorkspace =
+      workspaceId === BROWSED_WORKSPACE_VALUE && !!browsedWorkspacePath;
+
+    if (!workspace && !shouldOpenBrowsedWorkspace) {
       notificationService.error(t('nav.sessionCapsule.workspaceMissing'), { duration: 4000 });
       return;
     }
 
     setSubmitting(true);
+    let openedBrowsedWorkspace = false;
     try {
+      if (!workspace && browsedWorkspacePath) {
+        markDeferredNewSessionWorkspace(browsedWorkspacePath);
+        workspace = await openWorkspace(browsedWorkspacePath);
+        openedBrowsedWorkspace = true;
+      }
+
+      if (!workspace) {
+        notificationService.error(t('nav.sessionCapsule.workspaceMissing'), { duration: 4000 });
+        return;
+      }
+
       await launchSessionForChoice({ agentChoice, workspace, setActiveWorkspace });
 
       try {
@@ -245,19 +301,24 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
         e instanceof Error ? e.message : t('nav.workspaces.createSessionFailed'),
         { duration: 4000 }
       );
+      if (!openedBrowsedWorkspace && browsedWorkspacePath) {
+        clearDeferredNewSessionWorkspace(browsedWorkspacePath);
+      }
     } finally {
       setSubmitting(false);
     }
   }, [
     agentChoice,
+    browsedWorkspacePath,
     onClose,
+    openWorkspace,
     openedWorkspacesList,
     setActiveWorkspace,
     t,
     workspaceId,
   ]);
 
-  const noWorkspaces = openedWorkspacesList.length === 0;
+  const noWorkspaces = workspaceOptions.length === 0;
 
   return (
     <Modal
@@ -311,7 +372,13 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
                 size="medium"
                 options={workspaceOptions}
                 value={workspaceId ?? ''}
-                onChange={v => setWorkspaceId(String(v))}
+                onChange={v => {
+                  const selectedValue = String(v);
+                  setWorkspaceId(selectedValue);
+                  if (selectedValue !== BROWSED_WORKSPACE_VALUE) {
+                    setBrowsedWorkspacePath(null);
+                  }
+                }}
                 placeholder={t('nav.sessionCapsule.workspacePlaceholder')}
                 disabled={noWorkspaces}
                 searchable

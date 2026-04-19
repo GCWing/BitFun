@@ -32,6 +32,7 @@ import { WorkspaceKind } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { useSessionModeStore } from '../stores/sessionModeStore';
+import { consumeDeferredNewSessionWorkspace } from '../utils/deferredWorkspaceSession';
 import './AppLayout.scss';
 
 const log = createLogger('AppLayout');
@@ -205,6 +206,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           currentWorkspace.workspaceKind === WorkspaceKind.Assistant
             ? 'Claw'
             : explicitPreferredMode;
+        const suppressAutoSessionSelection = consumeDeferredNewSessionWorkspace(
+          currentWorkspace.rootPath
+        );
 
         const flowChatManager = FlowChatManager.getInstance();
         const hasHistoricalSessions = await flowChatManager.initialize(
@@ -215,12 +219,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             : undefined,
           currentWorkspace.workspaceKind === WorkspaceKind.Remote
             ? currentWorkspace.sshHost
-            : undefined
+            : undefined,
+          undefined,
+          { skipAutoSelectSession: suppressAutoSessionSelection }
         );
 
         let sessionId: string | undefined;
         const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
-        if (!hasHistoricalSessions) {
+        if (!hasHistoricalSessions && !suppressAutoSessionSelection) {
           const initialSessionMode =
             currentWorkspace.workspaceKind === WorkspaceKind.Assistant
               ? 'Claw'
