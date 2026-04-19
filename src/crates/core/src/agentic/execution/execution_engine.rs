@@ -17,7 +17,9 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
-use crate::agentic::tools::{get_all_registered_tools, SubagentParentInfo};
+use crate::agentic::tools::{
+    get_all_registered_tools, SubagentParentInfo, ToolRuntimeRestrictions,
+};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -1432,6 +1434,7 @@ impl ExecutionEngine {
                 model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
             };
@@ -1702,6 +1705,7 @@ impl ExecutionEngine {
             custom_data: tool_opts_custom,
             computer_use_host: None,
             cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: None,
         };
         for tool in &all_tools {

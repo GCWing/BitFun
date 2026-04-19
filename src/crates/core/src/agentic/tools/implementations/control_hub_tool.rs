@@ -1450,6 +1450,7 @@ mod control_hub_tests {
             custom_data: std::collections::HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
             workspace_services: None,
         }
     }

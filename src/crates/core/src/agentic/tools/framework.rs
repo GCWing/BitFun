@@ -1,4 +1,8 @@
 //! Tool framework - Tool interface definition and execution context
+use crate::agentic::tools::restrictions::{
+    is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
+    ToolRuntimeRestrictions,
+};
 use crate::agentic::tools::workspace_paths::{
     build_bitfun_runtime_uri, is_bitfun_runtime_uri, normalize_runtime_relative_path,
     parse_bitfun_runtime_uri,
@@ -65,6 +69,7 @@ pub struct ToolUseContext {
     pub computer_use_host: Option<crate::agentic::tools::computer_use_host::ComputerUseHostRef>,
     // Cancel tool execution more timely, especially for tools like TaskTool that need to run for a long time
     pub cancellation_token: Option<CancellationToken>,
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Workspace I/O services (filesystem + shell) — use these instead of
     /// checking `get_remote_workspace_manager()` inside individual tools.
     pub workspace_services: Option<WorkspaceServices>,
@@ -88,6 +93,62 @@ impl ToolUseContext {
 
     pub fn ws_shell(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceShell> {
         self.workspace_services.as_ref().map(|s| s.shell.as_ref())
+    }
+
+    pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
+        self.runtime_tool_restrictions.ensure_tool_allowed(tool_name)
+    }
+
+    pub fn enforce_path_operation(
+        &self,
+        operation: ToolPathOperation,
+        resolution: &ToolPathResolution,
+    ) -> BitFunResult<()> {
+        let allowed_roots = self
+            .runtime_tool_restrictions
+            .path_policy
+            .roots_for(operation);
+        if allowed_roots.is_empty() {
+            return Ok(());
+        }
+
+        let mut resolved_roots = Vec::with_capacity(allowed_roots.len());
+        for root in allowed_roots {
+            resolved_roots.push(self.resolve_tool_path(root)?);
+        }
+
+        let mut is_allowed = false;
+        for root in &resolved_roots {
+            if root.backend != resolution.backend {
+                continue;
+            }
+
+            let matches_root = match resolution.backend {
+                ToolPathBackend::Local => is_local_path_within_root(
+                    Path::new(&resolution.resolved_path),
+                    Path::new(&root.resolved_path),
+                )?,
+                ToolPathBackend::RemoteWorkspace => {
+                    is_remote_posix_path_within_root(&resolution.resolved_path, &root.resolved_path)
+                }
+            };
+
+            if matches_root {
+                is_allowed = true;
+                break;
+            }
+        }
+
+        if is_allowed {
+            return Ok(());
+        }
+
+        Err(crate::util::errors::BitFunError::validation(format!(
+            "Path '{}' is not allowed for {}. Allowed roots: {}",
+            resolution.logical_path,
+            operation.verb(),
+            allowed_roots.join(", ")
+        )))
     }
 
     /// Whether the session primary model accepts image inputs (from tool-definition / pipeline context).

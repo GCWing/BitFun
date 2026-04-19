@@ -16,6 +16,7 @@ use crate::agentic::fork::{ForkContextSnapshot, ForkExecutionRequest, ForkExecut
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::session::SessionManager;
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
@@ -51,6 +52,7 @@ struct HiddenSubagentExecutionRequest {
     created_by: Option<String>,
     subagent_parent_info: Option<SubagentParentInfo>,
     context: HashMap<String, String>,
+    runtime_tool_restrictions: ToolRuntimeRestrictions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1483,6 +1485,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             context: context_vars,
             subagent_parent_info: None,
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
             round_preempt: self.round_preempt_source.get().cloned(),
         };
@@ -1939,6 +1942,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             created_by,
             subagent_parent_info,
             context,
+            runtime_tool_restrictions,
         } = request;
 
         let session = self
@@ -2006,6 +2010,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // tool confirmation to prevent them from blocking indefinitely on a
             // confirmation channel that nobody will ever respond to.
             skip_tool_confirmation: true,
+            runtime_tool_restrictions,
             workspace_services: subagent_services,
             round_preempt: self.round_preempt_source.get().cloned(),
         };
@@ -2117,6 +2122,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     created_by,
                     subagent_parent_info: None,
                     context: request.context,
+                    runtime_tool_restrictions: request.runtime_tool_restrictions,
                 },
                 cancel_token,
             )
@@ -2167,6 +2173,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
                 subagent_parent_info: Some(subagent_parent_info),
                 context: context.unwrap_or_default(),
+                runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             },
             cancel_token,
         )

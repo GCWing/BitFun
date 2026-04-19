@@ -1,6 +1,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -97,7 +98,19 @@ Usage:
         }
 
         if let Some(ctx) = context {
-            if let Err(err) = ctx.resolve_tool_path(file_path) {
+            let resolved = match ctx.resolve_tool_path(file_path) {
+                Ok(resolved) => resolved,
+                Err(err) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(err.to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            };
+
+            if let Err(err) = ctx.enforce_path_operation(ToolPathOperation::Write, &resolved) {
                 return ValidationResult {
                     result: false,
                     message: Some(err.to_string()),
@@ -138,6 +151,7 @@ Usage:
             .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
 
         let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
 
         let content = input
             .get("content")

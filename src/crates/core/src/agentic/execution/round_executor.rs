@@ -353,6 +353,7 @@ impl RoundExecutor {
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
                 allowed_tools: context.available_tools.clone(),
+                runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 workspace_services: context.workspace_services.clone(),
             };
 

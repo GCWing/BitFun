@@ -5,6 +5,7 @@
 //! its own rounds, tools, cancellation, and cleanup lifecycle.
 
 use crate::agentic::core::{Message, Session, SessionConfig};
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::util::errors::{BitFunError, BitFunResult};
 use std::collections::HashMap;
 
@@ -80,6 +81,7 @@ pub struct ForkExecutionRequest {
     pub description: String,
     pub prompt_messages: Vec<Message>,
     pub context: HashMap<String, String>,
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     pub max_turns: Option<usize>,
 }
 

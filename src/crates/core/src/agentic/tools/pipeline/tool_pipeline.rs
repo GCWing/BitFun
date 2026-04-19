@@ -511,6 +511,27 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
+        if let Err(err) = task
+            .context
+            .runtime_tool_restrictions
+            .ensure_tool_allowed(&tool_name)
+        {
+            let error_msg = err.to_string();
+            warn!("Tool rejected by runtime restrictions: {}", error_msg);
+
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg,
+                        is_retryable: false,
+                    },
+                )
+                .await;
+
+            return Err(err);
+        }
+
         // Create cancellation token
         let cancellation_token = CancellationToken::new();
         self.cancellation_tokens
@@ -844,6 +865,7 @@ impl ToolPipeline {
             },
             computer_use_host: self.computer_use_host.clone(),
             cancellation_token: Some(cancellation_token),
+            runtime_tool_restrictions: task.context.runtime_tool_restrictions.clone(),
             workspace_services: task.context.workspace_services.clone(),
         };
 
