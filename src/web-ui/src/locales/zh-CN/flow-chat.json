@@ -561,7 +561,8 @@
       "expandContent": "展开内容",
       "inputParams": "输入参数",
       "executionResult": "执行结果",
-      "viewDetails": "查看详情"
+      "viewDetails": "查看详情",
+      "interruptedByRestart": "上次关闭应用时该工具尚未完成，已恢复为中断状态"
     },
     "askUser": {
       "completed": "已完成",

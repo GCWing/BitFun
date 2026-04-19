@@ -12,6 +12,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, Play, X, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
@@ -19,10 +20,11 @@ import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { CubeLoading, IconButton, Tooltip } from '../../component-library';
 import { TerminalOutputRenderer } from '@/tools/terminal/components';
 import { createLogger } from '@/shared/utils/logger';
-import { useTerminalCardExpansion } from './useTerminalCardExpansion';
+import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
 import './TerminalToolCard.scss';
 
 const log = createLogger('TerminalToolCard');
+const TERMINAL_COLLAPSED_STATUSES = new Set(['completed', 'cancelled', 'error', 'rejected']);
 const TERMINAL_OUTPUT_PREVIEW_ROWS = 4;
 const TERMINAL_OUTPUT_ESTIMATED_LINE_HEIGHT = 18;
 const TERMINAL_OUTPUT_VERTICAL_PADDING = 16;
@@ -42,12 +44,170 @@ interface ParsedTerminalResult {
   terminalSessionId?: string;
 }
 
+interface TerminalViewState {
+  isLoading: boolean;
+  isFailed: boolean;
+  showInterruptButton: boolean;
+  showLiveOutput: boolean;
+  showWaiting: boolean;
+  showCompletedResult: boolean;
+  showCancelledResult: boolean;
+  hasHeaderExtra: boolean;
+  statusLabel: string | null;
+  statusClassName: string | null;
+}
+
 function normalizeTerminalSessionId(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.startsWith('FlowChat-')) {
     return undefined;
   }
 
   return value;
+}
+
+function isCollapsedTerminalStatus(status: string): boolean {
+  return TERMINAL_COLLAPSED_STATUSES.has(status);
+}
+
+function getInitialTerminalExpandedState(status: string): boolean {
+  return !(isCollapsedTerminalStatus(status) || status === 'pending_confirmation');
+}
+
+function getAutoExpandedStateForTerminalStatus(status: string): boolean | null {
+  if (isCollapsedTerminalStatus(status) || status === 'pending_confirmation') {
+    return false;
+  }
+
+  if (status === 'preparing' || status === 'streaming' || status === 'running') {
+    return true;
+  }
+
+  return null;
+}
+
+function getTerminalViewState(params: {
+  status: string;
+  liveOutput: string;
+  interruptRequested: boolean;
+  showConfirmButtons: boolean;
+  wasInterrupted: boolean;
+  t: TFunction<'flow-chat'>;
+}): TerminalViewState {
+  const { status, liveOutput, interruptRequested, showConfirmButtons, wasInterrupted, t } = params;
+  const isRunning = status === 'running';
+  const isStreaming = status === 'streaming';
+  const isActive = isRunning || isStreaming;
+  const isLoading = status === 'preparing' || isActive;
+  const showInterruptButton = isRunning && !interruptRequested;
+
+  let statusLabel: string | null = null;
+  let statusClassName: string | null = null;
+
+  if (status === 'rejected') {
+    statusLabel = t('toolCards.terminal.rejected');
+    statusClassName = 'status-rejected';
+  } else if ((interruptRequested && isRunning) || wasInterrupted || status === 'cancelled') {
+    statusLabel = t('toolCards.terminal.cancelled');
+    statusClassName = 'status-cancelled';
+  } else if (status === 'error') {
+    statusLabel = t('toolCards.terminal.failed');
+    statusClassName = 'status-error';
+  }
+
+  return {
+    isLoading,
+    isFailed: status === 'error',
+    showInterruptButton,
+    showLiveOutput: isActive && liveOutput.length > 0,
+    showWaiting: isActive && liveOutput.length === 0,
+    showCompletedResult: status === 'completed',
+    showCancelledResult: status === 'cancelled' && liveOutput.length > 0,
+    hasHeaderExtra: Boolean(statusLabel || showConfirmButtons || showInterruptButton),
+    statusLabel,
+    statusClassName,
+  };
+}
+
+function renderTerminalExpandedContent(params: {
+  viewState: TerminalViewState;
+  liveOutput: string;
+  parsedResult: ParsedTerminalResult;
+  t: TFunction<'flow-chat'>;
+}): React.ReactNode {
+  const { viewState, liveOutput, parsedResult, t } = params;
+
+  return (
+    <>
+      {viewState.showLiveOutput && (
+        <div className="terminal-execution-output">
+          <TerminalOutputRenderer
+            content={liveOutput}
+            className="terminal-xterm-output"
+            maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
+          />
+        </div>
+      )}
+
+      {viewState.showWaiting && (
+        <div className="terminal-execution-output terminal-waiting">
+          <span className="waiting-text">{t('toolCards.terminal.executingCommand')}</span>
+        </div>
+      )}
+
+      {viewState.showCompletedResult && (
+        <div className="terminal-result-container">
+          {parsedResult.output && (
+            <div className="terminal-result-output">
+              <TerminalOutputRenderer
+                content={parsedResult.output}
+                className="terminal-xterm-output"
+                maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
+              />
+            </div>
+          )}
+          <div className="terminal-result-footer">
+            {parsedResult.workingDir && (
+              <>
+                <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
+                <span className="terminal-result-value">{parsedResult.workingDir}</span>
+              </>
+            )}
+            <span className={`terminal-exit-code ${parsedResult.exitCode === 0 ? 'success' : 'error'}`}>
+              {t('toolCards.terminal.exitCode', { code: parsedResult.exitCode })}
+            </span>
+            {parsedResult.executionTimeMs && (
+              <span className="terminal-execution-time">
+                {parsedResult.executionTimeMs}ms
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {viewState.showCancelledResult && (
+        <div className="terminal-result-container cancelled">
+          <div className="terminal-result-output">
+            <TerminalOutputRenderer
+              content={liveOutput}
+              className="terminal-xterm-output"
+              maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
+            />
+          </div>
+          <div className="terminal-result-footer">
+            <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function renderTerminalErrorContent(errorMessage: string): React.ReactNode {
+  return (
+    <div className="error-content">
+      <div className="error-message">{errorMessage}</div>
+    </div>
+  );
 }
 
 function parseTerminalResult(raw: unknown, durationMs?: number): ParsedTerminalResult {
@@ -141,18 +301,32 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   }, [progressLogs, progressMessage]);
 
   const toolId = toolItem.id ?? toolCall?.id;
+  const [isExpanded, setIsExpandedState] = useState(() => getInitialTerminalExpandedState(status));
+  const previousStatusRef = useRef(status);
   const {
     cardRootRef,
-    isExpanded,
-    setExpanded,
-    toggleExpanded,
-  } = useTerminalCardExpansion({
+    applyExpandedState,
+  } = useToolCardHeightContract({
     toolId,
     toolName: toolItem.toolName,
-    status,
-    terminalSessionId,
-    onExpand,
   });
+  const applyTerminalExpandedState = useCallback((
+    nextExpanded: boolean,
+    options?: { reason?: ToolCardCollapseReason },
+  ) => {
+    if (nextExpanded === isExpanded) {
+      return;
+    }
+
+    applyExpandedState(isExpanded, nextExpanded, setIsExpandedState, {
+      reason: options?.reason ?? 'manual',
+      onExpand,
+    });
+  }, [applyExpandedState, isExpanded, onExpand]);
+
+  const toggleExpanded = useCallback(() => {
+    applyTerminalExpandedState(!isExpanded, { reason: 'manual' });
+  }, [applyTerminalExpandedState, isExpanded]);
 
   const [interruptRequested, setInterruptRequested] = useState(false);
   const [isCommandTruncated, setIsCommandTruncated] = useState(false);
@@ -163,6 +337,20 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       setInterruptRequested(false);
     }
   }, [status]);
+
+  useEffect(() => {
+    const prevStatus = previousStatusRef.current;
+    previousStatusRef.current = status;
+
+    if (prevStatus === status) {
+      return;
+    }
+
+    const nextExpanded = getAutoExpandedStateForTerminalStatus(status);
+    if (nextExpanded !== null) {
+      applyTerminalExpandedState(nextExpanded, { reason: 'auto' });
+    }
+  }, [applyTerminalExpandedState, status]);
 
   const updateCommandTruncation = useCallback(() => {
     const element = commandRef.current;
@@ -207,41 +395,17 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   const canExecuteCommand = Boolean(command?.trim());
 
   const viewState = useMemo(() => {
-    const isRunning = status === 'running';
-    const isStreaming = status === 'streaming';
-    const isActive = isRunning || isStreaming;
-    const isLoading = status === 'preparing' || isActive;
-    const showInterruptButton = isRunning && !interruptRequested;
-
-    let statusLabel: string | null = null;
-    let statusClassName: string | null = null;
-
-    if ((status as string) === 'rejected') {
-      statusLabel = t('toolCards.terminal.rejected');
-      statusClassName = 'status-rejected';
-    } else if ((interruptRequested && isRunning) || parsedResult.wasInterrupted || status === 'cancelled') {
-      statusLabel = t('toolCards.terminal.cancelled');
-      statusClassName = 'status-cancelled';
-    } else if (status === 'error') {
-      statusLabel = t('toolCards.terminal.failed');
-      statusClassName = 'status-error';
-    }
-
-    return {
-      isLoading,
-      isFailed: status === 'error',
-      showInterruptButton,
-      showLiveOutput: isActive && liveOutput.length > 0,
-      showWaiting: isActive && liveOutput.length === 0,
-      showCompletedResult: status === 'completed',
-      showCancelledResult: status === 'cancelled' && liveOutput.length > 0,
-      hasHeaderExtra: Boolean(statusLabel || showConfirmButtons || showInterruptButton),
-      statusLabel,
-      statusClassName,
-    };
+    return getTerminalViewState({
+      status,
+      liveOutput,
+      interruptRequested,
+      showConfirmButtons,
+      wasInterrupted: parsedResult.wasInterrupted,
+      t,
+    });
   }, [
     interruptRequested,
-    liveOutput.length,
+    liveOutput,
     parsedResult.wasInterrupted,
     showConfirmButtons,
     status,
@@ -255,9 +419,9 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       return;
     }
 
-    setExpanded(true, { isManual: true, reason: 'manual' });
+    applyTerminalExpandedState(true, { reason: 'manual' });
     onConfirm?.(toolCall?.input);
-  }, [canExecuteCommand, onConfirm, setExpanded, toolCall?.input]);
+  }, [applyTerminalExpandedState, canExecuteCommand, onConfirm, toolCall?.input]);
 
   const handleReject = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -419,79 +583,12 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       statusIcon={renderStatusIcon()}
     />
   );
-
-  const renderExpandedContent = () => (
-    <>
-      {viewState.showLiveOutput && (
-        <div className="terminal-execution-output">
-          <TerminalOutputRenderer
-            content={liveOutput}
-            className="terminal-xterm-output"
-            maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
-          />
-        </div>
-      )}
-
-      {viewState.showWaiting && (
-        <div className="terminal-execution-output terminal-waiting">
-          <span className="waiting-text">{t('toolCards.terminal.executingCommand')}</span>
-        </div>
-      )}
-
-      {viewState.showCompletedResult && (
-        <div className="terminal-result-container">
-          {parsedResult.output && (
-            <div className="terminal-result-output">
-              <TerminalOutputRenderer
-                content={parsedResult.output}
-                className="terminal-xterm-output"
-                maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
-              />
-            </div>
-          )}
-          <div className="terminal-result-footer">
-            {parsedResult.workingDir && (
-              <>
-                <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
-                <span className="terminal-result-value">{parsedResult.workingDir}</span>
-              </>
-            )}
-            <span className={`terminal-exit-code ${parsedResult.exitCode === 0 ? 'success' : 'error'}`}>
-              {t('toolCards.terminal.exitCode', { code: parsedResult.exitCode })}
-            </span>
-            {parsedResult.executionTimeMs && (
-              <span className="terminal-execution-time">
-                {parsedResult.executionTimeMs}ms
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {viewState.showCancelledResult && (
-        <div className="terminal-result-container cancelled">
-          <div className="terminal-result-output">
-            <TerminalOutputRenderer
-              content={liveOutput}
-              className="terminal-xterm-output"
-              maxHeight={TERMINAL_OUTPUT_PREVIEW_MAX_HEIGHT}
-            />
-          </div>
-          <div className="terminal-result-footer">
-            <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
-          </div>
-        </div>
-      )}
-    </>
-  );
-
-  const renderErrorContent = () => (
-    <div className="error-content">
-      <div className="error-message">
-        {toolResult?.error || t('toolCards.terminal.executionFailed')}
-      </div>
-    </div>
-  );
+  const expandedContent = isExpanded
+    ? renderTerminalExpandedContent({ viewState, liveOutput, parsedResult, t })
+    : null;
+  const errorContent = viewState.isFailed
+    ? renderTerminalErrorContent(toolResult?.error || t('toolCards.terminal.executionFailed'))
+    : null;
 
   return (
     <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
@@ -501,8 +598,8 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
         onClick={handleCardClick}
         className="terminal-tool-card"
         header={renderHeader()}
-        expandedContent={isExpanded ? renderExpandedContent() : null}
-        errorContent={viewState.isFailed ? renderErrorContent() : null}
+        expandedContent={expandedContent}
+        errorContent={errorContent}
         isFailed={viewState.isFailed}
         requiresConfirmation={showConfirmButtons}
         headerExpandAffordance

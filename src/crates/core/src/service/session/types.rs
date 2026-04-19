@@ -258,6 +258,7 @@ pub struct TextItemData {
     /// Status field
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+
 }
 
 fn default_is_markdown() -> bool {
@@ -332,6 +333,9 @@ pub struct ToolItemData {
     /// Status field
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none", alias = "interruption_reason")]
+    pub interruption_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

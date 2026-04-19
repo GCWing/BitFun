@@ -8,6 +8,8 @@ import { getToolCardConfig, getToolCardComponent } from '../tool-cards';
 import type { FlowToolItem } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { FlowToolCardErrorBoundary } from './FlowToolCardErrorBoundary';
+import { useTranslation } from 'react-i18next';
+import { getToolInterruptionNote } from '../utils/toolInterruption';
 
 const log = createLogger('FlowToolCard');
 
@@ -32,8 +34,10 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   sessionId,
   className = ''
 }) => {
+  const { t } = useTranslation('flow-chat');
   const config = getToolCardConfig(toolItem.toolName);
   const CardComponent = getToolCardComponent(toolItem.toolName);
+  const interruptionNote = getToolInterruptionNote(toolItem, t);
 
   const handleConfirm = React.useCallback((updatedInput?: any) => {
     log.debug('handleConfirm called', {
@@ -71,6 +75,11 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           sessionId={sessionId}
         />
       </FlowToolCardErrorBoundary>
+      {interruptionNote && (
+        <div className="flow-tool-card-note" role="note">
+          {interruptionNote}
+        </div>
+      )}
     </div>
   );
 }, (prevProps, nextProps) => {
@@ -82,6 +91,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     prevProps.toolItem.id === nextProps.toolItem.id &&
     prevProps.toolItem.toolName === nextProps.toolItem.toolName &&
     prevProps.toolItem.status === nextProps.toolItem.status &&
+    prevProps.toolItem.interruptionReason === nextProps.toolItem.interruptionReason &&
     prevProps.toolItem.terminalSessionId === nextProps.toolItem.terminalSessionId &&
     prevProps.toolItem.userConfirmed === nextProps.toolItem.userConfirmed &&
     prevProps.toolItem.isParamsStreaming === nextProps.toolItem.isParamsStreaming &&

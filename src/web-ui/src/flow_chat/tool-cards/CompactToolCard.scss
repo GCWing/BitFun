@@ -27,6 +27,20 @@
   line-height: 1.65;
 }
 
+.flow-tool-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.flow-tool-card-note {
+  margin-left: 1.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82em;
+  line-height: 1.45;
+  opacity: 0.84;
+}
+
 /* ========== Loading state: A (border via text fade) + E (text fade) ========== */
 
 /* Hide left spinner/cube */

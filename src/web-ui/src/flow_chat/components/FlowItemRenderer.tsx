@@ -79,6 +79,7 @@ export const FlowItemRenderer = React.memo(
       const nextTool = next.item as FlowToolItem;
       // Compare streaming params to re-render when they update
       return prevTool.toolResult === nextTool.toolResult &&
+             prevTool.interruptionReason === nextTool.interruptionReason &&
              prevTool.isParamsStreaming === nextTool.isParamsStreaming &&
              JSON.stringify(prevTool.partialParams) === JSON.stringify(nextTool.partialParams);
     }

@@ -104,6 +104,12 @@ export interface TextItemData {
   content: string;
   isStreaming: boolean;
   timestamp: number;
+  status?: string;
+  orderIndex?: number;
+  isMarkdown?: boolean;
+  isSubagentItem?: boolean;
+  parentTaskToolId?: string;
+  subagentSessionId?: string;
 }
 
 export interface ThinkingItemData {
@@ -114,6 +120,9 @@ export interface ThinkingItemData {
   timestamp: number;
   orderIndex?: number;
   status?: string;
+  isSubagentItem?: boolean;
+  parentTaskToolId?: string;
+  subagentSessionId?: string;
 }
 
 export interface ToolItemData {
@@ -125,6 +134,12 @@ export interface ToolItemData {
   startTime: number;
   endTime?: number;
   durationMs?: number;
+  orderIndex?: number;
+  status?: string;
+  interruptionReason?: 'app_restart';
+  isSubagentItem?: boolean;
+  parentTaskToolId?: string;
+  subagentSessionId?: string;
 }
 
 export interface ToolCallData {

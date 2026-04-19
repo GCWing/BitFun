@@ -36,6 +36,7 @@ export interface FlowToolItem extends FlowItem {
   type: 'tool';
   toolName: string;
   terminalSessionId?: string;
+  interruptionReason?: 'app_restart';
   toolCall: {
     input: any;
     id: string;

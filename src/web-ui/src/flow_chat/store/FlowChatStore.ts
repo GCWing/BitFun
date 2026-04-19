@@ -22,6 +22,15 @@ import {
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
+import {
+  isTransientToolStatus,
+  normalizeRecoveredRoundStatus,
+  normalizeRecoveredTextStatus,
+  normalizeRecoveredThinkingStatus,
+  normalizeRecoveredToolStatus,
+  normalizeRecoveredTurnStatus,
+  settleInterruptedDialogTurn,
+} from '../utils/dialogTurnStability';
 import type { WorkspaceInfo } from '@/shared/types';
 import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
@@ -1341,48 +1350,12 @@ export class FlowChatStore {
         return prev;
       }
 
-      const updatedDialogTurns = session.dialogTurns.map((turn, index) => {
-        if (index !== session.dialogTurns.length - 1) {
-          return turn;
-        }
-
-        const updatedModelRounds = turn.modelRounds.map(round => {
-          const updatedItems = round.items.map(item => {
-            if (item.status === 'completed' || item.status === 'cancelled' || item.status === 'error') {
-              return item;
-            }
-            
-            return {
-              ...item,
-              status: 'cancelled' as const,
-              ...(item.type === 'text' && { isStreaming: false }),
-              ...(item.type === 'tool' && {
-                isParamsStreaming: false,
-                endTime: (item as any).endTime || Date.now()
-              }),
-              ...(item.type === 'thinking' && {
-                isCollapsed: true,
-                isStreaming: false
-              })
-            };
-          });
-
-          return {
-            ...round,
-            items: updatedItems,
-            isStreaming: false,
-            isComplete: true,
-            endTime: round.endTime || Date.now()
-          };
-        });
-
-        return {
-          ...turn,
-          status: 'cancelled' as const,
-          modelRounds: updatedModelRounds,
-          endTime: Date.now()
-        };
-      });
+      const settledAt = Date.now();
+      const updatedDialogTurns = session.dialogTurns.map((turn, index) =>
+        index === session.dialogTurns.length - 1
+          ? settleInterruptedDialogTurn(turn, settledAt)
+          : turn
+      );
 
       const updatedSession = {
         ...session,
@@ -1457,7 +1430,8 @@ export class FlowChatStore {
               id: item.id,
               content: (item as any).content || '',
               isStreaming: false,
-              timestamp: item.timestamp
+              timestamp: item.timestamp,
+              status: item.status,
             }));
           
           const toolItems = round.items
@@ -1465,11 +1439,13 @@ export class FlowChatStore {
             .map(item => ({
               id: item.id,
               toolName: (item as any).toolName || '',
+              interruptionReason: (item as any).interruptionReason,
               toolCall: (item as any).toolCall || { input: {}, id: item.id },
               toolResult: (item as any).toolResult,
               aiIntent: (item as any).aiIntent,
               startTime: (item as any).startTime || item.timestamp,
               endTime: (item as any).endTime,
+              status: item.status,
               durationMs: (item as any).endTime 
                 ? (item as any).endTime - (item as any).startTime 
                 : undefined
@@ -1482,7 +1458,8 @@ export class FlowChatStore {
               content: (item as any).content || '',
               isStreaming: false,
               isCollapsed: (item as any).isCollapsed || false,
-              timestamp: item.timestamp
+              timestamp: item.timestamp,
+              status: item.status,
             }));
           
           return {
@@ -1791,9 +1768,9 @@ export class FlowChatStore {
 
       const displayContent =
         metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
-
       const triggerSource = (metadata?.triggerSource || turn.userMessage.triggerSource) as
         import('@/shared/types/session-history').TriggerSource | undefined;
+      const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
 
       return {
       id: turn.turnId,
@@ -1809,73 +1786,85 @@ export class FlowChatStore {
         metadata,
         images,
       },
-      modelRounds: turn.modelRounds.map((round: any) => ({
-        id: round.id,
-        turnId: round.turnId,
-        items: [
-          ...round.textItems.map((text: any) => ({
-            id: text.id,
-            type: 'text' as const,
-            content: text.content,
-            isStreaming: text.isStreaming,
-            isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
-            timestamp: text.timestamp,
-            status: text.status || 'completed' as const,
-            orderIndex: text.orderIndex,
-            isSubagentItem: text.isSubagentItem,
-            parentTaskToolId: text.parentTaskToolId,
-            subagentSessionId: text.subagentSessionId,
-          })),
-          ...round.toolItems.map((tool: any) => {
-            let inferredStatus = 'completed';
-            if (tool.status) {
-              inferredStatus = tool.status;
-            } else if (tool.toolResult) {
-              inferredStatus = tool.toolResult.success === false ? 'error' : 'completed';
-            }
-            
-            return {
+      modelRounds: turn.modelRounds.map((round: any) => {
+        const normalizedRoundStatus = normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
+
+        return {
+          id: round.id,
+          turnId: round.turnId,
+          index: round.roundIndex ?? 0,
+          items: [
+            ...round.textItems.map((text: any) => ({
+              id: text.id,
+              type: 'text' as const,
+              content: text.content,
+              isStreaming: false,
+              isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
+              timestamp: text.timestamp,
+              status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
+              orderIndex: text.orderIndex,
+              isSubagentItem: text.isSubagentItem,
+              parentTaskToolId: text.parentTaskToolId,
+              subagentSessionId: text.subagentSessionId,
+            })),
+            ...round.toolItems.map((tool: any) => ({
               id: tool.id,
               type: 'tool' as const,
               toolName: tool.toolName,
+              interruptionReason:
+                tool.interruptionReason === 'app_restart'
+                  ? 'app_restart'
+                  : isTransientToolStatus(tool.status)
+                    ? 'app_restart'
+                    : undefined,
               toolCall: tool.toolCall,
               toolResult: tool.toolResult,
               aiIntent: tool.aiIntent,
               startTime: tool.startTime,
               endTime: tool.endTime,
               timestamp: tool.startTime,
-              status: inferredStatus,
+              status: normalizeRecoveredToolStatus(
+                tool.status,
+                normalizedTurnStatus,
+                tool.toolResult,
+                { preservePendingConfirmation: true },
+              ),
               orderIndex: tool.orderIndex,
               isSubagentItem: tool.isSubagentItem,
               parentTaskToolId: tool.parentTaskToolId,
               subagentSessionId: tool.subagentSessionId,
-            };
+            })),
+            ...(round.thinkingItems || []).map((thinking: any) => ({
+              id: thinking.id,
+              type: 'thinking' as const,
+              content: thinking.content,
+              isStreaming: false,
+              isCollapsed: thinking.isCollapsed ?? true,
+              timestamp: thinking.timestamp,
+              status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
+              orderIndex: thinking.orderIndex,
+              isSubagentItem: thinking.isSubagentItem,
+              parentTaskToolId: thinking.parentTaskToolId,
+              subagentSessionId: thinking.subagentSessionId,
+            })),
+          ].sort((a: any, b: any) => {
+            const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
+            const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
+            
+            return aIndex - bIndex;
           }),
-          ...(round.thinkingItems || []).map((thinking: any) => ({
-            id: thinking.id,
-            type: 'thinking' as const,
-            content: thinking.content,
-            isStreaming: thinking.isStreaming || false,
-            isCollapsed: thinking.isCollapsed || true,
-            timestamp: thinking.timestamp,
-            status: thinking.status || 'completed' as const,
-            orderIndex: thinking.orderIndex,
-            isSubagentItem: thinking.isSubagentItem,
-            parentTaskToolId: thinking.parentTaskToolId,
-            subagentSessionId: thinking.subagentSessionId,
-          })),
-        ].sort((a: any, b: any) => {
-          const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
-          const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
-          
-          return aIndex - bIndex;
-        }),
-        status: round.status,
-        timestamp: round.timestamp,
-      })),
+          isStreaming: false,
+          isComplete: normalizedRoundStatus !== 'pending' && normalizedRoundStatus !== 'streaming',
+          status: normalizedRoundStatus,
+          startTime: round.startTime ?? round.timestamp,
+          endTime: round.endTime,
+          timestamp: round.timestamp,
+        };
+      }),
       timestamp: turn.timestamp,
-      status: turn.status,
+      status: normalizedTurnStatus,
       startTime: turn.startTime,
+      endTime: turn.endTime,
       backendTurnIndex: turn.turnIndex,
     };
     });

@@ -569,7 +569,8 @@
       "expandContent": "Expand content",
       "inputParams": "Input Parameters",
       "executionResult": "Execution Result",
-      "viewDetails": "View Details"
+      "viewDetails": "View Details",
+      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted"
     },
     "askUser": {
       "completed": "Completed",
