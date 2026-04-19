@@ -16,9 +16,7 @@ export interface ShortcutDef {
  * These bindings always use catalog defaults; user overrides in config are ignored
  * and the keyboard settings UI does not allow remapping them.
  */
-export const NON_USER_CUSTOMIZABLE_SHORTCUT_IDS = new Set<string>([
-  'scene.openSession',
-]);
+export const NON_USER_CUSTOMIZABLE_SHORTCUT_IDS = new Set<string>();
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -38,58 +36,27 @@ function mod(
 // navigation and layout operations that must always be reachable.
 
 export const APP_SHORTCUTS: ShortcutDef[] = [
-  // Panel layout
+  // Settings list order: 搜索 → 返回 Agentic OS → 其余（见 compareAppShortcutIdsForSettings）
   {
-    id: 'panel.toggleLeft',
-    config: mod('B', { scope: 'app' }),
-    descriptionKey: 'keyboard.shortcuts.panel.toggleLeft',
+    id: 'nav.toggleSearch',
+    config: { key: 'f', alt: true, scope: 'app', allowInInput: true },
+    descriptionKey: 'keyboard.shortcuts.nav.toggleSearch',
   },
   {
-    id: 'panel.toggleBoth',
-    config: mod('B', { shift: true, scope: 'app' }),
-    descriptionKey: 'keyboard.shortcuts.panel.toggleBoth',
-  },
-
-  // Scene quick-open — jump to a named scene from anywhere
-  {
-    id: 'scene.openSession',
-    config: mod('A', { shift: true, scope: 'app', allowInInput: true }),
-    descriptionKey: 'keyboard.shortcuts.scene.openSession',
+    id: 'scene.escapeToAgenticBase',
+    config: { key: 'Escape', scope: 'app', allowInInput: true },
+    descriptionKey: 'keyboard.shortcuts.scene.escapeToAgenticBase',
   },
   {
     id: 'scene.openSettings',
     config: mod(',', { scope: 'app', allowInInput: true }),
     descriptionKey: 'keyboard.shortcuts.scene.openSettings',
   },
-
-  // Global workspace search (handled in UnifiedTopBar; Alt+F is a secondary binding without a separate catalog id)
-  {
-    id: 'nav.toggleSearch',
-    config: mod('k', { scope: 'app', allowInInput: true }),
-    descriptionKey: 'keyboard.shortcuts.nav.toggleSearch',
-  },
   {
     id: 'scene.openTerminal',
     config: mod('`', { shift: true, scope: 'app', allowInInput: true }),
     descriptionKey: 'keyboard.shortcuts.scene.openTerminal',
   },
-
-  // App-level UI
-  {
-    id: 'app.closePreview',
-    config: { key: 'Escape', scope: 'app', allowInInput: true },
-    descriptionKey: 'keyboard.shortcuts.app.closePreview',
-  },
-];
-
-// ─── Scene-bar navigation (scope: 'app', allowInInput: true) ──────────────
-// Alt+1–3: switch between the top-level scene tabs; merged into one row in
-// settings. Kept separate from APP_SHORTCUTS so the UI can merge them.
-
-export const SCENE_SHORTCUTS: ShortcutDef[] = [
-  { id: 'scene.focus1', config: { key: '1', alt: true, scope: 'app', allowInInput: true }, descriptionKey: 'keyboard.shortcuts.scene.focusMerged' },
-  { id: 'scene.focus2', config: { key: '2', alt: true, scope: 'app', allowInInput: true }, descriptionKey: 'keyboard.shortcuts.scene.focusMerged' },
-  { id: 'scene.focus3', config: { key: '3', alt: true, scope: 'app', allowInInput: true }, descriptionKey: 'keyboard.shortcuts.scene.focusMerged' },
 ];
 
 // ─── Editor canvas shortcuts (scope: 'canvas') ────────────────────────────
@@ -247,11 +214,23 @@ export const FILETREE_SHORTCUTS: ShortcutDef[] = [
 
 export const ALL_SHORTCUTS: ShortcutDef[] = [
   ...APP_SHORTCUTS,
-  ...SCENE_SHORTCUTS,
   ...CANVAS_SHORTCUTS,
   ...CHAT_SHORTCUTS,
   ...FILETREE_SHORTCUTS,
 ];
+
+/** App-scope rows listed first in Settings → Keyboard; others follow `ALL_SHORTCUTS` order. */
+const APP_SHORTCUT_SETTINGS_LEADERS = ['nav.toggleSearch', 'scene.escapeToAgenticBase'] as const;
+
+export function compareAppShortcutIdsForSettings(aId: string, bId: string): number {
+  const rank = (id: string): number => {
+    const lead = (APP_SHORTCUT_SETTINGS_LEADERS as readonly string[]).indexOf(id);
+    if (lead !== -1) return lead;
+    const cat = ALL_SHORTCUTS.findIndex((d) => d.id === id);
+    return 1000 + (cat < 0 ? 9999 : cat);
+  };
+  return rank(aId) - rank(bId);
+}
 
 /** Shortcuts registered in code but not listed in ALL_SHORTCUTS (e.g. legacy ids). */
 const EXTRA_SHORTCUT_DESCRIPTION_KEYS: Record<string, string> = {};

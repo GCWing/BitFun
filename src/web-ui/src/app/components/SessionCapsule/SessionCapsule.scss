@@ -24,6 +24,11 @@
   align-items: center;
   animation: capsule-appear 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 
+  // Above full-screen overlay scene (below UnifiedTopBar at $z-overlay)
+  &--above-scene-chrome {
+    z-index: 90;
+  }
+
   // ── Running state: morphs into a wider card ──────────────
   &--running {
     width: 40px;

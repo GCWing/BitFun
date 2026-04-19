@@ -19,9 +19,10 @@ import {
   ArrowRight,
   Clock,
   Radio,
+  Trash2,
   X,
 } from 'lucide-react';
-import { Search, FilterPill, FilterPillGroup, Select, IconButton } from '@/component-library';
+import { Search, FilterPill, FilterPillGroup, Select, IconButton, confirmDanger } from '@/component-library';
 import type { SelectOption } from '@/component-library';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -32,6 +33,7 @@ import {
 import { fallbackWorkspaceFolderLabel } from '@/flow_chat/utils/sessionOrdering';
 import { findWorkspaceForSession } from '@/flow_chat/utils/workspaceScope';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { stateMachineManager } from '@/flow_chat/state-machine';
@@ -45,6 +47,12 @@ import './TaskDetailScene.scss';
 
 const log = createLogger('TaskDetailScene');
 const RECENT_WORKSPACE_LIMIT = 7;
+
+/** Agentic (dispatcher) session title: `2007.1.2` — dotted date, no leading zeros on month/day. */
+function formatAgenticDotDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +95,10 @@ function getStatusVariant(s: Session, runningIds: Set<string>): StatusVariant {
 
 interface SessionRowProps {
   session: Session;
+  /** When set (e.g. dispatcher / Agentic OS run history), replaces title + id fallback. */
+  displayTitle?: string;
+  /** Delete control (e.g. Agentic OS run history); click does not trigger `onOpen`. */
+  onDelete?: (e: React.MouseEvent) => void;
   isHighlighted: boolean;
   statusVariant: StatusVariant;
   showMode?: boolean;
@@ -97,6 +109,8 @@ interface SessionRowProps {
 
 const SessionRow: React.FC<SessionRowProps> = ({
   session,
+  displayTitle,
+  onDelete,
   isHighlighted,
   statusVariant,
   showMode = true,
@@ -106,6 +120,7 @@ const SessionRow: React.FC<SessionRowProps> = ({
 }) => {
   const { t } = useI18n('common');
   const rowTitle =
+    displayTitle?.trim() ||
     session.title?.trim() ||
     t('taskDetailScene.fallbackTaskTitle', { id: session.sessionId.slice(0, 6) });
   const isRunning = statusVariant === 'running';
@@ -154,6 +169,23 @@ const SessionRow: React.FC<SessionRowProps> = ({
           <span className="tds-row__meta-item"><MessageSquare size={9} />{session.dialogTurns.length}</span>
         </span>
       </span>
+
+      {onDelete ? (
+        <IconButton
+          size="xs"
+          variant="ghost"
+          className="tds-row__delete-btn"
+          tooltip={t('nav.sessions.delete')}
+          aria-label={t('nav.sessions.delete')}
+          onClick={e => {
+            e.stopPropagation();
+            onDelete(e);
+          }}
+          onPointerDown={e => e.stopPropagation()}
+        >
+          <Trash2 size={12} />
+        </IconButton>
+      ) : null}
 
       <ArrowRight size={12} className="tds-row__arrow" />
     </div>
@@ -328,6 +360,17 @@ const TaskDetailScene: React.FC = () => {
     [t]
   );
 
+  const dispatcherSessionTitle = useCallback(
+    (s: Session) => {
+      const modifiedAt = s.updatedAt ?? s.lastActiveAt;
+      return t('taskDetailScene.agenticSessionTitle', {
+        created: formatAgenticDotDate(s.createdAt),
+        modified: formatAgenticDotDate(modifiedAt),
+      });
+    },
+    [t]
+  );
+
   const modeChips = useMemo<Array<{ id: ModeFilter; label: string }>>(
     () => [
       { id: 'all', label: t('taskDetailScene.filterAll') },
@@ -371,9 +414,9 @@ const TaskDetailScene: React.FC = () => {
   const dispatcherSessions = useMemo(
     () => Array.from(flowChatState.sessions.values())
       .filter(s => s.mode?.toLowerCase() === 'dispatcher')
-      .filter(s => matchesQuery(sessionDisplayTitle(s), qNorm))
+      .filter(s => matchesQuery(dispatcherSessionTitle(s), qNorm))
       .sort(compareSessionsForDisplay),
-    [flowChatState.sessions, qNorm, sessionDisplayTitle]
+    [flowChatState.sessions, qNorm, dispatcherSessionTitle]
   );
 
   const recentWorkspaceScope = useMemo(() => {
@@ -507,6 +550,25 @@ const TaskDetailScene: React.FC = () => {
     closeTaskDetail();
   }, [closeTaskDetail, openOverlay]);
 
+  const handleDeleteDispatcherSession = useCallback(async (session: Session, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const label = dispatcherSessionTitle(session);
+    const ok = await confirmDanger(
+      t('taskDetailScene.deleteAgenticSessionTitle'),
+      t('taskDetailScene.deleteAgenticSessionMessage', { label }),
+      {
+        confirmText: t('nav.sessions.delete'),
+        cancelText: t('actions.cancel'),
+      }
+    );
+    if (!ok) return;
+    try {
+      await flowChatManager.deleteChatSession(session.sessionId);
+    } catch (err) {
+      log.error('Failed to delete Agentic OS session', err);
+    }
+  }, [dispatcherSessionTitle, t]);
+
   return (
     <div className="tds">
       <div className="tds-layout">
@@ -574,6 +636,10 @@ const TaskDetailScene: React.FC = () => {
                       <SessionRow
                         key={s.sessionId}
                         session={s}
+                        displayTitle={dispatcherSessionTitle(s)}
+                        onDelete={e => {
+                          void handleDeleteDispatcherSession(s, e);
+                        }}
                         isHighlighted={s.sessionId === taskDetailSessionId}
                         statusVariant={getStatusVariant(s, runningIds)}
                         showMode={false}

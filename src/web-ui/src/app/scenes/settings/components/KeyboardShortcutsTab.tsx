@@ -29,6 +29,7 @@ import {
   SCOPE_LABEL_KEYS,
   getShortcutDescriptionI18nKey,
   NON_USER_CUSTOMIZABLE_SHORTCUT_IDS,
+  compareAppShortcutIdsForSettings,
 } from '@/shared/constants/shortcuts';
 import { createLogger } from '@/shared/utils/logger';
 import './KeyboardShortcutsTab.scss';
@@ -36,9 +37,6 @@ import './KeyboardShortcutsTab.scss';
 const log = createLogger('KeyboardShortcutsTab');
 
 const SCOPE_DISPLAY_ORDER: ShortcutScope[] = SCOPE_ORDER;
-
-/** SceneBar Alt+1–3: merged into one row in settings; not listed individually */
-const MERGED_SCENE_FOCUS_IDS = new Set(['scene.focus1', 'scene.focus2', 'scene.focus3']);
 
 /** Canvas tabs Mod+1–9: merged into one row in settings; not listed individually */
 const MERGED_TAB_SWITCH_IDS = new Set([
@@ -53,10 +51,8 @@ const MERGED_TAB_SWITCH_IDS = new Set([
   'tab.switchLast',
 ]);
 
-const MERGED_SCENE_RECORD_ID = '__merged_scene__';
 const MERGED_TAB_RECORD_ID = '__merged_tab__';
 
-const SCENE_FOCUS_ORDER = ['scene.focus1', 'scene.focus2', 'scene.focus3'] as const;
 const TAB_SWITCH_ORDER = [
   'tab.switch1',
   'tab.switch2',
@@ -106,6 +102,10 @@ function mergeCatalogWithLive(live: ShortcutRegistration[]): ShortcutRegistratio
     const sa = scopeOrder[a.config.scope ?? 'app'];
     const sb = scopeOrder[b.config.scope ?? 'app'];
     if (sa !== sb) return sa - sb;
+    if (sa === 0) {
+      const byCatalog = compareAppShortcutIdsForSettings(a.id, b.id);
+      if (byCatalog !== 0) return byCatalog;
+    }
     return b.priority - a.priority;
   });
   return out;
@@ -135,26 +135,6 @@ function getEffectiveConfig(reg: ShortcutRegistration, pending?: PendingChange):
     shift: pending.shift,
     alt: pending.alt,
   };
-}
-
-function sceneGroupUniform(
-  registrations: ShortcutRegistration[],
-  pending: Record<string, PendingChange>
-): boolean {
-  const cfgs = SCENE_FOCUS_ORDER.map((id) => {
-    const reg = registrations.find((r) => r.id === id);
-    if (!reg) return null;
-    return getEffectiveConfig(reg, pending[id]);
-  });
-  if (cfgs.some((c) => !c)) return false;
-  const m0 = modSignature(cfgs[0]!);
-  return (
-    m0 === modSignature(cfgs[1]!) &&
-    m0 === modSignature(cfgs[2]!) &&
-    cfgs[0]!.key === '1' &&
-    cfgs[1]!.key === '2' &&
-    cfgs[2]!.key === '3'
-  );
 }
 
 function tabGroupUniform(
@@ -285,24 +265,6 @@ const KeyboardShortcutsTab: React.FC = () => {
 
       const isMac = navigator.platform.toUpperCase().includes('MAC');
       const ctrl = isMac ? e.metaKey : e.ctrlKey;
-
-      if (recordingId === MERGED_SCENE_RECORD_ID) {
-        if (!captureDigit(e)) return;
-        const next: Record<string, PendingChange> = {};
-        for (let i = 0; i < SCENE_FOCUS_ORDER.length; i++) {
-          const id = SCENE_FOCUS_ORDER[i];
-          next[id] = {
-            id,
-            key: String(i + 1),
-            ctrl,
-            shift: e.shiftKey,
-            alt: e.altKey,
-          };
-        }
-        setPendingChanges((prev) => ({ ...prev, ...next }));
-        setRecordingId(null);
-        return;
-      }
 
       if (recordingId === MERGED_TAB_RECORD_ID) {
         if (!captureDigit(e)) return;
@@ -452,22 +414,6 @@ const KeyboardShortcutsTab: React.FC = () => {
     });
   };
 
-  /** Whether the merged SceneBar row matches the current search query */
-  const mergedSceneRowVisible = useMemo(() => {
-    const hasRegs = displayRegistrations.some((r) => MERGED_SCENE_FOCUS_IDS.has(r.id));
-    if (!hasRegs) return false;
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return true;
-    const hay = [
-      t('keyboard.shortcuts.scene.focusMerged'),
-      t('keyboard.shortcuts.scene.focusMergedHint'),
-      t('keyboard.mergedNonUniform'),
-    ]
-      .join(' ')
-      .toLowerCase();
-    return hay.includes(q);
-  }, [displayRegistrations, searchQuery, t]);
-
   /** Whether the merged canvas-tab row matches the current search query */
   const mergedTabSwitchRowVisible = useMemo(() => {
     const hasRegs = displayRegistrations.some((r) => MERGED_TAB_SWITCH_IDS.has(r.id));
@@ -484,17 +430,6 @@ const KeyboardShortcutsTab: React.FC = () => {
     return hay.includes(q);
   }, [displayRegistrations, searchQuery, t]);
 
-  const mergedSceneKeyLabel = useMemo(() => {
-    const firstId = SCENE_FOCUS_ORDER[0];
-    const reg = displayRegistrations.find((r) => r.id === firstId);
-    if (!reg) return t('keyboard.mergedNonUniform');
-    if (!sceneGroupUniform(displayRegistrations, pendingChanges)) {
-      return t('keyboard.mergedNonUniform');
-    }
-    const cfg = getEffectiveConfig(reg, pendingChanges[firstId]);
-    return formatMergedRangeLabel(cfg, '1–3');
-  }, [displayRegistrations, pendingChanges, t]);
-
   const mergedTabKeyLabel = useMemo(() => {
     const firstId = TAB_SWITCH_ORDER[0];
     const reg = displayRegistrations.find((r) => r.id === firstId);
@@ -506,19 +441,9 @@ const KeyboardShortcutsTab: React.FC = () => {
     return formatMergedRangeLabel(cfg, '1–9');
   }, [displayRegistrations, pendingChanges, t]);
 
-  const mergedSceneConflict = useMemo(
-    () => firstConflictInGroup(SCENE_FOCUS_ORDER, displayRegistrations, pendingChanges),
-    [displayRegistrations, pendingChanges]
-  );
-
   const mergedTabConflict = useMemo(
     () => firstConflictInGroup(TAB_SWITCH_ORDER, displayRegistrations, pendingChanges),
     [displayRegistrations, pendingChanges]
-  );
-
-  const mergedScenePending = useMemo(
-    () => SCENE_FOCUS_ORDER.some((id) => pendingChanges[id] !== undefined),
-    [pendingChanges]
   );
 
   const mergedTabPending = useMemo(
@@ -526,16 +451,12 @@ const KeyboardShortcutsTab: React.FC = () => {
     [pendingChanges]
   );
 
-  const appShortcutsWithoutMerged = filteredByScope('app').filter(
-    (r) => !MERGED_SCENE_FOCUS_IDS.has(r.id)
-  );
   const canvasShortcutsWithoutMerged = filteredByScope('canvas').filter(
     (r) => !MERGED_TAB_SWITCH_IDS.has(r.id)
   );
   const hasAnyVisibleShortcut =
     mergedTabSwitchRowVisible ||
-    mergedSceneRowVisible ||
-    appShortcutsWithoutMerged.length > 0 ||
+    filteredByScope('app').length > 0 ||
     canvasShortcutsWithoutMerged.length > 0 ||
     filteredByScope('chat').length > 0 ||
     filteredByScope('filetree').length > 0;
@@ -592,14 +513,11 @@ const KeyboardShortcutsTab: React.FC = () => {
         {SCOPE_DISPLAY_ORDER.map((scope) => {
           const rawItems = filteredByScope(scope);
           const showMergedTab = scope === 'canvas' && mergedTabSwitchRowVisible;
-          const showMergedScene = scope === 'app' && mergedSceneRowVisible;
           const items =
-            scope === 'app'
-              ? rawItems.filter((r) => !MERGED_SCENE_FOCUS_IDS.has(r.id))
-              : scope === 'canvas'
+            scope === 'canvas'
               ? rawItems.filter((r) => !MERGED_TAB_SWITCH_IDS.has(r.id))
               : rawItems;
-          if (items.length === 0 && !showMergedScene && !showMergedTab) return null;
+          if (items.length === 0 && !showMergedTab) return null;
 
           return (
             <ConfigPageSection
@@ -655,65 +573,6 @@ const KeyboardShortcutsTab: React.FC = () => {
                               setPendingChanges((prev) => {
                                 const next = { ...prev };
                                 for (const id of TAB_SWITCH_ORDER) delete next[id];
-                                return next;
-                              });
-                            }}
-                          >
-                            ↩
-                          </button>
-                        </Tooltip>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {showMergedScene && (
-                  <div
-                    className={[
-                      'kb-shortcuts__item kb-shortcuts__item--merged',
-                      recordingId === MERGED_SCENE_RECORD_ID ? 'kb-shortcuts__item--recording' : '',
-                      mergedSceneConflict ? 'kb-shortcuts__item--conflict' : '',
-                      mergedScenePending ? 'kb-shortcuts__item--modified' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    key="scene-focus-merged"
-                  >
-                    <div className="kb-shortcuts__item-label">
-                      <span className="kb-shortcuts__item-name">{t('keyboard.shortcuts.scene.focusMerged')}</span>
-                      <span className="kb-shortcuts__item-hint">{t('keyboard.shortcuts.scene.focusMergedHint')}</span>
-                      {mergedSceneConflict && (
-                        <span className="kb-shortcuts__item-conflict-hint">
-                          {t('keyboard.conflict')}: {shortcutDisplayName(mergedSceneConflict, t)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="kb-shortcuts__item-key">
-                      <Tooltip content={t('keyboard.clickToRecord')} placement="top">
-                        <button
-                          type="button"
-                          className={[
-                            'kb-shortcuts__keybadge',
-                            recordingId === MERGED_SCENE_RECORD_ID ? 'kb-shortcuts__keybadge--recording' : '',
-                            mergedSceneConflict ? 'kb-shortcuts__keybadge--conflict' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          onClick={() =>
-                            setRecordingId(recordingId === MERGED_SCENE_RECORD_ID ? null : MERGED_SCENE_RECORD_ID)
-                          }
-                        >
-                          {recordingId === MERGED_SCENE_RECORD_ID ? t('keyboard.recording') : mergedSceneKeyLabel}
-                        </button>
-                      </Tooltip>
-                      {mergedScenePending && recordingId !== MERGED_SCENE_RECORD_ID && (
-                        <Tooltip content={t('keyboard.revertChange')} placement="top">
-                          <button
-                            type="button"
-                            className="kb-shortcuts__revert-btn"
-                            onClick={() => {
-                              setPendingChanges((prev) => {
-                                const next = { ...prev };
-                                for (const id of SCENE_FOCUS_ORDER) delete next[id];
                                 return next;
                               });
                             }}

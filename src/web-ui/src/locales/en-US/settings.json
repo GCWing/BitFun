@@ -166,22 +166,13 @@
       "filetree": "File Tree"
     },
     "shortcuts": {
-      "panel": {
-        "toggleLeft": "Expand or collapse left navigation",
-        "toggleBoth": "Collapse All Panels"
-      },
       "nav": {
         "toggleSearch": "Open navigation search"
       },
       "scene": {
-        "focusMerged": "Switch scene",
-        "focusMergedHint": "Record Alt (or your chosen modifiers) + any digit 1–3 once; keys 1–3 map to scenes left to right.",
-        "openSession": "Open Agent Session",
         "openSettings": "Open Settings",
-        "openTerminal": "Open Terminal"
-      },
-      "app": {
-        "closePreview": "Close Preview / Dismiss Dialog"
+        "openTerminal": "Open Terminal",
+        "escapeToAgenticBase": "Return to Agentic OS desktop"
       },
       "canvas": {
         "missionControl": "Mission Control",

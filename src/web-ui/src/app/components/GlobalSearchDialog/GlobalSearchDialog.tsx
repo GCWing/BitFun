@@ -42,6 +42,7 @@ interface SearchResultItem {
 }
 
 const MAX_PER_GROUP = 20;
+const RECENT_TASKS_DEFAULT = 5;
 
 const getSessionTitle = (session: Session): string =>
   session.title?.trim() || `Task ${session.sessionId.slice(0, 6)}`;
@@ -53,6 +54,74 @@ const matchesQuery = (query: string, ...fields: (string | undefined | null)[]): 
   const normalizedQuery = query.toLowerCase();
   return fields.some(field => field && field.toLowerCase().includes(normalizedQuery));
 };
+
+type MergedSessionEntry =
+  | { session: Session; workspace: WorkspaceInfo }
+  | { disk: SessionMetadata; workspace: WorkspaceInfo };
+
+/** Agentic OS（导航「Agentic OS」）会话：Dispatcher 模式，持久化在 agentic_os 命名空间。 */
+function isAgenticOsDispatcherSession(session: Session): boolean {
+  if (session.mode?.toLowerCase() === 'dispatcher') return true;
+  if (session.storageScope === 'agentic_os') return true;
+  return false;
+}
+
+function isAgenticOsDispatcherMetadata(meta: SessionMetadata): boolean {
+  if (meta.agentType?.toLowerCase() === 'dispatcher') return true;
+  if (meta.storageScope === 'agentic_os') return true;
+  return false;
+}
+
+function buildMergedSessionEntries(
+  topLevelSessions: Array<{ session: Session; workspace: WorkspaceInfo }>,
+  persistedOpenWorkspaceSessions: Array<{ meta: SessionMetadata; workspace: WorkspaceInfo }>,
+  openedWorkspaceIdSet: Set<string>,
+  queryTrimmed: string,
+  options?: { excludeAgenticOsDispatcher?: boolean }
+): MergedSessionEntry[] {
+  const excludeDispatcher = options?.excludeAgenticOsDispatcher ?? false;
+
+  let candidateTopLevel = topLevelSessions;
+  if (excludeDispatcher) {
+    candidateTopLevel = candidateTopLevel.filter(
+      ({ session }) => !isAgenticOsDispatcherSession(session)
+    );
+  }
+
+  const storeMatches = queryTrimmed
+    ? candidateTopLevel.filter(({ session }) =>
+        matchesQuery(queryTrimmed, getSessionTitle(session), session.sessionId)
+      )
+    : candidateTopLevel;
+  const loadedSessionIds = new Set(storeMatches.map(({ session }) => session.sessionId));
+
+  const diskMatches = persistedOpenWorkspaceSessions.filter(({ meta, workspace }) => {
+    if (excludeDispatcher && isAgenticOsDispatcherMetadata(meta)) return false;
+    if (!openedWorkspaceIdSet.has(workspace.id)) return false;
+    if (meta.customMetadata?.parentSessionId) return false;
+    const label = meta.sessionName?.trim() || `Task ${meta.sessionId.slice(0, 6)}`;
+    if (queryTrimmed && !matchesQuery(queryTrimmed, label, meta.sessionId)) return false;
+    return !loadedSessionIds.has(meta.sessionId);
+  });
+
+  const mergedEntries: MergedSessionEntry[] = [
+    ...storeMatches.map(({ session, workspace }) => ({ session, workspace })),
+    ...diskMatches.map(({ meta, workspace }) => ({ disk: meta, workspace })),
+  ];
+  mergedEntries.sort((left, right) => {
+    const leftTime =
+      'session' in left
+        ? getSessionRecencyTime(left.session)
+        : left.disk.lastActiveAt ?? left.disk.createdAt ?? 0;
+    const rightTime =
+      'session' in right
+        ? getSessionRecencyTime(right.session)
+        : right.disk.lastActiveAt ?? right.disk.createdAt ?? 0;
+    return rightTime - leftTime;
+  });
+
+  return mergedEntries;
+}
 
 const APP_TO_AGENT_CHOICE: Record<string, NewSessionAgentChoice> = {
   'coding-app': 'agentic',
@@ -198,39 +267,33 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
     const trimmedQuery = query.trim();
 
     if (!trimmedQuery) {
-      for (const workspace of projectWorkspaces.slice(0, MAX_PER_GROUP)) {
-        items.push({
-          kind: 'workspace',
-          id: workspace.id,
-          label: workspace.name,
-          sublabel: workspace.rootPath,
-        });
-      }
-      for (const workspace of assistantWorkspacesList.slice(0, MAX_PER_GROUP)) {
-        const displayName = workspace.identity?.name?.trim() || workspace.name;
-        items.push({
-          kind: 'assistant',
-          id: workspace.id,
-          label: displayName,
-          sublabel: workspace.description,
-        });
-      }
-      for (const app of APP_REGISTRY.slice(0, MAX_PER_GROUP)) {
-        items.push({
-          kind: 'agent-app',
-          id: app.id,
-          label: tApps(app.nameKey),
-          sublabel: tApps(app.descriptionKey),
-          agentChoice: APP_TO_AGENT_CHOICE[app.id],
-        });
-      }
-      for (const app of liveApps.slice(0, MAX_PER_GROUP)) {
-        items.push({
-          kind: 'live-app',
-          id: app.id,
-          label: app.name,
-          sublabel: app.description || app.tags.join(' · '),
-        });
+      const mergedEntries = buildMergedSessionEntries(
+        topLevelSessions,
+        persistedOpenWorkspaceSessions,
+        openedWorkspaceIdSet,
+        '',
+        { excludeAgenticOsDispatcher: true }
+      );
+      for (const entry of mergedEntries.slice(0, RECENT_TASKS_DEFAULT)) {
+        if ('session' in entry) {
+          const { session, workspace } = entry;
+          items.push({
+            kind: 'session',
+            id: session.sessionId,
+            label: getSessionTitle(session),
+            sublabel: t('nav.search.sessionWorkspaceHint', { workspace: workspace.name }),
+            workspaceId: workspace.id,
+          });
+        } else {
+          const { disk, workspace } = entry;
+          items.push({
+            kind: 'session',
+            id: disk.sessionId,
+            label: disk.sessionName?.trim() || `Task ${disk.sessionId.slice(0, 6)}`,
+            sublabel: t('nav.search.sessionWorkspaceHint', { workspace: workspace.name }),
+            workspaceId: workspace.id,
+          });
+        }
       }
       return items;
     }
@@ -289,37 +352,12 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
       });
     }
 
-    const storeMatches = topLevelSessions.filter(({ session }) =>
-      matchesQuery(trimmedQuery, getSessionTitle(session), session.sessionId)
+    const mergedEntries = buildMergedSessionEntries(
+      topLevelSessions,
+      persistedOpenWorkspaceSessions,
+      openedWorkspaceIdSet,
+      trimmedQuery
     );
-    const loadedSessionIds = new Set(storeMatches.map(({ session }) => session.sessionId));
-
-    const diskMatches = persistedOpenWorkspaceSessions.filter(({ meta, workspace }) => {
-      if (!openedWorkspaceIdSet.has(workspace.id)) return false;
-      if (meta.customMetadata?.parentSessionId) return false;
-      const label = meta.sessionName?.trim() || `Task ${meta.sessionId.slice(0, 6)}`;
-      if (!matchesQuery(trimmedQuery, label, meta.sessionId)) return false;
-      return !loadedSessionIds.has(meta.sessionId);
-    });
-
-    const mergedEntries: Array<
-      { session: Session; workspace: WorkspaceInfo } |
-      { disk: SessionMetadata; workspace: WorkspaceInfo }
-    > = [
-      ...storeMatches.map(({ session, workspace }) => ({ session, workspace })),
-      ...diskMatches.map(({ meta, workspace }) => ({ disk: meta, workspace })),
-    ];
-    mergedEntries.sort((left, right) => {
-      const leftTime =
-        'session' in left
-          ? getSessionRecencyTime(left.session)
-          : left.disk.lastActiveAt ?? left.disk.createdAt ?? 0;
-      const rightTime =
-        'session' in right
-          ? getSessionRecencyTime(right.session)
-          : right.disk.lastActiveAt ?? right.disk.createdAt ?? 0;
-      return rightTime - leftTime;
-    });
 
     for (const entry of mergedEntries.slice(0, MAX_PER_GROUP)) {
       if ('session' in entry) {
@@ -456,7 +494,6 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
   const liveAppItems = results.filter(result => result.kind === 'live-app');
   const sessionItems = results.filter(result => result.kind === 'session');
   const queryTrimmed = query.trim();
-  const showDefaultSessionColumn = !queryTrimmed;
 
   let globalIndex = 0;
   const renderGroup = (
@@ -517,23 +554,22 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
           />
         </div>
         <div className="bitfun-nav-search-dialog__results" ref={listRef}>
-          {results.length === 0 && !showDefaultSessionColumn ? (
+          {results.length === 0 && queryTrimmed ? (
             <div className="bitfun-nav-search-dialog__empty">{t('nav.search.empty')}</div>
+          ) : results.length === 0 ? (
+            <div className="bitfun-nav-search-dialog__session-hint" role="status">
+              {t('nav.search.noRecentTasks')}
+            </div>
           ) : (
             <>
               {renderGroup(t('nav.search.groupWorkspaces'), workspaceItems, () => <FolderOpen size={14} />)}
               {renderGroup(t('nav.search.groupAssistants'), assistantItems, () => <User size={14} />)}
               {renderGroup(t('nav.search.groupAgentApps'), agentAppItems, () => <Bot size={14} />)}
               {renderGroup(t('nav.search.groupLiveApps'), liveAppItems, () => <Sparkles size={14} />)}
-              {showDefaultSessionColumn ? (
-                <div className="bitfun-nav-search-dialog__group" key="nav-search-sessions-default">
-                  <div className="bitfun-nav-search-dialog__group-label">{t('nav.search.groupSessions')}</div>
-                  <div className="bitfun-nav-search-dialog__session-hint" role="status">
-                    {t('nav.search.sessionSearchHintDefault')}
-                  </div>
-                </div>
-              ) : (
-                renderGroup(t('nav.search.groupSessions'), sessionItems, () => <ListChecks size={14} />)
+              {renderGroup(
+                queryTrimmed ? t('nav.search.groupSessions') : t('nav.search.groupRecentTasks'),
+                sessionItems,
+                () => <ListChecks size={14} />
               )}
             </>
           )}

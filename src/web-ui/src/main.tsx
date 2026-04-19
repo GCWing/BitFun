@@ -1,5 +1,8 @@
 import ReactDOM from "react-dom/client";
+import { installGlobalOverlayEscapeToSession } from "./app/globalOverlayEscape";
 import App from "./app/App";
+
+installGlobalOverlayEscapeToSession();
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import "./app/styles/index.scss";
