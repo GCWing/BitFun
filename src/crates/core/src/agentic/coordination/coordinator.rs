@@ -12,6 +12,7 @@ use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, EventRouter, EventSubscriber,
 };
 use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, ExecutionEngine};
+use crate::agentic::fork::{ForkContextSnapshot, ForkExecutionRequest, ForkExecutionResult};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::session::SessionManager;
@@ -22,6 +23,7 @@ use crate::service::bootstrap::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, error, info, warn};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -39,6 +41,16 @@ const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
 pub struct SubagentResult {
     /// AI text response
     pub text: String,
+}
+
+struct HiddenSubagentExecutionRequest {
+    session_name: String,
+    agent_type: String,
+    session_config: SessionConfig,
+    initial_messages: Vec<Message>,
+    created_by: Option<String>,
+    subagent_parent_info: Option<SubagentParentInfo>,
+    context: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -683,16 +695,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
-    /// Create a subagent session for internal AI execution.
+    /// Create a hidden subagent session for internal AI execution.
     /// Unlike `create_session`, this does NOT emit `SessionCreated` to the transport layer,
-    /// because subagent sessions are internal implementation details of the execution engine
+    /// because hidden child sessions are internal implementation details of the execution engine
     /// and must never appear as top-level items in the UI.
-    async fn create_subagent_session(
+    async fn create_hidden_subagent_session(
         &self,
         session_name: String,
         agent_type: String,
         config: SessionConfig,
-        parent_info: &SubagentParentInfo,
+        created_by: Option<String>,
     ) -> BitFunResult<Session> {
         self.session_manager
             .create_session_with_id_and_details(
@@ -700,10 +712,43 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_name,
                 agent_type,
                 config,
-                Some(format!("session-{}", parent_info.session_id)),
+                created_by,
                 SessionKind::Subagent,
             )
             .await
+    }
+
+    async fn load_session_context_messages(&self, session: &Session) -> BitFunResult<Vec<Message>> {
+        let session_id = &session.session_id;
+        let mut context_messages = self
+            .session_manager
+            .get_context_messages(session_id)
+            .await?;
+
+        if context_messages.is_empty() && !session.dialog_turn_ids.is_empty() {
+            if let Some(workspace_path) = session.config.workspace_path.as_deref() {
+                match self
+                    .session_manager
+                    .restore_session(Path::new(workspace_path), session_id)
+                    .await
+                {
+                    Ok(_) => {
+                        context_messages = self
+                            .session_manager
+                            .get_context_messages(session_id)
+                            .await?;
+                    }
+                    Err(e) => {
+                        debug!(
+                            "Failed to restore parent session context for fork capture: session_id={}, error={}",
+                            session_id, e
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(context_messages)
     }
 
     async fn wrap_user_input(
@@ -1871,24 +1916,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.tool_pipeline.cancel_tool(tool_id, reason).await
     }
 
-    /// Execute subagent task directly
-    /// DialogTurnStarted event not needed for now
-    ///
-    /// Parameters:
-    /// - agent_type: Agent type
-    /// - task_description: Task description
-    /// - subagent_parent_info: Parent info (tool call context)
-    /// - context: Additional context
-    /// - cancel_token: Optional cancel token (for async cancellation)
-    ///
-    /// Returns SubagentResult with the final text response
-    pub async fn execute_subagent(
+    async fn execute_hidden_subagent_internal(
         &self,
-        agent_type: String,
-        task_description: String,
-        subagent_parent_info: SubagentParentInfo,
-        workspace_path: Option<String>,
-        context: Option<std::collections::HashMap<String, String>>,
+        request: HiddenSubagentExecutionRequest,
         cancel_token: Option<&CancellationToken>,
     ) -> BitFunResult<SubagentResult> {
         // Check cancel token (before creating session)
@@ -1901,25 +1931,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
-        // Create independent subagent session.
-        // Use create_subagent_session (not create_session) so that no SessionCreated
-        // event is emitted to the transport layer — subagent sessions are internal
-        // implementation details and must not appear in the UI session list.
-        let workspace_path = workspace_path.ok_or_else(|| {
-            BitFunError::Validation(
-                "workspace_path is required when creating a subagent session".to_string(),
-            )
-        })?;
-        let subagent_config = SessionConfig {
-            workspace_path: Some(workspace_path),
-            ..SessionConfig::default()
-        };
+        let HiddenSubagentExecutionRequest {
+            session_name,
+            agent_type,
+            session_config,
+            initial_messages,
+            created_by,
+            subagent_parent_info,
+            context,
+        } = request;
+
         let session = self
-            .create_subagent_session(
-                format!("Subagent: {}", task_description),
+            .create_hidden_subagent_session(
+                session_name,
                 agent_type.clone(),
-                subagent_config,
-                &subagent_parent_info,
+                session_config,
+                created_by,
             )
             .await?;
 
@@ -1973,8 +2000,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             turn_index: 0,
             agent_type: agent_type.clone(),
             workspace: subagent_workspace,
-            context: context.unwrap_or_default(),
-            subagent_parent_info: Some(subagent_parent_info),
+            context,
+            subagent_parent_info: subagent_parent_info.clone(),
             // Subagents run autonomously without user interaction; always skip
             // tool confirmation to prevent them from blocking indefinitely on a
             // confirmation channel that nobody will ever respond to.
@@ -1982,8 +2009,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace_services: subagent_services,
             round_preempt: self.round_preempt_source.get().cloned(),
         };
-
-        let initial_messages = vec![Message::user(task_description)];
 
         let result = self
             .execution_engine
@@ -2037,6 +2062,115 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(SubagentResult {
             text: response_text,
         })
+    }
+
+    pub async fn capture_fork_context_snapshot(
+        &self,
+        parent_session_id: &str,
+    ) -> BitFunResult<ForkContextSnapshot> {
+        let parent_session = self
+            .session_manager
+            .get_session(parent_session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Parent session not found: {}", parent_session_id))
+            })?;
+        let context_messages = self.load_session_context_messages(&parent_session).await?;
+        ForkContextSnapshot::from_parent_session(&parent_session, context_messages)
+    }
+
+    /// Execute a hidden child agent that inherits the parent session's current
+    /// model-visible context.
+    pub async fn execute_forked_agent(
+        &self,
+        request: ForkExecutionRequest,
+        cancel_token: Option<&CancellationToken>,
+    ) -> BitFunResult<ForkExecutionResult> {
+        if request.agent_type.trim().is_empty() {
+            return Err(BitFunError::Validation(
+                "ForkExecutionRequest.agent_type is required".to_string(),
+            ));
+        }
+        if request.description.trim().is_empty() {
+            return Err(BitFunError::Validation(
+                "ForkExecutionRequest.description is required".to_string(),
+            ));
+        }
+        if request.prompt_messages.is_empty() {
+            return Err(BitFunError::Validation(
+                "ForkExecutionRequest.prompt_messages must not be empty".to_string(),
+            ));
+        }
+
+        let inherited_message_count = request.snapshot.inherited_message_count();
+        let prompt_message_count = request.prompt_messages.len();
+        let agent_type = request.agent_type.clone();
+        let session_config = request.child_session_config();
+        let initial_messages = request.composed_initial_messages();
+        let created_by = Some(format!("session-{}", request.snapshot.parent_session_id));
+        let child_result = self
+            .execute_hidden_subagent_internal(
+                HiddenSubagentExecutionRequest {
+                    session_name: format!("Fork: {}", request.description),
+                    agent_type,
+                    session_config,
+                    initial_messages,
+                    created_by,
+                    subagent_parent_info: None,
+                    context: request.context,
+                },
+                cancel_token,
+            )
+            .await?;
+
+        Ok(ForkExecutionResult {
+            text: child_result.text,
+            inherited_message_count,
+            prompt_message_count,
+        })
+    }
+
+    /// Execute subagent task directly
+    /// DialogTurnStarted event not needed for now
+    ///
+    /// Parameters:
+    /// - agent_type: Agent type
+    /// - task_description: Task description
+    /// - subagent_parent_info: Parent info (tool call context)
+    /// - context: Additional context
+    /// - cancel_token: Optional cancel token (for async cancellation)
+    ///
+    /// Returns SubagentResult with the final text response
+    pub async fn execute_subagent(
+        &self,
+        agent_type: String,
+        task_description: String,
+        subagent_parent_info: SubagentParentInfo,
+        workspace_path: Option<String>,
+        context: Option<HashMap<String, String>>,
+        cancel_token: Option<&CancellationToken>,
+    ) -> BitFunResult<SubagentResult> {
+        let workspace_path = workspace_path.ok_or_else(|| {
+            BitFunError::Validation(
+                "workspace_path is required when creating a subagent session".to_string(),
+            )
+        })?;
+
+        self.execute_hidden_subagent_internal(
+            HiddenSubagentExecutionRequest {
+                session_name: format!("Subagent: {}", task_description),
+                agent_type,
+                session_config: SessionConfig {
+                    workspace_path: Some(workspace_path),
+                    ..SessionConfig::default()
+                },
+                initial_messages: vec![Message::user(task_description)],
+                created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
+                subagent_parent_info: Some(subagent_parent_info),
+                context: context.unwrap_or_default(),
+            },
+            cancel_token,
+        )
+        .await
     }
 
     /// Clean up subagent session resources
