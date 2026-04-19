@@ -124,6 +124,8 @@ enum SessionMessageAgentType {
     Plan,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
+    #[serde(rename = "Design", alias = "design", alias = "DESIGN")]
+    Design,
 }
 
 impl SessionMessageAgentType {
@@ -132,6 +134,7 @@ impl SessionMessageAgentType {
             Self::Agentic => "agentic",
             Self::Plan => "Plan",
             Self::Cowork => "Cowork",
+            Self::Design => "Design",
         }
     }
 
@@ -142,6 +145,8 @@ impl SessionMessageAgentType {
             Some(Self::Plan)
         } else if value.eq_ignore_ascii_case("cowork") {
             Some(Self::Cowork)
+        } else if value.eq_ignore_ascii_case("design") {
+            Some(Self::Design)
         } else {
             None
         }
@@ -174,8 +179,9 @@ You must provide the target workspace as an absolute path, and you can optionall
 - "agentic": Coding-focused agent for implementation, debugging, and code changes.
 - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
 - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
+- "Design": Design-focused agent for HTML prototypes, design artifacts, and visual exploration.
 
-When overriding an existing session's agent_type, only switching between "agentic" and "Plan" is allowed. It will not switch coding sessions to or from "Cowork"."#
+When overriding an existing session's agent_type, only switching between "agentic" and "Plan" is allowed. It will not switch coding sessions to or from "Cowork" or "Design"."#
                 .to_string(),
         )
     }
@@ -198,7 +204,7 @@ When overriding an existing session's agent_type, only switching between "agenti
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
+                    "enum": ["agentic", "Plan", "Cowork", "Design"],
                     "description": "Optional target agent type. Defaults to the target session's current agent type."
                 }
             },
@@ -368,7 +374,7 @@ When overriding an existing session's agent_type, only switching between "agenti
             } else {
                 SessionMessageAgentType::from_str(persisted_agent_type).ok_or_else(|| {
                     BitFunError::tool(format!(
-                        "SessionMessage agent_type override is only supported for sessions using 'agentic', 'Plan', or 'Cowork'. Current agent type is '{}'.",
+                        "SessionMessage agent_type override is only supported for sessions using 'agentic', 'Plan', 'Cowork', or 'Design'. Current agent type is '{}'.",
                         persisted_agent_type
                     ))
                 })?

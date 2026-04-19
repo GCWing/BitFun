@@ -18,6 +18,7 @@ import {
   compareSessionsForDisplay,
   sessionBelongsToWorkspaceNavRow,
 } from '../utils/sessionOrdering';
+import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 
 import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
 import type { FlowToolItem, FlowTextItem, ModelRound } from '../types/flow-chat';
@@ -41,6 +42,15 @@ import {
 } from './flow-chat-manager';
 
 const log = createLogger('FlowChatManager');
+const RECENT_WORKSPACE_PRELOAD_LIMIT = 7;
+const WARM_HISTORY_SESSION_LIMIT = 5;
+const WARM_DISPATCHER_SESSION_LIMIT = 3;
+const PRELOAD_WORKSPACE_CONCURRENCY = 2;
+
+type PreloadWorkspaceScope = Pick<
+  WorkspaceInfo,
+  'id' | 'name' | 'rootPath' | 'connectionId' | 'sshHost'
+>;
 
 export class FlowChatManager {
   private static instance: FlowChatManager;
@@ -81,14 +91,16 @@ export class FlowChatManager {
     workspacePath: string,
     preferredMode?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope
   ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
       await this.context.flowChatStore.initializeFromDisk(
         workspacePath,
         remoteConnectionId,
-        remoteSshHost
+        remoteSshHost,
+        storageScope
       );
 
       const sessionMatchesWorkspace = (session: {
@@ -135,7 +147,8 @@ export class FlowChatManager {
             workspacePath,
             undefined,
             latestSession.remoteConnectionId,
-            latestSession.remoteSshHost
+            latestSession.remoteSshHost,
+            latestSession.storageScope
           );
         }
 
@@ -162,6 +175,190 @@ export class FlowChatManager {
     );
     
     this.eventListenerInitialized = true;
+  }
+
+  public async preloadRecentWorkspaceSessions(
+    workspaces: PreloadWorkspaceScope[],
+    options?: {
+      metadataLimit?: number;
+      warmHistoryCount?: number;
+      warmDispatcherCount?: number;
+      force?: boolean;
+    }
+  ): Promise<{
+    attemptedWorkspaceCount: number;
+    metadataLoadedCount: number;
+    warmedSessionCount: number;
+    warmedDispatcherCount: number;
+    failedWorkspaces: string[];
+  }> {
+    const metadataLimit = options?.metadataLimit ?? RECENT_WORKSPACE_PRELOAD_LIMIT;
+    const warmHistoryCount = options?.warmHistoryCount ?? WARM_HISTORY_SESSION_LIMIT;
+    const warmDispatcherCount = options?.warmDispatcherCount ?? WARM_DISPATCHER_SESSION_LIMIT;
+    const scopedWorkspaces = workspaces.slice(0, metadataLimit);
+    const failedWorkspaces: string[] = [];
+    let metadataLoadedCount = 0;
+
+    const runPreload = async (workspace: PreloadWorkspaceScope) => {
+      const remoteConnectionId = workspace.connectionId ?? undefined;
+      const remoteSshHost = workspace.sshHost ?? undefined;
+      if (
+        !options?.force &&
+        this.context.flowChatStore.hasWorkspaceMetadataPreloaded(
+          workspace.rootPath,
+          remoteConnectionId,
+          remoteSshHost
+        )
+      ) {
+        return;
+      }
+
+      try {
+        const { sessionAPI } = await import('@/infrastructure/api');
+        const metadata = await sessionAPI.listSessions(
+          workspace.rootPath,
+          remoteConnectionId,
+          remoteSshHost,
+          'workspace'
+        );
+        const inserted = await this.context.flowChatStore.hydrateWorkspaceSessionsMetadata(
+          metadata,
+          workspace.rootPath,
+          remoteConnectionId,
+          remoteSshHost,
+          'workspace'
+        );
+        metadataLoadedCount += inserted;
+      } catch (error) {
+        failedWorkspaces.push(workspace.name || workspace.rootPath);
+        log.warn('Failed to preload workspace sessions', {
+          workspaceId: workspace.id,
+          workspacePath: workspace.rootPath,
+          error,
+        });
+      }
+    };
+
+    for (let index = 0; index < scopedWorkspaces.length; index += PRELOAD_WORKSPACE_CONCURRENCY) {
+      const batch = scopedWorkspaces.slice(index, index + PRELOAD_WORKSPACE_CONCURRENCY);
+      await Promise.all(batch.map(runPreload));
+    }
+
+    const warmedSessionCandidates = Array.from(this.context.flowChatStore.getState().sessions.values())
+      .filter(session => {
+        if (!session.isHistorical) return false;
+        if (session.mode?.toLowerCase() === 'dispatcher') return false;
+        if (this.context.flowChatStore.hasSessionHistoryWarmed(session.sessionId)) return false;
+        return scopedWorkspaces.some(workspace => sessionMatchesWorkspace(session, workspace));
+      })
+      .sort(compareSessionsForDisplay)
+      .slice(0, warmHistoryCount);
+
+    const warmedDispatcherCandidates = Array.from(this.context.flowChatStore.getState().sessions.values())
+      .filter(session => {
+        if (!session.isHistorical) return false;
+        if (session.mode?.toLowerCase() !== 'dispatcher') return false;
+        if (this.context.flowChatStore.hasSessionHistoryWarmed(session.sessionId)) return false;
+        return true;
+      })
+      .sort(compareSessionsForDisplay)
+      .slice(0, warmDispatcherCount);
+
+    let warmedSessionCount = 0;
+    let warmedDispatcherCount = 0;
+    await Promise.allSettled(
+      warmedSessionCandidates.map(async session => {
+        const workspacePath = session.workspacePath;
+        if (!workspacePath) return;
+        try {
+          await this.context.flowChatStore.loadSessionHistory(
+            session.sessionId,
+            workspacePath,
+            undefined,
+            session.remoteConnectionId,
+            session.remoteSshHost,
+            session.storageScope
+          );
+          warmedSessionCount += 1;
+        } catch (error) {
+          log.warn('Failed to warm historical session', {
+            sessionId: session.sessionId,
+            workspacePath,
+            error,
+          });
+        }
+      })
+    );
+
+    await Promise.allSettled(
+      warmedDispatcherCandidates.map(async session => {
+        const workspacePath = session.workspacePath;
+        if (!workspacePath) return;
+        try {
+          await this.context.flowChatStore.loadSessionHistory(
+            session.sessionId,
+            workspacePath,
+            undefined,
+            session.remoteConnectionId,
+            session.remoteSshHost,
+            session.storageScope
+          );
+          warmedDispatcherCount += 1;
+        } catch (error) {
+          log.warn('Failed to warm dispatcher session', {
+            sessionId: session.sessionId,
+            workspacePath,
+            error,
+          });
+        }
+      })
+    );
+
+    return {
+      attemptedWorkspaceCount: scopedWorkspaces.length,
+      metadataLoadedCount,
+      warmedSessionCount,
+      warmedDispatcherCount,
+      failedWorkspaces,
+    };
+  }
+
+  public async preloadAgenticOsSessions(options?: {
+    warmDispatcherCount?: number;
+  }): Promise<{ metadataLoadedCount: number; warmedDispatcherCount: number }> {
+    const warmDispatcherCount = options?.warmDispatcherCount ?? WARM_DISPATCHER_SESSION_LIMIT;
+    const { sessionAPI } = await import('@/infrastructure/api');
+    const metadata = await sessionAPI.listSessions(undefined, undefined, undefined, 'agentic_os');
+    const metadataLoadedCount = await this.context.flowChatStore.hydrateWorkspaceSessionsMetadata(
+      metadata,
+      '',
+      undefined,
+      undefined,
+      'agentic_os'
+    );
+    const candidates = Array.from(this.context.flowChatStore.getState().sessions.values())
+      .filter(session =>
+        session.mode?.toLowerCase() === 'dispatcher' &&
+        session.isHistorical &&
+        !this.context.flowChatStore.hasSessionHistoryWarmed(session.sessionId)
+      )
+      .sort(compareSessionsForDisplay)
+      .slice(0, warmDispatcherCount);
+    let warmedDispatcherCount = 0;
+    await Promise.allSettled(
+      candidates.map(async session => {
+        await this.context.flowChatStore.loadSessionHistory(
+          session.sessionId,
+          session.workspacePath || '',
+          undefined,
+          session.remoteConnectionId,
+          session.remoteSshHost,
+          'agentic_os'
+        );
+        warmedDispatcherCount += 1;
+      })
+    );
+    return { metadataLoadedCount, warmedDispatcherCount };
   }
 
   public cleanupEventListeners(): void {

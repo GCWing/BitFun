@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText } from 'lucide-react';
+import { Brush, Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText } from 'lucide-react';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { ConfirmDialog, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -231,7 +231,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [t, workspace.rootPath]);
 
-  const handleCreateSession = useCallback(async (mode?: 'agentic' | 'Cowork' | 'Claw') => {
+  const handleCreateSession = useCallback(async (mode?: 'agentic' | 'Cowork' | 'Design' | 'Claw') => {
     setMenuOpen(false);
     const resolvedMode = mode ?? (workspace.workspaceKind === WorkspaceKind.Assistant ? 'Claw' : undefined);
     try {
@@ -271,6 +271,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
   const handleCreateCoworkSession = useCallback(() => {
     void handleCreateSession('Cowork');
+  }, [handleCreateSession]);
+
+  const handleCreateDesignSession = useCallback(() => {
+    void handleCreateSession('Design');
   }, [handleCreateSession]);
 
   const handleCreateInitSession = useCallback(async () => {
@@ -588,6 +592,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCoworkSession}>
                 <Plus size={13} />
                 <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCoworkSessionShort')}</span>
+              </button>
+              <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateDesignSession}>
+                <Brush size={13} />
+                <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newDesignSessionShort')}</span>
               </button>
               <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateInitSession(); }}>
                 <FileText size={13} />

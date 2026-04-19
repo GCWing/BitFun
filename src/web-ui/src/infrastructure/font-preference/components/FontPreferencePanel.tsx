@@ -10,7 +10,7 @@ const UI_LEVELS: Array<Exclude<FontSizeLevel, 'custom'>> = ['compact', 'small', 
 const FLOW_CHAT_PX_OPTIONS = [12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 export function FontPreferencePanel() {
-  const { t } = useTranslation('settings/basics');
+  const { t } = useTranslation('settings/appearance');
   const { preference, setUiSize, setFlowChatFont, reset } = useFontPreference();
 
   const { level, customPx } = preference.uiSize;

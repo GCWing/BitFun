@@ -6,7 +6,9 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
-use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::api::session_storage_path::{
+    desktop_effective_session_storage_path, SessionStorageScopeDto,
+};
 use bitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
@@ -20,11 +22,13 @@ pub struct CreateSessionRequest {
     pub session_id: Option<String>,
     pub session_name: String,
     pub agent_type: String,
-    pub workspace_path: String,
+    pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -43,6 +47,8 @@ pub struct SessionConfigDTO {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -70,6 +76,8 @@ pub struct UpdateSessionTitleRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,17 +109,21 @@ pub struct CompactSessionRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureCoordinatorSessionRequest {
     pub session_id: String,
-    pub workspace_path: String,
+    pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,32 +178,38 @@ pub struct CancelToolRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSessionRequest {
     pub session_id: String,
-    pub workspace_path: String,
+    pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RestoreSessionRequest {
     pub session_id: String,
-    pub workspace_path: String,
+    pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListSessionsRequest {
-    pub workspace_path: String,
+    pub workspace_path: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub storage_scope: Option<SessionStorageScopeDto>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -221,6 +239,7 @@ pub struct GenerateSessionTitleRequest {
 #[tauri::command]
 pub async fn create_session(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: CreateSessionRequest,
 ) -> Result<CreateSessionResponse, String> {
     fn norm_conn(s: Option<String>) -> Option<String> {
@@ -238,6 +257,26 @@ pub async fn create_session(
             .as_ref()
             .and_then(|c| norm_conn(c.remote_ssh_host.clone()))
     });
+    let storage_scope = request
+        .storage_scope
+        .or_else(|| request.config.as_ref().and_then(|c| c.storage_scope));
+    let resolved_workspace_path = request.workspace_path.clone().or_else(|| {
+        if matches!(storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+            Some(
+                app_state
+                    .workspace_service
+                    .path_manager()
+                    .agentic_os_runtime_root()
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        } else {
+            None
+        }
+    });
+    let workspace_path = resolved_workspace_path
+        .clone()
+        .ok_or_else(|| "workspace_path is required to create a session".to_string())?;
 
     let config = request
         .config
@@ -249,15 +288,23 @@ pub async fn create_session(
             max_turns: c.max_turns.unwrap_or(200),
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             compression_threshold: c.compression_threshold.unwrap_or(0.8),
-            workspace_path: Some(request.workspace_path.clone()),
+            workspace_path: Some(workspace_path.clone()),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
+            storage_scope: storage_scope.map(|scope| match scope {
+                SessionStorageScopeDto::Workspace => SessionStorageScope::Workspace,
+                SessionStorageScopeDto::AgenticOs => SessionStorageScope::AgenticOs,
+            }),
             model_id: c.model_name,
         })
         .unwrap_or(SessionConfig {
-            workspace_path: Some(request.workspace_path.clone()),
+            workspace_path: Some(workspace_path.clone()),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
+            storage_scope: storage_scope.map(|scope| match scope {
+                SessionStorageScopeDto::Workspace => SessionStorageScope::Workspace,
+                SessionStorageScopeDto::AgenticOs => SessionStorageScope::AgenticOs,
+            }),
             ..Default::default()
         });
 
@@ -267,7 +314,7 @@ pub async fn create_session(
             request.session_name.clone(),
             request.agent_type.clone(),
             config,
-            request.workspace_path,
+            workspace_path,
         )
         .await
         .map_err(|e| format!("Failed to create session: {}", e))?;
@@ -311,15 +358,23 @@ pub async fn update_session_title(
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
+            .or_else(|| {
+                if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+                    Some("")
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| {
                 "workspace_path is required when the session is not loaded".to_string()
             })?;
 
         let effective = desktop_effective_session_storage_path(
             &app_state,
-            workspace_path,
+            Some(workspace_path),
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
+            request.storage_scope,
         )
         .await;
 
@@ -355,16 +410,17 @@ pub async fn ensure_coordinator_session(
         return Ok(());
     }
 
-    let wp = request.workspace_path.trim();
-    if wp.is_empty() {
+    let wp = request.workspace_path.as_deref().unwrap_or("").trim();
+    if wp.is_empty() && !matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
         return Err("workspace_path is required when the session is not loaded".to_string());
     }
 
     let effective = desktop_effective_session_storage_path(
         &app_state,
-        wp,
+        Some(wp),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
+        request.storage_scope,
     )
     .await;
     coordinator
@@ -444,14 +500,22 @@ pub async fn compact_session(
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
+            .or_else(|| {
+                if matches!(request.storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+                    Some("")
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| {
                 "workspace_path is required when the session is not loaded".to_string()
             })?;
         let effective = desktop_effective_session_storage_path(
             &app_state,
-            workspace_path,
+            Some(workspace_path),
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
+            request.storage_scope,
         )
         .await;
         coordinator
@@ -618,9 +682,10 @@ pub async fn delete_session(
 ) -> Result<(), String> {
     let effective_path = desktop_effective_session_storage_path(
         &app_state,
-        &request.workspace_path,
+        request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
+        request.storage_scope,
     )
     .await;
     coordinator
@@ -637,9 +702,10 @@ pub async fn restore_session(
 ) -> Result<SessionResponse, String> {
     let effective_path = desktop_effective_session_storage_path(
         &app_state,
-        &request.workspace_path,
+        request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
+        request.storage_scope,
     )
     .await;
     let session = coordinator
@@ -658,9 +724,10 @@ pub async fn list_sessions(
 ) -> Result<Vec<SessionResponse>, String> {
     let effective_path = desktop_effective_session_storage_path(
         &app_state,
-        &request.workspace_path,
+        request.workspace_path.as_deref(),
         request.remote_connection_id.as_deref(),
         request.remote_ssh_host.as_deref(),
+        request.storage_scope,
     )
     .await;
     let summaries = coordinator

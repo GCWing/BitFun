@@ -40,10 +40,12 @@
     "new": "New Session",
     "newCode": "New Code session",
     "newCowork": "New Cowork session",
+    "newDesign": "New Design session",
     "newClaw": "New Claw session",
     "newWithIndex": "New Session {{count}}",
     "newCodeWithIndex": "New Code Session {{count}}",
     "newCoworkWithIndex": "New Cowork Session {{count}}",
+    "newDesignWithIndex": "New Design Session {{count}}",
     "newClawWithIndex": "New Claw Session {{count}}",
     "dispatcher": "Agentic OS",
     "title": "Session",
@@ -238,14 +240,16 @@
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
-      "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime"
+      "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
+      "Design": "Design mode: create HTML prototypes, visual artifacts, and polished design deliverables"
     },
     "modeNames": {
       "agentic": "Agentic",
       "Claw": "Claw",
       "Plan": "Plan",
       "debug": "Debug",
-      "Cowork": "Cowork"
+      "Cowork": "Cowork",
+      "Design": "Design"
     },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",
@@ -881,7 +885,8 @@
       "openSessionMenu": "Sessions & new",
       "moreMenu": "More",
       "newCodeSessionItem": "Code session",
-      "newCoworkSessionItem": "Cowork session"
+      "newCoworkSessionItem": "Cowork session",
+      "newDesignSessionItem": "Design session"
     },
     "chatInput": {
       "inputHint": "Enter content..."
@@ -949,6 +954,11 @@
     "subtitleEveningCowork": "Wrap up, reflect, or set the stage for tomorrow — all good here",
     "subtitleNightCowork": "Late nights are great for planning and clearing your head",
     "aiPartnerCowork": "Collaboration partner",
+    "subtitleMorningDesign": "Fresh eyes help. Let's turn your concept into something tangible today",
+    "subtitleAfternoonDesign": "Perfect time to refine a flow, prototype an idea, or explore new directions",
+    "subtitleEveningDesign": "Let's polish the details, compare options, and make the design feel right",
+    "subtitleNightDesign": "Quiet hours are perfect for visual thinking and careful craft",
+    "aiPartnerDesign": "Design partner",
     "aiPartnerClaw": "I'm your assistant",
     "subtitleMorningClaw": "What can I help you with today?",
     "subtitleAfternoonClaw": "What can I help you with?",
@@ -963,6 +973,7 @@
     "narrativeDispatcher": "Tell me what you want. I'll make it happen.",
     "featureIntro": "",
     "featureIntroCowork": "",
+    "featureIntroDesign": "",
     "lastTimeYouWere": "Last time you were working on:",
     "branch": "Branch:",
     "aheadCommits": "{{count}} commits ahead",
@@ -987,6 +998,7 @@
     "toStart": "to get started.",
     "workingIn": "We are working in",
     "workingInCowork": "Working in",
+    "workingInDesign": "Designing in",
     "gitClean": "All clean, ready to get to work ✦",
     "gitUnstaged": "{{count}} file(s)",
     "gitStaged": "{{count}} file(s)",
@@ -998,7 +1010,8 @@
     "commaSeparator": ", ",
     "period": ".",
     "project": "working.",
-    "projectCowork": "working in the project."
+    "projectCowork": "working in the project.",
+    "projectDesign": "inside the project."
   },
   "modelSelector": {
     "model": "Model",

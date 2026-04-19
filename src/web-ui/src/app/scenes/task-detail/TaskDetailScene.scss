@@ -443,6 +443,17 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   flex-shrink: 0;
 }
 
+.tds-row__live-app-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+  color: var(--color-accent-500);
+}
+
 .tds-row__icon {
   &--code       { color: var(--color-accent-500); }
   &--cowork     { color: #10b981; }
@@ -487,6 +498,7 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   &--code   { background: var(--color-accent-100);          color: var(--color-accent-500); }
   &--cowork { background: rgba(16, 185, 129, 0.10);         color: #10b981; }
   &--claw   { background: rgba(245, 158, 11, 0.10);         color: #f59e0b; }
+  &--live-app { background: color-mix(in srgb, var(--color-accent-500) 12%, transparent); color: var(--color-accent-500); }
   &--ws {
     background: var(--element-bg-medium);
     color: var(--color-text-muted);

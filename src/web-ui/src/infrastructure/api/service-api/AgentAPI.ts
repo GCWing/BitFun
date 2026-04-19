@@ -3,6 +3,7 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
+import type { SessionStorageScope } from '@/shared/types/session-history';
 
 
 
@@ -25,6 +26,7 @@ export interface SessionConfig {
   compressionThreshold?: number;
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  storageScope?: SessionStorageScope;
 }
 
  
@@ -32,9 +34,10 @@ export interface CreateSessionRequest {
   sessionId?: string; 
   sessionName: string;
   agentType: string;
-  workspacePath: string;
+  workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  storageScope?: SessionStorageScope;
   config?: SessionConfig;
 }
 
@@ -62,6 +65,7 @@ export interface CompactSessionRequest {
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  storageScope?: SessionStorageScope;
 }
 
  
@@ -107,6 +111,7 @@ export interface UpdateSessionTitleRequest {
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  storageScope?: SessionStorageScope;
 }
 
  
@@ -233,13 +238,14 @@ export class AgentAPI {
    
   async deleteSession(
     sessionId: string,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<void> {
     try {
       await api.invoke<void>('delete_session', { 
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost } 
+        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, storageScope } 
       });
     } catch (error) {
       throw createTauriCommandError('delete_session', error, { sessionId, workspacePath });
@@ -249,13 +255,14 @@ export class AgentAPI {
    
   async restoreSession(
     sessionId: string,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<SessionInfo> {
     try {
       return await api.invoke<SessionInfo>('restore_session', {
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost },
+        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, storageScope },
       });
     } catch (error) {
       throw createTauriCommandError('restore_session', error, { sessionId, workspacePath });
@@ -268,9 +275,10 @@ export class AgentAPI {
    */
   async ensureCoordinatorSession(request: {
     sessionId: string;
-    workspacePath: string;
+    workspacePath?: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
+    storageScope?: SessionStorageScope;
   }): Promise<void> {
     try {
       await api.invoke<void>('ensure_coordinator_session', { request });
@@ -298,13 +306,14 @@ export class AgentAPI {
 
    
   async listSessions(
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<SessionInfo[]> {
     try {
       return await api.invoke<SessionInfo[]>('list_sessions', {
-        request: { workspacePath, remoteConnectionId, remoteSshHost },
+        request: { workspacePath, remoteConnectionId, remoteSshHost, storageScope },
       });
     } catch (error) {
       throw createTauriCommandError('list_sessions', error, { workspacePath });

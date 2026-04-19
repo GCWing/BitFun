@@ -640,6 +640,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 todos: None,
                 workspace_path: Some(workspace_path.to_string()),
                 workspace_hostname: None,
+                storage_scope: None,
             };
             if let Err(e) = persistence_manager
                 .save_session_metadata(&workspace_path_buf, &metadata)

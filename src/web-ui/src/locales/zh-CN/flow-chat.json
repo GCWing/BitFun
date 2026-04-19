@@ -40,10 +40,12 @@
     "new": "新建会话",
     "newCode": "新建 Code 会话",
     "newCowork": "新建 Cowork 会话",
+    "newDesign": "新建 Design 会话",
     "newClaw": "新建 Claw 会话",
     "newWithIndex": "新建会话 {{count}}",
     "newCodeWithIndex": "新建 Code 会话 {{count}}",
     "newCoworkWithIndex": "新建 Cowork 会话 {{count}}",
+    "newDesignWithIndex": "新建 Design 会话 {{count}}",
     "newClawWithIndex": "新建 Claw 会话 {{count}}",
     "dispatcher": "Agentic OS",
     "title": "会话",
@@ -238,14 +240,16 @@
       "Claw": "个人助理模式：面向个人工作区和日常事务，使用独立的助理上下文",
       "Plan": "先规划后执行，先明确需求并制定实施计划，再进行编码",
       "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题",
-      "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果"
+      "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
+      "Design": "设计模式：创建 HTML 原型、视觉稿和更完整的设计交付物"
     },
     "modeNames": {
       "agentic": "Agentic",
       "Claw": "Claw",
       "Plan": "Plan",
       "debug": "Debug",
-      "Cowork": "Cowork"
+      "Cowork": "Cowork",
+      "Design": "Design"
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
@@ -873,7 +877,8 @@
       "openSessionMenu": "会话与新建",
       "moreMenu": "更多",
       "newCodeSessionItem": "编程会话",
-      "newCoworkSessionItem": "办公会话"
+      "newCoworkSessionItem": "办公会话",
+      "newDesignSessionItem": "设计会话"
     },
     "chatInput": {
       "inputHint": "输入内容..."
@@ -941,6 +946,11 @@
     "subtitleEveningCowork": "收尾、复盘、或是为明天做准备——都行",
     "subtitleNightCowork": "夜深了，适合规划和沉淀，有什么想梳理的？",
     "aiPartnerCowork": "协作搭档",
+    "subtitleMorningDesign": "趁头脑清醒，把概念变成看得见的设计吧",
+    "subtitleAfternoonDesign": "现在很适合打磨流程、做原型，或者试试新的视觉方向",
+    "subtitleEveningDesign": "一起抠细节、比方案，让设计更顺眼也更顺手",
+    "subtitleNightDesign": "安静的时间最适合视觉思考和精细打磨",
+    "aiPartnerDesign": "设计搭档",
     "aiPartnerClaw": "我是你的助理",
     "subtitleMorningClaw": "今天有什么需要帮忙的？",
     "subtitleAfternoonClaw": "有什么需要帮忙的？",
@@ -955,6 +965,7 @@
     "narrativeDispatcher": "说出你想要的，我来让它发生。",
     "featureIntro": "",
     "featureIntroCowork": "",
+    "featureIntroDesign": "",
     "lastTimeYouWere": "上次您正在处理：",
     "branch": "分支：",
     "aheadCommits": "领先 {{count}} 个提交",
@@ -980,6 +991,7 @@
     "workingIn": "我们正在",
     "project": "项目里工作。",
     "workingInCowork": "在",
+    "workingInDesign": "正在",
     "gitClean": "一切干净，可以放手大干了 ✦",
     "gitUnstaged": "{{count}} 个文件",
     "gitStaged": "{{count}} 个文件",
@@ -991,7 +1003,8 @@
     "commaSeparator": "，",
     "period": "。",
     "project": "工作。",
-    "projectCowork": "项目里工作。"
+    "projectCowork": "项目里工作。",
+    "projectDesign": "项目里做设计。"
   },
   "modelSelector": {
     "model": "模型",

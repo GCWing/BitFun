@@ -16,7 +16,7 @@ import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
 
-type SessionDisplayMode = 'code' | 'cowork' | 'claw' | 'dispatcher';
+type SessionDisplayMode = 'code' | 'cowork' | 'design' | 'claw' | 'dispatcher';
 
 const isAssistantWorkspace = (workspace?: WorkspaceInfo | null): boolean => {
   return workspace?.workspaceKind === WorkspaceKind.Assistant;
@@ -33,6 +33,7 @@ const normalizeSessionDisplayMode = (
   if (!mode) return 'code';
   const normalizedMode = mode.toLowerCase();
   if (normalizedMode === 'cowork') return 'cowork';
+  if (normalizedMode === 'design') return 'design';
   if (normalizedMode === 'claw') return 'claw';
   if (normalizedMode === 'dispatcher') return 'dispatcher';
   return 'code';
@@ -42,6 +43,9 @@ const resolveSessionWorkspacePath = (
   context: FlowChatContext,
   config?: SessionConfig
 ): string | null => {
+  if (config?.storageScope === 'agentic_os') {
+    return null;
+  }
   const explicitWorkspacePath = config?.workspacePath?.trim();
   if (explicitWorkspacePath) {
     return explicitWorkspacePath;
@@ -120,8 +124,12 @@ const resolveAgentType = (
 
 const requireSessionWorkspacePath = (
   workspacePath: string | undefined,
-  sessionId: string
+  sessionId: string,
+  storageScope?: import('@/shared/types/session-history').SessionStorageScope
 ): string => {
+  if (storageScope === 'agentic_os') {
+    return workspacePath || '';
+  }
   if (!workspacePath) {
     throw new Error(`Workspace path is required for session: ${sessionId}`);
   }
@@ -172,8 +180,10 @@ export async function createChatSession(
   try {
     const workspacePath = resolveSessionWorkspacePath(context, config);
     const workspace = resolveSessionWorkspace(context, config);
+    const storageScope =
+      config.storageScope ?? (mode?.toLowerCase() === 'dispatcher' ? 'agentic_os' : 'workspace');
 
-    if (!workspacePath) {
+    if (!workspacePath && storageScope !== 'agentic_os') {
       throw new Error('Workspace path is required to create a session');
     }
     const remoteConnectionId =
@@ -185,11 +195,13 @@ export async function createChatSession(
     const agentType = resolveAgentType(mode, workspace);
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
     const creationKey =
-      workspace?.id?.trim()
+      storageScope === 'agentic_os'
+        ? 'agentic_os'
+        : workspace?.id?.trim()
         ? workspace.id
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
-          : workspacePath;
+          : workspacePath ?? 'agentic_os';
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -203,6 +215,8 @@ export async function createChatSession(
     const sessionName =
       sessionMode === 'cowork'
         ? i18nService.t('flow-chat:session.newCoworkWithIndex', { count: sameModeCount })
+        : sessionMode === 'design'
+          ? i18nService.t('flow-chat:session.newDesignWithIndex', { count: sameModeCount })
         : sessionMode === 'claw'
           ? i18nService.t('flow-chat:session.newClawWithIndex', { count: sameModeCount })
           : sessionMode === 'dispatcher'
@@ -220,9 +234,10 @@ export async function createChatSession(
       const response = await agentAPI.createSession({
         sessionName,
         agentType,
-        workspacePath,
+        workspacePath: workspacePath || undefined,
         remoteConnectionId,
         remoteSshHost,
+        storageScope,
         config: {
           modelName: config.modelName || 'auto',
           enableTools: true,
@@ -232,6 +247,7 @@ export async function createChatSession(
           enableContextCompression: true,
           remoteConnectionId,
           remoteSshHost,
+          storageScope,
         }
       });
 
@@ -242,9 +258,10 @@ export async function createChatSession(
         sessionName,
         maxContextTokens,
         agentType,
-        workspacePath,
+        workspacePath || undefined,
         remoteConnectionId,
-        remoteSshHost
+        remoteSshHost,
+        storageScope
       );
 
       return response.sessionId;
@@ -285,7 +302,8 @@ export async function switchChatSession(
       sessionId,
       session?.workspacePath,
       session?.remoteConnectionId,
-      session?.remoteSshHost
+      session?.remoteSshHost,
+      session?.storageScope
     ).catch(error => {
       log.debug('Failed to touch session activity', { sessionId, error });
     });
@@ -294,7 +312,11 @@ export async function switchChatSession(
       // Load history in the background — do not block the UI.
       (async () => {
         try {
-          const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+          const workspacePath = requireSessionWorkspacePath(
+            session.workspacePath,
+            sessionId,
+            session.storageScope
+          );
 
           // loadSessionHistory internally calls restoreSession + loadSessionTurns.
           await context.flowChatStore.loadSessionHistory(
@@ -302,7 +324,8 @@ export async function switchChatSession(
             workspacePath,
             undefined,
             session.remoteConnectionId,
-            session.remoteSshHost
+            session.remoteSshHost,
+            session.storageScope
           );
         } catch (error) {
           log.error('Failed to load session history', { sessionId, error });
@@ -365,6 +388,7 @@ export async function renameChatSessionTitle(
     workspacePath: session.workspacePath,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
+    storageScope: session.storageScope,
   });
 
   await context.flowChatStore.updateSessionTitle(sessionId, updatedTitle, 'generated');
@@ -383,7 +407,11 @@ export async function ensureBackendSession(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+  const workspacePath = requireSessionWorkspacePath(
+    session.workspacePath,
+    sessionId,
+    session.storageScope
+  );
 
   const isHistoricalSession = session.isHistorical === true;
   const isFirstTurn = session.dialogTurns.length <= 1;
@@ -410,6 +438,7 @@ export async function ensureBackendSession(
       workspacePath,
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
+      storageScope: session.storageScope,
     });
     clearHistoricalFlag();
   } catch (e: any) {
@@ -430,12 +459,14 @@ export async function ensureBackendSession(
       workspacePath,
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
+      storageScope: session.storageScope,
       config: {
         modelName: session.config.modelName || 'auto',
         enableTools: true,
         safeMode: true,
         remoteConnectionId: session.remoteConnectionId,
         remoteSshHost: session.remoteSshHost,
+        storageScope: session.storageScope,
       }
     });
     clearHistoricalFlag();
@@ -454,7 +485,11 @@ export async function retryCreateBackendSession(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+  const workspacePath = requireSessionWorkspacePath(
+    session.workspacePath,
+    sessionId,
+    session.storageScope
+  );
   
   await agentAPI.createSession({
     sessionId: sessionId,
@@ -463,12 +498,14 @@ export async function retryCreateBackendSession(
     workspacePath,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
+    storageScope: session.storageScope,
     config: {
       modelName: session.config.modelName || 'auto',
       enableTools: true,
       safeMode: true,
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
+      storageScope: session.storageScope,
     }
   });
 }

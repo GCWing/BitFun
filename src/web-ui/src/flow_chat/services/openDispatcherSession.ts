@@ -2,18 +2,11 @@ import { flowChatStore } from '../store/FlowChatStore';
 import { flowChatManager } from './FlowChatManager';
 import { openMainSession } from './openBtwSession';
 
-export interface OpenDispatcherSessionOptions {
-  /** Assistant workspace used when creating a new Dispatcher session if none exists. */
-  assistantWorkspace?: { rootPath: string; id: string } | null;
-}
-
 /**
  * Focuses the latest Agentic OS (Dispatcher) session, or creates one if missing.
  * Mirrors the nav "Agentic OS" entry behavior.
  */
-export async function openDispatcherSession(
-  options?: OpenDispatcherSessionOptions
-): Promise<void> {
+export async function openDispatcherSession(): Promise<void> {
   const storeState = flowChatStore.getState();
   const existing =
     Array.from(storeState.sessions.values())
@@ -28,13 +21,5 @@ export async function openDispatcherSession(
     return;
   }
 
-  const globalWs = options?.assistantWorkspace;
-  if (globalWs) {
-    await flowChatManager.createChatSession(
-      { workspacePath: globalWs.rootPath, workspaceId: globalWs.id },
-      'Dispatcher'
-    );
-  } else {
-    await flowChatManager.createChatSession({}, 'Dispatcher');
-  }
+  await flowChatManager.createChatSession({ storageScope: 'agentic_os' }, 'Dispatcher');
 }

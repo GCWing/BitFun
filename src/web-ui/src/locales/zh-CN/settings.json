@@ -8,22 +8,26 @@
     "searchClear": "清除搜索",
     "beta": "Beta",
     "tabDescriptions": {
-      "basics": "语言、主题、日志、终端 Shell 与开机启动。",
+      "appearance": "语言、主题与界面字体大小。",
+      "basics": "日志、终端 Shell、开机启动与通知。",
       "models": "AI 模型、API 密钥、供应商与代理。",
-      "sessionConfig": "会话行为、工具与超时。",
+      "personalization": "标题生成、Agent 伙伴与调试模式。",
+      "permissions": "工具执行确认、超时与桌面自动化授权。",
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
       "keyboard": "快捷键与键位。"
     },
     "categories": {
-      "general": "通用",
+      "general": "基础",
       "smartCapabilities": "智慧化配置",
       "devkit": "开发套件"
     },
     "tabs": {
-      "basics": "基础",
+      "appearance": "外观",
+      "basics": "常规",
       "models": "模型",
-      "sessionConfig": "会话配置",
+      "personalization": "个性化",
+      "permissions": "权限",
       "skills": "技能",
       "agents": "智能体",
       "editor": "编辑器",

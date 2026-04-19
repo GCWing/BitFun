@@ -270,15 +270,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
   const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
   const currentMode = modeState.current;
-  // Cowork and Dispatcher sessions have a fixed agent type and do not support mode switching.
-  const canSwitchModes = !isAssistantWorkspace && currentMode !== 'Cowork' && currentMode !== 'Dispatcher';
+  // Cowork, Design, and Dispatcher sessions have a fixed agent type and do not support mode switching.
+  const canSwitchModes =
+    !isAssistantWorkspace &&
+    currentMode !== 'Cowork' &&
+    currentMode !== 'Design' &&
+    currentMode !== 'Dispatcher';
 
-  // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
+  // Session-level mode policy: fixed-purpose sessions are not available as incremental mode switches.
   const switchableModes = useMemo(
     () =>
       modeState.available.filter(mode =>
         mode.enabled &&
         mode.id !== 'Cowork' &&
+        mode.id !== 'Design' &&
         (isAssistantWorkspace || mode.id !== 'Claw')
       ),
     [isAssistantWorkspace, modeState.available]

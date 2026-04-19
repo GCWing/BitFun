@@ -39,11 +39,24 @@ const COWORK_PROFILE: BuiltinSkillProfile = BuiltinSkillProfile {
     ],
 };
 
+const DESIGN_PROFILE: BuiltinSkillProfile = BuiltinSkillProfile {
+    default_enabled: false,
+    overridden_skills: &[
+        "docx",
+        "pdf",
+        "pptx",
+        "xlsx",
+        "find-skills",
+        "writing-skills",
+    ],
+};
+
 fn builtin_profile_for_mode(mode_id: &str) -> BuiltinSkillProfile {
     match mode_id {
         "Plan" | "debug" => DISABLE_ALL_BUILTINS,
         "agentic" => AGENTIC_PROFILE,
         "Cowork" => COWORK_PROFILE,
+        "Design" => DESIGN_PROFILE,
         _ => ENABLE_ALL_BUILTINS,
     }
 }
@@ -125,6 +138,8 @@ mod tests {
         assert!(is_enabled_by_default_for_mode(&tdd, "agentic"));
         assert!(is_enabled_by_default_for_mode(&pdf, "Cowork"));
         assert!(!is_enabled_by_default_for_mode(&tdd, "Cowork"));
+        assert!(is_enabled_by_default_for_mode(&pdf, "Design"));
+        assert!(!is_enabled_by_default_for_mode(&tdd, "Design"));
         assert!(!is_enabled_by_default_for_mode(&pdf, "Plan"));
         assert!(!is_enabled_by_default_for_mode(&tdd, "debug"));
     }

@@ -39,6 +39,10 @@
       "name": "Cowork",
       "description": "A standalone Agent app for office collaboration, drafting, and day-to-day execution."
     },
+    "design": {
+      "name": "Design",
+      "description": "A standalone Agent app for HTML prototypes, visual artifacts, and design exploration."
+    },
     "claw": {
       "name": "Claw",
       "description": "A standalone Agent app for persistent personal-assistant style collaboration with memory and preferences."

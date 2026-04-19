@@ -8,22 +8,26 @@
     "searchClear": "Clear search",
     "beta": "Beta",
     "tabDescriptions": {
-      "basics": "Language, theme, logging, terminal shell, and launch at login.",
+      "appearance": "Language, theme, and interface font size.",
+      "basics": "Logging, terminal shell, launch at login, and notifications.",
       "models": "AI models, API keys, providers, and proxy.",
-      "sessionConfig": "Session behavior, tools, and timeouts.",
+      "personalization": "Title generation, Agent companion, and debug mode.",
+      "permissions": "Tool confirmation, timeouts, and desktop automation access.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
       "keyboard": "Shortcuts and key bindings."
     },
     "categories": {
-      "general": "General",
+      "general": "Basics",
       "smartCapabilities": "Smart Configuration",
       "devkit": "Dev Kit"
     },
     "tabs": {
-      "basics": "Basics",
+      "appearance": "Appearance",
+      "basics": "General",
       "models": "Models",
-      "sessionConfig": "Session Config",
+      "personalization": "Personalization",
+      "permissions": "Permissions",
       "skills": "Skills",
       "agents": "Agents",
       "editor": "Editor",

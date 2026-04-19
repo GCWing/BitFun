@@ -1,11 +1,12 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
+import type { SessionMetadata, DialogTurnData, SessionStorageScope } from '@/shared/types/session-history';
 
 function remoteSessionFields(
   remoteConnectionId?: string,
-  remoteSshHost?: string
+  remoteSshHost?: string,
+  storageScope?: SessionStorageScope
 ): Record<string, string> {
   const o: Record<string, string> = {};
   if (remoteConnectionId) {
@@ -14,20 +15,24 @@ function remoteSessionFields(
   if (remoteSshHost) {
     o.remote_ssh_host = remoteSshHost;
   }
+  if (storageScope) {
+    o.storage_scope = storageScope;
+  }
   return o;
 }
 
 export class SessionAPI {
   async listSessions(
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<SessionMetadata[]> {
     try {
       return await api.invoke('list_persisted_sessions', {
         request: {
           workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
         }
       });
     } catch (error) {
@@ -37,16 +42,17 @@ export class SessionAPI {
 
   async loadSessionTurns(
     sessionId: string,
-    workspacePath: string,
+    workspacePath?: string,
     limit?: number,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<DialogTurnData[]> {
     try {
       const request: Record<string, unknown> = {
         session_id: sessionId,
         workspace_path: workspacePath,
-        ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
       };
 
       if (limit !== undefined) {
@@ -63,16 +69,17 @@ export class SessionAPI {
 
   async saveSessionTurn(
     turnData: DialogTurnData,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<void> {
     try {
       await api.invoke('save_session_turn', {
         request: {
           turn_data: turnData,
           workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
         }
       });
     } catch (error) {
@@ -82,16 +89,17 @@ export class SessionAPI {
 
   async saveSessionMetadata(
     metadata: SessionMetadata,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<void> {
     try {
       await api.invoke('save_session_metadata', {
         request: {
           metadata,
           workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
         }
       });
     } catch (error) {
@@ -101,16 +109,17 @@ export class SessionAPI {
 
   async deleteSession(
     sessionId: string,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<void> {
     try {
       await api.invoke('delete_persisted_session', {
         request: {
           session_id: sessionId,
           workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
         }
       });
     } catch (error) {
@@ -120,16 +129,17 @@ export class SessionAPI {
 
   async touchSessionActivity(
     sessionId: string,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<void> {
     try {
       await api.invoke('touch_session_activity', {
         request: {
           session_id: sessionId,
           workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
         }
       });
     } catch (error) {
@@ -139,16 +149,17 @@ export class SessionAPI {
 
   async loadSessionMetadata(
     sessionId: string,
-    workspacePath: string,
+    workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: SessionStorageScope
   ): Promise<SessionMetadata | null> {
     try {
       return await api.invoke('load_persisted_session_metadata', {
         request: {
           session_id: sessionId,
           workspace_path: workspacePath,
-          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost, storageScope),
         }
       });
     } catch (error) {

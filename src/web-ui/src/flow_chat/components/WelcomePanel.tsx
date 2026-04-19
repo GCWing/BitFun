@@ -42,25 +42,47 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   } = useWorkspaceContext();
   const sessionModeLower = (sessionMode || '').toLowerCase();
   const isCoworkSession = sessionModeLower === 'cowork';
+  const isDesignSession = sessionModeLower === 'design';
   const isClawSession = sessionModeLower === 'claw';
   const isDispatcherSession = sessionModeLower === 'dispatcher';
   // code sessions use mode='agentic'; cowork sessions use mode='cowork'
-  const showPanda = sessionModeLower !== 'code' && sessionModeLower !== 'agentic' && sessionModeLower !== 'cowork' && sessionModeLower !== 'dispatcher';
+  const showPanda =
+    sessionModeLower !== 'code' &&
+    sessionModeLower !== 'agentic' &&
+    sessionModeLower !== 'cowork' &&
+    sessionModeLower !== 'design' &&
+    sessionModeLower !== 'dispatcher';
 
   const { document: identityDoc } = useAgentIdentityDocument(isClawSession ? workspacePath : '');
   const assistantName = isClawSession ? (identityDoc.name || '') : '';
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    const s = isCoworkSession ? 'Cowork' : isClawSession ? 'Claw' : isDispatcherSession ? 'Dispatcher' : '';
+    const s = isCoworkSession
+      ? 'Cowork'
+      : isDesignSession
+        ? 'Design'
+        : isClawSession
+          ? 'Claw'
+          : isDispatcherSession
+            ? 'Dispatcher'
+            : '';
     if (hour >= 5 && hour < 12) return { title: t('welcome.greetingMorning'), subtitle: t(`welcome.subtitleMorning${s}`) };
     if (hour >= 12 && hour < 18) return { title: t('welcome.greetingAfternoon'), subtitle: t(`welcome.subtitleAfternoon${s}`) };
     if (hour >= 18 && hour < 23) return { title: t('welcome.greetingEvening'), subtitle: t(`welcome.subtitleEvening${s}`) };
     return { title: t('welcome.greetingNight'), subtitle: t(`welcome.subtitleNight${s}`) };
-  }, [t, isCoworkSession, isClawSession, isDispatcherSession]);
+  }, [t, isCoworkSession, isDesignSession, isClawSession, isDispatcherSession]);
 
   const tagline = greeting.subtitle;
-  const aiPartnerKey = isCoworkSession ? 'welcome.aiPartnerCowork' : isClawSession ? 'welcome.aiPartnerClaw' : isDispatcherSession ? 'welcome.aiPartnerDispatcher' : 'welcome.aiPartner';
+  const aiPartnerKey = isCoworkSession
+    ? 'welcome.aiPartnerCowork'
+    : isDesignSession
+      ? 'welcome.aiPartnerDesign'
+      : isClawSession
+        ? 'welcome.aiPartnerClaw'
+        : isDispatcherSession
+          ? 'welcome.aiPartnerDispatcher'
+          : 'welcome.aiPartner';
 
   const otherWorkspaces = useMemo(
     () => openedWorkspacesList.filter(ws => ws.id !== currentWorkspace?.id),
@@ -162,7 +184,9 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
               <>
                 <span className="welcome-panel__narrative-sentence">
                   <span className="welcome-panel__narrative-sentence__text">
-                    {isCoworkSession ? t('welcome.workingInCowork') : t('welcome.workingIn')}
+                    {isCoworkSession || isDesignSession
+                      ? t(isDesignSession ? 'welcome.workingInDesign' : 'welcome.workingInCowork')
+                      : t('welcome.workingIn')}
                   </span>
                   <span className="welcome-panel__context-row">
                     <span className="welcome-panel__workspace-anchor" ref={workspaceDropdownRef}>
@@ -211,7 +235,9 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                     </span>
                   </span>
                   <span className="welcome-panel__narrative-sentence__text">
-                    {isCoworkSession ? t('welcome.projectCowork') : t('welcome.project')}
+                    {isCoworkSession || isDesignSession
+                      ? t(isDesignSession ? 'welcome.projectDesign' : 'welcome.projectCowork')
+                      : t('welcome.project')}
                   </span>
                 </span>
               </>

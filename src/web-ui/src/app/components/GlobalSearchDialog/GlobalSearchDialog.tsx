@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, User, ListChecks } from 'lucide-react';
+import { FolderOpen, User, ListChecks, Bot, Sparkles } from 'lucide-react';
 import { Search } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -16,6 +16,13 @@ import type { SessionMetadata } from '@/shared/types/session-history';
 import type { WorkspaceInfo } from '@/shared/types';
 import { sessionAPI } from '@/infrastructure/api';
 import { WorkspaceKind } from '@/shared/types';
+import { liveAppAPI, type LiveAppMeta } from '@/infrastructure/api/service-api/LiveAppAPI';
+import { APP_REGISTRY } from '@/app/scenes/apps/appRegistry';
+import {
+  NewSessionDialog,
+  launchSessionForChoice,
+  type NewSessionAgentChoice,
+} from '@/app/components/SessionCapsule/NewSessionDialog';
 import './GlobalSearchDialog.scss';
 
 interface GlobalSearchDialogProps {
@@ -23,7 +30,7 @@ interface GlobalSearchDialogProps {
   onClose: () => void;
 }
 
-type SearchResultKind = 'workspace' | 'assistant' | 'session';
+type SearchResultKind = 'workspace' | 'assistant' | 'session' | 'agent-app' | 'live-app';
 
 interface SearchResultItem {
   kind: SearchResultKind;
@@ -31,6 +38,7 @@ interface SearchResultItem {
   label: string;
   sublabel?: string;
   workspaceId?: string;
+  agentChoice?: NewSessionAgentChoice;
 }
 
 const MAX_PER_GROUP = 20;
@@ -46,15 +54,26 @@ const matchesQuery = (query: string, ...fields: (string | undefined | null)[]): 
   return fields.some(field => field && field.toLowerCase().includes(normalizedQuery));
 };
 
+const APP_TO_AGENT_CHOICE: Record<string, NewSessionAgentChoice> = {
+  'coding-app': 'agentic',
+  'cowork-app': 'Cowork',
+  'design-app': 'Design',
+  'claw-app': 'Claw',
+};
+
 const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }) => {
   const { t } = useI18n('common');
-  const { openedWorkspacesList, assistantWorkspacesList, setActiveWorkspace } = useWorkspaceContext();
+  const { t: tApps } = useI18n('scenes/apps');
+  const { activeWorkspace, openedWorkspacesList, assistantWorkspacesList, setActiveWorkspace } = useWorkspaceContext();
   const { openOverlay } = useOverlayManager();
   const { switchLeftPanelTab } = useApp();
   const setSelectedAssistantWorkspaceId = useMyAgentStore(s => s.setSelectedAssistantWorkspaceId);
   const openNurseryAssistant = useNurseryStore(s => s.openAssistant);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [liveApps, setLiveApps] = useState<LiveAppMeta[]>([]);
+  const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
+  const [pendingAgentChoice, setPendingAgentChoice] = useState<NewSessionAgentChoice>('agentic');
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
   const [persistedOpenWorkspaceSessions, setPersistedOpenWorkspaceSessions] = useState<
     Array<{ meta: SessionMetadata; workspace: WorkspaceInfo }>
@@ -111,6 +130,30 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
     };
   }, [open, openedWorkspacesList]);
 
+  useEffect(() => {
+    if (!open) {
+      setLiveApps([]);
+      return;
+    }
+
+    let cancelled = false;
+    void liveAppAPI.listLiveApps()
+      .then(items => {
+        if (!cancelled) {
+          setLiveApps(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveApps([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const projectWorkspaces = useMemo(
     () => openedWorkspacesList.filter(workspace => workspace.workspaceKind !== WorkspaceKind.Assistant),
     [openedWorkspacesList]
@@ -138,6 +181,18 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
     [sessionsInOpenedWorkspaces]
   );
 
+  const quickProjectWorkspace = useMemo(() => {
+    if (activeWorkspace && activeWorkspace.workspaceKind !== WorkspaceKind.Assistant) {
+      return activeWorkspace;
+    }
+    return projectWorkspaces[0] ?? null;
+  }, [activeWorkspace, projectWorkspaces]);
+
+  const quickClawWorkspace = useMemo(() => activeWorkspace ?? openedWorkspacesList[0] ?? null, [
+    activeWorkspace,
+    openedWorkspacesList,
+  ]);
+
   const results = useMemo((): SearchResultItem[] => {
     const items: SearchResultItem[] = [];
     const trimmedQuery = query.trim();
@@ -158,6 +213,23 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
           id: workspace.id,
           label: displayName,
           sublabel: workspace.description,
+        });
+      }
+      for (const app of APP_REGISTRY.slice(0, MAX_PER_GROUP)) {
+        items.push({
+          kind: 'agent-app',
+          id: app.id,
+          label: tApps(app.nameKey),
+          sublabel: tApps(app.descriptionKey),
+          agentChoice: APP_TO_AGENT_CHOICE[app.id],
+        });
+      }
+      for (const app of liveApps.slice(0, MAX_PER_GROUP)) {
+        items.push({
+          kind: 'live-app',
+          id: app.id,
+          label: app.name,
+          sublabel: app.description || app.tags.join(' · '),
         });
       }
       return items;
@@ -185,6 +257,35 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
         id: workspace.id,
         label: displayName,
         sublabel: workspace.description,
+      });
+    }
+
+    const filteredAgentApps = APP_REGISTRY
+      .filter(app =>
+        matchesQuery(trimmedQuery, app.id, tApps(app.nameKey), tApps(app.descriptionKey))
+      )
+      .slice(0, MAX_PER_GROUP);
+    for (const app of filteredAgentApps) {
+      items.push({
+        kind: 'agent-app',
+        id: app.id,
+        label: tApps(app.nameKey),
+        sublabel: tApps(app.descriptionKey),
+        agentChoice: APP_TO_AGENT_CHOICE[app.id],
+      });
+    }
+
+    const filteredLiveApps = liveApps
+      .filter(app =>
+        matchesQuery(trimmedQuery, app.id, app.name, app.description, app.category, ...app.tags)
+      )
+      .slice(0, MAX_PER_GROUP);
+    for (const app of filteredLiveApps) {
+      items.push({
+        kind: 'live-app',
+        id: app.id,
+        label: app.name,
+        sublabel: app.description || app.tags.join(' · '),
       });
     }
 
@@ -245,11 +346,13 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
     return items;
   }, [
     assistantWorkspacesList,
+    liveApps,
     openedWorkspaceIdSet,
     persistedOpenWorkspaceSessions,
     projectWorkspaces,
     query,
     t,
+    tApps,
     topLevelSessions,
   ]);
 
@@ -273,6 +376,28 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
       return;
     }
 
+    if (item.kind === 'agent-app') {
+      const choice = item.agentChoice ?? 'agentic';
+      const workspace = choice === 'Claw' ? quickClawWorkspace : quickProjectWorkspace;
+      if (workspace) {
+        await launchSessionForChoice({
+          agentChoice: choice,
+          workspace,
+          setActiveWorkspace,
+        });
+        return;
+      }
+
+      setPendingAgentChoice(choice);
+      setNewSessionDialogOpen(true);
+      return;
+    }
+
+    if (item.kind === 'live-app') {
+      openOverlay(`live-app:${item.id}`);
+      return;
+    }
+
     await openMainSession(item.id, {
       workspaceId: item.workspaceId,
       activateWorkspace: item.workspaceId ? setActiveWorkspace : undefined,
@@ -281,6 +406,8 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
     onClose,
     openNurseryAssistant,
     openOverlay,
+    quickClawWorkspace,
+    quickProjectWorkspace,
     setActiveWorkspace,
     setSelectedAssistantWorkspaceId,
     switchLeftPanelTab,
@@ -325,6 +452,8 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
 
   const workspaceItems = results.filter(result => result.kind === 'workspace');
   const assistantItems = results.filter(result => result.kind === 'assistant');
+  const agentAppItems = results.filter(result => result.kind === 'agent-app');
+  const liveAppItems = results.filter(result => result.kind === 'live-app');
   const sessionItems = results.filter(result => result.kind === 'session');
   const queryTrimmed = query.trim();
   const showDefaultSessionColumn = !queryTrimmed;
@@ -394,6 +523,8 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
             <>
               {renderGroup(t('nav.search.groupWorkspaces'), workspaceItems, () => <FolderOpen size={14} />)}
               {renderGroup(t('nav.search.groupAssistants'), assistantItems, () => <User size={14} />)}
+              {renderGroup(t('nav.search.groupAgentApps'), agentAppItems, () => <Bot size={14} />)}
+              {renderGroup(t('nav.search.groupLiveApps'), liveAppItems, () => <Sparkles size={14} />)}
               {showDefaultSessionColumn ? (
                 <div className="bitfun-nav-search-dialog__group" key="nav-search-sessions-default">
                   <div className="bitfun-nav-search-dialog__group-label">{t('nav.search.groupSessions')}</div>
@@ -411,7 +542,17 @@ const GlobalSearchDialog: React.FC<GlobalSearchDialogProps> = ({ open, onClose }
     </div>
   );
 
-  return createPortal(dialog, document.body);
+  return createPortal(
+    <>
+      {dialog}
+      <NewSessionDialog
+        open={newSessionDialogOpen}
+        onClose={() => setNewSessionDialogOpen(false)}
+        initialAgentChoice={pendingAgentChoice}
+      />
+    </>,
+    document.body
+  );
 };
 
 export default GlobalSearchDialog;

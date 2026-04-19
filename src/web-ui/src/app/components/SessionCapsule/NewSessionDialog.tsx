@@ -26,17 +26,19 @@ const log = createLogger('NewSessionDialog');
 const LS_AGENT = 'bitfun.newSessionDialog.agent';
 const LS_WORKSPACE = 'bitfun.newSessionDialog.workspaceId';
 
-export type NewSessionAgentChoice = 'agentic' | 'Cowork' | 'Claw';
+export type NewSessionAgentChoice = 'agentic' | 'Cowork' | 'Design' | 'Claw';
 
 export interface NewSessionDialogProps {
   open: boolean;
   onClose: () => void;
+  initialAgentChoice?: NewSessionAgentChoice;
 }
 
 function sessionModeToChoice(mode: string | undefined): NewSessionAgentChoice {
   if (!mode || mode === 'Dispatcher') return 'agentic';
   const m = mode.toLowerCase();
   if (m === 'cowork') return 'Cowork';
+  if (m === 'design') return 'Design';
   if (m === 'claw') return 'Claw';
   return 'agentic';
 }
@@ -61,7 +63,65 @@ function pickDefaultWorkspaceId(
   return opened[0]?.id ?? null;
 }
 
-export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({ open: isOpen, onClose }) => {
+function resolveModeFromChoice(agentChoice: NewSessionAgentChoice): 'agentic' | 'Cowork' | 'Design' | 'Claw' {
+  return agentChoice === 'agentic'
+    ? 'agentic'
+    : agentChoice === 'Cowork'
+      ? 'Cowork'
+      : agentChoice === 'Design'
+        ? 'Design'
+        : 'Claw';
+}
+
+function syncSessionModeStore(mode: 'agentic' | 'Cowork' | 'Design' | 'Claw'): void {
+  if (mode === 'Cowork') {
+    useSessionModeStore.getState().setMode('cowork');
+  } else if (mode === 'Design') {
+    useSessionModeStore.getState().setMode('design');
+  } else {
+    useSessionModeStore.getState().setMode('code');
+  }
+}
+
+export async function launchSessionForChoice(params: {
+  agentChoice: NewSessionAgentChoice;
+  workspace: WorkspaceInfo;
+  setActiveWorkspace: (workspaceId: string) => Promise<WorkspaceInfo>;
+}): Promise<void> {
+  const { agentChoice, workspace, setActiveWorkspace } = params;
+  const resolvedMode = resolveModeFromChoice(agentChoice);
+
+  syncSessionModeStore(resolvedMode);
+
+  const reusableId = findReusableEmptySessionId(workspace, resolvedMode);
+  if (reusableId) {
+    await openMainSession(reusableId, {
+      workspaceId: workspace.id,
+      activateWorkspace: setActiveWorkspace,
+    });
+    return;
+  }
+
+  await flowChatManager.createChatSession(
+    {
+      workspacePath: workspace.rootPath,
+      ...(isRemoteWorkspace(workspace) && workspace.connectionId
+        ? { remoteConnectionId: workspace.connectionId }
+        : {}),
+      ...(isRemoteWorkspace(workspace) && workspace.sshHost
+        ? { remoteSshHost: workspace.sshHost }
+        : {}),
+    },
+    resolvedMode
+  );
+  await setActiveWorkspace(workspace.id);
+}
+
+export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
+  open: isOpen,
+  onClose,
+  initialAgentChoice,
+}) => {
   const { t } = useI18n('common');
   const {
     openedWorkspacesList,
@@ -80,7 +140,7 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({ open: isOpen
     let storedWs: string | null = null;
     try {
       const a = localStorage.getItem(LS_AGENT) as NewSessionAgentChoice | null;
-      if (a === 'agentic' || a === 'Cowork' || a === 'Claw') {
+      if (a === 'agentic' || a === 'Cowork' || a === 'Design' || a === 'Claw') {
         storedAgent = a;
       }
       const w = localStorage.getItem(LS_WORKSPACE);
@@ -93,11 +153,11 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({ open: isOpen
     const active = activeId ? flowChatStore.getState().sessions.get(activeId) : undefined;
     const fromSession = sessionModeToChoice(active?.mode);
 
-    setAgentChoice(storedAgent ?? fromSession);
+    setAgentChoice(initialAgentChoice ?? storedAgent ?? fromSession);
     setWorkspaceId(
       pickDefaultWorkspaceId(openedWorkspacesList, recentWorkspaces, currentWorkspace, storedWs)
     );
-  }, [openedWorkspacesList, recentWorkspaces, currentWorkspace]);
+  }, [currentWorkspace, initialAgentChoice, openedWorkspacesList, recentWorkspaces]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -127,6 +187,10 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({ open: isOpen
       {
         value: 'Cowork',
         label: t('nav.sessions.modeCowork'),
+      },
+      {
+        value: 'Design',
+        label: t('nav.sessions.modeDesign'),
       },
       {
         value: 'Claw',
@@ -163,42 +227,9 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({ open: isOpen
       return;
     }
 
-    const resolvedMode =
-      agentChoice === 'agentic'
-        ? 'agentic'
-        : agentChoice === 'Cowork'
-          ? 'Cowork'
-          : 'Claw';
-
     setSubmitting(true);
     try {
-      if (resolvedMode === 'Cowork') {
-        useSessionModeStore.getState().setMode('cowork');
-      } else {
-        useSessionModeStore.getState().setMode('code');
-      }
-
-      const reusableId = findReusableEmptySessionId(workspace, resolvedMode);
-      if (reusableId) {
-        await openMainSession(reusableId, {
-          workspaceId: workspace.id,
-          activateWorkspace: setActiveWorkspace,
-        });
-      } else {
-        await flowChatManager.createChatSession(
-          {
-            workspacePath: workspace.rootPath,
-            ...(isRemoteWorkspace(workspace) && workspace.connectionId
-              ? { remoteConnectionId: workspace.connectionId }
-              : {}),
-            ...(isRemoteWorkspace(workspace) && workspace.sshHost
-              ? { remoteSshHost: workspace.sshHost }
-              : {}),
-          },
-          resolvedMode
-        );
-        await setActiveWorkspace(workspace.id);
-      }
+      await launchSessionForChoice({ agentChoice, workspace, setActiveWorkspace });
 
       try {
         localStorage.setItem(LS_AGENT, agentChoice);

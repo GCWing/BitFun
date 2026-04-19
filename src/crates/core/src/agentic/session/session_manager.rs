@@ -173,11 +173,26 @@ impl SessionManager {
     }
 
     fn session_workspace_from_config(config: &SessionConfig) -> Option<PathBuf> {
-        config.workspace_path.as_ref().map(PathBuf::from)
+        match config.storage_scope {
+            Some(crate::agentic::core::SessionStorageScope::AgenticOs) => {
+                crate::infrastructure::PathManager::new()
+                    .ok()
+                    .map(|pm| pm.agentic_os_runtime_root())
+            }
+            _ => config.workspace_path.as_ref().map(PathBuf::from),
+        }
     }
 
     /// Resolve the effective storage path for a session's workspace.
     async fn effective_workspace_path_from_config(config: &SessionConfig) -> Option<PathBuf> {
+        if matches!(
+            config.storage_scope,
+            Some(crate::agentic::core::SessionStorageScope::AgenticOs)
+        ) {
+            return crate::infrastructure::PathManager::new()
+                .ok()
+                .map(|pm| pm.agentic_os_runtime_root());
+        }
         let workspace_path = config.workspace_path.as_ref()?;
         let identity =
             crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(

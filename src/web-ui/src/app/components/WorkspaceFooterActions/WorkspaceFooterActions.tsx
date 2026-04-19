@@ -93,31 +93,20 @@ const WorkspaceFooterActions: React.FC = () => {
   const handleOpenDispatcher = useCallback(async () => {
     closeMenu();
     try {
-      await openDispatcherSession({
-        assistantWorkspace: defaultAssistantWorkspace
-          ? { rootPath: defaultAssistantWorkspace.rootPath, id: defaultAssistantWorkspace.id }
-          : null,
-      });
+      await openDispatcherSession();
     } catch (error) {
       log.error('Failed to open Dispatcher', error);
     }
-  }, [closeMenu, defaultAssistantWorkspace]);
+  }, [closeMenu]);
 
   const handleCreateDispatcherSession = useCallback(async (event: React.MouseEvent) => {
     event.stopPropagation();
     try {
-      if (defaultAssistantWorkspace) {
-        await flowChatManager.createChatSession(
-          { workspacePath: defaultAssistantWorkspace.rootPath, workspaceId: defaultAssistantWorkspace.id },
-          'Dispatcher'
-        );
-      } else {
-        await flowChatManager.createChatSession({}, 'Dispatcher');
-      }
+      await flowChatManager.createChatSession({ storageScope: 'agentic_os' }, 'Dispatcher');
     } catch (error) {
       log.error('Failed to create new Dispatcher session', error);
     }
-  }, [defaultAssistantWorkspace]);
+  }, []);
 
   const handleOpenAssistant = useCallback(() => {
     closeMenu();

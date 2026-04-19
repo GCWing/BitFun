@@ -35,6 +35,9 @@ import { useSessionModeStore } from '../stores/sessionModeStore';
 import './AppLayout.scss';
 
 const log = createLogger('AppLayout');
+const RECENT_WORKSPACE_PRELOAD_LIMIT = 7;
+const RECENT_SESSION_WARMUP_LIMIT = 5;
+const RECENT_DISPATCHER_WARMUP_LIMIT = 3;
 
 interface AppLayoutProps {
   className?: string;
@@ -89,6 +92,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }, []);
   const isTransitioning = false;
   const transitionDir: TransitionDirection = null;
+  const recentPreloadKeyRef = useRef<string | null>(null);
 
   // Auto-open last workspace on startup
   const autoOpenAttemptedRef = useRef(false);
@@ -287,6 +291,77 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     t,
   ]);
 
+  React.useEffect(() => {
+    if (loading || recentWorkspaces.length === 0) {
+      return;
+    }
+
+    const recentProjectWorkspaces = recentWorkspaces.filter(
+      workspace => workspace.workspaceKind !== WorkspaceKind.Assistant
+    );
+    const preloadTargetMap = new Map<string, (typeof recentWorkspaces)[number]>();
+    recentProjectWorkspaces
+      .slice(0, RECENT_WORKSPACE_PRELOAD_LIMIT)
+      .forEach(workspace => preloadTargetMap.set(workspace.id, workspace));
+    const preloadTargets = Array.from(preloadTargetMap.values());
+    const preloadKey = preloadTargets
+      .map(workspace => `${workspace.id}:${workspace.rootPath}:${workspace.connectionId ?? ''}:${workspace.sshHost ?? ''}`)
+      .join('|');
+
+    if (!preloadKey || recentPreloadKeyRef.current === preloadKey) {
+      return;
+    }
+    recentPreloadKeyRef.current = preloadKey;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await FlowChatManager.getInstance().preloadRecentWorkspaceSessions(
+          preloadTargets,
+          {
+            metadataLimit: RECENT_WORKSPACE_PRELOAD_LIMIT,
+            warmHistoryCount: RECENT_SESSION_WARMUP_LIMIT,
+          }
+        );
+        if (!cancelled) {
+          log.info('Recent workspace session preload completed', result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          log.warn('Recent workspace session preload failed', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, recentWorkspaces]);
+
+  React.useEffect(() => {
+    if (loading) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await FlowChatManager.getInstance().preloadAgenticOsSessions({
+          warmDispatcherCount: RECENT_DISPATCHER_WARMUP_LIMIT,
+        });
+        if (!cancelled) {
+          log.info('Agentic OS session preload completed', result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          log.warn('Agentic OS session preload failed', error);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading]);
+
   // Save in-progress conversations on window close
   React.useEffect(() => {
     let unlistenFn: (() => void) | null = null;
@@ -387,14 +462,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     return () => window.removeEventListener('toolbar-cancel-task', handleToolbarCancelTask);
   }, []);
 
-  // Create FlowChat session (toolbar / floating UI). detail.mode: 'cowork' → Cowork, else code (agentic).
-  const handleCreateFlowChatSession = React.useCallback(async (mode?: 'code' | 'cowork') => {
+  // Create FlowChat session (toolbar / floating UI). detail.mode selects a fixed top-level agent.
+  const handleCreateFlowChatSession = React.useCallback(async (mode?: 'code' | 'cowork' | 'design') => {
     try {
       const flowChatManager = FlowChatManager.getInstance();
       const setMode = useSessionModeStore.getState().setMode;
       if (mode === 'cowork') {
         setMode('cowork');
         await flowChatManager.createChatSession({}, 'Cowork');
+      } else if (mode === 'design') {
+        setMode('design');
+        await flowChatManager.createChatSession({}, 'Design');
       } else {
         setMode('code');
         await flowChatManager.createChatSession({}, 'agentic');
@@ -406,8 +484,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   React.useEffect(() => {
     const handler = (e: Event) => {
-      const mode = (e as CustomEvent<{ mode?: 'code' | 'cowork' }>).detail?.mode;
-      void handleCreateFlowChatSession(mode === 'cowork' ? 'cowork' : 'code');
+      const mode = (e as CustomEvent<{ mode?: 'code' | 'cowork' | 'design' }>).detail?.mode;
+      void handleCreateFlowChatSession(
+        mode === 'cowork' || mode === 'design' ? mode : 'code'
+      );
     };
     window.addEventListener('toolbar-create-session', handler);
     return () => window.removeEventListener('toolbar-create-session', handler);

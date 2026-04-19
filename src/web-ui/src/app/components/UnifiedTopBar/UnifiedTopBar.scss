@@ -115,18 +115,9 @@
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard;
 
-    svg {
-      flex-shrink: 0;
-      opacity: 0.7;
-    }
-
     &:hover {
       color: var(--color-text-primary);
       background: var(--element-bg-soft);
-
-      svg {
-        opacity: 1;
-      }
     }
 
     &:focus-visible {
@@ -137,10 +128,6 @@
     &.is-active {
       color: var(--color-text-primary);
       background: var(--element-bg-soft);
-
-      svg {
-        opacity: 1;
-      }
     }
 
     &.is-disabled,
@@ -152,10 +139,6 @@
       &:hover {
         color: var(--color-text-secondary);
         background: transparent;
-
-        svg {
-          opacity: 0.7;
-        }
       }
     }
   }
@@ -164,6 +147,109 @@
     height: 1px;
     margin: $size-gap-1 $size-gap-2;
     background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  }
+
+  &__appearance-wrap,
+  &__language-wrap {
+    position: relative;
+  }
+
+  &__menu-item--submenu-trigger {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    cursor: pointer;
+
+    &.is-open {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+  }
+
+  &__menu-item-label {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+
+  &__submenu-expand-icon {
+    flex-shrink: 0;
+    opacity: 0.65;
+  }
+
+  &__menu-item--submenu-trigger:hover &__submenu-expand-icon,
+  &__menu-item--submenu-trigger.is-open &__submenu-expand-icon {
+    opacity: 0.95;
+  }
+
+  &__submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    margin-left: 4px;
+    min-width: 200px;
+    max-height: min(70vh, 360px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: $size-gap-1;
+    background: var(--color-bg-elevated, #1e1e22);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: $size-radius-base;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    z-index: calc(#{$z-popover} + 1);
+  }
+
+  &__submenu-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: 0 $size-gap-2;
+    min-height: 30px;
+    border: none;
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    text-align: left;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -1px;
+    }
+
+    &.is-active {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__submenu-item-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  &__submenu-item-check {
+    flex-shrink: 0;
+    color: var(--color-accent-500);
   }
 
   // Unified context nav: back arrow + context title (overlay or session)

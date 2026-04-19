@@ -1,0 +1,72 @@
+{
+  "title": "外观",
+  "subtitle": "界面语言、主题与全局字体大小",
+  "appearance": {
+    "title": "外观",
+    "hint": "界面语言与视觉主题",
+    "language": "语言",
+    "themes": "主题",
+    "builtIn": "内置",
+    "custom": "自定义",
+    "export": "导出",
+    "delete": "删除",
+    "confirmDelete": "确定删除主题 \"{{name}}\" 吗？",
+    "languageRowHint": "选择一个语言包作为当前界面语言。",
+    "themeRowHint": "选择界面配色主题。",
+    "systemTheme": "跟随系统",
+    "systemThemeDescription": "根据系统浅色/深色外观自动在亮暗主题间切换，并随系统切换而更新。",
+    "presets": {
+      "bitfun-dark": {
+        "name": "暗色",
+        "description": "默认暗色主题"
+      },
+      "bitfun-light": {
+        "name": "亮色",
+        "description": "亮色主题 - 素雅高级，淡蓝灰调"
+      },
+      "bitfun-midnight": {
+        "name": "午夜",
+        "description": "午夜灰暗色主题 - 专业优雅，灵感来自 JetBrains IDE"
+      },
+      "bitfun-china-style": {
+        "name": "墨韵",
+        "description": "中国风主题 - 宣纸墨香，青花朱砂，温润典雅"
+      },
+      "bitfun-china-night": {
+        "name": "墨夜",
+        "description": "中国风暗色主题 - 墨夜星辰，月华如水，沉静典雅"
+      },
+      "bitfun-cyber": {
+        "name": "赛博",
+        "description": "科技感主题 - 深邃黑洞，霓虹未来，极致科技美学"
+      },
+      "bitfun-slate": {
+        "name": "石板灰",
+        "description": "石板灰几何主题 - 极深沉浸，高对比度灰度美学"
+      }
+    },
+    "fontSize": {
+      "title": "字体大小",
+      "hint": "调整界面与对话区域的字体大小（编辑器字号在编辑器设置中配置）。",
+      "uiSizeLabel": "界面字体",
+      "uiSizeHint": "调整导航、面板、设置等所有界面元素的字体大小。",
+      "levels": {
+        "compact": "紧凑",
+        "small": "小",
+        "default": "默认",
+        "medium": "中等",
+        "large": "大",
+        "custom": "自定义"
+      },
+      "customPxLabel": "自定义大小（12–20 px）",
+      "customPxPlaceholder": "14",
+      "customPxOutOfRange": "请输入 12–20 之间的整数",
+      "resetButton": "恢复默认",
+      "previewText": "BitFun 是一个由 AI 驱动的编程环境。The quick brown fox jumps over the lazy dog.",
+      "flowChatLabel": "对话区域",
+      "flowChatHint": "关闭时对话区域比界面大 1 px，并随界面档位变化。开启后在下方从列表中选择 12–20 px。",
+      "flowChatCustomToggle": "自定义对话字号",
+      "flowChatPxOption": "{{n}} px"
+    }
+  }
+}

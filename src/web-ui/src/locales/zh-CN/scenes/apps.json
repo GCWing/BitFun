@@ -39,6 +39,10 @@
       "name": "Cowork",
       "description": "面向办公协作的独立 Agent 应用，适合整理需求、起草内容与推进日常工作。"
     },
+    "design": {
+      "name": "Design",
+      "description": "面向 HTML 原型、视觉稿与设计探索的独立 Agent 应用。"
+    },
     "claw": {
       "name": "Claw",
       "description": "面向个人助理与持续协作场景的独立 Agent 应用，保留上下文与偏好。"

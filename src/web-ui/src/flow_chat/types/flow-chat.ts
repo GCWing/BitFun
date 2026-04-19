@@ -3,7 +3,7 @@
  * Supports mixed streaming output.
  */
 
-import type { DialogTurnKind, SessionKind, TriggerSource } from '@/shared/types/session-history';
+import type { DialogTurnKind, SessionKind, SessionStorageScope, TriggerSource } from '@/shared/types/session-history';
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -201,6 +201,9 @@ export interface Session {
   /** SSH config host for `~/.bitfun/remote_ssh/{host}/...` session paths when disconnected. */
   remoteSshHost?: string;
 
+  /** Persistence namespace for this session. Dispatcher uses `agentic_os`. */
+  storageScope?: SessionStorageScope;
+
   /**
    * Optional parent session id for hierarchical sessions.
    * Used by /btw "side threads" and potentially other derived sessions.
@@ -248,6 +251,7 @@ export interface SessionConfig {
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  storageScope?: SessionStorageScope;
 }
 
 export interface QueuedMessage {

@@ -6,6 +6,7 @@
 
 export type SessionKind = 'normal' | 'btw';
 export type PersistedSessionKind = 'standard' | 'subagent';
+export type SessionStorageScope = 'workspace' | 'agentic_os';
 
 /**
  * Identifies what triggered a dialog turn.
@@ -50,6 +51,7 @@ export interface SessionMetadata {
   remoteSshHost?: string;
   /** Backend unified workspace identity field: localhost for local, SSH host for remote. */
   workspaceHostname?: string;
+  storageScope?: SessionStorageScope;
 }
 
 export type SessionStatus = 'active' | 'archived' | 'completed';

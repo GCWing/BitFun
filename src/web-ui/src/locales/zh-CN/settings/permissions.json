@@ -1,18 +1,6 @@
 {
-  "title": "会话配置",
-  "subtitle": "会话相关 AI 功能与工具执行行为",
-  "features": {
-    "sessionTitle": {
-      "title": "会话标题自动生成",
-      "subtitle": "新对话时 AI 自动生成简洁标题",
-      "warning": "会话标题将使用用户消息的前 20 个字符"
-    },
-    "agentCompanion": {
-      "title": "Agent 伙伴",
-      "subtitle": "在收起的会话输入框中显示像素风格伙伴动画。",
-      "enable": "显示 Agent 伙伴"
-    }
-  },
+  "title": "权限",
+  "subtitle": "工具执行确认、超时与桌面自动化授权",
   "toolExecution": {
     "sectionTitle": "工具执行行为",
     "sectionDescription": "本会话中 AI 调用工具时的确认与超时策略。"
@@ -33,24 +21,11 @@
     "desktopOnly": "Computer use 仅在 BitFun 桌面应用中可用。",
     "platformNote": "说明"
   },
-  "model": {
-    "label": "模型",
-    "primary": "主力模型",
-    "fast": "快速模型"
-  },
-  "common": {
-    "enable": "启用"
-  },
-  "models": {
-    "empty": "暂无可用模型，请先在「模型」中添加模型。",
-    "updateSuccess": "{{agentName}} 将使用 {{modelName}}"
-  },
   "loading": {
     "text": "加载配置中..."
   },
   "messages": {
     "saveSuccess": "设置已保存",
-    "saveFailed": "保存失败",
-    "updateFailed": "设置失败"
+    "saveFailed": "保存失败"
   }
 }

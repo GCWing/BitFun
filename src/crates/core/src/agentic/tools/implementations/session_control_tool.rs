@@ -172,6 +172,8 @@ enum SessionControlAgentType {
     Plan,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
+    #[serde(rename = "Design", alias = "design", alias = "DESIGN")]
+    Design,
 }
 
 impl SessionControlAgentType {
@@ -180,6 +182,7 @@ impl SessionControlAgentType {
             Self::Agentic => "agentic",
             Self::Plan => "Plan",
             Self::Cowork => "Cowork",
+            Self::Design => "Design",
         }
     }
 }
@@ -216,7 +219,8 @@ Optional inputs:
 - "agent_type": Only used by create. Defaults to "agentic".
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
   - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
-  - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc."#
+  - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
+  - "Design": Design-focused agent for HTML prototypes, design artifacts, and visual exploration."#
                 .to_string(),
         )
     }
@@ -244,7 +248,7 @@ Optional inputs:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
+                    "enum": ["agentic", "Plan", "Cowork", "Design"],
                     "description": "Optional agent type when creating a session. Defaults to agentic."
                 }
             },

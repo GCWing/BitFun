@@ -1,0 +1,36 @@
+{
+  "title": "Personalization",
+  "subtitle": "Title generation, Agent companion, and debug mode",
+  "features": {
+    "sessionTitle": {
+      "title": "Auto Session Title",
+      "subtitle": "AI automatically generates concise titles for new conversations",
+      "warning": "Session title will use first 20 characters of user message"
+    },
+    "agentCompanion": {
+      "title": "Agent companion",
+      "subtitle": "Show a pixel-style companion animation in the collapsed chat input.",
+      "enable": "Show Agent companion"
+    }
+  },
+  "model": {
+    "label": "Model",
+    "primary": "Primary Model",
+    "fast": "Fast Model"
+  },
+  "common": {
+    "enable": "Enable"
+  },
+  "models": {
+    "empty": "No available models. Please add models in \"Models\" first.",
+    "updateSuccess": "{{agentName}} will use {{modelName}}"
+  },
+  "loading": {
+    "text": "Loading configuration..."
+  },
+  "messages": {
+    "saveSuccess": "Settings saved",
+    "saveFailed": "Save failed",
+    "updateFailed": "Update failed"
+  }
+}

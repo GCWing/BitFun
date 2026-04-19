@@ -2,13 +2,26 @@
 
 use crate::api::app_state::AppState;
 use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStorageScopeDto {
+    Workspace,
+    AgenticOs,
+}
 
 pub async fn desktop_effective_session_storage_path(
     app_state: &AppState,
-    workspace_path: &str,
+    workspace_path: Option<&str>,
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
+    storage_scope: Option<SessionStorageScopeDto>,
 ) -> std::path::PathBuf {
+    if matches!(storage_scope, Some(SessionStorageScopeDto::AgenticOs)) {
+        return app_state.workspace_service.path_manager().agentic_os_runtime_root();
+    }
+    let workspace_path = workspace_path.unwrap_or_default();
     let conn = remote_connection_id
         .map(str::trim)
         .filter(|s| !s.is_empty());

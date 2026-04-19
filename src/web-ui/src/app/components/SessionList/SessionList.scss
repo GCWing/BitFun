@@ -27,6 +27,22 @@
     text-align: center;
   }
 
+  &__inline-group-label {
+    display: flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 4px 2px 2px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-2xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+
+    &.is-secondary {
+      margin-top: 2px;
+    }
+  }
+
   &__inline-action {
     display: flex;
     align-items: center;
@@ -140,6 +156,10 @@
         background: var(--element-bg-soft);
       }
     }
+
+    &.is-live-app {
+      min-height: 28px;
+    }
   }
 
   &__inline-item-icon {
@@ -157,10 +177,18 @@
       color: var(--color-text-secondary);
     }
 
+    &.is-design {
+      color: color-mix(in srgb, var(--color-accent-500, #8b5cf6) 78%, white);
+    }
+
     &.is-running {
       color: var(--color-text-secondary);
       transition: opacity $motion-fast $easing-standard;
       animation: bitfun-nav-session-spin 1s linear infinite;
+    }
+
+    &.is-live-app {
+      opacity: 1;
     }
 
     .bitfun-nav-panel__inline-item:hover &,
@@ -203,6 +231,22 @@
     font-weight: 500;
     letter-spacing: 0.02em;
     opacity: 0.78;
+  }
+
+  &__inline-item-live-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 14px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-soft) 50%, transparent);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xxs);
+    font-weight: 500;
+    line-height: 1;
   }
 
   &__inline-item-tooltip {

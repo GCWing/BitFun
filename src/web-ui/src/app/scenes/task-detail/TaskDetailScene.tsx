@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Code2,
+  Brush,
   FolderOpen,
   FolderPlus,
   LayoutDashboard,
@@ -26,9 +27,10 @@ import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import type { WorkspaceInfo } from '@/shared/types';
 import {
-  findOpenedWorkspaceForSession,
   compareSessionsForDisplay,
 } from '@/flow_chat/utils/sessionOrdering';
+import { fallbackWorkspaceFolderLabel } from '@/flow_chat/utils/sessionOrdering';
+import { findWorkspaceForSession } from '@/flow_chat/utils/workspaceScope';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import { useOverlayStore } from '../../stores/overlayStore';
@@ -37,17 +39,21 @@ import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
+import { renderLiveAppIcon } from '@/app/scenes/apps/live-app/liveAppIcons';
+import { useRunningLiveAppItems, type RunningLiveAppItem } from '@/app/scenes/apps/live-app/liveAppTaskView';
 import './TaskDetailScene.scss';
 
 const log = createLogger('TaskDetailScene');
+const RECENT_WORKSPACE_LIMIT = 7;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-type ExecMode = 'code' | 'cowork' | 'claw';
+type ExecMode = 'code' | 'cowork' | 'design' | 'claw';
 
 function resolveExecMode(s: Session): ExecMode {
   const m = s.mode?.toLowerCase();
   if (m === 'cowork') return 'cowork';
+  if (m === 'design') return 'design';
   if (m === 'claw') return 'claw';
   return 'code';
 }
@@ -55,12 +61,14 @@ function resolveExecMode(s: Session): ExecMode {
 const MODE_LABELS: Record<ExecMode, string> = {
   code: 'Code',
   cowork: 'Cowork',
+  design: 'Design',
   claw: 'Claw',
 };
 
 function ModeIcon({ mode, size = 13, className }: { mode: ExecMode; size?: number; className?: string }) {
   switch (mode) {
     case 'cowork': return <ListTodo size={size} className={className} />;
+    case 'design': return <Brush size={size} className={className} />;
     case 'claw': return <Sparkles size={size} className={className} />;
     default: return <Code2 size={size} className={className} />;
   }
@@ -152,6 +160,52 @@ const SessionRow: React.FC<SessionRowProps> = ({
   );
 };
 
+interface LiveAppRowProps {
+  app: RunningLiveAppItem;
+  isHighlighted: boolean;
+  formatRelativeTime: (ts: number) => string;
+  onOpen: (appId: string) => void;
+}
+
+const LiveAppRow: React.FC<LiveAppRowProps> = ({
+  app,
+  isHighlighted,
+  formatRelativeTime,
+  onOpen,
+}) => (
+  <div
+    className={[
+      'tds-row',
+      'tds-row--live-app',
+      isHighlighted && 'is-highlighted',
+      'is-running',
+    ].filter(Boolean).join(' ')}
+    role="button"
+    tabIndex={0}
+    onClick={() => onOpen(app.id)}
+    onKeyDown={e => e.key === 'Enter' && onOpen(app.id)}
+  >
+    <span className="tds-row__dot tds-row__dot--running" />
+
+    <span className="tds-row__icon-wrap">
+      <span className="tds-row__live-app-icon">
+        {renderLiveAppIcon(app.icon, 13)}
+      </span>
+    </span>
+
+    <span className="tds-row__body">
+      <span className="tds-row__title">{app.title}</span>
+      <span className="tds-row__meta">
+        <span className="tds-row__badge tds-row__badge--live-app">Live App</span>
+        <span className="tds-row__meta-dot">·</span>
+        <span className="tds-row__meta-item"><Clock size={9} />{formatRelativeTime(app.updatedAt)}</span>
+      </span>
+    </span>
+
+    <ArrowRight size={12} className="tds-row__arrow" />
+  </div>
+);
+
 // ── Mode filter type ──────────────────────────────────────────────────────────
 
 type ModeFilter = 'all' | ExecMode;
@@ -172,6 +226,7 @@ interface WorkspaceRowProps {
   sessionCount: number;
   isActiveWorkspace: boolean;
   isFilterSelected: boolean;
+  isOpenedWorkspace: boolean;
   onSelect: (workspaceId: string) => void;
   onClose: (e: React.MouseEvent, workspaceId: string) => void;
 }
@@ -181,6 +236,7 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
   sessionCount,
   isActiveWorkspace,
   isFilterSelected,
+  isOpenedWorkspace,
   onSelect,
   onClose,
 }) => {
@@ -204,22 +260,25 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
       <span className="tds-ws-row__title">{workspace.name}</span>
       <span className="tds-ws-row__meta">
         {isActiveWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeCurrent')}</span>}
+        {!isOpenedWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeRecent')}</span>}
         <span className="tds-ws-row__meta-item">
           <MessageSquare size={9} />
           {sessionCount}
         </span>
       </span>
     </span>
-    <IconButton
-      size="xs"
-      variant="ghost"
-      className="tds-ws-row__close"
-      tooltip={t('taskDetailScene.closeWorkspace')}
-      onClick={e => onClose(e, workspace.id)}
-      aria-label={t('taskDetailScene.closeWorkspace')}
-    >
-      <X size={11} />
-    </IconButton>
+    {isOpenedWorkspace ? (
+      <IconButton
+        size="xs"
+        variant="ghost"
+        className="tds-ws-row__close"
+        tooltip={t('taskDetailScene.closeWorkspace')}
+        onClick={e => onClose(e, workspace.id)}
+        aria-label={t('taskDetailScene.closeWorkspace')}
+      >
+        <X size={11} />
+      </IconButton>
+    ) : null}
   </div>
   );
 };
@@ -231,8 +290,19 @@ const TaskDetailScene: React.FC = () => {
   const taskDetailSessionId = useSessionCapsuleStore(s => s.taskDetailSessionId);
   const closeTaskDetail = useSessionCapsuleStore(s => s.closeTaskDetail);
   const closeOverlay = useOverlayStore(s => s.closeOverlay);
+  const openOverlay = useOverlayStore(s => s.openOverlay);
+  const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const runningLiveApps = useRunningLiveAppItems();
 
-  const { openedWorkspacesList, setActiveWorkspace, currentWorkspace, openWorkspace, closeWorkspaceById } = useWorkspaceContext();
+  const {
+    openedWorkspacesList,
+    recentWorkspaces,
+    setActiveWorkspace,
+    switchWorkspace,
+    currentWorkspace,
+    openWorkspace,
+    closeWorkspaceById,
+  } = useWorkspaceContext();
 
   const formatRelativeTime = useCallback(
     (ts: number) => {
@@ -306,17 +376,33 @@ const TaskDetailScene: React.FC = () => {
     [flowChatState.sessions, qNorm, sessionDisplayTitle]
   );
 
-  // Execution sessions tied to an opened workspace only
+  const recentWorkspaceScope = useMemo(() => {
+    const scope = new Map<string, WorkspaceInfo>();
+    recentWorkspaces.slice(0, RECENT_WORKSPACE_LIMIT).forEach(workspace => {
+      scope.set(workspace.id, workspace);
+    });
+    openedWorkspacesList.forEach(workspace => {
+      scope.set(workspace.id, workspace);
+    });
+    return Array.from(scope.values());
+  }, [recentWorkspaces, openedWorkspacesList]);
+
+  const openedWorkspaceIdSet = useMemo(
+    () => new Set(openedWorkspacesList.map(workspace => workspace.id)),
+    [openedWorkspacesList]
+  );
+
+  // Execution sessions tied to recent/opened workspaces.
   const execSessions = useMemo(() => {
     return Array.from(flowChatState.sessions.values())
       .filter(s => s.mode?.toLowerCase() !== 'dispatcher')
       .sort(compareSessionsForDisplay)
       .map(session => {
-        const ws = findOpenedWorkspaceForSession(session, openedWorkspacesList);
+        const ws = findWorkspaceForSession(session, recentWorkspaceScope);
         return { session, workspace: ws ?? null };
       })
       .filter((row): row is { session: Session; workspace: WorkspaceInfo } => row.workspace !== null);
-  }, [flowChatState.sessions, openedWorkspacesList]);
+  }, [flowChatState.sessions, recentWorkspaceScope]);
 
   const sessionCountByWorkspaceId = useMemo(() => {
     const m = new Map<string, number>();
@@ -327,20 +413,20 @@ const TaskDetailScene: React.FC = () => {
   }, [execSessions]);
 
   const filteredWorkspaces = useMemo(() => {
-    return openedWorkspacesList.filter(ws =>
+    return recentWorkspaceScope.filter(ws =>
       matchesQuery(ws.name, qNorm) || matchesQuery(ws.rootPath ?? '', qNorm)
     );
-  }, [openedWorkspacesList, qNorm]);
+  }, [recentWorkspaceScope, qNorm]);
 
   const wsSelectOptions = useMemo<SelectOption[]>(
     () => [
       { label: t('taskDetailScene.allWorkspaces'), value: 'all' },
-      ...openedWorkspacesList.map(ws => ({ label: ws.name, value: ws.id })),
+      ...recentWorkspaceScope.map(ws => ({ label: ws.name, value: ws.id })),
     ],
-    [openedWorkspacesList, t]
+    [recentWorkspaceScope, t]
   );
 
-  const showWorkspaceLabelsOnSessions = openedWorkspacesList.length > 1;
+  const showWorkspaceLabelsOnSessions = recentWorkspaceScope.length > 1;
 
   // Filtered exec sessions (opened workspaces only)
   const filteredExec = useMemo(() => {
@@ -362,6 +448,7 @@ const TaskDetailScene: React.FC = () => {
     () => filteredExec.filter(({ session }) => runningIds.has(session.sessionId)).length,
     [filteredExec, runningIds]
   );
+  const totalRunningCount = runningExecCount + runningLiveApps.length;
 
   const handleWorkspacePaneSelect = useCallback((workspaceId: string) => {
     setWsFilter(prev => (prev === workspaceId ? 'all' : workspaceId));
@@ -391,7 +478,10 @@ const TaskDetailScene: React.FC = () => {
 
   const handleOpenSession = useCallback(async (session: Session) => {
     try {
-      const ws = findOpenedWorkspaceForSession(session, openedWorkspacesList);
+      const ws = findWorkspaceForSession(session, recentWorkspaceScope);
+      if (ws && !openedWorkspaceIdSet.has(ws.id)) {
+        await switchWorkspace(ws);
+      }
       const mustActivate = ws && ws.id !== currentWorkspace?.id;
       await openMainSession(session.sessionId, {
         workspaceId: ws?.id,
@@ -402,7 +492,20 @@ const TaskDetailScene: React.FC = () => {
     } catch (e) {
       log.error('Failed to open session', e);
     }
-  }, [openedWorkspacesList, currentWorkspace?.id, setActiveWorkspace, closeTaskDetail, closeOverlay]);
+  }, [
+    recentWorkspaceScope,
+    openedWorkspaceIdSet,
+    switchWorkspace,
+    currentWorkspace?.id,
+    setActiveWorkspace,
+    closeTaskDetail,
+    closeOverlay,
+  ]);
+
+  const handleOpenLiveApp = useCallback((appId: string) => {
+    openOverlay(`live-app:${appId}`);
+    closeTaskDetail();
+  }, [closeTaskDetail, openOverlay]);
 
   return (
     <div className="tds">
@@ -439,7 +542,7 @@ const TaskDetailScene: React.FC = () => {
               <div className="tds-left-pane tds-left-pane--ws tds-left-pane--head">
                 <div className="tds-pane-head">
                   <FolderOpen size={12} className="tds-pane-head__icon tds-pane-head__icon--ws" />
-                  <span className="tds-pane-head__title">{t('taskDetailScene.openedWorkspacesTitle')}</span>
+                  <span className="tds-pane-head__title">{t('taskDetailScene.recentWorkspacesTitle')}</span>
                   <span className="tds-pane-head__count">{filteredWorkspaces.length}</span>
                   <FilterPill
                     label={t('taskDetailScene.filterAll')}
@@ -496,6 +599,7 @@ const TaskDetailScene: React.FC = () => {
                         sessionCount={sessionCountByWorkspaceId.get(ws.id) ?? 0}
                         isActiveWorkspace={currentWorkspace?.id === ws.id}
                         isFilterSelected={wsFilter === ws.id}
+                        isOpenedWorkspace={openedWorkspaceIdSet.has(ws.id)}
                         onSelect={handleWorkspacePaneSelect}
                         onClose={handleCloseWorkspace}
                       />
@@ -515,10 +619,10 @@ const TaskDetailScene: React.FC = () => {
               <span className="tds-rail-head__title">{t('taskDetailScene.workspaceSessionsTitle')}</span>
               <span className="tds-rail-head__count">{filteredExec.length}</span>
 
-              {runningExecCount > 0 && (
+              {totalRunningCount > 0 && (
                 <span className="tds-rail-head__running">
                   <Radio size={9} />
-                  {t('taskDetailScene.runningCount', { count: runningExecCount })}
+                  {t('taskDetailScene.runningCount', { count: totalRunningCount })}
                 </span>
               )}
 
@@ -546,24 +650,41 @@ const TaskDetailScene: React.FC = () => {
             </div>
 
             <div className="tds-rail-list">
-              {filteredExec.length === 0 ? (
+              {filteredExec.length === 0 && runningLiveApps.length === 0 ? (
                 <div className="tds-empty">
                   <Code2 size={32} />
                   <p>{execSessions.length === 0 ? t('taskDetailScene.emptyWorkspaceSessions') : t('taskDetailScene.emptySessionsFiltered')}</p>
                 </div>
               ) : (
-                filteredExec.map(({ session, workspace }) => (
-                  <SessionRow
-                    key={session.sessionId}
-                    session={session}
-                    isHighlighted={session.sessionId === taskDetailSessionId}
-                    statusVariant={getStatusVariant(session, runningIds)}
-                    showMode
-                    workspaceName={showWorkspaceLabelsOnSessions ? workspace.name : undefined}
-                    formatRelativeTime={formatRelativeTime}
-                    onOpen={handleOpenSession}
-                  />
-                ))
+                <>
+                  {runningLiveApps.map(app => (
+                    <LiveAppRow
+                      key={app.id}
+                      app={app}
+                      isHighlighted={activeOverlay === app.overlayId}
+                      formatRelativeTime={formatRelativeTime}
+                      onOpen={handleOpenLiveApp}
+                    />
+                  ))}
+                  {filteredExec.map(({ session, workspace }) => (
+                    <SessionRow
+                      key={session.sessionId}
+                      session={session}
+                      isHighlighted={session.sessionId === taskDetailSessionId}
+                      statusVariant={getStatusVariant(session, runningIds)}
+                      showMode
+                      workspaceName={
+                        showWorkspaceLabelsOnSessions
+                          ? openedWorkspaceIdSet.has(workspace.id)
+                            ? workspace.name
+                            : `${workspace.name || fallbackWorkspaceFolderLabel(workspace.rootPath)} · ${t('taskDetailScene.badgeRecent')}`
+                          : undefined
+                      }
+                      formatRelativeTime={formatRelativeTime}
+                      onOpen={handleOpenSession}
+                    />
+                  ))}
+                </>
               )}
             </div>
           </div>

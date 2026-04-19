@@ -17,6 +17,7 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { SessionKind } from '@/shared/types/session-history';
+import type { SessionMetadata } from '@/shared/types/session-history';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -32,6 +33,8 @@ export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
+  private metadataPreloadedWorkspaceScopes = new Set<string>();
+  private warmedSessionIds = new Set<string>();
   
   private silentMode = false;
 
@@ -130,6 +133,46 @@ export class FlowChatStore {
     this.notifyListeners();
   }
 
+  private getWorkspaceScopeKey(
+    workspacePath: string,
+    remoteConnectionId?: string | null,
+    remoteSshHost?: string | null
+  ): string {
+    return [
+      workspacePath.trim(),
+      remoteConnectionId?.trim() ?? '',
+      remoteSshHost?.trim().toLowerCase() ?? '',
+    ].join('::');
+  }
+
+  public hasWorkspaceMetadataPreloaded(
+    workspacePath: string,
+    remoteConnectionId?: string | null,
+    remoteSshHost?: string | null
+  ): boolean {
+    return this.metadataPreloadedWorkspaceScopes.has(
+      this.getWorkspaceScopeKey(workspacePath, remoteConnectionId, remoteSshHost)
+    );
+  }
+
+  public markWorkspaceMetadataPreloaded(
+    workspacePath: string,
+    remoteConnectionId?: string | null,
+    remoteSshHost?: string | null
+  ): void {
+    this.metadataPreloadedWorkspaceScopes.add(
+      this.getWorkspaceScopeKey(workspacePath, remoteConnectionId, remoteSshHost)
+    );
+  }
+
+  public hasSessionHistoryWarmed(sessionId: string): boolean {
+    return this.warmedSessionIds.has(sessionId);
+  }
+
+  public markSessionHistoryWarmed(sessionId: string): void {
+    this.warmedSessionIds.add(sessionId);
+  }
+
   private collectCascadeSessionIds(
     rootSessionId: string,
     sessions: Map<string, Session>
@@ -190,7 +233,8 @@ export class FlowChatStore {
     mode?: string,
     workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -215,6 +259,7 @@ export class FlowChatStore {
         workspaceId: config.workspaceId,
         remoteConnectionId,
         remoteSshHost,
+        storageScope: storageScope ?? config.storageScope,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
         btwThreads: [],
@@ -243,7 +288,8 @@ export class FlowChatStore {
     workspacePath?: string,
     meta?: { parentSessionId?: string; sessionKind?: SessionKind; btwOrigin?: Session['btwOrigin'] },
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -272,6 +318,7 @@ export class FlowChatStore {
         workspacePath,
         remoteConnectionId,
         remoteSshHost,
+        storageScope,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
         btwThreads: [],
@@ -695,6 +742,9 @@ export class FlowChatStore {
     }
 
     const removedSessionIdSet = new Set(removedSessionIds);
+    removedSessionIds.forEach(sessionId => {
+      this.warmedSessionIds.delete(sessionId);
+    });
 
     this.setState(prev => {
       const newSessions = new Map(prev.sessions);
@@ -1470,108 +1520,171 @@ export class FlowChatStore {
    * Initialize by loading persisted session metadata from disk
    * Clears sessions from other workspaces, then loads sessions for the target workspace.
    */
+  public async hydrateWorkspaceSessionsMetadata(
+    metadataList: SessionMetadata[],
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope
+  ): Promise<number> {
+    const { stateMachineManager } = await import('../state-machine');
+    metadataList.forEach(metadata => {
+      stateMachineManager.getOrCreate(metadata.sessionId);
+    });
+
+    let insertedCount = 0;
+    const processSession = async (metadata: SessionMetadata) => {
+      const existingSession = this.state.sessions.get(metadata.sessionId);
+      const relationship = deriveSessionRelationshipFromMetadata(metadata);
+      const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
+
+      if (existingSession) {
+        const incomingUpdatedAt = metadata.lastActiveAt ?? metadata.createdAt ?? 0;
+        const existingUpdatedAt =
+          existingSession.updatedAt ??
+          existingSession.lastActiveAt ??
+          existingSession.lastFinishedAt ??
+          existingSession.createdAt;
+        if (incomingUpdatedAt <= existingUpdatedAt) {
+          return;
+        }
+
+        this.setState(prev => {
+          const currentSession = prev.sessions.get(metadata.sessionId);
+          if (!currentSession) return prev;
+
+          const nextSessions = new Map(prev.sessions);
+          nextSessions.set(metadata.sessionId, {
+            ...currentSession,
+            title: metadata.sessionName,
+            lastActiveAt: metadata.lastActiveAt,
+            lastFinishedAt,
+            updatedAt: incomingUpdatedAt,
+            todos: metadata.todos || currentSession.todos || [],
+            workspacePath: metadata.workspacePath || currentSession.workspacePath || workspacePath,
+            remoteConnectionId: metadata.remoteConnectionId || currentSession.remoteConnectionId || remoteConnectionId,
+            remoteSshHost:
+              metadata.remoteSshHost ||
+              metadata.workspaceHostname ||
+              currentSession.remoteSshHost ||
+              remoteSshHost,
+            storageScope: metadata.storageScope || currentSession.storageScope || storageScope || 'workspace',
+            parentSessionId: relationship.parentSessionId,
+            sessionKind: relationship.sessionKind,
+            btwOrigin: relationship.btwOrigin,
+            isHistorical: currentSession.dialogTurns.length === 0 ? true : currentSession.isHistorical,
+          });
+          return {
+            ...prev,
+            sessions: nextSessions,
+          };
+        });
+        return;
+      }
+
+      let maxContextTokens = 128128;
+      try {
+        const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
+        const models = await configManager.getConfig<any[]>('ai.models') || [];
+
+        if (metadata.modelName) {
+          const model = models.find((m: any) => m.name === metadata.modelName || m.id === metadata.modelName);
+          if (model?.context_window) {
+            maxContextTokens = model.context_window;
+          }
+        }
+
+        if (maxContextTokens === 128128) {
+          const defaultModels = await configManager.getConfig<Record<string, string>>('ai.default_models');
+          const primaryModelId = defaultModels?.primary;
+
+          if (primaryModelId) {
+            const primaryModel = models.find((m: any) => m.id === primaryModelId);
+            if (primaryModel?.context_window) {
+              maxContextTokens = primaryModel.context_window;
+            }
+          }
+        }
+      } catch (error) {
+        log.warn('Failed to get model context window size, using default', { sessionId: metadata.sessionId, error });
+      }
+
+      this.setState(prev => {
+        if (prev.sessions.has(metadata.sessionId)) {
+          return prev;
+        }
+
+        const VALID_AGENT_TYPES = ['agentic', 'debug', 'Plan', 'Cowork', 'Design', 'Claw', 'Dispatcher'];
+        const rawAgentType = metadata.agentType || 'agentic';
+        const validatedAgentType = VALID_AGENT_TYPES.includes(rawAgentType) ? rawAgentType : 'agentic';
+
+        if (rawAgentType !== validatedAgentType) {
+          log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
+        }
+
+        const session: Session = {
+          sessionId: metadata.sessionId,
+          title: metadata.sessionName,
+          titleStatus: 'generated',
+          dialogTurns: [],
+          status: 'idle',
+          config: {
+            agentType: validatedAgentType,
+            modelName: metadata.modelName,
+          },
+          createdAt: metadata.createdAt,
+          lastActiveAt: metadata.lastActiveAt,
+          lastFinishedAt,
+          updatedAt: metadata.lastActiveAt ?? metadata.createdAt,
+          error: null,
+          isHistorical: true,
+          todos: metadata.todos || [],
+          maxContextTokens,
+          mode: validatedAgentType,
+          workspacePath: metadata.workspacePath || workspacePath,
+          remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
+          remoteSshHost:
+            metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
+          storageScope: metadata.storageScope || storageScope || 'workspace',
+          parentSessionId: relationship.parentSessionId,
+          sessionKind: relationship.sessionKind,
+          btwThreads: [],
+          btwOrigin: relationship.btwOrigin,
+        };
+
+        const newSessions = new Map(prev.sessions);
+        newSessions.set(metadata.sessionId, session);
+
+        insertedCount += 1;
+
+        return {
+          ...prev,
+          sessions: newSessions,
+        };
+      });
+    };
+
+    await Promise.all(metadataList.map(processSession));
+    this.markWorkspaceMetadataPreloaded(workspacePath, remoteConnectionId, remoteSshHost);
+    return insertedCount;
+  }
+
   public async initializeFromDisk(
     workspacePath: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope
   ): Promise<void> {
     try {
       const { sessionAPI } = await import('@/infrastructure/api');
-      const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
-
-      const { stateMachineManager } = await import('../state-machine');
-      sessions.forEach(metadata => {
-        stateMachineManager.getOrCreate(metadata.sessionId);
-      });
-      
-      const processSession = async (metadata: any) => {
-        const existingSession = this.state.sessions.get(metadata.sessionId);
-        if (existingSession) {
-          return;
-        }
-        
-        let maxContextTokens = 128128;
-        try {
-          const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-          const models = await configManager.getConfig<any[]>('ai.models') || [];
-          
-          if (metadata.modelName) {
-            const model = models.find((m: any) => m.name === metadata.modelName || m.id === metadata.modelName);
-            if (model?.context_window) {
-              maxContextTokens = model.context_window;
-            }
-          }
-          
-          if (maxContextTokens === 128128) {
-            const defaultModels = await configManager.getConfig<Record<string, string>>('ai.default_models');
-            const primaryModelId = defaultModels?.primary;
-            
-            if (primaryModelId) {
-              const primaryModel = models.find((m: any) => m.id === primaryModelId);
-              if (primaryModel?.context_window) {
-                maxContextTokens = primaryModel.context_window;
-              }
-            }
-          }
-        } catch (error) {
-          log.warn('Failed to get model context window size, using default', { sessionId: metadata.sessionId, error });
-        }
-        
-        const relationship = deriveSessionRelationshipFromMetadata(metadata);
-        const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
-
-        this.setState(prev => {
-          if (prev.sessions.has(metadata.sessionId)) {
-            return prev;
-          }
-          
-          const VALID_AGENT_TYPES = ['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Dispatcher'];
-          const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = VALID_AGENT_TYPES.includes(rawAgentType) ? rawAgentType : 'agentic';
-          
-          if (rawAgentType !== validatedAgentType) {
-            log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
-          }
-          
-          const session: Session = {
-            sessionId: metadata.sessionId,
-            title: metadata.sessionName,
-            titleStatus: 'generated',
-            dialogTurns: [],
-            status: 'idle',
-            config: {
-              agentType: validatedAgentType,
-              modelName: metadata.modelName,
-            },
-            createdAt: metadata.createdAt,
-            lastActiveAt: metadata.lastActiveAt,
-            lastFinishedAt,
-            error: null,
-            isHistorical: true,
-            todos: (metadata as any).todos || [],
-            maxContextTokens,
-            mode: validatedAgentType,
-            workspacePath: (metadata as any).workspacePath || workspacePath,
-            remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
-            remoteSshHost:
-              metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
-            parentSessionId: relationship.parentSessionId,
-            sessionKind: relationship.sessionKind,
-            btwThreads: [],
-            btwOrigin: relationship.btwOrigin,
-          };
-          
-          const newSessions = new Map(prev.sessions);
-          newSessions.set(metadata.sessionId, session);
-          
-          return {
-            ...prev,
-            sessions: newSessions,
-          };
-        });
-      };
-      
-      await Promise.all(sessions.map(processSession));
+      const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost, storageScope);
+      await this.hydrateWorkspaceSessionsMetadata(
+        sessions,
+        workspacePath,
+        remoteConnectionId,
+        remoteSshHost,
+        storageScope
+      );
     } catch (error) {
       log.error('Failed to load persisted sessions', error);
     }
@@ -1585,7 +1698,8 @@ export class FlowChatStore {
     workspacePath: string,
     limit?: number,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope
   ): Promise<void> {
     try {
       const { stateMachineManager } = await import('../state-machine');
@@ -1593,7 +1707,13 @@ export class FlowChatStore {
       
       try {
         const { agentAPI } = await import('@/infrastructure/api');
-        await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
+        await agentAPI.restoreSession(
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          storageScope
+        );
       } catch (error) {
         log.warn('Backend session restore failed (may be new session)', { sessionId, error });
       }
@@ -1604,7 +1724,8 @@ export class FlowChatStore {
         workspacePath,
         limit,
         remoteConnectionId,
-        remoteSshHost
+        remoteSshHost,
+        storageScope
       );
       
       const dialogTurns = this.convertToDialogTurns(turns);
@@ -1617,6 +1738,7 @@ export class FlowChatStore {
           ...session,
           dialogTurns,
           isHistorical: false,
+          storageScope: session.storageScope ?? storageScope,
         };
         
         const newSessions = new Map(prev.sessions);
@@ -1627,6 +1749,7 @@ export class FlowChatStore {
           sessions: newSessions,
         };
       });
+      this.markSessionHistoryWarmed(sessionId);
     } catch (error) {
       log.error('Failed to load session history', { sessionId, error });
       throw error;

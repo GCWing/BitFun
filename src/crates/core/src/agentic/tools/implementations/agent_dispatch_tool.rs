@@ -18,7 +18,7 @@ use std::path::Path;
 /// AgentDispatch tool — creates and manages Standard agent sessions.
 ///
 /// Unlike the existing SessionControl tool, AgentDispatch:
-/// - Supports all Mode agent types (including Claw, debug, Dispatcher)
+/// - Supports all Mode agent types (including Claw, Design, debug, Dispatcher)
 /// - Accepts an optional task_briefing sent as the first message to the new session
 /// - Provides a `list` action that combines recent workspaces with their sessions
 /// - Provides a `status` action scoped to sessions created by this Dispatcher
@@ -92,7 +92,7 @@ impl AgentDispatchTool {
     }
 
     fn valid_agent_types() -> &'static [&'static str] {
-        &["agentic", "Plan", "Cowork", "debug", "Claw"]
+        &["agentic", "Plan", "Cowork", "Design", "debug", "Claw"]
     }
 
     fn creator_marker(context: &ToolUseContext) -> BitFunResult<String> {
@@ -141,7 +141,7 @@ Actions:
 
 Parameters for "create":
 - workspace: Absolute path to the project directory, or "global" for non-project tasks.
-- agent_type: One of "agentic" (coding), "Plan" (planning), "Cowork" (collaboration), "debug" (debugging), "Claw" (desktop automation).
+- agent_type: One of "agentic" (coding), "Plan" (planning), "Cowork" (collaboration), "Design" (design work), "debug" (debugging), "Claw" (desktop automation).
 - session_name: Short descriptive name for the session (e.g. "Fix login bug").
 - task_briefing: Full instructions sent as the first message to the new agent. Include all relevant context since the agent cannot see the Dispatcher conversation.
 
@@ -168,7 +168,7 @@ Parameters for "status":
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork", "debug", "Claw"],
+                    "enum": ["agentic", "Plan", "Cowork", "Design", "debug", "Claw"],
                     "description": "Type of agent to create. Required for create."
                 },
                 "session_name": {

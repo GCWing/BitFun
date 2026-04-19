@@ -286,6 +286,11 @@ impl PathManager {
         self.bitfun_home_dir().join("projects")
     }
 
+    /// Get the Agentic OS global runtime root: ~/.bitfun/core/agentic_os/
+    pub fn agentic_os_runtime_root(&self) -> PathBuf {
+        self.bitfun_home_dir().join("core").join("agentic_os")
+    }
+
     /// Get the runtime root for a workspace: ~/.bitfun/projects/<workspace-slug>/
     pub fn project_runtime_root(&self, workspace_path: &Path) -> PathBuf {
         self.projects_root()

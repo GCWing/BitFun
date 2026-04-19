@@ -253,7 +253,7 @@ export const ToolbarMode: React.FC = () => {
     }
   }, [toolbarState.pendingToolId]);
   
-  const dispatchToolbarCreateSession = useCallback((mode: 'code' | 'cowork') => {
+  const dispatchToolbarCreateSession = useCallback((mode: 'code' | 'cowork' | 'design') => {
     window.dispatchEvent(new CustomEvent('toolbar-create-session', { detail: { mode } }));
     setShowSessionPicker(false);
   }, []);
@@ -333,6 +333,22 @@ export const ToolbarMode: React.FC = () => {
             </span>
             <span className="bitfun-toolbar-mode__session-item-label">
               {t('toolCards.toolbar.newCoworkSessionItem')}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="bitfun-toolbar-mode__session-item bitfun-toolbar-mode__session-item--new"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              dispatchToolbarCreateSession('design');
+            }}
+          >
+            <span className="bitfun-toolbar-mode__session-item-icon" aria-hidden>
+              <Plus size={13} strokeWidth={2.25} />
+            </span>
+            <span className="bitfun-toolbar-mode__session-item-label">
+              {t('toolCards.toolbar.newDesignSessionItem')}
             </span>
           </button>
           <div className="bitfun-toolbar-mode__session-list-divider" role="separator" />

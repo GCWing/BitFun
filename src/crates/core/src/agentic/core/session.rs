@@ -11,6 +11,14 @@ pub enum SessionKind {
     Subagent,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStorageScope {
+    #[default]
+    Workspace,
+    AgenticOs,
+}
+
 // ============ Session ============
 
 /// Session: contains multiple dialog turns
@@ -140,6 +148,8 @@ pub struct SessionConfig {
     /// SSH config `host` for locating `~/.bitfun/remote_ssh/{host}/.../sessions` when disconnected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_scope: Option<SessionStorageScope>,
     /// Model config ID used by this session (for token usage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
@@ -158,6 +168,7 @@ impl Default for SessionConfig {
             workspace_path: None,
             remote_connection_id: None,
             remote_ssh_host: None,
+            storage_scope: None,
             model_id: None,
         }
     }

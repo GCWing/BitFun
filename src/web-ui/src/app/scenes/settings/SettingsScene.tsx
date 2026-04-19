@@ -18,8 +18,10 @@ import { useSettingsStore } from './settingsStore';
 import SettingsNav from './SettingsNav';
 import './SettingsScene.scss';
 import AIModelConfig from '../../../infrastructure/config/components/AIModelConfig';
-import SessionConfig from '../../../infrastructure/config/components/SessionConfig';
+import PersonalizationConfig from '../../../infrastructure/config/components/PersonalizationConfig';
+import PermissionsConfig from '../../../infrastructure/config/components/PermissionsConfig';
 import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
+import AppearanceConfig from '../../../infrastructure/config/components/AppearanceConfig';
 import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig';
 
 const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTab'));
@@ -37,9 +39,11 @@ const SettingsScene: React.FC = () => {
     );
   } else {
     switch (activeTab) {
+      case 'appearance':       Content = AppearanceConfig; break;
       case 'basics':           Content = BasicsConfig;     break;
       case 'models':           Content = AIModelConfig;    break;
-      case 'session-config':   Content = SessionConfig;    break;
+      case 'personalization':  Content = PersonalizationConfig; break;
+      case 'permissions':      Content = PermissionsConfig; break;
       case 'editor':           Content = EditorConfig;     break;
     }
   }

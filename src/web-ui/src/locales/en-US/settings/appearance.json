@@ -1,0 +1,72 @@
+{
+  "title": "Appearance",
+  "subtitle": "Interface language, theme, and global font size",
+  "appearance": {
+    "title": "Appearance",
+    "hint": "Interface language and visual theme",
+    "language": "Language",
+    "themes": "Themes",
+    "builtIn": "Built-in",
+    "custom": "Custom",
+    "export": "Export",
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete theme \"{{name}}\"?",
+    "languageRowHint": "Choose one language pack as the active UI language.",
+    "themeRowHint": "Choose the interface color theme.",
+    "systemTheme": "Match system",
+    "systemThemeDescription": "Use light or dark theme based on your OS appearance. Updates when the system switches.",
+    "presets": {
+      "bitfun-dark": {
+        "name": "Dark",
+        "description": "Default dark theme"
+      },
+      "bitfun-light": {
+        "name": "Light",
+        "description": "Light theme - Elegant and refined, soft blue-gray tones"
+      },
+      "bitfun-midnight": {
+        "name": "Midnight",
+        "description": "Midnight gray dark theme - Professional and elegant, inspired by JetBrains IDE"
+      },
+      "bitfun-china-style": {
+        "name": "Ink Charm",
+        "description": "Chinese style theme - Rice paper and ink, blue and vermilion, warm and elegant"
+      },
+      "bitfun-china-night": {
+        "name": "Ink Night",
+        "description": "Chinese dark theme - Starlit ink night, moonlight like water, serene and elegant"
+      },
+      "bitfun-cyber": {
+        "name": "Cyber",
+        "description": "Tech-style theme - Deep black hole, neon future, ultimate tech aesthetics"
+      },
+      "bitfun-slate": {
+        "name": "Slate",
+        "description": "Slate gray geometric theme - Deep immersion, high contrast grayscale aesthetics"
+      }
+    },
+    "fontSize": {
+      "title": "Font Size",
+      "hint": "Adjust font size for the UI and chat area (editor font is configured in the editor settings).",
+      "uiSizeLabel": "UI Font",
+      "uiSizeHint": "Controls font size across navigation, panels, settings, and all other UI elements.",
+      "levels": {
+        "compact": "Compact",
+        "small": "Small",
+        "default": "Default",
+        "medium": "Medium",
+        "large": "Large",
+        "custom": "Custom"
+      },
+      "customPxLabel": "Custom size (12–20 px)",
+      "customPxPlaceholder": "14",
+      "customPxOutOfRange": "Please enter an integer between 12 and 20",
+      "resetButton": "Reset to Default",
+      "previewText": "BitFun is an AI-driven programming environment. The quick brown fox jumps over the lazy dog.",
+      "flowChatLabel": "Chat area",
+      "flowChatHint": "When off, chat uses UI +1 px and tracks UI presets. When on, pick a size (12–20 px) from the list below.",
+      "flowChatCustomToggle": "Custom chat font size",
+      "flowChatPxOption": "{{n}} px"
+    }
+  }
+}

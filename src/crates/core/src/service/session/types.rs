@@ -1,6 +1,6 @@
 //! Types for session persistence
 
-use crate::agentic::core::SessionKind;
+use crate::agentic::core::{SessionKind, SessionStorageScope};
 use serde::{Deserialize, Serialize};
 
 /// Session metadata
@@ -88,6 +88,8 @@ pub struct SessionMetadata {
         alias = "workspace_hostname"
     )]
     pub workspace_hostname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "storage_scope")]
+    pub storage_scope: Option<SessionStorageScope>,
 }
 
 /// Session status
@@ -466,6 +468,7 @@ impl SessionMetadata {
             todos: None,
             workspace_path: None,
             workspace_hostname: None,
+            storage_scope: None,
         }
     }
 

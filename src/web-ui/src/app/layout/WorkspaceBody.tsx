@@ -18,6 +18,7 @@ import NotificationButton from '../components/TitleBar/NotificationButton';
 import SessionCapsule from '../components/SessionCapsule/SessionCapsule';
 import WorkspaceFooterActions from '../components/WorkspaceFooterActions/WorkspaceFooterActions';
 import { useOverlayStore } from '../stores/overlayStore';
+import { useLiveAppCatalogSync } from '../scenes/apps/live-app/hooks/useLiveAppCatalogSync';
 import './WorkspaceBody.scss';
 
 interface WorkspaceBodyProps {
@@ -42,6 +43,7 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   sceneOverlay,
 }) => {
   const activeOverlay = useOverlayStore((s) => s.activeOverlay);
+  useLiveAppCatalogSync();
 
   return (
     <div

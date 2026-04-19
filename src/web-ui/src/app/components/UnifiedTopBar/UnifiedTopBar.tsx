@@ -20,9 +20,18 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Info, ListChecks, PictureInPicture2, Search, FolderOpen } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ListChecks,
+  Search,
+  FolderOpen,
+} from 'lucide-react';
 import { Modal, Tooltip, WindowControls } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import type { LocaleId } from '@/infrastructure/i18n/types';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
@@ -50,6 +59,8 @@ import {
 import RemoteControlButton from './RemoteControlButton';
 import GlobalSearchDialog from '../GlobalSearchDialog/GlobalSearchDialog';
 import type { OverlaySceneId } from '../../overlay/types';
+import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
+import { SYSTEM_THEME_ID } from '@/infrastructure/theme/types';
 import './UnifiedTopBar.scss';
 
 const log = createLogger('UnifiedTopBar');
@@ -74,7 +85,14 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
   onClose,
   isMaximized = false,
 }) => {
-  const { t } = useI18n('common');
+  const {
+    t,
+    currentLanguage,
+    supportedLocales,
+    changeLanguage,
+    isChanging: localeChanging,
+  } = useI18n('common');
+  const { themes, themeId, setTheme, loading: themeLoading } = useTheme();
   const { enableToolbarMode } = useToolbarModeContext();
   const { hasWorkspace } = useCurrentWorkspace();
   const { warning } = useNotification();
@@ -86,6 +104,8 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoMenuOpen, setLogoMenuOpen] = useState(false);
+  const [appearanceSubmenuOpen, setAppearanceSubmenuOpen] = useState(false);
+  const [languageSubmenuOpen, setLanguageSubmenuOpen] = useState(false);
   const [logoMenuPosition, setLogoMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
@@ -98,7 +118,45 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
 
   const closeLogoMenu = useCallback(() => {
     setLogoMenuOpen(false);
+    setAppearanceSubmenuOpen(false);
+    setLanguageSubmenuOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (!logoMenuOpen) {
+      setAppearanceSubmenuOpen(false);
+      setLanguageSubmenuOpen(false);
+    }
+  }, [logoMenuOpen]);
+
+  const handleThemePick = useCallback(
+    (id: string) => {
+      void setTheme(id);
+    },
+    [setTheme]
+  );
+
+  const toggleAppearanceSubmenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setLanguageSubmenuOpen(false);
+    setAppearanceSubmenuOpen((v) => !v);
+  }, []);
+
+  const toggleLanguageSubmenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setAppearanceSubmenuOpen(false);
+    setLanguageSubmenuOpen((v) => !v);
+  }, []);
+
+  const handleLocalePick = useCallback(
+    (locale: LocaleId) => {
+      if (localeChanging) return;
+      void changeLanguage(locale);
+    },
+    [changeLanguage, localeChanging]
+  );
 
   const updateLogoMenuPosition = useCallback(() => {
     const anchor = logoMenuAnchorRef.current;
@@ -106,7 +164,8 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
 
     const rect = anchor.getBoundingClientRect();
     const viewportPadding = 8;
-    const estimatedWidth = 240;
+    // Leave room for the appearance flyout (≈ menu + submenu + gap) on narrow windows.
+    const estimatedWidth = 520;
     const maxLeft = window.innerWidth - estimatedWidth - viewportPadding;
 
     setLogoMenuPosition({
@@ -271,10 +330,8 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
       closeOverlay();
       return;
     }
-    void openDispatcherSession({
-      assistantWorkspace: sessionContext?.assistantWorkspace ?? null,
-    });
-  }, [hasOverlay, closeOverlay, sessionContext]);
+    void openDispatcherSession();
+  }, [hasOverlay, closeOverlay]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const now = Date.now();
@@ -368,17 +425,158 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
                     role="menuitem"
                     onClick={handleFloatingMode}
                   >
-                    <PictureInPicture2 size={14} aria-hidden="true" />
-                    <span>{t('header.switchToToolbar')}</span>
+                    {t('header.switchToToolbar')}
                   </button>
+                  <div className="unified-top-bar__appearance-wrap">
+                    <button
+                      type="button"
+                      className={`unified-top-bar__menu-item unified-top-bar__menu-item--submenu-trigger${
+                        appearanceSubmenuOpen ? ' is-open' : ''
+                      }`}
+                      role="menuitem"
+                      aria-haspopup="menu"
+                      aria-expanded={appearanceSubmenuOpen}
+                      onClick={toggleAppearanceSubmenu}
+                    >
+                      <span className="unified-top-bar__menu-item-label">{t('header.appearance')}</span>
+                      {appearanceSubmenuOpen ? (
+                        <ChevronDown
+                          size={14}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                          className="unified-top-bar__submenu-expand-icon"
+                        />
+                      ) : (
+                        <ChevronRight
+                          size={14}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                          className="unified-top-bar__submenu-expand-icon"
+                        />
+                      )}
+                    </button>
+                    {appearanceSubmenuOpen && (
+                      <div
+                        className="unified-top-bar__submenu"
+                        role="menu"
+                        aria-label={t('header.appearanceThemeList')}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className={`unified-top-bar__submenu-item${
+                            themeId === SYSTEM_THEME_ID ? ' is-active' : ''
+                          }`}
+                          role="menuitem"
+                          disabled={themeLoading}
+                          onClick={() => handleThemePick(SYSTEM_THEME_ID)}
+                        >
+                          <span className="unified-top-bar__submenu-item-label">
+                            {t('header.followSystemTheme')}
+                          </span>
+                          {themeId === SYSTEM_THEME_ID ? (
+                            <Check
+                              size={14}
+                              strokeWidth={2.5}
+                              className="unified-top-bar__submenu-item-check"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </button>
+                        {themes.map((th) => {
+                          const isActive = themeId !== SYSTEM_THEME_ID && themeId === th.id;
+                          return (
+                            <button
+                              key={th.id}
+                              type="button"
+                              className={`unified-top-bar__submenu-item${isActive ? ' is-active' : ''}`}
+                              role="menuitem"
+                              disabled={themeLoading}
+                              onClick={() => handleThemePick(th.id)}
+                            >
+                              <span className="unified-top-bar__submenu-item-label">{th.name}</span>
+                              {isActive ? (
+                                <Check
+                                  size={14}
+                                  strokeWidth={2.5}
+                                  className="unified-top-bar__submenu-item-check"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="unified-top-bar__language-wrap">
+                    <button
+                      type="button"
+                      className={`unified-top-bar__menu-item unified-top-bar__menu-item--submenu-trigger${
+                        languageSubmenuOpen ? ' is-open' : ''
+                      }`}
+                      role="menuitem"
+                      aria-haspopup="menu"
+                      aria-expanded={languageSubmenuOpen}
+                      onClick={toggleLanguageSubmenu}
+                    >
+                      <span className="unified-top-bar__menu-item-label">{t('header.language')}</span>
+                      {languageSubmenuOpen ? (
+                        <ChevronDown
+                          size={14}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                          className="unified-top-bar__submenu-expand-icon"
+                        />
+                      ) : (
+                        <ChevronRight
+                          size={14}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                          className="unified-top-bar__submenu-expand-icon"
+                        />
+                      )}
+                    </button>
+                    {languageSubmenuOpen && (
+                      <div
+                        className="unified-top-bar__submenu"
+                        role="menu"
+                        aria-label={t('header.languageList')}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {supportedLocales.map((loc) => {
+                          const isActive = currentLanguage === loc.id;
+                          return (
+                            <button
+                              key={loc.id}
+                              type="button"
+                              className={`unified-top-bar__submenu-item${isActive ? ' is-active' : ''}`}
+                              role="menuitem"
+                              disabled={localeChanging}
+                              onClick={() => handleLocalePick(loc.id)}
+                            >
+                              <span className="unified-top-bar__submenu-item-label">{loc.nativeName}</span>
+                              {isActive ? (
+                                <Check
+                                  size={14}
+                                  strokeWidth={2.5}
+                                  className="unified-top-bar__submenu-item-check"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     className="unified-top-bar__menu-item"
                     role="menuitem"
                     onClick={handleLogoAbout}
                   >
-                    <Info size={14} aria-hidden="true" />
-                    <span>{t('header.about')}</span>
+                    {t('header.about')}
                   </button>
                 </div>
               </>,

@@ -19,7 +19,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Code2, ListChecks, LayoutDashboard, ListTodo, Pin, Plus, Sparkles } from 'lucide-react';
+import { Brush, Code2, ListChecks, LayoutDashboard, LayoutGrid, ListTodo, Pin, Plus, Sparkles } from 'lucide-react';
 import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -36,6 +36,12 @@ import { resolveSessionRelationship } from '../../../flow_chat/utils/sessionMeta
 import { compareSessionsForDisplay, findOpenedWorkspaceForSession } from '../../../flow_chat/utils/sessionOrdering';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { createLogger } from '@/shared/utils/logger';
+import { renderLiveAppIcon } from '@/app/scenes/apps/live-app/liveAppIcons';
+import {
+  resolveActiveRunningLiveAppId,
+  useRunningLiveAppItems,
+  type RunningLiveAppItem,
+} from '@/app/scenes/apps/live-app/liveAppTaskView';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import SessionList from '../SessionList/SessionList';
@@ -44,12 +50,14 @@ import './SessionCapsule.scss';
 
 const log = createLogger('SessionCapsule');
 const AGENT_SCENE = 'session' as const;
+const RECENT_SESSION_LIMIT = 7;
 
-type SessionMode = 'code' | 'cowork' | 'claw';
+type SessionMode = 'code' | 'cowork' | 'design' | 'claw';
 
 const resolveSessionModeType = (session: Session): SessionMode => {
   const normalizedMode = session.mode?.toLowerCase();
   if (normalizedMode === 'cowork') return 'cowork';
+  if (normalizedMode === 'design') return 'design';
   if (normalizedMode === 'claw') return 'claw';
   return 'code';
 };
@@ -105,10 +113,13 @@ const SessionCapsule: React.FC = () => {
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
+  const [hoverExpanded, setHoverExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const runningLiveApps = useRunningLiveAppItems();
+  const activeLiveAppId = resolveActiveRunningLiveAppId(activeOverlay);
 
   // Capsule is only visible on the base Agent scene; every overlay uses SessionListDialog instead.
-  const usesDialog = activeOverlay !== null;
+  const usesDialog = activeOverlay !== null && !activeOverlay.startsWith('live-app:');
 
   useEffect(() => {
     const unsub = flowChatStore.subscribe((s) => setFlowChatState(s));
@@ -152,7 +163,6 @@ const SessionCapsule: React.FC = () => {
     [activeBtwSessionData?.childSessionId, activeSessionId, activeTabId]
   );
 
-  /** All running sessions (same order as the list), shown in full inside the collapsed capsule */
   const runningSessionsOrdered = useMemo((): Session[] => {
     if (runningSessionIds.size === 0) return [];
     return Array.from(flowChatState.sessions.values())
@@ -160,13 +170,15 @@ const SessionCapsule: React.FC = () => {
       .sort(compareSessionsForDisplay);
   }, [runningSessionIds, flowChatState.sessions]);
 
-  /** Exclude Agentic OS Dispatcher sessions — same filter as SessionList / SessionListDialog. */
-  const sessionCount = useMemo(
-    () =>
-      Array.from(flowChatState.sessions.values()).filter(
-        (s) => s.mode?.toLowerCase() !== 'dispatcher'
-      ).length,
-    [flowChatState.sessions]
+  const runningItems = useMemo(
+    (): Array<
+      | { kind: 'session'; session: Session }
+      | { kind: 'live-app'; app: RunningLiveAppItem }
+    > => [
+      ...runningLiveApps.map(app => ({ kind: 'live-app' as const, app })),
+      ...runningSessionsOrdered.map(session => ({ kind: 'session' as const, session })),
+    ],
+    [runningLiveApps, runningSessionsOrdered]
   );
 
   const handleSwitchToSession = useCallback(
@@ -222,11 +234,17 @@ const SessionCapsule: React.FC = () => {
     const state = flowChatStore.getState();
     const targetId =
       state.activeSessionId ??
-      Array.from(state.sessions.values()).sort(compareSessionsForDisplay)[0]?.sessionId;
+      Array.from(state.sessions.values())
+        .filter(session => session.mode?.toLowerCase() !== 'dispatcher')
+        .sort(compareSessionsForDisplay)[0]?.sessionId;
     if (!targetId) return;
     openTaskDetail(targetId);
     openOverlay('task-detail');
   }, [openTaskDetail, openOverlay]);
+
+  const handleOpenLiveApp = useCallback((appId: string) => {
+    openOverlay(`live-app:${appId}`);
+  }, [openOverlay]);
 
   const toggle = useCallback(() => {
     setExpanded((v) => {
@@ -247,6 +265,12 @@ const SessionCapsule: React.FC = () => {
   useEffect(() => {
     if (!expanded) setListFilterQuery('');
   }, [expanded]);
+
+  useEffect(() => {
+    if (expanded || runningSessionIds.size === 0) {
+      setHoverExpanded(false);
+    }
+  }, [expanded, runningSessionIds.size, runningLiveApps.length]);
 
   // Collapse when clicking outside the capsule (expanded only).
   // Ignore portaled UI that belongs to the session list (see SessionList).
@@ -278,19 +302,29 @@ const SessionCapsule: React.FC = () => {
   // In any overlay scene: session list is opened via SessionListDialog — hide capsule entirely.
   if (usesDialog) return null;
 
-  const hasRunning = !expanded && runningSessionsOrdered.length > 0;
+  const runningCount = runningItems.length;
+  const canHoverExpand = !expanded && runningCount > 0;
+  const showExpandedPanel = expanded || hoverExpanded;
 
   return (
     <div
       ref={panelRef}
       className={[
         'session-capsule',
-        expanded ? 'session-capsule--expanded' : '',
-        hasRunning ? 'session-capsule--running' : '',
+        showExpandedPanel ? 'session-capsule--expanded' : '',
+        !showExpandedPanel && runningCount > 0 ? 'session-capsule--running' : '',
       ].filter(Boolean).join(' ')}
       aria-label={t('nav.sections.sessions')}
+      onMouseEnter={canHoverExpand ? () => setHoverExpanded(true) : undefined}
+      onMouseLeave={canHoverExpand ? () => setHoverExpanded(false) : undefined}
+      onFocus={canHoverExpand ? () => setHoverExpanded(true) : undefined}
+      onBlur={canHoverExpand ? (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setHoverExpanded(false);
+        }
+      } : undefined}
     >
-      {expanded ? (
+      {showExpandedPanel ? (
         <>
           {/* Row 1: search field only */}
           <div className="session-capsule__header">
@@ -309,7 +343,11 @@ const SessionCapsule: React.FC = () => {
 
           {/* Task list */}
           <div className="session-capsule__list">
-            <SessionList listAllSessions listFilterQuery={listFilterQuery} />
+            <SessionList
+              listAllSessions
+              listFilterQuery={listFilterQuery}
+              maxSessions={RECENT_SESSION_LIMIT}
+            />
           </div>
 
           {/* Footer: new session + details + pin expand */}
@@ -351,28 +389,64 @@ const SessionCapsule: React.FC = () => {
           </div>
           <NewSessionDialog open={newSessionDialogOpen} onClose={() => setNewSessionDialogOpen(false)} />
         </>
-      ) : runningSessionsOrdered.length > 0 ? (
-        /* ── Running sessions card — wider panel showing each active task ── */
+      ) : runningItems.length > 0 ? (
         <div
           className="session-capsule__running-panel"
           role="group"
           aria-label={t('nav.sessionCapsule.runningSessionsGroupLabel')}
         >
-          {/* Header row: label + running count */}
           <div className="session-capsule__running-hd">
-            <span className="session-capsule__running-hd-label">
-              {t('nav.sessionCapsule.runningSessionsGroupLabel')}
-            </span>
             <span className="session-capsule__running-count">
-              {runningSessionsOrdered.length}
+              {runningItems.length}
             </span>
           </div>
 
-          {/* One row per running session */}
           <div className="session-capsule__running-rows">
-            {runningSessionsOrdered.map((session) => {
+            {runningItems.map(item => {
+              if (item.kind === 'live-app') {
+                const { app } = item;
+                const focused = activeLiveAppId === app.id;
+                return (
+                  <Tooltip
+                    key={app.id}
+                    content={t('nav.sessionCapsule.runningLiveAppTooltip', { title: app.title })}
+                    placement="right"
+                  >
+                    <button
+                      type="button"
+                      className={`session-capsule__running-row${focused ? ' is-active' : ''}`}
+                      onClick={() => handleOpenLiveApp(app.id)}
+                      aria-label={t('nav.sessionCapsule.runningLiveAppTooltip', { title: app.title })}
+                    >
+                      <span
+                        className={[
+                          'session-capsule__mode-avatar',
+                          'is-live-app',
+                          focused ? 'is-focused' : '',
+                        ].filter(Boolean).join(' ')}
+                        aria-hidden
+                      >
+                        {renderLiveAppIcon(app.icon, 12)}
+                      </span>
+                      <span className="session-capsule__running-row-title">{app.title}</span>
+                      <span className="session-capsule__running-row-badge" aria-hidden>
+                        <LayoutGrid size={10} />
+                      </span>
+                    </button>
+                  </Tooltip>
+                );
+              }
+
+              const { session } = item;
               const mode = resolveSessionModeType(session);
-              const ModeIcon = mode === 'cowork' ? ListTodo : mode === 'claw' ? Sparkles : Code2;
+              const ModeIcon =
+                mode === 'cowork'
+                  ? ListTodo
+                  : mode === 'design'
+                    ? Brush
+                    : mode === 'claw'
+                      ? Sparkles
+                      : Code2;
               const focused = isSessionUiFocused(session);
               const title = getSessionListTitle(session);
               return (
@@ -403,20 +477,6 @@ const SessionCapsule: React.FC = () => {
               );
             })}
           </div>
-
-          {/* Footer: expand full task list */}
-          <div className="session-capsule__running-ft">
-            <button
-              type="button"
-              className="session-capsule__open-list-btn"
-              onClick={toggle}
-              aria-label={t('nav.sessionCapsule.openTaskList')}
-              aria-expanded={false}
-            >
-              <ListChecks size={11} strokeWidth={2.3} />
-              <span>{t('nav.sessionCapsule.openTaskList')}</span>
-            </button>
-          </div>
         </div>
       ) : (
         <Tooltip content={t('nav.sections.sessions')} placement="right">
@@ -428,11 +488,6 @@ const SessionCapsule: React.FC = () => {
             aria-expanded={false}
           >
             <ListChecks size={15} />
-            {sessionCount > 0 && (
-              <span className="session-capsule__badge">
-                {sessionCount > 99 ? '99+' : sessionCount}
-              </span>
-            )}
           </button>
         </Tooltip>
       )}

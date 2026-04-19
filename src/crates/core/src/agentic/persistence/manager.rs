@@ -188,6 +188,10 @@ impl PersistenceManager {
     }
 
     fn project_sessions_dir(&self, workspace_path: &Path) -> PathBuf {
+        let agentic_os_runtime_root = self.path_manager.agentic_os_runtime_root();
+        if workspace_path == agentic_os_runtime_root {
+            return agentic_os_runtime_root.join("sessions");
+        }
         self.path_manager.project_sessions_dir(workspace_path)
     }
 
@@ -256,6 +260,12 @@ impl PersistenceManager {
     async fn ensure_runtime_for_write(&self, workspace_path: &Path) -> BitFunResult<()> {
         let remote_mirror_root = PathManager::remote_ssh_mirror_root();
         if workspace_path.starts_with(&remote_mirror_root) {
+            return Ok(());
+        }
+        if workspace_path == self.path_manager.agentic_os_runtime_root() {
+            fs::create_dir_all(self.project_sessions_dir(workspace_path))
+                .await
+                .map_err(|e| BitFunError::io(format!("Failed to create Agentic OS runtime: {}", e)))?;
             return Ok(());
         }
 
@@ -625,6 +635,10 @@ impl PersistenceManager {
                     Some(LOCAL_WORKSPACE_SSH_HOST.to_string())
                 }
             });
+        let storage_scope = session
+            .config
+            .storage_scope
+            .or_else(|| existing.and_then(|value| value.storage_scope));
 
         SessionMetadata {
             session_id: session.session_id.clone(),
@@ -656,6 +670,7 @@ impl PersistenceManager {
             todos: existing.and_then(|value| value.todos.clone()),
             workspace_path: Some(workspace_root),
             workspace_hostname,
+            storage_scope,
         }
     }
 

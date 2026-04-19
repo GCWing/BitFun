@@ -9,7 +9,14 @@ import { buildSessionMetadata } from '../../utils/sessionMetadata';
 
 const log = createLogger('PersistenceModule');
 
-function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
+function requireWorkspacePath(
+  sessionId: string,
+  workspacePath?: string,
+  storageScope?: import('@/shared/types/session-history').SessionStorageScope
+): string {
+  if (storageScope === 'agentic_os') {
+    return workspacePath || '';
+  }
   if (!workspacePath) {
     throw new Error(`Workspace path is required for session: ${sessionId}`);
   }
@@ -223,7 +230,7 @@ async function performSaveDialogTurnToDisk(
       return;
     }
 
-    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
+    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath, session.storageScope);
     
     const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
     if (!dialogTurn) {
@@ -237,7 +244,8 @@ async function performSaveDialogTurnToDisk(
       turnData,
       workspacePath,
       session.remoteConnectionId,
-      session.remoteSshHost
+      session.remoteSshHost,
+      session.storageScope
     );
     
     await updateSessionMetadata(context, sessionId);
@@ -414,7 +422,7 @@ export async function updateSessionMetadata(
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
 
-    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
+    const workspacePath = requireWorkspacePath(sessionId, session.workspacePath, session.storageScope);
 
     let existingMetadata: any = null;
     try {
@@ -422,7 +430,8 @@ export async function updateSessionMetadata(
         sessionId,
         workspacePath,
         session.remoteConnectionId,
-        session.remoteSshHost
+        session.remoteSshHost,
+        session.storageScope
       );
     } catch {
       // ignore
@@ -434,7 +443,8 @@ export async function updateSessionMetadata(
       metadata,
       workspacePath,
       session.remoteConnectionId,
-      session.remoteSshHost
+      session.remoteSshHost,
+      session.storageScope
     );
   } catch (error) {
     log.warn('Failed to update session metadata', { sessionId, error });
@@ -448,15 +458,17 @@ export async function touchSessionActivity(
   sessionId: string,
   workspacePath?: string,
   remoteConnectionId?: string,
-  remoteSshHost?: string
+  remoteSshHost?: string,
+  storageScope?: import('@/shared/types/session-history').SessionStorageScope
 ): Promise<void> {
   try {
     const { sessionAPI } = await import('@/infrastructure/api');
     await sessionAPI.touchSessionActivity(
       sessionId,
-      requireWorkspacePath(sessionId, workspacePath),
+      requireWorkspacePath(sessionId, workspacePath, storageScope),
       remoteConnectionId,
-      remoteSshHost
+      remoteSshHost,
+      storageScope
     );
   } catch (error) {
     log.debug('Failed to touch session activity', { sessionId, error });

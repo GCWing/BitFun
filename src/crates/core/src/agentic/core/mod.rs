@@ -21,5 +21,7 @@ pub use prompt_markup::{
     has_prompt_markup, is_system_reminder_only, render_system_reminder, render_user_query,
     strip_prompt_markup, PromptBlock, PromptBlockKind, PromptEnvelope,
 };
-pub use session::{CompressionState, Session, SessionConfig, SessionKind, SessionSummary};
+pub use session::{
+    CompressionState, Session, SessionConfig, SessionKind, SessionStorageScope, SessionSummary,
+};
 pub use state::{ProcessingPhase, SessionState, ToolExecutionState};

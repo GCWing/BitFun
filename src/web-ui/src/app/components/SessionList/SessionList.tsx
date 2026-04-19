@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Code2, ListTodo, Sparkles, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Brush, Code2, ListTodo, Sparkles, MoreHorizontal, Loader2, LayoutGrid } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../flow_chat/store/FlowChatStore';
@@ -28,6 +28,12 @@ import {
   findOpenedWorkspaceForSession,
   sessionBelongsToWorkspaceNavRow,
 } from '@/flow_chat/utils/sessionOrdering';
+import {
+  resolveActiveRunningLiveAppId,
+  useRunningLiveAppItems,
+  type RunningLiveAppItem,
+} from '@/app/scenes/apps/live-app/liveAppTaskView';
+import { renderLiveAppIcon } from '@/app/scenes/apps/live-app/liveAppIcons';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import './SessionList.scss';
@@ -35,11 +41,12 @@ import './SessionList.scss';
 const log = createLogger('SessionList');
 const AGENT_SCENE = 'session' as const;
 
-type SessionMode = 'code' | 'cowork' | 'claw';
+type SessionMode = 'code' | 'cowork' | 'design' | 'claw';
 
 const resolveSessionModeType = (session: Session): SessionMode => {
   const normalizedMode = session.mode?.toLowerCase();
   if (normalizedMode === 'cowork') return 'cowork';
+  if (normalizedMode === 'design') return 'design';
   if (normalizedMode === 'claw') return 'claw';
   return 'code';
 };
@@ -58,6 +65,7 @@ export interface SessionListProps {
   showSessionModeIcon?: boolean;
   listAllSessions?: boolean;
   listFilterQuery?: string;
+  maxSessions?: number;
 }
 
 const SessionList: React.FC<SessionListProps> = ({
@@ -70,11 +78,15 @@ const SessionList: React.FC<SessionListProps> = ({
   showSessionModeIcon = true,
   listAllSessions = false,
   listFilterQuery,
+  maxSessions,
 }) => {
   const { t } = useI18n('common');
   const { setActiveWorkspace, currentWorkspace, openedWorkspacesList } = useWorkspaceContext();
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const openOverlay = useOverlayStore(s => s.openOverlay);
   const activeTabId = activeOverlay ?? AGENT_SCENE;
+  const activeLiveAppId = resolveActiveRunningLiveAppId(activeOverlay);
+  const runningLiveApps = useRunningLiveAppItems();
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
     | { childSessionId: string; parentSessionId: string; workspacePath?: string }
@@ -148,8 +160,9 @@ const SessionList: React.FC<SessionListProps> = ({
           }
           return !session.workspacePath;
         })
-        .sort(compareSessionsForDisplay),
-    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost, listAllSessions]
+        .sort(compareSessionsForDisplay)
+        .slice(0, maxSessions ?? Number.POSITIVE_INFINITY),
+    [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost, listAllSessions, maxSessions]
   );
 
   const { topLevelSessions, childrenByParent } = useMemo(() => {
@@ -206,6 +219,16 @@ const SessionList: React.FC<SessionListProps> = ({
       return false;
     });
   }, [visibleItems, listFilterQuery, listAllSessions, openedWorkspacesList]);
+
+  const filteredRunningLiveApps = useMemo(() => {
+    const trimmedQuery = listFilterQuery?.trim().toLowerCase();
+    if (!trimmedQuery) return runningLiveApps;
+    return runningLiveApps.filter(app =>
+      app.title.toLowerCase().includes(trimmedQuery) ||
+      app.id.toLowerCase().includes(trimmedQuery) ||
+      app.description.toLowerCase().includes(trimmedQuery)
+    );
+  }, [listFilterQuery, runningLiveApps]);
 
   const activeSessionId = flowChatState.activeSessionId;
 
@@ -278,6 +301,8 @@ const SessionList: React.FC<SessionListProps> = ({
       const label =
         mode === 'cowork'
           ? t('nav.sessions.newCoworkSession')
+          : mode === 'design'
+            ? t('nav.sessions.newDesignSession')
           : mode === 'claw'
             ? t('nav.sessions.newClawSession')
             : t('nav.sessions.newCodeSession');
@@ -361,11 +386,11 @@ const SessionList: React.FC<SessionListProps> = ({
     [handleConfirmEdit, handleCancelEdit]
   );
 
-  if (topLevelSessions.length === 0) {
+  if (topLevelSessions.length === 0 && runningLiveApps.length === 0) {
     return null;
   }
 
-  if (filteredVisibleItems.length === 0 && listFilterQuery?.trim()) {
+  if (filteredVisibleItems.length === 0 && filteredRunningLiveApps.length === 0 && listFilterQuery?.trim()) {
     return (
       <div className="bitfun-nav-panel__inline-list bitfun-nav-panel__inline-list--filter-empty">
         <div className="bitfun-nav-panel__filter-empty">{t('nav.sessionCapsule.filterNoMatch')}</div>
@@ -375,6 +400,50 @@ const SessionList: React.FC<SessionListProps> = ({
 
   return (
     <div className="bitfun-nav-panel__inline-list">
+      {filteredRunningLiveApps.length > 0 ? (
+        <>
+          <div className="bitfun-nav-panel__inline-group-label">
+            {t('nav.sessionCapsule.runningLiveAppsGroupLabel')}
+          </div>
+          {filteredRunningLiveApps.map((app: RunningLiveAppItem) => {
+            const isRowActive = activeTabId === app.overlayId || activeLiveAppId === app.id;
+            const row = (
+              <div
+                key={app.id}
+                className={[
+                  'bitfun-nav-panel__inline-item',
+                  'is-live-app',
+                  isRowActive && 'is-active',
+                ].filter(Boolean).join(' ')}
+                onClick={() => openOverlay(app.overlayId)}
+              >
+                <span className="bitfun-nav-panel__inline-item-icon is-live-app">
+                  {renderLiveAppIcon(app.icon, 14)}
+                </span>
+                <span className="bitfun-nav-panel__inline-item-main">
+                  <span className="bitfun-nav-panel__inline-item-label">{app.title}</span>
+                  <span className="bitfun-nav-panel__inline-item-live-badge">
+                    <LayoutGrid size={10} />
+                    {t('nav.sessionCapsule.liveAppBadge')}
+                  </span>
+                </span>
+              </div>
+            );
+            return (
+              <Tooltip key={app.id} content={app.description || app.title} placement="right" followCursor>
+                {row}
+              </Tooltip>
+            );
+          })}
+        </>
+      ) : null}
+
+      {filteredRunningLiveApps.length > 0 && filteredVisibleItems.length > 0 ? (
+        <div className="bitfun-nav-panel__inline-group-label is-secondary">
+          {t('nav.search.groupSessions')}
+        </div>
+      ) : null}
+
       {filteredVisibleItems.map(({ session, level }) => {
         const isEditing = editingSessionId === session.sessionId;
         const relationship = resolveSessionRelationship(session);
@@ -415,6 +484,8 @@ const SessionList: React.FC<SessionListProps> = ({
         const SessionIcon =
           sessionModeKey === 'cowork'
             ? ListTodo
+            : sessionModeKey === 'design'
+              ? Brush
             : sessionModeKey === 'claw'
               ? Sparkles
               : Code2;
@@ -452,6 +523,8 @@ const SessionList: React.FC<SessionListProps> = ({
                     'bitfun-nav-panel__inline-item-icon',
                     sessionModeKey === 'cowork'
                       ? 'is-cowork'
+                      : sessionModeKey === 'design'
+                        ? 'is-design'
                       : sessionModeKey === 'claw'
                         ? 'is-claw'
                         : 'is-code',

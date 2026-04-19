@@ -38,6 +38,14 @@ export const APP_REGISTRY: readonly AppEntity[] = [
     agentId: 'Cowork',
   },
   {
+    id: 'design-app',
+    kind: 'standalone-agent-app',
+    nameKey: 'apps.design.name',
+    descriptionKey: 'apps.design.description',
+    badgeKey: 'apps.badges.standaloneAgentApp',
+    agentId: 'Design',
+  },
+  {
     id: 'claw-app',
     kind: 'standalone-agent-app',
     nameKey: 'apps.claw.name',

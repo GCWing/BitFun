@@ -6,9 +6,11 @@
  */
 
 export type ConfigTab =
+  | 'appearance'
   | 'basics'
   | 'models'
-  | 'session-config'
+  | 'personalization'
+  | 'permissions'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -40,11 +42,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         labelKey: 'configCenter.tabs.basics',
         descriptionKey: 'configCenter.tabDescriptions.basics',
         keywords: [
-          'language',
-          'locale',
-          'i18n',
-          'theme',
-          'appearance',
           'logging',
           'log',
           'terminal',
@@ -55,6 +52,22 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'login',
           'boot',
           'launch',
+        ],
+      },
+      {
+        id: 'appearance',
+        labelKey: 'configCenter.tabs.appearance',
+        descriptionKey: 'configCenter.tabDescriptions.appearance',
+        keywords: [
+          'language',
+          'locale',
+          'i18n',
+          'theme',
+          'appearance',
+          'font',
+          'font size',
+          'ui font',
+          'chat font',
         ],
       },
       {
@@ -98,21 +111,43 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
     nameKey: 'configCenter.categories.smartCapabilities',
     tabs: [
       {
-        id: 'session-config',
-        labelKey: 'configCenter.tabs.sessionConfig',
-        descriptionKey: 'configCenter.tabDescriptions.sessionConfig',
+        id: 'personalization',
+        labelKey: 'configCenter.tabs.personalization',
+        descriptionKey: 'configCenter.tabDescriptions.personalization',
         keywords: [
           'session',
           'chat',
-          'streaming',
+          'personalization',
+          'title',
+          'agent companion',
+          'debug',
+          'template',
+          'ingest',
+          'log path',
+          'personality',
+          '个性化',
+          '标题',
+          '调试',
+          '伙伴',
+        ],
+      },
+      {
+        id: 'permissions',
+        labelKey: 'configCenter.tabs.permissions',
+        descriptionKey: 'configCenter.tabDescriptions.permissions',
+        keywords: [
           'tool',
+          'permission',
+          'permissions',
+          'streaming',
           'timeout',
           'confirmation',
-          'history',
-          'companion',
+          'computer use',
+          'screen capture',
+          'accessibility',
           'agent',
-          'partner',
-          '伙伴',
+          '权限',
+          '授权',
         ],
       },
     ],
@@ -153,7 +188,10 @@ const KNOWN_TABS: ConfigTab[] = SETTINGS_CATEGORIES.flatMap((c) => c.tabs.map((t
 
 /** Map removed or renamed tabs; used by deep links and IDE actions. */
 export function normalizeSettingsTab(section: string): ConfigTab {
-  if (section === 'theme' || section === 'logging' || section === 'terminal') return 'basics';
+  if (section === 'theme' || section === 'appearance' || section === 'language' || section === 'font') return 'appearance';
+  if (section === 'logging' || section === 'terminal') return 'basics';
+  if (section === 'session-config' || section === 'personal' || section === 'companion' || section === 'debug-mode') return 'personalization';
+  if (section === 'permission' || section === 'permissions' || section === 'computer-use' || section === 'tool-execution') return 'permissions';
   if (section === 'ai-context') return DEFAULT_SETTINGS_TAB;
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';

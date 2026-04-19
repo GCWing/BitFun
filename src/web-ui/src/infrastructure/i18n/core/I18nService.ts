@@ -44,9 +44,11 @@ import zhCNPanelsTerminal from '../../../locales/zh-CN/panels/terminal.json';
 import zhCNSettingsAiModel from '../../../locales/zh-CN/settings/ai-model.json';
 import zhCNSettingsAgenticTools from '../../../locales/zh-CN/settings/agentic-tools.json';
 import zhCNSettingsMcp from '../../../locales/zh-CN/settings/mcp.json';
+import zhCNSettingsAppearance from '../../../locales/zh-CN/settings/appearance.json';
 import zhCNSettingsBasics from '../../../locales/zh-CN/settings/basics.json';
+import zhCNSettingsPersonalization from '../../../locales/zh-CN/settings/personalization.json';
+import zhCNSettingsPermissions from '../../../locales/zh-CN/settings/permissions.json';
 import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.json';
-import zhCNSettingsSessionConfig from '../../../locales/zh-CN/settings/session-config.json';
 import zhCNSettingsDebug from '../../../locales/zh-CN/settings/debug.json';
 import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
 import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
@@ -74,9 +76,11 @@ import enUSPanelsTerminal from '../../../locales/en-US/panels/terminal.json';
 import enUSSettingsAiModel from '../../../locales/en-US/settings/ai-model.json';
 import enUSSettingsAgenticTools from '../../../locales/en-US/settings/agentic-tools.json';
 import enUSSettingsMcp from '../../../locales/en-US/settings/mcp.json';
+import enUSSettingsAppearance from '../../../locales/en-US/settings/appearance.json';
 import enUSSettingsBasics from '../../../locales/en-US/settings/basics.json';
+import enUSSettingsPersonalization from '../../../locales/en-US/settings/personalization.json';
+import enUSSettingsPermissions from '../../../locales/en-US/settings/permissions.json';
 import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.json';
-import enUSSettingsSessionConfig from '../../../locales/en-US/settings/session-config.json';
 import enUSSettingsDebug from '../../../locales/en-US/settings/debug.json';
 import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
 import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
@@ -111,9 +115,11 @@ const resources = {
     'settings/ai-model': zhCNSettingsAiModel,
     'settings/agentic-tools': zhCNSettingsAgenticTools,
     'settings/mcp': zhCNSettingsMcp,
+    'settings/appearance': zhCNSettingsAppearance,
     'settings/basics': zhCNSettingsBasics,
+    'settings/personalization': zhCNSettingsPersonalization,
+    'settings/permissions': zhCNSettingsPermissions,
     'settings/ai-features': zhCNSettingsAiFeatures,
-    'settings/session-config': zhCNSettingsSessionConfig,
     'settings/debug': zhCNSettingsDebug,
     'settings/editor': zhCNSettingsEditor,
     'settings/skills': zhCNSettingsSkills,
@@ -142,9 +148,11 @@ const resources = {
     'settings/ai-model': enUSSettingsAiModel,
     'settings/agentic-tools': enUSSettingsAgenticTools,
     'settings/mcp': enUSSettingsMcp,
+    'settings/appearance': enUSSettingsAppearance,
     'settings/basics': enUSSettingsBasics,
+    'settings/personalization': enUSSettingsPersonalization,
+    'settings/permissions': enUSSettingsPermissions,
     'settings/ai-features': enUSSettingsAiFeatures,
-    'settings/session-config': enUSSettingsSessionConfig,
     'settings/debug': enUSSettingsDebug,
     'settings/editor': enUSSettingsEditor,
     'settings/skills': enUSSettingsSkills,
@@ -196,7 +204,10 @@ export class I18nService {
           'settings/ai-model',
           'settings/agentic-tools',
           'settings/mcp',
+          'settings/appearance',
           'settings/basics',
+          'settings/personalization',
+          'settings/permissions',
           'settings/ai-features',
           'settings/debug',
           'settings/editor',

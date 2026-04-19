@@ -95,7 +95,7 @@ pub struct AppLoggingConfig {
 #[serde(default)]
 pub struct AppSessionConfig {
     /// Default new session mode used by the frontend.
-    /// Supported values: "code", "cowork".
+    /// Supported values: "code", "cowork", "design".
     pub default_mode: String,
 }
 
