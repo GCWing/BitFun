@@ -78,7 +78,13 @@ pub struct BotPersistenceData {
     #[serde(default)]
     pub form_state: RemoteConnectFormState,
     /// Global verbose mode setting for all bot connections.
-    /// When true, intermediate tool execution progress is sent to the user.
+    /// When true, the agent's intermediate thinking summaries (one short
+    /// `[Thinking] …` line per `ThinkingEnd`) are forwarded to the user.
+    /// Tool-call notifications are intentionally NOT sent even in verbose
+    /// mode — they were too noisy for IM channels (especially WeChat where
+    /// each line costs a `context_token` slot) without giving the user
+    /// information they could act on.
+    /// Defaults to `false` (concise mode).
     #[serde(default)]
     pub verbose_mode: bool,
 }
@@ -606,7 +612,7 @@ pub fn save_bot_persistence(data: &BotPersistenceData) {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_downloadable_file_paths, resolve_workspace_path};
+    use super::{collect_auto_push_files, extract_downloadable_file_paths, resolve_workspace_path};
 
     fn make_temp_workspace() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
         let base = std::env::temp_dir().join(format!(
@@ -644,6 +650,28 @@ mod tests {
         let resolved = resolve_workspace_path("computer://../secret.txt", Some(&workspace));
 
         assert!(resolved.is_none());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// Regression: `[name.pptx](name.pptx)` style relative markdown links
+    /// emitted by the agent must be auto-pushed when the active workspace
+    /// (Pro mode `current_workspace` OR Assistant mode `current_assistant`)
+    /// is known. Previously only `current_workspace` was consulted, so
+    /// assistant-mode replies silently dropped attachments — see
+    /// `BotChatState::active_workspace_path` and the per-platform
+    /// `notify_files_ready` callers.
+    #[test]
+    fn collects_relative_pptx_link_against_assistant_workspace_root() {
+        let (base, workspace, _report) = make_temp_workspace();
+        let pptx = workspace.join("apple-vision-pro-keynote-style.pptx");
+        std::fs::write(&pptx, b"pptx-bytes").unwrap();
+
+        let text = "[apple-vision-pro-keynote-style.pptx](apple-vision-pro-keynote-style.pptx)";
+        let files = collect_auto_push_files(text, Some(&workspace));
+
+        assert_eq!(files.len(), 1, "relative pptx link must be auto-pushed");
+        assert_eq!(files[0].name, "apple-vision-pro-keynote-style.pptx");
+        assert_eq!(files[0].size, b"pptx-bytes".len() as u64);
         let _ = std::fs::remove_dir_all(base);
     }
 

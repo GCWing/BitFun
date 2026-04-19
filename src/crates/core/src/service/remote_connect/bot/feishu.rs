@@ -547,6 +547,12 @@ impl FeishuBot {
         } else {
             result.menu.render_text_block()
         };
+        // Empty replies (e.g. the silent "forward only" result returned by
+        // `handle_chat`) must not be sent — they would surface as a blank
+        // message in the user's Feishu chat.
+        if text.trim().is_empty() {
+            return Ok(());
+        }
         if result.actions.is_empty() {
             self.send_message(chat_id, &text).await
         } else {
@@ -641,9 +647,7 @@ impl FeishuBot {
         let language = current_bot_language().await;
         let workspace_root = {
             let states = self.chat_states.read().await;
-            states
-                .get(chat_id)
-                .and_then(|s| s.current_workspace.clone())
+            states.get(chat_id).and_then(|s| s.active_workspace_path())
         };
         let files = super::collect_auto_push_files(
             text,
@@ -653,11 +657,9 @@ impl FeishuBot {
             return;
         }
 
-        let intro = super::auto_push_intro(language, files.len());
-        if let Err(e) = self.send_message(chat_id, &intro).await {
-            warn!("Feishu auto-push intro failed for chat {chat_id}: {e}");
-        }
-
+        // Skip the "正在为你发送 N 个文件……" intro: the file card itself is
+        // visible in the chat; only error / size-skip notices below need to
+        // surface to the user.
         for file in files {
             if file.size > MAX_FEISHU_FILE_BYTES {
                 let notice = super::auto_push_skip_too_large_message(

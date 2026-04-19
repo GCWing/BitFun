@@ -40,6 +40,35 @@ struct PendingPairing {
 /// across all IM platforms by capping at 30 MB to match Feishu / WeChat.
 const MAX_TELEGRAM_FILE_BYTES: u64 = 30 * 1024 * 1024;
 
+/// Telegram caps `sendMessage.text` at 4096 UTF-16 code units. We chunk on
+/// char boundaries and stay slightly under the limit to leave headroom for
+/// any client-side counting differences.
+const MAX_TELEGRAM_TEXT_CHUNK: usize = 4000;
+
+fn chunk_text_for_telegram(text: &str) -> Vec<String> {
+    if text.len() <= MAX_TELEGRAM_TEXT_CHUNK {
+        return vec![text.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut rest = text;
+    while !rest.is_empty() {
+        if rest.len() <= MAX_TELEGRAM_TEXT_CHUNK {
+            out.push(rest.to_string());
+            break;
+        }
+        let mut cut = MAX_TELEGRAM_TEXT_CHUNK;
+        while cut > 0 && !rest.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        if cut == 0 {
+            cut = rest.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+        }
+        out.push(rest[..cut].to_string());
+        rest = &rest[cut..];
+    }
+    out
+}
+
 impl TelegramBot {
     fn invalid_pairing_code_message(language: BotLanguage) -> &'static str {
         if language.is_chinese() {
@@ -80,18 +109,24 @@ impl TelegramBot {
 
     pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<()> {
         let client = reqwest::Client::new();
-        let resp = client
-            .post(self.api_url("sendMessage"))
-            .json(&serde_json::json!({
-                "chat_id": chat_id,
-                "text": text,
-            }))
-            .send()
-            .await?;
+        // Telegram caps a single sendMessage at 4096 UTF-16 code units. We
+        // conservatively chunk on byte/char boundaries so long agent
+        // replies are delivered as multiple messages instead of being
+        // rejected or silently dropped.
+        for chunk in chunk_text_for_telegram(text) {
+            let resp = client
+                .post(self.api_url("sendMessage"))
+                .json(&serde_json::json!({
+                    "chat_id": chat_id,
+                    "text": chunk,
+                }))
+                .send()
+                .await?;
 
-        if !resp.status().is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("telegram sendMessage failed: {body}"));
+            if !resp.status().is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(anyhow!("telegram sendMessage failed: {body}"));
+            }
         }
         debug!("Telegram message sent to chat {chat_id}");
         Ok(())
@@ -180,9 +215,7 @@ impl TelegramBot {
         let language = current_bot_language().await;
         let workspace_root = {
             let states = self.chat_states.read().await;
-            states
-                .get(&chat_id)
-                .and_then(|s| s.current_workspace.clone())
+            states.get(&chat_id).and_then(|s| s.active_workspace_path())
         };
         let files = super::collect_auto_push_files(
             text,
@@ -192,11 +225,9 @@ impl TelegramBot {
             return;
         }
 
-        let intro = super::auto_push_intro(language, files.len());
-        if let Err(e) = self.send_message(chat_id, &intro).await {
-            warn!("Telegram auto-push intro failed for chat {chat_id}: {e}");
-        }
-
+        // Skip the "正在为你发送 N 个文件……" intro: the document message
+        // itself is visible in the chat; only error / size-skip notices
+        // below need to surface to the user.
         for file in files {
             if file.size > MAX_TELEGRAM_FILE_BYTES {
                 let notice = super::auto_push_skip_too_large_message(
@@ -247,14 +278,24 @@ impl TelegramBot {
         } else {
             result.menu.render_text_block()
         };
+        // Empty replies (e.g. the silent "forward only" result returned by
+        // `handle_chat`) must not be sent — Telegram rejects empty bodies
+        // and a lone whitespace message is just noise to the user.
+        if text.trim().is_empty() {
+            return;
+        }
         if result.actions.is_empty() {
-            self.send_message(chat_id, &text).await.ok();
+            if let Err(e) = self.send_message(chat_id, &text).await {
+                warn!("Failed to send Telegram message to {chat_id}: {e}");
+            }
         } else if let Err(e) = self
             .send_message_with_keyboard(chat_id, &text, &result.actions)
             .await
         {
             warn!("Failed to send Telegram keyboard message: {e}; falling back to plain text");
-            self.send_message(chat_id, &result.reply).await.ok();
+            if let Err(e2) = self.send_message(chat_id, &result.reply).await {
+                warn!("Telegram fallback plain send to {chat_id} also failed: {e2}");
+            }
         }
     }
 

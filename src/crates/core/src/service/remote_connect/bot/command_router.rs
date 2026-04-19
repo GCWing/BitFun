@@ -52,6 +52,13 @@ pub struct BotChatState {
     pub paired: bool,
     pub current_workspace: Option<String>,
     pub current_assistant: Option<String>,
+    /// Human-readable name of the active assistant (e.g. "默认助理" / "Bob").
+    /// Populated alongside `current_assistant` from `WorkspaceInfo.name` so
+    /// the assistant-mode menu body can show a meaningful label instead of
+    /// the workspace directory name (which is often a generic
+    /// "workspace" / "workspace-<uuid>" folder).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_assistant_name: Option<String>,
     pub current_session_id: Option<String>,
     #[serde(default)]
     pub display_mode: BotDisplayMode,
@@ -83,6 +90,7 @@ impl BotChatState {
             paired: false,
             current_workspace: None,
             current_assistant: None,
+            current_assistant_name: None,
             current_session_id: None,
             display_mode: BotDisplayMode::Assistant,
             pending_action: None,
@@ -90,6 +98,21 @@ impl BotChatState {
             pending_invalid_count: 0,
             last_menu_commands: Vec::new(),
         }
+    }
+
+    /// Returns the workspace root path that should be used to resolve relative
+    /// file references emitted by the agent (e.g. markdown links in replies).
+    ///
+    /// In Pro mode this is the explicitly switched workspace
+    /// (`current_workspace`); in Assistant mode the agent runs against the
+    /// per-user assistant workspace held in `current_assistant`. IM platform
+    /// adapters MUST consult both — looking only at `current_workspace` causes
+    /// auto-push to silently drop relative-path attachments produced by
+    /// assistant sessions (the most common case for end users).
+    pub fn active_workspace_path(&self) -> Option<String> {
+        self.current_workspace
+            .clone()
+            .or_else(|| self.current_assistant.clone())
     }
 
     fn set_pending(&mut self, action: PendingAction) {
@@ -425,13 +448,13 @@ fn welcome_view(s: &'static BotStrings) -> MenuView {
 }
 
 fn ready_to_chat_body(state: &BotChatState, s: &'static BotStrings) -> Option<String> {
-    if state.current_session_id.is_some() {
-        Some(format!(
-            "{}: {}",
-            s.current_session_label,
-            short_session_label(state, s)
-        ))
-    } else if state.display_mode == BotDisplayMode::Pro {
+    // Always show the workspace / assistant name (a human-meaningful
+    // identifier) regardless of whether a session is active. We deliberately
+    // do NOT surface `current_session_id` — the random UUID tail (e.g.
+    // "5cff6a1") is opaque to the user and adds nothing useful. If the
+    // user wants to manage sessions they can use /resume which renders
+    // proper session names.
+    if state.display_mode == BotDisplayMode::Pro {
         match &state.current_workspace {
             Some(p) => Some(format!(
                 "{}: {}",
@@ -441,27 +464,49 @@ fn ready_to_chat_body(state: &BotChatState, s: &'static BotStrings) -> Option<St
             None => Some(s.no_workspace.to_string()),
         }
     } else {
+        // Assistant mode: prefer the cached assistant display name (set by
+        // pairing / switch / resume flows from `WorkspaceInfo.name`). The
+        // workspace path's directory name is meaningless here — the actual
+        // assistant folder is usually `workspace` or `workspace-<uuid>`,
+        // both of which look like noise to the user.
         match &state.current_assistant {
-            Some(p) => Some(format!(
-                "{}: {}",
-                s.current_assistant_label,
-                short_path_name(p)
-            )),
+            Some(p) => {
+                let label = state
+                    .current_assistant_name
+                    .as_deref()
+                    .filter(|n| !n.trim().is_empty())
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| short_path_name(p));
+                Some(format!("{}: {}", s.current_assistant_label, label))
+            }
             None => Some(s.no_assistant.to_string()),
         }
     }
 }
 
-fn short_session_label(state: &BotChatState, s: &'static BotStrings) -> String {
-    state
-        .current_session_id
-        .as_deref()
-        .map(|id| {
-            // Show only the short tail to avoid showing full UUIDs.
-            let tail = id.rsplit('-').next().unwrap_or(id);
-            tail.to_string()
-        })
-        .unwrap_or_else(|| s.no_session.to_string())
+/// One-shot lookup that fills in `current_assistant_name` from the workspace
+/// service when the chat state has an `current_assistant` path but no cached
+/// display name (e.g. the state was persisted before the field was added).
+/// Best-effort: silently no-ops if the workspace service is unavailable or
+/// the path is not a known assistant workspace.
+async fn refresh_assistant_name_if_missing(state: &mut BotChatState) {
+    use crate::service::workspace::get_global_workspace_service;
+    if state.current_assistant_name.is_some() {
+        return;
+    }
+    let Some(path) = state.current_assistant.clone() else {
+        return;
+    };
+    let Some(svc) = get_global_workspace_service() else {
+        return;
+    };
+    let workspaces = svc.get_assistant_workspaces().await;
+    if let Some(ws) = workspaces
+        .into_iter()
+        .find(|w| w.root_path.to_string_lossy() == path)
+    {
+        state.current_assistant_name = Some(ws.name);
+    }
 }
 
 fn short_path_name(path: &str) -> String {
@@ -617,6 +662,7 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
     }
 
     state.current_assistant = Some(ws_info.root_path.to_string_lossy().to_string());
+    state.current_assistant_name = Some(ws_info.name.clone());
     state.current_session_id = None;
 
     let create_res = create_session(state, "Claw").await;
@@ -714,6 +760,12 @@ async fn dispatch(
     if !state.paired {
         return result_from_menu(state, welcome_view(s));
     }
+
+    // Lazily resolve `current_assistant_name` for chat states that were
+    // persisted before this field existed. Without this, already-paired
+    // users would keep seeing the workspace folder name (e.g. "workspace")
+    // until they manually re-switch assistants.
+    refresh_assistant_name_if_missing(state).await;
 
     // Handle /cancel as task cancellation when an active session exists.
     if let BotCommand::CancelTask(turn_id) = &cmd {
@@ -1033,6 +1085,7 @@ async fn select_assistant(
                 error!("Failed to init snapshot after bot assistant switch: {e}");
             }
             state.current_assistant = Some(path.to_string());
+            state.current_assistant_name = Some(name.to_string());
             state.current_session_id = None;
             info!("Bot switched assistant to: {path}");
 
@@ -1387,13 +1440,19 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                 }
             };
             let workspaces = ws_service.get_assistant_workspaces().await;
-            let resolved = if let Some(default_ws) =
+            let resolved: Option<(String, String)> = if let Some(default_ws) =
                 workspaces.into_iter().find(|w| w.assistant_id.is_none())
             {
-                Some(default_ws.root_path.to_string_lossy().to_string())
+                Some((
+                    default_ws.root_path.to_string_lossy().to_string(),
+                    default_ws.name.clone(),
+                ))
             } else {
                 match ws_service.create_assistant_workspace(None).await {
-                    Ok(ws_info) => Some(ws_info.root_path.to_string_lossy().to_string()),
+                    Ok(ws_info) => Some((
+                        ws_info.root_path.to_string_lossy().to_string(),
+                        ws_info.name.clone(),
+                    )),
                     Err(e) => {
                         return result_from_menu(
                             state,
@@ -1405,10 +1464,11 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                     }
                 }
             };
-            if let Some(ref path) = resolved {
+            if let Some((ref path, ref name)) = resolved {
                 state.current_assistant = Some(path.clone());
+                state.current_assistant_name = Some(name.clone());
             }
-            resolved
+            resolved.map(|(p, _)| p)
         }
     } else {
         state.current_workspace.clone()
@@ -1967,6 +2027,21 @@ async fn submit_question_answers(
 
 // ── Free-form chat handling ───────────────────────────────────────
 
+/// Look up the agent type a session was created with (e.g. "Claw", "Cowork",
+/// "agentic").  Returns `None` if the coordinator is unavailable or the
+/// session is not currently hot in memory; in that case `send_message` will
+/// lazily restore the session from disk and `resolve_agent_type` falls back
+/// to the safe default ("agentic"), so chat keeps working.
+async fn resolve_session_agent_type(session_id: &str) -> Option<String> {
+    use crate::agentic::coordination::get_global_coordinator;
+
+    let coordinator = get_global_coordinator()?;
+    coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .map(|s| s.agent_type.clone())
+}
+
 async fn handle_chat(
     state: &mut BotChatState,
     message: &str,
@@ -1995,32 +2070,35 @@ async fn handle_chat(
     let session_id = state.current_session_id.clone().unwrap();
     let turn_id = format!("turn_{}", uuid::Uuid::new_v4());
 
-    let session_busy = {
-        use crate::agentic::coordination::get_global_coordinator;
-        use crate::agentic::core::SessionState;
-        get_global_coordinator()
-            .and_then(|c| c.get_session_manager().get_session(&session_id))
-            .is_some_and(|s| matches!(s.state, SessionState::Processing { .. }))
-    };
+    // Pick the agent type from the actual session — NOT a hardcoded
+    // "agentic" — otherwise every chat message goes through the Code
+    // (`agentic`) agent regardless of what kind of session was created.
+    // Concretely: the IM pairing bootstrap creates a `Claw` session for
+    // assistant mode, but the old hardcoded value caused all subsequent
+    // messages to be re-routed to the Code agent and the assistant flow
+    // was effectively bypassed.  We mirror the agent type the session was
+    // actually created with, falling back to "agentic" only if the session
+    // is missing in memory (e.g. needs lazy restore — `send_message` will
+    // also normalize via `resolve_agent_type`).
+    let agent_type = resolve_session_agent_type(&session_id)
+        .await
+        .unwrap_or_else(|| "agentic".to_string());
 
-    let view = if session_busy {
-        MenuView::plain(s.queued).with_items(vec![
-            MenuItem::danger(s.item_cancel_task, format!("/cancel_task {turn_id}")),
-            MenuItem::default(s.item_back, "/menu"),
-        ])
-    } else {
-        MenuView::plain(s.processing)
-            .with_items(vec![
-                MenuItem::danger(s.item_cancel_task, format!("/cancel_task {turn_id}")),
-                MenuItem::default(s.item_back, "/menu"),
-            ])
-            .with_footer(s.footer_processing_cancel_hint)
-    };
+    // Intentionally do NOT send a "Processing..." / "Queued" interstitial
+    // message with a Cancel-task menu. The session manager queues new user
+    // messages automatically: the user can simply send another message and
+    // it will be processed once the current atomic step finishes. Showing
+    // a cancel button adds noise (especially on WeChat where every reply
+    // costs a context_token slot) without giving the user anything they
+    // actually need. The empty `MenuView::default()` here is silently
+    // dropped by every adapter's `send_handle_result` (see the
+    // empty-text guards in weixin.rs / feishu.rs / telegram.rs).
+    let view = MenuView::default();
 
     let forward = ForwardRequest {
         session_id,
         content: message.to_string(),
-        agent_type: "agentic".to_string(),
+        agent_type,
         turn_id,
         image_contexts,
     };
@@ -2071,8 +2149,6 @@ pub async fn execute_forwarded_turn(
     let result = tokio::time::timeout(std::time::Duration::from_secs(3600), async {
         let mut response = String::new();
         let mut thinking_buf = String::new();
-        let mut tool_params_cache: std::collections::HashMap<String, Option<serde_json::Value>> =
-            std::collections::HashMap::new();
 
         let streams_our_turn = || {
             tracker
@@ -2117,6 +2193,10 @@ pub async fn execute_forwarded_turn(
                         if !streams_our_turn() {
                             continue;
                         }
+                        // Only AskUserQuestion needs an IM-side prompt; every
+                        // other tool call is internal and not surfaced to the
+                        // user (verbose mode keeps thinking summaries only —
+                        // see ToolCompleted handler below).
                         if tool_name == "AskUserQuestion" {
                             if let Some(questions_value) =
                                 params.and_then(|p| p.get("questions").cloned())
@@ -2145,46 +2225,16 @@ pub async fn execute_forwarded_turn(
                                     }
                                 }
                             }
-                        } else {
-                            tool_params_cache.insert(tool_id, params);
                         }
                     }
-                    TrackerEvent::ToolCompleted {
-                        tool_id,
-                        tool_name,
-                        duration_ms,
-                        success,
-                    } => {
-                        if !streams_our_turn() {
-                            continue;
-                        }
-                        if verbose_mode {
-                            if let Some(sender) = message_sender.as_ref() {
-                                let params_str = tool_params_cache
-                                    .remove(&tool_id)
-                                    .flatten()
-                                    .and_then(|p| format_tool_params_slim(&p))
-                                    .unwrap_or_default();
-                                let duration_str = duration_ms
-                                    .map(|ms| {
-                                        if ms >= 1000 {
-                                            format!("{:.1}s", ms as f64 / 1000.0)
-                                        } else {
-                                            format!("{ms}ms")
-                                        }
-                                    })
-                                    .unwrap_or_default();
-                                let status = if success { "OK" } else { "FAILED" };
-                                let msg = if params_str.is_empty() {
-                                    format!("[{tool_name}] {status} {duration_str}")
-                                } else {
-                                    format!(
-                                        "[{tool_name}] {params_str}\n=> {status} {duration_str}"
-                                    )
-                                };
-                                sender(msg).await;
-                            }
-                        }
+                    TrackerEvent::ToolCompleted { .. } => {
+                        // Verbose mode used to push a `[ToolName] params => OK 627ms`
+                        // line for every tool call. That is noisy on IM channels
+                        // (especially WeChat where each line costs a context_token
+                        // slot) and provides little value to the end user — they
+                        // only care about the thinking summary and the final
+                        // answer. Drop the tool-call notifications entirely while
+                        // keeping `ThinkingEnd` summaries for verbose mode.
                     }
                     TrackerEvent::TurnCompleted { turn_id } => {
                         if turn_id == target_turn_id {
@@ -2221,16 +2271,13 @@ pub async fn execute_forwarded_turn(
         let full_text = tracker.accumulated_text();
         let full_text = if full_text.is_empty() { response } else { full_text };
 
-        let mut display_text = full_text.clone();
-        const MAX_BOT_MSG_LEN: usize = 4000;
-        if display_text.len() > MAX_BOT_MSG_LEN {
-            let mut end = MAX_BOT_MSG_LEN;
-            while !display_text.is_char_boundary(end) {
-                end -= 1;
-            }
-            display_text.truncate(end);
-            display_text.push_str("\n\n... (truncated)");
-        }
+        // Do NOT truncate here. Each IM adapter knows its own per-message
+        // size limit and chunks accordingly (e.g. WeChat splits via
+        // `chunk_text_for_weixin`, Telegram chunks at 4096 chars). A global
+        // 4000-char hard cut here would silently drop the tail of long
+        // replies (e.g. PPT outlines, code reviews) and confuse users with
+        // a "(truncated)" suffix they cannot recover from.
+        let display_text = full_text.clone();
 
         ForwardedTurnResult {
             display_text: if display_text.is_empty() {
@@ -2258,45 +2305,6 @@ fn truncate_at_char_boundary(s: &str, max_len: usize) -> String {
         end -= 1;
     }
     format!("{}...", &s[..end])
-}
-
-fn format_tool_params_slim(params: &serde_json::Value) -> Option<String> {
-    const MAX_VAL_LEN: usize = 120;
-    match params {
-        serde_json::Value::Object(obj) => {
-            let parts: Vec<String> = obj
-                .iter()
-                .filter_map(|(k, v)| {
-                    let val_str = match v {
-                        serde_json::Value::String(s) => {
-                            if s.len() > MAX_VAL_LEN {
-                                return None;
-                            }
-                            s.clone()
-                        }
-                        serde_json::Value::Bool(b) => b.to_string(),
-                        serde_json::Value::Number(n) => n.to_string(),
-                        serde_json::Value::Null => "null".to_string(),
-                        _ => {
-                            let json = serde_json::to_string(v).unwrap_or_default();
-                            if json.len() > MAX_VAL_LEN {
-                                return None;
-                            }
-                            json
-                        }
-                    };
-                    Some(format!("{k}: {val_str}"))
-                })
-                .collect();
-            if parts.is_empty() {
-                None
-            } else {
-                Some(parts.join(", "))
-            }
-        }
-        serde_json::Value::String(s) => Some(truncate_at_char_boundary(s, MAX_VAL_LEN)),
-        _ => None,
-    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────
@@ -2424,6 +2432,26 @@ mod state_tests {
     }
 
     #[test]
+    fn active_workspace_path_prefers_pro_workspace_then_assistant() {
+        let mut state = BotChatState::new("c".into());
+        assert_eq!(state.active_workspace_path(), None);
+
+        state.current_assistant = Some("/tmp/assistant-ws".to_string());
+        assert_eq!(
+            state.active_workspace_path().as_deref(),
+            Some("/tmp/assistant-ws"),
+            "assistant path is the fallback when no Pro workspace is set"
+        );
+
+        state.current_workspace = Some("/tmp/pro-ws".to_string());
+        assert_eq!(
+            state.active_workspace_path().as_deref(),
+            Some("/tmp/pro-ws"),
+            "Pro workspace wins over the assistant path when both are set"
+        );
+    }
+
+    #[test]
     fn clear_pending_resets_counters() {
         let mut state = BotChatState::new("c".into());
         state.set_pending(PendingAction::SelectWorkspace { options: vec![] });
@@ -2457,5 +2485,137 @@ mod menu_tests {
         let view = main_menu_view(&state, strings_for(BotLanguage::ZhCN));
         assert_eq!(view.items.len(), 5);
         assert!(view.items.iter().any(|i| i.command == "/new_code_session"));
+    }
+
+    /// Main menu must NOT surface the random session UUID tail. The user
+    /// only cares about the workspace / assistant name; the session ID is
+    /// noise (see /resume for proper session management).
+    #[test]
+    fn main_menu_body_omits_session_id() {
+        let mut state = BotChatState::new("c".into());
+        state.current_assistant = Some("/tmp/my-assistant".to_string());
+        state.current_assistant_name = Some("我的助理".to_string());
+        state.current_session_id =
+            Some("abcdef12-3456-7890-abcd-ef1234567890".to_string());
+        let s = strings_for(BotLanguage::ZhCN);
+        let view = main_menu_view(&state, s);
+        let body = view.body.as_deref().unwrap_or("");
+        assert!(
+            !body.contains("567890") && !body.contains("ef1234567890"),
+            "session UUID tail leaked into body: {body}"
+        );
+        assert!(body.contains("我的助理"), "assistant name missing: {body}");
+    }
+
+    /// Assistant mode must show the assistant's display name rather than
+    /// the workspace directory's `file_name`. The directory is usually a
+    /// generic "workspace" / "workspace-<uuid>" folder which is meaningless
+    /// to the user.
+    #[test]
+    fn assistant_mode_body_uses_display_name_not_dir_name() {
+        let mut state = BotChatState::new("c".into());
+        state.current_assistant =
+            Some("/tmp/bitfun_assistants/workspace-abc123".to_string());
+        state.current_assistant_name = Some("默认助理".to_string());
+        let s = strings_for(BotLanguage::ZhCN);
+        let view = main_menu_view(&state, s);
+        let body = view.body.as_deref().unwrap_or("");
+        assert!(
+            body.contains("默认助理"),
+            "expected assistant display name in body, got: {body}"
+        );
+        assert!(
+            !body.contains("workspace-abc123"),
+            "workspace directory name leaked into body: {body}"
+        );
+    }
+
+    /// Expert mode keeps showing the workspace directory name (it IS the
+    /// project name, which is what the user expects to see).
+    #[test]
+    fn expert_mode_body_still_uses_workspace_dir_name() {
+        let mut state = BotChatState::new("c".into());
+        state.display_mode = BotDisplayMode::Pro;
+        state.current_workspace = Some("/tmp/projects/MyApp".to_string());
+        // `current_assistant_name` should not affect Pro mode at all.
+        state.current_assistant_name = Some("ignored".to_string());
+        let s = strings_for(BotLanguage::ZhCN);
+        let view = main_menu_view(&state, s);
+        let body = view.body.as_deref().unwrap_or("");
+        assert!(body.contains("MyApp"), "workspace name missing: {body}");
+        assert!(!body.contains("ignored"), "assistant name leaked into Pro mode: {body}");
+    }
+
+    /// When the cached assistant display name is missing (e.g. legacy
+    /// persisted state), fall back to the path's last segment instead of
+    /// rendering an empty label or panicking.
+    #[test]
+    fn assistant_mode_body_falls_back_to_path_when_name_missing() {
+        let mut state = BotChatState::new("c".into());
+        state.current_assistant = Some("/tmp/my-assistant-folder".to_string());
+        state.current_assistant_name = None;
+        let s = strings_for(BotLanguage::ZhCN);
+        let view = main_menu_view(&state, s);
+        let body = view.body.as_deref().unwrap_or("");
+        assert!(
+            body.contains("my-assistant-folder"),
+            "expected fallback to path tail, got: {body}"
+        );
+    }
+
+    #[test]
+    fn main_menu_body_omits_session_label_text() {
+        let mut state = BotChatState::new("c".into());
+        state.current_assistant = Some("/tmp/my-assistant".to_string());
+        state.current_session_id = Some("session-xyz".to_string());
+        let s = strings_for(BotLanguage::ZhCN);
+        let view = main_menu_view(&state, s);
+        let body = view.body.as_deref().unwrap_or("");
+        assert!(
+            !body.contains(s.current_session_label),
+            "current_session_label leaked into body: {body}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod handle_chat_tests {
+    use super::*;
+
+    /// `handle_chat` must NOT push a "Processing… [Cancel Task]" interstitial
+    /// to the user. The session manager queues new messages automatically;
+    /// showing a cancel button just adds noise (and on WeChat costs a
+    /// context_token slot per send).
+    #[tokio::test]
+    async fn chat_message_forwards_silently_without_processing_menu() {
+        let mut state = BotChatState::new("peer".into());
+        state.paired = true;
+        state.current_assistant = Some("/tmp/a".into());
+        state.current_session_id = Some("s1".into());
+        let s = strings_for(BotLanguage::ZhCN);
+        let result = handle_chat(&mut state, "hello bitfun", vec![], s).await;
+
+        assert!(
+            result.forward_to_session.is_some(),
+            "chat message must still be forwarded to the session"
+        );
+        assert!(
+            result.menu.title.is_empty()
+                && result.menu.items.is_empty()
+                && result.menu.body.is_none()
+                && result.menu.footer_hint.is_none(),
+            "handle_chat must return an empty MenuView so adapters skip the send: {:?}",
+            result.menu
+        );
+        assert!(
+            !result.reply.contains(s.processing) && !result.reply.contains(s.queued),
+            "processing/queued text must not be sent: {}",
+            result.reply
+        );
+        assert!(
+            !result.reply.contains(s.item_cancel_task),
+            "cancel-task button must not be sent: {}",
+            result.reply
+        );
     }
 }
