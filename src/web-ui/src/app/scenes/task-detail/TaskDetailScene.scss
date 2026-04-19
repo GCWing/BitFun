@@ -403,7 +403,8 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
 
   &:hover {
     background: var(--element-bg-soft);
-    .tds-row__arrow { opacity: 1; }
+    .tds-row__arrow,
+    .tds-row__delete-btn { opacity: 1; }
   }
 
   &:focus-visible {
@@ -521,6 +522,17 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   gap: 3px;
   font-size: 10px;
   color: var(--color-text-muted);
+}
+
+.tds-row__delete-btn {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity $motion-fast $easing-standard;
+
+  &:hover {
+    color: var(--color-error);
+  }
 }
 
 .tds-row__arrow {

@@ -166,22 +166,13 @@
       "filetree": "文件树"
     },
     "shortcuts": {
-      "panel": {
-        "toggleLeft": "展开/收起左侧导航区域",
-        "toggleBoth": "折叠所有面板"
-      },
       "nav": {
         "toggleSearch": "打开导航搜索"
       },
       "scene": {
-        "focusMerged": "切换场景",
-        "focusMergedHint": "录制一次修饰键 + 任意数字 1–3；数字 1–3 对应从左到右的场景。",
-        "openSession": "打开 Agent 会话",
         "openSettings": "打开设置",
-        "openTerminal": "打开终端"
-      },
-      "app": {
-        "closePreview": "关闭预览 / 关闭弹窗"
+        "openTerminal": "打开终端",
+        "escapeToAgenticBase": "返回 Agentic OS 桌面"
       },
       "canvas": {
         "missionControl": "Mission Control",

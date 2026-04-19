@@ -17,7 +17,7 @@ export interface UseShortcutOptions {
  * shortcut to be unregistered and re-registered — only changes to `id` or
  * `config` trigger a re-registration.
  *
- * @param id       Unique shortcut identifier (e.g. 'panel.toggleLeft')
+ * @param id       Unique shortcut identifier (e.g. 'nav.toggleSearch')
  * @param config   Key + modifiers + scope config
  * @param callback Handler to invoke when the shortcut fires
  * @param options  Optional description, priority, enabled flag

@@ -14,11 +14,11 @@ import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceCont
 import { useWindowControls } from '../hooks/useWindowControls';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { useApp } from '../hooks/useApp';
-import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config';
 
 type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
+import { openDispatcherSession } from '@/flow_chat/services/openDispatcherSession';
 import WorkspaceBody from './WorkspaceBody';
 import { ToolbarMode, useToolbarModeContext } from '../../flow_chat';
 import { NewProjectDialog } from '../components/NewProjectDialog';
@@ -35,6 +35,7 @@ import { useSessionModeStore } from '../stores/sessionModeStore';
 import './AppLayout.scss';
 
 const log = createLogger('AppLayout');
+
 const RECENT_WORKSPACE_PRELOAD_LIMIT = 7;
 const RECENT_SESSION_WARMUP_LIMIT = 5;
 const RECENT_DISPATCHER_WARMUP_LIMIT = 3;
@@ -96,6 +97,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   // Auto-open last workspace on startup
   const autoOpenAttemptedRef = useRef(false);
+  /** Once per app mount: after FlowChat init, focus Agentic OS (Dispatcher) instead of a workspace-scoped chat. */
+  const startupAgenticOsSessionAppliedRef = useRef(false);
   useEffect(() => {
     if (autoOpenAttemptedRef.current || loading) return;
     if (!hasWorkspace && recentWorkspaces.length > 0) {
@@ -225,18 +228,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           sessionId = await flowChatManager.createChatSession({}, initialSessionMode);
         }
 
-        const activeSessionId = sessionId || flowChatStore.getState().activeSessionId;
-        if (currentWorkspace.workspaceKind === WorkspaceKind.Assistant && activeSessionId) {
-          ensureAssistantBootstrapForWorkspace(currentWorkspace, activeSessionId);
+        const workspaceScopedActiveId = sessionId || flowChatStore.getState().activeSessionId;
+        if (currentWorkspace.workspaceKind === WorkspaceKind.Assistant && workspaceScopedActiveId) {
+          ensureAssistantBootstrapForWorkspace(currentWorkspace, workspaceScopedActiveId);
         }
 
         const pendingDescription = sessionStorage.getItem('pendingProjectDescription');
         if (pendingDescription && pendingDescription.trim()) {
           sessionStorage.removeItem('pendingProjectDescription');
+          const pendingTargetSessionId = workspaceScopedActiveId;
 
           setTimeout(async () => {
             try {
-              const targetSessionId = sessionId || flowChatStore.getState().activeSessionId;
+              const targetSessionId = pendingTargetSessionId || flowChatStore.getState().activeSessionId;
 
               if (!targetSessionId) {
                 log.error('Cannot find active session ID');
@@ -256,6 +260,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
               });
             }
           }, 500);
+        }
+
+        if (!startupAgenticOsSessionAppliedRef.current && !explicitPreferredMode) {
+          try {
+            await openDispatcherSession();
+            startupAgenticOsSessionAppliedRef.current = true;
+          } catch (dispatcherError) {
+            log.warn('Failed to open default Agentic OS session', dispatcherError);
+          }
         }
 
         const pendingSettings = sessionStorage.getItem('pendingOpenSettings');
@@ -422,31 +435,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     window.addEventListener('toolbar-send-message', handleToolbarSendMessage);
     return () => window.removeEventListener('toolbar-send-message', handleToolbarSendMessage);
   }, []);
-
-  // Toggle left panel: mod+B (VS Code convention)
-  useShortcut(
-    'panel.toggleLeft',
-    { key: 'B', ctrl: true, scope: 'app' },
-    () => toggleLeftPanel(),
-    { priority: 5, description: 'keyboard.shortcuts.panel.toggleLeft' }
-  );
-
-  // Collapse/expand both panels: mod+Shift+B
-  useShortcut(
-    'panel.toggleBoth',
-    { key: 'B', ctrl: true, shift: true, scope: 'app' },
-    () => {
-      const bothCollapsed = state.layout.leftPanelCollapsed && state.layout.rightPanelCollapsed;
-      if (bothCollapsed) {
-        toggleLeftPanel();
-        setTimeout(() => toggleRightPanel(), 50);
-      } else {
-        if (!state.layout.leftPanelCollapsed) toggleLeftPanel();
-        if (!state.layout.rightPanelCollapsed) toggleRightPanel();
-      }
-    },
-    { priority: 5, description: 'keyboard.shortcuts.panel.toggleBoth' }
-  );
 
   // Toolbar cancel task
   React.useEffect(() => {

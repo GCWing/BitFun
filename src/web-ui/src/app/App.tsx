@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { ChatProvider, useAIInitialization } from '../infrastructure';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeProvider';
 import { SSHRemoteProvider } from '../features/ssh-remote';
@@ -178,15 +177,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, []);
 
-  // Escape closes preview overlay (registered via ShortcutManager)
-  useShortcut(
-    'app.closePreview',
-    { key: 'Escape', scope: 'app', allowInInput: true },
-    () => window.dispatchEvent(new CustomEvent('closePreview')),
-    { priority: 1, description: 'keyboard.shortcuts.app.closePreview' }
-  );
-
-  // Top SceneBar: Mod+Alt+1..9 / Mod+Alt+PageUp/PageDown
+  // Scene overlays: Mod+, / Mod+Shift+`
   useGlobalSceneShortcuts();
 
   // Unified layout via a single AppLayout

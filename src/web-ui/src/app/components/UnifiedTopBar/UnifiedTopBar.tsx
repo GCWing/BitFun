@@ -46,7 +46,6 @@ import {
 import { useOverlayStore } from '../../stores/overlayStore';
 import { useHeaderStore } from '../../stores/headerStore';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
-import SessionListDialog from '../SessionListDialog/SessionListDialog';
 import { getOverlayDef } from '../../overlay/overlayRegistry';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { ALL_SHORTCUTS } from '@/shared/constants/shortcuts';
@@ -98,7 +97,7 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
   const { warning } = useNotification();
   const closeOverlay = useOverlayStore((s) => s.closeOverlay);
   const sessionContext = useHeaderStore((s) => s.sessionContext);
-  const openSessionListDialog = useSessionCapsuleStore((s) => s.openSessionListDialog);
+  const requestExpandSessionList = useSessionCapsuleStore((s) => s.requestExpandSessionList);
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
   const hasOverlay = activeOverlay !== null;
 
@@ -284,17 +283,6 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
     priority: 5,
     description: NAV_TOGGLE_SEARCH_DEF.descriptionKey,
   });
-
-  // Secondary binding: Alt+F (same action as Mod+K, not listed separately in keyboard settings)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
-      e.preventDefault();
-      toggleNavSearch();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [toggleNavSearch]);
 
   const overlayDef = hasOverlay ? getOverlayDef(activeOverlay) : null;
   const overlayTitle = overlayDef?.labelKey ? t(overlayDef.labelKey) : (overlayDef?.label ?? '');
@@ -570,6 +558,11 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
                       </div>
                     )}
                   </div>
+                  <div
+                    className="unified-top-bar__menu-divider"
+                    role="separator"
+                    aria-orientation="horizontal"
+                  />
                   <button
                     type="button"
                     className="unified-top-bar__menu-item"
@@ -589,9 +582,10 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
             <button
               type="button"
               className="unified-top-bar__task-list-btn"
-              onClick={openSessionListDialog}
+              onClick={requestExpandSessionList}
               aria-label={t('nav.sessionCapsule.openTaskList')}
               data-testid="unified-top-bar-task-list"
+              data-bitfun-ignore-session-capsule-outside
             >
               <ListChecks size={14} strokeWidth={2.25} aria-hidden="true" />
             </button>
@@ -686,7 +680,6 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
       </div>
       </div>
 
-      <SessionListDialog />
       <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
       <Modal
         isOpen={showRemoteDisclaimer}

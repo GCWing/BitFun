@@ -434,6 +434,19 @@ export class ShortcutManager {
 
   // ─── Utilities ─────────────────────────────────────────────────────────────
 
+  /**
+   * Whether `event` matches the effective binding for a catalog shortcut id
+   * (defaults merged with `app.keybindings` overrides).
+   *
+   * Used when the handler runs outside the lookup table (e.g. an early capture-phase
+   * listener) so remapping in Settings still applies.
+   */
+  public matchesShortcutId(id: string, catalogDefault: ShortcutConfig, event: KeyboardEvent): boolean {
+    const config = this.getEffectiveConfig(id, catalogDefault);
+    const scope = config.scope ?? 'app';
+    return makeMapKey(scope, config) === makeEventKey(scope, event);
+  }
+
   public formatShortcut(config: ShortcutConfig): string {
     const isMac = navigator.platform.toUpperCase().includes('MAC');
     const parts: string[] = [];

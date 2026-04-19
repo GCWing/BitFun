@@ -161,8 +161,9 @@
       "groupAgentApps": "智能应用",
       "groupLiveApps": "灵动应用",
       "groupSessions": "所有任务",
+      "groupRecentTasks": "最近任务",
       "empty": "未找到相关结果",
-      "sessionSearchHintDefault": "输入关键词，搜索已打开工作区内的任务",
+      "noRecentTasks": "暂无最近任务，输入关键词可搜索工作区、助理、智能应用、灵动应用等",
       "sessionWorkspaceHint": "位于 {{workspace}}"
     },
     "displayModes": {
@@ -896,7 +897,10 @@
     "relativeMinutesAgo": "{{count}} 分钟前",
     "relativeHoursAgo": "{{count}} 小时前",
     "relativeDaysAgo": "{{count}} 天前",
-    "fallbackTaskTitle": "任务 {{id}}"
+    "fallbackTaskTitle": "任务 {{id}}",
+    "agenticSessionTitle": "{{created}} - {{modified}}",
+    "deleteAgenticSessionTitle": "删除运行历史会话？",
+    "deleteAgenticSessionMessage": "将永久删除「{{label}}」的对话记录，且无法恢复。"
   },
   "loading": {
     "scenes": "正在加载场景"

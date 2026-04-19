@@ -16,8 +16,7 @@ import {
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
-import type { SessionKind } from '@/shared/types/session-history';
-import type { SessionMetadata } from '@/shared/types/session-history';
+import type { SessionKind, SessionStorageScope, SessionMetadata } from '@/shared/types/session-history';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -28,6 +27,15 @@ import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 
 const log = createLogger('FlowChatStore');
+
+/** Ensures Agentic OS (dispatcher) deletes use `agentic_os` storage even when metadata omitted `storageScope`. */
+function resolveSessionDeleteStorageScope(session: Session): SessionStorageScope {
+  return (
+    session.storageScope ??
+    session.config?.storageScope ??
+    (session.mode?.toLowerCase() === 'dispatcher' ? 'agentic_os' : 'workspace')
+  );
+}
 
 export class FlowChatStore {
   private static instance: FlowChatStore;
@@ -578,41 +586,33 @@ export class FlowChatStore {
       return;
     }
 
+    const { agentAPI } = await import('@/infrastructure/api');
+    await Promise.all(
+      sessionIdsToDelete.map(async id => {
+        const sess = this.state.sessions.get(id);
+        if (!sess) {
+          throw new Error(`Session not found: ${id}`);
+        }
+        const storageScope = resolveSessionDeleteStorageScope(sess);
+        const workspacePath = sess.workspacePath;
+        if (!workspacePath && storageScope !== 'agentic_os') {
+          throw new Error(`Workspace path not found for session ${id}`);
+        }
+
+        await agentAPI.deleteSession(
+          id,
+          workspacePath || undefined,
+          sess.remoteConnectionId,
+          sess.remoteSshHost,
+          storageScope
+        );
+      })
+    );
+
     const { stateMachineManager } = await import('../state-machine');
     sessionIdsToDelete.forEach(id => {
       stateMachineManager.delete(id);
     });
-
-    try {
-      const { agentAPI } = await import('@/infrastructure/api');
-      const deleteResults = await Promise.allSettled(
-        sessionIdsToDelete.map(async id => {
-          const sess = this.state.sessions.get(id);
-          const workspacePath = sess?.workspacePath;
-          if (!workspacePath) {
-            throw new Error(`Workspace path not found for session ${id}`);
-          }
-
-          await agentAPI.deleteSession(
-            id,
-            workspacePath,
-            sess?.remoteConnectionId,
-            sess?.remoteSshHost
-          );
-        })
-      );
-
-      deleteResults.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          log.error('Failed to delete session on backend', {
-            sessionId: sessionIdsToDelete[index],
-            error: result.reason,
-          });
-        }
-      });
-    } catch (error) {
-      log.error('Failed to delete session on backend', { sessionId, error });
-    }
 
     this.removeSession(sessionId);
   }

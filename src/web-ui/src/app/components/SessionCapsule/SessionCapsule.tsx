@@ -13,9 +13,8 @@
  * The panel is position:fixed so it floats over all content.
  * Collapse/expand state is persisted in localStorage.
  *
- * The floating capsule is only visible on the base Agent scene (activeOverlay === null).
- * When any overlay is active (settings, tools, shell, live apps, ...) the capsule hides
- * entirely — the UnifiedTopBar's task-list icon opens a centered SessionListDialog instead.
+ * The capsule stays visible over overlay scenes; UnifiedTopBar "view all tasks" expands
+ * this panel instead of opening a separate modal.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -50,6 +49,7 @@ import './SessionCapsule.scss';
 
 const log = createLogger('SessionCapsule');
 const AGENT_SCENE = 'session' as const;
+/** Default visible rows in the expanded capsule; search still filters within this slice. */
 const RECENT_SESSION_LIMIT = 7;
 
 type SessionMode = 'code' | 'cowork' | 'design' | 'claw';
@@ -101,6 +101,7 @@ const SessionCapsule: React.FC = () => {
   const activeOverlay = useOverlayStore((s) => s.activeOverlay);
   const openOverlay = useOverlayStore((s) => s.openOverlay);
   const openTaskDetail = useSessionCapsuleStore((s) => s.openTaskDetail);
+  const sessionListExpandNonce = useSessionCapsuleStore((s) => s.sessionListExpandNonce);
   const { openedWorkspacesList, setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
   const activeBtwSessionTab = useAgentCanvasStore((state) => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
@@ -117,9 +118,6 @@ const SessionCapsule: React.FC = () => {
   const panelRef = useRef<HTMLDivElement>(null);
   const runningLiveApps = useRunningLiveAppItems();
   const activeLiveAppId = resolveActiveRunningLiveAppId(activeOverlay);
-
-  // Capsule is only visible on the base Agent scene; every overlay uses SessionListDialog instead.
-  const usesDialog = activeOverlay !== null && !activeOverlay.startsWith('live-app:');
 
   useEffect(() => {
     const unsub = flowChatStore.subscribe((s) => setFlowChatState(s));
@@ -290,21 +288,19 @@ const SessionCapsule: React.FC = () => {
     return () => document.removeEventListener('pointerdown', handler);
   }, [expanded, pinned]);
 
-  // When switching to an overlay that uses the dialog, hide the capsule.
+  const lastExpandNonceRef = useRef(sessionListExpandNonce);
   useEffect(() => {
-    if (usesDialog) {
-      setExpanded(false);
-      writeExpandedToStorage(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOverlay]);
-
-  // In any overlay scene: session list is opened via SessionListDialog — hide capsule entirely.
-  if (usesDialog) return null;
+    if (sessionListExpandNonce === lastExpandNonceRef.current) return;
+    lastExpandNonceRef.current = sessionListExpandNonce;
+    setExpanded(true);
+    writeExpandedToStorage(true);
+    setHoverExpanded(false);
+  }, [sessionListExpandNonce]);
 
   const runningCount = runningItems.length;
   const canHoverExpand = !expanded && runningCount > 0;
   const showExpandedPanel = expanded || hoverExpanded;
+  const liftAboveOverlayScene = activeOverlay !== null;
 
   return (
     <div
@@ -313,6 +309,7 @@ const SessionCapsule: React.FC = () => {
         'session-capsule',
         showExpandedPanel ? 'session-capsule--expanded' : '',
         !showExpandedPanel && runningCount > 0 ? 'session-capsule--running' : '',
+        liftAboveOverlayScene ? 'session-capsule--above-scene-chrome' : '',
       ].filter(Boolean).join(' ')}
       aria-label={t('nav.sections.sessions')}
       onMouseEnter={canHoverExpand ? () => setHoverExpanded(true) : undefined}
