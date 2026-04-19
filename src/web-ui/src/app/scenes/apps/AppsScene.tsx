@@ -103,6 +103,40 @@ const AppsScene: React.FC = () => {
   return <AppsHomeView />;
 };
 
+const AppsListSkeleton: React.FC<{
+  rowCount?: number;
+  showActions?: boolean;
+}> = ({ rowCount = 4, showActions = false }) => (
+  <div className="apps-scene__list apps-scene__list--skeleton" aria-busy="true">
+    {Array.from({ length: rowCount }).map((_, index) => (
+      <div
+        key={`apps-row-skeleton-${index}`}
+        className="apps-list-row apps-list-row--skeleton"
+        style={{ '--row-index': index } as React.CSSProperties}
+      >
+        <div className="apps-list-row__sk-icon" />
+        <div className="apps-list-row__sk-body">
+          <div className="apps-list-row__sk-head">
+            <div className="apps-list-row__sk-line apps-list-row__sk-line--name is-animated" />
+            <div className="apps-list-row__sk-pill" />
+          </div>
+          <div className="apps-list-row__sk-line apps-list-row__sk-line--desc is-animated" />
+          <div className="apps-list-row__sk-line apps-list-row__sk-line--meta" />
+        </div>
+        {showActions ? (
+          <div className="apps-list-row__sk-actions">
+            <div className="apps-list-row__sk-action" />
+            <div className="apps-list-row__sk-action" />
+          </div>
+        ) : (
+          <div className="apps-list-row__sk-chevron" />
+        )}
+      </div>
+    ))}
+  </div>
+);
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Home view
 // ─────────────────────────────────────────────────────────────────────────────
@@ -237,114 +271,112 @@ const AppsHomeView: React.FC = () => {
         </header>
 
         {/* ── Carousel — global, always on home ─────────────────── */}
-        {appCards.length > 0 && !agentLoading && (
+        {agentLoading ? (
+          <div className="app-carousel app-carousel--skeleton" aria-hidden="true" />
+        ) : appCards.length > 0 ? (
           <AppCarousel apps={appCards} onOpenApp={handleOpenAgentApp} />
-        )}
+        ) : null}
 
         {/* ── Tab pills + list section ───────────────────────────── */}
         <section className="apps-scene__list-section">
 
-          {/* Header: pills (left) + action button (right) */}
-          <div className="apps-scene__list-header">
-            <nav className="apps-scene__pills" role="tablist" aria-label={t('tabs.label')}>
-              {TAB_KEYS.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab}
-                  className={`apps-scene__pill${activeTab === tab ? ' is-active' : ''}`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {t(`tabs.${tab}`)}
-                </button>
-              ))}
-            </nav>
+              {/* Header: pills (left) + action button (right) */}
+              <div className="apps-scene__list-header">
+                <nav className="apps-scene__pills" role="tablist" aria-label={t('tabs.label')}>
+                  {TAB_KEYS.map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === tab}
+                      className={`apps-scene__pill${activeTab === tab ? ' is-active' : ''}`}
+                      onClick={() => setActiveTab(tab)}
+                    >
+                      {t(`tabs.${tab}`)}
+                    </button>
+                  ))}
+                </nav>
 
-            {/* Per-tab action button, right-aligned */}
-            {activeTab === 'agent-app' && (
-              <button type="button" className="apps-scene__list-action" disabled title={t('page.newAgentApp')}>
-                <Plus size={14} />
-                <span>{t('page.newAgentApp')}</span>
-              </button>
-            )}
-            {activeTab === 'live-app' && (
-              <button
-                type="button"
-                className="apps-scene__list-action"
-                onClick={handleAddFromFolder}
-                disabled={liveLoading}
-                title={t('liveApp.importFromFolder')}
-              >
-                <FolderPlus size={14} />
-                <span>{t('liveApp.importFromFolder')}</span>
-              </button>
-            )}
-            {activeTab === 'bridge-app' && (
-              <button type="button" className="apps-scene__list-action" disabled title={t('bridgeApp.comingSoon')}>
-                <Plus size={14} />
-                <span>{t('page.newBridgeApp')}</span>
-              </button>
-            )}
-          </div>
+                {/* Per-tab action button, right-aligned */}
+                {activeTab === 'agent-app' && (
+                  <button type="button" className="apps-scene__list-action" disabled title={t('page.newAgentApp')}>
+                    <Plus size={14} />
+                    <span>{t('page.newAgentApp')}</span>
+                  </button>
+                )}
+                {activeTab === 'live-app' && (
+                  <button
+                    type="button"
+                    className="apps-scene__list-action"
+                    onClick={handleAddFromFolder}
+                    disabled={liveLoading}
+                    title={t('liveApp.importFromFolder')}
+                  >
+                    <FolderPlus size={14} />
+                    <span>{t('liveApp.importFromFolder')}</span>
+                  </button>
+                )}
+                {activeTab === 'bridge-app' && (
+                  <button type="button" className="apps-scene__list-action" disabled title={t('bridgeApp.comingSoon')}>
+                    <Plus size={14} />
+                    <span>{t('page.newBridgeApp')}</span>
+                  </button>
+                )}
+              </div>
 
-          {/* Agent App list */}
-          {activeTab === 'agent-app' && (
-            agentLoading ? (
-              <div className="apps-scene__list">
-                {[0, 1, 2].map((i) => <div key={i} className="apps-list-row apps-list-row--skeleton" />)}
-              </div>
-            ) : filteredAgentApps.length === 0 ? (
-              <div className="apps-scene__empty">
-                <Bot size={28} strokeWidth={1.5} />
-                <p>{t('page.empty')}</p>
-              </div>
-            ) : (
-              <div className="apps-scene__list">
-                {filteredAgentApps.map((app) => (
-                  <AgentAppRow key={app.id} app={app} onOpen={handleOpenAgentApp} />
-                ))}
-              </div>
-            )
-          )}
+              {/* Agent App list */}
+              {activeTab === 'agent-app' && (
+                agentLoading ? (
+                  <AppsListSkeleton />
+                ) : filteredAgentApps.length === 0 ? (
+                  <div className="apps-scene__empty">
+                    <Bot size={28} strokeWidth={1.5} />
+                    <p>{t('page.empty')}</p>
+                  </div>
+                ) : (
+                  <div className="apps-scene__list">
+                    {filteredAgentApps.map((app) => (
+                      <AgentAppRow key={app.id} app={app} onOpen={handleOpenAgentApp} />
+                    ))}
+                  </div>
+                )
+              )}
 
-          {/* Live App list */}
-          {activeTab === 'live-app' && (
-            liveLoading && liveApps.length === 0 ? (
-              <div className="apps-scene__list">
-                {[0, 1, 2].map((i) => <div key={i} className="apps-list-row apps-list-row--skeleton" />)}
-              </div>
-            ) : filteredLiveApps.length === 0 ? (
-              <div className="apps-scene__empty">
-                {liveApps.length === 0
-                  ? <><Sparkles size={28} strokeWidth={1.5} /><p>{t('liveApp.empty.generate')}</p></>
-                  : <><LayoutGrid size={28} strokeWidth={1.5} /><p>{t('liveApp.empty.noMatch')}</p></>}
-              </div>
-            ) : (
-              <div className="apps-scene__list">
-                {filteredLiveApps.map((app) => (
-                  <LiveAppRow
-                    key={app.id}
-                    app={app}
-                    isRunning={runningIdSet.has(app.id)}
-                    onOpenDetails={setSelectedLiveApp}
-                    onOpen={handleOpenLiveApp}
-                    onStop={handleStopLiveApp}
-                    onDelete={setPendingDeleteId}
-                  />
-                ))}
-              </div>
-            )
-          )}
+              {/* Live App list */}
+              {activeTab === 'live-app' && (
+                liveLoading && liveApps.length === 0 ? (
+                  <AppsListSkeleton showActions />
+                ) : filteredLiveApps.length === 0 ? (
+                  <div className="apps-scene__empty">
+                    {liveApps.length === 0
+                      ? <><Sparkles size={28} strokeWidth={1.5} /><p>{t('liveApp.empty.generate')}</p></>
+                      : <><LayoutGrid size={28} strokeWidth={1.5} /><p>{t('liveApp.empty.noMatch')}</p></>}
+                  </div>
+                ) : (
+                  <div className="apps-scene__list">
+                    {filteredLiveApps.map((app) => (
+                      <LiveAppRow
+                        key={app.id}
+                        app={app}
+                        isRunning={runningIdSet.has(app.id)}
+                        onOpenDetails={setSelectedLiveApp}
+                        onOpen={handleOpenLiveApp}
+                        onStop={handleStopLiveApp}
+                        onDelete={setPendingDeleteId}
+                      />
+                    ))}
+                  </div>
+                )
+              )}
 
-          {/* Bridge App placeholder */}
-          {activeTab === 'bridge-app' && (
-            <div className="apps-scene__bridge-empty">
-              <Cable size={40} strokeWidth={1.2} />
-              <h3>{t('bridgeApp.title')}</h3>
-              <p>{t('bridgeApp.comingSoon')}</p>
-            </div>
-          )}
+              {/* Bridge App placeholder */}
+              {activeTab === 'bridge-app' && (
+                <div className="apps-scene__bridge-empty">
+                  <Cable size={40} strokeWidth={1.2} />
+                  <h3>{t('bridgeApp.title')}</h3>
+                  <p>{t('bridgeApp.comingSoon')}</p>
+                </div>
+              )}
         </section>
       </div>
 

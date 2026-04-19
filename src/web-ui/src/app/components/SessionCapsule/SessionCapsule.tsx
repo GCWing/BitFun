@@ -110,6 +110,7 @@ const SessionCapsule: React.FC = () => {
 
   const [expanded, setExpanded] = useState<boolean>(readExpandedFromStorage);
   const [pinned, setPinned] = useState<boolean>(readPinnedFromStorage);
+  const [overlayExpanded, setOverlayExpanded] = useState(false);
   const [listFilterQuery, setListFilterQuery] = useState('');
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
@@ -265,6 +266,25 @@ const SessionCapsule: React.FC = () => {
   }, [expanded]);
 
   useEffect(() => {
+    if (!overlayExpanded) setListFilterQuery('');
+  }, [overlayExpanded]);
+
+  const runningCount = runningItems.length;
+  const canHoverExpand = activeOverlay === null && !expanded && runningCount > 0;
+  const showExpandedPanel = activeOverlay !== null ? overlayExpanded : (expanded || hoverExpanded);
+  const liftAboveOverlayScene = activeOverlay !== null;
+  const showCollapsedCapsule = activeOverlay === null;
+
+  const collapseCapsule = useCallback(() => {
+    if (activeOverlay !== null) {
+      setOverlayExpanded(false);
+      return;
+    }
+    setExpanded(false);
+    writeExpandedToStorage(false);
+  }, [activeOverlay]);
+
+  useEffect(() => {
     if (expanded || runningSessionIds.size === 0) {
       setHoverExpanded(false);
     }
@@ -273,7 +293,7 @@ const SessionCapsule: React.FC = () => {
   // Collapse when clicking outside the capsule (expanded only).
   // Ignore portaled UI that belongs to the session list (see SessionList).
   useEffect(() => {
-    if (!expanded || pinned) return;
+    if (!showExpandedPanel || pinned) return;
     const handler = (e: PointerEvent) => {
       const target = e.target;
       if (!(target instanceof Node)) return;
@@ -281,28 +301,28 @@ const SessionCapsule: React.FC = () => {
       const root = target instanceof Element ? target : target.parentElement;
       if (root?.closest?.('[data-bitfun-ignore-session-capsule-outside]')) return;
       if (root?.closest?.('.modal-overlay')) return;
-      setExpanded(false);
-      writeExpandedToStorage(false);
+      collapseCapsule();
     };
     document.addEventListener('pointerdown', handler);
     return () => document.removeEventListener('pointerdown', handler);
-  }, [expanded, pinned]);
+  }, [collapseCapsule, pinned, showExpandedPanel]);
 
   const lastExpandNonceRef = useRef(sessionListExpandNonce);
   useEffect(() => {
     if (sessionListExpandNonce === lastExpandNonceRef.current) return;
     lastExpandNonceRef.current = sessionListExpandNonce;
+    if (activeOverlay !== null) {
+      setOverlayExpanded(true);
+      setHoverExpanded(false);
+      return;
+    }
     setExpanded(true);
     writeExpandedToStorage(true);
     setHoverExpanded(false);
-  }, [sessionListExpandNonce]);
-
-  const runningCount = runningItems.length;
-  const canHoverExpand = !expanded && runningCount > 0;
-  const showExpandedPanel = expanded || hoverExpanded;
-  const liftAboveOverlayScene = activeOverlay !== null;
+  }, [activeOverlay, sessionListExpandNonce]);
 
   return (
+    !showExpandedPanel && !showCollapsedCapsule ? null : (
     <div
       ref={panelRef}
       className={[
@@ -489,6 +509,7 @@ const SessionCapsule: React.FC = () => {
         </Tooltip>
       )}
     </div>
+    )
   );
 };
 

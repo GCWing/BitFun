@@ -5,7 +5,8 @@
  * right rail = execution sessions for opened workspaces.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Code2,
   Brush,
@@ -19,11 +20,11 @@ import {
   ArrowRight,
   Clock,
   Radio,
+  Server,
   Trash2,
   X,
 } from 'lucide-react';
-import { Search, FilterPill, FilterPillGroup, Select, IconButton, confirmDanger } from '@/component-library';
-import type { SelectOption } from '@/component-library';
+import { Search, FilterPill, FilterPillGroup, IconButton, confirmDanger } from '@/component-library';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -41,6 +42,7 @@ import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
+import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { renderLiveAppIcon } from '@/app/scenes/apps/live-app/liveAppIcons';
 import { useRunningLiveAppItems, type RunningLiveAppItem } from '@/app/scenes/apps/live-app/liveAppTaskView';
 import './TaskDetailScene.scss';
@@ -238,9 +240,23 @@ const LiveAppRow: React.FC<LiveAppRowProps> = ({
   </div>
 );
 
-// ── Mode filter type ──────────────────────────────────────────────────────────
+// ── Right rail grouping ───────────────────────────────────────────────────────
 
-type ModeFilter = 'all' | ExecMode;
+type ExecGroupingMode = 'workspace' | 'agent';
+
+interface ExecSessionRow {
+  session: Session;
+  workspace: WorkspaceInfo;
+  mode: ExecMode;
+}
+
+interface ExecSessionGroup {
+  id: string;
+  kind: ExecGroupingMode;
+  title: string;
+  mode?: ExecMode;
+  rows: ExecSessionRow[];
+}
 
 function normalizeQuery(q: string): string {
   return q.trim().toLowerCase();
@@ -256,8 +272,7 @@ function matchesQuery(haystack: string, q: string): boolean {
 interface WorkspaceRowProps {
   workspace: WorkspaceInfo;
   sessionCount: number;
-  isActiveWorkspace: boolean;
-  isFilterSelected: boolean;
+  isCurrentWorkspace: boolean;
   isOpenedWorkspace: boolean;
   onSelect: (workspaceId: string) => void;
   onClose: (e: React.MouseEvent, workspaceId: string) => void;
@@ -266,52 +281,163 @@ interface WorkspaceRowProps {
 const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
   workspace,
   sessionCount,
-  isActiveWorkspace,
-  isFilterSelected,
+  isCurrentWorkspace,
   isOpenedWorkspace,
   onSelect,
   onClose,
 }) => {
   const { t } = useI18n('common');
   return (
-  <div
-    className={[
-      'tds-ws-row',
-      isFilterSelected && 'is-filter',
-      isActiveWorkspace && 'is-current',
-    ].filter(Boolean).join(' ')}
-    role="button"
-    tabIndex={0}
-    onClick={() => onSelect(workspace.id)}
-    onKeyDown={e => e.key === 'Enter' && onSelect(workspace.id)}
-  >
-    <span className="tds-ws-row__icon-wrap">
-      <FolderOpen size={13} className="tds-ws-row__icon" />
-    </span>
-    <span className="tds-ws-row__body">
-      <span className="tds-ws-row__title">{workspace.name}</span>
-      <span className="tds-ws-row__meta">
-        {isActiveWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeCurrent')}</span>}
-        {!isOpenedWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeRecent')}</span>}
-        <span className="tds-ws-row__meta-item">
-          <MessageSquare size={9} />
-          {sessionCount}
+    <div
+      className={[
+        'tds-ws-row',
+        isCurrentWorkspace && 'is-current',
+      ].filter(Boolean).join(' ')}
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(workspace.id)}
+      onKeyDown={e => e.key === 'Enter' && onSelect(workspace.id)}
+    >
+      <span className="tds-ws-row__icon-wrap">
+        <FolderOpen size={13} className="tds-ws-row__icon" />
+      </span>
+      <span className="tds-ws-row__body">
+        <span className="tds-ws-row__title">{workspace.name}</span>
+        <span className="tds-ws-row__meta">
+          {isCurrentWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeCurrent')}</span>}
+          {!isOpenedWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeRecent')}</span>}
+          <span className="tds-ws-row__meta-item">
+            <MessageSquare size={9} />
+            {sessionCount}
+          </span>
         </span>
       </span>
-    </span>
-    {isOpenedWorkspace ? (
+      {isOpenedWorkspace ? (
+        <IconButton
+          size="xs"
+          variant="ghost"
+          className="tds-ws-row__close"
+          tooltip={t('taskDetailScene.closeWorkspace')}
+          onClick={e => onClose(e, workspace.id)}
+          aria-label={t('taskDetailScene.closeWorkspace')}
+        >
+          <X size={11} />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+};
+
+// ── Open workspace: local folder vs SSH (menu) ───────────────────────────────
+
+interface TaskDetailOpenWorkspaceMenuProps {
+  onOpenLocal: () => void;
+  onOpenRemote: () => void;
+  remoteAvailable: boolean;
+}
+
+const TaskDetailOpenWorkspaceMenu: React.FC<TaskDetailOpenWorkspaceMenuProps> = ({
+  onOpenLocal,
+  onOpenRemote,
+  remoteAvailable,
+}) => {
+  const { t } = useI18n('common');
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const updatePos = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const menuWidth = 216;
+    const pad = 8;
+    setPos({
+      top: rect.bottom + 4,
+      left: Math.max(pad, Math.min(rect.left, window.innerWidth - menuWidth - pad)),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePos();
+    const onViewport = () => updatePos();
+    window.addEventListener('resize', onViewport);
+    window.addEventListener('scroll', onViewport, true);
+    return () => {
+      window.removeEventListener('resize', onViewport);
+      window.removeEventListener('scroll', onViewport, true);
+    };
+  }, [open, updatePos]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (anchorRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div className="tds-open-ws-menu" ref={anchorRef}>
       <IconButton
         size="xs"
         variant="ghost"
-        className="tds-ws-row__close"
-        tooltip={t('taskDetailScene.closeWorkspace')}
-        onClick={e => onClose(e, workspace.id)}
-        aria-label={t('taskDetailScene.closeWorkspace')}
+        tooltip={t('taskDetailScene.openWorkspaceMenu')}
+        aria-label={t('taskDetailScene.openWorkspaceMenu')}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen(v => !v)}
       >
-        <X size={11} />
+        <FolderPlus size={12} />
       </IconButton>
-    ) : null}
-  </div>
+      {open && pos
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              className="tds-open-ws-popover"
+              style={{ top: pos.top, left: pos.left }}
+              role="menu"
+            >
+              <button
+                type="button"
+                className="tds-open-ws-popover__item"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onOpenLocal();
+                }}
+              >
+                <FolderOpen size={14} className="tds-open-ws-popover__icon" aria-hidden />
+                <span>{t('taskDetailScene.openWorkspaceLocal')}</span>
+              </button>
+              <button
+                type="button"
+                className="tds-open-ws-popover__item"
+                role="menuitem"
+                disabled={!remoteAvailable}
+                title={
+                  remoteAvailable ? undefined : t('taskDetailScene.openWorkspaceRemoteUnavailable')
+                }
+                onClick={() => {
+                  if (!remoteAvailable) return;
+                  setOpen(false);
+                  onOpenRemote();
+                }}
+              >
+                <Server size={14} className="tds-open-ws-popover__icon" aria-hidden />
+                <span>{t('taskDetailScene.openWorkspaceRemoteSsh')}</span>
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
+    </div>
   );
 };
 
@@ -325,6 +451,11 @@ const TaskDetailScene: React.FC = () => {
   const openOverlay = useOverlayStore(s => s.openOverlay);
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
   const runningLiveApps = useRunningLiveAppItems();
+  const sshContext = useContext(SSHContext);
+  const sshOpenAvailable =
+    typeof window !== 'undefined' &&
+    '__TAURI__' in window &&
+    Boolean(sshContext?.setShowConnectionDialog);
 
   const {
     openedWorkspacesList,
@@ -371,21 +502,20 @@ const TaskDetailScene: React.FC = () => {
     [t]
   );
 
-  const modeChips = useMemo<Array<{ id: ModeFilter; label: string }>>(
+  const groupingChips = useMemo<Array<{ id: ExecGroupingMode; label: string }>>(
     () => [
-      { id: 'all', label: t('taskDetailScene.filterAll') },
-      { id: 'code', label: 'Code' },
-      { id: 'cowork', label: 'Cowork' },
-      { id: 'claw', label: 'Claw' },
+      { id: 'workspace', label: t('taskDetailScene.groupByWorkspace') },
+      { id: 'agent', label: t('taskDetailScene.groupByAgent') },
     ],
     [t]
   );
 
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
-  const [wsFilter, setWsFilter] = useState<string>('all');
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
+  const [execGroupingMode, setExecGroupingMode] = useState<ExecGroupingMode>('workspace');
   const [listQuery, setListQuery] = useState('');
+  const [execQuery, setExecQuery] = useState('');
+  const workspaceOrderRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     setFlowChatState(flowChatStore.getState());
@@ -410,6 +540,7 @@ const TaskDetailScene: React.FC = () => {
 
   // Dispatcher (Agentic OS) sessions — not tied to a project workspace
   const qNorm = useMemo(() => normalizeQuery(listQuery), [listQuery]);
+  const execQNorm = useMemo(() => normalizeQuery(execQuery), [execQuery]);
 
   const dispatcherSessions = useMemo(
     () => Array.from(flowChatState.sessions.values())
@@ -421,13 +552,24 @@ const TaskDetailScene: React.FC = () => {
 
   const recentWorkspaceScope = useMemo(() => {
     const scope = new Map<string, WorkspaceInfo>();
-    recentWorkspaces.slice(0, RECENT_WORKSPACE_LIMIT).forEach(workspace => {
-      scope.set(workspace.id, workspace);
-    });
     openedWorkspacesList.forEach(workspace => {
       scope.set(workspace.id, workspace);
     });
-    return Array.from(scope.values());
+    recentWorkspaces.slice(0, RECENT_WORKSPACE_LIMIT).forEach(workspace => {
+      if (!scope.has(workspace.id)) {
+        scope.set(workspace.id, workspace);
+      }
+    });
+    const values = Array.from(scope.values());
+    const order = workspaceOrderRef.current;
+
+    values.forEach(workspace => {
+      if (!order.has(workspace.id)) {
+        order.set(workspace.id, order.size);
+      }
+    });
+
+    return values.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   }, [recentWorkspaces, openedWorkspacesList]);
 
   const openedWorkspaceIdSet = useMemo(
@@ -442,9 +584,9 @@ const TaskDetailScene: React.FC = () => {
       .sort(compareSessionsForDisplay)
       .map(session => {
         const ws = findWorkspaceForSession(session, recentWorkspaceScope);
-        return { session, workspace: ws ?? null };
+        return { session, workspace: ws ?? null, mode: resolveExecMode(session) };
       })
-      .filter((row): row is { session: Session; workspace: WorkspaceInfo } => row.workspace !== null);
+      .filter((row): row is ExecSessionRow & { workspace: WorkspaceInfo } => row.workspace !== null);
   }, [flowChatState.sessions, recentWorkspaceScope]);
 
   const sessionCountByWorkspaceId = useMemo(() => {
@@ -461,41 +603,81 @@ const TaskDetailScene: React.FC = () => {
     );
   }, [recentWorkspaceScope, qNorm]);
 
-  const wsSelectOptions = useMemo<SelectOption[]>(
-    () => [
-      { label: t('taskDetailScene.allWorkspaces'), value: 'all' },
-      ...recentWorkspaceScope.map(ws => ({ label: ws.name, value: ws.id })),
-    ],
-    [recentWorkspaceScope, t]
-  );
+  const showWorkspaceLabelsOnSessions =
+    execGroupingMode === 'agent' && recentWorkspaceScope.length > 1;
 
-  const showWorkspaceLabelsOnSessions = recentWorkspaceScope.length > 1;
-
-  // Filtered exec sessions (opened workspaces only)
-  const filteredExec = useMemo(() => {
-    return execSessions.filter(({ session, workspace }) => {
-      if (modeFilter !== 'all' && resolveExecMode(session) !== modeFilter) return false;
-      if (wsFilter !== 'all' && workspace.id !== wsFilter) return false;
-      if (
-        qNorm &&
-        !matchesQuery(sessionDisplayTitle(session), qNorm) &&
-        !matchesQuery(workspace.name, qNorm)
-      ) {
-        return false;
-      }
-      return true;
+  const visibleExecRows = useMemo(() => {
+    return execSessions.filter(({ session, workspace, mode }) => {
+      if (!qNorm && !execQNorm) return true;
+      const matchesGlobalQuery = !qNorm || (
+        matchesQuery(sessionDisplayTitle(session), qNorm) ||
+        matchesQuery(workspace.name, qNorm) ||
+        matchesQuery(MODE_LABELS[mode], qNorm) ||
+        matchesQuery(session.config.agentType ?? '', qNorm)
+      );
+      const matchesExecQuery = !execQNorm || (
+        matchesQuery(sessionDisplayTitle(session), execQNorm) ||
+        matchesQuery(workspace.name, execQNorm) ||
+        matchesQuery(MODE_LABELS[mode], execQNorm) ||
+        matchesQuery(session.config.agentType ?? '', execQNorm)
+      );
+      return matchesGlobalQuery && matchesExecQuery;
     });
-  }, [execSessions, modeFilter, wsFilter, qNorm, sessionDisplayTitle]);
+  }, [execSessions, qNorm, execQNorm, sessionDisplayTitle]);
+
+  const groupedExecSessions = useMemo<ExecSessionGroup[]>(() => {
+    const groups = new Map<string, ExecSessionGroup>();
+
+    for (const row of visibleExecRows) {
+      const key = execGroupingMode === 'workspace'
+        ? `workspace:${row.workspace.id}`
+        : `agent:${row.mode}`;
+      const group = groups.get(key);
+
+      if (group) {
+        group.rows.push(row);
+        continue;
+      }
+
+      const title = execGroupingMode === 'workspace'
+        ? (row.workspace.name || fallbackWorkspaceFolderLabel(row.workspace.rootPath))
+        : MODE_LABELS[row.mode];
+
+      groups.set(key, {
+        id: key,
+        kind: execGroupingMode,
+        title,
+        mode: execGroupingMode === 'agent' ? row.mode : undefined,
+        rows: [row],
+      });
+    }
+
+    return Array.from(groups.values());
+  }, [visibleExecRows, execGroupingMode]);
 
   const runningExecCount = useMemo(
-    () => filteredExec.filter(({ session }) => runningIds.has(session.sessionId)).length,
-    [filteredExec, runningIds]
+    () => visibleExecRows.filter(({ session }) => runningIds.has(session.sessionId)).length,
+    [visibleExecRows, runningIds]
   );
   const totalRunningCount = runningExecCount + runningLiveApps.length;
 
-  const handleWorkspacePaneSelect = useCallback((workspaceId: string) => {
-    setWsFilter(prev => (prev === workspaceId ? 'all' : workspaceId));
-  }, []);
+  const handleWorkspacePaneSelect = useCallback(async (workspaceId: string) => {
+    const targetWorkspace = recentWorkspaceScope.find(workspace => workspace.id === workspaceId);
+    if (!targetWorkspace) return;
+
+    try {
+      if (openedWorkspaceIdSet.has(targetWorkspace.id)) {
+        if (currentWorkspace?.id !== targetWorkspace.id) {
+          await setActiveWorkspace(targetWorkspace.id);
+        }
+        return;
+      }
+
+      await switchWorkspace(targetWorkspace);
+    } catch (e) {
+      log.error('Failed to switch workspace from task detail list', e);
+    }
+  }, [recentWorkspaceScope, openedWorkspaceIdSet, currentWorkspace?.id, setActiveWorkspace, switchWorkspace]);
 
   const handleOpenNewWorkspace = useCallback(async () => {
     try {
@@ -512,12 +694,11 @@ const TaskDetailScene: React.FC = () => {
   const handleCloseWorkspace = useCallback(async (e: React.MouseEvent, workspaceId: string) => {
     e.stopPropagation();
     try {
-      if (wsFilter === workspaceId) setWsFilter('all');
       await closeWorkspaceById(workspaceId);
     } catch (e) {
       log.error('Failed to close workspace', e);
     }
-  }, [closeWorkspaceById, wsFilter]);
+  }, [closeWorkspaceById]);
 
   const handleOpenSession = useCallback(async (session: Session) => {
     try {
@@ -606,21 +787,13 @@ const TaskDetailScene: React.FC = () => {
                   <FolderOpen size={12} className="tds-pane-head__icon tds-pane-head__icon--ws" />
                   <span className="tds-pane-head__title">{t('taskDetailScene.recentWorkspacesTitle')}</span>
                   <span className="tds-pane-head__count">{filteredWorkspaces.length}</span>
-                  <FilterPill
-                    label={t('taskDetailScene.filterAll')}
-                    active={wsFilter === 'all'}
-                    onClick={() => setWsFilter('all')}
-                    className="tds-pane-head__chip"
+                  <TaskDetailOpenWorkspaceMenu
+                    onOpenLocal={() => {
+                      void handleOpenNewWorkspace();
+                    }}
+                    onOpenRemote={() => sshContext?.setShowConnectionDialog(true)}
+                    remoteAvailable={sshOpenAvailable}
                   />
-                  <IconButton
-                    size="xs"
-                    variant="ghost"
-                    tooltip={t('taskDetailScene.openWorkspace')}
-                    onClick={handleOpenNewWorkspace}
-                    aria-label={t('taskDetailScene.openWorkspace')}
-                  >
-                    <FolderPlus size={12} />
-                  </IconButton>
                 </div>
               </div>
               {/* Row 2 — scrollable lists */}
@@ -663,8 +836,7 @@ const TaskDetailScene: React.FC = () => {
                         key={ws.id}
                         workspace={ws}
                         sessionCount={sessionCountByWorkspaceId.get(ws.id) ?? 0}
-                        isActiveWorkspace={currentWorkspace?.id === ws.id}
-                        isFilterSelected={wsFilter === ws.id}
+                        isCurrentWorkspace={currentWorkspace?.id === ws.id}
                         isOpenedWorkspace={openedWorkspaceIdSet.has(ws.id)}
                         onSelect={handleWorkspacePaneSelect}
                         onClose={handleCloseWorkspace}
@@ -683,7 +855,7 @@ const TaskDetailScene: React.FC = () => {
             <div className="tds-rail-head">
               <Code2 size={13} className="tds-rail-head__icon" />
               <span className="tds-rail-head__title">{t('taskDetailScene.workspaceSessionsTitle')}</span>
-              <span className="tds-rail-head__count">{filteredExec.length}</span>
+              <span className="tds-rail-head__count">{visibleExecRows.length}</span>
 
               {totalRunningCount > 0 && (
                 <span className="tds-rail-head__running">
@@ -693,22 +865,21 @@ const TaskDetailScene: React.FC = () => {
               )}
 
               <div className="tds-rail-head__filters">
-                {showWorkspaceLabelsOnSessions && (
-                  <Select
-                    className="tds-rail-select"
-                    size="small"
-                    options={wsSelectOptions}
-                    value={wsFilter}
-                    onChange={v => setWsFilter(String(v))}
-                  />
-                )}
+                <Search
+                  className="tds-rail-search__input"
+                  size="small"
+                  value={execQuery}
+                  onChange={setExecQuery}
+                  placeholder={t('taskDetailScene.searchSessionsPlaceholder')}
+                  clearable
+                />
                 <FilterPillGroup>
-                  {modeChips.map(chip => (
+                  {groupingChips.map(chip => (
                     <FilterPill
                       key={chip.id}
                       label={chip.label}
-                      active={modeFilter === chip.id}
-                      onClick={() => setModeFilter(chip.id)}
+                      active={execGroupingMode === chip.id}
+                      onClick={() => setExecGroupingMode(chip.id)}
                     />
                   ))}
                 </FilterPillGroup>
@@ -716,7 +887,7 @@ const TaskDetailScene: React.FC = () => {
             </div>
 
             <div className="tds-rail-list">
-              {filteredExec.length === 0 && runningLiveApps.length === 0 ? (
+              {visibleExecRows.length === 0 && runningLiveApps.length === 0 ? (
                 <div className="tds-empty">
                   <Code2 size={32} />
                   <p>{execSessions.length === 0 ? t('taskDetailScene.emptyWorkspaceSessions') : t('taskDetailScene.emptySessionsFiltered')}</p>
@@ -732,23 +903,38 @@ const TaskDetailScene: React.FC = () => {
                       onOpen={handleOpenLiveApp}
                     />
                   ))}
-                  {filteredExec.map(({ session, workspace }) => (
-                    <SessionRow
-                      key={session.sessionId}
-                      session={session}
-                      isHighlighted={session.sessionId === taskDetailSessionId}
-                      statusVariant={getStatusVariant(session, runningIds)}
-                      showMode
-                      workspaceName={
-                        showWorkspaceLabelsOnSessions
-                          ? openedWorkspaceIdSet.has(workspace.id)
-                            ? workspace.name
-                            : `${workspace.name || fallbackWorkspaceFolderLabel(workspace.rootPath)} · ${t('taskDetailScene.badgeRecent')}`
-                          : undefined
-                      }
-                      formatRelativeTime={formatRelativeTime}
-                      onOpen={handleOpenSession}
-                    />
+                  {groupedExecSessions.map(group => (
+                    <div key={group.id} className="tds-rail-group">
+                      <div className="tds-rail-group__head">
+                        {group.kind === 'workspace' ? (
+                          <FolderOpen size={12} className="tds-rail-group__icon tds-rail-group__icon--workspace" />
+                        ) : (
+                          <ModeIcon mode={group.mode ?? 'code'} size={12} className={`tds-rail-group__icon tds-rail-group__icon--${group.mode ?? 'code'}`} />
+                        )}
+                        <span className="tds-rail-group__title">{group.title}</span>
+                        <span className="tds-rail-group__count">{group.rows.length}</span>
+                      </div>
+                      <div className="tds-rail-group__list">
+                        {group.rows.map(({ session, workspace }) => (
+                          <SessionRow
+                            key={session.sessionId}
+                            session={session}
+                            isHighlighted={session.sessionId === taskDetailSessionId}
+                            statusVariant={getStatusVariant(session, runningIds)}
+                            showMode
+                            workspaceName={
+                              showWorkspaceLabelsOnSessions
+                                ? openedWorkspaceIdSet.has(workspace.id)
+                                  ? workspace.name
+                                  : `${workspace.name || fallbackWorkspaceFolderLabel(workspace.rootPath)} · ${t('taskDetailScene.badgeRecent')}`
+                                : undefined
+                            }
+                            formatRelativeTime={formatRelativeTime}
+                            onOpen={handleOpenSession}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </>
               )}

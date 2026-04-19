@@ -192,6 +192,43 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               variant="filled"
               inputSize="small"
               prefix={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
+              suffix={
+                <span className="flowchat-header__search-inline-controls">
+                  <span className="flowchat-header__search-count" aria-live="polite">
+                    {searchQuery.trim()
+                      ? hasNoResults
+                        ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
+                        : t('flowChatHeader.searchResult', {
+                            current: searchCurrentMatch,
+                            total: searchMatchCount,
+                            defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
+                          })
+                      : null}
+                  </span>
+                  <span className="flowchat-header__search-nav">
+                    <button
+                      className="flowchat-header__search-nav-btn"
+                      onClick={onSearchPrev}
+                      disabled={searchMatchCount === 0}
+                      title={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
+                      aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
+                      type="button"
+                    >
+                      <ChevronUp size={10} />
+                    </button>
+                    <button
+                      className="flowchat-header__search-nav-btn"
+                      onClick={onSearchNext}
+                      disabled={searchMatchCount === 0}
+                      title={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
+                      aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
+                      type="button"
+                    >
+                      <ChevronDown size={10} />
+                    </button>
+                  </span>
+                </span>
+              }
               type="text"
               value={searchQuery}
               onChange={e => onSearchChange?.(e.target.value)}
@@ -200,37 +237,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               aria-label={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
               error={hasNoResults}
             />
-            <span className="flowchat-header__search-count" aria-live="polite">
-              {searchQuery.trim()
-                ? hasNoResults
-                  ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
-                  : t('flowChatHeader.searchResult', {
-                      current: searchCurrentMatch,
-                      total: searchMatchCount,
-                      defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
-                    })
-                : null}
-            </span>
-            <IconButton
-              variant="ghost"
-              size="xs"
-              onClick={onSearchPrev}
-              disabled={searchMatchCount === 0}
-              tooltip={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-              aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-            >
-              <ChevronUp size={14} />
-            </IconButton>
-            <IconButton
-              variant="ghost"
-              size="xs"
-              onClick={onSearchNext}
-              disabled={searchMatchCount === 0}
-              tooltip={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-              aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-            >
-              <ChevronDown size={14} />
-            </IconButton>
             <IconButton
               variant="ghost"
               size="xs"

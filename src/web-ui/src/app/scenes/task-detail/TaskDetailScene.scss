@@ -243,6 +243,55 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   }
 }
 
+// ── Open workspace menu (recent workspaces pane header) ─────────────────────
+
+.tds-open-ws-menu {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.tds-open-ws-popover {
+  position: fixed;
+  z-index: calc(#{$z-dropdown} + 40);
+  min-width: 200px;
+  padding: $size-gap-1;
+  border-radius: $size-radius-base;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  /* Solid surface (match nav workspace item menu — avoids transparent panel on scene bg) */
+  background: var(--color-bg-elevated, var(--color-bg-primary));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.tds-open-ws-popover__item {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  width: 100%;
+  padding: $size-gap-2 $size-gap-3;
+  border: none;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: background $motion-fast $easing-standard;
+
+  &:hover:not(:disabled) {
+    background: var(--element-bg-medium);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.tds-open-ws-popover__icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
 // ── Pane scrollable list ──────────────────────────────────────────────────
 
 .tds-pane-list {
@@ -280,19 +329,23 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: $size-gap-2;
   padding: $size-gap-4 $size-gap-5 $size-gap-3;
   border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
 
   &__icon { flex-shrink: 0; color: var(--color-accent-500); }
 
   &__title {
+    min-width: 0;
+    flex-shrink: 1;
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-semibold;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--color-text-muted);
+    white-space: nowrap;
   }
 
   &__count {
@@ -313,6 +366,8 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
     font-size: 10px;
     font-weight: $font-weight-semibold;
     color: var(--color-accent-500);
@@ -329,8 +384,25 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
     align-items: center;
     gap: $size-gap-2;
     margin-left: auto;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    min-width: 0;
+    flex-shrink: 1;
   }
+}
+
+// ── Rail search ─────────────────────────────────────────────────────────────
+
+.tds-rail-search__input {
+  width: min(160px, 100%);
+  flex-shrink: 1;
+  min-width: 112px;
+}
+
+.tds-rail-search__input .search__wrapper {
+  border-radius: $size-radius-lg;
+  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--element-bg-subtle) 94%, transparent);
 }
 
 // ── Rail scrollable list ──────────────────────────────────────────────────
@@ -347,6 +419,61 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
     border-radius: 2px;
   }
   &::-webkit-scrollbar-track { background: transparent; }
+}
+
+// ── Rail groups ────────────────────────────────────────────────────────────
+
+.tds-rail-group + .tds-rail-group {
+  margin-top: $size-gap-3;
+}
+
+.tds-rail-group__head {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-2;
+  padding: $size-gap-1 $size-gap-2;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tds-rail-group__icon {
+  flex-shrink: 0;
+
+  &--workspace { color: var(--color-accent-500); }
+  &--code { color: var(--color-accent-500); }
+  &--cowork { color: #10b981; }
+  &--design { color: var(--color-purple-500); }
+  &--claw { color: #f59e0b; }
+}
+
+.tds-rail-group__title {
+  min-width: 0;
+  flex: 1;
+  font-size: 11px;
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tds-rail-group__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: $size-radius-full;
+  background: var(--element-bg-medium);
+  font-size: 10px;
+  font-weight: $font-weight-semibold;
+  color: var(--color-text-muted);
+}
+
+.tds-rail-group__list {
+  padding-top: $size-gap-1;
 }
 
 // ── Rail: Select component width constraint ───────────────────────────────
@@ -551,15 +678,14 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   min-height: 40px;
   padding: $size-gap-2 $size-gap-3;
   border-radius: $size-radius-lg;
-  cursor: pointer;
   background: transparent;
+  margin-bottom: 1px;
+  cursor: pointer;
   outline: none;
   transition: background $motion-fast $easing-standard;
-  margin-bottom: 1px;
 
   &:hover {
     background: var(--element-bg-soft);
-    .tds-ws-row__arrow { opacity: 1; }
   }
 
   &:focus-visible {
@@ -567,8 +693,12 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
     outline-offset: -2px;
   }
 
-  &.is-filter {
-    background: color-mix(in srgb, var(--color-accent-100) 60%, transparent);
+  &.is-current {
+    background: transparent;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
   }
 }
 

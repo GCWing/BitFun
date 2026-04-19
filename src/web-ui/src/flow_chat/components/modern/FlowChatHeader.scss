@@ -80,13 +80,29 @@
 
   &__search {
     flex: 0 1 auto;
-    max-width: min(320px, 42vw);
     min-width: 0;
     display: flex;
     align-items: center;
     // Tight spacing between input, match count, and nav buttons.
     gap: 2px;
     overflow: hidden;
+
+    // Expand animation: animate max-width and opacity when appearing.
+    max-width: min(320px, 42vw);
+    opacity: 1;
+    transform-origin: right center;
+    animation: flowchat-search-expand $motion-base $easing-standard both;
+  }
+
+  @keyframes flowchat-search-expand {
+    from {
+      max-width: 0;
+      opacity: 0;
+    }
+    to {
+      max-width: min(320px, 42vw);
+      opacity: 1;
+    }
   }
 
   &__search-field {
@@ -101,9 +117,16 @@
       color: var(--color-error, #c77070);
     }
 
-    // Default Input horizontal padding is generous; pull the right edge closer to match controls.
+    // Tighten right padding since nav buttons live inside the suffix now.
     .bitfun-input-container {
-      padding-right: 6px;
+      padding-right: 2px;
+    }
+
+    // Let the suffix span fill height so buttons align properly.
+    .bitfun-input-suffix {
+      padding: 0;
+      display: flex;
+      align-items: center;
     }
   }
 
@@ -113,17 +136,69 @@
     opacity: 0.75;
   }
 
+  // Container for count + nav buttons rendered inside the Input suffix.
+  &__search-inline-controls {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding-left: 2px;
+    border-left: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+    margin-left: 2px;
+  }
+
   &__search-count {
     flex-shrink: 0;
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-secondary);
     white-space: nowrap;
     text-align: right;
-    padding-left: 2px;
+    padding: 0 3px;
 
-    // Avoid a fixed min-width reserve when there is no count (span is empty).
     &:empty {
       display: none;
+    }
+  }
+
+  // Vertical nav control — two stacked arrow buttons as one compact rectangle.
+  &__search-nav {
+    display: flex;
+    flex-direction: column;
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+
+    &:hover {
+      border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+
+      .flowchat-header__search-nav-btn + .flowchat-header__search-nav-btn {
+        border-top: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+      }
+    }
+  }
+
+  &__search-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity $motion-base $easing-standard, background $motion-base $easing-standard;
+    line-height: 0;
+
+    &:hover:not(:disabled) {
+      opacity: 1;
+      background: var(--element-bg-soft, rgba(128, 128, 128, 0.1));
+    }
+
+    &:disabled {
+      opacity: 0.25;
+      cursor: default;
     }
   }
 

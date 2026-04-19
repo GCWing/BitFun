@@ -14,6 +14,8 @@ import {
   type ConnectionStatus,
   type SSHContextValue,
 } from './SSHRemoteContext';
+import { SSHConnectionDialog } from './SSHConnectionDialog';
+import { RemoteFileBrowser } from './RemoteFileBrowser';
 
 const log = createLogger('SSHRemoteProvider');
 
@@ -575,7 +577,26 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     clearError,
   };
 
-  return <SSHContext.Provider value={value}>{children}</SSHContext.Provider>;
+  return (
+    <SSHContext.Provider value={value}>
+      {children}
+      <SSHConnectionDialog
+        open={showConnectionDialog}
+        onClose={() => setShowConnectionDialog(false)}
+      />
+      {showFileBrowser && connectionId ? (
+        <RemoteFileBrowser
+          key={connectionId}
+          connectionId={connectionId}
+          initialPath={remoteFileBrowserInitialPath}
+          onSelect={path => {
+            void openWorkspace(path);
+          }}
+          onCancel={() => setShowFileBrowser(false)}
+        />
+      ) : null}
+    </SSHContext.Provider>
+  );
 };
 
 export default SSHRemoteProvider;
