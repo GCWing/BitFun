@@ -33,17 +33,21 @@ interface ExportImageButtonProps {
 // Exported content renderer.
 interface ExportContentProps {
   dialogTurn: DialogTurn;
-  logoDataUrl?: string;
 }
 
-const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn, logoDataUrl }) => {
+// Marker class on the logo placeholder so we can locate it for canvas compositing.
+const LOGO_PLACEHOLDER_CLASS = 'export-content__logo-placeholder';
+
+const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
   return (
     <div className="export-content">
       <div className="export-content__header">
-        <img
-          src={logoDataUrl ?? '/Logo-ICON.png'}
-          alt="BitFun"
-          className="export-content__logo"
+        {/* Placeholder reserves space for the logo. The actual logo is drawn
+            onto the final image via canvas compositing to avoid html-to-image
+            issues with embedding <img>/data URLs inside an SVG foreignObject. */}
+        <div
+          className={`export-content__logo ${LOGO_PLACEHOLDER_CLASS}`}
+          aria-label="BitFun"
         />
         <div className="export-content__title-group">
           <div className="export-content__title">BitFun</div>
@@ -156,27 +160,23 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       const computedStyle = getComputedStyle(document.documentElement);
       const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || '#121214';
 
-      // Pre-load logo and resize to 64x64 via canvas to produce a compact data URL.
-      // html-to-image truncates very long base64 strings in SVG attributes,
-      // so we must keep the data URL small by downscaling the original 1024x1024 image.
-      let logoDataUrl: string | undefined;
+      // Pre-load the logo as an HTMLImageElement. We do NOT try to embed it
+      // inside the captured DOM (html-to-image is unreliable with <img>/data URLs
+      // inside an SVG foreignObject and frequently drops them). Instead we
+      // reserve space with a placeholder element and composite the logo onto
+      // the final raster via canvas after html-to-image finishes.
+      let logoImage: HTMLImageElement | null = null;
       try {
-        logoDataUrl = await new Promise<string>((resolve, reject) => {
+        logoImage = await new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new window.Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64;
-            canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) { reject(new Error('no canvas ctx')); return; }
-            ctx.drawImage(img, 0, 0, 64, 64);
-            resolve(canvas.toDataURL('image/png'));
-          };
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
           img.onerror = reject;
-          img.src = '/Logo-ICON.png';
+          // Cache-bust to avoid stale decoded copies when re-exporting.
+          img.src = `/Logo-ICON.png?t=${Date.now()}`;
         });
       } catch (e) {
-        log.warn('Logo canvas resize failed, will use original path', e);
+        log.warn('Logo preload failed; export will proceed without logo overlay', e);
       }
       
       // Create hidden wrapper for rendering.
@@ -215,7 +215,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       
       // Render export content with React.
       const root = createRoot(wrapper);
-      root.render(<ExportContent dialogTurn={dialogTurn} logoDataUrl={logoDataUrl} />);
+      root.render(<ExportContent dialogTurn={dialogTurn} />);
       
       // Wait for render and images to load.
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -230,59 +230,128 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       // Yield to the main thread.
       await new Promise(resolve => setTimeout(resolve, 0));
 
+      // Capture the logo placeholder position (relative to the container)
+      // BEFORE the DOM is torn down, so we can composite the logo precisely
+      // onto the final image.
+      const containerRect = container.getBoundingClientRect();
+      const placeholderEl = container.querySelector(`.${LOGO_PLACEHOLDER_CLASS}`) as HTMLElement | null;
+      let logoBox: { x: number; y: number; w: number; h: number; radius: number } | null = null;
+      if (placeholderEl) {
+        const r = placeholderEl.getBoundingClientRect();
+        const radiusStr = getComputedStyle(placeholderEl).getPropertyValue('border-radius');
+        const radius = parseFloat(radiusStr) || 0;
+        logoBox = {
+          x: r.left - containerRect.left,
+          y: r.top - containerRect.top,
+          w: r.width,
+          h: r.height,
+          radius,
+        };
+      }
+
       // Generate image via html-to-image.
       const htmlToImage = await loadHtmlToImage();
       
       // Yield again before capture.
       await new Promise(resolve => setTimeout(resolve, 0));
       
-      let blob: Blob | null = null;
-      
+      const pixelRatio = 2;
+      const captureFilter = (node: HTMLElement) => {
+        // Filter out action buttons and other non-export elements.
+        if (node.classList?.contains('model-round-item__footer')) return false;
+        if (node.classList?.contains('user-message-item__actions')) return false;
+        if (node.classList?.contains('tool-card__actions')) return false;
+        if (node.classList?.contains('base-tool-card__confirm-actions')) return false;
+        if (node.classList?.contains('base-tool-card-expanded')) return false;
+        if (node.classList?.contains('compact-tool-card-expanded')) return false;
+        return true;
+      };
+
+      let baseDataUrl: string;
       try {
-        blob = await htmlToImage.toBlob(container, {
+        baseDataUrl = await htmlToImage.toPng(container, {
           quality: 1,
-          pixelRatio: 2,
+          pixelRatio,
           backgroundColor: bgColor,
           skipFonts: true,
           cacheBust: true,
-          filter: (node: HTMLElement) => {
-            // Filter out action buttons and other non-export elements.
-            if (node.classList?.contains('model-round-item__footer')) return false;
-            if (node.classList?.contains('user-message-item__actions')) return false;
-            if (node.classList?.contains('tool-card__actions')) return false;
-            if (node.classList?.contains('base-tool-card__confirm-actions')) return false;
-            if (node.classList?.contains('base-tool-card-expanded')) return false;
-            if (node.classList?.contains('compact-tool-card-expanded')) return false;
-            return true;
-          },
+          filter: captureFilter,
         });
       } catch (e) {
-        log.warn('toBlob failed, trying toPng', e);
-        
-        const dataUrl = await htmlToImage.toPng(container, {
+        log.warn('toPng failed, retrying with toBlob', e);
+        const fallbackBlob = await htmlToImage.toBlob(container, {
           quality: 1,
-          pixelRatio: 2,
+          pixelRatio,
           backgroundColor: bgColor,
           skipFonts: true,
           cacheBust: true,
-          filter: (node: HTMLElement) => {
-            if (node.classList?.contains('model-round-item__footer')) return false;
-            if (node.classList?.contains('user-message-item__actions')) return false;
-            if (node.classList?.contains('tool-card__actions')) return false;
-            if (node.classList?.contains('base-tool-card__confirm-actions')) return false;
-            if (node.classList?.contains('base-tool-card-expanded')) return false;
-            if (node.classList?.contains('compact-tool-card-expanded')) return false;
-            return true;
-          },
+          filter: captureFilter,
         });
-        
-        const response = await fetch(dataUrl);
-        blob = await response.blob();
+        if (!fallbackBlob) throw new Error(i18nService.t('flow-chat:exportImage.generateFailed'));
+        baseDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(fallbackBlob);
+        });
       }
 
-      // Cleanup.
+      // Cleanup the offscreen DOM as soon as we have the base capture.
       root.unmount();
       document.body.removeChild(wrapper);
+
+      // Composite the logo onto the captured image so it always appears,
+      // regardless of html-to-image's behavior with <img> elements.
+      const blob: Blob | null = await new Promise<Blob | null>((resolve, reject) => {
+        const baseImg = new window.Image();
+        baseImg.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = baseImg.naturalWidth;
+            canvas.height = baseImg.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { reject(new Error('no canvas ctx for compositing')); return; }
+            ctx.drawImage(baseImg, 0, 0);
+
+            if (logoImage && logoBox) {
+              const dx = logoBox.x * pixelRatio;
+              const dy = logoBox.y * pixelRatio;
+              const dw = logoBox.w * pixelRatio;
+              const dh = logoBox.h * pixelRatio;
+              const dr = logoBox.radius * pixelRatio;
+
+              ctx.save();
+              if (dr > 0) {
+                const path = new Path2D();
+                const r = Math.min(dr, dw / 2, dh / 2);
+                path.moveTo(dx + r, dy);
+                path.lineTo(dx + dw - r, dy);
+                path.quadraticCurveTo(dx + dw, dy, dx + dw, dy + r);
+                path.lineTo(dx + dw, dy + dh - r);
+                path.quadraticCurveTo(dx + dw, dy + dh, dx + dw - r, dy + dh);
+                path.lineTo(dx + r, dy + dh);
+                path.quadraticCurveTo(dx, dy + dh, dx, dy + dh - r);
+                path.lineTo(dx, dy + r);
+                path.quadraticCurveTo(dx, dy, dx + r, dy);
+                path.closePath();
+                ctx.clip(path);
+              }
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(logoImage, dx, dy, dw, dh);
+              ctx.restore();
+            } else {
+              log.warn('Logo overlay skipped', { hasLogo: !!logoImage, hasBox: !!logoBox });
+            }
+
+            canvas.toBlob((b) => resolve(b), 'image/png');
+          } catch (err) {
+            reject(err);
+          }
+        };
+        baseImg.onerror = reject;
+        baseImg.src = baseDataUrl;
+      });
 
       if (!blob) {
         throw new Error(i18nService.t('flow-chat:exportImage.generateFailed'));
