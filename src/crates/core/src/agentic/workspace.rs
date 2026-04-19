@@ -2,6 +2,7 @@ use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 /// Describes whether the workspace is local or remote via SSH.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -120,14 +121,70 @@ pub trait WorkspaceFileSystem: Send + Sync {
 }
 
 /// Unified shell execution for both local and remote workspaces.
+#[derive(Debug, Clone, Default)]
+pub struct WorkspaceCommandOptions {
+    pub timeout_ms: Option<u64>,
+    pub cancellation_token: Option<CancellationToken>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceCommandResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+    pub interrupted: bool,
+    pub timed_out: bool,
+}
+
+impl WorkspaceCommandResult {
+    pub fn combined_output(&self) -> String {
+        if self.stderr.is_empty() {
+            self.stdout.clone()
+        } else if self.stdout.is_empty() {
+            self.stderr.clone()
+        } else {
+            format!("{}\n{}", self.stdout, self.stderr)
+        }
+    }
+}
+
 #[async_trait]
 pub trait WorkspaceShell: Send + Sync {
+    /// Execute a command and return a structured result.
+    async fn exec_with_options(
+        &self,
+        command: &str,
+        options: WorkspaceCommandOptions,
+    ) -> anyhow::Result<WorkspaceCommandResult>;
+
     /// Execute a command and return (stdout, stderr, exit_code).
     async fn exec(
         &self,
         command: &str,
         timeout_ms: Option<u64>,
-    ) -> anyhow::Result<(String, String, i32)>;
+    ) -> anyhow::Result<(String, String, i32)> {
+        let result = self
+            .exec_with_options(
+                command,
+                WorkspaceCommandOptions {
+                    timeout_ms,
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        if result.timed_out {
+            anyhow::bail!(
+                "Command timed out after {}ms",
+                timeout_ms.unwrap_or_default()
+            );
+        }
+        if result.interrupted {
+            anyhow::bail!("Command was cancelled");
+        }
+
+        Ok((result.stdout, result.stderr, result.exit_code))
+    }
 }
 
 /// Bundle of workspace I/O services injected into ToolUseContext.
@@ -222,36 +279,131 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
 }
 
 /// Local shell implementation of `WorkspaceShell`.
-pub struct LocalWorkspaceShell;
+pub struct LocalWorkspaceShell {
+    workspace_root: String,
+}
+
+impl LocalWorkspaceShell {
+    pub fn new(workspace_root: String) -> Self {
+        Self { workspace_root }
+    }
+}
 
 #[async_trait]
 impl WorkspaceShell for LocalWorkspaceShell {
-    async fn exec(
+    async fn exec_with_options(
         &self,
         command: &str,
-        timeout_ms: Option<u64>,
-    ) -> anyhow::Result<(String, String, i32)> {
+        options: WorkspaceCommandOptions,
+    ) -> anyhow::Result<WorkspaceCommandResult> {
+        use std::process::Stdio;
+        use tokio::io::AsyncReadExt;
+
         let mut cmd = tokio::process::Command::new("sh");
         cmd.arg("-c").arg(command);
+        cmd.current_dir(&self.workspace_root);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
 
-        let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(30_000));
+        let mut child = cmd.spawn()?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to capture command stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to capture command stderr"))?;
 
-        let output = tokio::time::timeout(timeout, cmd.output())
-            .await
-            .map_err(|_| anyhow::anyhow!("Command timed out after {}ms", timeout.as_millis()))??;
+        let stdout_task = tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stdout);
+            let mut buffer = Vec::new();
+            reader.read_to_end(&mut buffer).await?;
+            Ok::<Vec<u8>, std::io::Error>(buffer)
+        });
+        let stderr_task = tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stderr);
+            let mut buffer = Vec::new();
+            reader.read_to_end(&mut buffer).await?;
+            Ok::<Vec<u8>, std::io::Error>(buffer)
+        });
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let exit_code = output.status.code().unwrap_or(-1);
-        Ok((stdout, stderr, exit_code))
+        let mut interrupted = false;
+        let mut timed_out = false;
+        let mut exit_code = -1;
+        let deadline = options
+            .timeout_ms
+            .map(|ms| tokio::time::Instant::now() + std::time::Duration::from_millis(ms));
+
+        loop {
+            if let Some(token) = options.cancellation_token.as_ref() {
+                if token.is_cancelled() {
+                    interrupted = true;
+                    let _ = child.start_kill();
+                    break;
+                }
+            }
+
+            if let Some(deadline) = deadline {
+                if tokio::time::Instant::now() >= deadline {
+                    timed_out = true;
+                    let _ = child.start_kill();
+                    break;
+                }
+            }
+
+            if let Some(status) = child.try_wait()? {
+                exit_code = status.code().unwrap_or(-1);
+                break;
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+
+        if interrupted || timed_out {
+            let _ = child.wait().await;
+            if interrupted {
+                #[cfg(windows)]
+                {
+                    exit_code = -1073741510;
+                }
+                #[cfg(not(windows))]
+                {
+                    exit_code = 130;
+                }
+            } else if timed_out {
+                exit_code = 124;
+            }
+        }
+
+        let stdout = String::from_utf8_lossy(
+            &stdout_task
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to join stdout task: {}", e))??,
+        )
+        .to_string();
+        let stderr = String::from_utf8_lossy(
+            &stderr_task
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to join stderr task: {}", e))??,
+        )
+        .to_string();
+
+        Ok(WorkspaceCommandResult {
+            stdout,
+            stderr,
+            exit_code,
+            interrupted,
+            timed_out,
+        })
     }
 }
 
 /// Build `WorkspaceServices` backed by the local filesystem and shell.
-pub fn local_workspace_services() -> WorkspaceServices {
+pub fn local_workspace_services(workspace_root: String) -> WorkspaceServices {
     WorkspaceServices {
         fs: Arc::new(LocalWorkspaceFs),
-        shell: Arc::new(LocalWorkspaceShell),
+        shell: Arc::new(LocalWorkspaceShell::new(workspace_root)),
     }
 }
 
@@ -359,17 +511,33 @@ impl RemoteWorkspaceShell {
 
 #[async_trait]
 impl WorkspaceShell for RemoteWorkspaceShell {
-    async fn exec(
+    async fn exec_with_options(
         &self,
         command: &str,
-        _timeout_ms: Option<u64>,
-    ) -> anyhow::Result<(String, String, i32)> {
+        options: WorkspaceCommandOptions,
+    ) -> anyhow::Result<WorkspaceCommandResult> {
         // Wrap the command with cd to workspace root so all commands
         // execute in the correct working directory on the remote server.
         let wrapped = format!("cd {} && {}", shell_escape(&self.workspace_root), command);
-        self.ssh_manager
-            .execute_command(&self.connection_id, &wrapped)
-            .await
+        let result = self
+            .ssh_manager
+            .execute_command_with_options(
+                &self.connection_id,
+                &wrapped,
+                crate::service::remote_ssh::SSHCommandOptions {
+                    timeout_ms: options.timeout_ms,
+                    cancellation_token: options.cancellation_token,
+                },
+            )
+            .await?;
+
+        Ok(WorkspaceCommandResult {
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exit_code: result.exit_code,
+            interrupted: result.interrupted,
+            timed_out: result.timed_out,
+        })
     }
 }
 

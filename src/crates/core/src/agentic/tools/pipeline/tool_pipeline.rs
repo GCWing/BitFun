@@ -704,6 +704,27 @@ impl ToolPipeline {
                 })
             }
             Err(e) => {
+                // Cancellation is a first-class terminal state, not a failure.
+                // Preserve Cancelled here so a late cancel cannot be overwritten
+                // by the generic Failed branch below.
+                if let BitFunError::Cancelled(reason) = &e {
+                    self.state_manager
+                        .update_state(
+                            &tool_id,
+                            ToolExecutionState::Cancelled {
+                                reason: reason.clone(),
+                            },
+                        )
+                        .await;
+
+                    info!(
+                        "Tool cancelled during execution: tool_name={}, reason={}",
+                        tool_name, reason
+                    );
+
+                    return Err(e);
+                }
+
                 let error_msg = e.to_string();
                 let is_retryable = task.options.max_retries > 0;
 
@@ -901,6 +922,24 @@ impl ToolPipeline {
 
     /// Cancel tool execution
     pub async fn cancel_tool(&self, tool_id: &str, reason: String) -> BitFunResult<()> {
+        let Some(task) = self.state_manager.get_task(tool_id) else {
+            debug!("Ignoring cancel request for unknown tool: tool_id={}", tool_id);
+            return Ok(());
+        };
+
+        match &task.state {
+            ToolExecutionState::Completed { .. }
+            | ToolExecutionState::Failed { .. }
+            | ToolExecutionState::Cancelled { .. } => {
+                debug!(
+                    "Ignoring duplicate cancel request for tool in terminal state: tool_id={}, state={:?}",
+                    tool_id, task.state
+                );
+                return Ok(());
+            }
+            _ => {}
+        }
+
         // 1. Trigger cancellation token
         if let Some((_, token)) = self.cancellation_tokens.remove(tool_id) {
             token.cancel();

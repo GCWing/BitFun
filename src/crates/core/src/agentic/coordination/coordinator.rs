@@ -209,7 +209,9 @@ impl ConversationCoordinator {
                 binding.root_path_string(),
             ))
         } else {
-            Some(crate::agentic::workspace::local_workspace_services())
+            Some(crate::agentic::workspace::local_workspace_services(
+                binding.root_path_string(),
+            ))
         }
     }
 

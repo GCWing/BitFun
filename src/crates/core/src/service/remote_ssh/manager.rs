@@ -4,12 +4,13 @@
 
 use crate::service::remote_ssh::password_vault::SSHPasswordVault;
 use crate::service::remote_ssh::types::{
-    SSHAuthMethod, SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionResult,
-    SavedConnection, ServerInfo,
+    SSHAuthMethod, SSHCommandOptions, SSHCommandResult, SSHConfigEntry, SSHConfigLookupResult,
+    SSHConnectionConfig, SSHConnectionResult, SavedConnection, ServerInfo,
 };
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use russh::client::{DisconnectReason, Handle, Handler, Msg};
+use russh::Sig;
 use russh_keys::key::PublicKey;
 use russh_keys::PublicKeyBase64;
 use russh_sftp::client::fs::ReadDir;
@@ -20,6 +21,10 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpStream;
+use tokio::time::{Duration, Instant};
+
+const SSH_COMMAND_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const SSH_COMMAND_INTERRUPT_DRAIN_GRACE: Duration = Duration::from_millis(500);
 
 /// OpenSSH keyword matching is case-insensitive, but `ssh_config` stores keys as written in the file
 /// (e.g. `HostName` vs `Hostname`). Resolve by ASCII case-insensitive compare.
@@ -138,11 +143,7 @@ impl SSHHandler {
         host: String,
         port: u16,
         known_hosts: Arc<tokio::sync::RwLock<HashMap<String, KnownHostEntry>>>,
-    ) -> (
-        Self,
-        Arc<std::sync::Mutex<Option<String>>>,
-        Arc<AtomicBool>,
-    ) {
+    ) -> (Self, Arc<std::sync::Mutex<Option<String>>>, Arc<AtomicBool>) {
         let disconnect_reason = Arc::new(std::sync::Mutex::new(None));
         let alive = Arc::new(AtomicBool::new(true));
         let handler = Self {
@@ -877,9 +878,7 @@ impl SSHConnectionManager {
         config: SSHConnectionConfig,
         timeout_secs: u64,
     ) -> anyhow::Result<SSHConnectionResult> {
-        let (handle, alive, server_info) = self
-            .establish_session(&config, timeout_secs)
-            .await?;
+        let (handle, alive, server_info) = self.establish_session(&config, timeout_secs).await?;
 
         let connection_id = config.id.clone();
 
@@ -1141,16 +1140,19 @@ impl SSHConnectionManager {
 
     /// Get server information (partial lines allowed so we can still fill `home_dir` via [`Self::probe_remote_home_dir`]).
     async fn get_server_info_internal(handle: &Handle<SSHHandler>) -> Option<ServerInfo> {
-        let (stdout, _stderr, exit_status) =
-            Self::execute_command_internal(handle, "uname -s && hostname && echo $HOME")
-                .await
-                .ok()?;
+        let result = Self::execute_command_internal(
+            handle,
+            "uname -s && hostname && echo $HOME",
+            SSHCommandOptions::default(),
+        )
+        .await
+        .ok()?;
 
-        if exit_status != 0 {
+        if result.exit_code != 0 {
             return None;
         }
 
-        let lines: Vec<&str> = stdout.trim().lines().collect();
+        let lines: Vec<&str> = result.stdout.trim().lines().collect();
         if lines.is_empty() {
             return None;
         }
@@ -1172,13 +1174,15 @@ impl SSHConnectionManager {
             "sh -c 'getent passwd \"$(id -un)\" 2>/dev/null | cut -d: -f6'",
         ];
         for cmd in PROBES {
-            let Ok((stdout, _, status)) = Self::execute_command_internal(handle, cmd).await else {
+            let Ok(result) =
+                Self::execute_command_internal(handle, cmd, SSHCommandOptions::default()).await
+            else {
                 continue;
             };
-            if status != 0 {
+            if result.exit_code != 0 {
                 continue;
             }
-            let first = stdout.trim().lines().next().unwrap_or("").trim();
+            let first = result.stdout.trim().lines().next().unwrap_or("").trim();
             if first.is_empty() || first == "~" {
                 continue;
             }
@@ -1188,19 +1192,79 @@ impl SSHConnectionManager {
     }
 
     /// Execute a command on the remote server
+    async fn interrupt_exec_channel(
+        session: &russh::Channel<Msg>,
+        signal: Sig,
+    ) -> anyhow::Result<()> {
+        session.signal(signal).await?;
+        let _ = session.eof().await;
+        Ok(())
+    }
+
     async fn execute_command_internal(
         handle: &Handle<SSHHandler>,
         command: &str,
-    ) -> std::result::Result<(String, String, i32), anyhow::Error> {
+        options: SSHCommandOptions,
+    ) -> std::result::Result<SSHCommandResult, anyhow::Error> {
         let mut session = handle.channel_open_session().await?;
         session.exec(true, command).await?;
 
         let mut stdout = String::new();
         let mut stderr = String::new();
-        let mut exit_status: i32 = -1;
+        let mut exit_status: Option<i32> = None;
+        let mut interrupted = false;
+        let mut timed_out = false;
+        let timeout_deadline = options
+            .timeout_ms
+            .map(|ms| Instant::now() + Duration::from_millis(ms));
+        let mut interrupt_drain_deadline: Option<Instant> = None;
 
         loop {
-            match session.wait().await {
+            let now = Instant::now();
+
+            if !interrupted
+                && options
+                    .cancellation_token
+                    .as_ref()
+                    .is_some_and(|token| token.is_cancelled())
+            {
+                interrupted = true;
+                interrupt_drain_deadline = Some(now + SSH_COMMAND_INTERRUPT_DRAIN_GRACE);
+                if let Err(e) = Self::interrupt_exec_channel(&session, Sig::INT).await {
+                    log::debug!("Failed to interrupt remote exec channel via SIGINT: {}", e);
+                }
+            }
+
+            if !timed_out && timeout_deadline.is_some_and(|deadline| now >= deadline) {
+                timed_out = true;
+                interrupt_drain_deadline = Some(now + SSH_COMMAND_INTERRUPT_DRAIN_GRACE);
+                if let Err(e) = Self::interrupt_exec_channel(&session, Sig::INT).await {
+                    log::debug!("Failed to interrupt timed out remote exec channel: {}", e);
+                }
+            }
+
+            let wait_budget = if let Some(deadline) = interrupt_drain_deadline {
+                if now >= deadline {
+                    let _ = session.close().await;
+                    break;
+                }
+                (deadline - now).min(SSH_COMMAND_WAIT_POLL_INTERVAL)
+            } else if let Some(deadline) = timeout_deadline {
+                if now >= deadline {
+                    SSH_COMMAND_WAIT_POLL_INTERVAL
+                } else {
+                    (deadline - now).min(SSH_COMMAND_WAIT_POLL_INTERVAL)
+                }
+            } else {
+                SSH_COMMAND_WAIT_POLL_INTERVAL
+            };
+
+            let next_msg = match tokio::time::timeout(wait_budget, session.wait()).await {
+                Ok(msg) => msg,
+                Err(_) => continue,
+            };
+
+            match next_msg {
                 Some(russh::ChannelMsg::Data { ref data }) => {
                     stdout.push_str(&String::from_utf8_lossy(data));
                 }
@@ -1210,7 +1274,10 @@ impl SSHConnectionManager {
                 Some(russh::ChannelMsg::ExitStatus {
                     exit_status: status,
                 }) => {
-                    exit_status = status as i32;
+                    exit_status = Some(status as i32);
+                }
+                Some(russh::ChannelMsg::ExitSignal { signal_name, .. }) => {
+                    interrupted = interrupted || matches!(signal_name, Sig::INT | Sig::TERM);
                 }
                 Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) => {
                     break;
@@ -1222,7 +1289,21 @@ impl SSHConnectionManager {
             }
         }
 
-        Ok((stdout, stderr, exit_status))
+        Ok(SSHCommandResult {
+            stdout,
+            stderr,
+            exit_code: exit_status.unwrap_or_else(|| {
+                if timed_out {
+                    124
+                } else if interrupted {
+                    130
+                } else {
+                    -1
+                }
+            }),
+            interrupted,
+            timed_out,
+        })
     }
 
     /// Disconnect from a server
@@ -1345,6 +1426,27 @@ impl SSHConnectionManager {
         connection_id: &str,
         command: &str,
     ) -> anyhow::Result<(String, String, i32)> {
+        let result = self
+            .execute_command_with_options(connection_id, command, SSHCommandOptions::default())
+            .await?;
+
+        if result.timed_out {
+            return Err(anyhow!("Command timed out"));
+        }
+        if result.interrupted {
+            return Err(anyhow!("Command was cancelled"));
+        }
+
+        Ok((result.stdout, result.stderr, result.exit_code))
+    }
+
+    /// Execute a command on the remote server with structured timeout/cancellation handling.
+    pub async fn execute_command_with_options(
+        &self,
+        connection_id: &str,
+        command: &str,
+        options: SSHCommandOptions,
+    ) -> anyhow::Result<SSHCommandResult> {
         self.ensure_alive_or_reconnect(connection_id).await?;
         let handle = {
             let guard = self.connections.read().await;
@@ -1355,7 +1457,7 @@ impl SSHConnectionManager {
                 .clone()
         };
 
-        Self::execute_command_internal(&handle, command)
+        Self::execute_command_internal(&handle, command, options)
             .await
             .map_err(|e| anyhow!("Command execution failed: {}", e))
     }

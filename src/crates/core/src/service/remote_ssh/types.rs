@@ -1,6 +1,7 @@
 //! Type definitions for Remote SSH service
 
 use serde::{Deserialize, Deserializer, Serialize};
+use tokio_util::sync::CancellationToken;
 
 /// Workspace backend type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -215,6 +216,23 @@ pub struct SSHConnectionResult {
     pub error: Option<String>,
     #[serde(rename = "serverInfo")]
     pub server_info: Option<ServerInfo>,
+}
+
+/// Options for executing a remote SSH command.
+#[derive(Debug, Clone, Default)]
+pub struct SSHCommandOptions {
+    pub timeout_ms: Option<u64>,
+    pub cancellation_token: Option<CancellationToken>,
+}
+
+/// Result of executing a remote SSH command.
+#[derive(Debug, Clone)]
+pub struct SSHCommandResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+    pub interrupted: bool,
+    pub timed_out: bool,
 }
 
 /// Remote server information
