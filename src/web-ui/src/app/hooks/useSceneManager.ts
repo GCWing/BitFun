@@ -11,8 +11,6 @@ import { useSceneStore } from '../stores/sceneStore';
 import { useMiniAppStore } from '../scenes/miniapps/miniAppStore';
 import { pickLocalizedString } from '../scenes/miniapps/utils/pickLocalizedString';
 import { useI18n } from '@/infrastructure/i18n';
-import { pickLocalizedString } from '../scenes/miniapps/utils/pickLocalizedString';
-import { useI18n } from '@/infrastructure/i18n';
 
 export interface UseSceneManagerReturn {
   openTabs: ReturnType<typeof useSceneStore.getState>['openTabs'];
