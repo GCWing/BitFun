@@ -223,6 +223,62 @@ html, body {
   white-space: nowrap;
 }
 
+/* ─── Range selector inside hero tile ─────────────── */
+.cs-range {
+  margin-top: clamp(6px, 1vh, 10px);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.cs-range-chip {
+  appearance: none;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-card-2);
+  color: var(--cs-text-2);
+  font: inherit;
+  font-size: clamp(10px, 1.4vh, 12px);
+  font-weight: 500;
+  padding: clamp(3px, 0.6vh, 6px) clamp(8px, 1vw, 12px);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  white-space: nowrap;
+}
+.cs-range-chip:hover {
+  border-color: var(--cs-border-strong);
+  color: var(--cs-text);
+}
+.cs-range-chip.is-active {
+  background: var(--cs-accent-soft);
+  color: var(--cs-accent);
+  border-color: rgba(var(--cs-accent-rgb), 0.45);
+}
+.cs-range-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+.cs-range-date {
+  appearance: none;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-card-2);
+  color: var(--cs-text);
+  font: inherit;
+  font-family: var(--cs-mono);
+  font-size: clamp(10px, 1.35vh, 11.5px);
+  padding: 2px 6px;
+  border-radius: var(--cs-radius-sm);
+  color-scheme: dark light;
+}
+.cs-range-date:focus {
+  outline: none;
+  border-color: rgba(var(--cs-accent-rgb), 0.55);
+}
+.cs-range-sep { color: var(--cs-text-muted); font-size: 11px; }
+
 /* ─── Bottom meta footer (replaces in-hero chips) ─── */
 .cs-meta-footer {
   display: flex;

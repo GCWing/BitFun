@@ -61,7 +61,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-coding-selfie",
-        version: 18,
+        version: 21,
         meta_json: include_str!("assets/coding-selfie/meta.json"),
         html: include_str!("assets/coding-selfie/index.html"),
         css: include_str!("assets/coding-selfie/style.css"),

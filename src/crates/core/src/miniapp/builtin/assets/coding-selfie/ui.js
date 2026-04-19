@@ -1,4 +1,8 @@
-// Built-in MiniApp: 每日编码快照 — full-page Bento dashboard (OLED dark).
+// Built-in MiniApp: 编码足迹 / Coding Footprint — full-page Bento dashboard.
+//
+// Range model: the dashboard supports four ranges (1d / 7d / 30d / custom
+// [start,end]). The git scan always pulls 52 weeks of commits once; range
+// switching is then a pure client-side recompute (no extra `git log` calls).
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,8 +31,7 @@ const SVG = {
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
 };
 
-// Coding-style classifier driven by the busiest hour of the week.
-// Style label keys are locale-agnostic; resolved via I18N at render time.
+// Coding-style classifier driven by the busiest hour of the range.
 const STYLES = [
   { range: [0, 5],   icon: SVG.moon,   key: 'styleNight' },
   { range: [5, 9],   icon: SVG.sun,    key: 'styleMorning' },
@@ -46,47 +49,58 @@ function styleForHour(h) {
 // ---- i18n -------------------------------------------------------------
 const I18N = {
   'zh-CN': {
-    title: '每日编码快照',
-    subtitle: '扫描你的本地 Git 仓库，凝结成一张今天的编码画像。',
+    title: '编码足迹',
+    subtitle: '扫描你的本地 Git 仓库，按所选区间凝结成一张编码画像。',
     streakLabel: '连续编码',
     streakUnit: 'DAYS',
+    rangeCommits: '区间内提交',
     todayCommits: '今日提交',
     codeChanges: '代码变动',
     filesTouched: '涉及文件',
     touchedToday: '今日变动',
+    touchedRange: '区间内变动',
     languagesUsed: '使用语言',
-    donutTitle: '本周语言分布',
+    donutTitle: '区间内语言分布',
+    donutTitleToday: '今日语言分布',
     commits: 'commits',
     hoursTitle: '24 小时活跃节律',
-    thisWeek: '本周',
     hoursAria: '24 小时提交分布',
     heatmapTitle: '编码热力',
     heatmapAria: '52 周提交热力',
     less: '少',
     more: '多',
-    commitsTitle: '今日提交',
-    brand: '每日编码快照',
+    commitsTitle: '区间内提交',
+    commitsTitleToday: '今日提交',
+    brand: '编码足迹',
     weekShort: ['日', '一', '二', '三', '四', '五', '六'],
     just: '刚刚',
-    noCommitsThisWeek: '本周尚无提交',
-    noActivityThisWeek: '本周尚无活动',
+    noCommitsThisRange: '区间内尚无提交',
+    noActivityThisRange: '区间内尚无活动',
     codingStyle: 'CODING STYLE',
     other: '其他',
     last52: (total, days) => `近 52 周 · ${total} 提交 · 活跃 ${days} 天`,
     perCellTitle: (date, count) => `${date} · ${count} 提交`,
     hourTitle: (hh, count) => `${hh}:00 — ${count} 提交`,
+    noCommitsRange: '区间内还没有提交',
     noCommitsToday: '今天还没有提交，去写下第一行代码吧。',
     showXofY: (shown, total) => `显示 ${shown} / 共 ${total} 次`,
     totalX: (total) => `共 ${total} 次提交`,
     greetings: { lateNight: '夜深了', morning: '早上好', am: '上午好', noon: '中午好', pm: '下午好', evening: '晚上好' },
     greetWith: (part, name) => name ? `${part}，${name}` : part,
-    subtitleEmpty: '今天还没开张 — 一次小提交，就能让今天的画像不再空白。',
-    subtitleSprint: (n) => `今天 ${n} 次提交，全力冲刺中。`,
-    subtitleSteady: (n) => `今天 ${n} 次提交，节奏稳健。`,
-    subtitleStart: (n) => `今天 ${n} 次提交，刚刚起步。`,
-    deltaUp: (n) => `较昨日 +${n}`,
-    deltaDown: (n) => `较昨日 ${n}`,
-    deltaSame: '与昨日持平',
+    subtitleEmptyToday: '今天还没开张 — 一次小提交，就能让今天的画像不再空白。',
+    subtitleEmptyRange: (label) => `${label} 区间内尚无提交，先动手敲下第一行。`,
+    subtitleSprintToday: (n) => `今天 ${n} 次提交，全力冲刺中。`,
+    subtitleSteadyToday: (n) => `今天 ${n} 次提交，节奏稳健。`,
+    subtitleStartToday: (n) => `今天 ${n} 次提交，刚刚起步。`,
+    subtitleSprintRange: (label, n) => `${label} 共 ${n} 次提交，状态拉满。`,
+    subtitleSteadyRange: (label, n) => `${label} 共 ${n} 次提交，节奏稳健。`,
+    subtitleStartRange: (label, n) => `${label} 共 ${n} 次提交，刚刚铺开。`,
+    deltaUp: (n) => `较上一区间 +${n}`,
+    deltaDown: (n) => `较上一区间 ${n}`,
+    deltaSame: '与上一区间持平',
+    deltaUpYesterday: (n) => `较昨日 +${n}`,
+    deltaDownYesterday: (n) => `较昨日 ${n}`,
+    deltaSameYesterday: '与昨日持平',
     firstToday: 'first commits today',
     streakFoot: [
       { lt: 1, text: '今日打个卡，开启新连胜' },
@@ -119,49 +133,68 @@ const I18N = {
     styleAm: '上午型选手',
     stylePm: '下午冲刺者',
     styleEvening: '夜猫子',
+    range1d: '近 1 天',
+    range7d: '近 7 天',
+    range30d: '近 30 天',
+    rangeCustom: '自定义',
+    rangeLabel: { '1d': '近 1 天', '7d': '近 7 天', '30d': '近 30 天', custom: '自定义区间' },
+    rangeBadge: (label, days) => days != null ? `${label} · ${days} 天` : label,
+    customRangeFmt: (s, e) => `${s} → ${e}`,
+    customRangeInvalid: '请选择起止日期（起 ≤ 止）',
   },
   'en-US': {
-    title: 'Daily Coding Snapshot',
-    subtitle: 'Scans your local Git repo and crystallizes today into one coding portrait.',
+    title: 'Coding Footprint',
+    subtitle: 'Scans your local Git repo and crystallizes the chosen range into a coding portrait.',
     streakLabel: 'Streak',
     streakUnit: 'DAYS',
+    rangeCommits: 'Commits',
     todayCommits: 'Commits Today',
     codeChanges: 'Lines',
     filesTouched: 'Files',
     touchedToday: 'touched today',
+    touchedRange: 'in range',
     languagesUsed: 'Languages',
-    donutTitle: 'This Week · Languages',
+    donutTitle: 'Range · Languages',
+    donutTitleToday: 'Today · Languages',
     commits: 'commits',
     hoursTitle: '24h Activity Rhythm',
-    thisWeek: 'this week',
     hoursAria: '24h commit distribution',
     heatmapTitle: 'Coding Heatmap',
     heatmapAria: '52-week commit heatmap',
     less: 'less',
     more: 'more',
-    commitsTitle: 'Today Commits',
-    brand: 'Daily Coding Snapshot',
+    commitsTitle: 'Commits in Range',
+    commitsTitleToday: 'Today Commits',
+    brand: 'Coding Footprint',
     weekShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     just: 'just now',
-    noCommitsThisWeek: 'No commits this week',
-    noActivityThisWeek: 'No activity this week',
+    noCommitsThisRange: 'No commits in range',
+    noActivityThisRange: 'No activity in range',
     codingStyle: 'CODING STYLE',
     other: 'Other',
     last52: (total, days) => `Last 52w · ${total} commits · ${days} active days`,
     perCellTitle: (date, count) => `${date} · ${count} commits`,
     hourTitle: (hh, count) => `${hh}:00 — ${count} commits`,
+    noCommitsRange: 'No commits in this range yet.',
     noCommitsToday: 'No commits yet today — write that first line.',
     showXofY: (shown, total) => `Showing ${shown} / ${total}`,
     totalX: (total) => `${total} commits`,
     greetings: { lateNight: 'Burning the midnight oil', morning: 'Good morning', am: 'Good morning', noon: 'Good noon', pm: 'Good afternoon', evening: 'Good evening' },
     greetWith: (part, name) => name ? `${part}, ${name}` : part,
-    subtitleEmpty: 'Nothing yet today — one tiny commit fills the canvas.',
-    subtitleSprint: (n) => `${n} commits today — full sprint mode.`,
-    subtitleSteady: (n) => `${n} commits today — steady rhythm.`,
-    subtitleStart: (n) => `${n} commits today — just getting started.`,
-    deltaUp: (n) => `+${n} vs yesterday`,
-    deltaDown: (n) => `${n} vs yesterday`,
-    deltaSame: 'same as yesterday',
+    subtitleEmptyToday: 'Nothing yet today — one tiny commit fills the canvas.',
+    subtitleEmptyRange: (label) => `Nothing in ${label} yet — write that first line.`,
+    subtitleSprintToday: (n) => `${n} commits today — full sprint mode.`,
+    subtitleSteadyToday: (n) => `${n} commits today — steady rhythm.`,
+    subtitleStartToday: (n) => `${n} commits today — just getting started.`,
+    subtitleSprintRange: (label, n) => `${n} commits in ${label} — full sprint mode.`,
+    subtitleSteadyRange: (label, n) => `${n} commits in ${label} — steady rhythm.`,
+    subtitleStartRange: (label, n) => `${n} commits in ${label} — just getting started.`,
+    deltaUp: (n) => `+${n} vs previous`,
+    deltaDown: (n) => `${n} vs previous`,
+    deltaSame: 'same as previous',
+    deltaUpYesterday: (n) => `+${n} vs yesterday`,
+    deltaDownYesterday: (n) => `${n} vs yesterday`,
+    deltaSameYesterday: 'same as yesterday',
     firstToday: 'first commits today',
     streakFoot: [
       { lt: 1, text: 'Punch in today and start a new streak' },
@@ -194,6 +227,14 @@ const I18N = {
     styleAm: 'Morning Brew',
     stylePm: 'Afternoon Sprinter',
     styleEvening: 'Night Owl',
+    range1d: 'Last 1d',
+    range7d: 'Last 7d',
+    range30d: 'Last 30d',
+    rangeCustom: 'Custom',
+    rangeLabel: { '1d': 'Last 1 day', '7d': 'Last 7 days', '30d': 'Last 30 days', custom: 'Custom range' },
+    rangeBadge: (label, days) => days != null ? `${label} · ${days}d` : label,
+    customRangeFmt: (s, e) => `${s} → ${e}`,
+    customRangeInvalid: 'Pick a valid date range (start ≤ end)',
   },
 };
 
@@ -233,9 +274,9 @@ function fmtDate(d) {
     : week[dt.getDay()];
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')} ${dayLabel}`;
 }
-function fmtShortDate(d) {
+function fmtDay(d) {
   const dt = new Date(d);
-  return `${dt.getMonth() + 1}/${dt.getDate()}`;
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 function relativeTime(iso) {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime());
@@ -278,7 +319,7 @@ function renderDonut(langs) {
   const total = langs.reduce((acc, l) => acc + l.weight, 0);
   if (total <= 0) {
     svg.innerHTML = '<circle cx="60" cy="60" r="46" fill="none" stroke="rgba(148,163,184,0.12)" stroke-width="12" />';
-    $('lang-legend').innerHTML = `<li class="cs-legend-row"><span></span><span class="cs-legend-name" style="color:var(--cs-text-muted)">${t('noCommitsThisWeek')}</span><span></span></li>`;
+    $('lang-legend').innerHTML = `<li class="cs-legend-row"><span></span><span class="cs-legend-name" style="color:var(--cs-text-muted)">${t('noCommitsThisRange')}</span><span></span></li>`;
     return;
   }
   const top = langs.slice(0, 5);
@@ -291,7 +332,6 @@ function renderDonut(langs) {
   const c = 2 * Math.PI * r;
   let offset = 0;
 
-  // Track ring
   const track = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   track.setAttribute('cx', '60');
   track.setAttribute('cy', '60');
@@ -362,16 +402,12 @@ function renderHours(hours) {
         ${t(s.key)} · ${String(peakHour).padStart(2, '0')}:00
       </span>`;
   } else {
-    badge.innerHTML = `<span class="cs-style-badge-label">${t('codingStyle')}</span><span class="cs-style-badge-value" style="color:var(--cs-text-muted)">${t('noActivityThisWeek')}</span>`;
+    badge.innerHTML = `<span class="cs-style-badge-label">${t('codingStyle')}</span><span class="cs-style-badge-value" style="color:var(--cs-text-muted)">${t('noActivityThisRange')}</span>`;
   }
 }
 
-// Heatmap rendering uses an adaptive multi-band layout: instead of forcing a
-// 7×52 strip (which leaves huge empty space in narrow/tall tiles), we split
-// the year into N stacked 7-row bands and pick the N that maximizes the
-// square cell size for the actual tile dimensions.
-
-let _heatmapCells = []; // flat list incl. leading/trailing pads
+// Heatmap rendering uses an adaptive multi-band layout (same as before).
+let _heatmapCells = [];
 let _heatmapMeta = { total: 0, activeDays: 0 };
 
 function renderHeatmap(heatmap) {
@@ -390,7 +426,6 @@ function renderHeatmap(heatmap) {
   const firstDate = new Date(heatmap[0].date + 'T00:00:00');
   const leadingEmpty = firstDate.getDay();
 
-  // Leading pads (so first column starts on Sunday)
   for (let i = 0; i < leadingEmpty; i++) {
     _heatmapCells.push({ empty: true });
   }
@@ -410,7 +445,6 @@ function renderHeatmap(heatmap) {
     if (d.count > 0) activeDays += 1;
   });
 
-  // Trailing pads to complete the last column
   const lastDate = new Date(heatmap[heatmap.length - 1].date + 'T00:00:00');
   const trailing = 6 - lastDate.getDay();
   for (let i = 0; i < trailing; i++) _heatmapCells.push({ empty: true });
@@ -423,13 +457,6 @@ function renderHeatmap(heatmap) {
 const HEAT_GAP = 2;
 const HEAT_BAND_GAP = 6;
 
-// Adaptive heatmap that ALWAYS fills 100% of the tile. Strategy:
-//   1) Try band counts 1..6 (each band is 7 rows × ceil(N/bands) cols).
-//   2) For each, the resulting cell is a rectangle (cellW x cellH).
-//   3) Score by aspect-ratio closeness to 1 (we prefer near-square cells but
-//      we do NOT enforce squareness — that's what was leaving whitespace).
-//   4) The chosen layout uses width:100% / height:100% with `1fr` tracks so
-//      the grid stretches edge-to-edge regardless of the cell aspect.
 function fitHeatmap() {
   const body = $('heatmap-body');
   if (!body || !_heatmapCells.length) return;
@@ -463,13 +490,11 @@ function fitHeatmap() {
     const slice = _heatmapCells.slice(startIdx, endIdx);
     while (slice.length < cellsPerBand) slice.push({ empty: true });
     const weeks = slice.length / 7;
-    // 1fr tracks fill the band edge-to-edge regardless of cell aspect.
     grid.style.gridTemplateColumns = `repeat(${weeks}, minmax(0, 1fr))`;
     grid.style.gridTemplateRows = `repeat(7, minmax(0, 1fr))`;
     grid.style.gap = `${HEAT_GAP}px`;
     grid.style.gridAutoFlow = 'column';
     grid.style.width = '100%';
-    // Each band gets equal vertical share of the body.
     grid.style.flex = '1 1 0';
     grid.style.minHeight = '0';
     slice.forEach((c) => {
@@ -498,13 +523,13 @@ function setupHeatmapResize() {
   _heatmapRO.observe(body);
 }
 
-function renderCommits(commits, totalToday) {
+function renderCommits(commits, totalInRange, isToday) {
   const list = $('commits-list');
   list.innerHTML = '';
   if (!commits.length) {
     const li = document.createElement('li');
     li.className = 'cs-commits-empty';
-    li.textContent = t('noCommitsToday');
+    li.textContent = isToday ? t('noCommitsToday') : t('noCommitsRange');
     list.appendChild(li);
     return;
   }
@@ -519,18 +544,15 @@ function renderCommits(commits, totalToday) {
     `;
     list.appendChild(li);
   });
-  // Visible count is bounded by CSS overflow:hidden in the list — surface a
-  // clearer breakdown so "10" never reads as a lonely number on the edge.
-  $('commits-hint').textContent = totalToday > commits.length
-    ? t('showXofY')(commits.length, totalToday)
-    : t('totalX')(totalToday);
+  $('commits-hint').textContent = totalInRange > commits.length
+    ? t('showXofY')(commits.length, totalInRange)
+    : t('totalX')(totalInRange);
 }
 
-function renderHero(data) {
+function renderHero(data, range, current) {
   const now = new Date();
   $('hero-greeting').textContent = greetingFor(now, data.author.name);
 
-  // Bottom meta footer (replaces the old in-hero chips)
   const repoEl = $('meta-repo');
   if (repoEl) {
     repoEl.textContent = `${data.repo.name}@${data.repo.branch}`;
@@ -545,16 +567,18 @@ function renderHero(data) {
     timeEl.parentElement.title = t('snapTimeTitle')(snap.toLocaleTimeString());
   }
 
-  const td = data.today;
+  const isToday = range.kind === '1d';
+  const label = describeRange(range);
   let subtitle;
-  if (td.commitCount === 0) {
-    subtitle = t('subtitleEmpty');
-  } else if (td.commitCount >= 8) {
-    subtitle = t('subtitleSprint')(td.commitCount);
-  } else if (td.commitCount >= 4) {
-    subtitle = t('subtitleSteady')(td.commitCount);
+  const n = current.commitCount;
+  if (n === 0) {
+    subtitle = isToday ? t('subtitleEmptyToday') : t('subtitleEmptyRange')(label);
+  } else if (n >= 8) {
+    subtitle = isToday ? t('subtitleSprintToday')(n) : t('subtitleSprintRange')(label, n);
+  } else if (n >= 4) {
+    subtitle = isToday ? t('subtitleSteadyToday')(n) : t('subtitleSteadyRange')(label, n);
   } else {
-    subtitle = t('subtitleStart')(td.commitCount);
+    subtitle = isToday ? t('subtitleStartToday')(n) : t('subtitleStartRange')(label, n);
   }
   $('hero-subtitle').textContent = subtitle;
 
@@ -576,34 +600,54 @@ function renderHero(data) {
   }
 }
 
-function renderStats(data) {
-  const td = data.today;
-  $('stat-commits').textContent = String(td.commitCount);
-  $('stat-add').textContent = `+${td.added}`;
-  $('stat-del').textContent = `-${td.deleted}`;
-  $('stat-files').textContent = String(td.fileCount);
-  $('stat-langs').textContent = String(td.langs.length);
+function renderStats(current, previous, range) {
+  $('stat-commits').textContent = String(current.commitCount);
+  $('stat-add').textContent = `+${current.added}`;
+  $('stat-del').textContent = `-${current.deleted}`;
+  $('stat-files').textContent = String(current.fileCount);
+  $('stat-langs').textContent = String(current.langs.length);
 
-  const net = td.added - td.deleted;
+  const net = current.added - current.deleted;
   $('stat-net').textContent = net >= 0 ? t('netPos')(net) : t('netNeg')(net);
 
-  $('stat-langs-list').textContent = td.langs.length
-    ? td.langs.slice(0, 3).map((l) => l.name).join(' · ')
+  $('stat-langs-list').textContent = current.langs.length
+    ? current.langs.slice(0, 3).map((l) => l.name).join(' · ')
     : '—';
 
-  const delta = td.commitCount - data.yesterday.commitCount;
+  // Tile labels adapt slightly between "today" and other ranges.
+  const isToday = range.kind === '1d';
+  const labelCommits = $('label-commits');
+  if (labelCommits) labelCommits.textContent = isToday ? t('todayCommits') : t('rangeCommits');
+  const filesFoot = $('stat-files-foot');
+  if (filesFoot) filesFoot.textContent = isToday ? t('touchedToday') : t('touchedRange');
+
+  const delta = current.commitCount - previous.commitCount;
   const dEl = $('stat-commits-delta');
   dEl.classList.remove('up', 'down');
-  if (delta > 0) {
-    dEl.innerHTML = `${SVG.trendUp} ${t('deltaUp')(delta)}`;
-    dEl.classList.add('up');
-  } else if (delta < 0) {
-    dEl.innerHTML = `${SVG.trendDown} ${t('deltaDown')(delta)}`;
-    dEl.classList.add('down');
-  } else if (data.yesterday.commitCount > 0) {
-    dEl.innerHTML = `${SVG.minus} ${t('deltaSame')}`;
+  if (isToday) {
+    if (delta > 0) {
+      dEl.innerHTML = `${SVG.trendUp} ${t('deltaUpYesterday')(delta)}`;
+      dEl.classList.add('up');
+    } else if (delta < 0) {
+      dEl.innerHTML = `${SVG.trendDown} ${t('deltaDownYesterday')(delta)}`;
+      dEl.classList.add('down');
+    } else if (previous.commitCount > 0) {
+      dEl.innerHTML = `${SVG.minus} ${t('deltaSameYesterday')}`;
+    } else {
+      dEl.textContent = t('firstToday');
+    }
   } else {
-    dEl.textContent = t('firstToday');
+    if (delta > 0) {
+      dEl.innerHTML = `${SVG.trendUp} ${t('deltaUp')(delta)}`;
+      dEl.classList.add('up');
+    } else if (delta < 0) {
+      dEl.innerHTML = `${SVG.trendDown} ${t('deltaDown')(delta)}`;
+      dEl.classList.add('down');
+    } else if (previous.commitCount > 0) {
+      dEl.innerHTML = `${SVG.minus} ${t('deltaSame')}`;
+    } else {
+      dEl.textContent = '';
+    }
   }
 }
 
@@ -617,59 +661,200 @@ function renderStreak(data) {
   $('streak-foot').textContent = foot;
 }
 
-function render(data) {
-  hideEmpty();
-  renderHero(data);
-  renderStreak(data);
-  renderStats(data);
-  renderDonut(data.week.langs);
-  $('donut-total').textContent = String(data.week.commitCount);
-  renderHours(data.week.hours);
-  renderHeatmap(data.heatmap);
-  setupHeatmapResize();
-  renderCommits(data.today.commits, data.today.commitCount);
+// ---- Range model ------------------------------------------------------
+
+let currentRange = { kind: '1d' };
+
+function describeRange(range) {
+  const labels = t('rangeLabel') || {};
+  if (range.kind === 'custom' && range.start && range.end) {
+    return t('customRangeFmt')(range.start, range.end);
+  }
+  return labels[range.kind] || range.kind;
 }
 
-function buildMarkdown(data) {
-  const td = data.today;
-  const date = fmtDate(new Date());
-  const lines = [];
-  lines.push(`# ${t('title')} · ${date}`);
-  lines.push('');
-  lines.push(`> \`${data.repo.name}@${data.repo.branch}\`${data.author.name ? ` · ${data.author.name}` : ''}`);
-  lines.push('');
-  lines.push('| Metric | Today | Yesterday |');
-  lines.push('|---|---|---|');
-  lines.push(`| Commits | **${td.commitCount}** | ${data.yesterday.commitCount} |`);
-  lines.push(`| Lines  | **+${td.added} / -${td.deleted}** | +${data.yesterday.added} / -${data.yesterday.deleted} |`);
-  lines.push(`| Files  | **${td.fileCount}** | ${data.yesterday.fileCount} |`);
-  lines.push(`| Streak | **${data.streak} days** | — |`);
+// Convert range descriptor -> { start, end, prevStart, prevEnd, days }
+// All bounds are inclusive of `start` (00:00) and exclusive of `end` (next-day 00:00).
+function rangeBounds(range, now) {
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const dayMs = 86400000;
 
-  if (td.langs.length) {
-    lines.push('');
-    lines.push(`**Languages:** ${td.langs.slice(0, 5).map((l) => l.name).join(' · ')}`);
+  if (range.kind === 'custom' && range.start && range.end) {
+    const s = new Date(range.start + 'T00:00:00');
+    const eDay = new Date(range.end + 'T00:00:00');
+    if (Number.isNaN(s.getTime()) || Number.isNaN(eDay.getTime()) || s.getTime() > eDay.getTime()) {
+      return null;
+    }
+    const e = new Date(eDay.getTime() + dayMs);
+    const days = Math.round((e.getTime() - s.getTime()) / dayMs);
+    const prevEnd = s;
+    const prevStart = new Date(s.getTime() - days * dayMs);
+    return { start: s, end: e, prevStart, prevEnd, days };
   }
 
-  let peakHour = 0, peakVal = 0;
-  data.week.hours.forEach((v, i) => { if (v > peakVal) { peakVal = v; peakHour = i; } });
-  if (peakVal > 0) {
-    const s = styleForHour(peakHour);
-    lines.push(`**Style:** ${t(s.key)} (peak ${String(peakHour).padStart(2, '0')}:00)`);
-  }
+  let days = 1;
+  if (range.kind === '7d') days = 7;
+  else if (range.kind === '30d') days = 30;
 
-  if (td.commits.length) {
-    lines.push('');
-    lines.push('**Today commits:**');
-    lines.push('');
-    td.commits.forEach((c) => {
-      lines.push(`- \`${c.hash}\` ${c.subject} _(+${c.added} -${c.deleted})_`);
-    });
-  }
+  const start = new Date(todayStart.getTime() - (days - 1) * dayMs);
+  const end = new Date(todayStart.getTime() + dayMs);
+  const prevEnd = start;
+  const prevStart = new Date(start.getTime() - days * dayMs);
+  return { start, end, prevStart, prevEnd, days };
+}
 
-  lines.push('');
-  lines.push('---');
-  lines.push(`_Generated by BitFun · ${t('title')}_`);
-  return lines.join('\n');
+function summarizeCommits(cs) {
+  let added = 0, deleted = 0;
+  const langs = new Map();
+  const files = new Set();
+  const hours = new Array(24).fill(0);
+  for (const c of cs) {
+    added += c.added;
+    deleted += c.deleted;
+    for (const f of c.files) {
+      files.add(f.path);
+      if (f.lang) {
+        const w = (f.added + f.deleted) || 1;
+        langs.set(f.lang, (langs.get(f.lang) || 0) + w);
+      }
+    }
+    const h = new Date(c.date).getHours();
+    if (h >= 0 && h < 24) hours[h] += 1;
+  }
+  const langArr = Array.from(langs.entries())
+    .map(([name, weight]) => ({ name, weight }))
+    .sort((a, b) => b.weight - a.weight);
+  const sorted = cs.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  return {
+    commitCount: cs.length,
+    added,
+    deleted,
+    fileCount: files.size,
+    langs: langArr,
+    hours,
+    commits: sorted.slice(0, 12).map((c) => ({
+      hash: c.hash.slice(0, 7),
+      date: c.date,
+      author: c.author,
+      subject: c.subject,
+      added: c.added,
+      deleted: c.deleted,
+    })),
+  };
+}
+
+function commitsBetween(commits, start, end) {
+  const sMs = start.getTime();
+  const eMs = end.getTime();
+  const out = [];
+  for (const c of commits) {
+    const ts = new Date(c.date).getTime();
+    if (ts >= sMs && ts < eMs) out.push(c);
+  }
+  return out;
+}
+
+function setRangeBadge(range) {
+  const badge = describeRange(range);
+  // Push range label into donut/hours/commits hints.
+  const hoursHint = $('hours-hint');
+  if (hoursHint) hoursHint.textContent = badge;
+  const donutTitle = $('donut-title');
+  if (donutTitle) donutTitle.textContent = range.kind === '1d' ? t('donutTitleToday') : t('donutTitle');
+  const commitsTitle = $('commits-title');
+  if (commitsTitle) commitsTitle.textContent = range.kind === '1d' ? t('commitsTitleToday') : t('commitsTitle');
+}
+
+function applyRangeChipsState() {
+  const bar = $('range-bar');
+  if (!bar) return;
+  bar.querySelectorAll('.cs-range-chip').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.getAttribute('data-range') === currentRange.kind);
+  });
+  const wrap = $('range-custom');
+  if (wrap) {
+    if (currentRange.kind === 'custom') wrap.removeAttribute('hidden');
+    else wrap.setAttribute('hidden', '');
+  }
+}
+
+function renderForRange() {
+  if (!lastData) return;
+  const bounds = rangeBounds(currentRange, new Date());
+  if (!bounds) {
+    // Invalid custom range — keep stats blank with a clear hint.
+    setRangeBadge(currentRange);
+    const hoursHint = $('hours-hint');
+    if (hoursHint) hoursHint.textContent = t('customRangeInvalid');
+    return;
+  }
+  const current = summarizeCommits(commitsBetween(lastData._commits, bounds.start, bounds.end));
+  const previous = summarizeCommits(commitsBetween(lastData._commits, bounds.prevStart, bounds.prevEnd));
+
+  setRangeBadge(currentRange);
+  renderHero(lastData, currentRange, current);
+  renderStreak(lastData);
+  renderStats(current, previous, currentRange);
+  renderDonut(current.langs);
+  $('donut-total').textContent = String(current.commitCount);
+  renderHours(current.hours);
+  renderCommits(current.commits, current.commitCount, currentRange.kind === '1d');
+}
+
+function render(data) {
+  hideEmpty();
+  // Heatmap is range-independent (always last 52 weeks).
+  renderHeatmap(data.heatmap);
+  setupHeatmapResize();
+  renderForRange();
+}
+
+function bindRangeBar() {
+  const bar = $('range-bar');
+  if (!bar || bar.dataset.bound) return;
+  bar.dataset.bound = '1';
+  bar.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.cs-range-chip');
+    if (!btn) return;
+    const kind = btn.getAttribute('data-range');
+    if (!kind) return;
+    if (kind === 'custom') {
+      // Default custom inputs to last 14 days the first time.
+      const startEl = $('range-start');
+      const endEl = $('range-end');
+      if (startEl && endEl) {
+        const today = new Date();
+        const todayStart = new Date(today);
+        todayStart.setHours(0, 0, 0, 0);
+        if (!endEl.value) endEl.value = fmtDay(todayStart);
+        if (!startEl.value) {
+          const s = new Date(todayStart.getTime() - 13 * 86400000);
+          startEl.value = fmtDay(s);
+        }
+        currentRange = { kind: 'custom', start: startEl.value, end: endEl.value };
+      } else {
+        currentRange = { kind: 'custom' };
+      }
+    } else {
+      currentRange = { kind };
+    }
+    applyRangeChipsState();
+    renderForRange();
+  });
+
+  const onCustomChange = () => {
+    if (currentRange.kind !== 'custom') return;
+    const startEl = $('range-start');
+    const endEl = $('range-end');
+    if (!startEl || !endEl) return;
+    currentRange = { kind: 'custom', start: startEl.value, end: endEl.value };
+    renderForRange();
+  };
+  const startEl = $('range-start');
+  const endEl = $('range-end');
+  if (startEl) startEl.addEventListener('change', onCustomChange);
+  if (endEl) endEl.addEventListener('change', onCustomChange);
 }
 
 function escapeHtml(s) {
@@ -683,10 +868,6 @@ function escapeAttr(s) {
 }
 
 // ---- Git scan (host-side shell, no Node/Bun worker) -----------------------
-// Mirrors the legacy `worker.js` `workspace.scan` output shape so the rest of
-// the UI does not need to change. Runs entirely from the iframe via
-// `app.shell.exec`, which the host now serves directly with the same
-// permission policy (shell.allow=["git"], fs.read=["{workspace}", ...]).
 
 const EXT_TO_LANG = {
   '.ts': 'TypeScript', '.tsx': 'TSX', '.js': 'JavaScript', '.jsx': 'JSX', '.mjs': 'JavaScript',
@@ -719,7 +900,6 @@ function basenameOf(p) {
   return segs.length ? segs[segs.length - 1] : p;
 }
 
-// POSIX single-quote shell escape: wrap with ' and escape inner ' as '\''.
 function shq(s) {
   if (s == null) return "''";
   return `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -750,49 +930,9 @@ function dayKey(d) {
   );
 }
 
-function summarize(cs) {
-  let added = 0, deleted = 0;
-  const langs = new Map();
-  const files = new Set();
-  const hours = new Array(24).fill(0);
-  for (const c of cs) {
-    added += c.added;
-    deleted += c.deleted;
-    for (const f of c.files) {
-      files.add(f.path);
-      if (f.lang) {
-        const t = (f.added + f.deleted) || 1;
-        langs.set(f.lang, (langs.get(f.lang) || 0) + t);
-      }
-    }
-    const h = new Date(c.date).getHours();
-    if (h >= 0 && h < 24) hours[h] += 1;
-  }
-  const langArr = Array.from(langs.entries())
-    .map(([name, weight]) => ({ name, weight }))
-    .sort((a, b) => b.weight - a.weight);
-  return {
-    commitCount: cs.length,
-    added,
-    deleted,
-    fileCount: files.size,
-    langs: langArr,
-    hours,
-    commits: cs.slice(0, 12).map((c) => ({
-      hash: c.hash.slice(0, 7),
-      date: c.date,
-      author: c.author,
-      subject: c.subject,
-      added: c.added,
-      deleted: c.deleted,
-    })),
-  };
-}
-
 async function scanGitWorkspace(cwd) {
   if (!cwd) return { ok: false, reason: 'no-workspace' };
 
-  // 1) Verify it is a git work tree.
   let inside;
   try {
     inside = (await gitRun(cwd, ['rev-parse', '--is-inside-work-tree'], { timeout: 8000 })).trim();
@@ -801,7 +941,6 @@ async function scanGitWorkspace(cwd) {
   }
   if (inside !== 'true') return { ok: false, reason: 'not-a-git-repo' };
 
-  // 2) Repo basics.
   const [topLevelRaw, branchRaw, userNameRaw, userEmailRaw] = await Promise.all([
     gitRunOptional(cwd, ['rev-parse', '--show-toplevel'], cwd, { timeout: 8000 }),
     gitRunOptional(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], 'HEAD', { timeout: 8000 }),
@@ -814,9 +953,6 @@ async function scanGitWorkspace(cwd) {
   const userEmail = (userEmailRaw || '').trim();
   const repoName = basenameOf(topLevel);
 
-  // 3) Auto-discover every email the current author has committed with in this
-  //    repo. Same logic as the old worker — handles squash-merge no-reply emails
-  //    and multiple identities for the same name.
   const detectedEmails = new Set();
   if (userEmail) detectedEmails.add(userEmail);
   if (userName) {
@@ -841,7 +977,6 @@ async function scanGitWorkspace(cwd) {
   for (const e of detectedEmails) patterns.push(escRe(e));
   const authorPattern = patterns.length ? patterns.join('\\|') : '';
 
-  // 4) Pull last 52 weeks of commits with numstat across ALL branches.
   const SEP = '\x1f';
   const REC = '\x1e';
   const fmt = `${REC}%H${SEP}%aI${SEP}%aN${SEP}%aE${SEP}%s`;
@@ -886,12 +1021,9 @@ async function scanGitWorkspace(cwd) {
     commits.push({ hash, date, author, email, subject, added, deleted, files });
   }
 
-  // 5) Aggregate by day (local time).
+  // Per-day index — used for streak + heatmap.
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(todayStart.getDate() - 1);
-
   const byDay = new Map();
   for (const c of commits) {
     const k = dayKey(c.date);
@@ -899,17 +1031,8 @@ async function scanGitWorkspace(cwd) {
     byDay.get(k).push(c);
   }
 
-  const todayKey = dayKey(todayStart);
-  const yesterdayKey = dayKey(yesterdayStart);
-  const today = summarize(byDay.get(todayKey) || []);
-  const yesterday = summarize(byDay.get(yesterdayKey) || []);
-
-  const weekCutoff = new Date(todayStart.getTime() - 6 * 86400000);
-  const week = summarize(commits.filter((c) => new Date(c.date) >= weekCutoff));
-  const month = summarize(commits);
-
-  // 6) Streak: consecutive days backwards with at least one commit. Counts today
-  //    if there are commits today; otherwise starts from yesterday.
+  // Streak: consecutive days backwards with >=1 commit. Counts today if there
+  // are commits today; otherwise starts from yesterday.
   let streak = 0;
   const cursor = new Date(todayStart);
   if (!byDay.has(dayKey(cursor))) {
@@ -920,7 +1043,7 @@ async function scanGitWorkspace(cwd) {
     cursor.setDate(cursor.getDate() - 1);
   }
 
-  // 7) Year heatmap: 7 * 52 = 364 days, oldest → today.
+  // 52-week heatmap, oldest → today.
   const HEATMAP_DAYS = 7 * 52;
   const heatmap = [];
   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
@@ -940,12 +1063,9 @@ async function scanGitWorkspace(cwd) {
       detectedEmails: Array.from(detectedEmails),
       scope: 'all-branches',
     },
-    today,
-    yesterday,
-    week,
-    month,
     streak,
     heatmap,
+    _commits: commits,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -966,8 +1086,6 @@ async function scan() {
     return;
   }
 
-  // Only show the full loading screen on the very first scan. Subsequent
-  // re-scans (triggered by `onActivate`) silently update the dashboard.
   if (!lastData) {
     showEmpty('loading', t('loadingTitle'), shortPath(ws), SVG.loader);
   }
@@ -998,8 +1116,6 @@ async function scan() {
 
 function shortPath(p) {
   if (!p) return '';
-  const home = (typeof navigator !== 'undefined' && /Mac|Linux/.test(navigator.platform)) ? null : null;
-  // Truncate from the left, keeping the last 2 segments visible.
   const segs = p.split(/[\\/]/).filter(Boolean);
   if (segs.length <= 3) return p;
   const tail = segs.slice(-2).join('/');
@@ -1007,6 +1123,8 @@ function shortPath(p) {
 }
 
 applyStaticI18n();
+applyRangeChipsState();
+bindRangeBar();
 window.app?.onActivate?.(scan);
 window.app?.onLocaleChange?.(() => {
   applyStaticI18n();

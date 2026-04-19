@@ -11,9 +11,22 @@
     <!-- HERO TILE -->
     <section class="cs-tile cs-tile-hero" aria-labelledby="hero-greeting">
       <div class="cs-hero-glow" aria-hidden="true"></div>
-      <h1 class="cs-hero-greeting" id="hero-greeting" data-i18n="title">每日编码快照</h1>
-      <p class="cs-hero-subtitle" id="hero-subtitle" data-i18n="subtitle">扫描你的本地 Git 仓库，凝结成一张今天的编码画像。</p>
+      <h1 class="cs-hero-greeting" id="hero-greeting" data-i18n="title">编码足迹</h1>
+      <p class="cs-hero-subtitle" id="hero-subtitle" data-i18n="subtitle">扫描你的本地 Git 仓库，按所选区间凝结成一张编码画像。</p>
       <div class="cs-hero-author" id="hero-author"></div>
+
+      <!-- Range selector -->
+      <div class="cs-range" id="range-bar" role="tablist" aria-label="range">
+        <button class="cs-range-chip" data-range="1d" type="button" role="tab" data-i18n="range1d">近 1 天</button>
+        <button class="cs-range-chip" data-range="7d" type="button" role="tab" data-i18n="range7d">近 7 天</button>
+        <button class="cs-range-chip" data-range="30d" type="button" role="tab" data-i18n="range30d">近 30 天</button>
+        <button class="cs-range-chip" data-range="custom" type="button" role="tab" data-i18n="rangeCustom">自定义</button>
+        <span class="cs-range-custom" id="range-custom" hidden>
+          <input type="date" id="range-start" class="cs-range-date" />
+          <span class="cs-range-sep">→</span>
+          <input type="date" id="range-end" class="cs-range-date" />
+        </span>
+      </div>
     </section>
 
     <!-- STREAK TILE -->
@@ -31,7 +44,7 @@
     <section class="cs-tile cs-tile-stat">
       <div class="cs-tile-head">
         <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
-        <span data-i18n="todayCommits">今日提交</span>
+        <span id="label-commits" data-i18n="rangeCommits">范围内提交</span>
       </div>
       <div class="cs-stat-num" id="stat-commits">0</div>
       <div class="cs-stat-foot" id="stat-commits-delta"></div>
@@ -56,7 +69,7 @@
         <span data-i18n="filesTouched">涉及文件</span>
       </div>
       <div class="cs-stat-num" id="stat-files">0</div>
-      <div class="cs-stat-foot" data-i18n="touchedToday">touched today</div>
+      <div class="cs-stat-foot" id="stat-files-foot" data-i18n="touchedRange">区间内变动</div>
     </section>
 
     <section class="cs-tile cs-tile-stat cs-tile-optional cs-tile-langs-stat">
@@ -72,7 +85,7 @@
     <section class="cs-tile cs-tile-donut" aria-labelledby="donut-title">
       <div class="cs-tile-head">
         <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
-        <span id="donut-title" data-i18n="donutTitle">本周语言分布</span>
+        <span id="donut-title" data-i18n="donutTitle">范围内语言分布</span>
       </div>
       <div class="cs-donut-row">
         <div class="cs-donut-wrap">
@@ -93,7 +106,7 @@
           <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span id="hours-title" data-i18n="hoursTitle">24 小时活跃节律</span>
         </span>
-        <span class="cs-tile-hint" data-i18n="thisWeek">本周</span>
+        <span class="cs-tile-hint" id="hours-hint"></span>
       </div>
       <div class="cs-hours" id="hours" role="img" data-i18n-attr="aria-label" data-i18n="hoursAria"></div>
       <div class="cs-hours-axis">
@@ -128,7 +141,7 @@
       <div class="cs-tile-head cs-tile-head-row">
         <span class="cs-tile-head-left">
           <svg class="cs-tile-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
-          <span id="commits-title" data-i18n="commitsTitle">今日提交</span>
+          <span id="commits-title" data-i18n="commitsTitle">范围内提交</span>
         </span>
         <span class="cs-tile-hint" id="commits-hint"></span>
       </div>
@@ -148,6 +161,6 @@
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
       <span id="meta-time">--:--</span>
     </span>
-    <span class="cs-meta-brand" aria-hidden="true" data-i18n="brand">每日编码快照</span>
+    <span class="cs-meta-brand" aria-hidden="true" data-i18n="brand">编码足迹</span>
   </footer>
 </div>
