@@ -41,7 +41,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-daily-divination",
-        version: 10,
+        version: 13,
         meta_json: include_str!("assets/divination/meta.json"),
         html: include_str!("assets/divination/index.html"),
         css: include_str!("assets/divination/style.css"),

@@ -22,11 +22,18 @@
     <main class="stage">
       <!-- Phase 1: shuffle + spread + pick ceremony -->
       <section class="draw-stage" id="draw-stage">
+        <div class="sigil-ring" aria-hidden="true">
+          <div class="sigil-ring__rune sigil-ring__rune--outer">✦ ☽ ✶ ☾ ✺ ⊛ ✧ ☼ ◌ ❀ ✤ ☄ ✦ ☽ ✶ ☾ ✺ ⊛ ✧ ☼ ◌ ❀ ✤ ☄</div>
+          <div class="sigil-ring__rune sigil-ring__rune--inner">✦ ✶ ☾ ✺ ✧ ☼ ◌ ❀ ✤ ☄ ◇ ⌘ ⚝ ✦ ✶ ☾ ✺ ✧ ☼ ◌ ❀ ✤ ☄ ◇</div>
+          <div class="sigil-ring__core"></div>
+        </div>
         <div class="draw-stage__title">
           <h2 class="draw-stage__greeting" id="greeting">凝神</h2>
           <p class="draw-stage__subtitle" id="draw-subtitle">轻触一张牌，揭开今日卦象</p>
         </div>
-        <div class="card-spread" id="card-spread" role="group" data-i18n-attr="aria-label" data-i18n="spreadAria"></div>
+        <div class="spread-wrap">
+          <div class="card-spread" id="card-spread" role="group" data-i18n-attr="aria-label" data-i18n="spreadAria"></div>
+        </div>
         <p class="draw-stage__tip" id="draw-tip">每日卦象一旦显现便已注定 · 翌日 00:00 焕新</p>
       </section>
 

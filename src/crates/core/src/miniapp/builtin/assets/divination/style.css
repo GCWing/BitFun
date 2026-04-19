@@ -97,7 +97,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--d-line);
   background:
     linear-gradient(180deg, rgba(10,6,23,0.85), rgba(10,6,23,0.55));
@@ -107,7 +107,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex; align-items: center; gap: 10px;
   font-family: var(--d-serif);
   font-weight: 500;
-  font-size: 17px;
+  font-size: 15px;
   letter-spacing: 4px;
   color: var(--d-gold-bright);
   text-shadow: 0 0 12px rgba(240,198,116,0.25);
@@ -115,7 +115,7 @@ button { font-family: inherit; cursor: pointer; }
 .header__title svg { color: var(--d-gold); filter: drop-shadow(0 0 6px rgba(212,175,55,0.4)); }
 .header__date {
   font-family: var(--d-serif);
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 2px;
   color: var(--d-text-soft);
   font-variant-numeric: tabular-nums;
@@ -127,30 +127,35 @@ button { font-family: inherit; cursor: pointer; }
   z-index: 1;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding: 28px 24px;
+  overflow: hidden;
+  padding: 14px 18px 18px;
   display: flex;
   justify-content: center;
 }
 
 /* ── Draw stage — spread of card backs to choose from ──── */
 .draw-stage {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  justify-content: center;
+  gap: 10px;
   margin: auto;
   width: 100%;
   max-width: 880px;
 }
+.draw-stage__title,
+.draw-stage > .spread-wrap,
+.draw-stage__tip { position: relative; z-index: 2; }
 .draw-stage__title {
   text-align: center;
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 .draw-stage__greeting {
   margin: 0;
   font-family: var(--d-serif);
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 500;
   letter-spacing: 12px;
   padding-left: 12px; /* compensate letter-spacing on first letter */
@@ -159,9 +164,9 @@ button { font-family: inherit; cursor: pointer; }
   animation: greetingFade 1.2s ease both;
 }
 .draw-stage__subtitle {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   font-family: var(--d-serif);
-  font-size: 13.5px;
+  font-size: 12.5px;
   letter-spacing: 3px;
   color: var(--d-text-soft);
   animation: greetingFade 1.6s ease both .2s;
@@ -169,7 +174,7 @@ button { font-family: inherit; cursor: pointer; }
 .draw-stage__tip {
   margin: 0;
   font-family: var(--d-serif);
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 1.5px;
   color: var(--d-text-mute);
   text-align: center;
@@ -180,20 +185,122 @@ button { font-family: inherit; cursor: pointer; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Spread wrapper hosts the sigil ring + the card fan ── */
+.spread-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Rotating arcane sigil — full-stage backdrop, sized to fit the viewport so
+ * the entire halo + rune circles are visible behind every element. */
+.sigil-ring {
+  position: absolute;
+  left: 50%; top: 50%;
+  /* Always fit inside the visible stage; never trigger scrollbars. */
+  width: min(560px, 92vw, 78vh);
+  height: min(560px, 92vw, 78vh);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.65;
+  filter: drop-shadow(0 0 18px rgba(212,175,55,0.18));
+  z-index: 0;
+}
+.sigil-ring::before,
+.sigil-ring::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(212,175,55,0.30);
+}
+.sigil-ring::after {
+  inset: 60px;
+  border-color: rgba(196,181,253,0.22);
+  border-style: dashed;
+  animation: ringSpin 60s linear infinite reverse;
+}
+.sigil-ring::before {
+  animation: ringPulse 5s ease-in-out infinite alternate;
+  box-shadow:
+    0 0 30px rgba(212,175,55,0.10) inset,
+    0 0 40px rgba(157,78,221,0.18);
+}
+.sigil-ring__core {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 180px; height: 180px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(240,198,116,0.10), transparent 70%);
+}
+.sigil-ring__core::before,
+.sigil-ring__core::after {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(0deg,   transparent 49.6%, rgba(212,175,55,0.35) 49.6%, rgba(212,175,55,0.35) 50.4%, transparent 50.4%),
+    linear-gradient(60deg,  transparent 49.6%, rgba(212,175,55,0.35) 49.6%, rgba(212,175,55,0.35) 50.4%, transparent 50.4%),
+    linear-gradient(120deg, transparent 49.6%, rgba(212,175,55,0.35) 49.6%, rgba(212,175,55,0.35) 50.4%, transparent 50.4%);
+  border-radius: 50%;
+  mask: radial-gradient(circle, transparent 25%, black 26%, black 99%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 25%, black 26%, black 99%, transparent 100%);
+  opacity: 0.55;
+}
+.sigil-ring__core::after {
+  transform: rotate(30deg);
+  animation: ringSpin 90s linear infinite;
+}
+.sigil-ring__rune {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  font-family: var(--d-serif);
+  letter-spacing: 14px;
+  color: var(--d-gold);
+  text-align: center;
+  white-space: nowrap;
+  animation: ringSpin 80s linear infinite;
+  text-shadow: 0 0 8px rgba(240,198,116,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.sigil-ring__rune--outer { opacity: 0.75; }
+.sigil-ring__rune--inner {
+  width: 70%; height: 70%;
+  left: 15%; top: 15%;
+  font-size: 11px;
+  letter-spacing: 10px;
+  opacity: 0.55;
+  animation-duration: 110s;
+  animation-direction: reverse;
+}
+@keyframes ringSpin { to { transform: rotate(360deg); } }
+@keyframes ringPulse {
+  from { opacity: 0.45; box-shadow: 0 0 30px rgba(212,175,55,0.10) inset, 0 0 30px rgba(157,78,221,0.14); }
+  to   { opacity: 0.75; box-shadow: 0 0 60px rgba(240,198,116,0.18) inset, 0 0 70px rgba(157,78,221,0.30); }
+}
+
 /* The fan of card backs. Cards visually overlap; hover/focus lifts them. */
 .card-spread {
   position: relative;
+  z-index: 1;
   display: flex;
   justify-content: center;
   align-items: flex-end;
   perspective: 1600px;
-  margin: 26px 0 6px;
-  min-height: 320px;
-  padding: 30px 20px 50px;
+  margin: 0;
+  min-height: 250px;
+  padding: 22px 16px 32px;
 }
 .card-pick {
-  --w: 168px;
-  --h: 248px;
+  --w: 158px;
+  --h: 234px;
   width: var(--w);
   height: var(--h);
   margin: 0 -32px;
@@ -212,6 +319,8 @@ button { font-family: inherit; cursor: pointer; }
     0 0 60px rgba(157,78,221,0.18) inset;
   transform: translateY(var(--y, 0)) rotate(var(--rot, 0deg));
   transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
   transition:
     transform .38s cubic-bezier(.2,.8,.2,1),
     box-shadow .38s ease,
@@ -268,7 +377,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .card-pick__symbol {
   font-family: var(--d-serif);
-  font-size: 60px;
+  font-size: 56px;
   line-height: 1;
   background: linear-gradient(135deg, #f0c674 0%, #d4af37 55%, #c084fc 100%);
   -webkit-background-clip: text;
@@ -327,19 +436,86 @@ button { font-family: inherit; cursor: pointer; }
   to   { transform: scale(1.12); filter: drop-shadow(0 0 22px rgba(240,198,116,0.85)); }
 }
 
-/* Discarded cards fade and drift away. */
+/* Selected card flips up, brightens, then disappears into the result. */
+.card-pick.is-flipping {
+  animation: cardFlip 1.1s cubic-bezier(.6,.05,.3,1) forwards !important;
+  z-index: 400 !important;
+}
+@keyframes cardFlip {
+  0%   { transform: translateY(-44px) rotateY(0deg) scale(1.08); filter: brightness(1.2) saturate(1.1); }
+  35%  { transform: translateY(-90px) rotateY(180deg) scale(1.22); filter: brightness(1.7) saturate(1.2); }
+  70%  { transform: translateY(-110px) rotateY(360deg) scale(1.10); filter: brightness(1.5) blur(2px); opacity: 1; }
+  100% { transform: translateY(-150px) rotateY(540deg) scale(0.4);  filter: brightness(1.2) blur(8px); opacity: 0; }
+}
+
+/* Discarded cards fade and drift away outward. */
 .card-pick.is-discarded {
   opacity: 0;
-  transform: translateY(80px) rotate(var(--rot, 0deg)) scale(0.85);
-  filter: blur(4px);
+  transform: translate(var(--scatter-x, 0px), 80px) rotate(var(--scatter-rot, 0deg)) scale(0.7);
+  filter: blur(6px);
   pointer-events: none;
+  transition: transform .9s cubic-bezier(.2,.8,.2,1), opacity .9s ease, filter .9s ease;
+}
+
+/* Expanding burst that explodes from the spread when a card is chosen. */
+.draw-burst {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 50;
+  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(240,198,116,0.85) 18%, rgba(157,78,221,0.55) 45%, transparent 70%);
+  animation: burstCore 1.1s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.draw-burst::before,
+.draw-burst::after {
+  content: '';
+  position: absolute; inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(240,198,116,0.65);
+  opacity: 0;
+  animation: burstRing 1.15s cubic-bezier(.2,.8,.2,1) forwards;
+  box-shadow: 0 0 24px rgba(240,198,116,0.55);
+}
+.draw-burst::after {
+  border-color: rgba(196,181,253,0.55);
+  border-width: 1px;
+  animation-delay: .15s;
+  box-shadow: 0 0 24px rgba(196,181,253,0.45);
+}
+@keyframes burstCore {
+  0%   { transform: scale(0.2); opacity: 0; }
+  18%  { transform: scale(2);   opacity: 1; }
+  100% { transform: scale(50);  opacity: 0; }
+}
+@keyframes burstRing {
+  0%   { transform: scale(0.4); opacity: 0; }
+  20%  { opacity: 0.95; }
+  100% { transform: scale(75); opacity: 0; }
+}
+
+/* A brief screen-wide flash for the reveal moment. */
+.draw-veil {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  background: radial-gradient(circle at 50% 50%, rgba(240,198,116,0.28), rgba(157,78,221,0.12) 35%, transparent 70%);
+  opacity: 0;
+  animation: veilFlash 1.0s ease forwards;
+}
+@keyframes veilFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ── Result ──────────────────────────────────────────── */
 .result {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 24px;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
   width: 100%;
   max-width: 980px;
   align-items: start;
@@ -347,13 +523,17 @@ button { font-family: inherit; cursor: pointer; }
 
 /* Card flips/rises in from where the chosen back was. */
 .result-stage.is-active .card-front {
-  animation: cardEnter .75s cubic-bezier(.2,.8,.2,1) both;
+  animation: cardEnter .85s cubic-bezier(.2,.8,.2,1) both;
 }
 @keyframes cardEnter {
   from {
     opacity: 0;
-    transform: translateY(24px) scale(0.92) rotateY(-22deg);
-    filter: blur(4px);
+    transform: translateY(-30px) scale(0.7) rotateY(-180deg);
+    filter: blur(6px) brightness(1.4);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0) brightness(1.15);
   }
   to {
     opacity: 1;
@@ -366,9 +546,9 @@ button { font-family: inherit; cursor: pointer; }
 .result-stage.is-active .result__panels > * {
   animation: panelRise .55s cubic-bezier(.2,.8,.2,1) both;
 }
-.result-stage.is-active .result__panels > *:nth-child(1) { animation-delay: .28s; }
-.result-stage.is-active .result__panels > *:nth-child(2) { animation-delay: .44s; }
-.result-stage.is-active .result__panels > *:nth-child(3) { animation-delay: .60s; }
+.result-stage.is-active .result__panels > *:nth-child(1) { animation-delay: .35s; }
+.result-stage.is-active .result__panels > *:nth-child(2) { animation-delay: .50s; }
+.result-stage.is-active .result__panels > *:nth-child(3) { animation-delay: .65s; }
 @keyframes panelRise {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -378,7 +558,7 @@ button { font-family: inherit; cursor: pointer; }
 .card-front {
   position: relative;
   border-radius: 14px;
-  padding: 26px 24px 28px;
+  padding: 16px 16px 18px;
   border: 1px solid rgba(212,175,55,0.45);
   background: linear-gradient(160deg, var(--card-tone-1, #2a1d44) 0%, var(--card-tone-2, #1d1b2e) 100%);
   box-shadow:
@@ -386,7 +566,6 @@ button { font-family: inherit; cursor: pointer; }
     0 0 0 1px rgba(212,175,55,0.18) inset,
     0 0 50px rgba(212,175,55,0.10);
   color: #fff;
-  min-height: 380px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -419,7 +598,7 @@ button { font-family: inherit; cursor: pointer; }
 .card-front__top {
   display: flex; align-items: center; justify-content: space-between;
   font-family: var(--d-serif);
-  font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+  font-size: 10.5px; letter-spacing: 3px; text-transform: uppercase;
   color: rgba(255,255,255,0.7);
   position: relative; z-index: 1;
 }
@@ -427,7 +606,7 @@ button { font-family: inherit; cursor: pointer; }
   background: rgba(212,175,55,0.18);
   color: var(--d-gold-bright);
   border: 1px solid rgba(212,175,55,0.5);
-  padding: 3px 10px; border-radius: 999px;
+  padding: 2px 9px; border-radius: 999px;
   letter-spacing: 1.5px;
   font-size: 10px;
   text-transform: none;
@@ -435,22 +614,27 @@ button { font-family: inherit; cursor: pointer; }
 }
 .card-front__art {
   font-family: var(--d-serif);
-  font-size: 110px;
+  font-size: 70px;
   line-height: 1;
   text-align: center;
-  margin: 30px 0 18px;
+  margin: 14px 0 8px;
   background: linear-gradient(135deg, #fff 0%, var(--d-gold-bright) 60%, var(--d-gold) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45)) drop-shadow(0 0 18px rgba(212,175,55,0.3));
   position: relative; z-index: 1;
+  animation: artFloat 5s ease-in-out infinite alternate;
+}
+@keyframes artFloat {
+  from { transform: translateY(0);    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45)) drop-shadow(0 0 14px rgba(212,175,55,0.30)); }
+  to   { transform: translateY(-4px); filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)) drop-shadow(0 0 26px rgba(240,198,116,0.55)); }
 }
 .card-front__name {
   font-family: var(--d-serif);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 500;
   text-align: center;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   letter-spacing: 8px;
   color: var(--d-gold-bright);
   position: relative; z-index: 1;
@@ -459,56 +643,56 @@ button { font-family: inherit; cursor: pointer; }
   text-align: center;
   color: rgba(255,255,255,0.78);
   font-family: var(--d-serif);
-  font-size: 13px;
-  letter-spacing: 4px;
-  margin: 0 0 18px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  margin: 0 0 10px;
   position: relative; z-index: 1;
 }
 .card-front__keyword::before, .card-front__keyword::after {
-  content: '✦'; color: var(--d-gold); margin: 0 10px; font-size: 10px;
+  content: '✦'; color: var(--d-gold); margin: 0 8px; font-size: 9px;
 }
 .card-front__quote {
   text-align: center;
   font-family: var(--d-serif);
   font-style: italic;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: rgba(255,255,255,0.88);
-  line-height: 1.85;
+  line-height: 1.6;
   margin: auto 0 0;
-  padding: 0 12px;
+  padding: 0 8px;
   position: relative; z-index: 1;
 }
 .card-front__insight {
   text-align: center;
   font-family: var(--d-serif);
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 1.2px;
   color: rgba(240,198,116,0.78);
-  line-height: 1.6;
-  margin: 12px 0 0;
-  padding: 8px 14px 0;
+  line-height: 1.55;
+  margin: 8px 0 0;
+  padding: 6px 10px 0;
   border-top: 1px dashed rgba(212,175,55,0.28);
   position: relative; z-index: 1;
 }
 .card-front__insight-label {
   display: block;
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 3px;
   color: var(--d-gold);
   opacity: 0.75;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .card-front__insight-text { display: block; }
 
 /* ── Right panels: stay arcane ───────────────────────── */
-.result__panels { display: flex; flex-direction: column; gap: 16px; }
+.result__panels { display: flex; flex-direction: column; gap: 10px; }
 .panel {
   position: relative;
   background:
     linear-gradient(180deg, rgba(45,28,80,0.55), rgba(21,16,43,0.70));
   border: 1px solid var(--d-line);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 10px 14px 12px;
   backdrop-filter: blur(10px);
   box-shadow: 0 0 0 1px rgba(212,175,55,0.06) inset, 0 8px 22px -10px rgba(0,0,0,0.6);
 }
@@ -516,7 +700,7 @@ button { font-family: inherit; cursor: pointer; }
 .panel::before, .panel::after {
   content: '';
   position: absolute;
-  width: 14px; height: 14px;
+  width: 12px; height: 12px;
   border: 1px solid var(--d-gold);
   opacity: 0.55;
   pointer-events: none;
@@ -526,30 +710,30 @@ button { font-family: inherit; cursor: pointer; }
 
 .panel__title {
   font-family: var(--d-serif);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--d-gold-bright);
   text-transform: uppercase;
   letter-spacing: 4px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   display: flex; align-items: center; gap: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 5px;
   border-bottom: 1px dashed var(--d-line);
 }
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .dot--good { background: var(--d-gold-bright); box-shadow: 0 0 8px rgba(240,198,116,0.7); }
 .dot--bad  { background: var(--d-bad); box-shadow: 0 0 8px rgba(176,48,80,0.7); }
 
 /* Fortune matrix — five-stars with golden glow, no SaaS bars */
-.fortunes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.fortunes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .fortune {
   display: grid;
-  grid-template-columns: minmax(64px, max-content) minmax(40px, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(48px, max-content) minmax(40px, 1fr) auto;
+  gap: 10px;
   align-items: center;
 }
 .fortune__label {
   font-family: var(--d-serif);
-  font-size: 14px;
+  font-size: 12.5px;
   letter-spacing: 2px;
   color: var(--d-text-soft);
   white-space: nowrap;
@@ -570,8 +754,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .fortune__stars {
   font-family: var(--d-serif);
-  font-size: 16px;
-  letter-spacing: 4px;
+  font-size: 14px;
+  letter-spacing: 3px;
   color: var(--d-gold-bright);
   text-shadow: 0 0 8px rgba(240,198,116,0.4);
   font-variant-numeric: tabular-nums;
@@ -579,13 +763,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 .fortune__stars .ghost { color: rgba(212,175,55,0.22); text-shadow: none; }
 
-.panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.suit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.suit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .suit li {
   font-family: var(--d-serif);
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 1px;
-  padding: 8px 12px 8px 26px;
+  padding: 5px 10px 5px 22px;
   border-radius: 6px;
   background: rgba(20,12,40,0.55);
   border: 1px solid rgba(212,175,55,0.10);
@@ -594,8 +778,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .suit li::before {
   position: absolute;
-  left: 10px; top: 50%; transform: translateY(-50%);
-  font-size: 12px;
+  left: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 11px;
 }
 .panel--good .suit li {
   background: linear-gradient(180deg, rgba(212,175,55,0.10), rgba(212,175,55,0.04));
@@ -609,47 +793,54 @@ button { font-family: inherit; cursor: pointer; }
 }
 .panel--bad .suit li::before { content: '✕'; color: var(--d-bad); font-weight: 600; }
 
-/* Lucky cells — sealed parchment look */
+/* Lucky cells — sealed parchment look — single row of four. */
 .lucky {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 .lucky__cell {
   background: linear-gradient(180deg, rgba(212,175,55,0.06), rgba(20,12,40,0.55));
   border: 1px solid rgba(212,175,55,0.22);
-  padding: 12px 14px;
+  padding: 8px 10px;
   border-radius: 8px;
   position: relative;
+  min-width: 0;
 }
 .lucky__label {
   font-family: var(--d-serif);
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 2.5px;
+  letter-spacing: 2px;
   color: var(--d-gold);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .lucky__value {
   font-family: var(--d-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   color: var(--d-text);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lucky__swatch {
-  width: 18px; height: 18px;
+  width: 14px; height: 14px;
   border-radius: 50%;
   border: 1px solid rgba(212,175,55,0.55);
   box-shadow: 0 0 10px rgba(255,255,255,0.10);
   display: inline-block;
+  flex-shrink: 0;
 }
 .lucky__value--mantra {
-  font-size: 13px;
+  font-size: 11.5px;
   font-style: italic;
   color: var(--d-text-soft);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 /* ── Footer ──────────────────────────────────────────── */
@@ -659,13 +850,13 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
+  padding: 8px 20px;
   border-top: 1px solid var(--d-line);
   background: linear-gradient(0deg, rgba(10,6,23,0.85), rgba(10,6,23,0.55));
 }
 .footer__hint {
   font-family: var(--d-serif);
-  font-size: 12px;
+  font-size: 11.5px;
   letter-spacing: 1.5px;
   color: var(--d-text-mute);
   font-style: italic;
@@ -674,10 +865,10 @@ button { font-family: inherit; cursor: pointer; }
   background: transparent;
   border: 1px solid rgba(212,175,55,0.45);
   color: var(--d-gold-bright);
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-family: var(--d-serif);
-  font-size: 12px;
+  font-size: 11.5px;
   letter-spacing: 1.5px;
   display: inline-flex; align-items: center; gap: 6px;
   transition: all .18s ease;
@@ -712,18 +903,24 @@ button { font-family: inherit; cursor: pointer; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(212,175,55,0.32); }
 
 /* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 880px) {
+  .lucky { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 720px) {
   .result { grid-template-columns: 1fr; }
-  .card-front { min-height: 320px; }
   .panel-row { grid-template-columns: 1fr; }
   .card-pick { --w: 132px; --h: 196px; margin: 0 -42px; }
   .card-pick__symbol { font-size: 48px; }
-  .card-spread { min-height: 250px; padding: 24px 14px 40px; }
+  .card-spread { min-height: 220px; padding: 18px 12px 32px; }
   .draw-stage__greeting { font-size: 22px; letter-spacing: 8px; padding-left: 8px; }
   .draw-stage__subtitle { font-size: 12.5px; letter-spacing: 2px; }
+  .sigil-ring__rune { font-size: 12px; letter-spacing: 11px; }
+  .sigil-ring__rune--inner { font-size: 10px; letter-spacing: 8px; }
 }
 @media (max-width: 460px) {
   .card-pick { --w: 110px; --h: 162px; margin: 0 -50px; border-radius: 11px; }
   .card-pick__symbol { font-size: 38px; }
-  .card-spread { min-height: 210px; }
+  .card-spread { min-height: 200px; }
+  .sigil-ring__rune { font-size: 11px; letter-spacing: 8px; }
+  .sigil-ring__rune--inner { font-size: 9px; letter-spacing: 6px; }
 }

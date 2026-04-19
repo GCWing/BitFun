@@ -886,16 +886,52 @@ function setupDraw(today, alreadyDrawn) {
 }
 
 let pickInFlight = false;
+function spawnBurst(centerEl) {
+  // Center the burst on the chosen card, fall back to viewport center.
+  let x = window.innerWidth / 2;
+  let y = window.innerHeight / 2;
+  if (centerEl && centerEl.getBoundingClientRect) {
+    const rect = centerEl.getBoundingClientRect();
+    x = rect.left + rect.width / 2;
+    y = rect.top + rect.height / 2;
+  }
+  const burst = document.createElement('div');
+  burst.className = 'draw-burst';
+  burst.style.left = x + 'px';
+  burst.style.top = y + 'px';
+  document.body.appendChild(burst);
+  const veil = document.createElement('div');
+  veil.className = 'draw-veil';
+  document.body.appendChild(veil);
+  setTimeout(() => { burst.remove(); veil.remove(); }, 1300);
+}
+
 function onPick(chosen, today, alreadyDrawn) {
   if (pickInFlight) return;
   pickInFlight = true;
-  for (const card of dom.cardSpread.children) {
+  // Compute scatter directions for the discarded cards so they fly outward.
+  const cards = Array.from(dom.cardSpread.children);
+  const chosenIdx = cards.indexOf(chosen);
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
     card.style.pointerEvents = 'none';
     card.tabIndex = -1;
-    if (card !== chosen) card.classList.add('is-discarded');
+    if (card !== chosen) {
+      const dir = i - chosenIdx;
+      const dx = dir * 160 + (dir < 0 ? -80 : 80);
+      const rot = dir * 18;
+      card.style.setProperty('--scatter-x', dx + 'px');
+      card.style.setProperty('--scatter-rot', rot + 'deg');
+      card.classList.add('is-discarded');
+    }
   }
   chosen.classList.add('is-chosen');
-  setTimeout(() => revealResult(today, alreadyDrawn), 760);
+  // After the lift settles, trigger the flip-into-burst sequence.
+  setTimeout(() => {
+    spawnBurst(chosen);
+    chosen.classList.add('is-flipping');
+  }, 380);
+  setTimeout(() => revealResult(today, alreadyDrawn), 1280);
 }
 
 function revealResult(today, alreadyDrawn) {
