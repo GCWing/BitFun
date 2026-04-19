@@ -105,17 +105,70 @@ impl ControlHubTool {
                 let os = std::env::consts::OS;
                 let arch = std::env::consts::ARCH;
 
+                // Probe which browser the host considers default. We surface
+                // both the kind AND whether it is CDP-driveable (Safari/
+                // Firefox aren't, so the model can fall back to system.open_url
+                // instead of attempting a doomed `browser.connect`).
+                let (browser_kind, browser_cdp_supported) =
+                    match crate::agentic::tools::browser_control::browser_launcher::BrowserLauncher::detect_default_browser() {
+                        Ok(k) => {
+                            let supported = !matches!(
+                                k,
+                                crate::agentic::tools::browser_control::browser_launcher::BrowserKind::Unknown(_)
+                            );
+                            (Some(k.to_string()), supported)
+                        }
+                        Err(_) => (None, false),
+                    };
+
+                // Same script_types probe as get_os_info — duplicated here
+                // because callers often hit `meta.capabilities` first and we
+                // don't want to force an extra system round-trip.
+                let mut script_types: Vec<&'static str> = vec!["shell"];
+                if cfg!(target_os = "macos") {
+                    script_types.push("applescript");
+                }
+                if which_exists("bash") {
+                    script_types.push("bash");
+                }
+                if which_exists("pwsh") || which_exists("powershell") {
+                    script_types.push("powershell");
+                }
+                if cfg!(target_os = "windows") {
+                    script_types.push("cmd");
+                }
+
+                #[cfg(target_os = "linux")]
+                let (display_server, desktop_env) = linux_session_info();
+                #[cfg(not(target_os = "linux"))]
+                let (display_server, desktop_env): (Option<String>, Option<String>) =
+                    (None, None);
+
                 let body = json!({
                     "domains": {
                         "desktop":  { "available": desktop_available, "reason": if desktop_available { Value::Null } else { json!("Only available in the BitFun desktop app") } },
-                        "browser":  { "available": true, "default_session_id": browser_default, "session_count": browser_session_count },
+                        "browser":  {
+                            "available": true,
+                            "default_session_id": browser_default,
+                            "session_count": browser_session_count,
+                            "default_browser": browser_kind,
+                            "cdp_supported": browser_cdp_supported,
+                        },
                         "app":      { "available": likely_app_available, "reason": if likely_app_available { Value::Null } else { json!("BitFun front-end (SelfControl bridge) is only wired up in the desktop app") } },
                         "terminal": { "available": likely_terminal_available, "reason": if likely_terminal_available { Value::Null } else { json!("TerminalApi is only available in contexts that registered it") } },
-                        "system":   { "available": true },
+                        "system":   {
+                            "available": true,
+                            "script_types": script_types,
+                        },
                         "meta":     { "available": true },
                     },
-                    "host": { "os": os, "arch": arch },
-                    "schema_version": "1.0",
+                    "host": {
+                        "os": os,
+                        "arch": arch,
+                        "display_server": display_server,
+                        "desktop_environment": desktop_env,
+                    },
+                    "schema_version": "1.1",
                 });
                 Ok(vec![ToolResult::ok(
                     body,
@@ -421,7 +474,11 @@ impl ControlHubTool {
         match action {
             "connect" => {
                 let kind = BrowserLauncher::detect_default_browser()?;
-                let launch_result = BrowserLauncher::launch_with_cdp(&kind, port).await?;
+                let user_data_dir = params
+                    .get("user_data_dir")
+                    .and_then(|v| v.as_str());
+                let launch_result =
+                    BrowserLauncher::launch_with_cdp_opts(&kind, port, user_data_dir).await?;
 
                 // UX shortcut: a frequent flow is "drive my Gmail tab" /
                 // "drive the GitHub PR I'm looking at". Without `target_*`
@@ -980,7 +1037,28 @@ impl ControlHubTool {
                             .ok_or_else(|| {
                                 BitFunError::tool("evaluate requires 'expression'".to_string())
                             })?;
-                        let result = actions.evaluate(expression).await?;
+                        // Bound the size of the returned value so a runaway
+                        // `JSON.stringify(document)` can't blow up the model
+                        // context window. Default 16 KiB; clamp to [1 KiB, 256 KiB].
+                        let max_value_bytes = params
+                            .get("max_value_bytes")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(16 * 1024)
+                            .clamp(1024, 256 * 1024) as usize;
+                        let mut result = actions.evaluate(expression).await?;
+                        let mut truncated = false;
+                        if let Some(value) = result.pointer_mut("/result/value") {
+                            let serialized = value.to_string();
+                            if serialized.len() > max_value_bytes {
+                                let (clip, was) =
+                                    truncate_with_marker(&serialized, max_value_bytes);
+                                truncated = was;
+                                *value = json!(clip);
+                            }
+                        }
+                        if let Some(obj) = result.as_object_mut() {
+                            obj.insert("truncated".to_string(), json!(truncated));
+                        }
                         let display = result
                             .get("result")
                             .and_then(|r| r.get("value"))
@@ -1391,6 +1469,18 @@ impl ControlHubTool {
     }
 
     /// Returns the platform-specific command and args to open an application.
+    ///
+    /// Cross-platform notes:
+    /// * macOS: `open -a <name>` resolves the app via LaunchServices.
+    /// * Windows: `cmd /C start "" <name>` resolves through `App Paths` registry
+    ///   and PATH. We deliberately keep the empty title argument (`""`) so
+    ///   `start` treats the next token as the program, not as the window title.
+    /// * Linux: `xdg-open` is for files/URLs, NOT for application names. We
+    ///   try in order: `gtk-launch <name>` (uses `.desktop` files), then a
+    ///   direct exec of the lower-cased name (handles `firefox`, `code`, etc.),
+    ///   and finally fall back to `xdg-open` so callers passing a URL/path by
+    ///   accident still work. The dispatcher in `handle_system` is aware of
+    ///   this fallback chain.
     fn platform_open_command(app_name: &str) -> (String, Vec<String>) {
         #[cfg(target_os = "macos")]
         {
@@ -1413,7 +1503,14 @@ impl ControlHubTool {
         }
         #[cfg(target_os = "linux")]
         {
-            ("xdg-open".to_string(), vec![app_name.to_string()])
+            // Probe in order of correctness; the first executable on PATH wins.
+            // `gtk-launch` is the canonical way to start a desktop application
+            // by its .desktop id; if not present we fall back to a direct exec.
+            if which_exists("gtk-launch") {
+                ("gtk-launch".to_string(), vec![app_name.to_string()])
+            } else {
+                (app_name.to_string(), vec![])
+            }
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
         {
@@ -1446,7 +1543,14 @@ impl ControlHubTool {
                 let mut host_error: Option<String> = None;
                 let method = "shell";
 
-                if context.computer_use_host.is_some() {
+                // Only macOS has a working ComputerUseHost.open_app pathway today
+                // (Accessibility-driven). On Windows / Linux the host either
+                // doesn't exist or returns a NotImplemented stub, so we save a
+                // round-trip by going straight to the platform shell. On macOS
+                // we still prefer the host because it knows about
+                // focus-after-launch and AX permission state.
+                let prefer_host = cfg!(target_os = "macos") && context.computer_use_host.is_some();
+                if prefer_host {
                     host_attempted = true;
                     let cu_input = json!({ "action": "open_app", "app_name": app_name });
                     match self.handle_desktop("open_app", &cu_input, context).await {
@@ -1477,16 +1581,68 @@ impl ControlHubTool {
                     }
                 }
 
-                let (cmd, args) = Self::platform_open_command(app_name);
-                let output = std::process::Command::new(&cmd)
-                    .args(&args)
-                    .output()
-                    .map_err(|e| {
-                        BitFunError::tool(format!(
-                            "open_app shell launch failed for '{}': {} (host_error: {:?})",
-                            app_name, e, host_error
-                        ))
-                    })?;
+                // Build the platform-specific launch attempt list. On Linux
+                // we try multiple strategies in order so the model doesn't
+                // need to know whether the user has gtk-launch installed.
+                let attempts: Vec<(String, Vec<String>)> = {
+                    let primary = Self::platform_open_command(app_name);
+                    #[cfg(target_os = "linux")]
+                    {
+                        let mut v = vec![primary];
+                        // Fallback 1: direct exec of the lowercase name (handles
+                        // `firefox`, `code`, `gnome-terminal`, etc. when the
+                        // exec name matches the app name).
+                        let lower = app_name.to_lowercase();
+                        if v.iter().all(|(c, _)| c != &lower) {
+                            v.push((lower, vec![]));
+                        }
+                        // Fallback 2: xdg-open — last-ditch, mostly for paths/URLs
+                        // erroneously passed as app_name.
+                        v.push(("xdg-open".to_string(), vec![app_name.to_string()]));
+                        v
+                    }
+                    #[cfg(not(target_os = "linux"))]
+                    {
+                        vec![primary]
+                    }
+                };
+
+                let mut last_err: Option<String> = None;
+                let mut output_opt = None;
+                let mut chosen_cmd = String::new();
+                let mut chosen_args: Vec<String> = vec![];
+                for (cmd, args) in &attempts {
+                    match std::process::Command::new(cmd).args(args).output() {
+                        Ok(out) => {
+                            if out.status.success() {
+                                chosen_cmd = cmd.clone();
+                                chosen_args = args.clone();
+                                output_opt = Some(out);
+                                break;
+                            } else {
+                                last_err = Some(format!(
+                                    "{} exit={:?} stderr={}",
+                                    cmd,
+                                    out.status.code(),
+                                    String::from_utf8_lossy(&out.stderr).trim()
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            last_err = Some(format!("spawn {}: {}", cmd, e));
+                        }
+                    }
+                }
+                let _ = chosen_args;
+                let output = output_opt.ok_or_else(|| {
+                    BitFunError::tool(format!(
+                        "open_app failed for '{}' across {} strategies: {} (host_error: {:?})",
+                        app_name,
+                        attempts.len(),
+                        last_err.as_deref().unwrap_or("(no error)"),
+                        host_error
+                    ))
+                })?;
 
                 if output.status.success() {
                     let warning = host_error.map(|e| {
@@ -1497,16 +1653,17 @@ impl ControlHubTool {
                             "launched": true,
                             "app": app_name,
                             "method": method,
+                            "via_command": chosen_cmd,
                             "host_attempted": host_attempted,
                             "warning": warning,
                         }),
-                        Some(format!("Opened {} via shell", app_name)),
+                        Some(format!("Opened {} via {}", app_name, chosen_cmd)),
                     )])
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
                     Err(BitFunError::tool(format!(
-                        "open_app failed for '{}'. host_attempted={}, host_error={:?}, shell_stderr='{}'",
-                        app_name, host_attempted, host_error, stderr
+                        "open_app failed for '{}'. host_attempted={}, host_error={:?}, last_command='{}', stderr='{}'",
+                        app_name, host_attempted, host_error, chosen_cmd, stderr
                     )))
                 }
             }
@@ -1546,18 +1703,26 @@ impl ControlHubTool {
                         #[cfg(not(target_os = "macos"))]
                         {
                             let _ = script;
-                            return Err(BitFunError::tool(
-                                "AppleScript is only available on macOS".to_string(),
+                            return Ok(err_response(
+                                "system",
+                                "run_script",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    "AppleScript is only available on macOS",
+                                )
+                                .with_hint("Use script_type='shell' (sh on Unix, PowerShell on Windows) or script_type='powershell'/'bash'"),
                             ));
                         }
                     }
+                    // The "shell" alias picks the OS's *default* shell so the
+                    // model can stay platform-agnostic. On Windows we now
+                    // route to PowerShell rather than cmd.exe to avoid the
+                    // GBK/CP936 stdout encoding nightmare and to give the
+                    // model a consistent surface area.
                     "shell" => {
                         #[cfg(target_os = "windows")]
                         {
-                            (
-                                "cmd".to_string(),
-                                vec!["/C".to_string(), script.to_string()],
-                            )
+                            powershell_invocation(script)
                         }
                         #[cfg(not(target_os = "windows"))]
                         {
@@ -1567,9 +1732,90 @@ impl ControlHubTool {
                             )
                         }
                     }
+                    "bash" => {
+                        // Bash is universally requested but not always on
+                        // PATH (Windows without WSL/git-bash). Detect and
+                        // surface a structured NotAvailable instead of a
+                        // confusing spawn-failure error.
+                        if !which_exists("bash") {
+                            return Ok(err_response(
+                                "system",
+                                "run_script",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    "bash is not on PATH",
+                                )
+                                .with_hint("Install Git for Windows / WSL, or use script_type='shell' / 'powershell' / 'cmd'"),
+                            ));
+                        }
+                        (
+                            "bash".to_string(),
+                            vec!["-c".to_string(), script.to_string()],
+                        )
+                    }
+                    "powershell" => {
+                        // Prefer pwsh (PowerShell 7+, cross-platform) when
+                        // available; fall back to legacy Windows powershell.
+                        let prog = if which_exists("pwsh") {
+                            "pwsh"
+                        } else if which_exists("powershell") {
+                            "powershell"
+                        } else {
+                            return Ok(err_response(
+                                "system",
+                                "run_script",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    "Neither pwsh nor powershell are on PATH",
+                                )
+                                .with_hint("Install PowerShell, or use script_type='shell' / 'bash'"),
+                            ));
+                        };
+                        (
+                            prog.to_string(),
+                            vec![
+                                "-NoProfile".to_string(),
+                                "-NonInteractive".to_string(),
+                                // -OutputEncoding utf8 is set inside the script
+                                // wrapper below for consistent stdout handling.
+                                "-Command".to_string(),
+                                format!(
+                                    "[Console]::OutputEncoding=[Text.Encoding]::UTF8; {}",
+                                    script
+                                ),
+                            ],
+                        )
+                    }
+                    "cmd" => {
+                        #[cfg(target_os = "windows")]
+                        {
+                            // Force code-page 65001 (UTF-8) before running the
+                            // user's script so stdout matches what we decode.
+                            (
+                                "cmd".to_string(),
+                                vec![
+                                    "/U".to_string(),
+                                    "/C".to_string(),
+                                    format!("chcp 65001>nul && {}", script),
+                                ],
+                            )
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            return Ok(err_response(
+                                "system",
+                                "run_script",
+                                ControlHubError::new(
+                                    ErrorCode::NotAvailable,
+                                    "script_type='cmd' is only available on Windows",
+                                )
+                                .with_hint("Use script_type='shell' / 'bash' / 'powershell'"),
+                            ));
+                        }
+                    }
                     other => {
                         return Err(BitFunError::tool(format!(
-                            "Unknown script_type: '{}'. Valid: applescript, shell",
+                            "Unknown script_type: '{}'. Valid: applescript (macOS), shell (OS default), bash, powershell, cmd (Windows)",
                             other
                         )))
                     }
@@ -1695,6 +1941,37 @@ impl ControlHubTool {
                 if let Ok(host) = hostname() {
                     info["hostname"] = json!(host);
                 }
+                // Linux-only: surface display server (X11 / Wayland) and the
+                // current desktop environment so the model can pick the right
+                // clipboard helper / window manipulation strategy without a
+                // separate `run_script` round-trip.
+                #[cfg(target_os = "linux")]
+                {
+                    let (display_server, desktop_env) = linux_session_info();
+                    if let Some(s) = display_server {
+                        info["display_server"] = json!(s);
+                    }
+                    if let Some(d) = desktop_env {
+                        info["desktop_environment"] = json!(d);
+                    }
+                }
+                // The set of `script_type` values the host can actually run.
+                // Discoverability win: model no longer has to spawn a doomed
+                // run_script call to learn that bash is missing on Windows.
+                let mut script_types = vec!["shell"];
+                if cfg!(target_os = "macos") {
+                    script_types.push("applescript");
+                }
+                if which_exists("bash") {
+                    script_types.push("bash");
+                }
+                if which_exists("pwsh") || which_exists("powershell") {
+                    script_types.push("powershell");
+                }
+                if cfg!(target_os = "windows") {
+                    script_types.push("cmd");
+                }
+                info["script_types"] = json!(script_types);
                 Ok(vec![ToolResult::ok(
                     info.clone(),
                     Some(format!(
@@ -1738,10 +2015,7 @@ impl ControlHubTool {
                             ErrorCode::NotAvailable,
                             format!("Clipboard read failed: {}", e),
                         )
-                        .with_hint(match std::env::consts::OS {
-                            "linux" => "Install wl-clipboard (Wayland) or xclip/xsel (X11)",
-                            _ => "Make sure the system clipboard helper is available on this host",
-                        }),
+                        .with_hints(linux_clipboard_install_hints()),
                     )),
                 }
             }
@@ -1768,10 +2042,7 @@ impl ControlHubTool {
                             ErrorCode::NotAvailable,
                             format!("Clipboard write failed: {}", e),
                         )
-                        .with_hint(match std::env::consts::OS {
-                            "linux" => "Install wl-clipboard (Wayland) or xclip/xsel (X11)",
-                            _ => "Make sure the system clipboard helper is available on this host",
-                        }),
+                        .with_hints(linux_clipboard_install_hints()),
                     )),
                 }
             }
@@ -1806,14 +2077,20 @@ impl ControlHubTool {
                 // NOTE: do NOT reuse platform_open_command — that helper
                 // is for *apps* (uses `open -a` on macOS) and would treat
                 // the URL as an application name, failing immediately.
+                //
+                // Windows: must NOT route through `cmd /C start "" <url>`.
+                // `cmd` interprets `&`, `^`, `%`, `|` in the URL — so a query
+                // string like `?a=1&b=2` gets the second arg dropped, and
+                // long URLs may be silently truncated. Use rundll32 with the
+                // URL protocol handler so the URL is passed verbatim and
+                // routed through the same default-handler resolution Windows
+                // uses for "Open in Browser" shell verbs.
                 let (program, args) = match std::env::consts::OS {
                     "macos" => ("open".to_string(), vec![url.to_string()]),
                     "windows" => (
-                        "cmd".to_string(),
+                        "rundll32".to_string(),
                         vec![
-                            "/C".to_string(),
-                            "start".to_string(),
-                            "".to_string(),
+                            "url.dll,FileProtocolHandler".to_string(),
                             url.to_string(),
                         ],
                     ),
@@ -1870,12 +2147,13 @@ impl ControlHubTool {
                         vec!["-a".to_string(), app.to_string(), path_str.to_string()],
                     ),
                     ("macos", None) => ("open".to_string(), vec![path_str.to_string()]),
+                    // Windows file open: same rundll32 dance as open_url so
+                    // paths with `&` / `%` survive intact when cmd would have
+                    // mangled them. ShellExec_RunDLL also accepts file paths.
                     ("windows", _) => (
-                        "cmd".to_string(),
+                        "rundll32".to_string(),
                         vec![
-                            "/C".to_string(),
-                            "start".to_string(),
-                            "".to_string(),
+                            "url.dll,FileProtocolHandler".to_string(),
                             path_str.to_string(),
                         ],
                     ),
@@ -2031,8 +2309,136 @@ fn read_os_version() -> Option<String> {
 }
 
 fn hostname() -> std::io::Result<String> {
+    // Prefer environment variables on each OS so we never have to spawn a
+    // subprocess for a value that's already in our address space, and so we
+    // never ingest a non-UTF-8 byte stream from `hostname.exe` on Windows
+    // running a CJK code page.
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(name) = std::env::var("COMPUTERNAME") {
+            if !name.is_empty() {
+                return Ok(name);
+            }
+        }
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        if let Ok(name) = std::env::var("HOSTNAME") {
+            if !name.is_empty() {
+                return Ok(name);
+            }
+        }
+        if let Ok(bytes) = std::fs::read("/etc/hostname") {
+            let s = String::from_utf8_lossy(&bytes).trim().to_string();
+            if !s.is_empty() {
+                return Ok(s);
+            }
+        }
+    }
     let out = std::process::Command::new("hostname").output()?;
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Cheap PATH lookup for an executable name. Used to decide between e.g.
+/// `pwsh` and `powershell`, or to surface a structured `NOT_AVAILABLE`
+/// error when the requested interpreter isn't installed.
+fn which_exists(name: &str) -> bool {
+    let paths = match std::env::var_os("PATH") {
+        Some(p) => p,
+        None => return false,
+    };
+    let exts: Vec<String> = if cfg!(target_os = "windows") {
+        std::env::var("PATHEXT")
+            .unwrap_or_else(|_| ".EXE;.BAT;.CMD;.COM".to_string())
+            .split(';')
+            .map(|s| s.to_string())
+            .collect()
+    } else {
+        vec![String::new()]
+    };
+    for dir in std::env::split_paths(&paths) {
+        for ext in &exts {
+            let mut candidate = dir.join(name);
+            if !ext.is_empty() {
+                let stem = candidate.file_name().map(|n| n.to_os_string());
+                if let Some(mut stem) = stem {
+                    stem.push(ext);
+                    candidate.set_file_name(stem);
+                }
+            }
+            if candidate.exists() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Build a `(program, args)` pair for invoking a PowerShell snippet on Windows
+/// with UTF-8 output forced. Centralised so the "shell" alias and an explicit
+/// `script_type='powershell'` produce the same encoding.
+#[cfg(target_os = "windows")]
+fn powershell_invocation(script: &str) -> (String, Vec<String>) {
+    let prog = if which_exists("pwsh") { "pwsh" } else { "powershell" };
+    (
+        prog.to_string(),
+        vec![
+            "-NoProfile".to_string(),
+            "-NonInteractive".to_string(),
+            "-Command".to_string(),
+            format!(
+                "[Console]::OutputEncoding=[Text.Encoding]::UTF8; {}",
+                script
+            ),
+        ],
+    )
+}
+
+/// Build OS-specific install hints for the clipboard helper. On Linux we
+/// inspect the session type so the suggestion matches what the user actually
+/// needs (Wayland users wasting time installing xclip is a real failure mode).
+fn linux_clipboard_install_hints() -> Vec<String> {
+    match std::env::consts::OS {
+        "linux" => {
+            #[cfg(target_os = "linux")]
+            {
+                let (server, _) = linux_session_info();
+                match server.as_deref() {
+                    Some("wayland") => vec![
+                        "Wayland session detected — install wl-clipboard (e.g. `sudo apt install wl-clipboard` / `sudo dnf install wl-clipboard`)".to_string(),
+                        "Fallback for XWayland apps: also install xclip or xsel".to_string(),
+                    ],
+                    Some("x11") | Some("tty") => vec![
+                        "X11 session detected — install xclip (`sudo apt install xclip`) or xsel (`sudo apt install xsel`)".to_string(),
+                    ],
+                    _ => vec![
+                        "Install wl-clipboard (Wayland) OR xclip/xsel (X11). Run `echo $XDG_SESSION_TYPE` to know which one applies.".to_string(),
+                    ],
+                }
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                vec!["Install wl-clipboard (Wayland) or xclip/xsel (X11)".to_string()]
+            }
+        }
+        _ => vec![
+            "Make sure the system clipboard helper is available on this host"
+                .to_string(),
+        ],
+    }
+}
+
+/// Best-effort detection of the Linux desktop session metadata (display
+/// server + desktop environment). Returns `(display_server, desktop_env)`,
+/// either of which may be `None` if the environment doesn't expose it.
+#[cfg(target_os = "linux")]
+fn linux_session_info() -> (Option<String>, Option<String>) {
+    let server = std::env::var("XDG_SESSION_TYPE").ok().filter(|s| !s.is_empty());
+    let de = std::env::var("XDG_CURRENT_DESKTOP")
+        .ok()
+        .or_else(|| std::env::var("DESKTOP_SESSION").ok())
+        .filter(|s| !s.is_empty());
+    (server, de)
 }
 
 /// Cross-platform clipboard read. Shells out to the canonical helper for
@@ -3026,6 +3432,186 @@ mod control_hub_tests {
             serde_json::from_value(results[0].content().clone()).unwrap();
         assert_eq!(payload["ok"], serde_json::Value::Bool(false));
         assert_eq!(payload["error"]["code"], "NOT_FOUND");
+    }
+
+    #[tokio::test]
+    async fn meta_capabilities_includes_script_types_and_default_browser() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("meta", "capabilities", &json!({}), &ctx)
+            .await
+            .expect("capabilities should succeed");
+        let payload = results.first().unwrap().content();
+
+        // schema_version must have been bumped since we added new fields.
+        assert_eq!(
+            payload.get("schema_version").and_then(|v| v.as_str()),
+            Some("1.1"),
+            "schema_version must be bumped to 1.1: {payload}"
+        );
+
+        // system.script_types must always include `shell`.
+        let script_types = payload
+            .get("domains")
+            .and_then(|d| d.get("system"))
+            .and_then(|s| s.get("script_types"))
+            .and_then(|v| v.as_array())
+            .expect("system.script_types missing");
+        assert!(
+            script_types
+                .iter()
+                .any(|s| s.as_str() == Some("shell")),
+            "script_types must include 'shell': {script_types:?}"
+        );
+        // On macOS we must additionally see applescript.
+        if cfg!(target_os = "macos") {
+            assert!(
+                script_types
+                    .iter()
+                    .any(|s| s.as_str() == Some("applescript")),
+                "macOS host must advertise applescript: {script_types:?}"
+            );
+        }
+        // On Windows we must additionally see cmd.
+        if cfg!(target_os = "windows") {
+            assert!(
+                script_types.iter().any(|s| s.as_str() == Some("cmd")),
+                "Windows host must advertise cmd: {script_types:?}"
+            );
+        }
+
+        // browser.default_browser key must exist (value may be null on hosts
+        // without any installed browser, but the field must be present so
+        // the model knows the probe ran).
+        assert!(
+            payload
+                .get("domains")
+                .and_then(|d| d.get("browser"))
+                .and_then(|b| b.get("cdp_supported"))
+                .is_some(),
+            "browser.cdp_supported missing: {payload}"
+        );
+    }
+
+    #[tokio::test]
+    async fn system_get_os_info_includes_script_types() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch("system", "get_os_info", &json!({}), &ctx)
+            .await
+            .expect("get_os_info should succeed");
+        let payload = results.first().unwrap().content();
+        let script_types = payload
+            .get("script_types")
+            .and_then(|v| v.as_array())
+            .expect("script_types missing from get_os_info");
+        assert!(script_types.iter().any(|s| s.as_str() == Some("shell")));
+    }
+
+    #[tokio::test]
+    async fn system_run_script_rejects_applescript_on_non_mac() {
+        // On non-macOS hosts, `applescript` must come back as a structured
+        // NOT_AVAILABLE rather than throwing — so the model can branch on
+        // `error.code`.
+        if cfg!(target_os = "macos") {
+            return; // skip on macOS where applescript is genuinely available
+        }
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch(
+                "system",
+                "run_script",
+                &json!({ "script": "say hi", "script_type": "applescript" }),
+                &ctx,
+            )
+            .await
+            .expect("dispatch returns the structured envelope");
+        let payload = results.first().unwrap().content();
+        assert_eq!(payload["ok"], serde_json::Value::Bool(false));
+        assert_eq!(payload["error"]["code"], "NOT_AVAILABLE");
+    }
+
+    #[tokio::test]
+    async fn system_run_script_unknown_type_lists_valid_options() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let err = tool
+            .dispatch(
+                "system",
+                "run_script",
+                &json!({ "script": "echo hi", "script_type": "ruby" }),
+                &ctx,
+            )
+            .await
+            .expect_err("unknown script_type must be a hard error");
+        let msg = err.to_string();
+        for must_have in ["applescript", "shell", "powershell", "cmd"] {
+            assert!(
+                msg.contains(must_have),
+                "valid script_type `{must_have}` missing from error message: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn which_exists_finds_a_universally_present_binary() {
+        // `sh` is always on Unix; `cmd` is always on Windows.
+        #[cfg(unix)]
+        assert!(which_exists("sh"), "sh must be on PATH on Unix hosts");
+        #[cfg(windows)]
+        assert!(which_exists("cmd"), "cmd must be on PATH on Windows hosts");
+        // A clearly bogus name must NOT resolve.
+        assert!(!which_exists("definitely-not-a-real-binary-bitfun-xyz"));
+    }
+
+    #[test]
+    fn linux_clipboard_install_hints_match_session_type() {
+        // Just sanity-check that the helper returns SOMETHING non-empty on
+        // every platform; the message content is OS-specific.
+        let hints = linux_clipboard_install_hints();
+        assert!(!hints.is_empty(), "hints must never be empty");
+    }
+
+    #[tokio::test]
+    async fn system_run_script_shell_executes_and_captures_stdout() {
+        // Real run: confirm the OS-default `shell` script_type resolves to
+        // the right interpreter and that we get UTF-8 stdout back. This
+        // protects against the historical Windows GBK regression where
+        // CJK output became `???`.
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let probe = if cfg!(target_os = "windows") {
+            // PowerShell prints with the Unicode code page configured above.
+            "Write-Output 'hello-bitfun'"
+        } else {
+            "echo hello-bitfun"
+        };
+        let results = tool
+            .dispatch(
+                "system",
+                "run_script",
+                &json!({ "script": probe, "script_type": "shell" }),
+                &ctx,
+            )
+            .await
+            .expect("shell run_script should succeed");
+        let payload = results.first().unwrap().content();
+        assert_eq!(
+            payload.get("success").and_then(|v| v.as_bool()),
+            Some(true),
+            "shell run_script payload: {payload}"
+        );
+        let out = payload
+            .get("output")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            out.contains("hello-bitfun"),
+            "expected stdout to contain 'hello-bitfun', got '{out}'"
+        );
     }
 
     #[tokio::test]

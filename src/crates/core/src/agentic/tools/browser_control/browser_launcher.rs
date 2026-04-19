@@ -307,6 +307,18 @@ impl BrowserLauncher {
     /// Launch the browser with the CDP debug port flag.
     /// Returns instructions if the browser is already running without CDP.
     pub async fn launch_with_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
+        Self::launch_with_cdp_opts(kind, port, None).await
+    }
+
+    /// Same as [`launch_with_cdp`] but allows passing an isolated
+    /// `--user-data-dir`. When the user is already running their main
+    /// browser without CDP, an isolated profile lets us start a sibling
+    /// instance with debugging enabled instead of asking them to quit.
+    pub async fn launch_with_cdp_opts(
+        kind: &BrowserKind,
+        port: u16,
+        user_data_dir: Option<&str>,
+    ) -> BitFunResult<LaunchResult> {
         if Self::is_cdp_available(port).await {
             info!("CDP already available on port {} for {}", port, kind);
             return Ok(LaunchResult::AlreadyConnected);
@@ -314,16 +326,26 @@ impl BrowserLauncher {
 
         let exe = Self::browser_executable(kind);
         let flag = format!("--remote-debugging-port={}", port);
+        let mut extra: Vec<String> = vec![];
+        if let Some(dir) = user_data_dir {
+            extra.push(format!("--user-data-dir={}", dir));
+        }
 
-        // Check if the browser process is already running (without CDP)
         let is_running = Self::is_browser_running(kind);
 
-        if is_running {
+        // Critical: if a same-kind browser is already running AND the model
+        // hasn't asked for an isolated profile, Chrome will ignore our
+        // `--remote-debugging-port` flag and just open a new window in the
+        // existing process. So instruct the user — unless `user_data_dir`
+        // gives us a sandbox to launch a parallel process in.
+        if is_running && user_data_dir.is_none() {
             let instructions = format!(
                 "Your {} is currently running without the CDP debug port. \
-                 Please quit the browser completely (Cmd+Q / Ctrl+Q) and \
-                 then I will relaunch it with the debug port enabled.\n\
-                 Alternatively, you can restart it manually:\n  \"{}\" {}",
+                 Either quit the browser completely (Cmd+Q / Ctrl+Q) so I \
+                 can relaunch it with debugging on, OR call browser.connect \
+                 again with `user_data_dir: \"<path>\"` so I can launch an \
+                 isolated parallel instance.\n\
+                 Alternatively, you can restart manually:\n  \"{}\" {}",
                 kind, exe, flag
             );
             return Ok(LaunchResult::BrowserRunningWithoutCdp {
@@ -334,12 +356,14 @@ impl BrowserLauncher {
             });
         }
 
-        info!("Launching {} with CDP on port {}", kind, port);
-        let result = Command::new(&exe).arg(&flag).spawn();
+        info!(
+            "Launching {} with CDP on port {} (user_data_dir={:?})",
+            kind, port, user_data_dir
+        );
+        let result = Command::new(&exe).arg(&flag).args(&extra).spawn();
 
         match result {
             Ok(_child) => {
-                // Wait a moment for the browser to start
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
                 if Self::is_cdp_available(port).await {
