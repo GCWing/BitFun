@@ -92,7 +92,10 @@ export class FlowChatManager {
     preferredMode?: string,
     remoteConnectionId?: string,
     remoteSshHost?: string,
-    storageScope?: import('@/shared/types/session-history').SessionStorageScope
+    storageScope?: import('@/shared/types/session-history').SessionStorageScope,
+    options?: {
+      skipAutoSelectSession?: boolean;
+    }
   ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
@@ -130,7 +133,11 @@ export class FlowChatManager {
       const activeSessionBelongsToWorkspace =
         !!activeSession && sessionMatchesWorkspace(activeSession);
 
-      if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
+      if (
+        hasHistoricalSessions &&
+        !activeSessionBelongsToWorkspace &&
+        !options?.skipAutoSelectSession
+      ) {
         const sortedWorkspaceSessions = [...workspaceSessions].sort(compareSessionsForDisplay);
         const latestSession = (preferredMode
           ? sortedWorkspaceSessions.find(session => session.mode === preferredMode)

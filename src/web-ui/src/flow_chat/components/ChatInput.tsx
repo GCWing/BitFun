@@ -49,6 +49,7 @@ import { ChatInputPixelPet } from './ChatInputPixelPet';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
+const EXPLICIT_ASSISTANT_MODES = new Set(['Dispatcher', 'dispatcher']);
 
 export interface ChatInputProps {
   className?: string;
@@ -767,7 +768,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [effectiveTargetSessionId]);
 
   React.useEffect(() => {
-    if (!isAssistantWorkspace || currentMode === 'Claw') {
+    if (
+      !isAssistantWorkspace ||
+      currentMode === 'Claw' ||
+      EXPLICIT_ASSISTANT_MODES.has(currentMode)
+    ) {
       return;
     }
 
