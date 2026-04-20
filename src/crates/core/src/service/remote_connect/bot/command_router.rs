@@ -526,7 +526,10 @@ fn main_menu_view(state: &BotChatState, s: &'static BotStrings) -> MenuView {
     let body = ready_to_chat_body(state, s);
     let mut items: Vec<MenuItem> = Vec::new();
     if state.display_mode == BotDisplayMode::Pro {
-        items.push(MenuItem::primary(s.item_new_code_session, "/new_code_session"));
+        items.push(MenuItem::primary(
+            s.item_new_code_session,
+            "/new_code_session",
+        ));
         items.push(MenuItem::default(
             s.item_new_cowork_session,
             "/new_cowork_session",
@@ -582,7 +585,10 @@ fn settings_menu_view(verbose: bool, state: &BotChatState, s: &'static BotString
 fn need_session_view(state: &BotChatState, s: &'static BotStrings) -> MenuView {
     let mut items = Vec::new();
     if state.display_mode == BotDisplayMode::Pro {
-        items.push(MenuItem::primary(s.item_new_code_session, "/new_code_session"));
+        items.push(MenuItem::primary(
+            s.item_new_code_session,
+            "/new_code_session",
+        ));
         items.push(MenuItem::default(
             s.item_new_cowork_session,
             "/new_cowork_session",
@@ -595,19 +601,13 @@ fn need_session_view(state: &BotChatState, s: &'static BotStrings) -> MenuView {
     MenuView::plain(s.need_session_title).with_items(items)
 }
 
-fn confirm_mode_switch_view(
-    target_mode: BotDisplayMode,
-    s: &'static BotStrings,
-) -> MenuView {
+fn confirm_mode_switch_view(target_mode: BotDisplayMode, s: &'static BotStrings) -> MenuView {
     let target_label = if target_mode == BotDisplayMode::Pro {
         s.mode_expert
     } else {
         s.mode_assistant
     };
-    let body = format!(
-        "{} → {}",
-        s.mode_confirm_switch_prefix, target_label
-    );
+    let body = format!("{} → {}", s.mode_confirm_switch_prefix, target_label);
     MenuView::plain(s.settings_title)
         .with_body(body)
         .with_items(vec![
@@ -667,12 +667,7 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
 
     let create_res = create_session(state, "Claw").await;
     if state.current_session_id.is_none() {
-        let detail = create_res
-            .reply
-            .lines()
-            .next()
-            .unwrap_or("")
-            .to_string();
+        let detail = create_res.reply.lines().next().unwrap_or("").to_string();
         return format!("{}{detail}", s.bootstrap_session_failed_prefix);
     }
 
@@ -699,12 +694,7 @@ pub async fn complete_im_bot_pairing(state: &mut BotChatState) -> HandleResult {
 /// session executor onto the chat state and refresh its TTL.
 pub fn apply_interactive_request(state: &mut BotChatState, req: &BotInteractiveRequest) {
     state.set_pending(req.pending_action.clone());
-    state.last_menu_commands = req
-        .menu
-        .items
-        .iter()
-        .map(|i| i.command.clone())
-        .collect();
+    state.last_menu_commands = req.menu.items.iter().map(|i| i.command.clone()).collect();
 }
 
 // ── Dispatch ───────────────────────────────────────────────────────
@@ -854,11 +844,7 @@ async fn confirm_then_run(
     result_from_menu(state, confirm_mode_switch_view(target, s))
 }
 
-async fn set_verbose(
-    state: &mut BotChatState,
-    on: bool,
-    s: &'static BotStrings,
-) -> HandleResult {
+async fn set_verbose(state: &mut BotChatState, on: bool, s: &'static BotStrings) -> HandleResult {
     let mut data = super::load_bot_persistence();
     data.verbose_mode = on;
     super::save_bot_persistence(&data);
@@ -875,10 +861,7 @@ async fn set_verbose(
 
 // ── Switch context (workspace or assistant) ────────────────────────
 
-async fn start_switch(
-    state: &mut BotChatState,
-    s: &'static BotStrings,
-) -> HandleResult {
+async fn start_switch(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
     use crate::service::workspace::get_global_workspace_service;
 
     let ws_service = match get_global_workspace_service() {
@@ -1017,10 +1000,7 @@ async fn select_workspace(
     let ws_service = match get_global_workspace_service() {
         Some(svc) => svc,
         None => {
-            return result_from_menu(
-                state,
-                MenuView::plain(s.workspace_service_unavailable),
-            );
+            return result_from_menu(state, MenuView::plain(s.workspace_service_unavailable));
         }
     };
     let path_buf = std::path::PathBuf::from(path);
@@ -1067,10 +1047,7 @@ async fn select_assistant(
     let ws_service = match get_global_workspace_service() {
         Some(svc) => svc,
         None => {
-            return result_from_menu(
-                state,
-                MenuView::plain(s.workspace_service_unavailable),
-            );
+            return result_from_menu(state, MenuView::plain(s.workspace_service_unavailable));
         }
     };
     let path_buf = std::path::PathBuf::from(path);
@@ -1238,10 +1215,7 @@ async fn start_resume(
             msg_hint,
         ));
         items.push(MenuItem::default(
-            truncate_label(
-                &format!("[{}] {}", sess.agent_type, sess.session_name),
-                26,
-            ),
+            truncate_label(&format!("[{}] {}", sess.agent_type, sess.session_name), 26),
             (i + 1).to_string(),
         ));
         options.push((sess.session_id.clone(), sess.session_name.clone()));
@@ -1262,14 +1236,10 @@ async fn start_resume(
     } else {
         s.footer_reply_session
     };
-    let view = MenuView::plain(format!(
-        "{} · #{}",
-        s.resume_page_label,
-        page + 1
-    ))
-    .with_body(body.trim_end().to_string())
-    .with_items(items)
-    .with_footer(footer);
+    let view = MenuView::plain(format!("{} · #{}", s.resume_page_label, page + 1))
+        .with_body(body.trim_end().to_string())
+        .with_items(items)
+        .with_footer(footer);
     result_from_menu(state, view)
 }
 
@@ -1361,10 +1331,7 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     }
 }
 
-async fn new_session_for_mode(
-    state: &mut BotChatState,
-    s: &'static BotStrings,
-) -> HandleResult {
+async fn new_session_for_mode(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
     let agent_type = if state.display_mode == BotDisplayMode::Pro {
         "agentic"
     } else {
@@ -1456,10 +1423,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                     Err(e) => {
                         return result_from_menu(
                             state,
-                            MenuView::plain(format!(
-                                "{}{e}",
-                                s.assistant_create_failed_prefix
-                            )),
+                            MenuView::plain(format!("{}{e}", s.assistant_create_failed_prefix)),
                         );
                     }
                 }
@@ -1576,11 +1540,7 @@ async fn handle_cancel_task(
 
 // ── Numeric reply routing ─────────────────────────────────────────
 
-async fn handle_number(
-    state: &mut BotChatState,
-    n: usize,
-    s: &'static BotStrings,
-) -> HandleResult {
+async fn handle_number(state: &mut BotChatState, n: usize, s: &'static BotStrings) -> HandleResult {
     if let Some(pending) = state.pending_action.clone() {
         return route_pending(state, pending, &n.to_string(), s).await;
     }
@@ -1722,10 +1682,7 @@ async fn route_pending(
 /// user retains context.  After [`PENDING_INVALID_LIMIT`] consecutive invalid
 /// replies the pending state is cleared and the user is returned to the main
 /// menu.
-async fn pending_invalid(
-    state: &mut BotChatState,
-    s: &'static BotStrings,
-) -> HandleResult {
+async fn pending_invalid(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
     state.pending_invalid_count = state.pending_invalid_count.saturating_add(1);
     if state.pending_invalid_count >= PENDING_INVALID_LIMIT {
         state.clear_pending();
@@ -1742,12 +1699,8 @@ async fn pending_invalid(
         }
     };
     let mut view = match &pending {
-        PendingAction::SelectWorkspace { options } => {
-            workspace_selection_view(state, options, s)
-        }
-        PendingAction::SelectAssistant { options } => {
-            assistant_selection_view(state, options, s)
-        }
+        PendingAction::SelectWorkspace { options } => workspace_selection_view(state, options, s),
+        PendingAction::SelectAssistant { options } => assistant_selection_view(state, options, s),
         PendingAction::SelectSession {
             options,
             page,
@@ -1779,12 +1732,7 @@ fn question_option_line(index: usize, option: &BotQuestionOption) -> String {
     if option.description.is_empty() {
         format!("{}. {}", index + 1, option.label)
     } else {
-        format!(
-            "{}. {} - {}",
-            index + 1,
-            option.label,
-            option.description
-        )
+        format!("{}. {} - {}", index + 1, option.label, option.description)
     }
 }
 
@@ -1968,10 +1916,7 @@ async fn handle_question_reply(
                 awaiting_custom_text: true,
                 pending_answer: pending_answer_next,
             });
-            return result_from_menu(
-                state,
-                MenuView::plain(s.question_custom_for_other_prefix),
-            );
+            return result_from_menu(state, MenuView::plain(s.question_custom_for_other_prefix));
         }
         answers.push(if question.multi_select {
             pending_answer_next.unwrap_or_else(|| Value::Array(Vec::new()))
@@ -2269,7 +2214,11 @@ pub async fn execute_forwarded_turn(
         }
 
         let full_text = tracker.accumulated_text();
-        let full_text = if full_text.is_empty() { response } else { full_text };
+        let full_text = if full_text.is_empty() {
+            response
+        } else {
+            full_text
+        };
 
         // Do NOT truncate here. Each IM adapter knows its own per-message
         // size limit and chunks accordingly (e.g. WeChat splits via
@@ -2315,13 +2264,22 @@ mod parse_command_tests {
 
     #[test]
     fn numeric_menu_with_trailing_dot() {
-        assert!(matches!(parse_command("1."), BotCommand::NumberSelection(1)));
-        assert!(matches!(parse_command("2。"), BotCommand::NumberSelection(2)));
+        assert!(matches!(
+            parse_command("1."),
+            BotCommand::NumberSelection(1)
+        ));
+        assert!(matches!(
+            parse_command("2。"),
+            BotCommand::NumberSelection(2)
+        ));
     }
 
     #[test]
     fn fullwidth_digit_one() {
-        assert!(matches!(parse_command("１"), BotCommand::NumberSelection(1)));
+        assert!(matches!(
+            parse_command("１"),
+            BotCommand::NumberSelection(1)
+        ));
     }
 
     #[test]
@@ -2349,13 +2307,22 @@ mod parse_command_tests {
 
     #[test]
     fn verbose_concise_real_commands() {
-        assert!(matches!(parse_command("/verbose"), BotCommand::SetVerbose(true)));
-        assert!(matches!(parse_command("/concise"), BotCommand::SetVerbose(false)));
+        assert!(matches!(
+            parse_command("/verbose"),
+            BotCommand::SetVerbose(true)
+        ));
+        assert!(matches!(
+            parse_command("/concise"),
+            BotCommand::SetVerbose(false)
+        ));
     }
 
     #[test]
     fn switch_aliases() {
-        assert!(matches!(parse_command("/switch"), BotCommand::SwitchContext));
+        assert!(matches!(
+            parse_command("/switch"),
+            BotCommand::SwitchContext
+        ));
         assert!(matches!(
             parse_command("/switch_workspace"),
             BotCommand::SwitchContext
@@ -2386,7 +2353,10 @@ mod parse_command_tests {
 
     #[test]
     fn resume_aliases() {
-        assert!(matches!(parse_command("/resume"), BotCommand::ResumeSession));
+        assert!(matches!(
+            parse_command("/resume"),
+            BotCommand::ResumeSession
+        ));
         assert!(matches!(parse_command("/r"), BotCommand::ResumeSession));
         assert!(matches!(
             parse_command("/resume_session"),
@@ -2396,7 +2366,10 @@ mod parse_command_tests {
 
     #[test]
     fn cancel_aliases() {
-        assert!(matches!(parse_command("/cancel"), BotCommand::CancelTask(None)));
+        assert!(matches!(
+            parse_command("/cancel"),
+            BotCommand::CancelTask(None)
+        ));
         match parse_command("/cancel_task turn_abc") {
             BotCommand::CancelTask(Some(id)) => assert_eq!(id, "turn_abc"),
             _ => panic!("expected cancel task with id"),
@@ -2413,7 +2386,10 @@ mod parse_command_tests {
 
     #[test]
     fn chat_message_fallback() {
-        assert!(matches!(parse_command("hello world"), BotCommand::ChatMessage(_)));
+        assert!(matches!(
+            parse_command("hello world"),
+            BotCommand::ChatMessage(_)
+        ));
     }
 }
 
@@ -2495,8 +2471,7 @@ mod menu_tests {
         let mut state = BotChatState::new("c".into());
         state.current_assistant = Some("/tmp/my-assistant".to_string());
         state.current_assistant_name = Some("我的助理".to_string());
-        state.current_session_id =
-            Some("abcdef12-3456-7890-abcd-ef1234567890".to_string());
+        state.current_session_id = Some("abcdef12-3456-7890-abcd-ef1234567890".to_string());
         let s = strings_for(BotLanguage::ZhCN);
         let view = main_menu_view(&state, s);
         let body = view.body.as_deref().unwrap_or("");
@@ -2514,8 +2489,7 @@ mod menu_tests {
     #[test]
     fn assistant_mode_body_uses_display_name_not_dir_name() {
         let mut state = BotChatState::new("c".into());
-        state.current_assistant =
-            Some("/tmp/bitfun_assistants/workspace-abc123".to_string());
+        state.current_assistant = Some("/tmp/bitfun_assistants/workspace-abc123".to_string());
         state.current_assistant_name = Some("默认助理".to_string());
         let s = strings_for(BotLanguage::ZhCN);
         let view = main_menu_view(&state, s);
@@ -2543,7 +2517,10 @@ mod menu_tests {
         let view = main_menu_view(&state, s);
         let body = view.body.as_deref().unwrap_or("");
         assert!(body.contains("MyApp"), "workspace name missing: {body}");
-        assert!(!body.contains("ignored"), "assistant name leaked into Pro mode: {body}");
+        assert!(
+            !body.contains("ignored"),
+            "assistant name leaked into Pro mode: {body}"
+        );
     }
 
     /// When the cached assistant display name is missing (e.g. legacy

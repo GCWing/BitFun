@@ -282,32 +282,44 @@ function handleTitleGeneration(
   context.flowChatStore.updateSessionTitle(sessionId, tempTitle, 'generating');
 }
 
-export async function cancelCurrentTask(context: FlowChatContext): Promise<boolean> {
+export async function cancelTaskForSession(
+  context: FlowChatContext,
+  sessionId: string
+): Promise<boolean> {
   try {
-    const state = context.flowChatStore.getState();
-    const sessionId = state.activeSessionId;
-    
-    if (!sessionId) {
-      log.debug('No active session to cancel');
+    const currentState = stateMachineManager.getCurrentState(sessionId);
+    const canCancel =
+      currentState === SessionExecutionState.PROCESSING ||
+      currentState === SessionExecutionState.FINISHING;
+    if (!canCancel) {
+      log.debug('Session not in cancellable state', { sessionId, currentState });
       return false;
     }
-    
-    const currentState = stateMachineManager.getCurrentState(sessionId);
-    const success = currentState === SessionExecutionState.PROCESSING 
-      ? await stateMachineManager.transition(sessionId, SessionExecutionEvent.USER_CANCEL)
-      : false;
-    
+
+    const success = await stateMachineManager.transition(
+      sessionId,
+      SessionExecutionEvent.USER_CANCEL
+    );
+
     if (success) {
       markCurrentTurnItemsAsCancelled(context, sessionId);
       cleanupSessionBuffers(context, sessionId);
     }
-    
+
     return success;
-    
   } catch (error) {
-    log.error('Failed to cancel current task', error);
+    log.error('Failed to cancel task for session', { sessionId, error });
     return false;
   }
+}
+
+export async function cancelCurrentTask(context: FlowChatContext): Promise<boolean> {
+  const sessionId = context.flowChatStore.getState().activeSessionId;
+  if (!sessionId) {
+    log.debug('No active session to cancel');
+    return false;
+  }
+  return cancelTaskForSession(context, sessionId);
 }
 
 export function markCurrentTurnItemsAsCancelled(

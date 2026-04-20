@@ -62,6 +62,20 @@
   to { transform: rotate(360deg); }
 }
 
+.design-tokens-proposal-card__list-streaming-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted, #858585);
+  background: var(--element-bg-base, rgba(255, 255, 255, 0.06));
+
+  .is-spinning { animation: dtp-spin 1s linear infinite; }
+}
+
 .design-tokens-proposal-card__list {
   display: flex;
   flex-direction: column;

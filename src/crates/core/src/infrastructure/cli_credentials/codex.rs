@@ -246,9 +246,7 @@ async fn refresh_codex_tokens(refresh_token: &str) -> Result<OAuthTokenResponse>
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "codex token refresh failed: HTTP {status}: {body}"
-        ));
+        return Err(anyhow!("codex token refresh failed: HTTP {status}: {body}"));
     }
     let parsed: OAuthTokenResponse = resp
         .json()
@@ -362,9 +360,7 @@ impl CredentialResolver for CodexResolver {
                     expires_at: exp,
                 })
             }
-            CliCredentialMode::OauthPersonal => {
-                Err(anyhow!("codex never uses OauthPersonal mode"))
-            }
+            CliCredentialMode::OauthPersonal => Err(anyhow!("codex never uses OauthPersonal mode")),
         }
     }
 }

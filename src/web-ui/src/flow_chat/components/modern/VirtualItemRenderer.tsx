@@ -10,7 +10,7 @@ import { UserMessageItem } from './UserMessageItem';
 import { ModelRoundItem } from './ModelRoundItem';
 import { ExploreGroupRenderer } from './ExploreGroupRenderer';
 import { CompactToolCard, CompactToolCardHeader } from '../../tool-cards/CompactToolCard';
-import { useFlowChatContext } from './FlowChatContext';
+import { useFlowChatViewContext } from './FlowChatContext';
 import './VirtualItemRenderer.scss';
 
 interface VirtualItemRendererProps {
@@ -20,7 +20,7 @@ interface VirtualItemRendererProps {
 
 export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
   ({ item, index }) => {
-    const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatContext();
+    const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatViewContext();
     const isSearchMatch = searchMatchIndices != null && searchMatchIndices.size > 0
       ? searchMatchIndices.has(index)
       : false;

@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Archive,
   ArchiveRestore,
@@ -28,7 +29,13 @@ export interface DesignArtifactBrowserProps {
 
 export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ workspacePath }) => {
   const { workspacePath: currentWorkspacePath } = useCurrentWorkspace();
-  const artifacts = useDesignArtifactStore((s) => s.artifacts);
+  const manifests = useDesignArtifactStore(
+    useShallow((s) =>
+      Object.values(s.artifacts)
+        .map((artifact) => artifact.manifest)
+        .sort((left, right) => left.id.localeCompare(right.id))
+    )
+  );
   const [query, setQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,9 +61,8 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
   }, [refresh]);
 
   const filtered = useMemo(() => {
-    const items = Object.values(artifacts).map((s) => s.manifest);
     const q = query.trim().toLowerCase();
-    return items
+    return manifests
       .filter((m) => (showArchived ? true : !m.archived_at))
       .filter((m) => {
         if (!q) return true;
@@ -67,10 +73,10 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
         );
       })
       .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-  }, [artifacts, query, showArchived]);
+  }, [manifests, query, showArchived]);
 
   const openInCanvas = (id: string) => {
-    const manifest = artifacts[id]?.manifest;
+    const manifest = manifests.find((item) => item.id === id);
     if (!manifest) return;
     ideControl.panel.open('design-artifact', {
       position: 'right',

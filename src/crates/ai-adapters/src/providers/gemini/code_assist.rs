@@ -32,10 +32,7 @@ pub(crate) fn apply_headers(client: &AIClient, builder: RequestBuilder) -> Reque
     shared::apply_header_policy(client, builder, |builder| {
         builder
             .header("Content-Type", "application/json")
-            .header(
-                "Authorization",
-                format!("Bearer {}", client.config.api_key),
-            )
+            .header("Authorization", format!("Bearer {}", client.config.api_key))
             .header("User-Agent", "BitFun-CodeAssist/1.0")
     })
 }
@@ -96,12 +93,13 @@ async fn discover_project(client: &AIClient) -> Result<String> {
     let load_status = load_resp.status();
     if !load_status.is_success() {
         let body = load_resp.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "loadCodeAssist failed: HTTP {load_status}: {body}"
-        ));
+        return Err(anyhow!("loadCodeAssist failed: HTTP {load_status}: {body}"));
     }
     let load_parsed: LoadCodeAssistResponse = load_resp.json().await?;
-    if let Some(project) = load_parsed.cloudaicompanion_project.filter(|s| !s.is_empty()) {
+    if let Some(project) = load_parsed
+        .cloudaicompanion_project
+        .filter(|s| !s.is_empty())
+    {
         *cached_project().lock().await = Some(project.clone());
         return Ok(project);
     }
@@ -119,9 +117,7 @@ async fn discover_project(client: &AIClient) -> Result<String> {
     let onboard_status = onboard_resp.status();
     if !onboard_status.is_success() {
         let body = onboard_resp.text().await.unwrap_or_default();
-        return Err(anyhow!(
-            "onboardUser failed: HTTP {onboard_status}: {body}"
-        ));
+        return Err(anyhow!("onboardUser failed: HTTP {onboard_status}: {body}"));
     }
     let parsed: OnboardOperation = onboard_resp.json().await?;
     if !parsed.done.unwrap_or(false) {

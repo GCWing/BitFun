@@ -13,7 +13,14 @@ import { VirtualMessageList, VirtualMessageListRef } from './VirtualMessageList'
 import { FlowChatHeader, type FlowChatHeaderTurnSummary } from './FlowChatHeader';
 import { FlowChatTurnListSidebar } from './FlowChatTurnListSidebar';
 import { WelcomePanel } from '../WelcomePanel';
-import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
+import {
+  FlowChatContext,
+  FlowChatStaticContext,
+  FlowChatViewContext,
+  type FlowChatContextValue,
+  type FlowChatStaticContextValue,
+  type FlowChatViewContextValue,
+} from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
 import { useFlowChatFileActions } from './useFlowChatFileActions';
 import { useFlowChatNavigation } from './useFlowChatNavigation';
@@ -101,7 +108,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     virtualListRef,
   });
 
-  const contextValue: FlowChatContextValue = useMemo(() => ({
+  const staticContextValue: FlowChatStaticContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
     onTabOpen,
     onOpenVisualization,
@@ -109,7 +116,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onToolConfirm: handleToolConfirm,
     onToolReject: handleToolReject,
     sessionId: activeSession?.sessionId,
-    activeSessionOverride: activeSession,
     config: {
       enableMarkdown: true,
       autoScroll: true,
@@ -119,6 +125,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       theme: 'dark',
       ...config,
     },
+  }), [
+    handleFileViewRequest,
+    onTabOpen,
+    onOpenVisualization,
+    onSwitchToChatPanel,
+    handleToolConfirm,
+    handleToolReject,
+    activeSession?.sessionId,
+    config,
+  ]);
+  const viewContextValue: FlowChatViewContextValue = useMemo(() => ({
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
     onExpandGroup: handleExpandGroup,
@@ -128,14 +145,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
   }), [
-    handleFileViewRequest,
-    onTabOpen,
-    onOpenVisualization,
-    onSwitchToChatPanel,
-    handleToolConfirm,
-    handleToolReject,
-    activeSession,
-    config,
     exploreGroupStates,
     handleExploreGroupToggle,
     handleExpandGroup,
@@ -145,6 +154,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
   ]);
+  const contextValue: FlowChatContextValue = useMemo(() => ({
+    ...staticContextValue,
+    ...viewContextValue,
+  }), [staticContextValue, viewContextValue]);
 
   const turnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {
     return (activeSession?.dialogTurns ?? [])
@@ -359,7 +372,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   return (
     <FlowChatContext.Provider value={contextValue}>
-      <div
+      <FlowChatStaticContext.Provider value={staticContextValue}>
+        <FlowChatViewContext.Provider value={viewContextValue}>
+          <div
         ref={chatScopeRef}
         className={[
           'modern-flowchat-container',
@@ -434,7 +449,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
             searchFocusRequest={turnListSearchFocusRequest}
           />
         </div>
-      </div>
+          </div>
+        </FlowChatViewContext.Provider>
+      </FlowChatStaticContext.Provider>
     </FlowChatContext.Provider>
   );
 };

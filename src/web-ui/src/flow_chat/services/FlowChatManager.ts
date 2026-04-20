@@ -33,6 +33,7 @@ import {
   cleanupSessionBuffers,
   sendMessage as sendMessageModule,
   cancelCurrentTask as cancelCurrentTaskModule,
+  cancelTaskForSession as cancelTaskForSessionModule,
   initializeEventListeners,
   processBatchedEvents,
   addDialogTurn as addDialogTurnModule,
@@ -509,6 +510,10 @@ export class FlowChatManager {
 
   async cancelCurrentTask(): Promise<boolean> {
     return cancelCurrentTaskModule(this.context);
+  }
+
+  async cancelTaskForSession(sessionId: string): Promise<boolean> {
+    return cancelTaskForSessionModule(this.context, sessionId);
   }
 
   public async saveAllInProgressTurns(): Promise<void> {

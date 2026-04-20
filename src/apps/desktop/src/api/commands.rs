@@ -2731,7 +2731,8 @@ pub async fn get_watched_paths() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn discover_cli_credentials() -> Result<Vec<bitfun_core::infrastructure::cli_credentials::DiscoveredCredential>, String> {
+pub async fn discover_cli_credentials(
+) -> Result<Vec<bitfun_core::infrastructure::cli_credentials::DiscoveredCredential>, String> {
     Ok(bitfun_core::infrastructure::cli_credentials::discover_all().await)
 }
 

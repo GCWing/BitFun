@@ -141,8 +141,10 @@ impl ControlHubTool {
                 #[cfg(target_os = "linux")]
                 let (display_server, desktop_env) = linux_session_info();
                 #[cfg(not(target_os = "linux"))]
-                let (display_server, desktop_env): (Option<String>, Option<String>) =
-                    (None, None);
+                let (display_server, desktop_env): (
+                    Option<String>,
+                    Option<String>,
+                ) = (None, None);
 
                 let body = json!({
                     "domains": {
@@ -195,33 +197,91 @@ impl ControlHubTool {
                     s.push((domain, score, why));
                 };
 
-                let app_kw = ["bitfun", "settings", "scene", "default model", "primary model", "fast model", "切换模型", "默认模型", "设置", "场景"];
-                let browser_kw = ["http", "https", "url", "browser", "google", "tab", "网页", "浏览器", "网站"];
-                let desktop_kw = ["screenshot", "click on", "window", "dialog", "finder", "vscode", "桌面", "应用窗口", "外部应用"];
+                let app_kw = [
+                    "bitfun",
+                    "settings",
+                    "scene",
+                    "default model",
+                    "primary model",
+                    "fast model",
+                    "切换模型",
+                    "默认模型",
+                    "设置",
+                    "场景",
+                ];
+                let browser_kw = [
+                    "http",
+                    "https",
+                    "url",
+                    "browser",
+                    "google",
+                    "tab",
+                    "网页",
+                    "浏览器",
+                    "网站",
+                ];
+                let desktop_kw = [
+                    "screenshot",
+                    "click on",
+                    "window",
+                    "dialog",
+                    "finder",
+                    "vscode",
+                    "桌面",
+                    "应用窗口",
+                    "外部应用",
+                ];
                 let terminal_kw = ["kill terminal", "interrupt", "ctrl+c", "stop process"];
-                let system_kw = ["open ", "applescript", "shell script", "运行脚本", "启动应用", "open app"];
+                let system_kw = [
+                    "open ",
+                    "applescript",
+                    "shell script",
+                    "运行脚本",
+                    "启动应用",
+                    "open app",
+                ];
 
                 for kw in app_kw {
                     if lower.contains(kw) {
-                        push(&mut suggestions, "app", 90, "Matches BitFun-internal UI keywords");
+                        push(
+                            &mut suggestions,
+                            "app",
+                            90,
+                            "Matches BitFun-internal UI keywords",
+                        );
                         break;
                     }
                 }
                 for kw in browser_kw {
                     if lower.contains(kw) {
-                        push(&mut suggestions, "browser", 85, "Matches browser/URL keywords");
+                        push(
+                            &mut suggestions,
+                            "browser",
+                            85,
+                            "Matches browser/URL keywords",
+                        );
                         break;
                     }
                 }
                 for kw in desktop_kw {
                     if lower.contains(kw) {
-                        push(&mut suggestions, "desktop", 75, "Matches third-party desktop window keywords");
+                        push(
+                            &mut suggestions,
+                            "desktop",
+                            75,
+                            "Matches third-party desktop window keywords",
+                        );
                         break;
                     }
                 }
                 for kw in terminal_kw {
                     if lower.contains(kw) {
-                        push(&mut suggestions, "terminal", 80, "Matches terminal-signal keywords");
+                        push(
+                            &mut suggestions,
+                            "terminal",
+                            80,
+                            "Matches terminal-signal keywords",
+                        );
                         break;
                     }
                 }
@@ -365,9 +425,13 @@ impl ControlHubTool {
 
                 let summary = match (clear_first, submit) {
                     (false, false) => format!("Pasted {} chars", text.chars().count()),
-                    (true, false) => format!("Replaced focused field with {} chars", text.chars().count()),
+                    (true, false) => {
+                        format!("Replaced focused field with {} chars", text.chars().count())
+                    }
                     (false, true) => format!("Pasted {} chars and submitted", text.chars().count()),
-                    (true, true) => format!("Replaced + submitted ({} chars)", text.chars().count()),
+                    (true, true) => {
+                        format!("Replaced + submitted ({} chars)", text.chars().count())
+                    }
                 };
                 return Ok(vec![ToolResult::ok(
                     json!({
@@ -421,9 +485,7 @@ impl ControlHubTool {
         match action {
             "connect" => {
                 let kind = BrowserLauncher::detect_default_browser()?;
-                let user_data_dir = params
-                    .get("user_data_dir")
-                    .and_then(|v| v.as_str());
+                let user_data_dir = params.get("user_data_dir").and_then(|v| v.as_str());
                 let launch_result =
                     BrowserLauncher::launch_with_cdp_opts(&kind, port, user_data_dir).await?;
 
@@ -697,16 +759,12 @@ impl ControlHubTool {
                     registry.get(Some(page_id)).await?
                 } else {
                     let pages = CdpClient::list_pages(port).await?;
-                    let page = pages
-                        .iter()
-                        .find(|p| p.id == page_id)
-                        .ok_or_else(|| BitFunError::tool(format!("Page '{}' not found", page_id)))?;
-                    let ws_url = page
-                        .web_socket_debugger_url
-                        .as_ref()
-                        .ok_or_else(|| {
-                            BitFunError::tool("Page has no WebSocket URL".to_string())
-                        })?;
+                    let page = pages.iter().find(|p| p.id == page_id).ok_or_else(|| {
+                        BitFunError::tool(format!("Page '{}' not found", page_id))
+                    })?;
+                    let ws_url = page.web_socket_debugger_url.as_ref().ok_or_else(|| {
+                        BitFunError::tool("Page has no WebSocket URL".to_string())
+                    })?;
                     let client = CdpClient::connect(ws_url).await?;
                     let session = BrowserSession {
                         session_id: page.id.clone(),
@@ -749,7 +807,11 @@ impl ControlHubTool {
                     Some(format!(
                         "Switched to page {} ({})",
                         page_id,
-                        if activated { "brought to front" } else { "background" }
+                        if activated {
+                            "brought to front"
+                        } else {
+                            "background"
+                        }
                     )),
                 )])
             }
@@ -1109,7 +1171,9 @@ impl ControlHubTool {
             let count = tasks.as_array().map(|a| a.len()).unwrap_or(0);
             return Ok(vec![ToolResult::ok(
                 json!({ "tasks": tasks }),
-                Some(format!("{count} named tasks available for app.execute_task")),
+                Some(format!(
+                    "{count} named tasks available for app.execute_task"
+                )),
             )]);
         }
 
@@ -1349,10 +1413,8 @@ impl ControlHubTool {
         // a `terminal_session_id` *before* attempting `kill` / `interrupt`.
         // Previously this required digging through earlier `Bash` results.
         if action == "list_sessions" {
-            let api =
-                crate::service::terminal::api::TerminalApi::from_singleton().map_err(|e| {
-                    BitFunError::tool(format!("TerminalApi unavailable: {}", e))
-                })?;
+            let api = crate::service::terminal::api::TerminalApi::from_singleton()
+                .map_err(|e| BitFunError::tool(format!("TerminalApi unavailable: {}", e)))?;
             let sessions = api
                 .list_sessions()
                 .await
@@ -1381,22 +1443,22 @@ impl ControlHubTool {
         // "Bash launched a long-running command, please interrupt it" and
         // the user has no other terminals open — forcing a `list_sessions`
         // round-trip just to copy the only id back wastes a turn.
-        let resolved_id: String = match params
-            .get("terminal_session_id")
-            .and_then(|v| v.as_str())
-        {
+        let resolved_id: String = match params.get("terminal_session_id").and_then(|v| v.as_str()) {
             Some(s) => s.to_string(),
             None => {
                 let api = crate::service::terminal::api::TerminalApi::from_singleton()
                     .map_err(|e| BitFunError::tool(format!("TerminalApi unavailable: {}", e)))?;
-                let sessions = api.list_sessions().await.map_err(|e| {
-                    BitFunError::tool(format!("list_sessions failed: {}", e))
-                })?;
+                let sessions = api
+                    .list_sessions()
+                    .await
+                    .map_err(|e| BitFunError::tool(format!("list_sessions failed: {}", e)))?;
                 let live: Vec<_> = sessions
                     .iter()
-                    .filter(|s| s.status.eq_ignore_ascii_case("running")
-                        || s.status.eq_ignore_ascii_case("active")
-                        || s.status.eq_ignore_ascii_case("idle"))
+                    .filter(|s| {
+                        s.status.eq_ignore_ascii_case("running")
+                            || s.status.eq_ignore_ascii_case("active")
+                            || s.status.eq_ignore_ascii_case("idle")
+                    })
                     .collect();
                 if live.len() == 1 {
                     live[0].id.clone()
@@ -2253,7 +2315,11 @@ fn read_os_version() -> Option<String> {
             .output()
             .ok()?;
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(format!("macOS {}", s)) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(format!("macOS {}", s))
+        }
     }
     #[cfg(target_os = "windows")]
     {
@@ -2262,7 +2328,11 @@ fn read_os_version() -> Option<String> {
             .output()
             .ok()?;
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     }
     #[cfg(target_os = "linux")]
     {
@@ -2352,7 +2422,11 @@ fn which_exists(name: &str) -> bool {
 /// `script_type='powershell'` produce the same encoding.
 #[cfg(target_os = "windows")]
 fn powershell_invocation(script: &str) -> (String, Vec<String>) {
-    let prog = if which_exists("pwsh") { "pwsh" } else { "powershell" };
+    let prog = if which_exists("pwsh") {
+        "pwsh"
+    } else {
+        "powershell"
+    };
     (
         prog.to_string(),
         vec![
@@ -2394,10 +2468,7 @@ fn linux_clipboard_install_hints() -> Vec<String> {
                 vec!["Install wl-clipboard (Wayland) or xclip/xsel (X11)".to_string()]
             }
         }
-        _ => vec![
-            "Make sure the system clipboard helper is available on this host"
-                .to_string(),
-        ],
+        _ => vec!["Make sure the system clipboard helper is available on this host".to_string()],
     }
 }
 
@@ -2406,7 +2477,9 @@ fn linux_clipboard_install_hints() -> Vec<String> {
 /// either of which may be `None` if the environment doesn't expose it.
 #[cfg(target_os = "linux")]
 fn linux_session_info() -> (Option<String>, Option<String>) {
-    let server = std::env::var("XDG_SESSION_TYPE").ok().filter(|s| !s.is_empty());
+    let server = std::env::var("XDG_SESSION_TYPE")
+        .ok()
+        .filter(|s| !s.is_empty());
     let de = std::env::var("XDG_CURRENT_DESKTOP")
         .ok()
         .or_else(|| std::env::var("DESKTOP_SESSION").ok())
@@ -2442,8 +2515,11 @@ async fn clipboard_read() -> Result<String, String> {
         // PowerShell appends CRLF; trim a single trailing newline so the
         // returned text matches what the user actually copied.
         let mut s = String::from_utf8_lossy(&out.stdout).to_string();
-        if s.ends_with("\r\n") { s.truncate(s.len() - 2); }
-        else if s.ends_with('\n') { s.truncate(s.len() - 1); }
+        if s.ends_with("\r\n") {
+            s.truncate(s.len() - 2);
+        } else if s.ends_with('\n') {
+            s.truncate(s.len() - 1);
+        }
         Ok(s)
     }
     #[cfg(target_os = "linux")]
@@ -2463,11 +2539,7 @@ async fn clipboard_read() -> Result<String, String> {
             ]
         };
         for (bin, args) in candidates {
-            if let Ok(out) = tokio::process::Command::new(bin)
-                .args(*args)
-                .output()
-                .await
-            {
+            if let Ok(out) = tokio::process::Command::new(bin).args(*args).output().await {
                 if out.status.success() {
                     return Ok(String::from_utf8_lossy(&out.stdout).to_string());
                 }
@@ -2873,22 +2945,16 @@ for control flow.
             return Ok(err_response(
                 "?",
                 action,
-                ControlHubError::new(
-                    ErrorCode::InvalidParams,
-                    "Missing required field 'domain'.",
-                )
-                .with_hint("Set domain to one of: app, browser, desktop, terminal, system."),
+                ControlHubError::new(ErrorCode::InvalidParams, "Missing required field 'domain'.")
+                    .with_hint("Set domain to one of: app, browser, desktop, terminal, system."),
             ));
         }
         if action.is_empty() {
             return Ok(err_response(
                 domain,
                 "?",
-                ControlHubError::new(
-                    ErrorCode::InvalidParams,
-                    "Missing required field 'action'.",
-                )
-                .with_hint("Pick a valid action for this domain (see ControlHub description)."),
+                ControlHubError::new(ErrorCode::InvalidParams, "Missing required field 'action'.")
+                    .with_hint("Pick a valid action for this domain (see ControlHub description)."),
             ));
         }
 
@@ -2958,8 +3024,8 @@ fn map_dispatch_error(domain: &str, _action: &str, err: BitFunError) -> ControlH
         .or_else(|| msg.strip_prefix("Service error: "))
         .or_else(|| msg.strip_prefix("Agent error: "))
         .unwrap_or(msg.as_str());
-    if let Some((code_str, rest)) = parse_bracket_code_prefix(strip_candidate)
-        .or_else(|| parse_bracket_code_prefix(&msg))
+    if let Some((code_str, rest)) =
+        parse_bracket_code_prefix(strip_candidate).or_else(|| parse_bracket_code_prefix(&msg))
     {
         let (message, hints) = parse_hints_suffix(rest);
         let code = ErrorCode::from_str(code_str).unwrap_or(ErrorCode::FrontendError);
@@ -3034,7 +3100,10 @@ mod control_hub_tests {
         let msg = err.to_string();
         assert!(msg.contains("Unknown domain"), "got: {msg}");
         for d in ["desktop", "browser", "app", "terminal", "system", "meta"] {
-            assert!(msg.contains(d), "valid domain {d} missing from error: {msg}");
+            assert!(
+                msg.contains(d),
+                "valid domain {d} missing from error: {msg}"
+            );
         }
     }
 
@@ -3093,15 +3162,13 @@ mod control_hub_tests {
             .and_then(|v| v.as_array())
             .expect("ranked array");
         assert!(
-            ranked.iter().any(|s| {
-                s.get("domain").and_then(|v| v.as_str()) == Some("browser")
-            }),
+            ranked
+                .iter()
+                .any(|s| { s.get("domain").and_then(|v| v.as_str()) == Some("browser") }),
             "browser must appear in ranked for URL intent: {payload}"
         );
         assert_eq!(
-            payload
-                .get("suggested_domain")
-                .and_then(|v| v.as_str()),
+            payload.get("suggested_domain").and_then(|v| v.as_str()),
             Some("browser")
         );
     }
@@ -3138,7 +3205,9 @@ mod control_hub_tests {
             .expect("list_settings_tabs should succeed");
         let payload = results.first().unwrap().content();
         let arr = payload.get("tabs").and_then(|v| v.as_array()).unwrap();
-        assert!(arr.iter().any(|t| t.get("id").and_then(|v| v.as_str()) == Some("models")));
+        assert!(arr
+            .iter()
+            .any(|t| t.get("id").and_then(|v| v.as_str()) == Some("models")));
     }
 
     #[tokio::test]
@@ -3170,7 +3239,12 @@ mod control_hub_tests {
             .await
             .expect("app_self_describe should succeed");
         let payload = results.first().unwrap().content();
-        for key in ["scenes", "settingsTabs", "liveApps", "liveAppSubsystemAvailable"] {
+        for key in [
+            "scenes",
+            "settingsTabs",
+            "liveApps",
+            "liveAppSubsystemAvailable",
+        ] {
             assert!(
                 payload.get(key).is_some(),
                 "self-describe payload missing `{key}`: {payload}"
@@ -3192,9 +3266,17 @@ mod control_hub_tests {
             .and_then(|v| v.as_array())
             .unwrap()
             .iter()
-            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .filter_map(|t| {
+                t.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
-        for required in ["open_live_app_gallery", "open_live_app", "set_primary_model"] {
+        for required in [
+            "open_live_app_gallery",
+            "open_live_app",
+            "set_primary_model",
+        ] {
             assert!(
                 names.iter().any(|n| n == required),
                 "task `{required}` missing from execute_task catalog: {names:?}"
@@ -3311,7 +3393,12 @@ mod control_hub_tests {
             ErrorCode::Timeout
         ));
         assert!(matches!(
-            map_dispatch_error("browser", "click", mk("stale reference, take a fresh snapshot")).code,
+            map_dispatch_error(
+                "browser",
+                "click",
+                mk("stale reference, take a fresh snapshot")
+            )
+            .code,
             ErrorCode::StaleRef
         ));
         // "session ... not found" hits NotFound first (correct: that is what
@@ -3338,9 +3425,7 @@ mod control_hub_tests {
             "description must call out `paste` as a first-class action"
         );
         assert!(
-            desc.contains("PREFER")
-                || desc.contains("prefer")
-                || desc.contains("STRONGLY"),
+            desc.contains("PREFER") || desc.contains("prefer") || desc.contains("STRONGLY"),
             "description must steer the model AWAY from type_text for non-trivial input"
         );
     }
@@ -3432,9 +3517,7 @@ mod control_hub_tests {
             .and_then(|v| v.as_array())
             .expect("system.script_types missing");
         assert!(
-            script_types
-                .iter()
-                .any(|s| s.as_str() == Some("shell")),
+            script_types.iter().any(|s| s.as_str() == Some("shell")),
             "script_types must include 'shell': {script_types:?}"
         );
         // On macOS we must additionally see applescript.
@@ -3577,10 +3660,7 @@ mod control_hub_tests {
             Some(true),
             "shell run_script payload: {payload}"
         );
-        let out = payload
-            .get("output")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let out = payload.get("output").and_then(|v| v.as_str()).unwrap_or("");
         assert!(
             out.contains("hello-bitfun"),
             "expected stdout to contain 'hello-bitfun', got '{out}'"

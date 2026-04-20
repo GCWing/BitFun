@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownRenderer } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
-import { useFlowChatContext } from './modern/FlowChatContext';
+import { useFlowChatStaticContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
 import './FlowTextBlock.scss';
 
@@ -28,7 +28,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   textItem,
   className = ''
 }) => {
-  const { onFileViewRequest, onTabOpen, onOpenVisualization } = useFlowChatContext();
+  const { onFileViewRequest, onTabOpen, onOpenVisualization } = useFlowChatStaticContext();
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'

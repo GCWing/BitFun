@@ -134,6 +134,8 @@
       "openTaskList": "View all tasks",
       "runningSessionsGroupLabel": "Running",
       "runningLiveAppsGroupLabel": "Running apps",
+      "cancelRunningAgentTask": "Cancel run",
+      "stopRunningLiveApp": "Stop app",
       "liveAppBadge": "App",
       "newSessionButton": "New process",
       "newSessionDialogTitle": "New process",
@@ -907,7 +909,8 @@
     "fallbackTaskTitle": "Task {{id}}",
     "agenticSessionTitle": "{{created}} - {{modified}}",
     "deleteAgenticSessionTitle": "Delete run history session?",
-    "deleteAgenticSessionMessage": "This will permanently delete \"{{label}}\" and its conversation. This cannot be undone."
+    "deleteAgenticSessionMessage": "This will permanently delete \"{{label}}\" and its conversation. This cannot be undone.",
+    "closeLiveApp": "Stop Live App"
   },
   "loading": {
     "scenes": "Loading scene"

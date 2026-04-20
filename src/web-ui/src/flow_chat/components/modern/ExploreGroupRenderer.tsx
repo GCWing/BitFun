@@ -13,7 +13,7 @@ import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { useToolCardHeightContract } from '../../tool-cards/useToolCardHeightContract';
-import { useFlowChatContext } from './FlowChatContext';
+import { useFlowChatStaticContext, useFlowChatViewContext } from './FlowChatContext';
 import './ExploreRegion.scss';
 
 export interface ExploreGroupRendererProps {
@@ -29,12 +29,12 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
   
-  const { 
+  const {
     exploreGroupStates, 
     onExploreGroupToggle, 
     onExpandGroup,
     onCollapseGroup 
-  } = useFlowChatContext();
+  } = useFlowChatViewContext();
   
   const { 
     groupId, 
@@ -236,7 +236,7 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, isLast
     onFileViewRequest,
     onTabOpen,
     sessionId,
-  } = useFlowChatContext();
+  } = useFlowChatStaticContext();
   
   const handleConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
     if (onToolConfirm) {

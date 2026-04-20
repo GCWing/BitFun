@@ -31,6 +31,8 @@ interface PreviewProps {
   mode: 'native' | 'inverse';
 }
 
+const STREAMING_SWATCH_LIMIT = 5;
+
 /**
  * Estimate the relative luminance of a CSS color string (hex / rgb only).
  * Used to decide whether a palette is authored as light-on-dark or
@@ -162,6 +164,36 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
   );
 };
 
+const StreamingProposalPreview: React.FC<{ proposal: any }> = React.memo(({ proposal }) => {
+  const colorEntries = Object.entries(proposal.colors || {}).slice(0, STREAMING_SWATCH_LIMIT) as Array<[string, string]>;
+
+  return (
+    <article className="design-tokens-proposal-card__item is-awaiting">
+      <header className="design-tokens-proposal-card__head">
+        <div className="design-tokens-proposal-card__name">
+          <div className="design-tokens-proposal-card__name-row">
+            <strong>{proposal.name || 'Untitled proposal'}</strong>
+          </div>
+          <span className="design-tokens-proposal-card__mood">{proposal.mood || 'Design direction'}</span>
+        </div>
+      </header>
+      <div className="design-tokens-proposal-card__swatches">
+        {colorEntries.map(([name, value]) => (
+          <div key={name} className="design-tokens-proposal-card__swatch" title={`${name} · ${value}`}>
+            <span className="design-tokens-proposal-card__swatch-chip" style={{ background: String(value) }} />
+            <span className="design-tokens-proposal-card__swatch-name">{name}</span>
+          </div>
+        ))}
+      </div>
+      <div className="design-tokens-proposal-card__pending">
+        <Loader2 size={14} className="is-spinning" />
+        <span>提案仍在传输中，完成后会显示完整预览。</span>
+      </div>
+    </article>
+  );
+});
+StreamingProposalPreview.displayName = 'StreamingProposalPreview';
+
 export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) => {
   const { workspacePath } = useCurrentWorkspace();
   const result = useMemo(() => parseResult(toolItem.toolResult?.result), [toolItem.toolResult?.result]);
@@ -186,7 +218,10 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
   const proposals: any[] = resultTokens?.proposals?.length ? resultTokens.proposals : inputProposals;
   const committedId: string | undefined = resultTokens?.committed_id || undefined;
 
-  const awaitingSelection = !isCompleted && !isFailed && proposals.length > 0;
+  /** 与 AskUserQuestionCard 一致：流式拼接参数未完成前不允许提交选择，避免点到不完整提案。 */
+  const paramsReady = !isParamsStreaming;
+  const awaitingSelection =
+    !isCompleted && !isFailed && proposals.length > 0 && paramsReady;
   const awaitingPayload = !isCompleted && !isFailed && proposals.length === 0;
 
   // User-side local state: which proposal is currently highlighted, and submission progress.
@@ -244,7 +279,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
   }, [scopeKey, artifactIdFromInput, workspacePath]);
 
   const submitChoice = useCallback(async (proposalId: string) => {
-    if (isSubmitting) return;
+    if (isSubmitting || isParamsStreaming) return;
     const toolId = toolItem.id ?? toolItem.toolCall?.id;
     if (!toolId) {
       log.warn('Cannot submit choice without tool id');
@@ -258,7 +293,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
       log.error('Failed to submit token selection', { toolId, error });
       setIsSubmitting(false);
     }
-  }, [isSubmitting, toolItem.id, toolItem.toolCall?.id]);
+  }, [isSubmitting, isParamsStreaming, toolItem.id, toolItem.toolCall?.id]);
 
   const recommit = useCallback(async (proposalId: string) => {
     await designTokensAPI.commit(proposalId, artifactIdFromInput, workspacePath);
@@ -343,6 +378,10 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
   );
 
   const renderProposal = (proposal: any) => {
+    if (isParamsStreaming) {
+      return <StreamingProposalPreview key={proposal.id} proposal={proposal} />;
+    }
+
     const colorEntries = Object.entries(proposal.colors || {}).slice(0, 8) as Array<[string, string]>;
     const typography = proposal.typography || {};
     const scale = typography.scale || {};
@@ -508,6 +547,12 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
           </div>
         ) : (
           <>
+            {proposals.length > 0 && Boolean(isParamsStreaming) && (
+              <div className="design-tokens-proposal-card__list-streaming-hint" role="status">
+                <Loader2 size={12} className="is-spinning" />
+                <span>正在接收方向提案，传输完成后再选择</span>
+              </div>
+            )}
             <div className="design-tokens-proposal-card__list">
               {proposals.map((proposal: any) => renderProposal(proposal))}
             </div>

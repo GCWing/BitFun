@@ -124,8 +124,8 @@ async fn load_oauth_creds() -> Result<Option<(PathBuf, OauthCredsFile)>> {
     let bytes = tokio::fs::read(&path)
         .await
         .with_context(|| format!("read {}", path.display()))?;
-    let parsed: OauthCredsFile = serde_json::from_slice(&bytes)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let parsed: OauthCredsFile =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))?;
     Ok(Some((path, parsed)))
 }
 
@@ -281,10 +281,7 @@ async fn refresh_google_oauth(refresh_token: &str) -> Result<GoogleTokenResponse
     Ok(parsed)
 }
 
-async fn ensure_fresh_oauth(
-    path: &PathBuf,
-    creds: &mut OauthCredsFile,
-) -> Result<()> {
+async fn ensure_fresh_oauth(path: &PathBuf, creds: &mut OauthCredsFile) -> Result<()> {
     let now_ms = chrono::Utc::now().timestamp_millis();
     let needs = match creds.expiry_date {
         Some(exp) => exp - now_ms <= REFRESH_LEEWAY_SECONDS * 1000,
