@@ -95,22 +95,23 @@ click UI elements, set models, or perform any action inside the BitFun app itsel
 
 Available actions (use EXACTLY one of these for the "action" field):
 - "execute_task": Run a high-level task. Requires "task" field.
-  Valid tasks: "set_primary_model", "set_fast_model", "enable_model", "disable_model", "toggle_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp".
+  Valid tasks: "set_primary_model", "set_fast_model", "enable_model", "disable_model", "toggle_model", "open_model_settings", "return_to_session", "delete_model", "open_live_app_gallery", "open_live_app" (legacy: "open_miniapp_gallery", "open_miniapp").
   Example: { "action": "execute_task", "task": "open_model_settings" }
   Example: { "action": "execute_task", "task": "enable_model", "params": { "modelQuery": "kimi" } }
   Example: { "action": "execute_task", "task": "disable_model", "params": { "modelQuery": "doubao-lite" } }
   Example: { "action": "execute_task", "task": "delete_model", "params": { "modelQuery": "OpenRouter" } }
   Example: { "action": "execute_task", "task": "set_primary_model", "params": { "modelQuery": "kimi" } }
-  Example: { "action": "execute_task", "task": "open_miniapp", "params": { "miniAppId": "<id from list_miniapps>" } }
+  Example: { "action": "execute_task", "task": "open_live_app", "params": { "liveAppId": "<id from list_live_apps>" } }
   CRITICAL: "open_model_settings" is a TASK, not an action. Do NOT use { "action": "open_model_settings" }.
 - "get_page_state": Returns the current page state including active scene, interactive elements, semantic hints, and quick-action targets. Each element carries a `selector` field that can be pasted directly into action="click". Optional "scope" (one of "auto" | "main" | "document" | <CSS-selector>); default "auto" prefers <main> and transparently widens when needed. Optional "includeOffscreen" (boolean | "auto", default "auto" — automatically true for the settings scene so the model list / MCP list rows below the viewport fold are visible).
 - "click": Clicks an element by CSS selector. Requires non-empty "selector". For text-based targeting use click_by_text instead.
 - "click_by_text": Clicks an element containing the given text. Requires "text" (also accepted as "query" / "label" / "searchText"). Optional "tag", optional "scope" (one of "auto" | "main" | "document" | <CSS-selector for a container>; default "auto" — searches inside <main> first, then widens to whole document on miss). Use "main" to avoid matching the global nav/sidebar/scene-tab bar. On AMBIGUOUS errors the response includes ready-to-use per-candidate selectors.
 - "input": Sets the value of an input element. Requires "selector" and "value" (also accepted as "text" / "inputValue" / "content"). Missing "value" returns INVALID_PARAMS — no silent success.
 - "scroll": Scrolls the page or an element. Optional "selector", requires "direction" ∈ {up, down, top, bottom}. As a convenience you may pass numeric "deltaY" instead (positive ⇒ down, negative ⇒ up); a missing/invalid direction returns INVALID_PARAMS — no silent success.
-- "open_scene": Opens a scene by ID. Requires "sceneId" (e.g., "settings", "session", "welcome", "miniapps", or "miniapp:<id>" for a specific mini-app).
+- "open_scene": Opens a scene by ID. Requires "sceneId" (e.g., "settings", "session", "welcome", "apps", or "live-app:<id>" for a specific Live App).
 - "open_settings_tab": Opens the settings scene and switches to a tab. Requires "tabId".
-- "open_miniapp": Opens a specific installed mini-app. Requires "miniAppId" (use ControlHub domain="app" action="list_miniapps" to discover).
+- "open_live_app": Opens a specific installed Live App. Requires "liveAppId" (aliases: miniAppId; use ControlHub domain="app" action="list_live_apps" to discover).
+- "open_miniapp": Legacy alias for open_live_app (same fields).
 - "set_config": Sets a config value by key. Requires "key" and the value (accepted as "configValue", or any of the aliases "value" / "config_value" / "data" / "payload" — they all map to the same field, BUT only for this action; "value"/"text" are NOT cross-aliased on other actions).
 - "get_config": Gets a config value by key. Requires "key".
 - "list_models": Lists all configured models with their display names, providers, and IDs. Optional "includeDisabled" (boolean).
@@ -127,11 +128,11 @@ Guidelines:
 3. When a page changes, use "wait" with ~300-500ms before the next action to let UI settle.
 4. For unknown UI tasks, use "get_page_state" first, read the "semanticHints" field, then decide.
 5. After completing the user's request, return to the session scene with "return_to_session" task or open_scene "session".
-6. For "what mini-apps are installed / show the gallery", call ControlHub domain="app" action="list_miniapps" first (it is pure-Rust, no UI round-trip), THEN open_miniapp_gallery or open_miniapp.
+6. For "what Live Apps are installed / show the gallery", call ControlHub domain="app" action="list_live_apps" first (it is pure-Rust, no UI round-trip), THEN open_live_app_gallery or open_live_app.
 
 Failure modes you should expect (and not retry blindly):
 - INVALID_PARAMS: required field missing or wrong type. Read the error hints — they list the canonical field name AND its accepted aliases for this exact action.
-- NOT_FOUND: selector / model / mini-app does not exist. Call get_page_state (or list_models / list_miniapps) before retrying with a guess.
+- NOT_FOUND: selector / model / Live App does not exist. Call get_page_state (or list_models / list_live_apps) before retrying with a guess.
 - AMBIGUOUS: multiple candidates matched. The hint contains per-candidate concrete selectors — pick one and re-issue with action="click"."#
                 .to_string(),
         )
@@ -152,6 +153,7 @@ Failure modes you should expect (and not retry blindly):
                         "scroll",
                         "open_scene",
                         "open_settings_tab",
+                        "open_live_app",
                         "open_miniapp",
                         "set_config",
                         "get_config",
@@ -167,12 +169,16 @@ Failure modes you should expect (and not retry blindly):
                 },
                 "task": {
                     "type": "string",
-                    "enum": ["set_primary_model", "set_fast_model", "enable_model", "disable_model", "toggle_model", "open_model_settings", "return_to_session", "delete_model", "open_miniapp_gallery", "open_miniapp"],
+                    "enum": ["set_primary_model", "set_fast_model", "enable_model", "disable_model", "toggle_model", "open_model_settings", "return_to_session", "delete_model", "open_live_app_gallery", "open_live_app", "open_miniapp_gallery", "open_miniapp"],
                     "description": "Task name when using execute_task. enable_model / disable_model / toggle_model are pure config writes (no UI navigation)."
+                },
+                "liveAppId": {
+                    "type": "string",
+                    "description": "Live App id (use ControlHub domain=\"app\" action=\"list_live_apps\" to discover) for open_live_app action / task."
                 },
                 "miniAppId": {
                     "type": "string",
-                    "description": "Mini-app id (use ControlHub domain=\"app\" action=\"list_miniapps\" to discover) for open_miniapp action / task."
+                    "description": "Legacy alias for liveAppId when opening a Live App."
                 },
                 "params": {
                     "type": "object",

@@ -1,6 +1,6 @@
-# MiniApp 设计与生成 Playbook
+# Live App 设计与生成 Playbook
 
-> 这份 Playbook 用于**生成一个新的 MiniApp**。AI 在使用 `InitMiniApp` 工具创建骨架后，必须遵循本指南完成实现，以避免典型的 "AI 味" 产出。
+> 这份 Playbook 用于**生成一个新的 Live App**。AI 在使用 `InitLiveApp` 工具创建骨架后，必须遵循本指南完成实现，以避免典型的 "AI 味" 产出。
 >
 > 维护或修改框架本身的代码请回到 `SKILL.md`，本文件只服务于"造一个具体的小应用"。
 
@@ -26,7 +26,7 @@
 按优先级取上下文：
 
 1. 用户提供的截图 / 品牌资料 / 现成代码
-2. `MiniApp/Demo/` 与 `src/crates/core/src/miniapp/builtin/assets/` 中**最贴近形态**的内置应用——直接 `ls` + `Read` 拿到它的 `style.css`、`index.html`，识别它的视觉语言（间距、圆角、卡片密度、配色）
+2. `LiveApp/Demo/` 与 `src/crates/core/src/live_app/builtin/assets/` 中**最贴近形态**的内置应用——直接 `ls` + `Read` 拿到它的 `style.css`、`index.html`，识别它的视觉语言（间距、圆角、卡片密度、配色）
 3. `--bitfun-*` 主题变量（见 SKILL.md 的"主题集成"章节）——所有颜色都优先 `var(--bitfun-xxx, fallback)`
 
 **从零生成是最后选择**——它直接导致千篇一律的"AI 味"产出。
@@ -90,7 +90,7 @@
 | 每个 section 都用一种新的卡片样式 | 一个 motif 贯穿；不同区块用相同卡片，靠内容区分 |
 | 用大量 stats / 装饰性图标填空白 | 留白本身就是设计；空白说明结构应被简化，不是被填满 |
 | 圆角随心所欲（4 / 8 / 12 / 16 混用） | 在设计系统里钉 1-2 个圆角档位，全应用统一 |
-| 一上来就写 1500 行 ui.js | 早提交早预览；功能成型后再分模块（参考 `MiniApp/Demo/git-graph` 的拆分） |
+| 一上来就写 1500 行 ui.js | 早提交早预览；功能成型后再分模块（参考 `LiveApp/Demo/git-graph` 的拆分） |
 
 ---
 
@@ -144,7 +144,7 @@
 
 ## 四、变体优先：Tweaks 模式
 
-> 灵感源：在最终用户那里，"一份代码服务多种偏好"才是 MiniApp 的天然优势。
+> 灵感源：在最终用户那里，"一份代码服务多种偏好"才是 Live App 的天然优势。
 
 ### 何时用 Tweaks
 
@@ -211,7 +211,7 @@
 
 ---
 
-## 七、与 BitFun 工具型 MiniApp 的契合度
+## 七、与 BitFun 工具型 Live App 的契合度
 
 绝大多数 BitFun 用户产出的小应用是**工具型**（regex 调试 / git 视图 / 编码自拍 / 计算器…），它们的设计调性应当：
 
@@ -247,10 +247,10 @@
 
 完整体现以上原则的内置/示例小应用：
 
-- `src/crates/core/src/miniapp/builtin/assets/regex-playground/` — 工具型，单 motif（"/"包裹的 pattern row），克制配色
-- `src/crates/core/src/miniapp/builtin/assets/coding-selfie/` — 数据可视化，使用 worker，i18n 完整
-- `src/crates/core/src/miniapp/builtin/assets/gomoku/` — 交互型，主题切换 + i18n + 持久化范例
-- `MiniApp/Demo/git-graph/` — 复杂应用拆模块的范例（`ui/components`, `ui/panels`, `ui/services`）
-- `MiniApp/Demo/icon-design-system/` — 设计系统型应用范例
+- `src/crates/core/src/live_app/builtin/assets/regex-playground/` — 工具型，单 motif（"/"包裹的 pattern row），克制配色
+- `src/crates/core/src/live_app/builtin/assets/coding-selfie/` — 数据可视化，使用 worker，i18n 完整
+- `src/crates/core/src/live_app/builtin/assets/gomoku/` — 交互型，主题切换 + i18n + 持久化范例
+- `LiveApp/Demo/git-graph/` — 复杂应用拆模块的范例（`ui/components`, `ui/panels`, `ui/services`）
+- `LiveApp/Demo/icon-design-system/` — 设计系统型应用范例
 
 读它们的 `style.css` 顶部注释和 `meta.json` 的 `i18n` 块，是最快理解"BitFun 味道"的方式。

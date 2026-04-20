@@ -1,2 +1,2 @@
-// Built-in MiniApp: Gomoku — no node-side logic; storage handled by the runtime host.
+// Built-in Live App: Gomoku — no node-side logic; storage handled by the runtime host.
 module.exports = {};

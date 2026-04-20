@@ -1,4 +1,4 @@
-// Gomoku — built-in MiniApp.
+// Gomoku — built-in Live App.
 // Pure-frontend 15x15 Gomoku with PvP + simple PvE AI; persists win stats via app.storage.
 
 // ── i18n ──────────────────────────────────────────────

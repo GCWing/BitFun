@@ -1,4 +1,4 @@
-// Daily Divination — built-in MiniApp.
+// Daily Divination — built-in Live App.
 // Programmer-themed tarot: 24 cards, 4 fortune dimensions, daily-locked via app.storage.
 //
 // i18n strategy

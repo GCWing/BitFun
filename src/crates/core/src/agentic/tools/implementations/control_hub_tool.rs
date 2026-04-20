@@ -1086,14 +1086,24 @@ impl ControlHubTool {
                     "params": { "modelQuery": "fuzzy match on model display name or id" },
                 },
                 {
+                    "name": "open_live_app_gallery",
+                    "description": "Open the Live Apps gallery scene (Apps overlay).",
+                    "params": {},
+                },
+                {
+                    "name": "open_live_app",
+                    "description": "Open a specific installed Live App by id (use list_live_apps to discover ids).",
+                    "params": { "liveAppId": "id of the Live App to open" },
+                },
+                {
                     "name": "open_miniapp_gallery",
-                    "description": "Open the Mini App gallery scene (lists installed mini-apps).",
+                    "description": "Legacy alias for open_live_app_gallery.",
                     "params": {},
                 },
                 {
                     "name": "open_miniapp",
-                    "description": "Open a specific installed mini-app by its id (use list_miniapps to discover ids).",
-                    "params": { "miniAppId": "id of the mini app to open" },
+                    "description": "Legacy alias for open_live_app (same params: liveAppId / miniAppId).",
+                    "params": { "miniAppId": "id of the Live App to open" },
                 },
             ]);
             let count = tasks.as_array().map(|a| a.len()).unwrap_or(0);
@@ -1107,13 +1117,13 @@ impl ControlHubTool {
         // These actions answer "what does BitFun itself expose?" so the
         // model never needs to fall back to filesystem-scanning the user's
         // workspace to guess at the app's own capabilities.
-        if action == "list_miniapps" {
+        if action == "list_live_apps" || action == "list_miniapps" {
             let include_runtime = params
                 .get("includeRuntime")
                 .or_else(|| params.get("include_runtime"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            return Self::handle_list_miniapps(include_runtime).await;
+            return Self::handle_list_live_apps(include_runtime).await;
         }
         if action == "list_scenes" {
             return Ok(vec![Self::scenes_tool_result()]);
@@ -1152,7 +1162,7 @@ impl ControlHubTool {
             ("profile", "Profile", "个人资料"),
             ("agents", "Agents", "智能体"),
             ("skills", "Skills", "技能"),
-            ("miniapps", "Mini App Gallery", "小应用"),
+            ("apps", "Live Apps", "应用"),
             ("browser", "Browser", "浏览器"),
             ("mermaid", "Mermaid Editor", "Mermaid 图表"),
             ("assistant", "Assistant", "助理"),
@@ -1185,7 +1195,7 @@ impl ControlHubTool {
         let count = scenes.len();
         ToolResult::ok(
             json!({ "scenes": scenes }),
-            Some(format!("{count} scenes available; pass any `id` to action `open_scene`. Mini-app scenes use id `miniapp:<appId>` (see app.list_miniapps).")),
+            Some(format!("{count} scenes available; pass any `id` to action `open_scene`. Per-app overlays use id `live-app:<appId>` (see app.list_live_apps).")),
         )
     }
 
@@ -1203,13 +1213,13 @@ impl ControlHubTool {
         )
     }
 
-    async fn handle_list_miniapps(include_runtime: bool) -> BitFunResult<Vec<ToolResult>> {
+    async fn handle_list_live_apps(include_runtime: bool) -> BitFunResult<Vec<ToolResult>> {
         let manager = match crate::live_app::try_get_global_live_app_manager() {
             Some(m) => m,
             None => {
                 return Ok(vec![ToolResult::ok(
-                    json!({ "miniapps": [], "available": false }),
-                    Some("MiniApp subsystem is not initialized in this build.".to_string()),
+                    json!({ "liveApps": [], "available": false }),
+                    Some("Live App subsystem is not initialized in this build.".to_string()),
                 )]);
             }
         };
@@ -1217,7 +1227,7 @@ impl ControlHubTool {
         let metas = manager
             .list()
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to list mini-apps: {e}")))?;
+            .map_err(|e| BitFunError::tool(format!("Failed to list Live Apps: {e}")))?;
 
         let entries: Vec<Value> = metas
             .iter()
@@ -1233,7 +1243,7 @@ impl ControlHubTool {
                 obj.insert("updatedAt".to_string(), json!(meta.updated_at));
                 obj.insert(
                     "openSceneId".to_string(),
-                    json!(format!("miniapp:{}", meta.id)),
+                    json!(format!("live-app:{}", meta.id)),
                 );
                 if include_runtime {
                     obj.insert(
@@ -1258,17 +1268,17 @@ impl ControlHubTool {
             .collect::<Vec<_>>()
             .join(", ");
         let summary = if count == 0 {
-            "No mini-apps installed.".to_string()
+            "No Live Apps installed.".to_string()
         } else if count <= 5 {
-            format!("{count} mini-app(s) installed: {preview}.")
+            format!("{count} Live App(s) installed: {preview}.")
         } else {
-            format!("{count} mini-app(s) installed; first 5: {preview}…")
+            format!("{count} Live App(s) installed; first 5: {preview}…")
         };
 
         Ok(vec![ToolResult::ok(
-            json!({ "miniapps": entries, "count": count, "available": true }),
+            json!({ "liveApps": entries, "count": count, "available": true }),
             Some(format!(
-                "{summary} To open one: execute_task task=open_miniapp params={{ miniAppId: <id> }}, or open_scene sceneId=miniapp:<id>."
+                "{summary} To open one: execute_task task=open_live_app params={{ liveAppId: <id> }}, or open_scene sceneId=live-app:<id>."
             )),
         )])
     }
@@ -1285,7 +1295,7 @@ impl ControlHubTool {
             .map(|(id, desc)| json!({ "id": id, "description": desc }))
             .collect();
 
-        let (miniapps, miniapp_available, miniapp_count): (Vec<Value>, bool, usize) =
+        let (live_apps, live_app_available, live_app_count): (Vec<Value>, bool, usize) =
             match crate::live_app::try_get_global_live_app_manager() {
                 Some(manager) => match manager.list().await {
                     Ok(metas) => {
@@ -1298,7 +1308,7 @@ impl ControlHubTool {
                                     "name": m.name,
                                     "description": m.description,
                                     "category": m.category,
-                                    "openSceneId": format!("miniapp:{}", m.id),
+                                    "openSceneId": format!("live-app:{}", m.id),
                                 })
                             })
                             .collect::<Vec<_>>();
@@ -1310,18 +1320,18 @@ impl ControlHubTool {
             };
 
         let summary = format!(
-            "BitFun self-describe: {} scenes, {} settings tabs, {} mini-app(s) installed.",
+            "BitFun self-describe: {} scenes, {} settings tabs, {} Live App(s) installed.",
             scenes.len(),
             settings_tabs.len(),
-            miniapp_count,
+            live_app_count,
         );
 
         Ok(vec![ToolResult::ok(
             json!({
                 "scenes": scenes,
                 "settingsTabs": settings_tabs,
-                "miniapps": miniapps,
-                "miniappSubsystemAvailable": miniapp_available,
+                "liveApps": live_apps,
+                "liveAppSubsystemAvailable": live_app_available,
             }),
             Some(summary),
         )])
@@ -2687,9 +2697,9 @@ for control flow.
 
 ### domain: "app"  (BitFun's own GUI via the SelfControl bridge)
 - Introspection (pure-Rust, no UI round-trip — call these BEFORE bash/fs):
-  * `app_self_describe` — one-shot snapshot: `{ scenes, settingsTabs, miniapps, miniappSubsystemAvailable }`. Use this whenever the user asks "what can BitFun do / what's installed / what scenes are there / what mini-apps are available" — DO NOT scan the user's workspace directories looking for app features, those directories are USER files, not BitFun installations.
-  * `list_miniapps { includeRuntime?: bool }` — installed mini-apps with `id / name / description / icon / category / openSceneId`.
-  * `list_scenes` — all scene ids you can pass to `open_scene` (plus dynamic `miniapp:<id>` for installed mini-apps).
+  * `app_self_describe` — one-shot snapshot: `{ scenes, settingsTabs, liveApps, liveAppSubsystemAvailable }`. Use this whenever the user asks "what can BitFun do / what's installed / what scenes are there / what Live Apps are available" — DO NOT scan the user's workspace directories looking for app features, those directories are USER files, not BitFun installations.
+  * `list_live_apps { includeRuntime?: bool }` — installed Live Apps with `id / name / description / icon / category / openSceneId` (legacy alias: `list_miniapps`).
+  * `list_scenes` — all scene ids you can pass to `open_scene` (plus dynamic `live-app:<id>` for installed Live Apps).
   * `list_settings_tabs` — all tab ids you can pass to `open_settings_tab`.
   * `list_tasks` — catalog of named recipes for `execute_task`.
 - Navigation / mutation: get_page_state, wait_for_selector, click,
@@ -2706,10 +2716,10 @@ for control flow.
   when the right delay isn't known.
 - For well-known requests, prefer `execute_task` recipes:
   * "set Kimi as the main model" → `set_primary_model { modelQuery: "kimi" }`
-  * "open the mini app gallery / show me installed mini apps" → first
-    `list_miniapps`, then `execute_task task=open_miniapp_gallery`
-    (or `open_miniapp { miniAppId: "<id>" }` to open a specific one).
-- HARD RULE: when the user asks "BitFun 里有哪些 X" / "what mini-apps /
+  * "open the Live Apps gallery / show installed Live Apps" → first
+    `list_live_apps`, then `execute_task task=open_live_app_gallery`
+    (or `open_live_app { liveAppId: "<id>" }` to open a specific one; legacy task names still work).
+- HARD RULE: when the user asks "BitFun 里有哪些 X" / "what Live Apps /
   scenes / settings does BitFun have" — answer with `app.app_self_describe`
   or the targeted `list_*` action. NEVER answer this kind of question by
   running `Bash` `ls` against the user's workspace; that path is for
@@ -3110,7 +3120,7 @@ mod control_hub_tests {
             .iter()
             .filter_map(|s| s.get("id").and_then(|v| v.as_str()))
             .collect();
-        for must_have in ["session", "settings", "miniapps", "welcome"] {
+        for must_have in ["session", "settings", "apps", "welcome"] {
             assert!(
                 ids.iter().any(|id| *id == must_have),
                 "scene `{must_have}` missing from list_scenes catalog: {ids:?}"
@@ -3132,27 +3142,27 @@ mod control_hub_tests {
     }
 
     #[tokio::test]
-    async fn app_list_miniapps_returns_unavailable_when_subsystem_absent() {
+    async fn app_list_live_apps_returns_unavailable_when_subsystem_absent() {
         let tool = ControlHubTool::new();
         let ctx = empty_context();
         let results = tool
-            .dispatch("app", "list_miniapps", &json!({}), &ctx)
+            .dispatch("app", "list_live_apps", &json!({}), &ctx)
             .await
-            .expect("list_miniapps should succeed even without subsystem");
+            .expect("list_live_apps should succeed even without subsystem");
         let payload = results.first().unwrap().content();
-        // Without a global MiniAppManager the action must succeed-with-empty
+        // Without a global LiveAppManager the action must succeed-with-empty
         // and signal availability=false, NOT error out — otherwise the model
         // would assume the action itself is broken.
         assert_eq!(
             payload.get("available").and_then(|v| v.as_bool()),
             Some(false)
         );
-        let arr = payload.get("miniapps").and_then(|v| v.as_array()).unwrap();
+        let arr = payload.get("liveApps").and_then(|v| v.as_array()).unwrap();
         assert!(arr.is_empty());
     }
 
     #[tokio::test]
-    async fn app_self_describe_includes_scenes_settings_and_miniapps_keys() {
+    async fn app_self_describe_includes_scenes_settings_and_live_apps_keys() {
         let tool = ControlHubTool::new();
         let ctx = empty_context();
         let results = tool
@@ -3160,7 +3170,7 @@ mod control_hub_tests {
             .await
             .expect("app_self_describe should succeed");
         let payload = results.first().unwrap().content();
-        for key in ["scenes", "settingsTabs", "miniapps", "miniappSubsystemAvailable"] {
+        for key in ["scenes", "settingsTabs", "liveApps", "liveAppSubsystemAvailable"] {
             assert!(
                 payload.get(key).is_some(),
                 "self-describe payload missing `{key}`: {payload}"
@@ -3169,7 +3179,7 @@ mod control_hub_tests {
     }
 
     #[tokio::test]
-    async fn app_list_tasks_includes_open_miniapp_recipes() {
+    async fn app_list_tasks_includes_open_live_app_recipes() {
         let tool = ControlHubTool::new();
         let ctx = empty_context();
         let results = tool
@@ -3184,7 +3194,7 @@ mod control_hub_tests {
             .iter()
             .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
             .collect();
-        for required in ["open_miniapp_gallery", "open_miniapp", "set_primary_model"] {
+        for required in ["open_live_app_gallery", "open_live_app", "set_primary_model"] {
             assert!(
                 names.iter().any(|n| n == required),
                 "task `{required}` missing from execute_task catalog: {names:?}"

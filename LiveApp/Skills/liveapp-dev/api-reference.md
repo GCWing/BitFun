@@ -6,7 +6,7 @@
 
 ## 能力边界（先看这一节）
 
-MiniApp **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"。生成代码前请先确认你需要的能力在表内：
+Live App **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"。生成代码前请先确认你需要的能力在表内：
 
 - `app.fs.*` —— 文件系统（受 `permissions.fs.read/write` 限制）
 - `app.shell.exec` —— 子进程命令行（受 `permissions.shell.allow` 命令名白名单限制）
@@ -395,7 +395,7 @@ const savePath = await app.dialog.save({
 }
 ```
 
-宿主会把这些框架原语直接路由到 Rust 实现（`bitfun_core::miniapp::host_dispatch`），完全不需要 Bun/Node 运行时；权限策略与 Worker 路径共用同一份 `resolve_policy`，行为完全等价。在这种模式下：
+宿主会把这些框架原语直接路由到 Rust 实现（`bitfun_core::live_app::host_dispatch`），完全不需要 Bun/Node 运行时；权限策略与 Worker 路径共用同一份 `resolve_policy`，行为完全等价。在这种模式下：
 
 - `app.shell.exec` / `app.fs.*` / `app.net.fetch` / `app.os.info` / `app.storage.get|set` —— 全部可用；
 - `app.call('myCustomMethod', …)` —— **不可用**（宿主会显式报错），需要走完整的 Worker 路径请把 `node.enabled` 设回 `true` 并提供 `worker.js`。
