@@ -3,6 +3,7 @@
 pub mod agentic_api;
 pub mod announcement_api;
 pub mod app_state;
+pub mod browser_control_api;
 pub mod btw_api;
 pub mod clipboard_file_api;
 pub mod commands;
@@ -20,6 +21,7 @@ pub mod live_app_api;
 pub mod path_target;
 pub mod remote_connect_api;
 pub mod runtime_api;
+pub mod self_control_api;
 pub mod session_api;
 pub mod session_storage_path;
 pub mod skill_api;

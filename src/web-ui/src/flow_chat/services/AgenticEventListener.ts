@@ -8,7 +8,14 @@
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import type { TextChunkEvent, ToolEvent, AgenticEvent, SessionTitleGeneratedEvent, ImageAnalysisEvent } from '@/infrastructure/api/service-api/AgentAPI';
+import type {
+  TextChunkEvent,
+  ToolEvent,
+  AgenticEvent,
+  SessionTitleGeneratedEvent,
+  SessionModelAutoMigratedEvent,
+  ImageAnalysisEvent,
+} from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
 type UnlistenFn = () => void;
@@ -33,6 +40,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionCompleted?: (event: AgenticEvent) => void;
   onContextCompressionFailed?: (event: AgenticEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
+  onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
 }
 
 export class AgenticEventListener {
@@ -178,6 +186,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onSessionTitleGenerated((event) => {
           logger.debug('Session title generated:', event);
           callbacks.onSessionTitleGenerated?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onSessionModelAutoMigrated) {
+        const unlisten = agentAPI.onSessionModelAutoMigrated((event) => {
+          logger.info('Session model auto-migrated:', event);
+          callbacks.onSessionModelAutoMigrated?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

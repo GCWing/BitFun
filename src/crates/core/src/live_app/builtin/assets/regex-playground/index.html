@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme-type="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="title">正则游乐场</title>
+</head>
+<body>
+  <div id="app" class="rx">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 3v6"/><path d="M14 6h6"/>
+            <circle cx="6.5" cy="17.5" r="1.5"/>
+            <path d="M14 12l-4 4"/><path d="M14 16l-4-4"/>
+          </svg>
+        </div>
+        <div class="brand__text">
+          <h1 class="brand__title" data-i18n="title">正则游乐场</h1>
+          <p class="brand__subtitle" data-i18n="subtitle">RegExp 实时调试 · ECMAScript 风格</p>
+        </div>
+      </div>
+      <div class="topbar__status">
+        <span class="status status--ok" id="status-pill">就绪</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="main-col">
+        <div class="card pattern-card">
+          <div class="pattern-row">
+            <span class="slash">/</span>
+            <input
+              id="pattern"
+              type="text"
+              class="pattern-input"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="\b[A-Z][a-zA-Z0-9_]*\b"
+            />
+            <span class="slash">/</span>
+            <div class="flags" id="flags">
+              <button type="button" class="flag" data-flag="g" data-i18n-attr="title" data-i18n="flagG">g</button>
+              <button type="button" class="flag" data-flag="i" data-i18n-attr="title" data-i18n="flagI">i</button>
+              <button type="button" class="flag" data-flag="m" data-i18n-attr="title" data-i18n="flagM">m</button>
+              <button type="button" class="flag" data-flag="s" data-i18n-attr="title" data-i18n="flagS">s</button>
+              <button type="button" class="flag" data-flag="u" data-i18n-attr="title" data-i18n="flagU">u</button>
+              <button type="button" class="flag" data-flag="y" data-i18n-attr="title" data-i18n="flagY">y</button>
+            </div>
+          </div>
+          <div class="pattern-error" id="pattern-error" hidden></div>
+        </div>
+
+        <div class="card test-card">
+          <div class="test-card__header">
+            <div class="card__title">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M4 7h8M4 10h5"/></svg>
+              <span data-i18n="testText">测试文本</span>
+            </div>
+            <div class="test-card__actions">
+              <span class="match-count" id="match-count">0 处匹配</span>
+              <button id="btn-clear" class="link-btn" type="button" data-i18n-attr="title" data-i18n="clear">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5 4l1 9h4l1-9"/></svg>
+                <span data-i18n="clear">清空</span>
+              </button>
+            </div>
+          </div>
+          <div class="editor">
+            <textarea id="test-text" spellcheck="false" autocomplete="off" autocorrect="off"
+              data-i18n-attr="placeholder" data-i18n="testPlaceholder" placeholder="把要匹配的文本粘贴到这里…"></textarea>
+            <pre id="highlight" class="highlight" aria-hidden="true"></pre>
+          </div>
+        </div>
+
+        <div class="card matches-card">
+          <div class="matches-card__header">
+            <div class="card__title matches-card__title">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 8l3 3 9-9"/></svg>
+              <span data-i18n="matchesTitle">匹配明细</span>
+              <span class="hint" id="matches-summary">尚未匹配</span>
+            </div>
+            <div class="matches-card__actions">
+              <button id="btn-prev-match" class="link-btn" type="button" data-i18n-attr="title" data-i18n="prevMatch" disabled>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3l-5 5 5 5"/></svg>
+              </button>
+              <button id="btn-next-match" class="link-btn" type="button" data-i18n-attr="title" data-i18n="nextMatch" disabled>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="matches" id="matches">
+            <div class="empty" data-i18n="matchesEmpty">输入正则与文本，匹配结果将在这里展示。</div>
+          </div>
+        </div>
+
+        <div class="card replace-card">
+          <div class="card__title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h6a3 3 0 010 6H7"/><path d="M9 8L7 10l2 2"/></svg>
+            <span data-i18n="replaceTitle">替换预览</span>
+            <span class="hint" data-i18n="replaceHint">支持 $1 $2 $&lt;name&gt; 反向引用</span>
+          </div>
+          <input id="replace-input" type="text" class="replace-input" data-i18n-attr="placeholder" data-i18n="replacePlaceholder" placeholder="替换为…（留空则不展示预览）" spellcheck="false" autocomplete="off"/>
+          <pre id="replace-output" class="replace-output" hidden></pre>
+        </div>
+      </section>
+
+      <aside class="side-col">
+        <div class="card library-card">
+          <div class="card__title" data-i18n="library">常用模式</div>
+          <div class="library" id="library"></div>
+        </div>
+
+        <div class="card ref-card">
+          <div class="card__title" data-i18n="cheatsheet">速查</div>
+          <ul class="ref" id="ref-list"></ul>
+        </div>
+      </aside>
+    </main>
+  </div>
+</body>
+</html>

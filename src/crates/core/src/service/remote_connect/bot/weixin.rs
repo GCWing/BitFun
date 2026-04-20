@@ -22,8 +22,8 @@ use tokio::sync::RwLock;
 
 use super::command_router::{
     complete_im_bot_pairing, current_bot_language, execute_forwarded_turn, handle_command,
-    parse_command, welcome_message, BotAction, BotChatState, BotInteractionHandler,
-    BotInteractiveRequest, BotLanguage, BotMessageSender, HandleResult,
+    parse_command, welcome_message, BotChatState, BotInteractionHandler,
+    BotInteractiveRequest, BotMessageSender, HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 use crate::service::remote_connect::remote_server::ImageAttachment;
@@ -169,6 +169,15 @@ struct UploadedMediaInfo {
     aeskey_hex: String,
     file_size_plain: u64,
     file_size_cipher: usize,
+}
+
+/// Result of `ilink/bot/getuploadurl`: the server may return either a
+/// pre-built complete CDN URL (`upload_full_url`, preferred) or just the
+/// `upload_param` to be combined with `cdn_base_url` and `filekey`.
+#[derive(Debug, Clone)]
+struct UploadUrlResult {
+    upload_full_url: Option<String>,
+    upload_param: Option<String>,
 }
 
 // ── QR login session store (in-memory, same role as OpenClaw installer) ─────
@@ -617,7 +626,70 @@ pub struct WeixinBot {
     pending_pairings: Arc<RwLock<HashMap<String, PendingPairing>>>,
     chat_states: Arc<RwLock<HashMap<String, BotChatState>>>,
     context_tokens: Arc<RwLock<HashMap<String, String>>>,
+    /// Per-peer typing ticket cache (returned by `ilink/bot/getconfig`,
+    /// required by `ilink/bot/sendtyping`).  Refreshed lazily and dropped
+    /// whenever a typing API call signals an invalid/expired ticket.
+    typing_tickets: Arc<RwLock<HashMap<String, String>>>,
     session_pause_until_ms: Arc<RwLock<HashMap<String, i64>>>,
+}
+
+/// RAII guard returned by [`WeixinBot::start_typing`].  Dropping or calling
+/// [`TypingHandle::stop`] cancels the periodic refresher and best-effort
+/// emits a `sendtyping(status=2)` to clear the "正在输入" UI on the peer side.
+///
+/// Cancellation uses an [`AtomicBool`] (not `tokio::sync::Notify`) on purpose:
+/// `Notify::notify_waiters` only wakes tasks that are *currently* parked on
+/// `.notified()`, so signalling while the loop is mid-`send_typing` HTTP call
+/// silently drops the wake-up and the task would refresh "正在输入" forever.
+/// An atomic flag plus short-grained polling makes the cancel deterministic.
+pub struct TypingHandle {
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+    handle: Option<tokio::task::JoinHandle<()>>,
+    bot: Arc<WeixinBot>,
+    peer_id: String,
+    stopped: bool,
+}
+
+impl TypingHandle {
+    /// Stop the typing loop and explicitly send a cancel event. Awaiting this
+    /// gives callers visibility into the cancel attempt; not awaiting (i.e.
+    /// just dropping) still cancels the loop and fires a best-effort cancel
+    /// from the Drop impl.
+    pub async fn stop(mut self) {
+        self.stopped = true;
+        self.cancel.store(true, std::sync::atomic::Ordering::Release);
+        if let Some(h) = self.handle.take() {
+            let _ = h.await;
+        }
+        if let Err(e) = self.bot.send_typing(&self.peer_id, 2).await {
+            debug!(
+                "weixin: send typing(cancel) failed for peer {peer}: {e}",
+                peer = self.peer_id
+            );
+        }
+    }
+}
+
+impl Drop for TypingHandle {
+    fn drop(&mut self) {
+        if self.stopped {
+            return;
+        }
+        self.cancel.store(true, std::sync::atomic::Ordering::Release);
+        if let Some(h) = self.handle.take() {
+            h.abort();
+        }
+        // Fire-and-forget cancel: we can't await in Drop, but we still want
+        // the peer's "正在输入" indicator to clear in case the future was
+        // dropped without `stop().await`.
+        let bot = self.bot.clone();
+        let peer = self.peer_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = bot.send_typing(&peer, 2).await {
+                debug!("weixin: drop-cancel typing failed for peer {peer}: {e}");
+            }
+        });
+    }
 }
 
 impl WeixinBot {
@@ -627,6 +699,7 @@ impl WeixinBot {
             pending_pairings: Arc::new(RwLock::new(HashMap::new())),
             chat_states: Arc::new(RwLock::new(HashMap::new())),
             context_tokens: Arc::new(RwLock::new(HashMap::new())),
+            typing_tickets: Arc::new(RwLock::new(HashMap::new())),
             session_pause_until_ms: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -710,6 +783,32 @@ impl WeixinBot {
         if !status.is_success() {
             return Err(anyhow!("ilink {endpoint} HTTP {status}: {text}"));
         }
+        // WeChat iLink returns HTTP 200 even on application errors. The actual
+        // status lives in the JSON body's `ret` / `errcode` fields. We MUST
+        // surface those as errors here so callers (e.g. `send_message_raw`)
+        // notice failures like expired `context_token` instead of silently
+        // dropping messages. `getupdates` callers parse the body themselves
+        // and tolerate `ret == -14`, so we only enforce this for the
+        // `sendmessage` endpoint where the body is well-defined.
+        if endpoint.contains("sendmessage")
+            || endpoint.contains("sendtyping")
+            || endpoint.contains("getconfig")
+        {
+            if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                let ret = v["ret"].as_i64().unwrap_or(0);
+                let errcode = v["errcode"].as_i64().unwrap_or(0);
+                if ret != 0 || errcode != 0 {
+                    let errmsg = v["errmsg"]
+                        .as_str()
+                        .or_else(|| v["msg"].as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    return Err(anyhow!(
+                        "ilink {endpoint} application error ret={ret} errcode={errcode} errmsg={errmsg}"
+                    ));
+                }
+            }
+        }
         Ok(text)
     }
 
@@ -717,8 +816,22 @@ impl WeixinBot {
         DEFAULT_CDN_BASE_URL
     }
 
-    async fn fetch_weixin_cdn_bytes(&self, encrypted_query_param: &str) -> Result<Vec<u8>> {
-        let url = build_cdn_download_url(self.cdn_base_url(), encrypted_query_param);
+    /// Download CDN bytes.  Prefers `full_url` (when the server pre-builds the
+    /// complete URL, matching `@tencent-weixin/openclaw-weixin@2.x`'s
+    /// `CDNMedia.full_url`); otherwise falls back to building the URL from
+    /// `encrypted_query_param`.
+    async fn fetch_weixin_cdn_bytes(
+        &self,
+        encrypted_query_param: &str,
+        full_url: Option<&str>,
+    ) -> Result<Vec<u8>> {
+        let url = match full_url
+            .map(str::trim)
+            .filter(|s: &&str| !s.is_empty())
+        {
+            Some(u) => u.to_string(),
+            None => build_cdn_download_url(self.cdn_base_url(), encrypted_query_param),
+        };
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
             .build()?;
@@ -738,6 +851,7 @@ impl WeixinBot {
             .as_str()
             .filter(|s| !s.is_empty())
             .ok_or_else(|| anyhow!("image: missing encrypt_query_param"))?;
+        let full_url = img["media"]["full_url"].as_str();
 
         let key: Option<[u8; 16]> = if let Some(hex_s) =
             img["aeskey"].as_str().filter(|s| !s.is_empty())
@@ -755,7 +869,7 @@ impl WeixinBot {
             None
         };
 
-        let enc = self.fetch_weixin_cdn_bytes(param).await?;
+        let enc = self.fetch_weixin_cdn_bytes(param, full_url).await?;
         match key {
             Some(k) => decrypt_aes_128_ecb_pkcs7(&enc, &k),
             None => Ok(enc),
@@ -826,7 +940,10 @@ impl WeixinBot {
         (attachments, skipped)
     }
 
-    /// `ilink/bot/getuploadurl` — returns `upload_param` for CDN POST.
+    /// `ilink/bot/getuploadurl` — returns either `upload_full_url` (preferred,
+    /// when the server pre-builds the complete CDN URL) and/or
+    /// `upload_param` (legacy, requires client-side URL composition).
+    /// Mirrors `getUploadUrl` in `@tencent-weixin/openclaw-weixin@2.x`.
     #[allow(clippy::too_many_arguments)]
     async fn ilink_get_upload_url(
         &self,
@@ -837,7 +954,7 @@ impl WeixinBot {
         rawfilemd5: &str,
         filesize: usize,
         aeskey_hex: &str,
-    ) -> Result<String> {
+    ) -> Result<UploadUrlResult> {
         let body = json!({
             "filekey": filekey,
             "media_type": media_type,
@@ -857,11 +974,22 @@ impl WeixinBot {
             )
             .await?;
         let v: Value = serde_json::from_str(&raw)?;
-        v["upload_param"]
-            .as_str()
-            .map(|s| s.to_string())
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| anyhow!("getuploadurl: missing upload_param"))
+        let pick = |k: &str| -> Option<String> {
+            v[k].as_str()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        let upload_full_url = pick("upload_full_url");
+        let upload_param = pick("upload_param");
+        if upload_full_url.is_none() && upload_param.is_none() {
+            return Err(anyhow!(
+                "getuploadurl: missing both upload_full_url and upload_param"
+            ));
+        }
+        Ok(UploadUrlResult {
+            upload_full_url,
+            upload_param,
+        })
     }
 
     async fn post_weixin_cdn_upload(&self, cdn_url: &str, ciphertext: &[u8]) -> Result<String> {
@@ -930,7 +1058,7 @@ impl WeixinBot {
         rand::thread_rng().fill_bytes(&mut filekey_raw);
         let filekey = hex::encode(filekey_raw);
 
-        let upload_param = self
+        let url_resp = self
             .ilink_get_upload_url(
                 to_user_id,
                 &filekey,
@@ -942,7 +1070,15 @@ impl WeixinBot {
             )
             .await?;
 
-        let cdn_url = build_cdn_upload_url(self.cdn_base_url(), &upload_param, &filekey);
+        let cdn_url = if let Some(full) = url_resp.upload_full_url.as_deref() {
+            full.to_string()
+        } else if let Some(param) = url_resp.upload_param.as_deref() {
+            build_cdn_upload_url(self.cdn_base_url(), param, &filekey)
+        } else {
+            return Err(anyhow!(
+                "getuploadurl: missing both upload_full_url and upload_param"
+            ));
+        };
         debug!(
             "weixin CDN upload: media_type={media_type} rawsize={rawsize} cipher_len={}",
             ciphertext.len()
@@ -958,13 +1094,24 @@ impl WeixinBot {
         })
     }
 
-    /// `aes_key` in JSON: base64 of raw 16-byte key (standard); matches typical iLink clients.
+    /// `aes_key` in JSON for outbound media items.
+    ///
+    /// Quirk match with the official `@tencent-weixin/openclaw-weixin@2.x`
+    /// reference plugin: it does `Buffer.from(aeskey.toString("hex")).toString("base64")`,
+    /// which treats the 32-char hex *string* as UTF-8 bytes and base64-encodes
+    /// **those ASCII bytes** — NOT the raw 16 binary bytes.  The downstream
+    /// WeChat client decodes the value, sees 32 ASCII hex chars, and hex-
+    /// decodes back to the original 16-byte AES key.  We were previously
+    /// shipping `base64(raw 16 bytes)` (the "obvious" interpretation), which
+    /// the WeChat client cannot decrypt — the file appeared in the chat but
+    /// every download attempt failed with "下载失败".  Stay bug-compatible
+    /// with the reference so the client can decrypt the CDN payload.
     fn media_aes_key_b64(aeskey_hex: &str) -> Result<String> {
-        let bytes = hex::decode(aeskey_hex.trim()).map_err(|e| anyhow!("aeskey hex: {e}"))?;
-        if bytes.len() != 16 {
-            return Err(anyhow!("aeskey must decode to 16 bytes"));
+        let trimmed = aeskey_hex.trim();
+        if trimmed.len() != 32 || !trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(anyhow!("aeskey must be 32 ascii hex chars"));
         }
-        Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+        Ok(base64::engine::general_purpose::STANDARD.encode(trimmed.as_bytes()))
     }
 
     async fn send_message_with_items(
@@ -1071,80 +1218,6 @@ impl WeixinBot {
         Ok(())
     }
 
-    fn expired_download_message(language: BotLanguage) -> &'static str {
-        if language.is_chinese() {
-            "这个下载链接已过期，请重新让助手发送一次。"
-        } else {
-            "This download link has expired. Please ask the agent again."
-        }
-    }
-
-    fn sending_file_message(language: BotLanguage, file_name: &str) -> String {
-        if language.is_chinese() {
-            format!("正在发送“{file_name}”……")
-        } else {
-            format!("Sending \"{file_name}\"…")
-        }
-    }
-
-    fn send_file_failed_message(language: BotLanguage, file_name: &str, error: &str) -> String {
-        if language.is_chinese() {
-            format!("无法发送“{file_name}”：{error}")
-        } else {
-            format!("Could not send \"{file_name}\": {error}")
-        }
-    }
-
-    async fn handle_download_request(
-        &self,
-        peer_id: &str,
-        token: &str,
-        workspace_root: Option<String>,
-    ) {
-        let (path, language) = {
-            let mut states = self.chat_states.write().await;
-            let state = states.get_mut(peer_id);
-            let language = current_bot_language().await;
-            let path = state.and_then(|s| s.pending_files.remove(token));
-            (path, language)
-        };
-
-        match path {
-            None => {
-                let _ = self
-                    .send_text(peer_id, Self::expired_download_message(language))
-                    .await;
-            }
-            Some(path) => {
-                let file_name = std::path::Path::new(&path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("file")
-                    .to_string();
-                let _ = self
-                    .send_text(peer_id, &Self::sending_file_message(language, &file_name))
-                    .await;
-                let root = workspace_root.as_deref().map(std::path::Path::new);
-                match self.send_workspace_file_to_peer(peer_id, &path, root).await {
-                    Ok(()) => info!("Weixin file delivered to {peer_id}: {path}"),
-                    Err(e) => {
-                        warn!("Weixin file send failed: {e}");
-                        let _ = self
-                            .send_text(
-                                peer_id,
-                                &Self::send_file_failed_message(
-                                    language,
-                                    &file_name,
-                                    &e.to_string(),
-                                ),
-                            )
-                            .await;
-                    }
-                }
-            }
-        }
-    }
-
     async fn get_updates_once(&self, buf: &str, timeout: Duration) -> Result<Value> {
         if self.is_session_paused().await {
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -1209,17 +1282,199 @@ impl WeixinBot {
     }
 
     /// Send text to peer; uses last known `context_token` for that peer.
+    ///
+    /// If the WeChat iLink API rejects the message (typically because the
+    /// `context_token` has expired or exceeded its usage budget), we drop
+    /// the cached token so subsequent sends fail fast with a clear error
+    /// instead of silently retrying a known-bad token. The token will be
+    /// refreshed automatically the next time the user sends an inbound
+    /// message (see `run_message_loop` / `wait_for_pairing`).
     pub async fn send_text(&self, peer_id: &str, text: &str) -> Result<()> {
         let token = {
             let m = self.context_tokens.read().await;
             m.get(peer_id)
                 .cloned()
-                .ok_or_else(|| anyhow!("missing context_token for peer {peer_id}"))?
+                .ok_or_else(|| anyhow!("context_token unavailable for peer {peer_id} (waiting for next inbound message)"))?
         };
         for chunk in chunk_text_for_weixin(text) {
-            self.send_message_raw(peer_id, &token, &chunk).await?;
+            if let Err(e) = self.send_message_raw(peer_id, &token, &chunk).await {
+                if Self::is_context_token_error(&e) {
+                    let mut m = self.context_tokens.write().await;
+                    if m.get(peer_id).map(|t| t == &token).unwrap_or(false) {
+                        m.remove(peer_id);
+                        warn!(
+                            "weixin: dropped stale context_token for peer {peer_id} after send error: {e}"
+                        );
+                    }
+                }
+                return Err(e);
+            }
         }
         Ok(())
+    }
+
+    /// Heuristic: treat any send error mentioning an iLink application error
+    /// (or a ret/errcode payload) as a context_token-expiration signal.
+    /// We invalidate aggressively because the only thing we can do with a
+    /// bad token is stop using it.
+    fn is_context_token_error(err: &anyhow::Error) -> bool {
+        let s = err.to_string();
+        s.contains("application error")
+            || s.contains("context_token")
+            || s.contains("errcode=")
+    }
+
+    /// Best-effort send that logs a warning on failure instead of silently
+    /// swallowing the error. Use this for non-critical replies (welcome,
+    /// pairing-error hints, etc.) where we don't want to abort the caller
+    /// but we DO want a log record if the send actually failed.
+    async fn try_send_text(&self, peer_id: &str, text: &str, ctx: &str) {
+        if let Err(e) = self.send_text(peer_id, text).await {
+            warn!("weixin: {ctx} send to peer {peer_id} failed: {e}");
+        }
+    }
+
+    // ── Typing indicator (ilink/bot/getconfig + ilink/bot/sendtyping) ──────
+    //
+    // Per `@tencent-weixin/openclaw-weixin` (`src/api/api.ts`), driving the
+    // "对方正在输入" hint above the WeChat chat input requires two calls:
+    //   1. `POST ilink/bot/getconfig`   → returns a base64 `typing_ticket`
+    //      bound to the `(bot, ilink_user_id, context_token)` triple.
+    //   2. `POST ilink/bot/sendtyping`  → with `status=1` to start typing and
+    //      `status=2` to cancel (also auto-times out server-side after a few
+    //      seconds, hence the 5-second refresh cadence used below).
+
+    /// Fetch a fresh typing_ticket for `peer_id`. Always invokes
+    /// `ilink/bot/getconfig` (does NOT consult the cache) so the caller can
+    /// recover from a stale ticket by clearing it and calling here again.
+    async fn fetch_typing_ticket(&self, peer_id: &str) -> Result<String> {
+        let context_token = {
+            let m = self.context_tokens.read().await;
+            m.get(peer_id).cloned()
+        };
+        let mut body = json!({
+            "ilink_user_id": peer_id,
+            "base_info": { "channel_version": CHANNEL_VERSION }
+        });
+        if let Some(ct) = context_token {
+            body["context_token"] = json!(ct);
+        }
+        let raw = self
+            .post_ilink(
+                "ilink/bot/getconfig",
+                body,
+                Duration::from_secs(API_TIMEOUT_SECS),
+            )
+            .await?;
+        let v: Value = serde_json::from_str(&raw)?;
+        let ticket = v["typing_ticket"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow!("ilink/bot/getconfig returned empty typing_ticket"))?;
+        let mut m = self.typing_tickets.write().await;
+        m.insert(peer_id.to_string(), ticket.clone());
+        Ok(ticket)
+    }
+
+    /// Send one typing event (`status`: 1 = start, 2 = cancel). Lazily fetches
+    /// a typing_ticket on the first call per peer and refreshes once on
+    /// ticket-related errors before giving up.
+    async fn send_typing(&self, peer_id: &str, status: i64) -> Result<()> {
+        let cached = {
+            let m = self.typing_tickets.read().await;
+            m.get(peer_id).cloned()
+        };
+        let ticket = match cached {
+            Some(t) => t,
+            None => self.fetch_typing_ticket(peer_id).await?,
+        };
+
+        let send_with = |t: String| async move {
+            let body = json!({
+                "ilink_user_id": peer_id,
+                "typing_ticket": t,
+                "status": status,
+                "base_info": { "channel_version": CHANNEL_VERSION }
+            });
+            self.post_ilink(
+                "ilink/bot/sendtyping",
+                body,
+                Duration::from_secs(API_TIMEOUT_SECS),
+            )
+            .await
+        };
+
+        match send_with(ticket.clone()).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // Drop the stale ticket and retry once with a fresh one. We
+                // can't reliably distinguish ticket errors from transient
+                // failures, so we always try to recover at most once.
+                {
+                    let mut m = self.typing_tickets.write().await;
+                    if m.get(peer_id).map(|t| t == &ticket).unwrap_or(false) {
+                        m.remove(peer_id);
+                    }
+                }
+                debug!("weixin: typing ticket retry for peer {peer_id} (prev err: {e})");
+                let fresh = self.fetch_typing_ticket(peer_id).await?;
+                send_with(fresh).await?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Spawn a background task that emits `sendtyping(status=1)` immediately
+    /// and refreshes it every 5 seconds. The returned [`TypingHandle`] cancels
+    /// the loop and emits `sendtyping(status=2)` when stopped or dropped, so
+    /// the "正在输入" hint disappears on the user's side as soon as the bot
+    /// finishes responding.
+    fn start_typing(self: &Arc<Self>, peer_id: String) -> TypingHandle {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_task = cancel.clone();
+        let bot = self.clone();
+        let peer_for_task = peer_id.clone();
+        let handle = tokio::spawn(async move {
+            // Refresh interval matches OpenClaw's 6s default cadence; we use
+            // 5s to leave a small safety margin against server-side timeout.
+            // Each "wait" between refreshes is broken into 100ms ticks so a
+            // stop signal from the main task is observed within ≤100ms even
+            // mid-wait, which keeps the indicator from lingering after the
+            // bot has actually finished responding.
+            const TICK: Duration = Duration::from_millis(100);
+            const TICKS_PER_REFRESH: u32 = 50; // 50 * 100ms = 5s
+            const TICKS_AFTER_FAILURE: u32 = 100; // 100 * 100ms = 10s
+
+            loop {
+                if cancel_task.load(Ordering::Acquire) {
+                    return;
+                }
+                let next_wait = match bot.send_typing(&peer_for_task, 1).await {
+                    Ok(()) => TICKS_PER_REFRESH,
+                    Err(e) => {
+                        debug!(
+                            "weixin: send typing(start) failed for peer {peer_for_task}: {e}"
+                        );
+                        TICKS_AFTER_FAILURE
+                    }
+                };
+                for _ in 0..next_wait {
+                    if cancel_task.load(Ordering::Acquire) {
+                        return;
+                    }
+                    tokio::time::sleep(TICK).await;
+                }
+            }
+        });
+        TypingHandle {
+            cancel,
+            handle: Some(handle),
+            bot: self.clone(),
+            peer_id,
+            stopped: false,
+        }
     }
 
     fn is_weixin_media_item_type(type_id: i64) -> bool {
@@ -1332,72 +1587,80 @@ impl WeixinBot {
         false
     }
 
-    fn format_actions_footer(language: BotLanguage, actions: &[BotAction]) -> String {
-        if actions.is_empty() {
-            return String::new();
-        }
-        let header = if language.is_chinese() {
-            "\n\n——\n快捷操作（可发送对应命令或回复数字）：\n"
-        } else {
-            "\n\n——\nQuick actions (send the command or reply with the number):\n"
-        };
-        let mut s = header.to_string();
-        for (i, a) in actions.iter().enumerate() {
-            let n = i + 1;
-            s.push_str(&format!("{n}. {} → {}\n", a.label, a.command));
-        }
-        s
-    }
-
-    fn clean_reply_text(language: BotLanguage, text: &str, has_actions: bool) -> String {
-        let mut lines: Vec<String> = Vec::new();
-        let mut replaced_cancel = false;
-        for line in text.lines() {
-            let trimmed = line.trim();
-            if trimmed.contains("/cancel_task ") {
-                if has_actions && !replaced_cancel {
-                    let hint = if language.is_chinese() {
-                        "如需停止本次请求，请发送命令 /cancel_task 或下方列出的取消命令。"
-                    } else {
-                        "To stop this request, send /cancel_task or the cancel command listed below."
-                    };
-                    lines.push(hint.to_string());
-                    replaced_cancel = true;
-                }
-                continue;
-            }
-            lines.push(line.to_string());
-        }
-        lines.join("\n").trim().to_string()
-    }
-
     async fn send_handle_result(&self, peer_id: &str, result: &HandleResult) {
         let language = current_bot_language().await;
-        let footer = Self::format_actions_footer(language, &result.actions);
-        let body = Self::clean_reply_text(language, &result.reply, !result.actions.is_empty());
-        let combined = format!("{body}{footer}");
-        if let Err(e) = self.send_text(peer_id, &combined).await {
+        let text = if result.menu.items.is_empty() && result.menu.title.is_empty() {
+            result.reply.clone()
+        } else {
+            result.menu.render_plain_text(language)
+        };
+        if text.trim().is_empty() {
+            return;
+        }
+        if let Err(e) = self.send_text(peer_id, &text).await {
             warn!("weixin send_handle_result: {e}");
         }
     }
 
+    /// Scan `text` for downloadable file references and push each matching
+    /// file directly to the peer via the iLink CDN pipeline.  Files exceeding
+    /// `MAX_WEIXIN_FILE_BYTES` are skipped with a brief notice; per-file
+    /// failures are reported as plain-text replies.
     async fn notify_files_ready(&self, peer_id: &str, text: &str) {
-        let result = {
-            let mut states = self.chat_states.write().await;
-            let state = states.entry(peer_id.to_string()).or_insert_with(|| {
-                let mut s = BotChatState::new(peer_id.to_string());
-                s.paired = true;
-                s
-            });
-            let workspace_root = state.current_workspace.clone();
-            super::prepare_file_download_actions(
-                text,
-                state,
-                workspace_root.as_deref().map(std::path::Path::new),
-            )
+        let language = current_bot_language().await;
+        let workspace_root = {
+            let states = self.chat_states.read().await;
+            states.get(peer_id).and_then(|s| s.active_workspace_path())
         };
-        if let Some(result) = result {
-            self.send_handle_result(peer_id, &result).await;
+        let files = super::collect_auto_push_files(
+            text,
+            workspace_root.as_deref().map(std::path::Path::new),
+        );
+        if files.is_empty() {
+            return;
+        }
+
+        // Intentionally do NOT send a "正在为你发送 N 个文件……" intro: the
+        // file message itself already shows up in the chat, and the intro
+        // line just adds noise (and on WeChat costs a context_token slot
+        // per send). Errors / size-skips below still surface as their own
+        // notice messages so the user is informed when something is wrong.
+        let root_path = workspace_root.as_deref().map(std::path::Path::new);
+        for file in files {
+            if file.size > MAX_WEIXIN_FILE_BYTES {
+                let notice = super::auto_push_skip_too_large_message(
+                    language,
+                    &file.name,
+                    file.size,
+                    MAX_WEIXIN_FILE_BYTES,
+                );
+                if let Err(e) = self.send_text(peer_id, &notice).await {
+                    warn!("Weixin auto-push skip notice failed for peer {peer_id}: {e}");
+                }
+                continue;
+            }
+            match self
+                .send_workspace_file_to_peer(peer_id, &file.abs_path, root_path)
+                .await
+            {
+                Ok(()) => info!(
+                    "Weixin auto-pushed file to peer {peer_id}: {}",
+                    file.abs_path
+                ),
+                Err(e) => {
+                    warn!(
+                        "Weixin auto-push failed for {} to peer {peer_id}: {e}",
+                        file.name
+                    );
+                    let notice =
+                        super::auto_push_failed_message(language, &file.name, &e.to_string());
+                    if let Err(send_err) = self.send_text(peer_id, &notice).await {
+                        warn!(
+                            "Weixin auto-push failure notice failed for peer {peer_id}: {send_err}"
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -1483,7 +1746,7 @@ impl WeixinBot {
                     let language = current_bot_language().await;
 
                     if text == "/start" {
-                        let _ = self.send_text(&peer, welcome_message(language)).await;
+                        self.try_send_text(&peer, welcome_message(language), "welcome").await;
                         continue;
                     }
 
@@ -1498,10 +1761,7 @@ impl WeixinBot {
                                 .insert(peer.clone(), state.clone());
                             self.persist_chat_state(&peer, &state).await;
 
-                            let footer = Self::format_actions_footer(language, &result.actions);
-                            let _ = self
-                                .send_text(&peer, &format!("{}{}", result.reply, footer))
-                                .await;
+                            self.send_handle_result(&peer, &result).await;
                             return Ok(peer);
                         } else {
                             let err = if language.is_chinese() {
@@ -1509,7 +1769,7 @@ impl WeixinBot {
                             } else {
                                 "Invalid or expired pairing code."
                             };
-                            let _ = self.send_text(&peer, err).await;
+                            self.try_send_text(&peer, err, "pairing-invalid").await;
                         }
                     } else if !text.is_empty() {
                         let err = if language.is_chinese() {
@@ -1517,14 +1777,14 @@ impl WeixinBot {
                         } else {
                             "Please send the 6-digit pairing code from BitFun Desktop Remote Connect."
                         };
-                        let _ = self.send_text(&peer, err).await;
+                        self.try_send_text(&peer, err, "pairing-prompt").await;
                     } else if Self::has_inbound_image_items(msg) {
                         let err = if language.is_chinese() {
                             "配对请直接发送 6 位数字配对码；完成配对后再发送图片与助手对话。"
                         } else {
                             "To pair, send the 6-digit code only. After pairing you can send images to chat."
                         };
-                        let _ = self.send_text(&peer, err).await;
+                        self.try_send_text(&peer, err, "pairing-image-hint").await;
                     }
                 }
             }
@@ -1609,7 +1869,7 @@ impl WeixinBot {
                                 MAX_INBOUND_IMAGES, skipped_images
                             )
                         };
-                        let _ = bot.send_text(&peer, &note).await;
+                        bot.try_send_text(&peer, &note, "image-truncation-notice").await;
                     }
                     let body = WeixinBot::body_from_message(&msg_value);
                     let text = if body.trim().is_empty() && !images.is_empty() {
@@ -1646,7 +1906,7 @@ impl WeixinBot {
             let trimmed = text.trim();
             if trimmed == "/start" {
                 drop(states);
-                let _ = self.send_text(&peer_id, welcome_message(language)).await;
+                self.try_send_text(&peer_id, welcome_message(language), "welcome").await;
                 return;
             }
             if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
@@ -1654,10 +1914,7 @@ impl WeixinBot {
                     let result = complete_im_bot_pairing(state).await;
                     self.persist_chat_state(&peer_id, state).await;
                     drop(states);
-                    let footer = Self::format_actions_footer(language, &result.actions);
-                    let _ = self
-                        .send_text(&peer_id, &format!("{}{}", result.reply, footer))
-                        .await;
+                    self.send_handle_result(&peer_id, &result).await;
                     return;
                 } else {
                     let err = if language.is_chinese() {
@@ -1666,7 +1923,7 @@ impl WeixinBot {
                         "Invalid or expired pairing code."
                     };
                     drop(states);
-                    let _ = self.send_text(&peer_id, err).await;
+                    self.try_send_text(&peer_id, err, "pairing-invalid").await;
                     return;
                 }
             }
@@ -1676,17 +1933,7 @@ impl WeixinBot {
             } else {
                 "Please send the 6-digit pairing code."
             };
-            let _ = self.send_text(&peer_id, err).await;
-            return;
-        }
-
-        let trimmed = text.trim();
-        if let Some(stripped) = trimmed.strip_prefix("download_file:") {
-            let token = stripped.trim().to_string();
-            let workspace_root = state.current_workspace.clone();
-            drop(states);
-            self.handle_download_request(&peer_id, &token, workspace_root)
-                .await;
+            self.try_send_text(&peer_id, err, "pairing-prompt").await;
             return;
         }
 
@@ -1700,6 +1947,13 @@ impl WeixinBot {
         if let Some(forward) = result.forward_to_session {
             let bot = self.clone();
             let peer = peer_id.clone();
+            // Only show "正在输入" when there's an actual agentic turn to run.
+            // Local command/menu replies are already sent synchronously above,
+            // so a typing indicator there would either flash for a few ms or,
+            // worse, linger if the cancel call is delayed — both look broken
+            // to the user.  Agentic turns are the long-running case where
+            // typing genuinely tells the user "the bot is still working".
+            let typing_for_turn = self.start_typing(peer_id.clone());
             tokio::spawn(async move {
                 let interaction_bot = bot.clone();
                 let peer_c = peer.clone();
@@ -1719,7 +1973,9 @@ impl WeixinBot {
                     let msg_bot = msg_bot.clone();
                     let peer_s = peer_m.clone();
                     Box::pin(async move {
-                        let _ = msg_bot.send_text(&peer_s, &t).await;
+                        if let Err(e) = msg_bot.send_text(&peer_s, &t).await {
+                            warn!("weixin: send intermediate message to peer {peer_s} failed: {e}");
+                        }
                     })
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
@@ -1727,9 +1983,15 @@ impl WeixinBot {
                     execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
                         .await;
                 if !turn_result.display_text.is_empty() {
-                    let _ = bot.send_text(&peer, &turn_result.display_text).await;
+                    if let Err(e) = bot.send_text(&peer, &turn_result.display_text).await {
+                        warn!("weixin: send final reply to peer {peer} failed: {e}");
+                    }
                 }
                 bot.notify_files_ready(&peer, &turn_result.full_text).await;
+                // Stop typing AFTER both the final reply and any auto-pushed
+                // files have been dispatched, so the indicator does not flap
+                // off between the text answer and its attachments.
+                typing_for_turn.stop().await;
             });
         }
     }
@@ -1741,7 +2003,7 @@ impl WeixinBot {
             s.paired = true;
             s
         });
-        state.pending_action = Some(interaction.pending_action.clone());
+        super::command_router::apply_interactive_request(state, &interaction);
         self.persist_chat_state(&peer_id, state).await;
         drop(states);
 
@@ -1749,6 +2011,7 @@ impl WeixinBot {
             reply: interaction.reply,
             actions: interaction.actions,
             forward_to_session: None,
+            menu: interaction.menu,
         };
         self.send_handle_result(&peer_id, &result).await;
     }
@@ -1783,6 +2046,29 @@ mod weixin_inbound_tests {
     use super::*;
     use serde_json::json;
 
+    /// Sanity-check the heuristic used by `send_text` to decide whether a
+    /// failed `send_message_raw` indicates the cached `context_token` has
+    /// gone bad. Application errors and explicit `errcode=` strings must
+    /// trigger token invalidation; pure transport errors (network/HTTP)
+    /// must NOT, so we don't drop a perfectly good token after a transient
+    /// blip.
+    #[test]
+    fn context_token_error_heuristic() {
+        let app_err = anyhow!(
+            "ilink ilink/bot/sendmessage application error ret=0 errcode=12345 errmsg=context_token expired"
+        );
+        assert!(WeixinBot::is_context_token_error(&app_err));
+
+        let app_err_short = anyhow!("upstream returned errcode=42 unauthorized");
+        assert!(WeixinBot::is_context_token_error(&app_err_short));
+
+        let net_err = anyhow!("error sending request: connection refused");
+        assert!(!WeixinBot::is_context_token_error(&net_err));
+
+        let http_err = anyhow!("ilink ilink/bot/sendmessage HTTP 500 Internal Server Error");
+        assert!(!WeixinBot::is_context_token_error(&http_err));
+    }
+
     #[test]
     fn aes_ecb_roundtrip() {
         let key = [9u8; 16];
@@ -1807,6 +2093,46 @@ mod weixin_inbound_tests {
         let b64 = B64.encode(hex_str.as_bytes());
         let k = parse_weixin_cdn_aes_key(&b64).unwrap();
         assert_eq!(k, raw);
+    }
+
+    /// Outbound `aes_key` MUST be base64 of the 32-char hex *string* (its
+    /// ASCII bytes), NOT base64 of the 16 raw key bytes.  This matches the
+    /// official `@tencent-weixin/openclaw-weixin@2.x` reference plugin and
+    /// is what the WeChat client expects when it pulls the file from CDN —
+    /// otherwise every download fails with "下载失败" even though the bot
+    /// successfully delivers the message itself.
+    #[test]
+    fn media_aes_key_b64_matches_openclaw_hex_ascii_format() {
+        let raw = [
+            0x01u8, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
+            0x32, 0x10,
+        ];
+        let aeskey_hex = hex::encode(raw);
+        let produced = WeixinBot::media_aes_key_b64(&aeskey_hex).unwrap();
+        let expected = B64.encode(aeskey_hex.as_bytes());
+        assert_eq!(
+            produced, expected,
+            "media_aes_key_b64 must base64-encode the hex string ASCII bytes (OpenClaw quirk)"
+        );
+        let decoded = B64.decode(&produced).unwrap();
+        assert_eq!(
+            decoded.len(),
+            32,
+            "decoded value must be 32 ASCII chars, not 16 raw bytes"
+        );
+        assert!(
+            std::str::from_utf8(&decoded)
+                .map(|s| s.chars().all(|c| c.is_ascii_hexdigit()))
+                .unwrap_or(false),
+            "decoded payload must be the original hex string"
+        );
+    }
+
+    #[test]
+    fn media_aes_key_b64_rejects_non_hex_input() {
+        assert!(WeixinBot::media_aes_key_b64("not_hex_at_all").is_err());
+        assert!(WeixinBot::media_aes_key_b64("zz".repeat(16).as_str()).is_err());
+        assert!(WeixinBot::media_aes_key_b64("ab").is_err());
     }
 
     #[test]

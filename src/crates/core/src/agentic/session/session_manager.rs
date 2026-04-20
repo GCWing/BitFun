@@ -10,7 +10,10 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::SessionContextStore;
 use crate::infrastructure::ai::get_global_ai_client_factory;
-use crate::service::config::{get_app_language_code, short_model_user_language_instruction};
+use crate::service::config::{
+    get_app_language_code, get_global_config_service, short_model_user_language_instruction,
+    subscribe_config_updates, ConfigUpdateEvent,
+};
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, TurnStatus, UserMessageData,
 };
@@ -20,6 +23,7 @@ use crate::util::sanitize_plain_model_output;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use serde_json::json;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -399,8 +403,163 @@ impl SessionManager {
             manager.spawn_auto_save_task();
         }
         manager.spawn_cleanup_task();
+        manager.spawn_model_reconciliation_listener();
 
         manager
+    }
+
+    /// Decide whether the given session model id is still usable.
+    ///
+    /// `model_id` is treated as "usable" when:
+    /// - it is a special selector (`auto` / `primary` / `fast` / `default` /
+    ///   empty) — these are evaluated again at request time against
+    ///   `default_models`, so their long-term validity is governed elsewhere;
+    /// - it resolves to a model that exists AND is enabled.
+    fn is_session_model_id_usable(
+        ai_config: &crate::service::config::types::AIConfig,
+        model_id: &str,
+    ) -> bool {
+        let trimmed = model_id.trim();
+        if trimmed.is_empty()
+            || trimmed == "auto"
+            || trimmed == "default"
+            || trimmed == "primary"
+            || trimmed == "fast"
+        {
+            return true;
+        }
+        ai_config.is_model_reference_active(trimmed)
+    }
+
+    /// Reset every active session whose bound model id is in
+    /// `invalidated_model_ids` back to `"auto"`. Persists the change and emits
+    /// `AgenticEvent::SessionModelAutoMigrated` for every migrated session so
+    /// the UI can refresh its model selector and surface a notice.
+    async fn migrate_sessions_off_invalidated_models(
+        &self,
+        invalidated_model_ids: &[String],
+        reason: &'static str,
+    ) {
+        if invalidated_model_ids.is_empty() {
+            return;
+        }
+        let invalid: HashSet<&str> = invalidated_model_ids.iter().map(String::as_str).collect();
+
+        // Snapshot affected sessions first to avoid holding DashMap iterators
+        // across async writes.
+        let affected: Vec<(String, String)> = self
+            .sessions
+            .iter()
+            .filter_map(|entry| {
+                let session = entry.value();
+                let current = session.config.model_id.as_deref()?.trim().to_string();
+                if invalid.contains(current.as_str()) {
+                    Some((session.session_id.clone(), current))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if affected.is_empty() {
+            return;
+        }
+
+        for (session_id, previous_model_id) in affected {
+            if let Err(e) = self.update_session_model_id(&session_id, "auto").await {
+                warn!(
+                    "Failed to auto-migrate session model after reconcile: session_id={}, previous={}, error={}",
+                    session_id, previous_model_id, e
+                );
+                continue;
+            }
+            info!(
+                "Session model auto-migrated to 'auto': session_id={}, previous_model_id={}, reason={}",
+                session_id, previous_model_id, reason
+            );
+
+            if let Some(coordinator) =
+                crate::agentic::coordination::get_global_coordinator()
+            {
+                coordinator
+                    .emit_session_model_auto_migrated(
+                        &session_id,
+                        &previous_model_id,
+                        "auto",
+                        reason,
+                    )
+                    .await;
+            }
+        }
+    }
+
+    /// Best-effort: drop cached AI clients for invalidated models so the next
+    /// request rebuilds against the reconciled config.
+    async fn invalidate_ai_clients_for_models(invalidated_model_ids: &[String]) {
+        if invalidated_model_ids.is_empty() {
+            return;
+        }
+        if let Ok(factory) = get_global_ai_client_factory().await {
+            for model_id in invalidated_model_ids {
+                factory.invalidate_model(model_id);
+            }
+        }
+    }
+
+    fn spawn_model_reconciliation_listener(&self) {
+        let sessions = self.sessions.clone();
+        let session_workspace_index = self.session_workspace_index.clone();
+        let context_store = self.context_store.clone();
+        let persistence_manager = self.persistence_manager.clone();
+        let manager_config = self.config.clone();
+
+        tokio::spawn(async move {
+            let Some(mut receiver) = subscribe_config_updates() else {
+                debug!(
+                    "SessionManager: config update subscription unavailable; skipping model reconciliation listener"
+                );
+                return;
+            };
+
+            // Re-build a thin handle that mirrors `self` for the listener loop.
+            // We can't move `self` into a 'static task, so we recreate the
+            // surface area we need from the cloned shared fields above.
+            let manager = Self {
+                sessions,
+                session_workspace_index,
+                context_store,
+                persistence_manager,
+                config: manager_config,
+            };
+
+            loop {
+                match receiver.recv().await {
+                    Ok(ConfigUpdateEvent::ModelsReconciled {
+                        invalidated_model_ids,
+                        ..
+                    }) => {
+                        Self::invalidate_ai_clients_for_models(&invalidated_model_ids).await;
+                        manager
+                            .migrate_sessions_off_invalidated_models(
+                                &invalidated_model_ids,
+                                "model_reconciled",
+                            )
+                            .await;
+                    }
+                    Ok(_) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        debug!("SessionManager model reconciliation listener: channel closed");
+                        break;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        warn!(
+                            "SessionManager model reconciliation listener lagged by {} events; continuing",
+                            n
+                        );
+                    }
+                }
+            }
+        });
     }
 
     // ============ Session CRUD ============
@@ -834,6 +993,48 @@ impl SessionManager {
             .persistence_manager
             .load_session(&session_storage_path, session_id)
             .await?;
+
+        // Lazy migration: if the persisted model_id is no longer usable
+        // (model deleted or disabled while the session was on disk), repoint
+        // it to "auto" before the session re-enters memory. The next request
+        // will pick a model via the normal auto/agent/default pipeline.
+        if let Some(persisted_model_id) = session.config.model_id.as_deref() {
+            let trimmed = persisted_model_id.trim();
+            let needs_migration = if trimmed.is_empty() {
+                false
+            } else if let Ok(ai_config) = get_global_config_service()
+                .await
+                .map_err(|e| BitFunError::config(e.to_string()))?
+                .get_config::<crate::service::config::types::AIConfig>(Some("ai"))
+                .await
+            {
+                !Self::is_session_model_id_usable(&ai_config, trimmed)
+            } else {
+                false
+            };
+
+            if needs_migration {
+                warn!(
+                    "Session restore detected stale model_id; migrating to auto: session_id={}, previous_model_id={}",
+                    session_id, trimmed
+                );
+                let previous_model_id = trimmed.to_string();
+                session.config.model_id = Some("auto".to_string());
+
+                if let Some(coordinator) =
+                    crate::agentic::coordination::get_global_coordinator()
+                {
+                    coordinator
+                        .emit_session_model_auto_migrated(
+                            session_id,
+                            &previous_model_id,
+                            "auto",
+                            "model_unavailable_on_restore",
+                        )
+                        .await;
+                }
+            }
+        }
 
         // Reset session state to Idle
         // After application restart, previous Processing state is invalid and must be reset

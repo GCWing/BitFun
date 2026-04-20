@@ -1,3 +1,4 @@
+mod bitfun_self_provider;
 mod prompt_builder_impl;
 mod request_context;
 

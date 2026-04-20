@@ -93,6 +93,16 @@ pub(crate) async fn send_stream(
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
 ) -> Result<StreamResponse> {
+    // Codex CLI's ChatGPT-login backend (`chatgpt.com/backend-api/codex`)
+    // speaks a constrained Responses dialect with several extra
+    // requirements (flat tool schema, mandatory `instructions`,
+    // `store: false`, no `max_output_tokens`, etc.). Keep that adapter
+    // self-contained so the standard Responses path stays untouched.
+    if super::codex_chatgpt::is_codex_chatgpt_endpoint(&client.config.request_url) {
+        return super::codex_chatgpt::send_stream(client, messages, tools, extra_body, max_tries)
+            .await;
+    }
+
     let url = client.config.request_url.clone();
     debug!(
         "Responses config: model={}, request_url={}, max_tries={}",

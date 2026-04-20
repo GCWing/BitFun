@@ -64,6 +64,16 @@
     height: 32px;
     border-radius: 8px;
     object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  /* The logo is rendered as a placeholder div during DOM capture, then the
+     real logo image is composited onto the final raster via canvas. The
+     placeholder must reserve the exact box size but render nothing visible. */
+  &__logo-placeholder {
+    background: transparent;
+    border: none;
+    display: block;
   }
 
   &__title-group {

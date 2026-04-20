@@ -157,6 +157,7 @@ mod tests {
             thinking_budget_tokens: None,
             custom_request_body: None,
             custom_request_body_mode: None,
+            auth: Default::default(),
         }
     }
 

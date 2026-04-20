@@ -1,0 +1,729 @@
+/* Regex Playground — developer-tool theme.
+ * Design system reference:
+ *   palette  ─ Inherits BitFun host theme (--bitfun-* tokens) so it reads
+ *              as a native panel under both bitfun-dark and bitfun-light.
+ *              Local --rx-* tokens are derived from the host vars with
+ *              standalone-safe fallbacks matching the default dark theme.
+ *   accent   ─ host primary (cool blue / slate) for focus & active states;
+ *              warning amber as the secondary "match" highlight.
+ *   type     ─ system mono (code) + system sans (UI), follows --bitfun-font-*
+ *   pattern  ─ bento-style cards on calm host surfaces
+ *   motion   ─ 150-300ms color-shift micro-interactions, no scale jumps
+ */
+
+/* Note: mini-app sandbox has net.allow: [], so we don't @import remote fonts.
+ * Rely on the system mono / sans stack — on macOS this resolves to SF Mono / SF Pro,
+ * on Windows to Cascadia / Segoe UI, on Linux to system defaults. */
+
+*, *::before, *::after { box-sizing: border-box; }
+body, html { margin: 0; padding: 0; height: 100%; }
+[hidden] { display: none !important; }
+
+:root {
+  /* Surfaces — drive everything off host bg tokens so the playground tracks
+   * BitFun light/dark automatically. Fallbacks mirror the default dark theme. */
+  --rx-bg:        var(--bitfun-bg,            #0e0e10);
+  --rx-bg-2:      var(--bitfun-bg-tertiary,   #121214);
+  --rx-surface:   var(--bitfun-bg-secondary,  #1c1c1f);
+  --rx-surface-2: var(--bitfun-element-bg,    rgba(255,255,255,0.06));
+  --rx-surface-3: var(--bitfun-element-hover, rgba(255,255,255,0.10));
+
+  --rx-border:        var(--bitfun-border-subtle, rgba(255,255,255,0.10));
+  --rx-border-strong: var(--bitfun-border,        rgba(255,255,255,0.18));
+  --rx-border-bright: var(--bitfun-border,        rgba(255,255,255,0.28));
+
+  --rx-text:      var(--bitfun-text,           #e8e8e8);
+  --rx-text-soft: var(--bitfun-text-secondary, #b0b0b0);
+  --rx-text-mute: var(--bitfun-text-muted,     #858585);
+  --rx-text-dim:  var(--bitfun-text-muted,     #6a6a6a);
+
+  /* Accent — follows host primary (blue in dark, slate in light) instead of
+   * the previous saturated "run green" which clashed with BitFun's neutral palette. */
+  --rx-accent:        var(--bitfun-accent,       #60a5fa);
+  --rx-accent-strong: var(--bitfun-accent-hover, #3b82f6);
+  --rx-accent-soft:   rgba(96,165,250,0.14);
+
+  /* Semantic colors — pulled from host so they harmonize with the rest of BitFun. */
+  --rx-match:      var(--bitfun-warning, #f59e0b);            /* warm match highlight */
+  --rx-match-soft: rgba(245,158,11,0.18);
+  --rx-error:      var(--bitfun-error,   #ef4444);
+  --rx-info:       var(--bitfun-info,    #E1AB80);
+  --rx-group:      #b39dff;                                    /* capture-group accent */
+  --rx-string:     var(--bitfun-success, #34d399);
+
+  --rx-radius:    var(--bitfun-radius,    8px);
+  --rx-radius-sm: 6px;
+  --rx-shadow-card: 0 1px 0 rgba(255,255,255,0.025) inset, 0 4px 14px -8px rgba(0,0,0,0.55);
+  --rx-shadow-elevated: 0 1px 0 rgba(255,255,255,0.035) inset, 0 16px 32px -18px rgba(0,0,0,0.7);
+
+  --rx-mono: var(--bitfun-font-mono, ui-monospace, "SFMono-Regular", "JetBrains Mono",
+              Menlo, "Cascadia Code", Consolas, "Liberation Mono", monospace);
+  --rx-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+              "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif);
+
+  --rx-dur: 200ms;
+  --rx-ease: cubic-bezier(.2,.8,.2,1);
+}
+
+/* Light-theme local overrides — host already swaps --bitfun-* tokens, but a
+ * few decorative pieces (rgba accent washes, capture-group badge, code chips)
+ * benefit from sturdier alpha / hue picks against a near-white surface. */
+[data-theme-type="light"] {
+  --rx-accent-soft: rgba(71,85,105,0.10);
+  --rx-match-soft:  rgba(192,140,66,0.18);
+  --rx-group:       #6b5a89;
+  --rx-shadow-card:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 1px 2px rgba(15,23,42,0.06),
+    0 4px 14px -8px rgba(15,23,42,0.10);
+  --rx-shadow-elevated:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 12px 32px -18px rgba(15,23,42,0.20);
+}
+
+body {
+  font-family: var(--rx-sans);
+  font-size: 13px;
+  color: var(--rx-text);
+  background: var(--rx-bg);
+}
+button, input, textarea, select { font-family: inherit; color: inherit; }
+
+.rx {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  /* Page wash: very faint accent halos on the host background — keeps the
+   * surface feeling alive without introducing a competing hue. */
+  background:
+    radial-gradient(1000px 500px at 90% -10%, rgba(96,165,250,0.05), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(139,92,246,0.035), transparent 55%),
+    var(--rx-bg);
+}
+
+/* ── Topbar ─────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--rx-border);
+  background: color-mix(in srgb, var(--rx-bg) 80%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand__icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--rx-accent) 22%, transparent),
+      color-mix(in srgb, var(--rx-accent) 8%,  transparent));
+  border: 1px solid color-mix(in srgb, var(--rx-accent) 36%, transparent);
+  display: grid; place-items: center;
+  color: var(--rx-accent-strong);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--rx-accent) 18%, transparent);
+  flex-shrink: 0;
+}
+.brand__text { min-width: 0; }
+.brand__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rx-text);
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brand__subtitle {
+  margin: 2px 0 0;
+  font-family: var(--rx-mono);
+  font-size: 11.5px;
+  color: var(--rx-text-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  font-family: var(--rx-mono);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--rx-surface);
+  color: var(--rx-text-soft);
+  border: 1px solid var(--rx-border-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.status::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+.status--ok {
+  color: var(--rx-string);
+  border-color: color-mix(in srgb, var(--rx-string) 40%, transparent);
+  background: color-mix(in srgb, var(--rx-string) 8%, transparent);
+}
+.status--err {
+  color: var(--rx-error);
+  border-color: color-mix(in srgb, var(--rx-error) 40%, transparent);
+  background: color-mix(in srgb, var(--rx-error) 8%, transparent);
+}
+.status--idle { color: var(--rx-text-dim); }
+
+/* ── Layout ─────────────────────────────────────────── */
+/* Wide: two columns, each independently scrollable, app fits viewport. */
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  min-height: 0;
+}
+.main-col {
+  display: grid;
+  /* pattern (auto) │ test (auto, fixed editor) │ matches (1fr — absorbs slack) │ replace (auto) */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+}
+.side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+/* ── Card ───────────────────────────────────────────── */
+.card {
+  background: var(--rx-surface);
+  border: 1px solid var(--rx-border-strong);
+  border-radius: var(--rx-radius);
+  padding: 14px 16px;
+  box-shadow: var(--rx-shadow-card);
+  min-width: 0;
+}
+.card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--rx-sans);
+  font-size: 12px;
+  color: var(--rx-text-soft);
+  margin: 0 0 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.card__title svg { color: var(--rx-accent-strong); flex-shrink: 0; }
+.hint {
+  margin-left: auto;
+  font-family: var(--rx-mono);
+  font-size: 11px;
+  color: var(--rx-text-mute);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ── Pattern card ───────────────────────────────────── */
+.pattern-card { padding: 12px 14px; }
+.pattern-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--rx-bg-2);
+  border: 1px solid var(--rx-border-strong);
+  border-radius: var(--rx-radius-sm);
+  padding: 6px 10px;
+  transition: border-color var(--rx-dur) var(--rx-ease),
+              box-shadow var(--rx-dur) var(--rx-ease);
+}
+.pattern-row:focus-within {
+  border-color: var(--rx-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rx-accent) 22%, transparent);
+}
+.slash {
+  color: var(--rx-match);
+  font-family: var(--rx-mono);
+  font-size: 16px;
+  font-weight: 500;
+  user-select: none;
+}
+.pattern-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--rx-text);
+  font-family: var(--rx-mono);
+  font-size: 14px;
+  padding: 6px 0;
+  caret-color: var(--rx-accent);
+}
+.pattern-input::placeholder { color: var(--rx-text-dim); }
+.flags { display: flex; gap: 4px; flex-shrink: 0; }
+.flag {
+  min-width: 26px; height: 26px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: 1px solid var(--rx-border-strong);
+  background: var(--rx-surface-2);
+  color: var(--rx-text-mute);
+  font-family: var(--rx-mono);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color var(--rx-dur) var(--rx-ease),
+              border-color var(--rx-dur) var(--rx-ease),
+              background-color var(--rx-dur) var(--rx-ease);
+}
+.flag:hover { color: var(--rx-text-soft); border-color: var(--rx-border-bright); }
+.flag.is-active {
+  background: color-mix(in srgb, var(--rx-accent) 16%, transparent);
+  color: var(--rx-accent-strong);
+  border-color: color-mix(in srgb, var(--rx-accent) 55%, transparent);
+}
+.pattern-error {
+  margin-top: 8px;
+  font-family: var(--rx-mono);
+  font-size: 11.5px;
+  color: var(--rx-error);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--rx-error) 8%, transparent);
+  border-left: 2px solid var(--rx-error);
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Test editor ────────────────────────────────────── */
+.test-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.test-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+.test-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.match-count {
+  font-family: var(--rx-mono);
+  font-size: 11px;
+  color: var(--rx-text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.link-btn {
+  background: var(--rx-surface-2);
+  border: 1px solid var(--rx-border-strong);
+  color: var(--rx-text-soft);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-family: var(--rx-sans);
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: color var(--rx-dur) var(--rx-ease),
+              border-color var(--rx-dur) var(--rx-ease),
+              background-color var(--rx-dur) var(--rx-ease);
+}
+.link-btn:hover { color: var(--rx-text); border-color: var(--rx-border-bright); }
+.link-btn:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 1px; }
+.link-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.editor {
+  position: relative;
+  /* Bounded editor — never dominates the screen, never shifts when match count changes. */
+  height: clamp(160px, 22vh, 240px);
+  flex: 0 0 auto;
+  border: 1px solid var(--rx-border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--rx-bg-2);
+}
+.editor textarea, .editor .highlight {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  padding: 12px 14px;
+  font-family: var(--rx-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 0;
+  margin: 0;
+  overflow: auto;
+  tab-size: 2;
+}
+.editor textarea {
+  background: transparent;
+  color: var(--rx-text);
+  caret-color: var(--rx-accent);
+  resize: none;
+  outline: none;
+  z-index: 2;
+}
+.editor .highlight {
+  pointer-events: none;
+  color: transparent;
+  z-index: 1;
+}
+.editor .highlight mark {
+  background: var(--rx-match-soft);
+  color: transparent;
+  border-radius: 2px;
+  padding: 1px 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--rx-match) 55%, transparent);
+}
+.editor .highlight mark.is-active {
+  background: color-mix(in srgb, var(--rx-accent) 30%, transparent);
+  box-shadow: 0 0 0 1px var(--rx-accent),
+              0 0 8px color-mix(in srgb, var(--rx-accent) 45%, transparent);
+}
+
+/* ── Matches list — git-grep / rg style ─────────────── */
+.matches-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 14px;
+}
+.matches-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+.matches-card__title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.matches-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.matches-card__actions .link-btn { padding: 4px 8px; }
+
+.matches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* 宽屏下 matches-card 是 1fr，本列表 flex:1 填满；min-height:0 才能让 overflow 生效 */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.matches:empty { display: none; }
+.empty {
+  color: var(--rx-text-dim);
+  font-family: var(--rx-mono);
+  font-size: 11.5px;
+  padding: 18px 6px;
+  text-align: center;
+}
+
+.match {
+  display: grid;
+  /* idx | line:col | text | groups badge */
+  grid-template-columns: 36px 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px 7px 0;
+  background: var(--rx-bg-2);
+  border: 1px solid var(--rx-border);
+  border-left: 3px solid var(--rx-border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color var(--rx-dur) var(--rx-ease),
+              border-color var(--rx-dur) var(--rx-ease);
+}
+.match:hover {
+  background: var(--rx-surface-2);
+  border-left-color: var(--rx-match);
+}
+.match:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 1px; }
+.match.is-active {
+  background: var(--rx-accent-soft);
+  border-color: color-mix(in srgb, var(--rx-accent) 38%, transparent);
+  border-left-color: var(--rx-accent);
+}
+.match__index {
+  text-align: center;
+  color: var(--rx-match);
+  font-family: var(--rx-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.match__loc {
+  font-family: var(--rx-mono);
+  font-size: 11px;
+  color: var(--rx-text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  padding-right: 4px;
+  border-right: 1px dashed var(--rx-border-strong);
+}
+.match__text {
+  font-family: var(--rx-mono);
+  font-size: 12.5px;
+  color: var(--rx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.match__text--empty { color: var(--rx-text-dim); font-style: italic; }
+.match__more {
+  font-family: var(--rx-mono);
+  font-size: 10.5px;
+  color: var(--rx-group);
+  background: color-mix(in srgb, var(--rx-group) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rx-group) 36%, transparent);
+  padding: 1px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.match__groups {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(60px, 140px) minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 3px;
+  margin: 6px 10px 0 56px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--rx-border-strong);
+  font-family: var(--rx-mono);
+  font-size: 11px;
+}
+.match__group-tag {
+  color: var(--rx-group);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.match__group-val {
+  color: var(--rx-string);
+  word-break: break-all;
+  min-width: 0;
+}
+.match__group-val--empty {
+  color: var(--rx-text-dim);
+  font-style: italic;
+}
+
+/* ── Replace ────────────────────────────────────────── */
+.replace-input {
+  width: 100%;
+  background: var(--rx-bg-2);
+  border: 1px solid var(--rx-border-strong);
+  color: var(--rx-text);
+  font-family: var(--rx-mono);
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 5px;
+  outline: none;
+  caret-color: var(--rx-accent);
+  transition: border-color var(--rx-dur) var(--rx-ease),
+              box-shadow var(--rx-dur) var(--rx-ease);
+}
+.replace-input::placeholder { color: var(--rx-text-dim); }
+.replace-input:focus {
+  border-color: var(--rx-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rx-accent) 22%, transparent);
+}
+.replace-output {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 5px;
+  background: var(--rx-bg-2);
+  border: 1px solid var(--rx-border);
+  border-left: 2px solid var(--rx-accent);
+  font-family: var(--rx-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--rx-text-soft);
+  max-height: 160px;
+  overflow: auto;
+}
+
+/* ── Library ────────────────────────────────────────── */
+/* library-card 自身限制最大高度，内部列表独立滚动，
+ * 避免常用模式条目过多时把 side-col 撑高、把速查和替换预览挤出视口。 */
+.library-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 0 1 auto;
+}
+.library {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: clamp(160px, 30vh, 320px);
+  overflow-y: auto;
+  padding-right: 4px;
+  /* 让滚动条与卡片边距更协调 */
+  margin-right: -2px;
+}
+.ref-card { flex: 0 0 auto; }
+.lib-item {
+  background: var(--rx-bg-2);
+  border: 1px solid var(--rx-border);
+  border-left: 2px solid var(--rx-group);
+  padding: 8px 11px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color var(--rx-dur) var(--rx-ease),
+              border-color var(--rx-dur) var(--rx-ease);
+}
+.lib-item:hover {
+  background: var(--rx-surface-2);
+  border-color: var(--rx-border-strong);
+  border-left-color: var(--rx-accent-strong);
+}
+.lib-item:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 1px; }
+.lib-item__name {
+  font-family: var(--rx-sans);
+  font-size: 12.5px;
+  color: var(--rx-text);
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+.lib-item__pattern {
+  font-family: var(--rx-mono);
+  font-size: 10.5px;
+  color: var(--rx-text-mute);
+  word-break: break-all;
+  line-height: 1.45;
+}
+
+/* ── Reference list ─────────────────────────────────── */
+.ref { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ref li {
+  font-family: var(--rx-sans);
+  font-size: 12px;
+  color: var(--rx-text-soft);
+  line-height: 1.6;
+}
+.ref code {
+  background: var(--rx-bg-2);
+  border: 1px solid var(--rx-border-strong);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--rx-mono);
+  color: var(--rx-accent-strong);
+  font-size: 11px;
+  margin-right: 2px;
+}
+
+/* ── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bitfun-scrollbar-thumb, rgba(255,255,255,0.14));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bitfun-scrollbar-thumb-hover, rgba(255,255,255,0.26));
+}
+
+/* ── Reduced motion ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+/*
+ * 关键修复：窄屏下不再让任何 column 单独滚动，整个 .rx 改为 auto 高度
+ * 由 body / 滚动容器统一滚动，彻底避免 grid + overflow:hidden 把内容裁掉。
+ */
+@media (max-width: 1080px) {
+  body { overflow: auto; }
+  .rx { min-height: 100vh; height: auto; }
+  .topbar { position: sticky; top: 0; }
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+  }
+  .main-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  /* Stacked mode: editor stays bounded; matches gets its own max-height since
+   * there's no flex parent to absorb slack — page itself scrolls. */
+  .editor { height: clamp(180px, 26vh, 280px); flex: 0 0 auto; }
+  .side-col { overflow: visible; }
+  .matches { flex: 0 0 auto; max-height: clamp(220px, 40vh, 420px); }
+}
+@media (max-width: 560px) {
+  .layout { padding: 10px; gap: 10px; }
+  .topbar { padding: 9px 12px; }
+  .brand__subtitle { display: none; }
+  .match { grid-template-columns: 28px 56px minmax(0, 1fr) auto; gap: 6px; }
+  .match__groups { margin-left: 40px; }
+}
+
+/* ── Light theme adaptation ─────────────────────────────────────────────
+ * The host (see bridge_builder.rs) writes [data-theme-type="light"] on <html>
+ * AND repaints all --bitfun-* CSS variables. Because every --rx-* token above
+ * already proxies through var(--bitfun-…), most of the playground re-tints
+ * automatically. Only a handful of decorative pieces — page wash, frosted
+ * topbar tint — need an explicit ivory pass. */
+[data-theme-type="light"] .rx {
+  background:
+    radial-gradient(1000px 500px at 90% -10%, rgba(71,85,105,0.05), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(124,58,237,0.04), transparent 55%),
+    var(--rx-bg);
+}
+[data-theme-type="light"] .topbar {
+  background: color-mix(in srgb, var(--rx-bg) 85%, transparent);
+  border-bottom-color: var(--rx-border);
+}
+[data-theme-type="light"] .pattern-error {
+  color: #b91c1c;
+}

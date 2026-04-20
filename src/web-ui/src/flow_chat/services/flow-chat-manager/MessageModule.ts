@@ -23,6 +23,8 @@ import {
 
 const log = createLogger('MessageModule');
 
+const ONE_SHOT_AGENT_TYPES_FOR_SESSION = new Set(['Init']);
+
 function normalizeModelSelection(
   modelId: string | undefined,
   models: AIModelConfig[],
@@ -175,7 +177,15 @@ export async function sendMessage(
       metadata: { sessionId: sessionId, dialogTurnId }
     });
 
-    const currentAgentType = agentType || session.mode || 'agentic';
+    const currentAgentType = (agentType?.trim() || session.mode || 'agentic').trim();
+
+    if (
+      agentType?.trim() &&
+      !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
+      session.mode !== currentAgentType
+    ) {
+      context.flowChatStore.updateSessionMode(sessionId, currentAgentType);
+    }
 
     try {
       await ensureBackendSession(context, sessionId);

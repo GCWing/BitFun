@@ -162,6 +162,31 @@ During those transitions, the DOM may report intermediate sizes for multiple fra
 
 `layoutTransitionCountRef` prevents us from consuming compensation too early while the layout is still animating. If you remove this guard, compensation can disappear mid-transition and reintroduce vertical drift.
 
+## C. Follow-Output Mode (continuous tail)
+
+When the viewport is in follow-output mode and the latest turn is still
+streaming, the user's intent is "keep the tail visible", which is the
+opposite of "preserve the upper anchor". To avoid the visible
+"stutter then jump" behavior caused by collapse pre-compensation
+freezing the viewport mid-animation, follow mode short-circuits the
+protection path:
+
+1. `handleToolCardCollapseIntent` returns early without writing
+   `pendingCollapseIntent`, without adding `collapse` reservation, and
+   without activating anchor lock.
+2. The shrink branch of `measureHeightChange` returns early without
+   adding fallback footer compensation.
+3. A continuous RAF loop in `useFlowChatFollowOutput` runs every frame
+   while `isFollowing && isStreaming`, calling `performAutoFollowScroll`
+   to chase the bottom and `reconcileStickyPinReservation` to keep the
+   sticky-latest pin floor aligned with the live DOM.
+4. The loop is cancelled as soon as follow exits (user upward scroll,
+   session change, streaming ends, or an explicit navigation).
+
+This branch coexists with the legacy collapse compensation path. Outside
+follow mode (user reading older content), all original protections still
+apply unchanged.
+
 ## Why `overflow-anchor: none` Must Stay
 
 `VirtualMessageList.scss` disables native browser scroll anchoring on:
@@ -217,6 +242,11 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Removing `overflow-anchor: none`.
 - Removing transition-aware delayed measurement.
 - Simplifying anchor restore to a one-shot restore without the scroll listener fallback.
+- Removing the follow-mode short-circuit in `handleToolCardCollapseIntent` /
+  `measureHeightChange`. Without it, follow-output streaming will visibly stall
+  during collapse animations and then snap to the latest token.
+- Removing the continuous RAF follow loop. Event-driven follow alone cannot
+  keep up with collapse animations + dense token streams without visible jitter.
 
 ## If You Need To Change This Logic
 

@@ -8,6 +8,28 @@
   "editProviderSubtitle": "Basic Provider Parameters",
   "editSubtitle": "Basic Model Parameters",
   "confirmDelete": "Are you sure you want to delete this configuration?",
+  "cliAuth": {
+    "sectionTitle": "Local CLI accounts",
+    "sectionDescription": "Import Codex CLI / Gemini CLI accounts already signed in on this machine and use them as models",
+    "rescan": "Re-scan",
+    "empty": "No signed-in Codex / Gemini CLI accounts detected. Sign in from the terminal first, then re-scan.",
+    "import": "Use this account",
+    "refresh": "Refresh token",
+    "refreshSuccess": "Token refreshed",
+    "refreshFailed": "Refresh failed: {{error}}",
+    "expiresAt": "Token valid until {{time}}",
+    "tokenValid": "Token ready",
+    "accountLine": "Account: {{account}}",
+    "label": "Authentication",
+    "options": {
+      "apiKey": "API Key",
+      "codexCli": "Codex CLI account",
+      "geminiCli": "Gemini CLI account"
+    },
+    "detected": "Will use the local {{label}} ({{account}})",
+    "notDetected": "No signed-in {{kind}} account detected; sign in from the terminal first.",
+    "unknownAccount": "current login"
+  },
   "providerSelection": {
     "title": "Select Model Provider",
     "subtitle": "Choose a preset provider for quick setup, or select custom for full manual configuration",

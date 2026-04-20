@@ -213,6 +213,15 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           globalEventBus.emit('editor:file-changed', { filePath });
         });
 
+        // 3) Restore the original user input back into the chat input box,
+        //    but only when the input is empty to avoid clobbering pending edits.
+        if (messageContent.trim().length > 0) {
+          globalEventBus.emit('fill-chat-input', {
+            content: messageContent,
+            onlyIfEmpty: true,
+          });
+        }
+
         notificationService.success(t('message.rollbackSuccess'));
       } catch (error) {
         log.error('Rollback failed', error);
@@ -220,7 +229,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       } finally {
         setIsRollingBack(false);
       }
-    }, [canRollback, sessionId, t, turnIndex]);
+    }, [canRollback, sessionId, t, turnIndex, messageContent]);
     
     // Detect whether the single-line preview is actually truncated.
     useEffect(() => {

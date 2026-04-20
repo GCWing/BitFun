@@ -355,6 +355,22 @@ impl TransportAdapter for TauriTransportAdapter {
                     }),
                 )?;
             }
+            AgenticEvent::SessionModelAutoMigrated {
+                session_id,
+                previous_model_id,
+                new_model_id,
+                reason,
+            } => {
+                self.app_handle.emit(
+                    "agentic://session-model-auto-migrated",
+                    json!({
+                        "sessionId": session_id,
+                        "previousModelId": previous_model_id,
+                        "newModelId": new_model_id,
+                        "reason": reason,
+                    }),
+                )?;
+            }
             AgenticEvent::ModelRoundCompleted {
                 session_id,
                 turn_id,

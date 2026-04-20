@@ -616,12 +616,83 @@
   &__input-area {
     position: relative;
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: stretch;
     width: 100%;
     min-height: 56px;
     overflow: visible;
     // Last line descenders + clearance above the action row (send is 28px tall in a short bar)
     padding-bottom: 4px;
+  }
+
+  &__image-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding: 2px 0;
+  }
+
+  &__image-chip {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 6px;
+    overflow: visible;
+    background: var(--element-bg-medium, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
+    flex-shrink: 0;
+
+    &:hover .bitfun-chat-input__image-chip-remove {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  &__image-chip-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 5px;
+    display: block;
+
+    &--placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__image-chip-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-bg-elevated, #1f2937);
+    color: var(--color-text-primary, #fff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+
+    &:hover {
+      background: var(--color-bg-elevated-hover, #374151);
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--color-accent, #60a5fa);
+      outline-offset: 1px;
+    }
   }
   
   &__action-button {

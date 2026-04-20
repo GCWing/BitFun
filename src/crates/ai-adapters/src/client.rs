@@ -105,6 +105,9 @@ impl AIClient {
             ApiFormat::Gemini => {
                 gemini::request::send_stream(self, messages, tools, extra_body, max_tries).await
             }
+            ApiFormat::GeminiCodeAssist => {
+                gemini::code_assist::send_stream(self, messages, tools, extra_body, max_tries).await
+            }
         }
     }
 
@@ -145,6 +148,7 @@ impl AIClient {
             }
             ApiFormat::Anthropic => anthropic::discovery::list_models(self).await,
             ApiFormat::Gemini => gemini::discovery::list_models(self).await,
+            ApiFormat::GeminiCodeAssist => gemini::code_assist::list_models(self).await,
         }
     }
 }

@@ -90,9 +90,15 @@ export function resolveFlowChatFontSizeTokens(pref: FontPreference): FontSizeTok
     return deriveFontSizeTokens(pref.flowChat.basePx ?? 14);
   }
   if (pref.flowChat.mode === 'lift') {
+    /*
+     * "lift" used to add +1 to the UI baseline, which made every flow-chat font level
+     * one step bigger than the surrounding UI. The user prefers the chat one notch
+     * smaller, so we now leave the baseline as-is (effectively the same scale as `sync`,
+     * but kept as a separate mode for compatibility with stored preferences).
+     */
     const ui = resolveFontSizeTokens(pref.uiSize);
     const uiBase = parseInt(ui.base, 10);
-    const bumped = Number.isNaN(uiBase) ? 15 : Math.min(20, uiBase + 1);
+    const bumped = Number.isNaN(uiBase) ? 14 : Math.min(20, uiBase);
     return deriveFontSizeTokens(bumped);
   }
   return resolveFontSizeTokens(pref.uiSize);

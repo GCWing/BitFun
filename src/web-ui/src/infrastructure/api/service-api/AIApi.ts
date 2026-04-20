@@ -29,6 +29,21 @@ export interface RemoteModelInfo {
   display_name?: string;
 }
 
+export type CliCredentialKind = 'codex' | 'gemini';
+export type CliCredentialMode = 'api_key' | 'chat_gpt' | 'oauth_personal';
+
+export interface DiscoveredCliCredential {
+  kind: CliCredentialKind;
+  mode: CliCredentialMode;
+  display_label: string;
+  account?: string | null;
+  expires_at?: number | null;
+  source_path: string;
+  suggested_format: string;
+  suggested_base_url: string;
+  suggested_model: string;
+}
+
 export class AIApi {
    
   async listModels(): Promise<any[]> {
@@ -142,6 +157,24 @@ export class AIApi {
   }
 
    
+  async discoverCliCredentials(): Promise<DiscoveredCliCredential[]> {
+    try {
+      return await api.invoke<DiscoveredCliCredential[]>('discover_cli_credentials', {});
+    } catch (error) {
+      throw createTauriCommandError('discover_cli_credentials', error);
+    }
+  }
+
+  async refreshCliCredential(kind: CliCredentialKind): Promise<DiscoveredCliCredential> {
+    try {
+      return await api.invoke<DiscoveredCliCredential>('refresh_cli_credential', {
+        request: { kind }
+      });
+    } catch (error) {
+      throw createTauriCommandError('refresh_cli_credential', error, { kind });
+    }
+  }
+
   async fixMermaidCode(request: { sourceCode: string; errorMessage: string }): Promise<string> {
     try {
       return await api.invoke('fix_mermaid_code', { 

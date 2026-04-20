@@ -127,9 +127,8 @@
     "retry": "Retry",
     "addImage": "Add image",
     "maxImagesWarning": "Maximum {{count}} images allowed",
-    "imageAddedSuccess": "Successfully added {{count}} images",
-    "imageAddedSingle": "Added clipboard image: {{name}}",
     "imagePasteFailed": "Image paste failed",
+    "removeImage": "Remove image",
     "largePastePlaceholder": "[Pasted Content {{count}} chars]",
     "messageTooLarge": "Message exceeds the maximum length of {{max}} characters ({{count}} provided).",
     "openWorkspaceFolder": "Open workspace folder",
@@ -164,7 +163,12 @@
     "temperature": "Temperature",
     "maxTokens": "Max Tokens",
     "topP": "Top P",
-    "streaming": "Streaming"
+    "streaming": "Streaming",
+    "autoMigrated": {
+      "title": "Model auto-switched",
+      "description": "Session model \"{{previous}}\" is no longer available. Switched to \"{{next}}\".",
+      "reason": "Reason: {{reason}}"
+    }
   },
   "toolbar": {
     "newSession": "New Session",
@@ -241,7 +245,8 @@
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
-      "Design": "Design mode: create HTML prototypes, visual artifacts, and polished design deliverables"
+      "Design": "Design mode: create HTML prototypes, visual artifacts, and polished design deliverables",
+      "DeepResearch": "Deep research with parallel sub-agents: dispatches multiple agents to investigate concurrently, producing comprehensive sourced reports"
     },
     "modeNames": {
       "agentic": "Agentic",
@@ -249,7 +254,8 @@
       "Plan": "Plan",
       "debug": "Debug",
       "Cowork": "Cowork",
-      "Design": "Design"
+      "Design": "Design",
+      "DeepResearch": "Deep Research"
     },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",

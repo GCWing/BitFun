@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme-type="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="title">五子棋</title>
+</head>
+<body>
+  <div id="app" class="gomoku">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__logo">
+          <span class="brand__dot brand__dot--black"></span>
+          <span class="brand__dot brand__dot--white"></span>
+        </div>
+        <div class="brand__text">
+          <h1 class="brand__title" data-i18n="title">五子棋</h1>
+          <p class="brand__subtitle" data-i18n="subtitle">先连成五子者胜</p>
+        </div>
+      </div>
+      <div class="topbar__actions">
+        <div class="seg" id="mode-seg" role="tablist" data-i18n-attr="aria-label" data-i18n="modeAria">
+          <button class="seg__btn" data-mode="pvp" type="button" data-i18n="modePvp">双人对战</button>
+          <button class="seg__btn is-active" data-mode="pve" type="button" data-i18n="modePve">人机对弈</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="board-wrap">
+        <div class="board-frame">
+          <svg id="board" class="board" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" data-i18n-attr="aria-label" data-i18n="boardAria"></svg>
+          <div id="result-overlay" class="result-overlay" hidden>
+            <div class="result-card">
+              <div class="result-card__icon" id="result-icon">★</div>
+              <div class="result-card__title" id="result-title">黑棋胜</div>
+              <div class="result-card__sub" id="result-sub">连成五子</div>
+              <div class="result-card__actions">
+                <button id="result-review" class="btn" type="button" data-i18n="reviewBoard">查看对局</button>
+                <button id="result-restart" class="btn btn--primary" type="button" data-i18n="playAgain">再来一局</button>
+              </div>
+            </div>
+          </div>
+          <button id="result-reopen" class="result-reopen" type="button" hidden data-i18n="showResult">查看结果</button>
+        </div>
+      </section>
+
+      <aside class="sidepanel">
+        <div class="card turn-card">
+          <div class="card__label" data-i18n="currentTurn">当前回合</div>
+          <div class="turn">
+            <span class="turn__stone" id="turn-stone"></span>
+            <span class="turn__name" id="turn-name">黑棋</span>
+          </div>
+          <div class="turn__hint" id="turn-hint">点击棋盘任意交叉点落子</div>
+        </div>
+
+        <div class="card actions-card">
+          <button id="btn-undo" class="btn btn--ghost" type="button">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 1 0 5-5"/><path d="M3 3v5h5"/></svg>
+            <span data-i18n="undo">悔棋</span>
+          </button>
+          <button id="btn-restart" class="btn btn--ghost" type="button">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 2"/></svg>
+            <span data-i18n="restart">重新开始</span>
+          </button>
+        </div>
+
+        <div class="card stats-card">
+          <div class="card__title" data-i18n="record">战绩</div>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat__label">
+                <span class="stone stone--mini stone--black"></span>
+                <span data-i18n="blackWins">黑棋胜</span>
+              </div>
+              <div class="stat__value" id="stat-black">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">
+                <span class="stone stone--mini stone--white"></span>
+                <span data-i18n="whiteWins">白棋胜</span>
+              </div>
+              <div class="stat__value" id="stat-white">0</div>
+            </div>
+            <div class="stat" id="stat-pve-row" hidden>
+              <div class="stat__label">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="12" height="9" rx="2"/><circle cx="6" cy="8" r="0.8" fill="currentColor"/><circle cx="10" cy="8" r="0.8" fill="currentColor"/></svg>
+                <span data-i18n="aiWins">AI 胜</span>
+              </div>
+              <div class="stat__value" id="stat-ai">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card history-card">
+          <div class="card__title" data-i18n="moves">手数</div>
+          <div class="history" id="history">
+            <span class="history__empty" data-i18n="noMoves">尚未落子</span>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+</body>
+</html>

@@ -30,7 +30,7 @@ impl AgenticMode {
                 "Skill".to_string(),
                 "AskUserQuestion".to_string(),
                 "TerminalControl".to_string(),
-                "ComputerUse".to_string(),
+                "ControlHub".to_string(),
             ],
         }
     }

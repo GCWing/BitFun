@@ -15,7 +15,9 @@ impl DeepResearchAgent {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                // Web research
+                // Sub-agent orchestration — parallel research via Task
+                "Task".to_string(),
+                // Web research (used in planning phase & direct lookups)
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
                 // Codebase / file exploration
@@ -46,11 +48,11 @@ impl Agent for DeepResearchAgent {
     }
 
     fn name(&self) -> &str {
-        "DeepResearch"
+        "Deep Research"
     }
 
     fn description(&self) -> &str {
-        r#"Produces a comprehensive deep-research report on any subject using the Longitudinal + Cross-sectional Analysis method. Covers full historical evolution (origins, milestones, decision logic) and competitive landscape (peer comparison, ecosystem position, trend judgment), concluding with an integrated synthesis. Best for open-ended research questions about products, companies, technologies, or individuals where depth and narrative quality matter."#
+        r#"Produces a comprehensive deep-research report on any subject using parallel sub-agent orchestration. Dispatches multiple research agents concurrently to investigate different chapters and competitors simultaneously, then synthesizes findings into a cohesive report. Uses the Longitudinal + Cross-sectional Analysis method covering full historical evolution, competitive landscape, and integrated synthesis. Best for open-ended research questions about products, companies, technologies, or individuals where depth, speed, and narrative quality matter."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -74,12 +76,15 @@ mod tests {
     fn has_expected_default_tools() {
         let agent = DeepResearchAgent::new();
         let tools = agent.default_tools();
+        assert!(
+            tools.contains(&"Task".to_string()),
+            "Task tool required for parallel sub-agent orchestration"
+        );
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
         assert!(tools.contains(&"Write".to_string()));
         assert!(tools.contains(&"Bash".to_string()));
         assert!(tools.contains(&"TerminalControl".to_string()));
-        assert!(!tools.contains(&"Task".to_string()), "Task tool must not be included to prevent recursive subagent calls");
     }
 
     #[test]

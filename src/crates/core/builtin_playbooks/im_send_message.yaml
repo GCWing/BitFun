@@ -1,0 +1,133 @@
+name: im_send_message
+description: |
+  Send a message to a specific contact in any IM / chat app (WeChat, iMessage,
+  Slack, Lark, Telegram, ...). Uses the clipboard-paste pattern that avoids
+  every IME / OCR / mouse-coordinate failure mode of typing CJK or emoji
+  character-by-character. Inspired by Codex's `pbcopy + cmd+v` flow which is
+  the smoothest known recipe for this task.
+
+  Replaces the typical 15-20 step flailing dance (activate → screenshot →
+  search → OCR disambiguation → click contact → screenshot → click input →
+  type CJK → screenshot → press Return → verify) with a deterministic recipe
+  that includes a mid-flow verification screenshot so the model can detect
+  "wrong contact opened" BEFORE pasting the message body.
+
+  IMPORTANT — when sending to a SECOND contact (or any new contact), invoke
+  this playbook AGAIN from the top. Do NOT try to manually `cmd+f` in the
+  current chat — `cmd+f` inside an open conversation triggers in-chat find,
+  not contact search, and the message body will be sent to the WRONG person.
+  Each invocation re-activates the app and resets state via Escape so the
+  search is always against the contact list, never a stale chat input.
+
+parameters:
+  - name: app_name
+    description: "Display name of the IM app, e.g. WeChat, 微信, iMessage, Slack, Lark, 飞书"
+    required: true
+  - name: contact
+    description: "Contact / group / channel name to send to. Pasted into the in-app search."
+    required: true
+  - name: message
+    description: "Message body. Any text — CJK, emoji, multi-line all supported."
+    required: true
+  - name: search_chord
+    description: "Keyboard shortcut to focus the in-app search box. Default ['command','f'] (macOS)."
+    required: false
+    default: ["command", "f"]
+  - name: send_keys
+    description: |
+      Chord that submits the message in this app. Default ['return'] works for
+      WeChat/iMessage/Telegram. Use ['command','return'] for Slack/Lark where
+      Return inserts a newline.
+    required: false
+    default: ["return"]
+
+steps:
+  - domain: system
+    action: open_app
+    params:
+      app_name: "{{app_name}}"
+    description: "Activate the IM app (foreground if already running)"
+
+  - domain: desktop
+    action: wait
+    params:
+      ms: 600
+    description: "Brief wait for the window to come to front"
+
+  # State reset: if the app is already in a chat, an in-chat find overlay,
+  # a popup, or any modal — Escape closes it so the next `cmd+f` is guaranteed
+  # to hit the global contact search rather than "find in conversation".
+  - domain: desktop
+    action: key_chord
+    params:
+      keys: ["escape"]
+    description: "Close any in-chat find / popup / modal so search is fresh"
+
+  - domain: desktop
+    action: wait
+    params:
+      ms: 150
+    description: "Let the modal-close animation settle"
+
+  - domain: desktop
+    action: key_chord
+    params:
+      keys: "{{search_chord}}"
+    description: "Open in-app contact search (cmd+f on macOS by default)"
+
+  - domain: desktop
+    action: wait
+    params:
+      ms: 200
+    description: "Wait for the search panel to render before pasting"
+
+  - domain: desktop
+    action: paste
+    params:
+      text: "{{contact}}"
+      submit: true
+    description: |
+      Paste the contact name into the search box and press Return — opens
+      the chat with the top match. clipboard avoids IME corruption of CJK
+      contact names like '尉怡青'.
+
+  - domain: desktop
+    action: wait
+    params:
+      ms: 600
+    description: "Wait for the chat to render and the input field to focus"
+
+  # MID-FLOW VERIFY: capture the focused window so the model can confirm
+  # the conversation header / contact name matches `{{contact}}` BEFORE
+  # pasting the message body. If the wrong chat is open, abort here — do
+  # NOT proceed to the next paste. This single screenshot is the
+  # difference between "send to right person" and "send to last person
+  # plus contact name as garbage prefix".
+  - domain: desktop
+    action: screenshot
+    params:
+      screenshot_window: true
+    description: |
+      VERIFY the chat header shows '{{contact}}'. If it does NOT — STOP.
+      The next paste would send the message to the wrong contact. Re-run
+      the playbook with a more specific contact string, or fall back to
+      manual click_element / move_to_text on the contact in the search
+      result list before pasting the message.
+
+  - domain: desktop
+    action: paste
+    params:
+      text: "{{message}}"
+      submit: true
+      submit_keys: "{{send_keys}}"
+    description: |
+      Paste the message body and submit. Single tool call sends ANY text
+      (CJK, emoji, multi-line). For Slack/Lark pass send_keys=['command','return'].
+
+  - domain: desktop
+    action: screenshot
+    params:
+      screenshot_window: true
+    description: |
+      Final verification — capture the FULL chat window so the model can
+      confirm the new message bubble appeared in the right conversation.

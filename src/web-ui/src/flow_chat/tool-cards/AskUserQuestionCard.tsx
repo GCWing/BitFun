@@ -415,7 +415,14 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
             <div className="card-title">
               <span className="questions-count">{t('toolCards.askUser.questionsCount', { count: questions.length })}</span>
             </div>
-            <div className="header-actions">
+          </div>
+
+          <div className="questions-container">
+            {questions.map((q, idx) => renderQuestion(q, idx))}
+          </div>
+
+          <div className="card-footer-row">
+            <div className="footer-actions">
               <Button
                 variant="primary"
                 size="small"
@@ -439,10 +446,6 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                 <span className="status-text">{getStatusText()}</span>
               </div>
             </div>
-          </div>
-
-          <div className="questions-container">
-            {questions.map((q, idx) => renderQuestion(q, idx))}
           </div>
         </>
       ) : (

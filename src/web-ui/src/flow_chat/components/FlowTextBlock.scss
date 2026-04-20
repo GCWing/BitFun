@@ -4,50 +4,108 @@
 
 .flow-text-block {
   width: 100%;
+  /*
+   * Vertical rhythm of the flow chat is driven by per-flow-item margin-bottom (set
+   * here on `.flow-text-block`, on `.flow-thinking-item`, and on the tool wrappers).
+   * This single 0.6rem (~9.6px) value is the canonical "block gap" between any two
+   * sibling flow items (text → text, text → tool, tool → thinking, ...), as well as
+   * between the LAST item of one model round and the FIRST item of the next.
+   */
+  margin: 0 0 0.6rem 0;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
 
   /*
-   * Flow chat: global Markdown.scss uses root `rem` and ignores panel font-size.
-   * Tie body + structure to --flowchat-font-size-* so settings / lift mode apply here.
+   * Markdown rendering inside a flow text block:
+   * — All headings (h1-h6) collapse to body font-size — only `font-weight` distinguishes
+   *   them, so the chat reads as a single typographic flow (no jumping font sizes).
+   * — Block siblings (p / ul / ol / blockquote / heading / pre) get a comfortable
+   *   ~0.7em gap from `--markdown-block-gap`, matching the "good case" mock the user
+   *   approved.
+   * — List items get a smaller ~0.45em gap so each `li` reads as its own bullet/number
+   *   line but the list still feels denser than paragraph→paragraph.
+   * — Loose-list `<li><p>` is collapsed (display: inline) so loose and tight lists
+   *   share the same vertical rhythm.
+   * — `ul > li::marker` is forced to body em (Safari < 17 ignores marker font-size, so
+   *   we also draw our own bullet via `::before`) — prevents bullet rows from being
+   *   ~20% taller than ordered-list / paragraph rows.
    */
   .markdown-renderer {
+    --markdown-block-gap: 0.7em;
     font-size: var(--flowchat-font-size-base);
     line-height: 1.65;
     letter-spacing: 0.01em;
-  }
 
-  .markdown-renderer p,
-  .markdown-renderer li,
-  .markdown-renderer ul,
-  .markdown-renderer ol {
-    font-size: inherit;
-  }
+    /* Headings: same size as body, just heavier weight. */
+    h1, h2, h3, h4, h5, h6 {
+      font-size: var(--flowchat-font-size-base) !important;
+      line-height: 1.65 !important;
+      font-weight: 600;
+      letter-spacing: normal;
+      border: none;
+      padding: 0;
+      color: var(--color-text-primary);
+    }
 
-  .markdown-renderer h1 {
-    font-size: var(--flowchat-font-size-3xl);
-  }
+    /* Body block elements share the same line-height + font-size as paragraphs. */
+    p,
+    ol,
+    ul,
+    li {
+      font-size: var(--flowchat-font-size-base);
+      line-height: 1.65;
+    }
 
-  .markdown-renderer h2 {
-    font-size: var(--flowchat-font-size-2xl);
-  }
+    /* List item gap (smaller than block gap, but visible). */
+    li + li {
+      margin-top: 0.45em;
+    }
 
-  .markdown-renderer h3 {
-    font-size: var(--flowchat-font-size-xl);
-  }
+    /* Tight rhythm WITHIN a list item (heading line + description, etc.). */
+    li > * + * {
+      margin-top: 0.15em;
+    }
 
-  .markdown-renderer h4 {
-    font-size: var(--flowchat-font-size-lg);
-  }
+    /* Loose-list <li><p>...</p></li>: collapse the inner <p> so the bullet line and
+     * the description read as one paragraph — avoids the markdown loose-mode blank
+     * line that breaks the visual list rhythm. */
+    li > p {
+      display: inline;
+    }
 
-  .markdown-renderer h5 {
-    font-size: var(--flowchat-font-size-base);
-  }
+    /* Pin list marker to body em so every list / paragraph line shares the exact same
+     * line box height. (Global Markdown.scss makes ul markers 1.2em + bold.) */
+    ul > li::marker,
+    ol > li::marker {
+      font-size: 1em !important;
+      font-weight: normal !important;
+    }
 
-  .markdown-renderer h6 {
-    font-size: var(--flowchat-font-size-sm);
-  }
+    ul {
+      list-style: none;
+      padding-left: 1.25rem;
+    }
 
-  .markdown-renderer pre {
-    font-size: var(--flowchat-font-size-sm);
+    ul > li {
+      position: relative;
+    }
+
+    ul > li::before {
+      content: '';
+      position: absolute;
+      left: -0.85rem;
+      top: 0.65em;
+      width: 0.32em;
+      height: 0.32em;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.55;
+    }
+
+    /* Code fences keep mono font but match flow-chat sizing. */
+    pre {
+      font-size: var(--flowchat-font-size-sm);
+    }
   }
 
   /* Markdown.scss sets 0.875rem !important on fenced blocks — override with flow-chat scale. */
@@ -119,7 +177,7 @@
 
   .text-content {
     color: var(--color-text-primary);
-    line-height: 1.6;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-wrap: break-word;
     
