@@ -275,6 +275,15 @@ export const Tooltip: React.FC<TooltipProps> = ({
     setActualPlacement(placement);
   }, [placement]);
 
+  // When the tooltip becomes disabled (e.g. parent opens a menu/popover that
+  // covers the trigger), cancel any pending show timer and force-hide so a
+  // tooltip cannot appear or linger above the new overlay.
+  useEffect(() => {
+    if (disabled) {
+      hideTooltip();
+    }
+  }, [disabled, hideTooltip]);
+
   useEffect(() => {
     if (visible) {
       requestAnimationFrame(() => {
@@ -327,6 +336,13 @@ export const Tooltip: React.FC<TooltipProps> = ({
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    // Always cancel any pending show timer so a click before the tooltip
+    // appears won't surface a stale tooltip after the trigger is covered
+    // by a menu/backdrop (which prevents the natural mouseleave).
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     // Always hide tooltip on click for better UX (e.g., button tooltips)
     if (visible) {
       hideTooltip();

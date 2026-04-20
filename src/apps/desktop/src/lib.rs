@@ -338,6 +338,8 @@ pub async fn run() {
             test_ai_connection,
             test_ai_config_connection,
             list_ai_models_by_config,
+            discover_cli_credentials,
+            refresh_cli_credential,
             initialize_ai,
             set_agent_model,
             get_agent_models,
@@ -569,6 +571,11 @@ pub async fn run() {
             api::live_app_api::live_app_ai_chat,
             api::live_app_api::live_app_ai_cancel,
             api::live_app_api::live_app_ai_list_models,
+            // Browser Control API (CDP-based user browser control)
+            api::browser_control_api::browser_control_get_status,
+            api::browser_control_api::browser_control_launch,
+            api::browser_control_api::browser_control_create_launcher,
+            api::self_control_api::submit_self_control_response,
             // SSH Remote API
             api::ssh_api::ssh_list_saved_connections,
             api::ssh_api::ssh_save_connection,

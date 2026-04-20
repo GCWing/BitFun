@@ -215,17 +215,19 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('core.primary.description')}
         align="center"
       >
+        <div data-self-control-target="primary-model-select">
           <Select
             value={defaultModels.primary || ''}
             onChange={(value) => handleDefaultModelChange('primary', normalizeSelectValue(value))}
-          placeholder={t('core.primary.placeholder')}
-          options={enabledModels.map(buildModelOption)}
-          renderOption={renderModelOption}
-          renderValue={renderModelValue}
-          className="default-model-config__model-select"
-          disabled={enabledModels.length === 0}
-          size="small"
-        />
+            placeholder={t('core.primary.placeholder')}
+            options={enabledModels.map(buildModelOption)}
+            renderOption={renderModelOption}
+            renderValue={renderModelValue}
+            className="default-model-config__model-select"
+            disabled={enabledModels.length === 0}
+            size="small"
+          />
+        </div>
       </ConfigPageRow>
 
       <ConfigPageRow
@@ -233,19 +235,21 @@ export const DefaultModelConfig: React.FC = () => {
         description={t('core.fast.description')}
         align="center"
       >
-        <Select
-          value={defaultModels.fast || ''}
-          onChange={(value) => handleDefaultModelChange('fast', normalizeSelectValue(value))}
-          placeholder={t('core.fast.placeholder')}
-          options={[
-            { label: t('core.fast.notSet'), value: '' },
-            ...enabledModels.map(buildModelOption),
-          ]}
-          renderOption={renderModelOption}
-          renderValue={renderModelValue}
-          className="default-model-config__model-select"
-          size="small"
-        />
+        <div data-self-control-target="fast-model-select">
+          <Select
+            value={defaultModels.fast || ''}
+            onChange={(value) => handleDefaultModelChange('fast', normalizeSelectValue(value))}
+            placeholder={t('core.fast.placeholder')}
+            options={[
+              { label: t('core.fast.notSet'), value: '' },
+              ...enabledModels.map(buildModelOption),
+            ]}
+            renderOption={renderModelOption}
+            renderValue={renderModelValue}
+            className="default-model-config__model-select"
+            size="small"
+          />
+        </div>
       </ConfigPageRow>
     </div>
   );

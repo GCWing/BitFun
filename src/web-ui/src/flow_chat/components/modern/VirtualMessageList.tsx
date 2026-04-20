@@ -261,6 +261,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     scheduleFollowToLatest: () => {},
   });
   const deferredFollowReasonRef = useRef<string | null>(null);
+  // Mirror of `isFollowingOutput` for use inside listeners that are registered
+  // once per mount. When follow mode is active we deliberately bypass collapse
+  // pre-compensation and anchor lock so the continuous follow loop can keep
+  // tracking the bottom without fighting the layout-stability machinery.
+  const isFollowingOutputRef = useRef(false);
+  const isStreamingOutputRef = useRef(false);
 
   const isInputActive = useChatInputState(state => state.isActive);
   const isInputExpanded = useChatInputState(state => state.isExpanded);
@@ -443,6 +449,13 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     // Content shrank: preserve the current visual anchor by extending the footer
     // when the user does not already have enough distance from the bottom.
     const shrinkAmount = -heightDelta;
+    // Follow-output mode wants to chase the bottom; absorbing the shrink with
+    // synthetic footer would visually freeze the viewport mid-animation. The
+    // continuous follow loop will scroll back to the tail on the next frame.
+    if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
+      previousScrollTopRef.current = currentScrollTop;
+      return;
+    }
     const collapseIntent = pendingCollapseIntentRef.current;
     const now = performance.now();
     const hasValidCollapseIntent = collapseIntent.active && collapseIntent.expiresAtMs >= now;
@@ -1263,6 +1276,17 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         filePath?: string | null;
         reason?: string | null;
       }>).detail;
+      // In follow-output mode, the user wants the viewport pinned to the
+      // latest streaming token. Reserving footer space + locking an upper
+      // anchor would freeze the viewport on older content during the
+      // collapse animation, producing the "stutter then jump" effect. Skip
+      // the protection path entirely and let the continuous follow loop
+      // absorb the shrink frame-by-frame.
+      if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
+        scheduleVisibleTurnMeasure(2);
+        schedulePinReservationReconcile(2);
+        return;
+      }
       const baseTotalCompensationPx = getTotalBottomCompensationPx();
       const distanceFromBottom = Math.max(
         0,
@@ -1606,6 +1630,13 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     getAutoFollowDistanceFromBottom: (scroller) => (
       Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop - getTotalBottomCompensationPx())
     ),
+    onContinuousFollowFrame: () => {
+      // Keep sticky-latest pin floor aligned with the live DOM as collapses
+      // shrink the layout. Without this the pin reservation would lag for one
+      // RAF tick and the viewport would briefly land below the latest user
+      // message.
+      reconcileStickyPinReservation();
+    },
   });
 
   useEffect(() => {
@@ -1721,6 +1752,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     handleScroll: handleFollowOutputScroll,
     scheduleFollowToLatest,
   };
+  isFollowingOutputRef.current = isFollowingOutput;
+  isStreamingOutputRef.current = isStreamingOutput;
 
   const scrollToTurn = useCallback((turnIndex: number) => {
     if (!virtuosoRef.current) return;

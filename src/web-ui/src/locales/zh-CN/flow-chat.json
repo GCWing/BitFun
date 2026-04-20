@@ -127,9 +127,8 @@
     "retry": "重试",
     "addImage": "添加图片",
     "maxImagesWarning": "最多只能选择{{count}}张图片",
-    "imageAddedSuccess": "成功添加 {{count}} 张图片",
-    "imageAddedSingle": "已添加剪贴板图片: {{name}}",
     "imagePasteFailed": "图片粘贴失败",
+    "removeImage": "移除图片",
     "largePastePlaceholder": "[已粘贴内容 {{count}} 字符]",
     "messageTooLarge": "消息超过最大长度 {{max}} 个字符（当前 {{count}} 个字符）。",
     "openWorkspaceFolder": "打开工作区文件夹",
@@ -164,7 +163,12 @@
     "temperature": "温度",
     "maxTokens": "最大令牌数",
     "topP": "Top P",
-    "streaming": "流式输出"
+    "streaming": "流式输出",
+    "autoMigrated": {
+      "title": "模型已自动切换",
+      "description": "会话原模型\"{{previous}}\"不可用，已切换为\"{{next}}\"。",
+      "reason": "原因：{{reason}}"
+    }
   },
   "toolbar": {
     "newSession": "新建会话",
@@ -241,7 +245,8 @@
       "Plan": "先规划后执行，先明确需求并制定实施计划，再进行编码",
       "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
-      "Design": "设计模式：创建 HTML 原型、视觉稿和更完整的设计交付物"
+      "Design": "设计模式：创建 HTML 原型、视觉稿和更完整的设计交付物",
+      "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告"
     },
     "modeNames": {
       "agentic": "Agentic",
@@ -249,7 +254,8 @@
       "Plan": "Plan",
       "debug": "Debug",
       "Cowork": "Cowork",
-      "Design": "Design"
+      "Design": "Design",
+      "DeepResearch": "Deep Research"
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",

@@ -120,7 +120,7 @@ pub(crate) fn build_request_body(
     anthropic_tools: Option<Vec<serde_json::Value>>,
     extra_body: Option<serde_json::Value>,
 ) -> serde_json::Value {
-    let max_tokens = client.config.max_tokens.unwrap_or(8192);
+    let max_tokens = client.config.max_tokens.unwrap_or(32000);
 
     let mut request_body = serde_json::json!({
         "model": client.config.model,

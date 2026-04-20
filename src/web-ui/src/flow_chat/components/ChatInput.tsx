@@ -20,7 +20,7 @@ import { SessionExecutionEvent } from '../state-machine/types';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
 import type { FlowChatState } from '../types/flow-chat';
-import type { FileContext, DirectoryContext } from '../../shared/types/context';
+import type { FileContext, DirectoryContext, ImageContext } from '../../shared/types/context';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
@@ -49,7 +49,6 @@ import { ChatInputPixelPet } from './ChatInputPixelPet';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
-const IME_ENTER_GUARD_MS = 120;
 
 export interface ChatInputProps {
   className?: string;
@@ -193,7 +192,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const richTextInputRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const isImeComposingRef = useRef(false);
-  const lastImeCompositionEndAtRef = useRef(0);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
@@ -210,10 +208,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const removeContext = useContextStore(state => state.removeContext);
   const clearContexts = useContextStore(state => state.clearContexts);
 
-  const currentImageCount = useMemo(
-    () => contexts.filter(c => c.type === 'image').length,
+  const imageContexts = useMemo(
+    () => contexts.filter((c): c is ImageContext => c.type === 'image'),
     [contexts],
   );
+  const currentImageCount = imageContexts.length;
   
   const activeSessionState = useActiveSessionState();
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
@@ -289,9 +288,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [isAssistantWorkspace, modeState.available]
   );
 
-  /** Code session: only Plan and debug are optional on top of default agentic */
+  /** Code session: modes switchable on top of default agentic */
   const incrementalCodeModes = useMemo(
-    () => switchableModes.filter(m => m.id === 'Plan' || m.id === 'debug'),
+    () => switchableModes.filter(m => m.id === 'Plan' || m.id === 'debug' || m.id === 'DeepResearch' || m.id === 'Team'),
     [switchableModes]
   );
 
@@ -364,7 +363,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     contexts,
     onClearContexts: clearContexts,
     onSuccess: onSendMessage,
-    currentAgentType: effectiveTargetSession?.mode || modeState.current,
+    // Composer mode is authoritative (synced from session on switch, updated in
+    // applyModeChange). Prefer it over session.mode so a stale store cannot force
+    // agentic when the user selected Team or another mode.
+    currentAgentType: modeState.current,
   });
 
   const [mcpPromptCommands, setMcpPromptCommands] = useState<SlashMcpPromptItem[]>([]);
@@ -556,10 +558,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [clearPendingLargePastes]);
 
   React.useEffect(() => {
-    const handleFillChatInput = (data: { content: string }) => {
+    const handleFillChatInput = (data: { content: string; onlyIfEmpty?: boolean }) => {
+      if (data.onlyIfEmpty && inputValueRef.current.trim().length > 0) {
+        return;
+      }
       clearPendingLargePastes();
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: data.content });
+      inputValueRef.current = data.content;
 
       if (richTextInputRef.current) {
         richTextInputRef.current.focus();
@@ -869,17 +875,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       
       try {
         const imageContext = await createImageContextFromClipboard(file);
-        
+
         addContext(imageContext);
-        
-        if (richTextInputRef.current && (richTextInputRef.current as any).insertTag) {
-          (richTextInputRef.current as any).insertTag(imageContext);
+
+        if (!inputState.isActive) {
+          dispatchInput({ type: 'ACTIVATE' });
         }
-        
-        notificationService.success(
-          t('input.imageAddedSingle', { name: imageContext.imageName }),
-          { duration: 2000 }
-        );
       } catch (error) {
         log.error('Failed to process clipboard image', { fileName: file.name, error });
         notificationService.error(
@@ -899,7 +900,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         inputElement.removeEventListener('imagePaste', handleImagePaste);
       }
     };
-  }, [addContext, currentImageCount, t]);
+  }, [addContext, currentImageCount, inputState.isActive, t]);
 
   React.useEffect(() => {
     if (!effectiveTargetSessionId || !workspacePath) {
@@ -1041,6 +1042,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     const activeContextIds = new Set(activeContexts.map(context => context.id));
     contexts.forEach(context => {
+      // Image contexts are not represented by inline tag pills inside the
+      // editor; they live in a separate thumbnail strip and are removed via
+      // their own × button. Skip them when reconciling against editor tags.
+      if (context.type === 'image') return;
       if (!activeContextIds.has(context.id)) {
         removeContext(context.id);
       }
@@ -1841,11 +1846,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    const isComposing = (e.nativeEvent as KeyboardEvent).isComposing || isImeComposingRef.current;
-    const justFinishedComposition = Date.now() - lastImeCompositionEndAtRef.current < IME_ENTER_GUARD_MS;
-    
+    const nativeEvt = e.nativeEvent as KeyboardEvent;
+    // IME-safe Enter detection (see useImeEnterGuard for the rationale):
+    //  - our own composition flag covers browsers where `isComposing` is flaky
+    //  - `keyCode === 229` is the W3C "composition keyCode" still emitted by
+    //    every evergreen browser while the IME owns the key, even after
+    //    `isComposing` has flipped back to false. Replaces the previous
+    //    120ms time-window guard which would swallow legitimate fast Enters.
+    const isComposing =
+      isImeComposingRef.current
+      || nativeEvt.isComposing
+      || nativeEvt.keyCode === 229;
+
     if (e.key === 'Enter' && !e.shiftKey) {
-      if (isComposing || justFinishedComposition) {
+      if (isComposing) {
         return;
       }
       
@@ -1879,7 +1893,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleImeCompositionEnd = useCallback(() => {
     isImeComposingRef.current = false;
-    lastImeCompositionEndAtRef.current = Date.now();
   }, []);
 
   const handleImageInput = useCallback(() => {
@@ -1903,18 +1916,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         notificationService.warning(t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }), { duration: 3000 });
       }
       
-      let successCount = 0;
-      
       for (const file of fileArray) {
         try {
           const imageContext = await createImageContextFromFile(file);
           addContext(imageContext);
-          
-          if (richTextInputRef.current && (richTextInputRef.current as any).insertTag) {
-            (richTextInputRef.current as any).insertTag(imageContext);
-          }
-          
-          successCount++;
         } catch (error) {
           log.error('Failed to process image', { fileName: file.name, error });
           notificationService.error(
@@ -1922,13 +1927,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             { duration: 3000 }
           );
         }
-      }
-      
-      if (successCount > 0) {
-        notificationService.success(
-          t('input.imageAddedSuccess', { count: successCount }),
-          { duration: 2000 }
-        );
       }
     };
     
@@ -2192,7 +2190,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             notificationService.warning(t('input.maxImagesWarning', { count: CHAT_INPUT_CONFIG.image.maxCount }), { duration: 3000 });
             return;
           }
-          if (richTextInputRef.current && (richTextInputRef.current as any).insertTag) {
+          // Images are shown as separate thumbnails outside the editor; they
+          // don't get an inline #img: pill. All other context types do.
+          if (
+            context.type !== 'image' &&
+            richTextInputRef.current &&
+            (richTextInputRef.current as any).insertTag
+          ) {
             (richTextInputRef.current as any).insertTag(context);
           }
           if (!inputState.isActive) {
@@ -2278,6 +2282,46 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </div>
             )}
             <div className="bitfun-chat-input__input-area">
+              {imageContexts.length > 0 && (
+                <div
+                  className="bitfun-chat-input__image-strip"
+                  data-testid="chat-input-image-strip"
+                >
+                  {imageContexts.map(image => {
+                    const previewUrl = image.thumbnailUrl || image.dataUrl;
+                    return (
+                      <div
+                        key={image.id}
+                        className="bitfun-chat-input__image-chip"
+                        title={image.imageName}
+                      >
+                        {previewUrl ? (
+                          <img
+                            className="bitfun-chat-input__image-chip-thumb"
+                            src={previewUrl}
+                            alt={image.imageName}
+                          />
+                        ) : (
+                          <div className="bitfun-chat-input__image-chip-thumb bitfun-chat-input__image-chip-thumb--placeholder">
+                            <Image size={14} />
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="bitfun-chat-input__image-chip-remove"
+                          aria-label={t('input.removeImage', { defaultValue: 'Remove image' })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeContext(image.id);
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <RichTextInput
                 ref={richTextInputRef}
                 value={inputState.value}

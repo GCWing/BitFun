@@ -1,0 +1,39 @@
+name: app_model_setup
+description: "Configure or switch AI models in BitFun settings"
+parameters:
+  - name: model_query
+    description: "Model name or keyword to search for (e.g., 'gpt-4o', 'claude', 'kimi')"
+    required: true
+  - name: slot
+    description: "Which model slot to set: 'primary' or 'fast'"
+    required: false
+    default: "primary"
+steps:
+  - domain: app
+    action: list_models
+    description: "List all available configured models"
+    output_var: available_models
+
+  - domain: app
+    action: execute_task
+    params:
+      task: "set_primary_model"
+      params:
+        modelQuery: "{{model_query}}"
+    description: "Set the primary model via direct config search"
+    condition: "slot is primary"
+
+  - domain: app
+    action: execute_task
+    params:
+      task: "set_fast_model"
+      params:
+        modelQuery: "{{model_query}}"
+    description: "Set the fast model via direct config search"
+    condition: "slot is fast"
+
+  - domain: app
+    action: execute_task
+    params:
+      task: "return_to_session"
+    description: "Return to the chat session"

@@ -11,6 +11,20 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
+}
+
+/* Tool item wrapper around .compact-tool-card-wrapper (see ModelRoundItem / FlowItemRenderer).
+ * Canonical 0.6rem (~9.6px) bottom margin matches `.flow-text-block` and
+ * `.flow-thinking-item`, giving every flow item the same visual gap to its sibling.
+ * The explicit `line-height` pins the wrapper's strut so WebKit (Tauri/macOS) doesn't
+ * inherit a different line-height from ancestors. */
+.flowchat-flow-item,
+.flowchat-tool-wrapper {
+  margin: 0 0 0.6rem 0;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
 }
 
 /* ========== Loading state: A (border via text fade) + E (text fade) ========== */
@@ -32,7 +46,7 @@
 .compact-tool-card {
   background: transparent !important;
   border: none !important;
-  padding: 2px 8px 2px 1rem !important;
+  padding: 0 8px 0 0 !important;
   margin: 0 !important;
   box-shadow: none !important;
   display: flex;
@@ -85,17 +99,35 @@
 
 /* ========== Header element styles ========== */
 
+/*
+ * WebKit (Tauri on macOS) baseline quirk fix:
+ * — Use `display: flex` (not `inline-flex`) so children don't carry an inline
+ *   baseline that WebKit aligns to their bottom margin edge (which forces the
+ *   row line-box to grow to fit the SVG's full height ABOVE its baseline).
+ * — Force inner SVGs to `display: block` to drop the inline descender slot.
+ * — Pin icon wrappers to `line-height: 1` so the wrapper height === SVG height,
+ *   then let the parent flex `align-items: center` vertically center them inside
+ *   the 23px text rhythm. This way the row height is driven solely by the text
+ *   spans (line-height 1.65 × 14px = 23.1px), not by icon wrappers.
+ */
 .compact-card-status-icon {
-  font-size: 14px;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1;
   flex-shrink: 0;
   color: var(--color-text-muted);
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  > svg {
+    display: block;
+  }
 }
 
 .compact-card-action {
-  font-size: 13px;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
   font-weight: 500;
   color: var(--color-text-muted);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -104,7 +136,8 @@
 
 .compact-card-content {
   flex: 1;
-  font-size: 13px;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
   color: var(--color-text-muted);
   min-width: 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -120,20 +153,33 @@
 }
 
 .compact-card-extra {
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
   color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
+
+  > svg {
+    display: block;
+  }
 }
 
 .compact-card-right-icon {
-  font-size: 12px;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1;
   flex-shrink: 0;
   color: var(--color-text-muted);
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   margin-left: auto;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  > svg {
+    display: block;
+  }
 }
 
 /* ========== Status-specific styles ========== */
@@ -262,7 +308,7 @@
 .compact-expanded-result-snippet {
   color: var(--color-text-muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.65;
   margin-bottom: 4px;
   padding-left: 18px;
 }
@@ -288,7 +334,7 @@
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
     font-size: 11px;
-    line-height: 1.5;
+    line-height: 1.65;
     white-space: pre-wrap;
     word-break: break-word;
     overflow-x: auto;

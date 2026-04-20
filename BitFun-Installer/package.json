@@ -1,6 +1,6 @@
 {
   "name": "bitfun-installer",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "description": "BitFun Custom Installer - Modern branded installation experience",

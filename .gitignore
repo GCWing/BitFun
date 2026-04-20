@@ -65,3 +65,5 @@ tests/e2e/reports/
 .cursor
 
 ASSETS_LICENSES.md
+
+external/

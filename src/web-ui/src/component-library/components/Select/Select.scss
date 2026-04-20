@@ -478,6 +478,13 @@
     text-align: center;
     color: var(--color-text-muted, #a0a0a0);
     font-size: var(--font-size-sm, 14px);
+
+    &--loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
   }
 
   &__custom-value-hint {

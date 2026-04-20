@@ -29,8 +29,21 @@ interface UseFlowChatFollowOutputOptions {
   performUserFollowScroll: () => void;
   performAutoFollowScroll: () => void;
   performLatestTurnStickyPin: () => void;
+  /**
+   * Returns true when auto-follow should be suspended for layout-protection
+   * reasons (collapse animation, etc.). The continuous follow loop ignores
+   * this signal because follow mode actively wants to track the bottom even
+   * while intermediate cards collapse; only the event-driven `scheduleFollowToLatest`
+   * still respects it for backward compatibility with anchor restore paths.
+   */
   shouldSuspendAutoFollow?: () => boolean;
   getAutoFollowDistanceFromBottom?: (scroller: HTMLElement) => number;
+  /**
+   * Optional per-frame hook invoked from inside the continuous follow loop.
+   * Used to reconcile sticky-latest pin floor in lockstep with the scroll
+   * adjustment so the pin reservation never lags behind a shrinking layout.
+   */
+  onContinuousFollowFrame?: () => void;
 }
 
 interface UseFlowChatFollowOutputResult {
@@ -60,6 +73,7 @@ export function useFlowChatFollowOutput({
   performLatestTurnStickyPin,
   shouldSuspendAutoFollow,
   getAutoFollowDistanceFromBottom,
+  onContinuousFollowFrame,
 }: UseFlowChatFollowOutputOptions): UseFlowChatFollowOutputResult {
   const [isFollowingOutput, setIsFollowingOutput] = useState(false);
 
@@ -70,10 +84,24 @@ export function useFlowChatFollowOutput({
   const lastObservedScrollTopRef = useRef(0);
   const previousSessionIdRef = useRef<string | undefined>(activeSessionId);
   const armedAutoFollowTurnIdRef = useRef<string | null>(null);
+  const continuousFollowFrameRef = useRef<number | null>(null);
+  const isStreamingRef = useRef(isStreaming);
+  const performAutoFollowScrollRef = useRef(performAutoFollowScroll);
+  const onContinuousFollowFrameRef = useRef(onContinuousFollowFrame);
+  const getAutoFollowDistanceFromBottomRef = useRef(getAutoFollowDistanceFromBottom);
+
+  isStreamingRef.current = isStreaming;
+  performAutoFollowScrollRef.current = performAutoFollowScroll;
+  onContinuousFollowFrameRef.current = onContinuousFollowFrame;
+  getAutoFollowDistanceFromBottomRef.current = getAutoFollowDistanceFromBottom;
 
   const setFollowingOutput = useCallback((nextValue: boolean) => {
     isFollowingOutputRef.current = nextValue;
     setIsFollowingOutput(prev => (prev === nextValue ? prev : nextValue));
+    if (!nextValue && continuousFollowFrameRef.current !== null) {
+      cancelAnimationFrame(continuousFollowFrameRef.current);
+      continuousFollowFrameRef.current = null;
+    }
   }, []);
 
   const cancelScheduledFollow = useCallback(() => {
@@ -82,6 +110,72 @@ export function useFlowChatFollowOutput({
       followFrameRef.current = null;
     }
   }, []);
+
+  const stopContinuousFollowLoop = useCallback(() => {
+    if (continuousFollowFrameRef.current !== null) {
+      cancelAnimationFrame(continuousFollowFrameRef.current);
+      continuousFollowFrameRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Continuous RAF-driven follow loop.
+   *
+   * Why this exists:
+   *  - Streaming text + auto-collapsing tool cards generate dense bursts of
+   *    DOM mutations and CSS transitions. Event-driven follow (via observers)
+   *    is gated by `shouldSuspendAutoFollow` during transitions, which makes
+   *    the viewport visibly stall and then jump after the transition ends.
+   *  - This loop runs every animation frame while follow + streaming is
+   *    active, pushing scrollTop toward the latest token regardless of any
+   *    intermediate layout shrink. The result is a smooth, continuous tail.
+   *
+   * Safety:
+   *  - Programmatic scrolls inside this loop bump
+   *    `programmaticScrollUntilMsRef` so the user-intent detector does not
+   *    misclassify them as upward scrolls.
+   *  - The loop bails out as soon as follow is exited, streaming ends, the
+   *    scroller disappears, or the viewport is already pinned to the bottom.
+   */
+  const runContinuousFollowFrame = useCallback(() => {
+    continuousFollowFrameRef.current = null;
+
+    if (!isFollowingOutputRef.current || !isStreamingRef.current) {
+      return;
+    }
+
+    const scroller = scrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    onContinuousFollowFrameRef.current?.();
+
+    const rawDistance = getDistanceFromBottom(scroller);
+    const measuredDistance = getAutoFollowDistanceFromBottomRef.current?.(scroller) ?? rawDistance;
+    if (measuredDistance > AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
+      programmaticScrollUntilMsRef.current = performance.now() + PROGRAMMATIC_SCROLL_GUARD_MS;
+      explicitUserScrollIntentUntilMsRef.current = 0;
+      performAutoFollowScrollRef.current();
+      lastObservedScrollTopRef.current = scroller.scrollTop;
+    }
+
+    if (!isFollowingOutputRef.current || !isStreamingRef.current) {
+      return;
+    }
+
+    continuousFollowFrameRef.current = requestAnimationFrame(runContinuousFollowFrame);
+  }, [scrollerRef]);
+
+  const startContinuousFollowLoop = useCallback(() => {
+    if (continuousFollowFrameRef.current !== null) {
+      return;
+    }
+    if (!isFollowingOutputRef.current || !isStreamingRef.current) {
+      return;
+    }
+    continuousFollowFrameRef.current = requestAnimationFrame(runContinuousFollowFrame);
+  }, [runContinuousFollowFrame]);
 
   const cancelPendingAutoFollowArm = useCallback(() => {
     armedAutoFollowTurnIdRef.current = null;
@@ -310,17 +404,20 @@ export function useFlowChatFollowOutput({
 
   useEffect(() => {
     if (!isFollowingOutput || !isStreaming) {
+      stopContinuousFollowLoop();
       return;
     }
 
     scheduleFollowToLatest('streaming-started');
-  }, [isFollowingOutput, isStreaming, scheduleFollowToLatest]);
+    startContinuousFollowLoop();
+  }, [isFollowingOutput, isStreaming, scheduleFollowToLatest, startContinuousFollowLoop, stopContinuousFollowLoop]);
 
   useEffect(() => {
     return () => {
       cancelScheduledFollow();
+      stopContinuousFollowLoop();
     };
-  }, [cancelScheduledFollow]);
+  }, [cancelScheduledFollow, stopContinuousFollowLoop]);
 
   return {
     isFollowingOutput,

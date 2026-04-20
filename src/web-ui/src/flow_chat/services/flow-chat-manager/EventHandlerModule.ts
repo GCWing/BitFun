@@ -19,7 +19,11 @@ import {
 } from '../EventBatcher';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import type { ImageAnalysisEvent } from '@/infrastructure/api/service-api/AgentAPI';
+import type {
+  ImageAnalysisEvent,
+  SessionModelAutoMigratedEvent,
+} from '@/infrastructure/api/service-api/AgentAPI';
+import { i18nService } from '@/infrastructure/i18n';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
@@ -244,6 +248,9 @@ export async function initializeEventListeners(
     },
     onSessionTitleGenerated: (event) => {
       handleSessionTitleGenerated(event);
+    },
+    onSessionModelAutoMigrated: (event) => {
+      handleSessionModelAutoMigrated(event);
     }
   };
 
@@ -522,6 +529,27 @@ function handleSessionTitleGenerated(event: any): void {
 
   const store = FlowChatStore.getInstance();
   store.updateSessionTitle(sessionId, title, 'generated');
+}
+
+function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
+  const { sessionId, previousModelId, newModelId, reason } = event;
+  if (!sessionId || !newModelId) return;
+
+  const store = FlowChatStore.getInstance();
+  store.updateSessionModelName(sessionId, newModelId);
+
+  const description = i18nService.t('flow-chat:model.autoMigrated.description', {
+    previous: previousModelId || 'unknown',
+    next: newModelId,
+  });
+  const reasonText = reason
+    ? ' ' + i18nService.t('flow-chat:model.autoMigrated.reason', { reason })
+    : '';
+
+  notificationService.warning(description + reasonText, {
+    title: i18nService.t('flow-chat:model.autoMigrated.title'),
+    duration: 6000,
+  });
 }
 
 /**

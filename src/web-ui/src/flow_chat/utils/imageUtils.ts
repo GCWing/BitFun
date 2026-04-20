@@ -8,7 +8,22 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('imageUtils');
 
-let clipboardImageCounter = 0;
+/**
+ * Build a human-readable, unique-ish filename for an image that came from the
+ * clipboard (which has no real path). We deliberately avoid an incrementing
+ * `image-N` counter because that name used to leak into the prompt and made
+ * the model believe a file named `image-1.png` actually existed on disk.
+ */
+function generateClipboardImageName(mimeType: string): string {
+  const ext = (mimeType.split('/')[1] || 'png').toLowerCase();
+  const now = new Date();
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
+    `-${pad(now.getMilliseconds(), 3)}`;
+  return `clipboard-${stamp}.${ext}`;
+}
 
 /**
  * Generate image thumbnail
@@ -281,11 +296,9 @@ export async function createImageContextFromClipboard(
     imagePath: '', // Clipboard images do not have a path.
     imageName: (() => {
       const raw = file.name || '';
-      const ext = file.type.split('/')[1] || 'png';
       const genericPattern = /^image\.\w+$/i;
       if (!raw || genericPattern.test(raw)) {
-        clipboardImageCounter++;
-        return `image-${clipboardImageCounter}.${ext}`;
+        return generateClipboardImageName(file.type || 'image/png');
       }
       return raw;
     })(),

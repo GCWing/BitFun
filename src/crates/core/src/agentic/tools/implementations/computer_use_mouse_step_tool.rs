@@ -30,7 +30,7 @@ impl Tool for ComputerUseMouseStepTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(
-            "Move the pointer **one cardinal step** (up / down / left / right) by **`pixels`** (default 32, clamped 1..400) — same as **`ComputerUse`** **`pointer_move_rel`** on macOS scale. **Host blocks this immediately after a `screenshot`** until you reposition with **`move_to_text`**, **`mouse_move`** (`use_screen_coordinates`: true), **`click_element`**, or **`click_label`** (do not nudge from the JPEG). For diagonals, use **`ComputerUse`** **`pointer_move_rel`**.".to_string(),
+            "Move the pointer **one cardinal step** (up / down / left / right) by **`pixels`** (default 32, clamped 1..400) — same as **`ComputerUse`** **`pointer_move_rel`** on macOS scale. **Host blocks this immediately after a `screenshot`** until you reposition with **`move_to_text`**, **`mouse_move`** (`use_screen_coordinates`: true), or **`click_element`** (do not nudge from the JPEG). For diagonals, use **`ComputerUse`** **`pointer_move_rel`**.".to_string(),
         )
     }
 

@@ -1,7 +1,12 @@
 /* Model round item styles (BEM). */
 
 .model-round-item {
-  margin-bottom: 0.5rem;
+  /*
+   * No bottom margin — the inter-round gap is covered by the same line-height rhythm
+   * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
+   * round transitions all read as one continuous, evenly-spaced text column.
+   */
+  margin-bottom: 0;
   padding: 0 3rem;
   animation: fadeIn 0.4s ease;
   position: relative;
@@ -15,11 +20,6 @@
   // Complete state
   &--complete {
     opacity: 1;
-  }
-
-  // Reduce spacing when compact tool cards are present.
-  &:has(.compact-tool-card) {
-    margin-bottom: 0.001rem;
   }
 
   @media (max-width: 768px) {
@@ -116,16 +116,6 @@
 }
 
 // ==================== Explore region adjustments ====================
-
-// Reduce spacing when only a collapsed explore region is present.
-.model-round-item:has(.explore-region--collapsed):not(:has(.explore-region--expanded)):not(:has(.base-tool-card)):not(:has(.flow-text-block)) {
-  margin-bottom: 0;
-}
-
-// Reduce spacing between consecutive collapsed explore regions.
-.model-round-item:has(.explore-region--collapsed) + .model-round-item:has(.explore-region--collapsed) {
-  margin-top: -4px;
-}
 
 /* Focus highlight for programmatic "jump to marker" navigation. */
 .flowchat-flow-item.flowchat-flow-item--focused {

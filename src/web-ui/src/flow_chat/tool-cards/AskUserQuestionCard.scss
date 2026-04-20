@@ -66,11 +66,21 @@
   letter-spacing: -0.01em;
 }
 
-.header-actions {
+.footer-actions {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+}
+
+.card-footer-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-base);
+  background: transparent;
 }
 
 /* ========== Status indicator ========== */

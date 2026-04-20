@@ -1,0 +1,32 @@
+{
+  "id": "builtin-coding-selfie",
+  "name": "编码足迹",
+  "description": "扫描当前工作区 git 仓库，按 1/7/30 天或自定义区间统计提交、增删行、语言分布、活跃节律，并展示全年编码热力图。",
+  "icon": "Aperture",
+  "category": "developer",
+  "tags": ["git", "统计", "报告", "内置"],
+  "version": 2,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": { "read": ["{appdata}", "{workspace}"], "write": ["{appdata}"] },
+    "shell": { "allow": ["git"] },
+    "net": { "allow": [] },
+    "node": { "enabled": false }
+  },
+  "ai_context": null,
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "编码足迹",
+        "description": "扫描当前工作区 git 仓库，按 1/7/30 天或自定义区间统计提交、增删行、语言分布、活跃节律，并展示全年编码热力图。",
+        "tags": ["git", "统计", "报告", "内置"]
+      },
+      "en-US": {
+        "name": "Coding Footprint",
+        "description": "Scans the current workspace git repo and shows commits, ±lines, language mix and activity rhythm for the last 1/7/30 days or a custom range, plus a full-year heatmap.",
+        "tags": ["git", "stats", "report", "built-in"]
+      }
+    }
+  }
+}

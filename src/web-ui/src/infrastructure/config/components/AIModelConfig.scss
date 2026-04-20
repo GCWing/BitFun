@@ -2006,5 +2006,37 @@
   }
 }
 
+.bitfun-ai-model-config {
+  &__cli-discovery {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-1;
+  }
+
+  &__cli-empty {
+    padding: $size-gap-3 0;
+
+    p {
+      margin: 0;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      line-height: 1.5;
+    }
+  }
+
+  &__cli-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-2;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+
+    button {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+  }
+}
+
 
 

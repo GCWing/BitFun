@@ -1,0 +1,1363 @@
+/* Daily Divination — arcane tarot theme.
+ * Palette: deep indigo / royal purple / antique gold / rose mauve.
+ * Type: serif display for ritual text, sans for utility chrome.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+body, html { margin: 0; padding: 0; height: 100%; }
+[hidden] { display: none !important; }
+
+:root {
+  --d-bg: #0a0617;
+  --d-bg-deep: #06030f;
+  --d-panel: #15102b;
+  --d-panel-2: #1d1638;
+  --d-line: rgba(212, 175, 55, 0.22);
+  --d-line-soft: rgba(212, 175, 55, 0.10);
+  --d-gold: #d4af37;
+  --d-gold-bright: #f0c674;
+  --d-rose: #c084fc;
+  --d-rose-deep: #9d4edd;
+  --d-bad: #b03050;
+  --d-good: #a8d08d;
+  --d-text: #f3e8ff;
+  --d-text-soft: #c4b5fd;
+  --d-text-mute: #8b7fa8;
+  --d-serif: ui-serif, "Cormorant Garamond", "Cormorant", "EB Garamond",
+             "Noto Serif SC", "Songti SC", "Source Han Serif SC", Georgia, serif;
+  --d-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+
+body {
+  font-family: var(--d-sans);
+  font-size: 13px;
+  color: var(--d-text);
+  background: var(--d-bg-deep);
+  overflow: hidden;
+}
+
+button { font-family: inherit; cursor: pointer; }
+
+/* ── Stage canvas ────────────────────────────────────── */
+.div-app {
+  /* `--scene-tone` follows the day's card so the entire room is monochromatic.
+   * Defaults to deep violet; JS injects the chosen card's tone[0] once revealed. */
+  --scene-tone: var(--card-tone-1, #5b21b6);
+  --scene-tone-deep: var(--card-tone-2, #150a2a);
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(1400px 700px at 50% -20%,
+      color-mix(in srgb, var(--scene-tone) 28%, transparent),
+      transparent 60%),
+    radial-gradient(900px 600px at 100% 110%,
+      color-mix(in srgb, var(--scene-tone) 18%, transparent),
+      transparent 65%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--scene-tone-deep) 75%, #050314),
+      #050314 75%);
+  transition: background 1.4s ease;
+}
+/* Starfield: a quiet layer of pinpoint stars + a brighter sparkle layer. */
+.div-app::before, .div-app::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-repeat: repeat;
+}
+.div-app::before {
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.55), transparent 50%),
+    radial-gradient(1px 1px at 70px 110px, rgba(255,255,255,0.40), transparent 50%),
+    radial-gradient(1px 1px at 130px 60px, rgba(255,255,255,0.35), transparent 50%),
+    radial-gradient(1.4px 1.4px at 200px 180px, rgba(240,198,116,0.45), transparent 50%),
+    radial-gradient(1px 1px at 280px 40px, rgba(255,255,255,0.30), transparent 50%);
+  background-size: 320px 220px;
+  opacity: 0.75;
+}
+.div-app::after {
+  background-image:
+    radial-gradient(1.6px 1.6px at 40px 80px, rgba(240,198,116,0.55), transparent 60%),
+    radial-gradient(1.2px 1.2px at 220px 140px, rgba(196,181,253,0.55), transparent 60%);
+  background-size: 280px 200px;
+  opacity: 0.5;
+  animation: twinkle 6s ease-in-out infinite alternate;
+}
+@keyframes twinkle { from { opacity: 0.30; } to { opacity: 0.65; } }
+
+.aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(110px);
+  pointer-events: none;
+  animation: drift 28s ease-in-out infinite alternate;
+  transition: background 1.4s ease;
+}
+.aurora--1 {
+  width: 520px; height: 520px; left: -140px; top: -120px;
+  opacity: 0.32;
+  background: radial-gradient(circle, var(--scene-tone, #6d28d9), transparent 70%);
+}
+.aurora--2 {
+  width: 560px; height: 560px; right: -180px; top: 35%;
+  opacity: 0.22;
+  background: radial-gradient(circle, var(--scene-tone, #6d28d9), transparent 70%);
+  animation-delay: -10s;
+}
+/* The third aurora stays gold to keep a touch of warm contrast across themes. */
+.aurora--3 {
+  width: 440px; height: 440px; left: 35%; bottom: -200px;
+  opacity: 0.10;
+  background: radial-gradient(circle, #d4af37, transparent 75%);
+  animation-delay: -16s;
+}
+@keyframes drift { 0% { transform: translate(0,0) scale(1); } 100% { transform: translate(40px,-30px) scale(1.06); } }
+
+/* ── Header ──────────────────────────────────────────── */
+.header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background:
+    linear-gradient(180deg, rgba(10,6,23,0.92), rgba(10,6,23,0.55));
+  backdrop-filter: blur(14px);
+}
+.header::after {
+  content: '';
+  position: absolute;
+  left: 24px; right: 24px; bottom: 0;
+  height: 1px;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(212,175,55,0.10) 8%,
+      rgba(212,175,55,0.55) 50%,
+      rgba(212,175,55,0.10) 92%,
+      transparent 100%);
+}
+.header__title {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--d-serif);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 5px;
+  color: var(--d-gold-bright);
+  text-shadow: 0 0 14px rgba(240,198,116,0.28);
+  text-transform: uppercase;
+  padding-left: 5px;
+}
+.header__title svg { color: var(--d-gold); filter: drop-shadow(0 0 6px rgba(212,175,55,0.45)); }
+.header__date {
+  font-family: var(--d-serif);
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--d-gold);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* ── Stage ───────────────────────────────────────────── */
+.stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px 18px 18px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Draw stage — spread of card backs to choose from ──── */
+.draw-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: auto;
+  width: 100%;
+  max-width: 880px;
+}
+.draw-stage__title,
+.draw-stage > .spread-wrap,
+.draw-stage__tip { position: relative; z-index: 2; }
+.draw-stage__title {
+  text-align: center;
+  margin-bottom: 0;
+}
+.draw-stage__greeting {
+  margin: 0;
+  font-family: var(--d-serif);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 12px;
+  padding-left: 12px; /* compensate letter-spacing on first letter */
+  color: var(--d-gold-bright);
+  text-shadow: 0 0 18px rgba(240,198,116,0.30);
+  animation: greetingFade 1.2s ease both;
+}
+.draw-stage__subtitle {
+  margin: 6px 0 0;
+  font-family: var(--d-serif);
+  font-size: 12.5px;
+  letter-spacing: 3px;
+  color: var(--d-text-soft);
+  animation: greetingFade 1.6s ease both .2s;
+}
+.draw-stage__tip {
+  margin: 0;
+  font-family: var(--d-serif);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--d-text-mute);
+  text-align: center;
+  animation: greetingFade 1.8s ease both .4s;
+}
+@keyframes greetingFade {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Spread wrapper hosts the sigil ring + the card fan ── */
+.spread-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Rotating arcane sigil — full-stage backdrop, sized to fit the viewport so
+ * the entire halo + rune circles are visible behind every element. */
+.sigil-ring {
+  position: absolute;
+  left: 50%; top: 50%;
+  /* Always fit inside the visible stage; never trigger scrollbars. */
+  width: min(560px, 92vw, 78vh);
+  height: min(560px, 92vw, 78vh);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.65;
+  filter: drop-shadow(0 0 18px rgba(212,175,55,0.18));
+  z-index: 0;
+}
+.sigil-ring::before,
+.sigil-ring::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(212,175,55,0.30);
+}
+.sigil-ring::after {
+  inset: 60px;
+  border-color: rgba(196,181,253,0.22);
+  border-style: dashed;
+  animation: ringSpin 60s linear infinite reverse;
+}
+.sigil-ring::before {
+  animation: ringPulse 5s ease-in-out infinite alternate;
+  box-shadow:
+    0 0 30px rgba(212,175,55,0.10) inset,
+    0 0 40px rgba(157,78,221,0.18);
+}
+.sigil-ring__core {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 180px; height: 180px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(240,198,116,0.10), transparent 70%);
+}
+.sigil-ring__core::before,
+.sigil-ring__core::after {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(0deg,   transparent 49.6%, rgba(212,175,55,0.35) 49.6%, rgba(212,175,55,0.35) 50.4%, transparent 50.4%),
+    linear-gradient(60deg,  transparent 49.6%, rgba(212,175,55,0.35) 49.6%, rgba(212,175,55,0.35) 50.4%, transparent 50.4%),
+    linear-gradient(120deg, transparent 49.6%, rgba(212,175,55,0.35) 49.6%, rgba(212,175,55,0.35) 50.4%, transparent 50.4%);
+  border-radius: 50%;
+  mask: radial-gradient(circle, transparent 25%, black 26%, black 99%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 25%, black 26%, black 99%, transparent 100%);
+  opacity: 0.55;
+}
+.sigil-ring__core::after {
+  transform: rotate(30deg);
+  animation: ringSpin 90s linear infinite;
+}
+.sigil-ring__rune {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  font-family: var(--d-serif);
+  letter-spacing: 14px;
+  color: var(--d-gold);
+  text-align: center;
+  white-space: nowrap;
+  animation: ringSpin 80s linear infinite;
+  text-shadow: 0 0 8px rgba(240,198,116,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.sigil-ring__rune--outer { opacity: 0.75; }
+.sigil-ring__rune--inner {
+  width: 70%; height: 70%;
+  left: 15%; top: 15%;
+  font-size: 11px;
+  letter-spacing: 10px;
+  opacity: 0.55;
+  animation-duration: 110s;
+  animation-direction: reverse;
+}
+@keyframes ringSpin { to { transform: rotate(360deg); } }
+@keyframes ringPulse {
+  from { opacity: 0.45; box-shadow: 0 0 30px rgba(212,175,55,0.10) inset, 0 0 30px rgba(157,78,221,0.14); }
+  to   { opacity: 0.75; box-shadow: 0 0 60px rgba(240,198,116,0.18) inset, 0 0 70px rgba(157,78,221,0.30); }
+}
+
+/* The fan of card backs. Cards visually overlap; hover/focus lifts them. */
+.card-spread {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  perspective: 1600px;
+  margin: 0;
+  min-height: 250px;
+  padding: 22px 16px 32px;
+}
+.card-pick {
+  --w: 158px;
+  --h: 234px;
+  width: var(--w);
+  height: var(--h);
+  margin: 0 -32px;
+  border-radius: 14px;
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  overflow: hidden;
+  border: 1px solid rgba(212,175,55,0.45);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(157,78,221,0.40), transparent 70%),
+    linear-gradient(160deg, #1d1438 0%, #2c1054 50%, #160a2c 100%);
+  box-shadow:
+    0 24px 60px -22px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(212,175,55,0.16) inset,
+    0 0 60px rgba(157,78,221,0.18) inset;
+  transform: translateY(var(--y, 0)) rotate(var(--rot, 0deg));
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  transition:
+    transform .38s cubic-bezier(.2,.8,.2,1),
+    box-shadow .38s ease,
+    opacity .45s ease,
+    filter .35s ease;
+  opacity: 0;
+  animation: cardEnterFan .55s cubic-bezier(.2,.8,.2,1) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+@keyframes cardEnterFan {
+  from {
+    opacity: 0;
+    transform: translateY(60px) rotate(0deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(var(--y, 0)) rotate(var(--rot, 0deg)) scale(1);
+  }
+}
+.card-pick:hover,
+.card-pick:focus-visible {
+  transform: translateY(calc(var(--y, 0px) - 28px)) rotate(0deg) scale(1.02);
+  z-index: 99 !important;
+  box-shadow:
+    0 38px 80px -22px rgba(157,78,221,0.55),
+    0 0 0 1px rgba(212,175,55,0.36) inset,
+    0 0 60px rgba(212,175,55,0.22);
+  filter: brightness(1.08);
+}
+.card-pick:focus-visible {
+  outline: 2px solid var(--d-gold-bright);
+  outline-offset: 4px;
+}
+.card-pick__pattern {
+  position: absolute; inset: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(212,175,55,0.30);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(212,175,55,0.06) 0, transparent 40%),
+    repeating-linear-gradient(45deg, rgba(212,175,55,0.04) 0 4px, transparent 4px 9px);
+}
+.card-pick__pattern::before, .card-pick__pattern::after {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  border: 1px solid var(--d-gold);
+  opacity: 0.7;
+}
+.card-pick__pattern::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+.card-pick__pattern::after  { bottom: 6px; right: 6px; border-left: 0; border-top: 0; }
+.card-pick__inner {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.card-pick__symbol {
+  font-family: var(--d-serif);
+  font-size: 56px;
+  line-height: 1;
+  background: linear-gradient(135deg, #f0c674 0%, #d4af37 55%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 10px rgba(212,175,55,0.45));
+  opacity: 0.92;
+}
+/* Subtle moving sheen across the back. */
+.card-pick__shine {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255,255,255,0.10) 50%,
+    transparent 65%
+  );
+  background-size: 220% 220%;
+  background-position: 100% 0;
+  animation: sheen 4.2s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+@keyframes sheen {
+  0%, 100% { background-position: 130% 0; opacity: 0.0; }
+  35%      { opacity: 0.55; }
+  60%      { background-position: -30% 0; opacity: 0; }
+}
+
+/* Selected card: rises and glows. */
+.card-pick.is-chosen {
+  transform: translateY(-44px) rotate(0deg) scale(1.08);
+  z-index: 200 !important;
+  box-shadow:
+    0 60px 120px -28px rgba(157,78,221,0.70),
+    0 0 0 1px rgba(212,175,55,0.55) inset,
+    0 0 80px rgba(212,175,55,0.35),
+    0 0 140px rgba(157,78,221,0.45);
+  filter: brightness(1.18) saturate(1.1);
+  animation: chosenPulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes chosenPulse {
+  from { box-shadow: 0 60px 120px -28px rgba(157,78,221,0.70),
+                     0 0 0 1px rgba(212,175,55,0.55) inset,
+                     0 0 80px rgba(212,175,55,0.35),
+                     0 0 140px rgba(157,78,221,0.45); }
+  to   { box-shadow: 0 70px 140px -28px rgba(157,78,221,0.85),
+                     0 0 0 1px rgba(240,198,116,0.75) inset,
+                     0 0 110px rgba(240,198,116,0.55),
+                     0 0 180px rgba(157,78,221,0.65); }
+}
+.card-pick.is-chosen .card-pick__symbol {
+  animation: symPulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes symPulse {
+  from { transform: scale(1);    filter: drop-shadow(0 0 10px rgba(212,175,55,0.45)); }
+  to   { transform: scale(1.12); filter: drop-shadow(0 0 22px rgba(240,198,116,0.85)); }
+}
+
+/* Selected card flips up, brightens, then disappears into the result. */
+.card-pick.is-flipping {
+  animation: cardFlip 1.1s cubic-bezier(.6,.05,.3,1) forwards !important;
+  z-index: 400 !important;
+}
+@keyframes cardFlip {
+  0%   { transform: translateY(-44px) rotateY(0deg) scale(1.08); filter: brightness(1.2) saturate(1.1); }
+  35%  { transform: translateY(-90px) rotateY(180deg) scale(1.22); filter: brightness(1.7) saturate(1.2); }
+  70%  { transform: translateY(-110px) rotateY(360deg) scale(1.10); filter: brightness(1.5) blur(2px); opacity: 1; }
+  100% { transform: translateY(-150px) rotateY(540deg) scale(0.4);  filter: brightness(1.2) blur(8px); opacity: 0; }
+}
+
+/* Discarded cards fade and drift away outward. */
+.card-pick.is-discarded {
+  opacity: 0;
+  transform: translate(var(--scatter-x, 0px), 80px) rotate(var(--scatter-rot, 0deg)) scale(0.7);
+  filter: blur(6px);
+  pointer-events: none;
+  transition: transform .9s cubic-bezier(.2,.8,.2,1), opacity .9s ease, filter .9s ease;
+}
+
+/* Expanding burst that explodes from the spread when a card is chosen. */
+.draw-burst {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 50;
+  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(240,198,116,0.85) 18%, rgba(157,78,221,0.55) 45%, transparent 70%);
+  animation: burstCore 1.1s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.draw-burst::before,
+.draw-burst::after {
+  content: '';
+  position: absolute; inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(240,198,116,0.65);
+  opacity: 0;
+  animation: burstRing 1.15s cubic-bezier(.2,.8,.2,1) forwards;
+  box-shadow: 0 0 24px rgba(240,198,116,0.55);
+}
+.draw-burst::after {
+  border-color: rgba(196,181,253,0.55);
+  border-width: 1px;
+  animation-delay: .15s;
+  box-shadow: 0 0 24px rgba(196,181,253,0.45);
+}
+@keyframes burstCore {
+  0%   { transform: scale(0.2); opacity: 0; }
+  18%  { transform: scale(2);   opacity: 1; }
+  100% { transform: scale(50);  opacity: 0; }
+}
+@keyframes burstRing {
+  0%   { transform: scale(0.4); opacity: 0; }
+  20%  { opacity: 0.95; }
+  100% { transform: scale(75); opacity: 0; }
+}
+
+/* A brief screen-wide flash for the reveal moment. */
+.draw-veil {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  background: radial-gradient(circle at 50% 50%, rgba(240,198,116,0.28), rgba(157,78,221,0.12) 35%, transparent 70%);
+  opacity: 0;
+  animation: veilFlash 1.0s ease forwards;
+}
+@keyframes veilFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── Result ──────────────────────────────────────────── */
+.result {
+  /* `--accent` is the bright tone of the day, derived from the chosen card.
+   * Cascades to fortune fills + mantra glow so the page reads as one palette. */
+  --accent: var(--card-tone-1, #6d28d9);
+  --accent-soft: color-mix(in srgb, var(--accent) 30%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 55%, transparent);
+  display: grid;
+  grid-template-columns: 288px 1fr;
+  gap: 28px;
+  width: 100%;
+  max-width: 1040px;
+  align-items: start;
+  padding: 4px 4px;
+}
+
+/* Card flips/rises in from where the chosen back was. */
+.result-stage.is-active .card-front {
+  animation: cardEnter .85s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.7) rotateY(-180deg);
+    filter: blur(6px) brightness(1.4);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0) brightness(1.15);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotateY(0);
+    filter: none;
+  }
+}
+
+/* Right-side panels cascade in. */
+.result-stage.is-active .result__panels > * {
+  animation: panelRise .55s cubic-bezier(.2,.8,.2,1) both;
+}
+.result-stage.is-active .result__panels > *:nth-child(1) { animation-delay: .35s; }
+.result-stage.is-active .result__panels > *:nth-child(2) { animation-delay: .50s; }
+.result-stage.is-active .result__panels > *:nth-child(3) { animation-delay: .65s; }
+@keyframes panelRise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Card front ─────────────────────────────────────────
+ * Tarot card aspect ~ 5:8. Natural height (no stretch),
+ * deep cosmic background, single hairline gold border, no
+ * heavy corner brackets — the whole point is restraint. */
+.card-front {
+  position: relative;
+  border-radius: 14px;
+  padding: 24px 22px 22px;
+  border: 1px solid rgba(212,175,55,0.40);
+  background:
+    radial-gradient(140% 60% at 50% 0%, rgba(240,198,116,0.10), transparent 55%),
+    radial-gradient(120% 80% at 50% 100%, rgba(157,78,221,0.20), transparent 55%),
+    linear-gradient(168deg, var(--card-tone-1, #2a1d44) 0%, var(--card-tone-2, #160a2c) 100%);
+  box-shadow:
+    0 30px 80px -22px rgba(0,0,0,0.72),
+    0 0 0 1px rgba(212,175,55,0.16) inset,
+    0 0 40px rgba(157,78,221,0.18) inset;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* Single inner hairline frame — replaces the busy 8-corner brackets. */
+.card-front::after {
+  content: '';
+  position: absolute; inset: 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(212,175,55,0.20);
+  pointer-events: none;
+}
+.card-front__top {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--d-serif);
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--d-gold);
+  position: relative; z-index: 1;
+  padding: 0 2px;
+}
+.card-front__index { font-variant-numeric: tabular-nums; opacity: 0.85; }
+.card-front__tag {
+  color: var(--d-gold-bright);
+  border: 1px solid rgba(212,175,55,0.55);
+  background: rgba(20,12,40,0.45);
+  padding: 3px 12px;
+  border-radius: 999px;
+  letter-spacing: 2px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  font-family: var(--d-serif);
+}
+.card-front__art {
+  font-family: var(--d-serif);
+  font-size: 92px;
+  line-height: 1;
+  text-align: center;
+  margin: 28px auto 22px;
+  width: 120px; height: 120px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #fff 0%, var(--d-gold-bright) 55%, var(--d-gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 4px 14px rgba(0,0,0,0.55))
+    drop-shadow(0 0 26px rgba(240,198,116,0.45));
+  position: relative; z-index: 1;
+  animation: artFloat 5s ease-in-out infinite alternate;
+}
+/* Soft circular glow behind the glyph + slowly rotating hairline ring. */
+.card-front__art::before {
+  content: '';
+  position: absolute; inset: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(240,198,116,0.18) 0%,
+    rgba(157,78,221,0.10) 40%,
+    transparent 70%);
+  z-index: -1;
+}
+.card-front__art::after {
+  content: '';
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(212,175,55,0.30);
+  animation: ringSpin 70s linear infinite;
+  z-index: -1;
+}
+@keyframes artFloat {
+  from { transform: translateY(0);    filter: drop-shadow(0 4px 14px rgba(0,0,0,0.55)) drop-shadow(0 0 18px rgba(212,175,55,0.30)); }
+  to   { transform: translateY(-3px); filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55)) drop-shadow(0 0 32px rgba(240,198,116,0.55)); }
+}
+.card-front__name {
+  font-family: var(--d-serif);
+  font-size: 24px;
+  font-weight: 400;
+  text-align: center;
+  margin: 0 0 12px;
+  letter-spacing: 14px;
+  padding-left: 14px; /* offset letter-spacing on first glyph */
+  color: var(--d-gold-bright);
+  position: relative; z-index: 1;
+}
+.card-front__keyword {
+  text-align: center;
+  color: rgba(255,255,255,0.80);
+  font-family: var(--d-serif);
+  font-size: 11.5px;
+  letter-spacing: 5px;
+  margin: 0 0 18px;
+  position: relative; z-index: 1;
+  text-transform: uppercase;
+}
+.card-front__keyword::before,
+.card-front__keyword::after {
+  content: '';
+  display: inline-block;
+  width: 24px; height: 1px;
+  vertical-align: middle;
+  margin: 0 12px;
+  background: linear-gradient(90deg, transparent, var(--d-gold), transparent);
+}
+.card-front__quote {
+  text-align: center;
+  font-family: var(--d-serif);
+  font-style: italic;
+  font-size: 13px;
+  color: rgba(255,255,255,0.92);
+  line-height: 1.7;
+  margin: 6px 0 0;
+  padding: 0 6px;
+  position: relative; z-index: 1;
+}
+.card-front__quote::before,
+.card-front__quote::after {
+  font-family: var(--d-serif);
+  color: var(--d-gold);
+  font-size: 24px;
+  line-height: 0;
+  vertical-align: -8px;
+  opacity: 0.7;
+}
+.card-front__quote::before { content: '“'; margin-right: 4px; }
+.card-front__quote::after  { content: '”'; margin-left: 4px; }
+.card-front__insight {
+  text-align: center;
+  font-family: var(--d-serif);
+  font-size: 11.5px;
+  letter-spacing: 0.6px;
+  color: rgba(240,198,116,0.85);
+  line-height: 1.6;
+  margin: 22px 0 0;
+  padding: 14px 6px 0;
+  border-top: 1px solid rgba(212,175,55,0.20);
+  position: relative; z-index: 1;
+}
+.card-front__insight-label {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 4px;
+  color: var(--d-gold);
+  opacity: 0.85;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.card-front__insight-text { display: block; }
+
+/* ── Right column ─────────────────────────────────────
+ * Reading sheet — everything on one airy parchment, no
+ * boxes-within-boxes. Sections separated by hairlines and
+ * generous whitespace, like a real ritual page. */
+.result__panels {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  min-width: 0;
+  padding: 10px 6px 4px;
+}
+/* No panel box — sections render as bare typography. */
+.panel {
+  position: relative;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.panel::before, .panel::after { content: none; }
+
+/* Section title: small caps + thin gold rule running to the right edge.
+ * Implemented with flex: title group on the left, hairline rule fills rest. */
+.panel__title {
+  font-family: var(--d-serif);
+  font-size: 11px;
+  color: var(--d-gold);
+  text-transform: uppercase;
+  letter-spacing: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  font-weight: 500;
+}
+.panel__title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg,
+    rgba(212,175,55,0.45) 0,
+    rgba(212,175,55,0.06) 70%,
+    transparent 100%);
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.dot--good { background: var(--d-gold-bright); box-shadow: 0 0 8px rgba(240,198,116,0.85); }
+.dot--bad  { background: var(--d-bad);          box-shadow: 0 0 8px rgba(176,48,80,0.85); }
+
+/* ── Fortune matrix ─ aligned three-column grid.
+ * Fixed label / stars widths so all bars share the same start/end X. */
+.fortunes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.fortune {
+  display: grid;
+  grid-template-columns: 56px 1fr 100px;
+  column-gap: 18px;
+  align-items: center;
+}
+.fortune__label {
+  font-family: var(--d-serif);
+  font-size: 13.5px;
+  letter-spacing: 5px;
+  color: var(--d-text);
+  white-space: nowrap;
+}
+.fortune__bar {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+  position: relative;
+}
+.fortune__fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 999px;
+  background: var(--d-gold-bright);
+  transition: width 1.1s cubic-bezier(.2,.8,.2,1);
+}
+.fortune__stars {
+  font-family: var(--d-serif);
+  font-size: 14px;
+  letter-spacing: 4px;
+  color: var(--d-gold-bright);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+.fortune__stars .ghost { color: rgba(255,255,255,0.16); }
+
+/* ── DO / DON'T as twin elegant lists ── */
+.panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.suit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.suit li {
+  font-family: var(--d-serif);
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  padding: 10px 4px 10px 24px;
+  position: relative;
+  color: var(--d-text);
+  line-height: 1.45;
+  border-bottom: 1px solid rgba(212,175,55,0.08);
+}
+.suit li:last-child { border-bottom: 0; }
+.suit li::before {
+  position: absolute;
+  left: 2px; top: 12px;
+  font-size: 11px;
+  line-height: 1;
+}
+.panel--good .suit li::before {
+  content: '✦';
+  color: var(--d-gold-bright);
+  text-shadow: 0 0 6px rgba(240,198,116,0.55);
+}
+.panel--bad .suit li {
+  color: rgba(243,232,255,0.78);
+  border-bottom-color: rgba(176,48,80,0.18);
+}
+.panel--bad .suit li::before {
+  content: '✕';
+  color: var(--d-bad);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* ── Lucky omens ─ even three columns on top, mantra below as a hero quote */
+.lucky {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 18px;
+  row-gap: 22px;
+  align-items: stretch;
+}
+.lucky__cell {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* Vertical hairline rule between the three top cells */
+.lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+  padding-left: 18px;
+  border-left: 1px solid rgba(212,175,55,0.14);
+  margin-left: -18px;
+}
+.lucky__cell--mantra {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding-top: 22px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(212,175,55,0.16);
+  gap: 12px;
+  align-items: center;
+}
+.lucky__label {
+  font-family: var(--d-serif);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  color: var(--d-gold);
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.lucky__cell--mantra .lucky__label {
+  letter-spacing: 5px;
+  color: var(--d-gold);
+}
+.lucky__value {
+  font-family: var(--d-serif);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: var(--d-text);
+  display: flex; align-items: center; gap: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.2;
+}
+.lucky__swatch {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.lucky__value--mantra {
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--d-text-soft);
+  letter-spacing: 0.6px;
+  white-space: normal;
+  line-height: 1.6;
+  text-align: center;
+  padding: 0 16px;
+  display: block;
+  max-width: 560px;
+}
+.lucky__value--mantra::before,
+.lucky__value--mantra::after {
+  font-family: var(--d-serif);
+  color: var(--d-gold);
+  font-size: 22px;
+  line-height: 0;
+  vertical-align: -8px;
+  opacity: 0.5;
+}
+.lucky__value--mantra::before { content: '“'; margin-right: 6px; }
+.lucky__value--mantra::after  { content: '”'; margin-left: 6px; }
+
+/* ── Footer ──────────────────────────────────────────── */
+.footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  background: linear-gradient(0deg, rgba(10,6,23,0.92), rgba(10,6,23,0.55));
+}
+.footer::before {
+  content: '';
+  position: absolute;
+  left: 24px; right: 24px; top: 0;
+  height: 1px;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(212,175,55,0.10) 8%,
+      rgba(212,175,55,0.55) 50%,
+      rgba(212,175,55,0.10) 92%,
+      transparent 100%);
+}
+.footer__hint {
+  font-family: var(--d-serif);
+  font-size: 11.5px;
+  letter-spacing: 1.8px;
+  color: var(--d-text-mute);
+  font-style: italic;
+}
+.link-btn {
+  background: transparent;
+  border: 1px solid rgba(212,175,55,0.45);
+  color: var(--d-gold-bright);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-family: var(--d-serif);
+  font-size: 11.5px;
+  letter-spacing: 1.5px;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all .18s ease;
+}
+.link-btn:hover {
+  color: #fff;
+  background: rgba(212,175,55,0.14);
+  box-shadow: 0 0 14px rgba(212,175,55,0.25);
+}
+
+/* ── Toast ───────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%; bottom: 60px;
+  transform: translateX(-50%);
+  background: var(--d-panel-2);
+  color: var(--d-gold-bright);
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(212,175,55,0.45);
+  font-family: var(--d-serif);
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55), 0 0 24px rgba(212,175,55,0.18);
+  animation: toastIn .25s ease;
+  z-index: 9;
+}
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.18); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212,175,55,0.32); }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 880px) {
+  .lucky { grid-template-columns: 1fr 1fr; }
+  .lucky__cell--mantra { grid-column: 1 / -1; }
+  .lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+    padding-left: 0;
+    border-left: 0;
+    margin-left: 0;
+  }
+  .lucky__cell:nth-child(2) { padding-left: 18px; border-left: 1px solid rgba(212,175,55,0.14); }
+}
+@media (max-width: 720px) {
+  .result { grid-template-columns: 1fr; }
+  .panel-row { grid-template-columns: 1fr; }
+  .fortune { grid-template-columns: 40px 1fr 84px; gap: 10px; }
+  .card-pick { --w: 132px; --h: 196px; margin: 0 -42px; }
+  .card-pick__symbol { font-size: 48px; }
+  .card-spread { min-height: 220px; padding: 18px 12px 32px; }
+  .draw-stage__greeting { font-size: 22px; letter-spacing: 8px; padding-left: 8px; }
+  .draw-stage__subtitle { font-size: 12.5px; letter-spacing: 2px; }
+  .sigil-ring__rune { font-size: 12px; letter-spacing: 11px; }
+  .sigil-ring__rune--inner { font-size: 10px; letter-spacing: 8px; }
+}
+@media (max-width: 460px) {
+  .card-pick { --w: 110px; --h: 162px; margin: 0 -50px; border-radius: 11px; }
+  .card-pick__symbol { font-size: 38px; }
+  .card-spread { min-height: 200px; }
+  .sigil-ring__rune { font-size: 11px; letter-spacing: 8px; }
+  .sigil-ring__rune--inner { font-size: 9px; letter-spacing: 6px; }
+}
+
+/* ── Light theme adaptation ─────────────────────────────────────────────
+ * The host writes [data-theme-type="light"] on <html> via the bridge.
+ * Aesthetic: deep tarot cards laid on warm parchment. Cards & their gold
+ * filigree stay dark/luminous; only the surrounding "room" flips to ivory.
+ * This keeps the ritual feeling while integrating with a light app shell.
+ */
+[data-theme-type="light"] {
+  --d-bg:        #f3eada;
+  --d-bg-deep:   #e8dcc0;
+  --d-panel:     #fbf5e6;
+  --d-panel-2:   #f3eada;
+  --d-line:      rgba(120, 90, 28, 0.32);
+  --d-line-soft: rgba(120, 90, 28, 0.16);
+  --d-gold:        #8a6a1f;
+  --d-gold-bright: #b58a2a;
+  --d-rose:        #6b21a8;
+  --d-rose-deep:   #4c1d95;
+  --d-text:        #2a1d10;
+  --d-text-soft:   #5b4a36;
+  --d-text-mute:   #8a7a62;
+  --d-good:        #15803d;
+  --d-bad:         #9b1c3a;
+}
+[data-theme-type="light"] body { background: #e8dcc0; color: var(--d-text); }
+/* Page canvas: scene tone becomes a watercolor wash on parchment, not a flood. */
+[data-theme-type="light"] .div-app {
+  background:
+    radial-gradient(1400px 700px at 50% -20%,
+      color-mix(in srgb, var(--scene-tone) 14%, transparent),
+      transparent 60%),
+    radial-gradient(900px 600px at 100% 110%,
+      color-mix(in srgb, var(--scene-tone) 10%, transparent),
+      transparent 65%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--scene-tone) 6%, #f3eada),
+      #e8dcc0 75%);
+}
+/* Hide the white-pinpoint starfield on light bg (it would look like dust). */
+[data-theme-type="light"] .div-app::before,
+[data-theme-type="light"] .div-app::after { opacity: 0; }
+/* Soften the auroras to faint watercolor pools on parchment. */
+[data-theme-type="light"] .aurora--1 { opacity: 0.16; mix-blend-mode: multiply; }
+[data-theme-type="light"] .aurora--2 { opacity: 0.12; mix-blend-mode: multiply; }
+[data-theme-type="light"] .aurora--3 { opacity: 0.10; mix-blend-mode: multiply; }
+/* Header / footer: cream wash + slightly stronger gold rule. */
+[data-theme-type="light"] .header {
+  background: linear-gradient(180deg, rgba(243,234,218,0.94), rgba(243,234,218,0.55));
+}
+[data-theme-type="light"] .footer {
+  background: linear-gradient(0deg, rgba(243,234,218,0.94), rgba(243,234,218,0.55));
+}
+[data-theme-type="light"] .header__title,
+[data-theme-type="light"] .header__date { text-shadow: none; }
+[data-theme-type="light"] .header__title svg {
+  filter: drop-shadow(0 0 4px rgba(138,106,31,0.35));
+}
+/* Greetings + draw stage: dark gold ink instead of glowing gold. */
+[data-theme-type="light"] .draw-stage__greeting {
+  color: var(--d-gold);
+  text-shadow: none;
+}
+[data-theme-type="light"] .draw-stage__subtitle { color: var(--d-text-soft); }
+[data-theme-type="light"] .draw-stage__tip       { color: var(--d-text-mute); }
+/* Sigil ring: parchment-friendly opacity + subtle ink instead of glow. */
+[data-theme-type="light"] .sigil-ring {
+  opacity: 0.45;
+  filter: drop-shadow(0 0 6px rgba(138,106,31,0.18));
+}
+/* Result panels: panels themselves have no background, so on parchment the
+ * gold rules + ink text just work. Fix the spots that were tuned for dark bg. */
+[data-theme-type="light"] .panel__title { color: var(--d-gold); }
+[data-theme-type="light"] .panel__title::after {
+  background: linear-gradient(90deg,
+    rgba(120,90,28,0.45) 0%,
+    rgba(120,90,28,0.10) 70%,
+    transparent 100%);
+}
+[data-theme-type="light"] .fortune__label,
+[data-theme-type="light"] .lucky__label    { color: var(--d-text-soft); }
+[data-theme-type="light"] .lucky__value    { color: var(--d-text); }
+[data-theme-type="light"] .suit li         { color: var(--d-text); border-bottom-color: rgba(120,90,28,0.18); }
+[data-theme-type="light"] .panel--bad .suit li {
+  color: rgba(43,30,18,0.85);
+  border-bottom-color: rgba(155,28,58,0.22);
+}
+[data-theme-type="light"] .lucky__cell + .lucky__cell:not(.lucky__cell--mantra) {
+  border-left-color: rgba(120,90,28,0.18);
+}
+/* Mantra: script-on-parchment look. */
+[data-theme-type="light"] .lucky__value--mantra { color: var(--d-text); }
+[data-theme-type="light"] .lucky__value--mantra::before,
+[data-theme-type="light"] .lucky__value--mantra::after { color: var(--d-gold); }
+/* Fortune bar: white-on-dark track + ghost stars need ink-on-cream. */
+[data-theme-type="light"] .fortune__bar       { background: rgba(120,90,28,0.18); }
+[data-theme-type="light"] .fortune__fill      { background: var(--d-gold); }
+[data-theme-type="light"] .fortune__stars     { color: var(--d-gold); }
+[data-theme-type="light"] .fortune__stars .ghost { color: rgba(120,90,28,0.22); }
+/* Footer hint ink. */
+[data-theme-type="light"] .footer__hint { color: var(--d-text-soft); }
+
+/* ── Light theme — Card front ─────────────────────────────────────────
+ * On parchment, a deep saturated card looks pasted-on. We re-skin the
+ * card-front as a tinted vellum panel: the day's scene tone provides a
+ * watercolor wash; text becomes ink; gold filigree deepens to brass.
+ * The card is still clearly a "card" (raised, framed) but breathes the
+ * same warm air as the rest of the page. */
+[data-theme-type="light"] .card-front {
+  border-color: rgba(120,90,28,0.45);
+  background:
+    radial-gradient(140% 60% at 50% 0%, rgba(255,255,255,0.55), transparent 55%),
+    radial-gradient(120% 80% at 50% 100%,
+      color-mix(in srgb, var(--card-tone-2, #150a2a) 18%, transparent),
+      transparent 55%),
+    linear-gradient(168deg,
+      color-mix(in srgb, var(--card-tone-1, #5b21b6) 22%, #fbf5e6) 0%,
+      color-mix(in srgb, var(--card-tone-2, #150a2a) 14%, #ece1c7) 100%);
+  box-shadow:
+    0 24px 60px -22px rgba(70, 50, 20, 0.35),
+    0 0 0 1px rgba(120,90,28,0.18) inset,
+    0 0 30px rgba(120,90,28,0.10) inset;
+  color: var(--d-text);
+}
+[data-theme-type="light"] .card-front::after {
+  border-color: rgba(120,90,28,0.30);
+}
+[data-theme-type="light"] .card-front__top    { color: var(--d-gold); }
+[data-theme-type="light"] .card-front__tag    {
+  color: var(--d-gold-bright);
+  background: rgba(255,255,255,0.55);
+  border-color: rgba(120,90,28,0.45);
+}
+/* Glyph: take the day's primary tone instead of white→gold. */
+[data-theme-type="light"] .card-front__art {
+  background: linear-gradient(135deg,
+    var(--card-tone-1, #5b21b6) 0%,
+    color-mix(in srgb, var(--card-tone-2, #150a2a) 70%, var(--d-gold)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 2px 4px rgba(70,50,20,0.18))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--card-tone-1, #5b21b6) 35%, transparent));
+}
+[data-theme-type="light"] .card-front__art::before {
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--card-tone-1, #5b21b6) 16%, transparent) 0%,
+    rgba(120,90,28,0.06) 40%,
+    transparent 70%);
+}
+[data-theme-type="light"] .card-front__art::after {
+  border-color: rgba(120,90,28,0.30);
+}
+[data-theme-type="light"] .card-front__name {
+  color: color-mix(in srgb, var(--card-tone-2, #150a2a) 70%, var(--d-gold));
+}
+[data-theme-type="light"] .card-front__keyword { color: var(--d-text-soft); }
+[data-theme-type="light"] .card-front__quote   { color: var(--d-text); }
+[data-theme-type="light"] .card-front__insight {
+  color: color-mix(in srgb, var(--card-tone-2, #150a2a) 60%, var(--d-text-soft));
+  border-top-color: rgba(120,90,28,0.28);
+}
+[data-theme-type="light"] .card-front__insight-label { color: var(--d-gold); }
+/* Card flip animation re-uses the glyph art-float drop-shadow which assumed
+ * a dark background; soften so it doesn't feel like a hot spot on parchment. */
+[data-theme-type="light"] .card-front__art {
+  animation: artFloatLight 5s ease-in-out infinite alternate;
+}
+@keyframes artFloatLight {
+  from { transform: translateY(0);
+    filter: drop-shadow(0 2px 4px rgba(70,50,20,0.18))
+            drop-shadow(0 0 14px rgba(120,90,28,0.18)); }
+  to   { transform: translateY(-3px);
+    filter: drop-shadow(0 4px 8px rgba(70,50,20,0.22))
+            drop-shadow(0 0 22px rgba(120,90,28,0.28)); }
+}
+
+/* ── Light theme — Card backs (draw stage) ─────────────────────────────
+ * Re-skin the fan of card backs as warm vellum cards with deep-gold
+ * filigree, instead of deep purple slabs floating on parchment. */
+[data-theme-type="light"] .card-pick {
+  border-color: rgba(120,90,28,0.55);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255,255,255,0.45), transparent 70%),
+    linear-gradient(160deg, #faf2dd 0%, #ecdfbe 50%, #d9c89a 100%);
+  box-shadow:
+    0 22px 50px -22px rgba(70,50,20,0.45),
+    0 0 0 1px rgba(120,90,28,0.22) inset,
+    0 0 40px rgba(120,90,28,0.10) inset;
+}
+[data-theme-type="light"] .card-pick:hover,
+[data-theme-type="light"] .card-pick:focus-visible {
+  box-shadow:
+    0 32px 60px -22px rgba(120,90,28,0.45),
+    0 0 0 1px rgba(120,90,28,0.50) inset,
+    0 0 40px rgba(181,138,42,0.30);
+  filter: brightness(1.04);
+}
+[data-theme-type="light"] .card-pick__pattern {
+  border-color: rgba(120,90,28,0.40);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(120,90,28,0.10) 0, transparent 40%),
+    repeating-linear-gradient(45deg,
+      rgba(120,90,28,0.08) 0 4px,
+      transparent 4px 9px);
+}
+[data-theme-type="light"] .card-pick__pattern::before,
+[data-theme-type="light"] .card-pick__pattern::after {
+  border-color: var(--d-gold);
+  opacity: 0.85;
+}
+/* Symbol on the back: deeper gold gradient instead of gold→purple. */
+[data-theme-type="light"] .card-pick__symbol {
+  background: linear-gradient(135deg,
+    #b58a2a 0%, #8a6a1f 55%, #6b4f15 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(70,50,20,0.25))
+          drop-shadow(0 0 8px rgba(181,138,42,0.35));
+  opacity: 0.95;
+}
+/* Sheen across the back: keep but tone down (mix-blend looks weird on cream). */
+[data-theme-type="light"] .card-pick__shine {
+  background: linear-gradient(115deg,
+    transparent 35%,
+    rgba(255,250,235,0.55) 50%,
+    transparent 65%);
+  mix-blend-mode: normal;
+}
+/* Chosen / pulse animation: replace purple/gold halos with warm amber halos. */
+[data-theme-type="light"] .card-pick.is-chosen {
+  box-shadow:
+    0 50px 100px -28px rgba(181,138,42,0.55),
+    0 0 0 1px rgba(120,90,28,0.65) inset,
+    0 0 70px rgba(181,138,42,0.40),
+    0 0 130px rgba(181,138,42,0.30);
+  animation: chosenPulseLight 1.2s ease-in-out infinite alternate;
+}
+@keyframes chosenPulseLight {
+  from { box-shadow:
+           0 50px 100px -28px rgba(181,138,42,0.55),
+           0 0 0 1px rgba(120,90,28,0.65) inset,
+           0 0 70px rgba(181,138,42,0.40),
+           0 0 130px rgba(181,138,42,0.30); }
+  to   { box-shadow:
+           0 60px 120px -28px rgba(181,138,42,0.75),
+           0 0 0 1px rgba(181,138,42,0.85) inset,
+           0 0 100px rgba(240,200,120,0.55),
+           0 0 170px rgba(181,138,42,0.45); }
+}
+/* Burst + reveal flash: shift from purple/gold cosmic flare to warm amber. */
+[data-theme-type="light"] .draw-burst {
+  background: radial-gradient(circle,
+    rgba(255,250,235,0.95) 0%,
+    rgba(240,200,120,0.85) 18%,
+    rgba(181,138,42,0.55) 45%,
+    transparent 70%);
+}
+[data-theme-type="light"] .draw-burst::before {
+  border-color: rgba(181,138,42,0.65);
+  box-shadow: 0 0 24px rgba(181,138,42,0.45);
+}
+[data-theme-type="light"] .draw-burst::after {
+  border-color: rgba(120,90,28,0.55);
+  box-shadow: 0 0 24px rgba(120,90,28,0.35);
+}
+[data-theme-type="light"] .draw-veil {
+  background: radial-gradient(circle at 50% 50%,
+    rgba(240,200,120,0.30),
+    rgba(181,138,42,0.10) 35%,
+    transparent 70%);
+}
+

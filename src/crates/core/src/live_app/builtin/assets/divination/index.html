@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme-type="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="title">每日占卜</title>
+</head>
+<body>
+  <div id="app" class="div-app">
+    <div class="aurora aurora--1"></div>
+    <div class="aurora aurora--2"></div>
+    <div class="aurora aurora--3"></div>
+
+    <header class="header">
+      <div class="header__title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z"/><path d="M19 15l.6 1.6 1.6.6-1.6.6L19 19l-.6-1.6-1.6-.6 1.6-.6L19 15z"/><path d="M5 16l.5 1.3L7 18l-1.5.7L5 20l-.5-1.3L3 18l1.5-.7L5 16z"/></svg>
+        <span data-i18n="title">每日占卜</span>
+      </div>
+      <div class="header__date" id="date-label"></div>
+    </header>
+
+    <main class="stage">
+      <!-- Phase 1: shuffle + spread + pick ceremony -->
+      <section class="draw-stage" id="draw-stage">
+        <div class="sigil-ring" aria-hidden="true">
+          <div class="sigil-ring__rune sigil-ring__rune--outer">✦ ☽ ✶ ☾ ✺ ⊛ ✧ ☼ ◌ ❀ ✤ ☄ ✦ ☽ ✶ ☾ ✺ ⊛ ✧ ☼ ◌ ❀ ✤ ☄</div>
+          <div class="sigil-ring__rune sigil-ring__rune--inner">✦ ✶ ☾ ✺ ✧ ☼ ◌ ❀ ✤ ☄ ◇ ⌘ ⚝ ✦ ✶ ☾ ✺ ✧ ☼ ◌ ❀ ✤ ☄ ◇</div>
+          <div class="sigil-ring__core"></div>
+        </div>
+        <div class="draw-stage__title">
+          <h2 class="draw-stage__greeting" id="greeting">凝神</h2>
+          <p class="draw-stage__subtitle" id="draw-subtitle">轻触一张牌，揭开今日卦象</p>
+        </div>
+        <div class="spread-wrap">
+          <div class="card-spread" id="card-spread" role="group" data-i18n-attr="aria-label" data-i18n="spreadAria"></div>
+        </div>
+        <p class="draw-stage__tip" id="draw-tip">每日卦象一旦显现便已注定 · 翌日 00:00 焕新</p>
+      </section>
+
+      <!-- Phase 2: card revealed -->
+      <section class="result result-stage" id="result-stage" hidden>
+        <article class="card-front" id="card-front">
+          <div class="card-front__top">
+            <span class="card-front__index" id="card-index">No. 01</span>
+            <span class="card-front__tag" id="card-tag">机缘</span>
+          </div>
+          <div class="card-front__art" id="card-art">✦</div>
+          <h2 class="card-front__name" id="card-name">命运之轮</h2>
+          <p class="card-front__keyword" id="card-keyword">流转 · 节奏</p>
+          <p class="card-front__quote" id="card-quote"></p>
+          <p class="card-front__insight" id="card-insight"></p>
+        </article>
+
+        <div class="result__panels">
+          <section class="panel panel--fortunes">
+            <div class="panel__title" data-i18n="fortuneMatrix">运势矩阵</div>
+            <ul class="fortunes" id="fortunes"></ul>
+          </section>
+
+          <div class="panel-row">
+            <section class="panel panel--good">
+              <div class="panel__title">
+                <span class="dot dot--good"></span> <span data-i18n="todayGood">今日宜</span>
+              </div>
+              <ul class="suit" id="suit-good"></ul>
+            </section>
+            <section class="panel panel--bad">
+              <div class="panel__title">
+                <span class="dot dot--bad"></span> <span data-i18n="todayBad">今日忌</span>
+              </div>
+              <ul class="suit" id="suit-bad"></ul>
+            </section>
+          </div>
+
+          <section class="panel panel--lucky">
+            <div class="panel__title" data-i18n="omenTitle">机缘提示</div>
+            <div class="lucky">
+              <div class="lucky__cell">
+                <div class="lucky__label" data-i18n="luckyColor">幸运色</div>
+                <div class="lucky__value">
+                  <span class="lucky__swatch" id="lucky-color-swatch"></span>
+                  <span id="lucky-color-name">—</span>
+                </div>
+              </div>
+              <div class="lucky__cell">
+                <div class="lucky__label" data-i18n="luckyNumber">幸运数字</div>
+                <div class="lucky__value" id="lucky-number">—</div>
+              </div>
+              <div class="lucky__cell">
+                <div class="lucky__label" data-i18n="luckyHour">推荐时段</div>
+                <div class="lucky__value" id="lucky-hour">—</div>
+              </div>
+              <div class="lucky__cell lucky__cell--mantra">
+                <div class="lucky__label" data-i18n="mantra">咒语</div>
+                <div class="lucky__value lucky__value--mantra" id="lucky-mantra">—</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <button id="btn-share" class="link-btn" type="button" hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="9" height="8" rx="1"/><path d="M5 6V4a3 3 0 0 1 6 0v2"/></svg>
+        <span data-i18n="copyText">复制运势文本</span>
+      </button>
+      <span class="footer__hint" id="footer-hint" data-i18n="footerHint">愿你今日的代码无 bug，commit 总能通过 review。</span>
+    </footer>
+
+    <div id="toast" class="toast" hidden></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,31 @@
+name: desktop_app_automation
+description: "Automate a desktop application via accessibility and keyboard/mouse control"
+parameters:
+  - name: app_name
+    description: "Application name to automate"
+    required: true
+  - name: task_description
+    description: "What to accomplish in the application"
+    required: true
+steps:
+  - domain: system
+    action: open_app
+    params:
+      app_name: "{{app_name}}"
+    description: "Launch or bring the target application to front"
+
+  - domain: desktop
+    action: wait
+    params:
+      ms: 2000
+    description: "Wait for the application to become ready"
+
+  - domain: desktop
+    action: screenshot
+    description: "Take a screenshot to observe the current state"
+
+  - domain: desktop
+    action: locate
+    params:
+      text_query: "{{task_description}}"
+    description: "Use accessibility tree to locate relevant UI elements"

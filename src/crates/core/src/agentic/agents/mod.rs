@@ -13,6 +13,7 @@ mod design_mode;
 mod debug_mode;
 mod dispatcher_mode;
 mod plan_mode;
+mod team_mode;
 // Built-in subagents
 mod deep_research_agent;
 mod explore_agent;
@@ -47,6 +48,8 @@ pub use registry::{
     CustomSubagentDetail, SubAgentSource,
 };
 use std::any::Any;
+pub use team_mode::TeamMode;
+
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
 

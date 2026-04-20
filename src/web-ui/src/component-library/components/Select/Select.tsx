@@ -529,7 +529,12 @@ export const Select: React.FC<SelectProps> = ({
           
           <div className="select__options">
             {filteredOptions.length === 0 ? (
-              allowCustomValue && !multiple && searchQuery.trim() ? (
+              loading ? (
+                <div className="select__empty select__empty--loading">
+                  <span className="select__loading-spinner" aria-hidden="true" />
+                  <span>{t('select.loading')}</span>
+                </div>
+              ) : allowCustomValue && !multiple && searchQuery.trim() ? (
                 <div 
                   className="select__custom-value-hint"
                   onClick={() => handleCustomValueSubmit()}

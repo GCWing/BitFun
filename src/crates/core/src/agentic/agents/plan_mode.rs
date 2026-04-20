@@ -25,7 +25,7 @@ impl PlanMode {
                 "Glob".to_string(),
                 "AskUserQuestion".to_string(),
                 "CreatePlan".to_string(),
-                "ComputerUse".to_string(),
+                "ControlHub".to_string(),
             ],
         }
     }

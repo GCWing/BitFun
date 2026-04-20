@@ -6,12 +6,16 @@
 
 pub mod command_router;
 pub mod feishu;
+pub mod locale;
+pub mod menu;
 pub mod telegram;
 pub mod weixin;
 
 use serde::{Deserialize, Serialize};
 
 pub use command_router::{BotChatState, ForwardRequest, ForwardedTurnResult, HandleResult};
+pub use locale::BotLanguage;
+pub use menu::{MenuItem, MenuItemStyle, MenuView};
 
 /// Configuration for a bot-based connection.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +78,13 @@ pub struct BotPersistenceData {
     #[serde(default)]
     pub form_state: RemoteConnectFormState,
     /// Global verbose mode setting for all bot connections.
-    /// When true, intermediate tool execution progress is sent to the user.
+    /// When true, the agent's intermediate thinking summaries (one short
+    /// `[Thinking] …` line per `ThinkingEnd`) are forwarded to the user.
+    /// Tool-call notifications are intentionally NOT sent even in verbose
+    /// mode — they were too noisy for IM channels (especially WeChat where
+    /// each line costs a `context_token` slot) without giving the user
+    /// information they could act on.
+    /// Defaults to `false` (concise mode).
     #[serde(default)]
     pub verbose_mode: bool,
 }
@@ -488,64 +498,70 @@ pub fn extract_downloadable_file_paths(
     paths
 }
 
-// ── Shared file-download action builder ───────────────────────────
+// ── Auto-push file delivery helpers ───────────────────────────────
 
-/// Scan `text` for downloadable file references (`computer://`, `file://`,
-/// and markdown hyperlinks to local files), register them as pending downloads
-/// in `state`, and return a ready-to-send [`HandleResult`] with one download
-/// button per file.  Returns `None` when no downloadable files are found.
-pub fn prepare_file_download_actions(
-    text: &str,
-    state: &mut command_router::BotChatState,
-    workspace_root: Option<&std::path::Path>,
-) -> Option<command_router::HandleResult> {
-    use command_router::BotAction;
-
-    let file_paths = extract_downloadable_file_paths(text, workspace_root);
-    if file_paths.is_empty() {
-        return None;
-    }
-
-    let mut actions: Vec<BotAction> = Vec::new();
-    for path in &file_paths {
-        if let Some((name, size)) = get_file_metadata(path, workspace_root) {
-            let token = generate_download_token(&state.chat_id);
-            state.pending_files.insert(token.clone(), path.clone());
-            actions.push(BotAction::secondary(
-                format!("📥 {} ({})", name, format_file_size(size)),
-                format!("download_file:{token}"),
-            ));
-        }
-    }
-
-    if actions.is_empty() {
-        return None;
-    }
-
-    let intro = if actions.len() == 1 {
-        "📎 1 file ready to download:".to_string()
-    } else {
-        format!("📎 {} files ready to download:", actions.len())
-    };
-
-    Some(command_router::HandleResult {
-        reply: intro,
-        actions,
-        forward_to_session: None,
-    })
+/// One file to be auto-pushed to the IM peer alongside an agent reply.
+#[derive(Debug, Clone)]
+pub struct AutoPushFile {
+    /// Absolute path on the desktop (already resolved).
+    pub abs_path: String,
+    /// User-visible filename (basename of `abs_path`).
+    pub name: String,
+    /// Plaintext file size in bytes (for size-limit checks and UI).
+    pub size: u64,
 }
 
-/// Produce a short hex token for a pending file download.
-fn generate_download_token(chat_id: &str) -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let ns = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    let salt = chat_id
-        .bytes()
-        .fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-    format!("{:08x}", ns ^ salt)
+/// Scan an agent reply for downloadable file references and resolve their
+/// metadata so each platform adapter can push them directly to the user
+/// without an intermediate "tap to download" prompt.
+pub fn collect_auto_push_files(
+    text: &str,
+    workspace_root: Option<&std::path::Path>,
+) -> Vec<AutoPushFile> {
+    extract_downloadable_file_paths(text, workspace_root)
+        .into_iter()
+        .filter_map(|path| {
+            get_file_metadata(&path, workspace_root).map(|(name, size)| AutoPushFile {
+                abs_path: path,
+                name,
+                size,
+            })
+        })
+        .collect()
+}
+
+/// Caption sent once before the first auto-pushed file.
+pub fn auto_push_intro(language: BotLanguage, count: usize) -> String {
+    let strings = locale::strings_for(language);
+    if count <= 1 {
+        strings.auto_push_intro_one.to_string()
+    } else {
+        locale::fmt_count(strings.auto_push_intro_many_fmt, count)
+    }
+}
+
+/// Notice sent when a single file exceeds the platform's size limit and is skipped.
+pub fn auto_push_skip_too_large_message(
+    language: BotLanguage,
+    file_name: &str,
+    size: u64,
+    limit: u64,
+) -> String {
+    let strings = locale::strings_for(language);
+    strings
+        .auto_push_skip_too_large_fmt
+        .replace("{name}", file_name)
+        .replace("{size}", &format_file_size(size))
+        .replace("{limit}", &format_file_size(limit))
+}
+
+/// Notice sent when an upload/send call fails for a single file.
+pub fn auto_push_failed_message(language: BotLanguage, file_name: &str, err: &str) -> String {
+    let strings = locale::strings_for(language);
+    strings
+        .auto_push_failed_fmt
+        .replace("{name}", file_name)
+        .replace("{err}", err)
 }
 
 const REMOTE_CONNECT_PERSISTENCE_FILENAME: &str = "remote_connect_persistence.json";
@@ -601,7 +617,7 @@ pub fn save_bot_persistence(data: &BotPersistenceData) {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_downloadable_file_paths, resolve_workspace_path};
+    use super::{collect_auto_push_files, extract_downloadable_file_paths, resolve_workspace_path};
 
     fn make_temp_workspace() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
         let base = std::env::temp_dir().join(format!(
@@ -639,6 +655,28 @@ mod tests {
         let resolved = resolve_workspace_path("computer://../secret.txt", Some(&workspace));
 
         assert!(resolved.is_none());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// Regression: `[name.pptx](name.pptx)` style relative markdown links
+    /// emitted by the agent must be auto-pushed when the active workspace
+    /// (Pro mode `current_workspace` OR Assistant mode `current_assistant`)
+    /// is known. Previously only `current_workspace` was consulted, so
+    /// assistant-mode replies silently dropped attachments — see
+    /// `BotChatState::active_workspace_path` and the per-platform
+    /// `notify_files_ready` callers.
+    #[test]
+    fn collects_relative_pptx_link_against_assistant_workspace_root() {
+        let (base, workspace, _report) = make_temp_workspace();
+        let pptx = workspace.join("apple-vision-pro-keynote-style.pptx");
+        std::fs::write(&pptx, b"pptx-bytes").unwrap();
+
+        let text = "[apple-vision-pro-keynote-style.pptx](apple-vision-pro-keynote-style.pptx)";
+        let files = collect_auto_push_files(text, Some(&workspace));
+
+        assert_eq!(files.len(), 1, "relative pptx link must be auto-pushed");
+        assert_eq!(files[0].name, "apple-vision-pro-keynote-style.pptx");
+        assert_eq!(files[0].size, b"pptx-bytes".len() as u64);
         let _ = std::fs::remove_dir_all(base);
     }
 

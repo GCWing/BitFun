@@ -184,6 +184,22 @@ pub enum AgenticEvent {
         error: String,
         recoverable: bool,
     },
+
+    /// A session's bound model has been automatically migrated because the
+    /// previously bound model became unavailable (disabled or deleted).
+    /// The frontend should refresh its model selector for the session and
+    /// surface a non-blocking notice so the user knows what happened.
+    SessionModelAutoMigrated {
+        session_id: String,
+        /// The model id the session was using before the migration.
+        previous_model_id: String,
+        /// The model id (or selector such as `"auto"`) the session is now bound
+        /// to. This is what `SessionConfig.model_id` was rewritten to.
+        new_model_id: String,
+        /// Why the migration happened, e.g. `"model_disabled"` or
+        /// `"model_deleted"`.
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -326,7 +342,8 @@ impl AgenticEvent {
             | Self::TextChunk { session_id, .. }
             | Self::ThinkingChunk { session_id, .. }
             | Self::ModelRoundCompleted { session_id, .. }
-            | Self::ToolEvent { session_id, .. } => Some(session_id),
+            | Self::ToolEvent { session_id, .. }
+            | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
     }
@@ -340,6 +357,7 @@ impl AgenticEvent {
 
             Self::SessionStateChanged { .. }
             | Self::SessionTitleGenerated { .. }
+            | Self::SessionModelAutoMigrated { .. }
             | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
 
             Self::ImageAnalysisStarted { .. }

@@ -36,31 +36,40 @@ struct PendingPairing {
     created_at: i64,
 }
 
+/// Telegram Bot API hard limit for `sendDocument` uploads (50 MB), aligned
+/// across all IM platforms by capping at 30 MB to match Feishu / WeChat.
+const MAX_TELEGRAM_FILE_BYTES: u64 = 30 * 1024 * 1024;
+
+/// Telegram caps `sendMessage.text` at 4096 UTF-16 code units. We chunk on
+/// char boundaries and stay slightly under the limit to leave headroom for
+/// any client-side counting differences.
+const MAX_TELEGRAM_TEXT_CHUNK: usize = 4000;
+
+fn chunk_text_for_telegram(text: &str) -> Vec<String> {
+    if text.len() <= MAX_TELEGRAM_TEXT_CHUNK {
+        return vec![text.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut rest = text;
+    while !rest.is_empty() {
+        if rest.len() <= MAX_TELEGRAM_TEXT_CHUNK {
+            out.push(rest.to_string());
+            break;
+        }
+        let mut cut = MAX_TELEGRAM_TEXT_CHUNK;
+        while cut > 0 && !rest.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        if cut == 0 {
+            cut = rest.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+        }
+        out.push(rest[..cut].to_string());
+        rest = &rest[cut..];
+    }
+    out
+}
+
 impl TelegramBot {
-    fn expired_download_message(language: BotLanguage) -> &'static str {
-        if language.is_chinese() {
-            "这个下载链接已过期，请重新让助手发送一次。"
-        } else {
-            "This download link has expired. Please ask the agent again."
-        }
-    }
-
-    fn sending_file_message(language: BotLanguage, file_name: &str) -> String {
-        if language.is_chinese() {
-            format!("正在发送“{file_name}”……")
-        } else {
-            format!("Sending \"{file_name}\"…")
-        }
-    }
-
-    fn send_file_failed_message(language: BotLanguage, file_name: &str, error: &str) -> String {
-        if language.is_chinese() {
-            format!("无法发送“{file_name}”：{error}")
-        } else {
-            format!("Could not send \"{file_name}\": {error}")
-        }
-    }
-
     fn invalid_pairing_code_message(language: BotLanguage) -> &'static str {
         if language.is_chinese() {
             "配对码无效或已过期，请重试。"
@@ -74,14 +83,6 @@ impl TelegramBot {
             "请输入 BitFun Desktop 中显示的 6 位配对码。"
         } else {
             "Please enter the 6-digit pairing code from BitFun Desktop."
-        }
-    }
-
-    fn cancel_button_hint(language: BotLanguage) -> &'static str {
-        if language.is_chinese() {
-            "如需停止本次请求，请点击下方的“取消任务”按钮。"
-        } else {
-            "If needed, tap the Cancel Task button below to stop this request."
         }
     }
 
@@ -108,18 +109,24 @@ impl TelegramBot {
 
     pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<()> {
         let client = reqwest::Client::new();
-        let resp = client
-            .post(self.api_url("sendMessage"))
-            .json(&serde_json::json!({
-                "chat_id": chat_id,
-                "text": text,
-            }))
-            .send()
-            .await?;
+        // Telegram caps a single sendMessage at 4096 UTF-16 code units. We
+        // conservatively chunk on byte/char boundaries so long agent
+        // replies are delivered as multiple messages instead of being
+        // rejected or silently dropped.
+        for chunk in chunk_text_for_telegram(text) {
+            let resp = client
+                .post(self.api_url("sendMessage"))
+                .json(&serde_json::json!({
+                    "chat_id": chat_id,
+                    "text": chunk,
+                }))
+                .send()
+                .await?;
 
-        if !resp.status().is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("telegram sendMessage failed: {body}"));
+            if !resp.status().is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(anyhow!("telegram sendMessage failed: {body}"));
+            }
         }
         debug!("Telegram message sent to chat {chat_id}");
         Ok(())
@@ -172,11 +179,10 @@ impl TelegramBot {
     }
 
     /// Send a local file to a Telegram chat as a document attachment.
-    ///
-    /// Skips files larger than 50 MB (Telegram Bot API hard limit).
+    /// Caller is expected to pre-check the size against `MAX_TELEGRAM_FILE_BYTES`.
     async fn send_file_as_document(&self, chat_id: i64, file_path: &str) -> Result<()> {
-        const MAX_SIZE: u64 = 30 * 1024 * 1024; // Unified 30 MB cap (Feishu API hard limit)
-        let content = super::read_workspace_file(file_path, MAX_SIZE, None).await?;
+        let content =
+            super::read_workspace_file(file_path, MAX_TELEGRAM_FILE_BYTES, None).await?;
 
         let part = reqwest::multipart::Part::bytes(content.bytes)
             .file_name(content.name.clone())
@@ -201,76 +207,51 @@ impl TelegramBot {
         Ok(())
     }
 
-    /// Scan `text` for downloadable file links (`computer://`, `file://`, and
-    /// markdown hyperlinks to local files), store them as pending downloads and
-    /// send a notification with one inline-keyboard button per file.
+    /// Scan `text` for downloadable file references and push every matching
+    /// file directly to the Telegram chat as an attachment.  Files exceeding
+    /// `MAX_TELEGRAM_FILE_BYTES` are skipped with a brief notice; per-file
+    /// upload failures are reported as plain-text replies.
     async fn notify_files_ready(&self, chat_id: i64, text: &str) {
-        let result = {
-            let mut states = self.chat_states.write().await;
-            let state = states.entry(chat_id).or_insert_with(|| {
-                let mut s = BotChatState::new(chat_id.to_string());
-                s.paired = true;
-                s
-            });
-            let workspace_root = state.current_workspace.clone();
-            super::prepare_file_download_actions(
-                text,
-                state,
-                workspace_root.as_deref().map(std::path::Path::new),
-            )
+        let language = current_bot_language().await;
+        let workspace_root = {
+            let states = self.chat_states.read().await;
+            states.get(&chat_id).and_then(|s| s.active_workspace_path())
         };
-        if let Some(result) = result {
-            if let Err(e) = self
-                .send_message_with_keyboard(chat_id, &result.reply, &result.actions)
-                .await
-            {
-                warn!("Failed to send file notification to Telegram: {e}");
-            }
+        let files = super::collect_auto_push_files(
+            text,
+            workspace_root.as_deref().map(std::path::Path::new),
+        );
+        if files.is_empty() {
+            return;
         }
-    }
 
-    /// Handle a `download_file:<token>` callback: look up the pending file and
-    /// send it.  Sends a plain-text error if the token has expired or the
-    /// transfer fails.
-    async fn handle_download_request(&self, chat_id: i64, token: &str) {
-        let (path, language) = {
-            let mut states = self.chat_states.write().await;
-            let state = states.get_mut(&chat_id);
-            let language = current_bot_language().await;
-            let path = state.and_then(|s| s.pending_files.remove(token));
-            (path, language)
-        };
-
-        match path {
-            None => {
-                let _ = self
-                    .send_message(chat_id, Self::expired_download_message(language))
-                    .await;
+        // Skip the "正在为你发送 N 个文件……" intro: the document message
+        // itself is visible in the chat; only error / size-skip notices
+        // below need to surface to the user.
+        for file in files {
+            if file.size > MAX_TELEGRAM_FILE_BYTES {
+                let notice = super::auto_push_skip_too_large_message(
+                    language,
+                    &file.name,
+                    file.size,
+                    MAX_TELEGRAM_FILE_BYTES,
+                );
+                let _ = self.send_message(chat_id, &notice).await;
+                continue;
             }
-            Some(path) => {
-                let file_name = std::path::Path::new(&path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("file")
-                    .to_string();
-                let _ = self
-                    .send_message(chat_id, &Self::sending_file_message(language, &file_name))
-                    .await;
-                match self.send_file_as_document(chat_id, &path).await {
-                    Ok(()) => info!("Sent file to Telegram chat {chat_id}: {path}"),
-                    Err(e) => {
-                        warn!("Failed to send file to Telegram: {e}");
-                        let _ = self
-                            .send_message(
-                                chat_id,
-                                &Self::send_file_failed_message(
-                                    language,
-                                    &file_name,
-                                    &e.to_string(),
-                                ),
-                            )
-                            .await;
-                    }
+            match self.send_file_as_document(chat_id, &file.abs_path).await {
+                Ok(()) => info!(
+                    "Telegram auto-pushed file to chat {chat_id}: {}",
+                    file.abs_path
+                ),
+                Err(e) => {
+                    warn!(
+                        "Telegram auto-push failed for {} in chat {chat_id}: {e}",
+                        file.name
+                    );
+                    let notice =
+                        super::auto_push_failed_message(language, &file.name, &e.to_string());
+                    let _ = self.send_message(chat_id, &notice).await;
                 }
             }
         }
@@ -292,40 +273,30 @@ impl TelegramBot {
     /// text is replaced with a friendlier prompt, and a Cancel Task button is
     /// added via the inline keyboard.
     async fn send_handle_result(&self, chat_id: i64, result: &HandleResult) {
-        let language = current_bot_language().await;
-        let text = Self::clean_reply_text(language, &result.reply, !result.actions.is_empty());
-        if result.actions.is_empty() {
-            self.send_message(chat_id, &text).await.ok();
+        let text = if result.menu.items.is_empty() && result.menu.title.is_empty() {
+            result.reply.clone()
         } else {
-            if let Err(e) = self
-                .send_message_with_keyboard(chat_id, &text, &result.actions)
-                .await
-            {
-                warn!("Failed to send Telegram keyboard message: {e}; falling back to plain text");
-                self.send_message(chat_id, &result.reply).await.ok();
+            result.menu.render_text_block()
+        };
+        // Empty replies (e.g. the silent "forward only" result returned by
+        // `handle_chat`) must not be sent — Telegram rejects empty bodies
+        // and a lone whitespace message is just noise to the user.
+        if text.trim().is_empty() {
+            return;
+        }
+        if result.actions.is_empty() {
+            if let Err(e) = self.send_message(chat_id, &text).await {
+                warn!("Failed to send Telegram message to {chat_id}: {e}");
+            }
+        } else if let Err(e) = self
+            .send_message_with_keyboard(chat_id, &text, &result.actions)
+            .await
+        {
+            warn!("Failed to send Telegram keyboard message: {e}; falling back to plain text");
+            if let Err(e2) = self.send_message(chat_id, &result.reply).await {
+                warn!("Telegram fallback plain send to {chat_id} also failed: {e2}");
             }
         }
-    }
-
-    /// Remove raw `/cancel_task <turn_id>` instruction lines and replace them
-    /// with a short hint that the button below can be used instead.
-    fn clean_reply_text(language: BotLanguage, text: &str, has_actions: bool) -> String {
-        let mut lines: Vec<String> = Vec::new();
-        let mut replaced_cancel = false;
-
-        for line in text.lines() {
-            let trimmed = line.trim();
-            if trimmed.contains("/cancel_task ") {
-                if has_actions && !replaced_cancel {
-                    lines.push(Self::cancel_button_hint(language).to_string());
-                    replaced_cancel = true;
-                }
-                continue;
-            }
-            lines.push(line.to_string());
-        }
-
-        lines.join("\n").trim().to_string()
     }
 
     /// Register the bot command menu visible in Telegram's "/" menu.
@@ -333,15 +304,15 @@ impl TelegramBot {
         let client = reqwest::Client::new();
         let commands = serde_json::json!({
             "commands": [
-                { "command": "switch_workspace", "description": "List and switch workspaces" },
-                { "command": "pro", "description": "Switch to Expert mode (Code/Cowork)" },
-                { "command": "assistant", "description": "Switch to Assistant mode (Claw)" },
-                { "command": "resume_session", "description": "Resume an existing session" },
-                { "command": "new_code_session", "description": "Create coding session (Expert)" },
-                { "command": "new_cowork_session", "description": "Create cowork session (Expert)" },
-                { "command": "new_claw_session", "description": "Create claw session (Assistant)" },
-                { "command": "cancel_task", "description": "Cancel the current task" },
-                { "command": "help", "description": "Show available commands" },
+                { "command": "menu", "description": "Show the main menu" },
+                { "command": "new", "description": "Create a new session" },
+                { "command": "resume", "description": "Resume an existing session" },
+                { "command": "switch", "description": "Switch assistant or workspace" },
+                { "command": "cancel", "description": "Cancel the current task" },
+                { "command": "expert", "description": "Switch to Expert mode" },
+                { "command": "assistant", "description": "Switch to Assistant mode" },
+                { "command": "settings", "description": "Open settings" },
+                { "command": "help", "description": "Show help" },
             ]
         });
         let resp = client
@@ -667,14 +638,6 @@ impl TelegramBot {
             return;
         }
 
-        // Intercept file download callbacks before normal command routing.
-        if let Some(stripped) = text.strip_prefix("download_file:") {
-            let token = stripped.trim().to_string();
-            drop(states);
-            self.handle_download_request(chat_id, &token).await;
-            return;
-        }
-
         let cmd = parse_command(text);
         let result = handle_command(state, cmd, images).await;
 
@@ -722,7 +685,7 @@ impl TelegramBot {
             s.paired = true;
             s
         });
-        state.pending_action = Some(interaction.pending_action.clone());
+        super::command_router::apply_interactive_request(state, &interaction);
         self.persist_chat_state(chat_id, state).await;
         drop(states);
 
@@ -730,6 +693,7 @@ impl TelegramBot {
             reply: interaction.reply,
             actions: interaction.actions,
             forward_to_session: None,
+            menu: interaction.menu,
         };
         self.send_handle_result(chat_id, &result).await;
     }
