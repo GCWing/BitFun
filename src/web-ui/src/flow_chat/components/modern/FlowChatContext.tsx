@@ -7,7 +7,7 @@ import { createContext, useContext } from 'react';
 import type { FlowChatConfig, Session } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 
-export interface FlowChatContextValue {
+export interface FlowChatStaticContextValue {
   // File and panel actions
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
   onTabOpen?: (tabInfo: any, sessionId?: string, panelType?: string) => void;
@@ -20,11 +20,12 @@ export interface FlowChatContextValue {
 
   // Session info
   sessionId?: string;
-  activeSessionOverride?: Session | null;
 
   // Config
   config?: FlowChatConfig;
+}
 
+export interface FlowChatViewContextValue {
   // ========== Explore group collapse state ==========
   /**
    * Expanded/collapsed state for explore groups.
@@ -61,6 +62,12 @@ export interface FlowChatContextValue {
   searchCurrentMatchVirtualIndex?: number;
 }
 
+export interface FlowChatContextValue extends FlowChatStaticContextValue, FlowChatViewContextValue {
+  activeSessionOverride?: Session | null;
+}
+
+export const FlowChatStaticContext = createContext<FlowChatStaticContextValue>({});
+export const FlowChatViewContext = createContext<FlowChatViewContextValue>({});
 export const FlowChatContext = createContext<FlowChatContextValue>({});
 
 /**
@@ -68,6 +75,14 @@ export const FlowChatContext = createContext<FlowChatContextValue>({});
  */
 export const useFlowChatContext = () => {
   return useContext(FlowChatContext);
+};
+
+export const useFlowChatStaticContext = () => {
+  return useContext(FlowChatStaticContext);
+};
+
+export const useFlowChatViewContext = () => {
+  return useContext(FlowChatViewContext);
 };
 
 

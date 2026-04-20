@@ -134,6 +134,8 @@
       "openTaskList": "查看全部任务",
       "runningSessionsGroupLabel": "运行中",
       "runningLiveAppsGroupLabel": "运行中的应用",
+      "cancelRunningAgentTask": "取消执行",
+      "stopRunningLiveApp": "停止应用",
       "liveAppBadge": "应用",
       "newSessionButton": "新建进程",
       "newSessionDialogTitle": "新建进程",
@@ -907,7 +909,8 @@
     "fallbackTaskTitle": "任务 {{id}}",
     "agenticSessionTitle": "{{created}} - {{modified}}",
     "deleteAgenticSessionTitle": "删除运行历史会话？",
-    "deleteAgenticSessionMessage": "将永久删除「{{label}}」的对话记录，且无法恢复。"
+    "deleteAgenticSessionMessage": "将永久删除「{{label}}」的对话记录，且无法恢复。",
+    "closeLiveApp": "停止 Live App"
   },
   "loading": {
     "scenes": "正在加载场景"

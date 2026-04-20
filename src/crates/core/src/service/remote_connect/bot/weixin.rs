@@ -22,8 +22,8 @@ use tokio::sync::RwLock;
 
 use super::command_router::{
     complete_im_bot_pairing, current_bot_language, execute_forwarded_turn, handle_command,
-    parse_command, welcome_message, BotChatState, BotInteractionHandler,
-    BotInteractiveRequest, BotMessageSender, HandleResult,
+    parse_command, welcome_message, BotChatState, BotInteractionHandler, BotInteractiveRequest,
+    BotMessageSender, HandleResult,
 };
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 use crate::service::remote_connect::remote_server::ImageAttachment;
@@ -657,7 +657,8 @@ impl TypingHandle {
     /// from the Drop impl.
     pub async fn stop(mut self) {
         self.stopped = true;
-        self.cancel.store(true, std::sync::atomic::Ordering::Release);
+        self.cancel
+            .store(true, std::sync::atomic::Ordering::Release);
         if let Some(h) = self.handle.take() {
             let _ = h.await;
         }
@@ -675,7 +676,8 @@ impl Drop for TypingHandle {
         if self.stopped {
             return;
         }
-        self.cancel.store(true, std::sync::atomic::Ordering::Release);
+        self.cancel
+            .store(true, std::sync::atomic::Ordering::Release);
         if let Some(h) = self.handle.take() {
             h.abort();
         }
@@ -825,10 +827,7 @@ impl WeixinBot {
         encrypted_query_param: &str,
         full_url: Option<&str>,
     ) -> Result<Vec<u8>> {
-        let url = match full_url
-            .map(str::trim)
-            .filter(|s: &&str| !s.is_empty())
-        {
+        let url = match full_url.map(str::trim).filter(|s: &&str| !s.is_empty()) {
             Some(u) => u.to_string(),
             None => build_cdn_download_url(self.cdn_base_url(), encrypted_query_param),
         };
@@ -1319,9 +1318,7 @@ impl WeixinBot {
     /// bad token is stop using it.
     fn is_context_token_error(err: &anyhow::Error) -> bool {
         let s = err.to_string();
-        s.contains("application error")
-            || s.contains("context_token")
-            || s.contains("errcode=")
+        s.contains("application error") || s.contains("context_token") || s.contains("errcode=")
     }
 
     /// Best-effort send that logs a warning on failure instead of silently
@@ -1454,9 +1451,7 @@ impl WeixinBot {
                 let next_wait = match bot.send_typing(&peer_for_task, 1).await {
                     Ok(()) => TICKS_PER_REFRESH,
                     Err(e) => {
-                        debug!(
-                            "weixin: send typing(start) failed for peer {peer_for_task}: {e}"
-                        );
+                        debug!("weixin: send typing(start) failed for peer {peer_for_task}: {e}");
                         TICKS_AFTER_FAILURE
                     }
                 };
@@ -1746,7 +1741,8 @@ impl WeixinBot {
                     let language = current_bot_language().await;
 
                     if text == "/start" {
-                        self.try_send_text(&peer, welcome_message(language), "welcome").await;
+                        self.try_send_text(&peer, welcome_message(language), "welcome")
+                            .await;
                         continue;
                     }
 
@@ -1869,7 +1865,8 @@ impl WeixinBot {
                                 MAX_INBOUND_IMAGES, skipped_images
                             )
                         };
-                        bot.try_send_text(&peer, &note, "image-truncation-notice").await;
+                        bot.try_send_text(&peer, &note, "image-truncation-notice")
+                            .await;
                     }
                     let body = WeixinBot::body_from_message(&msg_value);
                     let text = if body.trim().is_empty() && !images.is_empty() {
@@ -1906,7 +1903,8 @@ impl WeixinBot {
             let trimmed = text.trim();
             if trimmed == "/start" {
                 drop(states);
-                self.try_send_text(&peer_id, welcome_message(language), "welcome").await;
+                self.try_send_text(&peer_id, welcome_message(language), "welcome")
+                    .await;
                 return;
             }
             if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {

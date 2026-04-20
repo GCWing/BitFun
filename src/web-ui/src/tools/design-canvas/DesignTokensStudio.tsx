@@ -24,7 +24,6 @@ function entries(obj: unknown): Array<[string, string]> {
 
 export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) => {
   const { workspacePath } = useCurrentWorkspace();
-  const docs = useDesignTokensStore((s) => s.byScope);
   // Canonical scope key: prefer an explicit path from the card,
   // otherwise derive workspace/artifact key so we never silently fall
   // through to `Object.values(docs)[0]`.
@@ -32,7 +31,7 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     () => canonicalScopeKey({ explicitPath: scopePath, workspacePath, artifactId }),
     [scopePath, workspacePath, artifactId]
   );
-  const document = docs[scopeKey];
+  const document = useDesignTokensStore((s) => s.byScope[scopeKey]);
   const proposals = document?.proposals || [];
   const [selectedId, setSelectedId] = useState<string>(document?.committed_id || proposals[0]?.id || '');
   const [switchOn, setSwitchOn] = useState(true);

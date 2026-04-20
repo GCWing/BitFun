@@ -19,28 +19,24 @@ impl DesignMode {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                // Clarification + planning helpers
+                // Briefing and progress
                 "AskUserQuestion".to_string(),
                 "TodoWrite".to_string(),
+                // Second-pass review only; DesignReview is the intended built-in pairing.
                 "Task".to_string(),
-                "Skill".to_string(),
-                // Discovery + editing
+                // Focused file discovery and editing
                 "LS".to_string(),
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
-                "Delete".to_string(),
+                // Design Canvas workflow
                 "DesignTokens".to_string(),
-                // Structured design artifacts for the right-side Design Canvas tab
                 "DesignArtifact".to_string(),
-                // Utilities
+                // Verification and inspection
                 "GetFileDiff".to_string(),
                 "Bash".to_string(),
-                "TerminalControl".to_string(),
-                "WebSearch".to_string(),
-                "ComputerUse".to_string(),
             ],
         }
     }
@@ -74,5 +70,53 @@ impl Agent for DesignMode {
 
     fn is_readonly(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Agent, DesignMode};
+
+    #[test]
+    fn default_tools_are_focused_on_design_canvas_delivery() {
+        let agent = DesignMode::new();
+
+        assert_eq!(
+            agent.default_tools(),
+            vec![
+                "AskUserQuestion".to_string(),
+                "TodoWrite".to_string(),
+                "Task".to_string(),
+                "LS".to_string(),
+                "Read".to_string(),
+                "Grep".to_string(),
+                "Glob".to_string(),
+                "Write".to_string(),
+                "Edit".to_string(),
+                "DesignTokens".to_string(),
+                "DesignArtifact".to_string(),
+                "GetFileDiff".to_string(),
+                "Bash".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn default_tools_exclude_broad_or_redundant_surfaces() {
+        let tools = DesignMode::new().default_tools();
+
+        for redundant_tool in [
+            "Skill",
+            "Delete",
+            "TerminalControl",
+            "WebSearch",
+            "ComputerUse",
+            "GenerativeUI",
+        ] {
+            assert!(
+                !tools.contains(&redundant_tool.to_string()),
+                "{redundant_tool} should not be a default Design tool"
+            );
+        }
     }
 }

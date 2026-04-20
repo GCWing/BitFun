@@ -1,7 +1,7 @@
 use super::{
     Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DebugMode, DeepResearchAgent,
-    DesignMode, DispatcherMode, ExploreAgent, FileFinderAgent, GenerateDocAgent, InitAgent,
-    PlanMode,
+    DesignMode, DesignReviewAgent, DispatcherMode, ExploreAgent, FileFinderAgent, GenerateDocAgent,
+    InitAgent, PlanMode,
 };
 use crate::agentic::agents::custom_subagents::{
     CustomSubagent, CustomSubagentKind, CustomSubagentLoader,
@@ -307,6 +307,7 @@ impl AgentRegistry {
             Arc::new(ExploreAgent::new()),
             Arc::new(FileFinderAgent::new()),
             Arc::new(DeepResearchAgent::new()),
+            Arc::new(DesignReviewAgent::new()),
         ];
         for subagent in builtin_subagents {
             register(

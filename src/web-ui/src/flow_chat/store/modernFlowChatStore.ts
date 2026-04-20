@@ -135,6 +135,87 @@ function computeRoundStats(round: ModelRound): { readCount: number; searchCount:
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
 let cachedVirtualItems: VirtualItem[] = [];
+let cachedVirtualItemsByKey = new Map<string, VirtualItem>();
+
+function getVirtualItemCacheKey(item: VirtualItem): string {
+  switch (item.type) {
+    case 'user-message':
+      return `user-message:${item.turnId}`;
+    case 'model-round':
+      return `model-round:${item.data.id}`;
+    case 'explore-group':
+      return `explore-group:${item.data.groupId}`;
+    case 'image-analyzing':
+      return `image-analyzing:${item.turnId}`;
+  }
+}
+
+function areFlowItemArraysReferentiallyEqual(left: FlowItem[], right: FlowItem[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areRoundArraysReferentiallyEqual(left: ModelRound[], right: ModelRound[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function canReuseVirtualItem(previous: VirtualItem | undefined, next: VirtualItem): previous is VirtualItem {
+  if (!previous || previous.type !== next.type || previous.turnId !== next.turnId) {
+    return false;
+  }
+
+  switch (next.type) {
+    case 'user-message': {
+      const previousUserMessage = previous as Extract<VirtualItem, { type: 'user-message' }>;
+      return previousUserMessage.data === next.data;
+    }
+    case 'model-round': {
+      const previousModelRound = previous as Extract<VirtualItem, { type: 'model-round' }>;
+      return previousModelRound.data === next.data && previousModelRound.isLastRound === next.isLastRound;
+    }
+    case 'image-analyzing':
+      return true;
+    case 'explore-group': {
+      const previousExploreGroup = previous as Extract<VirtualItem, { type: 'explore-group' }>;
+      return (
+        previousExploreGroup.data.groupId === next.data.groupId &&
+        previousExploreGroup.data.isGroupStreaming === next.data.isGroupStreaming &&
+        previousExploreGroup.data.isLastGroupInTurn === next.data.isLastGroupInTurn &&
+        previousExploreGroup.data.stats.readCount === next.data.stats.readCount &&
+        previousExploreGroup.data.stats.searchCount === next.data.stats.searchCount &&
+        previousExploreGroup.data.stats.thinkingCount === next.data.stats.thinkingCount &&
+        areRoundArraysReferentiallyEqual(previousExploreGroup.data.rounds, next.data.rounds) &&
+        areFlowItemArraysReferentiallyEqual(previousExploreGroup.data.allItems, next.data.allItems)
+      );
+    }
+  }
+}
+
+function reuseStableVirtualItems(items: VirtualItem[]): VirtualItem[] {
+  const nextCache = new Map<string, VirtualItem>();
+  const stabilizedItems = items.map(item => {
+    const cacheKey = getVirtualItemCacheKey(item);
+    const previous = cachedVirtualItemsByKey.get(cacheKey);
+    const stabilized = canReuseVirtualItem(previous, item) ? previous : item;
+    nextCache.set(cacheKey, stabilized);
+    return stabilized;
+  });
+  cachedVirtualItemsByKey = nextCache;
+  return stabilizedItems;
+}
 
 /**
  * Convert Session to virtualized render items
@@ -151,6 +232,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       cachedSession = null;
       cachedDialogTurnsRef = null;
       cachedVirtualItems = [];
+      cachedVirtualItemsByKey = new Map();
     }
     return cachedVirtualItems;
   }
@@ -269,8 +351,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     }
   });
 
-  cachedVirtualItems = items;
-  return items;
+  cachedVirtualItems = reuseStableVirtualItems(items);
+  return cachedVirtualItems;
 }
 
 function getInitialModernState(): Pick<
@@ -320,6 +402,7 @@ export const useModernFlowChatStore = create<ModernFlowChatState>()(
       cachedSession = null;
       cachedDialogTurnsRef = null;
       cachedVirtualItems = [];
+      cachedVirtualItemsByKey = new Map();
 
       set((state) => {
         state.activeSession = null;

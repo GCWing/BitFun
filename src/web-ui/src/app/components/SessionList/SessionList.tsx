@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Brush, Code2, ListTodo, Sparkles, MoreHorizontal, Loader2, LayoutGrid } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Brush, Code2, ListTodo, Sparkles, MoreHorizontal, Loader2, LayoutGrid, Square } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../flow_chat/store/FlowChatStore';
@@ -34,6 +34,8 @@ import {
   type RunningLiveAppItem,
 } from '@/app/scenes/apps/live-app/liveAppTaskView';
 import { renderLiveAppIcon } from '@/app/scenes/apps/live-app/liveAppIcons';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
+import { useLiveAppStore } from '@/app/scenes/apps/live-app/liveAppStore';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import { SessionExecutionState } from '@/flow_chat/state-machine/types';
 import './SessionList.scss';
@@ -84,6 +86,8 @@ const SessionList: React.FC<SessionListProps> = ({
   const { setActiveWorkspace, currentWorkspace, openedWorkspacesList } = useWorkspaceContext();
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
   const openOverlay = useOverlayStore(s => s.openOverlay);
+  const closeOverlay = useOverlayStore(s => s.closeOverlay);
+  const markWorkerStopped = useLiveAppStore(s => s.markWorkerStopped);
   const activeTabId = activeOverlay ?? AGENT_SCENE;
   const activeLiveAppId = resolveActiveRunningLiveAppId(activeOverlay);
   const runningLiveApps = useRunningLiveAppItems();
@@ -345,6 +349,31 @@ const SessionList: React.FC<SessionListProps> = ({
     []
   );
 
+  const handleCancelSessionTask = useCallback(
+    (event: React.MouseEvent, sessionId: string) => {
+      event.stopPropagation();
+      void flowChatManager.cancelTaskForSession(sessionId);
+    },
+    []
+  );
+
+  const handleStopLiveApp = useCallback(
+    async (event: React.MouseEvent, appId: string) => {
+      event.stopPropagation();
+      try {
+        await liveAppAPI.workerStop(appId);
+      } catch (error) {
+        log.warn('Failed to stop live app worker', { appId, error });
+      } finally {
+        markWorkerStopped(appId);
+        if (activeOverlay === `live-app:${appId}`) {
+          closeOverlay();
+        }
+      }
+    },
+    [activeOverlay, closeOverlay, markWorkerStopped]
+  );
+
   const handleStartEdit = useCallback(
     (event: React.MouseEvent, session: Session) => {
       event.stopPropagation();
@@ -427,6 +456,19 @@ const SessionList: React.FC<SessionListProps> = ({
                     {t('nav.sessionCapsule.liveAppBadge')}
                   </span>
                 </span>
+                <div className="bitfun-nav-panel__inline-item-trailing">
+                  <IconButton
+                    variant="ghost"
+                    size="xs"
+                    className="bitfun-nav-panel__inline-item-cancel-btn"
+                    onClick={event => void handleStopLiveApp(event, app.id)}
+                    tooltip={t('nav.sessionCapsule.stopRunningLiveApp')}
+                    tooltipPlacement="top"
+                    aria-label={t('nav.sessionCapsule.stopRunningLiveApp')}
+                  >
+                    <Square className="bitfun-nav-panel__inline-item-cancel-icon" size={11} strokeWidth={2.25} aria-hidden />
+                  </IconButton>
+                </div>
               </div>
             );
             return (
@@ -581,14 +623,29 @@ const SessionList: React.FC<SessionListProps> = ({
                     <span className="bitfun-nav-panel__inline-item-btw-badge">btw</span>
                   ) : null}
                 </span>
-                <div className="bitfun-nav-panel__inline-item-actions">
-                  <button
-                    type="button"
-                    className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
-                    onClick={event => handleMenuOpen(event, session.sessionId)}
-                  >
-                    <MoreHorizontal size={12} />
-                  </button>
+                <div className="bitfun-nav-panel__inline-item-trailing">
+                  {isRunning ? (
+                    <IconButton
+                      variant="ghost"
+                      size="xs"
+                      className="bitfun-nav-panel__inline-item-cancel-btn"
+                      onClick={event => handleCancelSessionTask(event, session.sessionId)}
+                      tooltip={t('nav.sessionCapsule.cancelRunningAgentTask')}
+                      tooltipPlacement="top"
+                      aria-label={t('nav.sessionCapsule.cancelRunningAgentTask')}
+                    >
+                      <Square className="bitfun-nav-panel__inline-item-cancel-icon" size={11} strokeWidth={2.25} aria-hidden />
+                    </IconButton>
+                  ) : null}
+                  <div className="bitfun-nav-panel__inline-item-actions">
+                    <button
+                      type="button"
+                      className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                      onClick={event => handleMenuOpen(event, session.sessionId)}
+                    >
+                      <MoreHorizontal size={12} />
+                    </button>
+                  </div>
                 </div>
                 {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(
                   <div

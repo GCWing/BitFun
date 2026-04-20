@@ -14,6 +14,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import {
@@ -49,7 +50,6 @@ import { designArtifactAPI } from './api';
 import {
   useDesignArtifactStore,
   type DesignArtifactManifest,
-  type DesignArtifactState,
   type SelectedElement,
 } from './store/designArtifactStore';
 import './DesignCanvasPanel.scss';
@@ -171,23 +171,31 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
   initialManifest,
 }) => {
   const { workspacePath: currentWorkspacePath } = useCurrentWorkspace();
-  const artifactState: DesignArtifactState | undefined = useDesignArtifactStore(
-    (s) => s.artifacts[artifactId]
+  const artifactStateMeta = useDesignArtifactStore(
+    useShallow((s) => {
+      const artifact = s.artifacts[artifactId];
+      return {
+        manifest: artifact?.manifest,
+      };
+    })
   );
+  const filesCache = useDesignArtifactStore((s) => s.artifacts[artifactId]?.fileCache ?? {});
+  const selectedElement = useDesignArtifactStore((s) => s.artifacts[artifactId]?.selectedElement);
+  const extractedTokens = useDesignArtifactStore((s) => s.artifacts[artifactId]?.tokens);
   const upsertManifest = useDesignArtifactStore((s) => s.upsertManifest);
   const setFileContent = useDesignArtifactStore((s) => s.setFileContent);
   const setSelectedElement = useDesignArtifactStore((s) => s.setSelectedElement);
   const setTokens = useDesignArtifactStore((s) => s.setTokens);
 
   useEffect(() => {
-    if (initialManifest && !artifactState) {
+    if (initialManifest && !artifactStateMeta.manifest) {
       upsertManifest(initialManifest, 'ok');
     }
-  }, [initialManifest, artifactState, upsertManifest]);
+  }, [initialManifest, artifactStateMeta.manifest, upsertManifest]);
 
-  const manifest = artifactState?.manifest ?? initialManifest;
+  const manifest = artifactStateMeta.manifest ?? initialManifest;
 
-  const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [viewport, setViewport] = useState<Viewport>('desktop');
   const [pickerActive, setPickerActive] = useState(false);
   const [activeFile, setActiveFile] = useState<string>(manifest?.entry ?? '');
@@ -217,7 +225,6 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
   const currentRoot = artifactRoot ? `${artifactRoot.replace(/[\\/]$/, '')}/current` : '';
   const versionsRoot = artifactRoot ? `${artifactRoot.replace(/[\\/]$/, '')}/versions` : '';
   const effectiveWorkspacePath = workspacePath || currentWorkspacePath;
-  const filesCache = artifactState?.fileCache ?? {};
   const isAgentLocked = Boolean(
     manifest?.editing_lock && manifest.editing_lock.holder !== 'human'
   );
@@ -318,7 +325,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
 
   const buildContinueContext = useCallback(() => {
     if (!manifest) return '';
-    const selection = artifactState?.selectedElement;
+    const selection = selectedElement;
     const parts: string[] = [];
     parts.push(`Continue working on design artifact \`${manifest.id}\` (${manifest.title}).`);
     if (manifest.current_version) {
@@ -343,7 +350,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       'Update the artifact via DesignArtifact (update_file / snapshot, pass expected_version to avoid overwriting concurrent human edits).'
     );
     return parts.join('\n');
-  }, [artifactState?.selectedElement, manifest]);
+  }, [selectedElement, manifest]);
 
   const handleContinueWithAgent = useCallback(() => {
     const text = buildContinueContext();
@@ -1016,8 +1023,8 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         {isInspectorOpen && (
           <DesignInspector
             manifest={manifest}
-            selectedElement={artifactState?.selectedElement}
-            tokens={artifactState?.tokens}
+            selectedElement={selectedElement}
+            tokens={extractedTokens}
             onOpenFile={(path) => {
               setActiveFile(path);
               ensureFileLoaded(path);
@@ -1028,15 +1035,15 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         )}
       </div>
 
-      {artifactState?.selectedElement?.domPath && !isInspectorOpen && (
+      {selectedElement?.domPath && !isInspectorOpen && (
         <div className="design-canvas-panel__inspector">
           <div className="design-canvas-panel__inspector-label">已选中</div>
           <code className="design-canvas-panel__inspector-path">
-            {artifactState.selectedElement.domPath}
+            {selectedElement.domPath}
           </code>
-          {artifactState.selectedElement.textExcerpt && (
+          {selectedElement.textExcerpt && (
             <span className="design-canvas-panel__inspector-text">
-              “{artifactState.selectedElement.textExcerpt}”
+              “{selectedElement.textExcerpt}”
             </span>
           )}
         </div>

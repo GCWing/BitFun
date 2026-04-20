@@ -923,7 +923,10 @@ impl ToolPipeline {
     /// Cancel tool execution
     pub async fn cancel_tool(&self, tool_id: &str, reason: String) -> BitFunResult<()> {
         let Some(task) = self.state_manager.get_task(tool_id) else {
-            debug!("Ignoring cancel request for unknown tool: tool_id={}", tool_id);
+            debug!(
+                "Ignoring cancel request for unknown tool: tool_id={}",
+                tool_id
+            );
             return Ok(());
         };
 

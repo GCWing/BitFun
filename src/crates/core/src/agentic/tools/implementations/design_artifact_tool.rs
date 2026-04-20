@@ -1585,7 +1585,7 @@ Operational rules:
 - Use relative paths inside the artifact (e.g. `index.html`, `styles/main.css`). Never use `..` or absolute paths.
 - Call `snapshot` at natural save points (finished an iteration, end of a Todo batch). Every snapshot records a short `summary` describing intent.
 - Keep each file under ~1000 lines; split into subfiles when they grow.
-- The artifact lives under `.design/<artifact_id>/` in the workspace. Treat that directory as owned by this tool family — write through this tool, not through Write/Edit."#.to_string())
+- The artifact lives under `.design/<artifact_id>/` in the workspace. Create, sync, snapshot, and inspect through this tool; write substantial file contents with Write/Edit under `<manifest.root>/current/...`."#.to_string())
     }
 
     async fn description_with_context(

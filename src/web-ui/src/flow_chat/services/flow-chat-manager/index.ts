@@ -46,6 +46,7 @@ export {
 export {
   sendMessage,
   cancelCurrentTask,
+  cancelTaskForSession,
   markCurrentTurnItemsAsCancelled
 } from './MessageModule';
 

@@ -181,8 +181,7 @@ impl TelegramBot {
     /// Send a local file to a Telegram chat as a document attachment.
     /// Caller is expected to pre-check the size against `MAX_TELEGRAM_FILE_BYTES`.
     async fn send_file_as_document(&self, chat_id: i64, file_path: &str) -> Result<()> {
-        let content =
-            super::read_workspace_file(file_path, MAX_TELEGRAM_FILE_BYTES, None).await?;
+        let content = super::read_workspace_file(file_path, MAX_TELEGRAM_FILE_BYTES, None).await?;
 
         let part = reqwest::multipart::Part::bytes(content.bytes)
             .file_name(content.name.clone())

@@ -271,6 +271,28 @@
     word-break: break-word;
   }
 
+  &__inline-item-trailing {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  &__inline-item-cancel-btn.icon-btn {
+    color: var(--color-warning, #c9944d);
+
+    &:hover:not(:disabled) {
+      color: color-mix(in srgb, var(--color-warning, #c9944d) 88%, white);
+      background: color-mix(in srgb, var(--color-warning, #c9944d) 18%, transparent);
+    }
+  }
+
+  &__inline-item-cancel-icon {
+    color: inherit;
+  }
+
   &__inline-item-actions {
     display: flex;
     align-items: center;
@@ -278,7 +300,6 @@
     gap: 2px;
     flex: 0 0 16px;
     width: 16px;
-    margin-left: auto;
     opacity: 0;
     pointer-events: none;
     transition: opacity $motion-fast $easing-standard;

@@ -18,7 +18,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Brush, Code2, ListChecks, LayoutDashboard, LayoutGrid, ListTodo, Pin, Plus, Sparkles } from 'lucide-react';
+import { Brush, Code2, ListChecks, LayoutDashboard, LayoutGrid, ListTodo, Pin, Plus, Sparkles, Square } from 'lucide-react';
 import { Search, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -42,6 +42,9 @@ import {
   type RunningLiveAppItem,
 } from '@/app/scenes/apps/live-app/liveAppTaskView';
 import { useOverlayStore } from '../../stores/overlayStore';
+import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
+import { useLiveAppStore } from '@/app/scenes/apps/live-app/liveAppStore';
 import { useSessionCapsuleStore } from '../../stores/sessionCapsuleStore';
 import SessionList from '../SessionList/SessionList';
 import { NewSessionDialog } from './NewSessionDialog';
@@ -100,6 +103,8 @@ const SessionCapsule: React.FC = () => {
   const { t } = useI18n('common');
   const activeOverlay = useOverlayStore((s) => s.activeOverlay);
   const openOverlay = useOverlayStore((s) => s.openOverlay);
+  const closeOverlay = useOverlayStore((s) => s.closeOverlay);
+  const markWorkerStopped = useLiveAppStore((s) => s.markWorkerStopped);
   const openTaskDetail = useSessionCapsuleStore((s) => s.openTaskDetail);
   const sessionListExpandNonce = useSessionCapsuleStore((s) => s.sessionListExpandNonce);
   const { openedWorkspacesList, setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
@@ -244,6 +249,28 @@ const SessionCapsule: React.FC = () => {
   const handleOpenLiveApp = useCallback((appId: string) => {
     openOverlay(`live-app:${appId}`);
   }, [openOverlay]);
+
+  const handleCancelSessionTask = useCallback((event: React.MouseEvent, sessionId: string) => {
+    event.stopPropagation();
+    void flowChatManager.cancelTaskForSession(sessionId);
+  }, []);
+
+  const handleStopLiveApp = useCallback(
+    async (event: React.MouseEvent, appId: string) => {
+      event.stopPropagation();
+      try {
+        await liveAppAPI.workerStop(appId);
+      } catch (error) {
+        log.warn('Failed to stop live app worker', { appId, error });
+      } finally {
+        markWorkerStopped(appId);
+        if (activeOverlay === `live-app:${appId}`) {
+          closeOverlay();
+        }
+      }
+    },
+    [activeOverlay, closeOverlay, markWorkerStopped]
+  );
 
   const toggle = useCallback(() => {
     setExpanded((v) => {
@@ -424,33 +451,44 @@ const SessionCapsule: React.FC = () => {
                 const { app } = item;
                 const focused = activeLiveAppId === app.id;
                 return (
-                  <Tooltip
-                    key={app.id}
-                    content={t('nav.sessionCapsule.runningLiveAppTooltip', { title: app.title })}
-                    placement="right"
-                  >
-                    <button
-                      type="button"
-                      className={`session-capsule__running-row${focused ? ' is-active' : ''}`}
-                      onClick={() => handleOpenLiveApp(app.id)}
-                      aria-label={t('nav.sessionCapsule.runningLiveAppTooltip', { title: app.title })}
+                  <div key={app.id} className="session-capsule__running-row-wrap">
+                    <Tooltip
+                      content={t('nav.sessionCapsule.runningLiveAppTooltip', { title: app.title })}
+                      placement="right"
                     >
-                      <span
-                        className={[
-                          'session-capsule__mode-avatar',
-                          'is-live-app',
-                          focused ? 'is-focused' : '',
-                        ].filter(Boolean).join(' ')}
-                        aria-hidden
+                      <button
+                        type="button"
+                        className={`session-capsule__running-row${focused ? ' is-active' : ''}`}
+                        onClick={() => handleOpenLiveApp(app.id)}
+                        aria-label={t('nav.sessionCapsule.runningLiveAppTooltip', { title: app.title })}
                       >
-                        {renderLiveAppIcon(app.icon, 12)}
-                      </span>
-                      <span className="session-capsule__running-row-title">{app.title}</span>
-                      <span className="session-capsule__running-row-badge" aria-hidden>
-                        <LayoutGrid size={10} />
-                      </span>
-                    </button>
-                  </Tooltip>
+                        <span
+                          className={[
+                            'session-capsule__mode-avatar',
+                            'is-live-app',
+                            focused ? 'is-focused' : '',
+                          ].filter(Boolean).join(' ')}
+                          aria-hidden
+                        >
+                          {renderLiveAppIcon(app.icon, 12)}
+                        </span>
+                        <span className="session-capsule__running-row-title">{app.title}</span>
+                        <span className="session-capsule__running-row-badge" aria-hidden>
+                          <LayoutGrid size={10} />
+                        </span>
+                      </button>
+                    </Tooltip>
+                    <Tooltip content={t('nav.sessionCapsule.stopRunningLiveApp')} placement="right">
+                      <button
+                        type="button"
+                        className="session-capsule__running-row-cancel"
+                        onClick={event => void handleStopLiveApp(event, app.id)}
+                        aria-label={t('nav.sessionCapsule.stopRunningLiveApp')}
+                      >
+                        <Square className="session-capsule__running-row-cancel-icon" size={10} strokeWidth={2.25} aria-hidden />
+                      </button>
+                    </Tooltip>
+                  </div>
                 );
               }
 
@@ -467,30 +505,41 @@ const SessionCapsule: React.FC = () => {
               const focused = isSessionUiFocused(session);
               const title = getSessionListTitle(session);
               return (
-                <Tooltip
-                  key={session.sessionId}
-                  content={t('nav.sessionCapsule.runningSwitchTooltip', { title })}
-                  placement="right"
-                >
-                  <button
-                    type="button"
-                    className={`session-capsule__running-row${focused ? ' is-active' : ''}`}
-                    onClick={() => void handleSwitchToSession(session.sessionId)}
-                    aria-label={t('nav.sessionCapsule.runningSwitchTooltip', { title })}
+                <div key={session.sessionId} className="session-capsule__running-row-wrap">
+                  <Tooltip
+                    content={t('nav.sessionCapsule.runningSwitchTooltip', { title })}
+                    placement="right"
                   >
-                    <span
-                      className={[
-                        'session-capsule__mode-avatar',
-                        `is-${mode}`,
-                        focused ? 'is-focused' : '',
-                      ].filter(Boolean).join(' ')}
-                      aria-hidden
+                    <button
+                      type="button"
+                      className={`session-capsule__running-row${focused ? ' is-active' : ''}`}
+                      onClick={() => void handleSwitchToSession(session.sessionId)}
+                      aria-label={t('nav.sessionCapsule.runningSwitchTooltip', { title })}
                     >
-                      <ModeIcon size={12} strokeWidth={2.4} />
-                    </span>
-                    <span className="session-capsule__running-row-title">{title}</span>
-                  </button>
-                </Tooltip>
+                      <span
+                        className={[
+                          'session-capsule__mode-avatar',
+                          `is-${mode}`,
+                          focused ? 'is-focused' : '',
+                        ].filter(Boolean).join(' ')}
+                        aria-hidden
+                      >
+                        <ModeIcon size={12} strokeWidth={2.4} />
+                      </span>
+                      <span className="session-capsule__running-row-title">{title}</span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip content={t('nav.sessionCapsule.cancelRunningAgentTask')} placement="right">
+                    <button
+                      type="button"
+                      className="session-capsule__running-row-cancel"
+                      onClick={event => handleCancelSessionTask(event, session.sessionId)}
+                      aria-label={t('nav.sessionCapsule.cancelRunningAgentTask')}
+                    >
+                      <Square className="session-capsule__running-row-cancel-icon" size={10} strokeWidth={2.25} aria-hidden />
+                    </button>
+                  </Tooltip>
+                </div>
               );
             })}
           </div>

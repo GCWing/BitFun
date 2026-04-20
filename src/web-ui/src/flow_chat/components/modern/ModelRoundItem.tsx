@@ -15,7 +15,7 @@ import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { isCollapsibleTool } from '../../tool-cards';
-import { useFlowChatContext } from './FlowChatContext';
+import { useFlowChatStaticContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
@@ -528,7 +528,7 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
     onFileViewRequest,
     onTabOpen,
     sessionId,
-  } = useFlowChatContext();
+  } = useFlowChatStaticContext();
   
   const handleConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
     if (onToolConfirm) {
@@ -602,7 +602,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, isLastItem })
     onFileViewRequest,
     onTabOpen,
     sessionId,
-  } = useFlowChatContext();
+  } = useFlowChatStaticContext();
   
   const isSubagentItem = (item as any).isSubagentItem === true;
   const parentTaskToolId = (item as any).parentTaskToolId;

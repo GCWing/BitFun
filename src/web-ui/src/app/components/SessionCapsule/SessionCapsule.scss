@@ -236,6 +236,30 @@
   align-items: center;
   padding: 1px 4px 3px;
   gap: 1px;
+
+  > .session-capsule__running-row-wrap {
+    animation: capsule-row-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+    @for $i from 1 through 10 {
+      &:nth-child(#{$i}) {
+        animation-delay: #{($i - 1) * 40}ms;
+      }
+    }
+  }
+}
+
+.session-capsule__running-row-wrap {
+  display: flex;
+  align-items: center;
+  width: 30px;
+  min-width: 30px;
+  gap: 0;
+
+  .session-capsule--running-hovered &,
+  .session-capsule--running:focus-within & {
+    width: calc(100% - 8px);
+    gap: 2px;
+  }
 }
 
 // Individual task row
@@ -260,12 +284,6 @@
     width $motion-fast $easing-standard,
     color $motion-fast $easing-standard,
     background $motion-fast $easing-standard;
-  // Staggered slide-in on initial render
-  animation: capsule-row-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
-
-  @for $i from 1 through 10 {
-    &:nth-child(#{$i}) { animation-delay: #{($i - 1) * 40}ms; }
-  }
 
   &:hover {
     color: var(--color-text-primary);
@@ -285,11 +303,58 @@
 
   .session-capsule--running-hovered &,
   .session-capsule--running:focus-within & {
-    width: calc(100% - 8px);
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
     justify-content: flex-start;
     gap: 7px;
     padding: 0 7px;
   }
+}
+
+.session-capsule__running-row-cancel {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-warning, #c9944d);
+  cursor: pointer;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    width $motion-fast $easing-standard,
+    opacity $motion-fast $easing-standard,
+    color $motion-fast $easing-standard,
+    background $motion-fast $easing-standard;
+
+  .session-capsule--running-hovered &,
+  .session-capsule--running:focus-within & {
+    width: 22px;
+    min-width: 22px;
+    opacity: 1;
+  }
+
+  &:hover {
+    color: color-mix(in srgb, var(--color-warning, #c9944d) 88%, white);
+    background: color-mix(in srgb, var(--color-warning, #c9944d) 18%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: -1px;
+  }
+}
+
+.session-capsule__running-row-cancel-icon {
+  color: inherit;
+  flex-shrink: 0;
 }
 
 @keyframes capsule-row-enter {

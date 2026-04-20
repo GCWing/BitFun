@@ -21,6 +21,7 @@ import {
   Clock,
   Radio,
   Server,
+  Square,
   Trash2,
   X,
 } from 'lucide-react';
@@ -44,7 +45,9 @@ import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { renderLiveAppIcon } from '@/app/scenes/apps/live-app/liveAppIcons';
+import { useLiveAppStore } from '@/app/scenes/apps/live-app/liveAppStore';
 import { useRunningLiveAppItems, type RunningLiveAppItem } from '@/app/scenes/apps/live-app/liveAppTaskView';
+import { liveAppAPI } from '@/infrastructure/api/service-api/LiveAppAPI';
 import './TaskDetailScene.scss';
 
 const log = createLogger('TaskDetailScene');
@@ -212,6 +215,7 @@ interface LiveAppRowProps {
   isHighlighted: boolean;
   formatRelativeTime: (ts: number) => string;
   onOpen: (appId: string) => void;
+  onClose: (e: React.MouseEvent, appId: string) => void;
 }
 
 const LiveAppRow: React.FC<LiveAppRowProps> = ({
@@ -219,39 +223,59 @@ const LiveAppRow: React.FC<LiveAppRowProps> = ({
   isHighlighted,
   formatRelativeTime,
   onOpen,
-}) => (
-  <div
-    className={[
-      'tds-row',
-      'tds-row--live-app',
-      isHighlighted && 'is-highlighted',
-      'is-running',
-    ].filter(Boolean).join(' ')}
-    role="button"
-    tabIndex={0}
-    onClick={() => onOpen(app.id)}
-    onKeyDown={e => e.key === 'Enter' && onOpen(app.id)}
-  >
-    <span className="tds-row__dot tds-row__dot--running" />
+  onClose,
+}) => {
+  const { t } = useI18n('common');
+  const closeLabel = t('taskDetailScene.closeLiveApp');
+  return (
+    <div
+      className={[
+        'tds-row',
+        'tds-row--live-app',
+        isHighlighted && 'is-highlighted',
+        'is-running',
+      ].filter(Boolean).join(' ')}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(app.id)}
+      onKeyDown={e => e.key === 'Enter' && onOpen(app.id)}
+    >
+      <span className="tds-row__dot tds-row__dot--running" />
 
-    <span className="tds-row__icon-wrap">
-      <span className="tds-row__live-app-icon">
-        {renderLiveAppIcon(app.icon, 13)}
+      <span className="tds-row__icon-wrap">
+        <span className="tds-row__live-app-icon">
+          {renderLiveAppIcon(app.icon, 13)}
+        </span>
       </span>
-    </span>
 
-    <span className="tds-row__body">
-      <span className="tds-row__title">{app.title}</span>
-      <span className="tds-row__meta">
-        <span className="tds-row__badge tds-row__badge--live-app">Live App</span>
-        <span className="tds-row__meta-dot">·</span>
-        <span className="tds-row__meta-item"><Clock size={9} />{formatRelativeTime(app.updatedAt)}</span>
+      <span className="tds-row__body">
+        <span className="tds-row__title">{app.title}</span>
+        <span className="tds-row__meta">
+          <span className="tds-row__badge tds-row__badge--live-app">Live App</span>
+          <span className="tds-row__meta-dot">·</span>
+          <span className="tds-row__meta-item"><Clock size={9} />{formatRelativeTime(app.updatedAt)}</span>
+        </span>
       </span>
-    </span>
 
-    <ArrowRight size={12} className="tds-row__arrow" />
-  </div>
-);
+      <IconButton
+        size="xs"
+        variant="ghost"
+        className="tds-row__delete-btn"
+        tooltip={closeLabel}
+        aria-label={closeLabel}
+        onClick={e => {
+          e.stopPropagation();
+          void onClose(e, app.id);
+        }}
+        onPointerDown={e => e.stopPropagation()}
+      >
+        <Square size={12} />
+      </IconButton>
+
+      <ArrowRight size={12} className="tds-row__arrow" />
+    </div>
+  );
+};
 
 // ── Right rail grouping ───────────────────────────────────────────────────────
 
@@ -474,6 +498,8 @@ const TaskDetailScene: React.FC = () => {
   const closeOverlay = useOverlayStore(s => s.closeOverlay);
   const openOverlay = useOverlayStore(s => s.openOverlay);
   const activeOverlay = useOverlayStore(s => s.activeOverlay);
+  const markWorkerStopped = useLiveAppStore(s => s.markWorkerStopped);
+  const closeLiveAppInStore = useLiveAppStore(s => s.closeApp);
   const runningLiveApps = useRunningLiveAppItems();
   const sshContext = useContext(SSHContext);
   const sshOpenAvailable =
@@ -764,6 +790,24 @@ const TaskDetailScene: React.FC = () => {
     closeTaskDetail();
   }, [closeTaskDetail, openOverlay]);
 
+  const handleCloseLiveApp = useCallback(
+    async (_e: React.MouseEvent, appId: string) => {
+      const overlayId = `live-app:${appId}`;
+      try {
+        await liveAppAPI.workerStop(appId);
+      } catch (err) {
+        log.warn('Failed to stop Live App worker', err);
+      } finally {
+        markWorkerStopped(appId);
+        closeLiveAppInStore(appId);
+        if (activeOverlay === overlayId) {
+          closeOverlay();
+        }
+      }
+    },
+    [activeOverlay, closeLiveAppInStore, closeOverlay, markWorkerStopped]
+  );
+
   const handleDeleteDispatcherSession = useCallback(async (session: Session, e: React.MouseEvent) => {
     e.stopPropagation();
     const label = dispatcherSessionTitle(session);
@@ -934,6 +978,7 @@ const TaskDetailScene: React.FC = () => {
                       isHighlighted={activeOverlay === app.overlayId}
                       formatRelativeTime={formatRelativeTime}
                       onOpen={handleOpenLiveApp}
+                      onClose={handleCloseLiveApp}
                     />
                   ))}
                   {groupedExecSessions.map(group => (

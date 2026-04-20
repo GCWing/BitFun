@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, User, Orbit } from 'lucide-react';
 import type { DialogTurn } from '../../types/flow-chat';
 import type { TriggerSource } from '@/shared/types/session-history';
-import { useFlowChatContext } from './FlowChatContext';
+import { useFlowChatStaticContext, useFlowChatViewContext } from './FlowChatContext';
 import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { snapshotAPI } from '@/infrastructure/api';
@@ -96,9 +96,10 @@ function highlightText(text: string, query: string): React.ReactNode {
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId }) => {
     const { t, i18n } = useTranslation('flow-chat');
-    const { sessionId, activeSessionOverride, searchQuery } = useFlowChatContext();
+    const { sessionId } = useFlowChatStaticContext();
+    const { searchQuery } = useFlowChatViewContext();
     const activeSessionFromStore = useActiveSession();
-    const activeSession = activeSessionOverride ?? activeSessionFromStore;
+    const activeSession = activeSessionFromStore;
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [isTruncated, setIsTruncated] = useState(false);

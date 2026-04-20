@@ -225,6 +225,26 @@ function assembleDocument(
   return out;
 }
 
+function collectReferencedAssetPaths(entryPath: string, entryHtml: string): string[] {
+  const referenced = new Set<string>();
+  const collect = (regex: RegExp) => {
+    for (const match of entryHtml.matchAll(regex)) {
+      const raw = String(match[1] || '').trim();
+      if (!raw || /^[a-z]+:/i.test(raw) || raw.startsWith('//') || raw.startsWith('data:')) {
+        continue;
+      }
+      referenced.add(joinDocumentRelative(entryPath, raw));
+    }
+  };
+
+  collect(/<link\s+[^>]*?href=["']([^"']+)["']/gi);
+  collect(/<script\s+[^>]*?src=["']([^"']+)["']/gi);
+  collect(/<(?:img|source|image|video|audio|link)[^>]*?\s(?:src|href|xlink:href)=["']([^"']+)["']/gi);
+  collect(/url\((?:['"])?([^)'"]+)(?:['"])?\)/gi);
+
+  return Array.from(referenced).sort();
+}
+
 const PICKER_INSTRUMENT = `
   (function () {
     var pickerActive = false;
@@ -356,9 +376,35 @@ export const DesignArtifactFrame: React.FC<DesignArtifactFrameProps> = ({
   const internalRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = frameRef ?? internalRef;
   const [isReady, setIsReady] = useState(false);
+  const entryHtml = files[entry];
+  const relevantAssetPaths = useMemo(() => {
+    if (typeof entryHtml !== 'string' || !/\.(html?)$/i.test(entry)) {
+      return [];
+    }
+    return collectReferencedAssetPaths(entry, entryHtml);
+  }, [entry, entryHtml]);
+  const textDependencySignature = useMemo(() => {
+    if (typeof entryHtml !== 'string' || !/\.(html?)$/i.test(entry)) {
+      return '';
+    }
+    return [
+      entry,
+      entryHtml,
+      ...relevantAssetPaths
+        .filter((path) => Object.prototype.hasOwnProperty.call(files, path))
+        .map((path) => `${path}:${files[path] ?? ''}`),
+    ].join('\u0001');
+  }, [entry, entryHtml, files, relevantAssetPaths]);
+  const assetDependencySignature = useMemo(
+    () =>
+      relevantAssetPaths
+        .filter((path) => Object.prototype.hasOwnProperty.call(assets ?? {}, path))
+        .map((path) => `${path}:${(assets ?? {})[path] ?? ''}`)
+        .join('\u0001'),
+    [assets, relevantAssetPaths]
+  );
 
   const doc = useMemo(() => {
-    const entryHtml = files[entry];
     if (typeof entryHtml !== 'string' || !/\.(html?)$/i.test(entry)) {
       return '<!doctype html><html><body><main style="font-family:Inter,system-ui,sans-serif;padding:24px;color:#111">Waiting for HTML entry...</main></body></html>';
     }
@@ -371,7 +417,7 @@ export const DesignArtifactFrame: React.FC<DesignArtifactFrameProps> = ({
       return assembled.replace(/<\/head>/i, `${inject}</head>`);
     }
     return `<!doctype html><html><head><meta charset="utf-8">${inject}</head><body>${assembled}</body></html>`;
-    }, [entry, files, assets]);
+    }, [assetDependencySignature, entry, entryHtml, textDependencySignature]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {

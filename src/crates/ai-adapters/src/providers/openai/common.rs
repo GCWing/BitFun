@@ -119,7 +119,11 @@ async fn list_codex_chatgpt_models(
     client: &AIClient,
     base_models_url: &str,
 ) -> Result<Vec<RemoteModelInfo>> {
-    let separator = if base_models_url.contains('?') { '&' } else { '?' };
+    let separator = if base_models_url.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
     let url = format!(
         "{base_models_url}{separator}client_version={version}",
         version = CODEX_CLIENT_VERSION_HEADER
@@ -155,7 +159,6 @@ async fn list_codex_chatgpt_models(
 
     Ok(dedupe_remote_models(filtered))
 }
-
 
 pub(crate) fn extract_tool_name(tool: &serde_json::Value) -> String {
     tool.get("function")

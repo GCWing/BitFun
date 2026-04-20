@@ -50,7 +50,6 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
   const resultPayload = useMemo(() => parseResult(toolResult?.result), [toolResult?.result]);
   const upsertManifest = useDesignArtifactStore((s) => s.upsertManifest);
   const upsertManifests = useDesignArtifactStore((s) => s.upsertManifests);
-  const setFileContent = useDesignArtifactStore((s) => s.setFileContent);
 
   const action = (toolCall?.input?.action as string) || 'create';
   const manifest = resultPayload?.manifest;
@@ -87,16 +86,10 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
     listed: '列表',
     ok: '完成',
   };
-  const streamingArtifactId =
-    (toolCall?.input?.artifact_id as string | undefined) ||
-    (toolCall?.input?.id as string | undefined) ||
-    manifest?.id;
   const streamingPath =
     (toolItem.partialParams?.path as string | undefined) ||
     (toolCall?.input?.path as string | undefined) ||
     (toolCall?.input?.entry as string | undefined);
-  const streamingContent = toolItem.partialParams?.content as string | undefined;
-  const streamingCreateFiles = toolItem.partialParams?.files as Record<string, string> | undefined;
 
   useEffect(() => {
     if (status !== 'completed' || !resultPayload?.success) return;
@@ -107,22 +100,6 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
       upsertManifests(manifests);
     }
   }, [status, resultPayload?.success, manifest, manifests, event, upsertManifest, upsertManifests]);
-
-  useEffect(() => {
-    if (!streamingArtifactId) return;
-    if (status !== 'streaming' && status !== 'running' && status !== 'preparing') return;
-    if (typeof streamingContent === 'string' && streamingContent.length > 0 && streamingPath) {
-      setFileContent(streamingArtifactId, streamingPath, streamingContent);
-      return;
-    }
-    if (streamingCreateFiles && typeof streamingCreateFiles === 'object') {
-      Object.entries(streamingCreateFiles).forEach(([path, content]) => {
-        if (typeof content === 'string' && content.length > 0) {
-          setFileContent(streamingArtifactId, path, content);
-        }
-      });
-    }
-  }, [status, streamingArtifactId, streamingPath, streamingContent, streamingCreateFiles, setFileContent]);
 
   const openInCanvas = useCallback(() => {
     if (!manifest) return;
