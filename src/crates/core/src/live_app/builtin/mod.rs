@@ -49,33 +49,32 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
         worker_js: include_str!("assets/divination/worker.js"),
         esm_dependencies_json: "[]",
     },
-    BuiltinApp {
-        id: "builtin-regex-playground",
-        version: 15,
-        meta_json: include_str!("assets/regex-playground/meta.json"),
-        html: include_str!("assets/regex-playground/index.html"),
-        css: include_str!("assets/regex-playground/style.css"),
-        ui_js: include_str!("assets/regex-playground/ui.js"),
-        worker_js: include_str!("assets/regex-playground/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinApp {
-        id: "builtin-coding-selfie",
-        version: 27,
-        meta_json: include_str!("assets/coding-selfie/meta.json"),
-        html: include_str!("assets/coding-selfie/index.html"),
-        css: include_str!("assets/coding-selfie/style.css"),
-        ui_js: include_str!("assets/coding-selfie/ui.js"),
-        worker_js: include_str!("assets/coding-selfie/worker.js"),
-        esm_dependencies_json: "[]",
-    },
 ];
+
+/// Built-in app ids that have been retired. On startup we remove their on-disk
+/// directories so they disappear from the gallery for users who previously had
+/// them seeded.
+pub const RETIRED_BUILTIN_APP_IDS: &[&str] =
+    &["builtin-regex-playground", "builtin-coding-selfie"];
 
 /// Seed all built-in Live Apps into the user data directory. Idempotent: skips apps
 /// whose on-disk marker version is >= the bundled version. User's `storage.json`
 /// is preserved across reseeds; source files & meta.json (without timestamps) are
 /// overwritten.
 pub async fn seed_builtin_live_apps(manager: &Arc<LiveAppManager>) -> BitFunResult<()> {
+    for app_id in RETIRED_BUILTIN_APP_IDS {
+        let app_dir = manager.path_manager().live_app_dir(app_id);
+        if app_dir.exists() {
+            match tokio::fs::remove_dir_all(&app_dir).await {
+                Ok(_) => log::info!("removed retired builtin live app '{}'", app_id),
+                Err(e) => log::warn!(
+                    "failed to remove retired builtin live app '{}': {}",
+                    app_id,
+                    e
+                ),
+            }
+        }
+    }
     for app in BUILTIN_APPS {
         if let Err(e) = seed_one(manager, app).await {
             log::warn!("seed builtin live app '{}' failed: {}", app.id, e);

@@ -10,6 +10,7 @@ import { open as dialogOpen, save as dialogSave, message as dialogMessage } from
 import type { LiveApp } from '@/infrastructure/api/service-api/LiveAppAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
+import { useI18n } from '@/infrastructure/i18n';
 import { buildLiveAppThemeVars } from '../buildLiveAppThemeVars';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 
@@ -33,8 +34,11 @@ export function useLiveAppBridge(
 ) {
   const { workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
+  const { currentLanguage } = useI18n();
   const themeRef = useRef(currentTheme);
   themeRef.current = currentTheme;
+  const localeRef = useRef(currentLanguage);
+  localeRef.current = currentLanguage;
   const workspacePathRef = useRef(workspacePath);
   workspacePathRef.current = workspacePath;
 
@@ -64,6 +68,16 @@ export function useLiveAppBridge(
         if (payload && iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage(
             { type: 'bitfun:event', event: 'themeChange', payload },
+            '*',
+          );
+        }
+        return;
+      }
+
+      if (method === 'bitfun/request-locale') {
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            { type: 'bitfun:event', event: 'localeChange', payload: { locale: localeRef.current } },
             '*',
           );
         }
@@ -160,6 +174,14 @@ export function useLiveAppBridge(
       '*',
     );
   }, [currentTheme, iframeRef]);
+
+  useEffect(() => {
+    if (!currentLanguage || !iframeRef.current?.contentWindow) return;
+    iframeRef.current.contentWindow.postMessage(
+      { type: 'bitfun:event', event: 'localeChange', payload: { locale: currentLanguage } },
+      '*',
+    );
+  }, [currentLanguage, iframeRef]);
 
   useEffect(() => {
     const currentAppId = app.id;
