@@ -154,7 +154,7 @@ impl AppState {
             None => {
                 log::warn!(
                     "worker_host.js not found in any candidate location; \
-                     MiniApp Workers will not start"
+                     Live App workers will not start"
                 );
                 std::path::PathBuf::from("worker_host.js")
             }

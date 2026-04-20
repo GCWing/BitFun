@@ -133,8 +133,19 @@ const ACTION_ALIASES: Record<string, Record<string, readonly string[]>> = {
   open_settings_tab: {
     tabId: ['tab_id', 'tab'],
   },
+  open_live_app: {
+    liveAppId: [
+      'live_app_id',
+      'miniAppId',
+      'mini_app_id',
+      'miniappId',
+      'miniapp_id',
+      'appId',
+      'app_id',
+    ],
+  },
   open_miniapp: {
-    miniAppId: ['mini_app_id', 'miniappId', 'miniapp_id', 'appId', 'app_id'],
+    miniAppId: ['mini_app_id', 'miniappId', 'miniapp_id', 'appId', 'app_id', 'liveAppId', 'live_app_id'],
   },
   set_default_model: {
     modelQuery: ['model_query', 'query', 'model'],
@@ -242,6 +253,7 @@ export type SelfControlAction =
   | { type: 'scroll'; selector?: string; direction: 'up' | 'down' | 'top' | 'bottom' }
   | { type: 'open_scene'; sceneId: string }
   | { type: 'open_settings_tab'; tabId: string }
+  | { type: 'open_live_app'; liveAppId: string }
   | { type: 'open_miniapp'; miniAppId: string }
   | { type: 'set_config'; key: string; configValue: unknown }
   | { type: 'get_config'; key: string }
@@ -489,8 +501,10 @@ export class SelfControlService {
         return this.openScene(action.sceneId);
       case 'open_settings_tab':
         return this.openSettingsTab(action.tabId);
+      case 'open_live_app':
+        return this.openLiveApp(action.liveAppId);
       case 'open_miniapp':
-        return this.openMiniApp(action.miniAppId);
+        return this.openLiveApp(action.miniAppId);
 
       // Region 3: Config & Models
       case 'set_config':
@@ -587,22 +601,31 @@ export class SelfControlService {
         return this.setModelEnabled(modelQuery, intent);
       }
 
+      case 'open_live_app_gallery':
       case 'open_miniapp_gallery': {
-        return this.openScene('miniapps');
+        return this.openScene('apps');
       }
 
+      case 'open_live_app':
       case 'open_miniapp': {
-        const miniAppId =
-          this.coerceParam(params?.miniAppId ?? params?.mini_app_id ?? params?.miniappId);
-        if (!miniAppId) {
-          throw new SelfControlError('Missing miniAppId for open_miniapp', 'INVALID_PARAMS');
+        const appId = this.coerceParam(
+          params?.liveAppId ??
+            params?.miniAppId ??
+            params?.mini_app_id ??
+            params?.miniappId,
+        );
+        if (!appId) {
+          throw new SelfControlError(
+            'Missing liveAppId for open_live_app / open_miniapp (aliases: miniAppId)',
+            'INVALID_PARAMS',
+          );
         }
-        return this.openMiniApp(miniAppId);
+        return this.openLiveApp(appId);
       }
 
       default:
         throw new SelfControlError(
-          `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, enable_model, disable_model, toggle_model, open_model_settings, return_to_session, delete_model, open_miniapp_gallery, open_miniapp.`,
+          `Unknown task: ${task}. Available tasks: set_primary_model, set_fast_model, enable_model, disable_model, toggle_model, open_model_settings, return_to_session, delete_model, open_live_app_gallery, open_live_app (legacy: open_miniapp_gallery, open_miniapp).`,
           'INVALID_PARAMS',
         );
     }
@@ -798,8 +821,12 @@ export class SelfControlService {
   }
 
   private openScene(sceneId: string): string {
-    useSceneStore.getState().openOverlay(sceneId as any);
-    return `Opened scene: ${sceneId}`;
+    let id = (sceneId ?? '').trim();
+    if (id === 'miniapps') {
+      id = 'apps';
+    }
+    useSceneStore.getState().openOverlay(id as any);
+    return `Opened scene: ${id}`;
   }
 
   private openSettingsTab(tabId: string): string {
@@ -808,10 +835,10 @@ export class SelfControlService {
     return `Opened settings tab: ${tabId}`;
   }
 
-  private openMiniApp(miniAppId: string): string {
-    const id = (miniAppId ?? '').trim();
+  private openLiveApp(liveAppId: string): string {
+    const id = (liveAppId ?? '').trim();
     if (!id) {
-      throw new SelfControlError('open_miniapp requires miniAppId', 'INVALID_PARAMS');
+      throw new SelfControlError('open_live_app requires liveAppId', 'INVALID_PARAMS');
     }
     const known = useLiveAppStore.getState().apps.find((app: { id: string }) => app.id === id);
     if (!known) {

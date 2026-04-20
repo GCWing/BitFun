@@ -69,7 +69,7 @@ Input: name, description, icon, category. The tool creates the app directory and
 - manifest (meta.json), source/index.html, source/style.css, source/ui.js, source/worker.js,
   package.json, storage.json.
 
-Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app. The Live App uses window.app (app.fs, app.call, app.dialog, etc.) — see the Live App API reference at MiniApp/Skills/miniapp-dev/api-reference.md in this repository."#
+Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app. The Live App uses window.app (app.fs, app.call, app.dialog, etc.) — see the Live App API reference at LiveApp/Skills/liveapp-dev/api-reference.md in this repository."#
             .to_string())
     }
 

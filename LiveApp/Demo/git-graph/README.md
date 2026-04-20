@@ -34,7 +34,7 @@ This demo showcases BitFun **Live App** full-stack collaboration — specificall
 ### Directory Structure
 
 ```
-MiniApp/Demo/git-graph/          # source tree in this repository
+LiveApp/Demo/git-graph/          # source tree in this repository
 ├── README.md           # this file
 ├── meta.json           # metadata & permissions (fs/shell/node)
 ├── package.json        # npm deps (simple-git) + build script
@@ -58,7 +58,7 @@ MiniApp/Demo/git-graph/          # source tree in this repository
     └── esm_dependencies.json  # ESM deps (empty for this demo)
 ```
 
-**During development**: after editing `source/ui/*.js` or `source/styles/*.css`, run `npm run build` inside this `git-graph` directory (repo path: `MiniApp/Demo/git-graph`) to regenerate `source/ui.js` and `source/style.css`. BitFun will pick up the latest build on next load.
+**During development**: after editing `source/ui/*.js` or `source/styles/*.css`, run `npm run build` inside this `git-graph` directory (repo path: `LiveApp/Demo/git-graph`) to regenerate `source/ui.js` and `source/style.css`. BitFun will pick up the latest build on next load.
 
 ### Running in BitFun
 
@@ -123,7 +123,7 @@ MiniApp/Demo/git-graph/          # source tree in this repository
 ### 目录结构
 
 ```
-MiniApp/Demo/git-graph/          # 仓库内源码路径
+LiveApp/Demo/git-graph/          # 仓库内源码路径
 ├── README.md           # 本说明
 ├── meta.json           # 元数据与权限（fs/shell/node）
 ├── package.json        # npm 依赖（simple-git）及 build 脚本
@@ -147,7 +147,7 @@ MiniApp/Demo/git-graph/          # 仓库内源码路径
     └── esm_dependencies.json  # ESM 依赖（本示例为空）
 ```
 
-**开发时**：修改 `source/ui/*.js` 或 `source/styles/*.css` 后，在本仓库的 `MiniApp/Demo/git-graph` 目录执行 `npm run build` 生成 `source/ui.js` 与 `source/style.css`，BitFun 加载时会使用最新构建结果。
+**开发时**：修改 `source/ui/*.js` 或 `source/styles/*.css` 后，在本仓库的 `LiveApp/Demo/git-graph` 目录执行 `npm run build` 生成 `source/ui.js` 与 `source/style.css`，BitFun 加载时会使用最新构建结果。
 
 ### 在 BitFun 中运行
 
