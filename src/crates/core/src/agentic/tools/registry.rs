@@ -148,10 +148,16 @@ impl ToolRegistry {
         // Live App tool (InitLiveApp)
         self.register_tool(Arc::new(InitLiveAppTool::new()));
 
-        // All desktop automation consolidated into ComputerUse (click_element, click, mouse_move,
-        // scroll, drag, screenshot, locate, key_chord, type_text, pointer_move_rel, wait).
-        // The separate ComputerUseMousePrecise/Step/Click tools are no longer registered.
-        self.register_tool(Arc::new(ComputerUseTool::new()));
+        // ControlHub — sole unified control entry point that aggregates ALL control
+        // capabilities (app, desktop, browser, terminal, system, meta) into a single
+        // tool. Legacy split control tools are intentionally NOT registered
+        // here: their implementations are kept internal where needed and reused by
+        // ControlHub, but the model only ever sees one control tool to eliminate
+        // cross-tool selection mistakes.
+        self.register_tool(Arc::new(ControlHubTool::new()));
+
+        // Playbook — predefined step-by-step operation guides for common tasks.
+        self.register_tool(Arc::new(PlaybookTool::new()));
     }
 
     /// Register a single tool
@@ -198,6 +204,22 @@ mod tests {
     fn registry_includes_cron_tool() {
         let registry = create_tool_registry();
         assert!(registry.get_tool("Cron").is_some());
+    }
+
+    /// Phase 0 contract: ControlHub is the sole control entry point. Legacy
+    /// split control tools must NOT be visible to the model; their
+    /// implementations are reused internally only.
+    #[test]
+    fn registry_exposes_controlhub_only_for_control_capabilities() {
+        let registry = create_tool_registry();
+        assert!(
+            registry.get_tool("ControlHub").is_some(),
+            "ControlHub must be registered as the unified control tool"
+        );
+        assert!(
+            registry.get_tool("ComputerUse").is_none(),
+            "Legacy split control tools must remain hidden (Phase 0 dedup)"
+        );
     }
 
     #[test]
