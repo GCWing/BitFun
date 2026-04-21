@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Palette, ExternalLink, Check, AlertCircle, Loader2, ChevronDown, ChevronRight, Clock, RotateCcw } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
@@ -65,6 +66,7 @@ function relativeLuminance(input?: string): number | undefined {
 }
 
 const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
+  const { t } = useTranslation('flow-chat');
   const colors = proposal.colors || {};
   const typography = proposal.typography || {};
   const radius = proposal.radius || {};
@@ -138,9 +140,14 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
     '--mp-shadow': mdShadow,
   } as React.CSSProperties;
 
+  const modeLabel =
+    mode === 'native'
+      ? t('toolCards.designTokens.previewModeNative')
+      : t('toolCards.designTokens.previewModeInverse');
+
   return (
     <div className={`dtp-preview dtp-preview--${mode}`} style={style}>
-      <div className="dtp-preview__label">{mode}</div>
+      <div className="dtp-preview__label">{modeLabel}</div>
       <div className="dtp-preview__type" style={{ fontSize: titleSize }}>
         Aa
         <span style={{ fontSize: bodySize }}>Ag</span>
@@ -148,14 +155,18 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
       </div>
 
       <div className="dtp-preview__components">
-        <button type="button" className="dtp-preview__btn dtp-preview__btn--primary">Primary</button>
-        <button type="button" className="dtp-preview__btn dtp-preview__btn--ghost">Ghost</button>
+        <button type="button" className="dtp-preview__btn dtp-preview__btn--primary">
+          {t('toolCards.designTokens.previewPrimary')}
+        </button>
+        <button type="button" className="dtp-preview__btn dtp-preview__btn--ghost">
+          {t('toolCards.designTokens.previewGhost')}
+        </button>
       </div>
       <div className="dtp-preview__components">
         <div className="dtp-preview__input">
-          <span>Placeholder</span>
+          <span>{t('toolCards.designTokens.previewPlaceholder')}</span>
         </div>
-        <label className="dtp-preview__switch" aria-label="switch">
+        <label className="dtp-preview__switch" aria-label={t('toolCards.designTokens.switchAriaLabel')}>
           <input type="checkbox" defaultChecked readOnly />
           <span className="dtp-preview__switch-track"><span className="dtp-preview__switch-thumb" /></span>
         </label>
@@ -165,6 +176,7 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
 };
 
 const StreamingProposalPreview: React.FC<{ proposal: any }> = React.memo(({ proposal }) => {
+  const { t } = useTranslation('flow-chat');
   const colorEntries = Object.entries(proposal.colors || {}).slice(0, STREAMING_SWATCH_LIMIT) as Array<[string, string]>;
 
   return (
@@ -172,9 +184,11 @@ const StreamingProposalPreview: React.FC<{ proposal: any }> = React.memo(({ prop
       <header className="design-tokens-proposal-card__head">
         <div className="design-tokens-proposal-card__name">
           <div className="design-tokens-proposal-card__name-row">
-            <strong>{proposal.name || 'Untitled proposal'}</strong>
+            <strong>{proposal.name || t('toolCards.designTokens.untitledProposal')}</strong>
           </div>
-          <span className="design-tokens-proposal-card__mood">{proposal.mood || 'Design direction'}</span>
+          <span className="design-tokens-proposal-card__mood">
+            {proposal.mood || t('toolCards.designTokens.defaultMood')}
+          </span>
         </div>
       </header>
       <div className="design-tokens-proposal-card__swatches">
@@ -187,7 +201,7 @@ const StreamingProposalPreview: React.FC<{ proposal: any }> = React.memo(({ prop
       </div>
       <div className="design-tokens-proposal-card__pending">
         <Loader2 size={14} className="is-spinning" />
-        <span>提案仍在传输中，完成后会显示完整预览。</span>
+        <span>{t('toolCards.designTokens.streamingHint')}</span>
       </div>
     </article>
   );
@@ -195,6 +209,7 @@ const StreamingProposalPreview: React.FC<{ proposal: any }> = React.memo(({ prop
 StreamingProposalPreview.displayName = 'StreamingProposalPreview';
 
 export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) => {
+  const { t } = useTranslation('flow-chat');
   const { workspacePath } = useCurrentWorkspace();
   const result = useMemo(() => parseResult(toolItem.toolResult?.result), [toolItem.toolResult?.result]);
   const { status, toolResult, toolCall, partialParams, isParamsStreaming } = toolItem;
@@ -212,7 +227,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
 
   const isCompleted = status === 'completed';
   const isFailed = status === 'error' || toolResult?.success === false;
-  const failure = toolResult?.error || result?.error || 'Design token generation failed.';
+  const failure = toolResult?.error || result?.error || t('toolCards.designTokens.generationFailed');
 
   // Prefer the authoritative result when the tool has completed; otherwise fall back to the streaming input.
   const proposals: any[] = resultTokens?.proposals?.length ? resultTokens.proposals : inputProposals;
@@ -267,7 +282,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
     ideControl.panel.open('design-tokens-studio', {
       position: 'right',
       config: {
-        title: '设计令牌',
+        title: t('toolCards.designTokens.studioPanelTitle'),
         data: {
           artifactId: artifactIdFromInput,
           scopePath: scopeKey,
@@ -276,7 +291,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
       },
       options: { auto_focus: true, check_duplicate: true },
     });
-  }, [scopeKey, artifactIdFromInput, workspacePath]);
+  }, [scopeKey, artifactIdFromInput, workspacePath, t]);
 
   const submitChoice = useCallback(async (proposalId: string) => {
     if (isSubmitting || isParamsStreaming) return;
@@ -325,11 +340,11 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
           </div>
         ) : (
           <div className="design-tokens-proposal-card__title">
-            <span>设计方向提案</span>
+            <span>{t('toolCards.designTokens.cardTitle')}</span>
             {proposals.length > 0 && <span className="design-tokens-proposal-card__count">{proposals.length}</span>}
             {awaitingSelection && (
               <span className="design-tokens-proposal-card__awaiting-chip">
-                <Loader2 size={10} className="is-spinning" /> 等待你的选择
+                <Loader2 size={10} className="is-spinning" /> {t('toolCards.designTokens.awaitingYourChoice')}
                 {remainingMs !== null && (
                   <span className="design-tokens-proposal-card__countdown">
                     <Clock size={10} />
@@ -341,17 +356,17 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
             )}
             {isCompleted && committedId && (
               <span className="design-tokens-proposal-card__committed-chip">
-                <Check size={10} /> 已采用
+                <Check size={10} /> {t('toolCards.designTokens.adopted')}
               </span>
             )}
             {isCompleted && !committedId && selectionStatus && (
               <span className="design-tokens-proposal-card__warn-chip">
                 {selectionStatus === 'timeout'
-                  ? '已超时'
+                  ? t('toolCards.designTokens.statusTimeout')
                   : selectionStatus === 'cancelled'
-                    ? '已取消'
+                    ? t('toolCards.designTokens.statusCancelled')
                     : selectionStatus === 'invalid'
-                      ? '选择无效'
+                      ? t('toolCards.designTokens.statusInvalid')
                       : selectionStatus}
               </span>
             )}
@@ -360,7 +375,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
       }
       extra={
         !isFailed ? (
-          <Tooltip content="打开令牌工作台" placement="top">
+          <Tooltip content={t('toolCards.designTokens.openTokensStudio')} placement="top">
             <span>
               <IconButton
                 type="button"
@@ -425,7 +440,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
                 <span key={name} style={{ background: String(value) }} title={`${name} · ${value}`} />
               ))}
             </span>
-            <span className="design-tokens-proposal-card__collapsed-hint">展开</span>
+            <span className="design-tokens-proposal-card__collapsed-hint">{t('toolCards.designTokens.expand')}</span>
           </button>
         </article>
       );
@@ -441,7 +456,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
                   type="button"
                   className="design-tokens-proposal-card__collapse-btn"
                   onClick={() => toggleExpand(proposal.id)}
-                  title="Collapse"
+                  title={t('toolCards.designTokens.collapse')}
                 >
                   <ChevronDown size={12} />
                 </button>
@@ -452,7 +467,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
           </div>
           {isCommitted && (
             <span className="design-tokens-proposal-card__badge">
-              <Check size={10} /> 已采用
+              <Check size={10} /> {t('toolCards.designTokens.adopted')}
             </span>
           )}
         </header>
@@ -468,15 +483,15 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
 
         <dl className="design-tokens-proposal-card__system">
           <div>
-            <dt>字体</dt>
+            <dt>{t('toolCards.designTokens.font')}</dt>
             <dd title={family}>{family.split(',')[0].replace(/['"]/g, '')} · {displaySize}/{bodySize}</dd>
           </div>
           <div>
-            <dt>圆角</dt>
+            <dt>{t('toolCards.designTokens.radius')}</dt>
             <dd>{radiusMd}</dd>
           </div>
           <div>
-            <dt>阴影</dt>
+            <dt>{t('toolCards.designTokens.shadow')}</dt>
             <dd className="design-tokens-proposal-card__shadow-chip" style={{ boxShadow: shadowMd }} />
           </div>
         </dl>
@@ -497,28 +512,28 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
               isLoading={isPendingThis}
             >
               {isPendingThis ? (
-                <>正在提交…</>
+                <>{t('toolCards.designTokens.submitting')}</>
               ) : (
                 <>
                   <Check size={12} />
-                  采用这套体系
+                  {t('toolCards.designTokens.adoptThisSystem')}
                 </>
               )}
             </Button>
           ) : isCompleted ? (
             isCommitted ? (
               <Button size="small" variant="ghost" type="button" disabled>
-                <Check size={12} /> 已采用
+                <Check size={12} /> {t('toolCards.designTokens.adopted')}
               </Button>
             ) : (
               <Button size="small" variant="ghost" type="button" onClick={() => recommit(proposal.id)}>
-                <Check size={12} /> 切换到这套
+                <Check size={12} /> {t('toolCards.designTokens.switchToThisSystem')}
               </Button>
             )
           ) : null}
           <Button size="small" variant="ghost" type="button" onClick={openStudio}>
             <ExternalLink size={12} />
-            在工作台打开
+            {t('toolCards.designTokens.openInStudio')}
           </Button>
         </div>
       </article>
@@ -536,21 +551,25 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
           <div className="design-tokens-proposal-card__error-body">
             <AlertCircle size={16} />
             <div>
-              <div className="design-tokens-proposal-card__error-title">令牌方向生成失败</div>
+              <div className="design-tokens-proposal-card__error-title">{t('toolCards.designTokens.errorTitle')}</div>
               <div className="design-tokens-proposal-card__error-copy">{failure}</div>
             </div>
           </div>
         ) : awaitingPayload ? (
           <div className="design-tokens-proposal-card__pending">
             <Loader2 size={14} className="is-spinning" />
-            <span>{isParamsStreaming ? '正在接收方向提案…' : '正在准备方向…'}</span>
+            <span>
+              {isParamsStreaming
+                ? t('toolCards.designTokens.receivingDirections')
+                : t('toolCards.designTokens.preparingDirections')}
+            </span>
           </div>
         ) : (
           <>
             {proposals.length > 0 && Boolean(isParamsStreaming) && (
               <div className="design-tokens-proposal-card__list-streaming-hint" role="status">
                 <Loader2 size={12} className="is-spinning" />
-                <span>正在接收方向提案，传输完成后再选择</span>
+                <span>{t('toolCards.designTokens.streamingSelectHint')}</span>
               </div>
             )}
             <div className="design-tokens-proposal-card__list">
@@ -560,7 +579,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
               <div className="design-tokens-proposal-card__retry">
                 <Button size="small" variant="ghost" type="button" onClick={retryAwaitSelection}>
                   <RotateCcw size={12} />
-                  重新打开选择
+                  {t('toolCards.designTokens.reopenSelection')}
                 </Button>
               </div>
             )}

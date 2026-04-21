@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Palette, ExternalLink, FileStack, GitBranch } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
@@ -45,6 +46,7 @@ function parseResult(raw: unknown): ResultPayload | null {
 }
 
 export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) => {
+  const { t } = useTranslation('flow-chat');
   const { status, toolCall, toolResult } = toolItem;
   const { workspacePath } = useCurrentWorkspace();
   const resultPayload = useMemo(() => parseResult(toolResult?.result), [toolResult?.result]);
@@ -56,36 +58,16 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
   const manifests = resultPayload?.manifests;
   const event = resultPayload?.artifact_event ?? 'ok';
   const isFailed = status === 'error' || resultPayload?.success === false;
-  const failure = resultPayload?.error || '设计产物操作失败';
+  const failure = resultPayload?.error || t('toolCards.designArtifact.operationFailed');
 
-  const ACTION_LABELS: Record<string, string> = {
-    create: '创建',
-    update_file: '更新文件',
-    delete_file: '删除文件',
-    set_entry: '设为入口',
-    snapshot: '快照',
-    acquire_lock: '获取锁',
-    release_lock: '释放锁',
-    set_thumbnail: '更新缩略图',
-    zip_export: '导出 zip',
-    archive: '归档',
-    get: '查看',
-    list: '列表',
-  };
-  const EVENT_LABELS: Record<string, string> = {
-    created: '已创建',
-    'file-changed': '已更新',
-    'file-removed': '已删除',
-    'manifest-updated': '已更新清单',
-    'snapshot-committed': '已快照',
-    'lock-acquired': '已上锁',
-    'lock-released': '已解锁',
-    'thumbnail-updated': '缩略图已更新',
-    exported: '已导出',
-    archived: '已归档',
-    listed: '列表',
-    ok: '完成',
-  };
+  const actionLabel = useCallback(
+    (a: string) => t(`toolCards.designArtifact.actions.${a}`, { defaultValue: a }),
+    [t]
+  );
+  const eventLabel = useCallback(
+    (e: string) => t(`toolCards.designArtifact.events.${e}`, { defaultValue: e }),
+    [t]
+  );
   const streamingPath =
     (toolItem.partialParams?.path as string | undefined) ||
     (toolCall?.input?.path as string | undefined) ||
@@ -121,10 +103,14 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
   const filesCount = manifest?.files?.length ?? 0;
   const versionsCount = manifest?.versions?.length ?? 0;
   const subtitle = manifest
-    ? `${manifest.kind} · ${filesCount} 个文件 · ${versionsCount} 次快照`
+    ? t('toolCards.designArtifact.manifestSubtitle', {
+        kind: manifest.kind,
+        filesCount,
+        versionsCount,
+      })
     : action === 'list'
-      ? `共 ${manifests?.length ?? 0} 个产物`
-      : (ACTION_LABELS[action] ?? action);
+      ? t('toolCards.designArtifact.listSubtitle', { count: manifests?.length ?? 0 })
+      : actionLabel(action);
 
   const header = (
     <ToolCardHeader
@@ -134,13 +120,13 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
         <div className="design-artifact-index-card__header">
           <div className="design-artifact-index-card__title-row">
             <span className="design-artifact-index-card__title">
-              {manifest?.title || '设计产物'}
+              {manifest?.title || t('toolCards.designArtifact.defaultTitle')}
             </span>
             {manifest?.id && (
               <code className="design-artifact-index-card__id">{manifest.id}</code>
             )}
             <span className={`design-artifact-index-card__event design-artifact-index-card__event--${event}`}>
-              {EVENT_LABELS[event] ?? event}
+              {eventLabel(event)}
             </span>
           </div>
           <div className="design-artifact-index-card__subtitle">
@@ -159,7 +145,7 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
             }}
           >
             <ExternalLink size={12} />
-            <span>在画布打开</span>
+            <span>{t('toolCards.designArtifact.openInCanvas')}</span>
           </button>
         ) : null
       }
@@ -174,7 +160,7 @@ export const DesignArtifactIndexCard: React.FC<ToolCardProps> = ({ toolItem }) =
       </div>
       {status !== 'completed' && streamingPath && (
         <div className="design-artifact-index-card__stat">
-          <span>正在写入</span>
+          <span>{t('toolCards.designArtifact.writing')}</span>
           <code>{streamingPath}</code>
         </div>
       )}

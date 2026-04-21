@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ClipboardCopy, FileText, Layers, Palette } from 'lucide-react';
 import type { DesignArtifactManifest, SelectedElement } from './store/designArtifactStore';
 import './DesignInspector.scss';
@@ -22,29 +23,31 @@ export interface DesignInspectorProps {
   onCopyContext: () => void;
 }
 
-const ASSET_KIND_LABELS: Record<string, string> = {
-  html: '页面',
-  css: '样式',
-  js: '脚本',
-  mjs: '脚本',
-  json: '数据',
-  png: '图片',
-  jpg: '图片',
-  jpeg: '图片',
-  webp: '图片',
-  svg: '图片',
-  ttf: '字体',
-  woff: '字体',
-  woff2: '字体',
+const EXT_TO_KIND: Record<string, string> = {
+  html: 'page',
+  css: 'style',
+  js: 'script',
+  mjs: 'script',
+  json: 'data',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  webp: 'image',
+  svg: 'image',
+  ttf: 'font',
+  woff: 'font',
+  woff2: 'font',
 };
 
-function groupFiles(manifest: DesignArtifactManifest) {
-    const groups: Record<string, string[]> = {};
+const KIND_ORDER = ['page', 'style', 'script', 'data', 'image', 'font', 'other'];
+
+function groupFiles(manifest: DesignArtifactManifest): Record<string, string[]> {
+  const groups: Record<string, string[]> = {};
   for (const file of manifest.files) {
-    const ext = (file.path.split('.').pop() || 'other').toLowerCase();
-    const label = ASSET_KIND_LABELS[ext] ?? '其他';
-    if (!groups[label]) groups[label] = [];
-    groups[label].push(file.path);
+    const ext = (file.path.split('.').pop() || '').toLowerCase();
+    const kind = EXT_TO_KIND[ext] || 'other';
+    if (!groups[kind]) groups[kind] = [];
+    groups[kind].push(file.path);
   }
   return groups;
 }
@@ -56,15 +59,25 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
   onOpenFile,
   onCopyContext,
 }) => {
+  const { t } = useTranslation('flow-chat');
   const [tab, setTab] = useState<InspectorTab>('element');
 
   const grouped = useMemo(() => groupFiles(manifest), [manifest]);
+  const sortedGroups = useMemo(() => {
+    return Object.entries(grouped).sort(
+      (a, b) => KIND_ORDER.indexOf(a[0]) - KIND_ORDER.indexOf(b[0])
+    );
+  }, [grouped]);
+
   const tokenEntries = useMemo(() => {
     const source = tokens ?? {};
     return Object.keys(source)
       .sort()
       .map((name) => [name, source[name]] as const);
   }, [tokens]);
+
+  const assetKindLabel = (kind: string) =>
+    t(`designCanvas.inspector.assetKind.${kind}`, { defaultValue: kind });
 
   return (
     <aside className="design-inspector">
@@ -75,7 +88,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
           onClick={() => setTab('element')}
         >
           <Layers size={13} />
-          元素
+          {t('designCanvas.inspector.tabElement')}
         </button>
         <button
           type="button"
@@ -83,7 +96,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
           onClick={() => setTab('tokens')}
         >
           <Palette size={13} />
-          令牌
+          {t('designCanvas.inspector.tabTokens')}
         </button>
         <button
           type="button"
@@ -91,7 +104,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
           onClick={() => setTab('assets')}
         >
           <FileText size={13} />
-          资源
+          {t('designCanvas.inspector.tabAssets')}
         </button>
       </div>
 
@@ -100,17 +113,17 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
           <div className="design-inspector__section">
             {!selectedElement?.domPath ? (
               <div className="design-inspector__empty">
-                在工具栏启用取样器，然后点击预览中的任意元素以查看其计算样式。
+                {t('designCanvas.inspector.elementHint')}
               </div>
             ) : (
               <>
                 <div className="design-inspector__row">
-                  <span className="design-inspector__label">路径</span>
+                  <span className="design-inspector__label">{t('designCanvas.inspector.path')}</span>
                   <code className="design-inspector__value">{selectedElement.domPath}</code>
                 </div>
                 {selectedElement.textExcerpt && (
                   <div className="design-inspector__row">
-                    <span className="design-inspector__label">文字</span>
+                    <span className="design-inspector__label">{t('designCanvas.inspector.text')}</span>
                     <span className="design-inspector__value">
                       “{selectedElement.textExcerpt}”
                     </span>
@@ -118,7 +131,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
                 )}
                 {selectedElement.rect && (
                   <div className="design-inspector__row">
-                    <span className="design-inspector__label">盒子</span>
+                    <span className="design-inspector__label">{t('designCanvas.inspector.box')}</span>
                     <code className="design-inspector__value">
                       {`${Math.round(selectedElement.rect.width)}×${Math.round(
                         selectedElement.rect.height
@@ -128,7 +141,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
                     </code>
                   </div>
                 )}
-                <div className="design-inspector__subhead">计算样式</div>
+                <div className="design-inspector__subhead">{t('designCanvas.inspector.computedStyles')}</div>
                 <div className="design-inspector__styles">
                   {selectedElement.computedStyle &&
                   Object.keys(selectedElement.computedStyle).length > 0 ? (
@@ -139,7 +152,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
                       </div>
                     ))
                   ) : (
-                    <div className="design-inspector__empty">暂无样式数据</div>
+                    <div className="design-inspector__empty">{t('designCanvas.inspector.noStyleData')}</div>
                   )}
                 </div>
                 <button
@@ -148,7 +161,7 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
                   onClick={onCopyContext}
                 >
                   <ClipboardCopy size={12} />
-                  复制选中上下文
+                  {t('designCanvas.inspector.copyContext')}
                 </button>
               </>
             )}
@@ -157,10 +170,10 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
 
         {tab === 'tokens' && (
           <div className="design-inspector__section">
-            <div className="design-inspector__subhead">设计令牌</div>
+            <div className="design-inspector__subhead">{t('designCanvas.inspector.tokensHead')}</div>
             {tokenEntries.length === 0 ? (
               <div className="design-inspector__empty">
-                未在文档根节点发现 CSS 自定义属性。
+                {t('designCanvas.inspector.noCssVariables')}
               </div>
             ) : (
               <div className="design-inspector__tokens">
@@ -186,9 +199,9 @@ export const DesignInspector: React.FC<DesignInspectorProps> = ({
 
         {tab === 'assets' && (
           <div className="design-inspector__section">
-            {Object.entries(grouped).map(([groupLabel, files]) => (
-              <div key={groupLabel} className="design-inspector__asset-group">
-                <div className="design-inspector__subhead">{groupLabel}</div>
+            {sortedGroups.map(([kindKey, files]) => (
+              <div key={kindKey} className="design-inspector__asset-group">
+                <div className="design-inspector__subhead">{assetKindLabel(kindKey)}</div>
                 <ul className="design-inspector__asset-list">
                   {files.map((path) => (
                     <li key={path}>

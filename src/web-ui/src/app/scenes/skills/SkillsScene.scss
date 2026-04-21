@@ -256,7 +256,7 @@ $skills-column-gap:  clamp(14px, 1.6vw, 20px);
   }
 }
 
-// Market cards — 3-column × 2-row grid (6 cards per page)
+// Market cards — 3-column grid (12 cards per page, 4 rows)
 .skills-split__market-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -73,7 +73,7 @@ const SkillsScene: React.FC = () => {
   const market = useSkillMarket({
     searchQuery: marketQuery,
     installedSkillNames,
-    pageSize: 6,
+    pageSize: 12,
     onInstalledChanged: async () => {
       await installed.loadSkills(true);
     },
@@ -137,7 +137,7 @@ const SkillsScene: React.FC = () => {
 
   const marketSkeletonGrid = (keyPrefix: string) => (
     <div className="skills-split__skeleton-grid" aria-busy="true" aria-label={t('list.loading')}>
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 12 }).map((_, i) => (
         <div
           key={`${keyPrefix}-${i}`}
           className="skills-split__skeleton-card"
@@ -222,7 +222,7 @@ const SkillsScene: React.FC = () => {
               </div>
             )}
 
-            {/* Market cards grid — 3×2, 6 per page */}
+            {/* Market cards grid — 3×4, 12 per page */}
             {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length > 0 && (
               <div className="skills-split__market-grid">
                 {market.marketSkills.map((skill, index) => {

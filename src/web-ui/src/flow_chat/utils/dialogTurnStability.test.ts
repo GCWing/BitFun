@@ -61,6 +61,27 @@ describe('dialogTurnStability', () => {
     expect(normalizeRecoveredTurnStatus('processing', { error: null })).toBe('cancelled');
   });
 
+  it('normalizes recovered in-progress turns with failed tools to error', () => {
+    expect(
+      normalizeRecoveredTurnStatus('inprogress', {
+        error: null,
+        modelRounds: [
+          {
+            toolItems: [
+              {
+                status: 'error',
+                toolResult: {
+                  success: false,
+                  error: 'Arguments are invalid JSON.',
+                },
+              },
+            ],
+          },
+        ],
+      })
+    ).toBe('error');
+  });
+
   it('keeps pending confirmation tools actionable after recovery', () => {
     expect(
       normalizeRecoveredToolStatus(

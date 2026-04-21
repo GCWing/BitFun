@@ -298,7 +298,9 @@ const SessionCapsule: React.FC = () => {
 
   const runningCount = runningItems.length;
   const canHoverExpand = activeOverlay === null && !expanded && runningCount > 0;
-  const showExpandedPanel = activeOverlay !== null ? overlayExpanded : (expanded || hoverExpanded);
+  const showExpandedPanel = activeOverlay !== null
+    ? overlayExpanded
+    : (expanded || hoverExpanded || newSessionDialogOpen);
   const liftAboveOverlayScene = activeOverlay !== null;
   const showCollapsedCapsule = activeOverlay === null;
 
@@ -320,7 +322,7 @@ const SessionCapsule: React.FC = () => {
   // Collapse when clicking outside the capsule (expanded only).
   // Ignore portaled UI that belongs to the session list (see SessionList).
   useEffect(() => {
-    if (!showExpandedPanel || pinned) return;
+    if (!showExpandedPanel || pinned || newSessionDialogOpen) return;
     const handler = (e: PointerEvent) => {
       const target = e.target;
       if (!(target instanceof Node)) return;
@@ -332,7 +334,7 @@ const SessionCapsule: React.FC = () => {
     };
     document.addEventListener('pointerdown', handler);
     return () => document.removeEventListener('pointerdown', handler);
-  }, [collapseCapsule, pinned, showExpandedPanel]);
+  }, [collapseCapsule, newSessionDialogOpen, pinned, showExpandedPanel]);
 
   const lastExpandNonceRef = useRef(sessionListExpandNonce);
   useEffect(() => {
@@ -360,10 +362,14 @@ const SessionCapsule: React.FC = () => {
       ].filter(Boolean).join(' ')}
       aria-label={t('nav.sections.sessions')}
       onMouseEnter={canHoverExpand ? () => setHoverExpanded(true) : undefined}
-      onMouseLeave={canHoverExpand ? () => setHoverExpanded(false) : undefined}
+      onMouseLeave={canHoverExpand ? () => {
+        if (!newSessionDialogOpen) {
+          setHoverExpanded(false);
+        }
+      } : undefined}
       onFocus={canHoverExpand ? () => setHoverExpanded(true) : undefined}
       onBlur={canHoverExpand ? (event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        if (!newSessionDialogOpen && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setHoverExpanded(false);
         }
       } : undefined}

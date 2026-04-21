@@ -1506,7 +1506,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       return true;
     }
 
-    return lastDialogTurn.modelRounds.some(round => round.isStreaming);
+    return false;
   }, [activeSession, isProcessing]);
 
   const scrollToLatestEndPositionInternal = useCallback((behavior: ScrollBehavior) => {

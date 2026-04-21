@@ -895,6 +895,7 @@
     "closeWorkspace": "关闭工作区",
     "badgeCurrent": "当前",
     "badgeRecent": "最近",
+    "workspaceNotOpenedTooltip": "未打开 · 点击后将加入已打开工作区",
     "emptyRunHistoryFiltered": "无匹配的运行历史",
     "emptyRunHistory": "暂无运行历史",
     "emptyWorkspacesFiltered": "无匹配的工作区",

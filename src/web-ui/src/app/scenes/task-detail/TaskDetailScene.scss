@@ -706,7 +706,9 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   margin-bottom: 1px;
   cursor: pointer;
   outline: none;
-  transition: background $motion-fast $easing-standard;
+  transition:
+    background $motion-fast $easing-standard,
+    opacity $motion-fast $easing-standard;
 
   &:hover {
     background: var(--element-bg-soft);
@@ -715,6 +717,32 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   &:focus-visible {
     outline: 2px solid var(--border-accent-soft);
     outline-offset: -2px;
+  }
+
+  /** 仅最近访问、尚未打开：弱化文案与图标色，无边框/无铺底 */
+  &.is-not-opened {
+    opacity: 0.92;
+
+    .tds-ws-row__icon-wrap {
+      background: transparent;
+    }
+
+    .tds-ws-row__title {
+      color: var(--color-text-secondary);
+      font-weight: $font-weight-normal;
+    }
+
+    .tds-ws-row__path {
+      opacity: 0.88;
+    }
+
+    &:hover {
+      opacity: 1;
+
+      .tds-ws-row__title {
+        color: var(--color-text-primary);
+      }
+    }
   }
 
   &.is-current {
@@ -737,7 +765,13 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   flex-shrink: 0;
 }
 
-.tds-ws-row__icon { color: var(--color-accent-500); }
+.tds-ws-row__icon {
+  color: var(--color-accent-500);
+
+  &--closed {
+    color: var(--color-text-muted);
+  }
+}
 
 .tds-ws-row__body {
   flex: 1;
@@ -777,8 +811,17 @@ $tds-footer-safe: calc(#{$size-gap-3} * 2 + 36px + env(safe-area-inset-bottom, 0
   font-weight: $font-weight-semibold;
   padding: 0 5px;
   border-radius: $size-radius-full;
-  background: var(--color-accent-100);
-  color: var(--color-accent-500);
+
+  &--current {
+    background: transparent;
+    color: var(--color-accent-500);
+  }
+
+  &--recent {
+    background: transparent;
+    color: var(--color-text-muted);
+    font-weight: $font-weight-medium;
+  }
 }
 
 .tds-ws-row__meta-item {

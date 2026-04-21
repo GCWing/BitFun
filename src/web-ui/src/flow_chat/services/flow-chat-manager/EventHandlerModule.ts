@@ -36,6 +36,7 @@ import {
   cleanupSaveState,
   updateSessionMetadata,
 } from './PersistenceModule';
+import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
 import { 
   processNormalTextChunkInternal, 
   processThinkingChunkInternal,
@@ -1414,28 +1415,18 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   const hasSuccessfulModelRounds = dialogTurn && dialogTurn.modelRounds.length > 0;
   
   if (hasSuccessfulModelRounds) {
-    context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
-      const updatedModelRounds = turn.modelRounds.map((round) => {
-        if (round.isStreaming) {
-          return {
-            ...round,
-            isStreaming: false,
-            isComplete: true,
-            status: 'error' as const,
-            endTime: Date.now()
-          };
-        }
-        return round;
-      });
-      
-      return {
-        ...turn,
-        modelRounds: updatedModelRounds,
-        status: 'error' as const,
-        error: error || 'Execution failed',
-        endTime: Date.now()
-      };
-    });
+    const settledAt = Date.now();
+    context.flowChatStore.updateDialogTurn(sessionId, turnId, turn =>
+      settleInterruptedDialogTurn(
+        {
+          ...turn,
+          status: 'error',
+          error: error || 'Execution failed',
+          endTime: turn.endTime ?? settledAt,
+        },
+        settledAt
+      )
+    );
     
     saveDialogTurnToDisk(context, sessionId, turnId).catch(err => {
       log.warn('Failed to save failed dialog turn', { sessionId, turnId, error: err });
@@ -1509,27 +1500,17 @@ function handleDialogTurnCancelled(
 
   context.flowChatStore.markSessionFinished(sessionId);
   
-  context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
-    const updatedModelRounds = turn.modelRounds.map((round) => {
-      if (round.isStreaming) {
-        return {
-          ...round,
-          isStreaming: false,
-          isComplete: true,
-          status: 'cancelled' as const,
-          endTime: Date.now()
-        };
-      }
-      return round;
-    });
-    
-    return {
-      ...turn,
-      modelRounds: updatedModelRounds,
-      status: 'cancelled' as const,
-      endTime: Date.now()
-    };
-  });
+  const settledAt = Date.now();
+  context.flowChatStore.updateDialogTurn(sessionId, turnId, turn =>
+    settleInterruptedDialogTurn(
+      {
+        ...turn,
+        status: 'cancelled',
+        endTime: turn.endTime ?? settledAt,
+      },
+      settledAt
+    )
+  );
   
   const dialogTurn = session.dialogTurns.find(t => t.id === turnId);
   if (dialogTurn) {

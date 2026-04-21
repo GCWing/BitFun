@@ -329,6 +329,7 @@ export const NewSessionDialog: React.FC<NewSessionDialogProps> = ({
       contentInset
       contentClassName="new-session-dialog__modal-surface"
       showCloseButton
+      closeOnOverlayClick={false}
     >
       <div className="new-session-dialog">
         <header className="new-session-dialog__masthead">

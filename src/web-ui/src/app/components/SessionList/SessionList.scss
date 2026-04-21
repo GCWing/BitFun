@@ -106,6 +106,14 @@
       background: var(--element-bg-soft);
     }
 
+    /* Running (spinner) icon: no full-row rounded rect behind the circular loader */
+    &:has(.bitfun-nav-panel__inline-item-icon.is-running) {
+      &:hover,
+      &.is-active {
+        background: transparent;
+      }
+    }
+
     &.is-editing {
       cursor: default;
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
@@ -182,7 +190,7 @@
     }
 
     &.is-running {
-      color: var(--color-text-secondary);
+      color: var(--color-success, #6eb88c);
       transition: opacity $motion-fast $easing-standard;
       animation: bitfun-nav-session-spin 1s linear infinite;
     }

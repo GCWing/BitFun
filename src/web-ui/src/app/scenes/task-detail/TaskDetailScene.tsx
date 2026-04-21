@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import {
   Code2,
   Brush,
+  Folder,
   FolderOpen,
   FolderPlus,
   LayoutDashboard,
@@ -25,7 +26,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { Search, FilterPill, FilterPillGroup, IconButton, confirmDanger } from '@/component-library';
+import { Search, FilterPill, FilterPillGroup, IconButton, Tooltip, confirmDanger } from '@/component-library';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
@@ -330,10 +331,11 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
   const primaryName = workspace.name?.trim() ?? '';
   const showPathSecondary = Boolean(fullPath && fullPath !== primaryName);
 
-  return (
+  const row = (
     <div
       className={[
         'tds-ws-row',
+        isOpenedWorkspace ? 'is-opened' : 'is-not-opened',
         isCurrentWorkspace && 'is-current',
       ].filter(Boolean).join(' ')}
       role="button"
@@ -342,7 +344,11 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
       onKeyDown={e => e.key === 'Enter' && onSelect(workspace.id)}
     >
       <span className="tds-ws-row__icon-wrap">
-        <FolderOpen size={13} className="tds-ws-row__icon" />
+        {isOpenedWorkspace ? (
+          <FolderOpen size={13} className="tds-ws-row__icon" aria-hidden />
+        ) : (
+          <Folder size={13} className="tds-ws-row__icon tds-ws-row__icon--closed" aria-hidden />
+        )}
       </span>
       <span className="tds-ws-row__body">
         <span className="tds-ws-row__title">{workspace.name}</span>
@@ -352,8 +358,12 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
           </span>
         ) : null}
         <span className="tds-ws-row__meta">
-          {isCurrentWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeCurrent')}</span>}
-          {!isOpenedWorkspace && <span className="tds-ws-row__badge">{t('taskDetailScene.badgeRecent')}</span>}
+          {isCurrentWorkspace && (
+            <span className="tds-ws-row__badge tds-ws-row__badge--current">{t('taskDetailScene.badgeCurrent')}</span>
+          )}
+          {!isOpenedWorkspace && (
+            <span className="tds-ws-row__badge tds-ws-row__badge--recent">{t('taskDetailScene.badgeRecent')}</span>
+          )}
           <span className="tds-ws-row__meta-item">
             <MessageSquare size={9} />
             {sessionCount}
@@ -373,6 +383,16 @@ const WorkspaceRow: React.FC<WorkspaceRowProps> = ({
         </IconButton>
       ) : null}
     </div>
+  );
+
+  if (isOpenedWorkspace) {
+    return row;
+  }
+
+  return (
+    <Tooltip content={t('taskDetailScene.workspaceNotOpenedTooltip')} placement="top">
+      {row}
+    </Tooltip>
   );
 };
 

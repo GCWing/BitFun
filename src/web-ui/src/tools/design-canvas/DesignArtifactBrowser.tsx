@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import {
   Archive,
@@ -28,6 +29,7 @@ export interface DesignArtifactBrowserProps {
 }
 
 export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ workspacePath }) => {
+  const { t } = useTranslation('flow-chat');
   const { workspacePath: currentWorkspacePath } = useCurrentWorkspace();
   const manifests = useDesignArtifactStore(
     useShallow((s) =>
@@ -105,7 +107,7 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
           <input
             type="text"
             value={query}
-            placeholder="搜索产物…"
+            placeholder={t('designCanvas.browser.searchPlaceholder')}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
@@ -115,22 +117,22 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
           />
-          显示已归档
+          {t('designCanvas.browser.showArchived')}
         </label>
         <button type="button" className="design-artifact-browser__refresh" onClick={refresh}>
           <RefreshCcw size={13} />
-          刷新
+          {t('designCanvas.browser.refresh')}
         </button>
       </div>
 
       {isLoading && filtered.length === 0 ? (
-        <div className="design-artifact-browser__empty">正在加载产物…</div>
+        <div className="design-artifact-browser__empty">{t('designCanvas.browser.loading')}</div>
       ) : filtered.length === 0 ? (
         <div className="design-artifact-browser__empty">
           <Palette size={20} />
-          <div>当前工作区还没有设计产物</div>
+          <div>{t('designCanvas.browser.emptyTitle')}</div>
           <div className="design-artifact-browser__empty-hint">
-            让设计 Agent 创建一个 — 完成后会自动出现在这里。
+            {t('designCanvas.browser.emptyHint')}
           </div>
         </div>
       ) : (
@@ -156,8 +158,8 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
                   <div className="design-artifact-browser__subtitle">
                     <code>{m.id}</code>
                     <span>{m.kind}</span>
-                    <span>{m.files.length} 个文件</span>
-                    <span>{m.versions.length} 次快照</span>
+                    <span>{t('designCanvas.browser.fileCount', { count: m.files.length })}</span>
+                    <span>{t('designCanvas.browser.snapshotCount', { count: m.versions.length })}</span>
                     {m.current_version && <code>v{m.current_version.slice(0, 8)}</code>}
                   </div>
                 </div>
@@ -166,7 +168,7 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
                     type="button"
                     className="design-artifact-browser__action"
                     onClick={() => openInCanvas(m.id)}
-                    title="在画布打开"
+                    title={t('designCanvas.browser.openInCanvas')}
                   >
                     <ExternalLink size={13} />
                   </button>
@@ -174,7 +176,7 @@ export const DesignArtifactBrowser: React.FC<DesignArtifactBrowserProps> = ({ wo
                     type="button"
                     className="design-artifact-browser__action"
                     onClick={() => toggleArchive(m.id, !archived)}
-                    title={archived ? '取消归档' : '归档'}
+                    title={archived ? t('designCanvas.browser.unarchive') : t('designCanvas.browser.archive')}
                   >
                     {archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
                   </button>

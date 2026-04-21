@@ -1770,7 +1770,10 @@ export class FlowChatStore {
         metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
       const triggerSource = (metadata?.triggerSource || turn.userMessage.triggerSource) as
         import('@/shared/types/session-history').TriggerSource | undefined;
-      const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
+      const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, {
+        error: turn.error,
+        modelRounds: turn.modelRounds,
+      });
 
       return {
       id: turn.turnId,

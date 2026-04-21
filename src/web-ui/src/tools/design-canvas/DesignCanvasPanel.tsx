@@ -14,6 +14,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -71,14 +73,18 @@ const VIEWPORT_ICONS: Record<Viewport, React.ReactNode> = {
   mobile: <Smartphone size={14} />,
 };
 
-function formatRelativeTime(iso?: string): string {
+function formatRelativeTime(iso: string | undefined, t: TFunction<'flow-chat'>): string {
   if (!iso) return '';
   try {
-    const t = new Date(iso).getTime();
-    const diff = Date.now() - t;
-    if (diff < 60_000) return '刚刚';
-    if (diff < 3_600_000) return `${Math.round(diff / 60_000)} 分钟前`;
-    if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)} 小时前`;
+    const ts = new Date(iso).getTime();
+    const diff = Date.now() - ts;
+    if (diff < 60_000) return t('designCanvas.panel.time.justNow');
+    if (diff < 3_600_000) {
+      return t('designCanvas.panel.time.minutesAgo', { count: Math.round(diff / 60_000) });
+    }
+    if (diff < 86_400_000) {
+      return t('designCanvas.panel.time.hoursAgo', { count: Math.round(diff / 3_600_000) });
+    }
     return new Date(iso).toLocaleString();
   } catch {
     return iso;
@@ -155,14 +161,20 @@ function notifyPathSuccess(prefix: string, filePath: string): void {
   });
 }
 
-function formatLockAge(since?: string): string {
+function formatLockAge(since: string | undefined, t: TFunction<'flow-chat'>): string {
   if (!since) return '';
   const parsed = Date.parse(since);
   if (Number.isNaN(parsed)) return '';
   const diff = Date.now() - parsed;
-  if (diff < 60_000) return `${Math.max(1, Math.round(diff / 1000))} 秒`;
-  if (diff < 3_600_000) return `${Math.round(diff / 60_000)} 分钟`;
-  return `${Math.round(diff / 3_600_000)} 小时`;
+  if (diff < 60_000) {
+    return t('designCanvas.panel.lockAge.seconds', {
+      count: Math.max(1, Math.round(diff / 1000)),
+    });
+  }
+  if (diff < 3_600_000) {
+    return t('designCanvas.panel.lockAge.minutes', { count: Math.round(diff / 60_000) });
+  }
+  return t('designCanvas.panel.lockAge.hours', { count: Math.round(diff / 3_600_000) });
 }
 
 export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
@@ -170,6 +182,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
   workspacePath,
   initialManifest,
 }) => {
+  const { t } = useTranslation('flow-chat');
   const { workspacePath: currentWorkspacePath } = useCurrentWorkspace();
   const artifactStateMeta = useDesignArtifactStore(
     useShallow((s) => {
@@ -229,14 +242,14 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     manifest?.editing_lock && manifest.editing_lock.holder !== 'human'
   );
   const phaseLabel = useMemo(() => {
-    if (!manifest?.current_version) return '脚手架';
-    if (isSnapshotting) return '收尾';
-    if (pickerActive) return '取样';
-    return '迭代';
-  }, [manifest?.current_version, isSnapshotting, pickerActive]);
+    if (!manifest?.current_version) return t('designCanvas.panel.phase.scaffold');
+    if (isSnapshotting) return t('designCanvas.panel.phase.finishing');
+    if (pickerActive) return t('designCanvas.panel.phase.sampling');
+    return t('designCanvas.panel.phase.iterating');
+  }, [manifest?.current_version, isSnapshotting, pickerActive, t]);
 
   // Lock staleness: even if backend still has the lock record, a UI that didn't
-  // hear back within `LOCK_STALE_MS` should surface "过期" so the user knows they
+  // hear back within `LOCK_STALE_MS` should surface "expired" so the user knows they
   // can safely take it over.
   const lockIsStale = useMemo(() => {
     const since = manifest?.editing_lock?.since;
@@ -363,10 +376,10 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     const text = buildContinueContext();
     if (!text) return;
     navigator.clipboard?.writeText(text).then(
-      () => notificationService.success('已复制选中上下文'),
-      () => notificationService.error('复制失败')
+      () => notificationService.success(t('designCanvas.panel.notifications.copyContextOk')),
+      () => notificationService.error(t('designCanvas.panel.notifications.copyContextFail'))
     );
-  }, [buildContinueContext]);
+  }, [buildContinueContext, t]);
 
   // ---------- Open entry externally ----------
 
@@ -385,10 +398,10 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         window.open(fileUrl, '_blank');
       } catch (fallbackErr) {
         log.warn('Failed to open delivery file externally', fallbackErr);
-        notificationService.error('打开失败：无法在外部应用中预览');
+        notificationService.error(t('designCanvas.panel.notifications.openExternalFail'));
       }
     }
-  }, [currentRoot, manifest]);
+  }, [currentRoot, manifest, t]);
 
   // ---------- Save from Monaco (lock-aware) ----------
 
@@ -397,7 +410,9 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       if (!manifest) return;
       if (isAgentLocked && !lockIsStale) {
         notificationService.warning(
-          `Agent 正在编辑此产物（持有者：${manifest.editing_lock?.holder}）`
+          t('designCanvas.panel.notifications.agentEditingBlocked', {
+            holder: String(manifest.editing_lock?.holder ?? ''),
+          })
         );
         return;
       }
@@ -410,12 +425,12 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         });
         setFileContent(manifest.id, activeFile, content);
         if (res.manifest) {
-          notificationService.success('已保存');
+          notificationService.success(t('designCanvas.panel.notifications.saved'));
         }
       } catch (err: any) {
         const msg = String(err?.message || err);
         if (msg.includes('VERSION_CONFLICT')) {
-          notificationService.error('版本冲突：另一侧已更新此产物，请刷新后重试');
+          notificationService.error(t('designCanvas.panel.notifications.versionConflict'));
           try {
             const list = await designArtifactAPI.list(workspacePath);
             const fresh = list.find((m) => m.id === manifest.id);
@@ -424,16 +439,28 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
             /* no-op */
           }
         } else if (msg.includes('EDIT_LOCKED')) {
-          notificationService.error('产物被锁定，释放锁后再保存');
+          notificationService.error(t('designCanvas.panel.notifications.editLocked'));
         } else {
           log.error('Save failed', err);
-          notificationService.error('保存失败：' + msg);
+          notificationService.error(
+            t('designCanvas.panel.notifications.saveFailed', { message: msg })
+          );
         }
       } finally {
         setIsSaving(false);
       }
     },
-    [manifest, isAgentLocked, lockIsStale, activeFile, effectiveWorkspacePath, setFileContent, upsertManifest, workspacePath]
+    [
+      manifest,
+      isAgentLocked,
+      lockIsStale,
+      activeFile,
+      effectiveWorkspacePath,
+      setFileContent,
+      upsertManifest,
+      workspacePath,
+      t,
+    ]
   );
 
   // Debounced auto-snapshot: if the user makes a run of saves, queue a
@@ -450,7 +477,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     autoSnapshotTimer.current = window.setTimeout(async () => {
       try {
         await designArtifactAPI.snapshot(manifest.id, {
-          summary: '自动快照（编辑防抖）',
+          summary: t('designCanvas.panel.snapshot.autoSummary'),
           author: 'human',
           workspacePath: effectiveWorkspacePath,
         });
@@ -461,7 +488,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     return () => {
       if (autoSnapshotTimer.current) window.clearTimeout(autoSnapshotTimer.current);
     };
-  }, [manifest?.updated_at, manifest?.id, isAgentLocked, isSnapshotting, effectiveWorkspacePath]);
+  }, [manifest?.updated_at, manifest?.id, isAgentLocked, isSnapshotting, effectiveWorkspacePath, t]);
 
   // ---------- Snapshot ----------
 
@@ -472,42 +499,49 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       // Lightweight prompt. A richer in-app dialog would be nicer, but
       // `window.prompt` remains acceptable because it's synchronous and keeps
       // the "take a snapshot" flow a single click away.
-      const summary = window.prompt('快照说明（可选）：', '手动快照');
+      const summary = window.prompt(
+        t('designCanvas.panel.snapshot.promptMessage'),
+        t('designCanvas.panel.snapshot.promptDefault')
+      );
       if (summary === null) {
         setIsSnapshotting(false);
         return;
       }
       const snapshotResult = await designArtifactAPI.snapshot(manifest.id, {
-        summary: summary || '手动快照',
+        summary: summary || t('designCanvas.panel.snapshot.manualSummaryDefault'),
         author: 'human',
         workspacePath: effectiveWorkspacePath,
       });
       const snapshotPath = getSnapshotVersionPath(snapshotResult.manifest ?? manifest);
       if (snapshotPath) {
-        notifyPathSuccess('已生成快照：', snapshotPath);
+        notifyPathSuccess(t('designCanvas.panel.notifications.snapshotPathPrefix'), snapshotPath);
       } else {
-        notificationService.success('已生成快照');
+        notificationService.success(t('designCanvas.panel.notifications.snapshotOk'));
       }
       setIsSnapshotting(false);
 
     } catch (err: any) {
       log.error('Snapshot failed', err);
-      notificationService.error('快照失败：' + String(err?.message || err));
+      notificationService.error(
+        t('designCanvas.panel.notifications.snapshotFailed', {
+          message: String(err?.message || err),
+        })
+      );
       setIsSnapshotting(false);
     } finally {
       // Success clears the busy state before the thumbnail refresh continues in
       // the background; this fallback covers early exits and unexpected paths.
       setIsSnapshotting(false);
     }
-  }, [manifest, effectiveWorkspacePath]);
+  }, [manifest, effectiveWorkspacePath, t]);
 
   // ---------- Export menu ----------
 
   const handleDownloadEntryHtml = useCallback(async () => {
     if (!manifest) return;
     const loading = notificationService.loading({
-      title: '正在导出',
-      message: '正在准备 HTML 文件...',
+      title: t('designCanvas.panel.notifications.exportingTitle'),
+      message: t('designCanvas.panel.notifications.exportHtmlMessage'),
     });
     await waitForNextPaint();
     try {
@@ -523,18 +557,20 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         `${manifest.id}-${buildTimestamp()}.html`
       );
       loading.cancel();
-      notifyPathSuccess('已导出至 ', filePath);
+      notifyPathSuccess(t('designCanvas.panel.notifications.exportToPrefix'), filePath);
     } catch (err: any) {
       log.error('HTML export failed', err);
-      loading.fail('导出失败：' + String(err?.message || err));
+      loading.fail(
+        t('designCanvas.panel.notifications.exportFailed', { message: String(err?.message || err) })
+      );
     }
-  }, [manifest, filesCache, ensureFileLoaded]);
+  }, [manifest, filesCache, ensureFileLoaded, t]);
 
   const handleZipExport = useCallback(async () => {
     if (!manifest) return;
     const loading = notificationService.loading({
-      title: '正在导出',
-      message: '正在打包 Zip...',
+      title: t('designCanvas.panel.notifications.exportingTitle'),
+      message: t('designCanvas.panel.notifications.exportZipMessage'),
     });
     await waitForNextPaint();
     try {
@@ -542,19 +578,21 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       const exportPath = (res.export_path as string) || '';
       loading.cancel();
       if (exportPath) {
-        notifyPathSuccess('已导出至 ', exportPath);
+        notifyPathSuccess(t('designCanvas.panel.notifications.exportToPrefix'), exportPath);
       } else {
-        notificationService.success('已导出至 .design/');
+        notificationService.success(t('designCanvas.panel.notifications.exportDesignFolder'));
       }
     } catch (err: any) {
       log.error('Zip export failed', err);
-      loading.fail('导出失败：' + String(err?.message || err));
+      loading.fail(
+        t('designCanvas.panel.notifications.exportFailed', { message: String(err?.message || err) })
+      );
     }
-  }, [manifest, effectiveWorkspacePath]);
+  }, [manifest, effectiveWorkspacePath, t]);
 
   const handleScreenshot = useCallback(async () => {
-    notificationService.info('截图导出需要后台渲染器；当前已停止使用会卡住界面的主线程截图。');
-  }, []);
+    notificationService.info(t('designCanvas.panel.notifications.screenshotInfo'));
+  }, [t]);
 
   const handleSkillExport = useCallback(
     (format: 'pdf' | 'pptx') => {
@@ -570,9 +608,11 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         `Write the output next to the artifact root directory: ${artifactRoot}\n` +
         `Report the output path when done.`;
       globalEventBus.emit('fill-chat-input', { content: prompt }, 'DesignCanvasPanel');
-      notificationService.success(`已向聊天插入 ${format.toUpperCase()} 导出指令`);
+      notificationService.success(
+        t('designCanvas.panel.notifications.skillExportInserted', { format: format.toUpperCase() })
+      );
     },
-    [manifest, currentRoot, artifactRoot]
+    [manifest, currentRoot, artifactRoot, t]
   );
 
   // ---------- Edit lock toggle (manual from UI) ----------
@@ -582,20 +622,22 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
     try {
       if (manifest.editing_lock) {
         await designArtifactAPI.releaseLock(manifest.id, workspacePath);
-        notificationService.success('已释放编辑锁');
+        notificationService.success(t('designCanvas.panel.notifications.lockReleased'));
       } else {
         await designArtifactAPI.acquireLock(manifest.id, {
           holder: 'human',
-          note: '手动 UI 加锁',
+          note: t('designCanvas.panel.lock.manualAcquireNote'),
           workspacePath: effectiveWorkspacePath,
         });
-        notificationService.success('已获取编辑锁');
+        notificationService.success(t('designCanvas.panel.notifications.lockAcquired'));
       }
     } catch (err: any) {
       log.warn('Toggle lock failed', err);
-      notificationService.error('锁操作失败：' + String(err?.message || err));
+      notificationService.error(
+        t('designCanvas.panel.notifications.lockToggleFailed', { message: String(err?.message || err) })
+      );
     }
-  }, [manifest, workspacePath, effectiveWorkspacePath]);
+  }, [manifest, workspacePath, effectiveWorkspacePath, t]);
 
   // ---------- Render ----------
 
@@ -604,9 +646,9 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       <div className="design-canvas-panel design-canvas-panel--empty">
         <div className="design-canvas-panel__empty">
           <Wand2 size={24} />
-          <div className="design-canvas-panel__empty-title">设计画布</div>
+          <div className="design-canvas-panel__empty-title">{t('designCanvas.panel.emptyTitle')}</div>
           <div className="design-canvas-panel__empty-subtitle">
-            尚未载入产物。设计 Agent 下次改动后会自动填充此面板。
+            {t('designCanvas.panel.emptySubtitle')}
           </div>
         </div>
       </div>
@@ -654,7 +696,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       <div className="design-canvas-panel__code-body">
         {isLoadingFile ? (
           <div className="design-canvas-panel__loading">
-            <Loader2 size={16} className="spin" /> 正在加载文件…
+            <Loader2 size={16} className="spin" /> {t('designCanvas.panel.loadingFile')}
           </div>
         ) : (
           <CodeEditor
@@ -684,7 +726,9 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       ? null
       : manifest.versions.find((v) => v.id === diffToVersion) || null;
     const fromLabel = fromManifest ? fromManifest.id.slice(0, 8) : '—';
-    const toLabel = toIsCurrent ? 'current' : toManifest?.id.slice(0, 8) || '—';
+    const toLabel = toIsCurrent
+      ? t('designCanvas.panel.diffLabelCurrent')
+      : toManifest?.id.slice(0, 8) || '—';
     const fromPath = fromManifest
       ? `${versionsRoot.replace(/[\\/]$/, '')}/${fromManifest.id}/${activeFilePath}`.replace(
           /\\/g,
@@ -704,7 +748,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
       <div className="design-canvas-panel__diff">
         <div className="design-canvas-panel__diff-toolbar">
           <div className="design-canvas-panel__diff-selector">
-            <label>从</label>
+            <label>{t('designCanvas.panel.diffFrom')}</label>
             <select
               value={diffFromVersion}
               onChange={(e) => setDiffFromVersion(e.target.value)}
@@ -717,12 +761,12 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
             </select>
           </div>
           <div className="design-canvas-panel__diff-selector">
-            <label>到</label>
+            <label>{t('designCanvas.panel.diffTo')}</label>
             <select
               value={diffToVersion}
               onChange={(e) => setDiffToVersion(e.target.value)}
             >
-              <option value="current">当前（工作副本）</option>
+              <option value="current">{t('designCanvas.panel.diffCurrentWorkingCopy')}</option>
               {manifest.versions.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.id.slice(0, 8)} · {v.summary}
@@ -735,7 +779,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         <div className="design-canvas-panel__diff-body">
           {manifest.versions.length === 0 ? (
             <div className="design-canvas-panel__history-empty">
-              暂无快照 — Diff 用于比较两次已保存的版本
+              {t('designCanvas.panel.diffNoSnapshots')}
             </div>
           ) : (
             <DesignDiffLoader
@@ -752,11 +796,10 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
 
   const historyView = (
     <div className="design-canvas-panel__history">
-      <h4>版本历史</h4>
+      <h4>{t('designCanvas.panel.historyTitle')}</h4>
       {manifest.versions.length === 0 ? (
         <div className="design-canvas-panel__history-empty">
-          暂无快照。让 Agent 调用 <code>DesignArtifact.snapshot</code>，或点击相机按钮手动生成快照；
-          另外，编辑 45 秒后系统会自动为你生成一次防抖快照。
+          {t('designCanvas.panel.historyEmpty')}
         </div>
       ) : (
         <ul className="design-canvas-panel__history-list">
@@ -773,7 +816,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                 <span className="design-canvas-panel__history-id">{v.id.slice(0, 12)}</span>
                 <span className="design-canvas-panel__history-author">{v.author}</span>
                 <span className="design-canvas-panel__history-time">
-                  {formatRelativeTime(v.created_at)}
+                  {formatRelativeTime(v.created_at, t)}
                 </span>
               </div>
               <div className="design-canvas-panel__history-summary">{v.summary}</div>
@@ -790,10 +833,19 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
         <div className="design-canvas-panel__lock-banner" role="status">
           <Lock size={12} />
           <span>
-            {lockIsStale ? '锁已过期' : 'Agent 正在编辑此产物'}（持有者：
+            {lockIsStale
+              ? t('designCanvas.panel.lockBanner.stale')
+              : t('designCanvas.panel.lockBanner.agentEditing')}
+            {t('designCanvas.panel.lockBanner.holderLead')}
             {manifest.editing_lock?.holder}
-            {manifest.editing_lock?.since && `，已持有 ${formatLockAge(manifest.editing_lock.since)}`}
-            {lockIsStale ? '）— 可安全接管' : '）— 代码只读'}
+            {manifest.editing_lock?.since
+              ? t('designCanvas.panel.lockBanner.heldFor', {
+                  duration: formatLockAge(manifest.editing_lock.since, t),
+                })
+              : ''}
+            {lockIsStale
+              ? t('designCanvas.panel.lockBanner.suffixStale')
+              : t('designCanvas.panel.lockBanner.suffixReadOnly')}
           </span>
           {lockIsStale && (
             <button
@@ -803,17 +855,21 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                 try {
                   await designArtifactAPI.acquireLock(manifest.id, {
                     holder: 'human',
-                    note: '接管已过期的锁',
+                    note: t('designCanvas.panel.lockBanner.takeOverNote'),
                     force: true,
                     workspacePath: effectiveWorkspacePath,
                   });
-                  notificationService.success('已接管编辑锁');
+                  notificationService.success(t('designCanvas.panel.notifications.takeoverLockOk'));
                 } catch (err: any) {
-                  notificationService.error('接管失败：' + String(err?.message || err));
+                  notificationService.error(
+                    t('designCanvas.panel.notifications.takeoverLockFail', {
+                      message: String(err?.message || err),
+                    })
+                  );
                 }
               }}
             >
-              <Unlock size={11} /> 接管
+              <Unlock size={11} /> {t('designCanvas.panel.lockBanner.takeOver')}
             </button>
           )}
         </div>
@@ -831,7 +887,8 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
           )}
           {isSaving && (
             <span className="design-canvas-panel__hint">
-              <Loader2 size={11} className="spin" /> 正在写入 {activeFilePath}…
+              <Loader2 size={11} className="spin" />{' '}
+              {t('designCanvas.panel.savingHint', { path: activeFilePath })}
             </span>
           )}
         </div>
@@ -844,7 +901,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                 viewMode === mode ? ' design-canvas-panel__mode-btn--active' : ''
               }`}
               onClick={() => setViewMode(mode)}
-              title={mode}
+              title={t(`designCanvas.panel.mode.${mode}`)}
             >
               {mode === 'preview' && <Eye size={14} />}
               {mode === 'code' && <CodeIcon size={14} />}
@@ -852,10 +909,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
               {mode === 'diff' && <GitCompare size={14} />}
               {mode === 'history' && <History size={14} />}
               <span>
-                {mode === 'preview' ? '预览' :
-                 mode === 'code' ? '代码' :
-                 mode === 'split' ? '分屏' :
-                 mode === 'diff' ? '对比' : '历史'}
+                {t(`designCanvas.panel.mode.${mode}`)}
               </span>
             </button>
           ))}
@@ -880,7 +934,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
               pickerActive ? ' design-canvas-panel__picker-btn--active' : ''
             }`}
             onClick={() => setPickerActive((v) => !v)}
-            title="选取元素"
+            title={t('designCanvas.panel.pickerTitle')}
           >
             <MousePointer2 size={14} />
           </button>
@@ -890,7 +944,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
               isInspectorOpen ? ' design-canvas-panel__picker-btn--active' : ''
             }`}
             onClick={() => setIsInspectorOpen((v) => !v)}
-            title="检查器"
+            title={t('designCanvas.panel.inspectorTitle')}
           >
             <FileText size={14} />
           </button>
@@ -899,19 +953,19 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
             className="design-canvas-panel__action-btn"
             onClick={handleSnapshot}
             disabled={isSnapshotting}
-            title="快照 + 缩略图"
+            title={t('designCanvas.panel.snapshotTitle')}
           >
             {isSnapshotting ? <Loader2 size={14} className="spin" /> : <Camera size={14} />}
-            <span>快照</span>
+            <span>{t('designCanvas.panel.snapshotLabel')}</span>
           </button>
           <button
             type="button"
             className="design-canvas-panel__action-btn"
             onClick={handleContinueWithAgent}
-            title="让 Agent 继续"
+            title={t('designCanvas.panel.continueTitle')}
           >
             <Wand2 size={14} />
-            <span>继续</span>
+            <span>{t('designCanvas.panel.continueLabel')}</span>
           </button>
           <button
             type="button"
@@ -919,7 +973,13 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
               manifest.editing_lock ? ' design-canvas-panel__action-btn--locked' : ''
             }`}
             onClick={handleToggleLock}
-            title={manifest.editing_lock ? `释放锁（${manifest.editing_lock.holder}）` : '获取编辑锁'}
+            title={
+              manifest.editing_lock
+                ? t('designCanvas.panel.releaseLockTitle', {
+                    holder: manifest.editing_lock.holder,
+                  })
+                : t('designCanvas.panel.acquireLockTitle')
+            }
           >
             {manifest.editing_lock ? <Lock size={14} /> : <Unlock size={14} />}
           </button>
@@ -928,7 +988,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
               type="button"
               className="design-canvas-panel__action-btn"
               onClick={() => setIsExportMenuOpen((v) => !v)}
-              title="导出"
+              title={t('designCanvas.panel.exportTitle')}
             >
               <Download size={14} />
               <ChevronDown size={12} />
@@ -943,7 +1003,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                       handleDownloadEntryHtml();
                     }}
                   >
-                    <FileText size={13} /> 入口 HTML
+                    <FileText size={13} /> {t('designCanvas.panel.exportEntryHtml')}
                   </button>
                 </li>
                 <li>
@@ -954,7 +1014,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                       handleZipExport();
                     }}
                   >
-                    <FileArchive size={13} /> Zip 打包
+                    <FileArchive size={13} /> {t('designCanvas.panel.exportZip')}
                   </button>
                 </li>
                 <li>
@@ -965,7 +1025,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                       handleScreenshot();
                     }}
                   >
-                    <Camera size={13} /> 截图 PNG
+                    <Camera size={13} /> {t('designCanvas.panel.exportScreenshotPng')}
                   </button>
                 </li>
                 <li>
@@ -976,7 +1036,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                       handleSkillExport('pdf');
                     }}
                   >
-                    <FileText size={13} /> 转 PDF
+                    <FileText size={13} /> {t('designCanvas.panel.exportPdf')}
                   </button>
                 </li>
                 <li>
@@ -987,7 +1047,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
                       handleSkillExport('pptx');
                     }}
                   >
-                    <FileText size={13} /> 转 PPTX
+                    <FileText size={13} /> {t('designCanvas.panel.exportPptx')}
                   </button>
                 </li>
               </ul>
@@ -997,7 +1057,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
             type="button"
             className="design-canvas-panel__action-btn"
             onClick={handleOpenExternal}
-            title="在外部应用中打开"
+            title={t('designCanvas.panel.openExternalTitle')}
           >
             <ExternalLink size={14} />
           </button>
@@ -1037,7 +1097,7 @@ export const DesignCanvasPanel: React.FC<DesignCanvasPanelProps> = ({
 
       {selectedElement?.domPath && !isInspectorOpen && (
         <div className="design-canvas-panel__inspector">
-          <div className="design-canvas-panel__inspector-label">已选中</div>
+          <div className="design-canvas-panel__inspector-label">{t('designCanvas.panel.selectedLabel')}</div>
           <code className="design-canvas-panel__inspector-path">
             {selectedElement.domPath}
           </code>
@@ -1067,6 +1127,7 @@ const DesignDiffLoader: React.FC<DesignDiffLoaderProps> = ({
   fromLabel,
   toLabel,
 }) => {
+  const { t } = useTranslation('flow-chat');
   const [original, setOriginal] = useState('');
   const [modified, setModified] = useState('');
   const [loading, setLoading] = useState(true);
@@ -1100,12 +1161,16 @@ const DesignDiffLoader: React.FC<DesignDiffLoaderProps> = ({
   if (loading) {
     return (
       <div className="design-canvas-panel__loading">
-        <Loader2 size={16} className="spin" /> 正在加载对比…
+        <Loader2 size={16} className="spin" /> {t('designCanvas.panel.diffLoading')}
       </div>
     );
   }
   if (error) {
-    return <div className="design-canvas-panel__history-empty">加载对比失败：{error}</div>;
+    return (
+      <div className="design-canvas-panel__history-empty">
+        {t('designCanvas.panel.diffLoadFailed', { message: error })}
+      </div>
+    );
   }
 
   return (

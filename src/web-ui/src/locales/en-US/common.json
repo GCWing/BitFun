@@ -895,6 +895,7 @@
     "closeWorkspace": "Close workspace",
     "badgeCurrent": "Current",
     "badgeRecent": "Recent",
+    "workspaceNotOpenedTooltip": "Not open — click to add to open workspaces",
     "emptyRunHistoryFiltered": "No matching run history",
     "emptyRunHistory": "No run history yet",
     "emptyWorkspacesFiltered": "No matching workspaces",

@@ -22,13 +22,38 @@ function isTerminalTurnStatus(status: DialogTurn['status']): boolean {
   return status === 'completed' || status === 'cancelled' || status === 'error';
 }
 
-function getTurnFallbackStatus(turn: Pick<DialogTurn, 'error'>): DialogTurn['status'] {
-  return turn.error ? 'error' : 'cancelled';
+function hasNestedError(turn: Pick<DialogTurn, 'error'> & { modelRounds?: Array<Partial<ModelRound> & { toolItems?: any[]; textItems?: any[]; thinkingItems?: any[] }> }): boolean {
+  if (turn.error) {
+    return true;
+  }
+
+  return (turn.modelRounds ?? []).some(round => {
+    if (round.status === 'error') {
+      return true;
+    }
+
+    const items = [
+      ...(round.items ?? []),
+      ...(round.toolItems ?? []),
+      ...(round.textItems ?? []),
+      ...(round.thinkingItems ?? []),
+    ];
+
+    return items.some((item: any) =>
+      item?.status === 'error' ||
+      item?.toolResult?.success === false ||
+      item?.tool_result?.success === false
+    );
+  });
+}
+
+function getTurnFallbackStatus(turn: Pick<DialogTurn, 'error'> & { modelRounds?: Array<Partial<ModelRound> & { toolItems?: any[]; textItems?: any[]; thinkingItems?: any[] }> }): DialogTurn['status'] {
+  return hasNestedError(turn) ? 'error' : 'cancelled';
 }
 
 export function normalizeRecoveredTurnStatus(
   status: unknown,
-  turn: Pick<DialogTurn, 'error'>,
+  turn: Pick<DialogTurn, 'error'> & { modelRounds?: Array<Partial<ModelRound> & { toolItems?: any[]; textItems?: any[]; thinkingItems?: any[] }> },
 ): DialogTurn['status'] {
   if (status === 'completed' || status === 'cancelled' || status === 'error') {
     return status;

@@ -34,7 +34,8 @@
     width: 40px;
     align-items: center;
     background: var(--color-bg-elevated, #18181a);
-    border: 1px solid var(--border-subtle);
+    /* Running: green halo only — no neutral gray stroke */
+    border: none;
     border-radius: 999px;
     overflow: hidden;
     // Layered shadow + faint green ambient glow
@@ -287,13 +288,14 @@
 
   &:hover {
     color: var(--color-text-primary);
-    background: var(--element-bg-soft);
+    /* No pill behind the circular mode avatar — only the avatar chip carries fill */
+    background: transparent;
   }
 
   // Focused / currently-viewed session
   &.is-active {
     color: var(--color-text-primary);
-    background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, transparent);
+    background: transparent;
   }
 
   &:focus-visible {
@@ -486,17 +488,17 @@
   border-radius: 50%;
   transition: transform $motion-fast $easing-standard;
 
-  // Spinning arc border — conic via rotating partial border
+  // Spinning arc — always success green (running affordance), not mode hue / gray
   &::before {
     content: '';
     position: absolute;
     inset: -2.5px;
     border-radius: 50%;
     border: 1.5px solid transparent;
-    border-top-color: currentColor;
-    border-right-color: color-mix(in srgb, currentColor 32%, transparent);
+    border-top-color: var(--color-success, #6eb88c);
+    border-right-color: color-mix(in srgb, var(--color-success, #6eb88c) 32%, transparent);
     animation: capsule-arc-spin 2.2s linear infinite;
-    opacity: 0.5;
+    opacity: 0.72;
     pointer-events: none;
   }
 
@@ -505,12 +507,12 @@
     transform: scale(1.1);
   }
 
-  // Active/focused session: stronger ring
+  // Active/focused session: stronger green ring (matches running arc)
   &.is-focused {
-    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-success, #6eb88c) 55%, transparent);
 
     &::before {
-      opacity: 0.8;
+      opacity: 0.95;
       border-width: 1.5px;
     }
   }

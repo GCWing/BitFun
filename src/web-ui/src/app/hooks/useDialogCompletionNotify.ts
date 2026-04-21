@@ -32,6 +32,12 @@ export const useDialogCompletionNotify = () => {
     window.addEventListener('blur', handleBlur);
 
     const unlisten = agentAPI.onDialogTurnCompleted(async (event) => {
+      const subagentParentInfo =
+        event?.subagentParentInfo ?? event?.subagent_parent_info;
+      if (subagentParentInfo) {
+        return;
+      }
+
       // Send notification if page is hidden OR window lost OS focus
       const isBackground = document.hidden || !windowFocusedRef.current;
       if (!isBackground) {

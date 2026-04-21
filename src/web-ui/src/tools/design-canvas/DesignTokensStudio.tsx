@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Palette } from 'lucide-react';
 import { Button } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -23,6 +24,7 @@ function entries(obj: unknown): Array<[string, string]> {
 }
 
 export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) => {
+  const { t } = useTranslation('flow-chat');
   const { workspacePath } = useCurrentWorkspace();
   // Canonical scope key: prefer an explicit path from the card,
   // otherwise derive workspace/artifact key so we never silently fall
@@ -45,9 +47,11 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     if (!selected) return;
     try {
       await designTokensAPI.commit(selected.id, artifactId, workspacePath);
-      notificationService.success('已采用此套令牌');
+      notificationService.success(t('designCanvas.studio.commitOk'));
     } catch (err: any) {
-      notificationService.error('采用失败：' + String(err?.message || err));
+      notificationService.error(
+        t('designCanvas.studio.commitFail', { message: String(err?.message || err) })
+      );
     }
   };
 
@@ -55,7 +59,7 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     return (
       <div className="design-tokens-studio design-tokens-studio--empty">
         <Palette size={28} />
-        <div>暂无令牌提案。先让设计 Agent 生成几套方向。</div>
+        <div>{t('designCanvas.studio.empty')}</div>
       </div>
     );
   }
@@ -164,13 +168,17 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     '--dt-border': paletteIsLight ? 'rgba(255,255,255,0.09)' : 'rgba(12,13,16,0.09)',
   } as React.CSSProperties;
 
-  const nativeLabel = paletteIsLight ? '浅色画布（调色板原生）' : '深色画布（调色板原生）';
-  const inverseLabel = paletteIsLight ? '深色画布（压力测试）' : '浅色画布（压力测试）';
+  const nativeLabel = paletteIsLight
+    ? t('designCanvas.studio.nativeLight')
+    : t('designCanvas.studio.nativeDark');
+  const inverseLabel = paletteIsLight
+    ? t('designCanvas.studio.stressDark')
+    : t('designCanvas.studio.stressLight');
 
   return (
     <div className="design-tokens-studio">
       <aside className="design-tokens-studio__sidebar">
-        <div className="design-tokens-studio__sidebar-title">方向</div>
+        <div className="design-tokens-studio__sidebar-title">{t('designCanvas.studio.sidebarTitle')}</div>
         {proposals.map((proposal) => {
           const isCommitted = document?.committed_id === proposal.id;
           const classes = [
@@ -195,7 +203,7 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
                 <div className="design-tokens-studio__proposal-mood">{proposal.mood}</div>
               </div>
               {isCommitted && (
-                <span className="design-tokens-studio__proposal-badge" title="已采用">
+                <span className="design-tokens-studio__proposal-badge" title={t('designCanvas.studio.adoptedBadge')}>
                   <Check size={10} />
                 </span>
               )}
@@ -207,20 +215,20 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
       <main className="design-tokens-studio__main">
         <header className="design-tokens-studio__header">
           <div className="design-tokens-studio__heading">
-            <span className="design-tokens-studio__eyebrow">设计令牌</span>
+            <span className="design-tokens-studio__eyebrow">{t('designCanvas.studio.eyebrow')}</span>
             <h2>{selected.name}</h2>
             <p>{selected.mood}</p>
           </div>
           <Button type="button" size="small" variant="primary" className="design-tokens-studio__commit" onClick={commit}>
             <Check size={14} />
-            {document?.committed_id === selected.id ? '重新采用' : '采用此套'}
+            {document?.committed_id === selected.id ? t('designCanvas.studio.recommit') : t('designCanvas.studio.adopt')}
           </Button>
         </header>
 
         <section className="design-tokens-studio__section">
           <div className="design-tokens-studio__section-head">
-            <h3>调色板</h3>
-            <span>{colorEntries.length} 个令牌</span>
+            <h3>{t('designCanvas.studio.palette')}</h3>
+            <span>{t('designCanvas.studio.tokenCount', { count: colorEntries.length })}</span>
           </div>
           <div className="design-tokens-studio__swatches">
             {colorEntries.map(([name, value]) => (
@@ -238,15 +246,17 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
         <div className="design-tokens-studio__grid">
           <section className="design-tokens-studio__section">
             <div className="design-tokens-studio__section-head">
-              <h3>字体</h3>
+              <h3>{t('designCanvas.studio.typography')}</h3>
               <span style={{ fontFamily: family }}>{family.split(',')[0].replace(/['"]/g, '')}</span>
             </div>
             <div className="design-tokens-studio__type" style={{ fontFamily: family }}>
-              {scaleEntries.length === 0 && <div className="design-tokens-studio__hint">未定义字号梯度</div>}
+              {scaleEntries.length === 0 && (
+                <div className="design-tokens-studio__hint">{t('designCanvas.studio.noTypeScale')}</div>
+              )}
               {scaleEntries.map(([name, value]) => (
                 <div key={name} className="design-tokens-studio__type-row">
                   <div className="design-tokens-studio__type-sample" style={{ fontSize: value }}>
-                    The quick brown fox
+                    {t('designCanvas.studio.typeSample')}
                   </div>
                   <div className="design-tokens-studio__type-meta">
                     <code>{name}</code>
@@ -266,8 +276,8 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
 
           <section className="design-tokens-studio__section">
             <div className="design-tokens-studio__section-head">
-              <h3>圆角</h3>
-              <span>{radiusEntries.length} 个令牌</span>
+              <h3>{t('designCanvas.studio.radius')}</h3>
+              <span>{t('designCanvas.studio.tokenCount', { count: radiusEntries.length })}</span>
             </div>
             <div className="design-tokens-studio__tiles">
               {radiusEntries.map(([name, value]) => (
@@ -285,8 +295,8 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
 
           <section className="design-tokens-studio__section">
             <div className="design-tokens-studio__section-head">
-              <h3>阴影</h3>
-              <span>{shadowEntries.length} 个令牌</span>
+              <h3>{t('designCanvas.studio.shadow')}</h3>
+              <span>{t('designCanvas.studio.tokenCount', { count: shadowEntries.length })}</span>
             </div>
             <div className="design-tokens-studio__tiles">
               {shadowEntries.map(([name, value]) => (
@@ -304,11 +314,13 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
 
           <section className="design-tokens-studio__section">
             <div className="design-tokens-studio__section-head">
-              <h3>间距</h3>
-              <span>{spacingEntries.length} 个令牌</span>
+              <h3>{t('designCanvas.studio.spacing')}</h3>
+              <span>{t('designCanvas.studio.tokenCount', { count: spacingEntries.length })}</span>
             </div>
             <div className="design-tokens-studio__spacing">
-              {spacingEntries.length === 0 && <div className="design-tokens-studio__hint">未定义间距梯度</div>}
+              {spacingEntries.length === 0 && (
+                <div className="design-tokens-studio__hint">{t('designCanvas.studio.noSpacingScale')}</div>
+              )}
               {spacingEntries.map(([name, value]) => {
                 const num = parseInt(String(value), 10);
                 const w = isNaN(num) ? 8 : Math.min(64, Math.max(2, num));
@@ -326,8 +338,8 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
 
         <section className="design-tokens-studio__section">
           <div className="design-tokens-studio__section-head">
-            <h3>组件预览</h3>
-            <span>浅色画布 · 深色画布</span>
+            <h3>{t('designCanvas.studio.componentPreview')}</h3>
+            <span>{t('designCanvas.studio.previewPairCaption')}</span>
           </div>
           <div className="design-tokens-studio__preview-pair">
             {([
@@ -340,25 +352,33 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
                   <div className="preview-card preview-card--primary">
                     <div className="preview-chip">{selected.mood}</div>
                     <h4>{selected.name}</h4>
-                    <p>{surface.mode === 'native'
-                      ? '按 tokens.json 中声明的调色板原生渲染。'
-                      : '相同调色板在反向明度上的压力测试 — 检查文字、边框、强调色是否依然可读。'}</p>
+                    <p>
+                      {surface.mode === 'native'
+                        ? t('designCanvas.studio.previewNativeDesc')
+                        : t('designCanvas.studio.previewStressDesc')}
+                    </p>
 
                     <div className="preview-row">
-                      <button className="preview-btn preview-btn--primary" type="button">主要</button>
-                      <button className="preview-btn preview-btn--secondary" type="button">次级</button>
-                      <button className="preview-btn preview-btn--ghost" type="button">幽灵</button>
+                      <button className="preview-btn preview-btn--primary" type="button">
+                        {t('designCanvas.studio.btnPrimary')}
+                      </button>
+                      <button className="preview-btn preview-btn--secondary" type="button">
+                        {t('designCanvas.studio.btnSecondary')}
+                      </button>
+                      <button className="preview-btn preview-btn--ghost" type="button">
+                        {t('designCanvas.studio.btnGhost')}
+                      </button>
                     </div>
 
                     <div className="preview-row preview-row--split">
                       <div className="preview-field">
-                        <label>邮箱</label>
+                        <label>{t('designCanvas.studio.fieldEmail')}</label>
                         <div className="preview-input">
                           <input type="email" placeholder="name@studio.com" defaultValue="" />
                         </div>
                       </div>
                       <div className="preview-field preview-field--inline">
-                        <label>通知</label>
+                        <label>{t('designCanvas.studio.fieldNotify')}</label>
                         <button
                           type="button"
                           className={`preview-switch${switchOn ? ' is-on' : ''}`}
@@ -371,23 +391,23 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
                     </div>
 
                     <div className="preview-chips">
-                      <span className="preview-pill">强调</span>
-                      <span className="preview-pill preview-pill--muted">次级</span>
-                      <span className="preview-pill preview-pill--outline">描边</span>
+                      <span className="preview-pill">{t('designCanvas.studio.pillAccent')}</span>
+                      <span className="preview-pill preview-pill--muted">{t('designCanvas.studio.pillMuted')}</span>
+                      <span className="preview-pill preview-pill--outline">{t('designCanvas.studio.pillOutline')}</span>
                     </div>
                   </div>
 
                   <div className="preview-card preview-card--stats">
                     <div className="preview-stat">
-                      <span className="preview-stat__label">圆角</span>
+                      <span className="preview-stat__label">{t('designCanvas.studio.statRadius')}</span>
                       <strong>{pick(radius, 'md', 'base') || '—'}</strong>
                     </div>
                     <div className="preview-stat">
-                      <span className="preview-stat__label">阴影</span>
+                      <span className="preview-stat__label">{t('designCanvas.studio.statShadow')}</span>
                       <div className="preview-stat__shadow" />
                     </div>
                     <div className="preview-stat">
-                      <span className="preview-stat__label">动效</span>
+                      <span className="preview-stat__label">{t('designCanvas.studio.statMotion')}</span>
                       <strong>{pick(motion.duration as any, 'normal', 'base') || '—'}</strong>
                     </div>
                   </div>
