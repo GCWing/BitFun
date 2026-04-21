@@ -63,6 +63,7 @@ tests/e2e/reports/
 .bitfun/
 .cursor
 .cursor/rules/no-cargo.mdc
+.sisyphus/
 
 ASSETS_LICENSES.md
 

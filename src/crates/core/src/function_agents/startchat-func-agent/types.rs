@@ -6,6 +6,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+// Re-export shared types for backward compatibility and relative import
+pub use crate::function_agents::common::{AgentError, AgentErrorType, AgentResult, Language};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkStateOptions {
@@ -39,12 +42,6 @@ impl Default for WorkStateOptions {
             language: Language::English,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Language {
-    Chinese,
-    English,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -278,57 +275,3 @@ pub struct AIGeneratedAnalysis {
 
     pub quick_actions: Vec<QuickAction>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentError {
-    pub message: String,
-    pub error_type: AgentErrorType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum AgentErrorType {
-    GitError,
-    AnalysisError,
-    InvalidInput,
-    InternalError,
-}
-
-impl fmt::Display for AgentError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{:?}] {}", self.error_type, self.message)
-    }
-}
-
-impl std::error::Error for AgentError {}
-
-impl AgentError {
-    pub fn git_error(msg: impl Into<String>) -> Self {
-        Self {
-            message: msg.into(),
-            error_type: AgentErrorType::GitError,
-        }
-    }
-
-    pub fn analysis_error(msg: impl Into<String>) -> Self {
-        Self {
-            message: msg.into(),
-            error_type: AgentErrorType::AnalysisError,
-        }
-    }
-
-    pub fn invalid_input(msg: impl Into<String>) -> Self {
-        Self {
-            message: msg.into(),
-            error_type: AgentErrorType::InvalidInput,
-        }
-    }
-
-    pub fn internal_error(msg: impl Into<String>) -> Self {
-        Self {
-            message: msg.into(),
-            error_type: AgentErrorType::InternalError,
-        }
-    }
-}
-
-pub type AgentResult<T> = Result<T, AgentError>;

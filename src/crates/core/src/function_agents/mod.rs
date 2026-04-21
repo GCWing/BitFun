@@ -1,8 +1,10 @@
-﻿/*!
+/*!
  * Function Agents module
  *
  * Provides various function agents for automating specific tasks
  */
+
+pub mod common;
 
 #[path = "git-func-agent/mod.rs"]
 pub mod git_func_agent;
@@ -10,12 +12,12 @@ pub mod git_func_agent;
 #[path = "startchat-func-agent/mod.rs"]
 pub mod startchat_func_agent;
 
-pub use git_func_agent::GitFunctionAgent;
-pub use startchat_func_agent::StartchatFunctionAgent;
+// Re-export shared types from common module
+pub use common::{AgentError, AgentErrorType, AgentResult, Language};
 
-pub use git_func_agent::{CommitFormat, CommitMessage, CommitMessageOptions, CommitType};
-
+// Re-export agents and specific types
+pub use git_func_agent::{GitFunctionAgent, CommitFormat, CommitMessage, CommitMessageOptions, CommitType};
 pub use startchat_func_agent::{
-    CurrentWorkState, GitWorkState, GreetingMessage, PredictedAction, QuickAction,
+    StartchatFunctionAgent, CurrentWorkState, GitWorkState, GreetingMessage, PredictedAction, QuickAction,
     WorkStateAnalysis, WorkStateOptions,
 };

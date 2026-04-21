@@ -1,6 +1,7 @@
 use super::ai_service::AIAnalysisService;
 use super::context_analyzer::ContextAnalyzer;
 use super::types::*;
+use crate::function_agents::common::{AgentError, AgentResult};
 use crate::infrastructure::ai::AIClientFactory;
 use crate::service::git::{GitDiffParams, GitService};
 /**

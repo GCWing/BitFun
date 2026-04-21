@@ -38,7 +38,7 @@ impl StartchatFunctionAgent {
     pub async fn quick_analyze(
         &self,
         repo_path: &Path,
-        language: Language,
+        language: crate::function_agents::Language,
     ) -> AgentResult<WorkStateAnalysis> {
         let options = WorkStateOptions {
             language,
@@ -53,7 +53,7 @@ impl StartchatFunctionAgent {
             analyze_git: false,
             predict_next_actions: false,
             include_quick_actions: false,
-            language: Language::Chinese,
+            language: crate::function_agents::Language::Chinese,
         };
 
         self.analyze_work_state(repo_path, options).await
