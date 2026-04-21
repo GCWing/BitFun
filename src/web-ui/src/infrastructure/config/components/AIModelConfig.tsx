@@ -1703,7 +1703,7 @@ const AIModelConfig: React.FC = () => {
         : undefined;
 
     const renderAuthRow = () => (
-      <ConfigPageRow label={t('cliAuth.label')} align="center" wide>
+      <ConfigPageRow label={t('cliAuth.label')} align={authIsCli ? 'start' : 'center'} wide>
         <div className="bitfun-ai-model-config__control-stack">
           <Select
             value={authType}
@@ -1715,7 +1715,7 @@ const AIModelConfig: React.FC = () => {
             size="small"
           />
           {authIsCli && (
-            <small className={matchedCliCredential ? 'resolved-url__hint' : `resolved-url__hint bitfun-ai-model-config__json-status--error`}>
+            <small className={matchedCliCredential ? 'resolved-url__hint bitfun-ai-model-config__cli-auth-hint' : `resolved-url__hint bitfun-ai-model-config__cli-auth-hint bitfun-ai-model-config__json-status--error`}>
               {matchedCliCredential
                 ? t('cliAuth.detected', {
                     label: matchedCliCredential.display_label,

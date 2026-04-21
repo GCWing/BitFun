@@ -34,6 +34,7 @@ Usage:
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
 - The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.
+- Keep edits focused. Avoid replacing huge multi-hundred-line blocks in one call when a smaller targeted edit would work.
 - Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance."#
         .to_string())
     }
@@ -49,11 +50,11 @@ Usage:
                 "old_string": {
                     "type": "string",
                     "default": "",
-                    "description": "The text to replace (must be unique within the file, and must match the file contents exactly, including all whitespace and indentation)"
+                    "description": "The text to replace (must be unique within the file, and must match the file contents exactly, including all whitespace and indentation). Include enough surrounding context to avoid broad replacements."
                 },
                 "new_string": {
                     "type": "string",
-                    "description": "The text to replace it with (must be different from old_string)"
+                    "description": "The text to replace it with (must be different from old_string). Keep edits targeted; avoid replacing huge multi-hundred-line blocks in one call when smaller edits are possible."
                 },
                 "replace_all": {
                     "type": "boolean",

@@ -16,6 +16,53 @@ import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
 
+async function hydrateHistoricalSession(
+  context: FlowChatContext,
+  sessionId: string,
+  notifyOnError: boolean
+): Promise<void> {
+  const existing = context.pendingHistoryLoads.get(sessionId);
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const loadPromise = (async () => {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    if (!session?.isHistorical) {
+      return;
+    }
+
+    const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+
+    await context.flowChatStore.loadSessionHistory(
+      sessionId,
+      workspacePath,
+      undefined,
+      session.remoteConnectionId,
+      session.remoteSshHost
+    );
+  })();
+
+  context.pendingHistoryLoads.set(sessionId, loadPromise);
+
+  try {
+    await loadPromise;
+  } catch (error) {
+    log.error('Failed to load session history', { sessionId, error });
+    if (notifyOnError) {
+      notificationService.warning('Failed to load session history, showing empty session', {
+        duration: 3000
+      });
+    }
+    throw error;
+  } finally {
+    if (context.pendingHistoryLoads.get(sessionId) === loadPromise) {
+      context.pendingHistoryLoads.delete(sessionId);
+    }
+  }
+}
+
 type SessionDisplayMode = 'code' | 'cowork' | 'claw';
 
 const isAssistantWorkspace = (workspace?: WorkspaceInfo | null): boolean => {
@@ -285,25 +332,7 @@ export async function switchChatSession(
 
     if (session?.isHistorical) {
       // Load history in the background — do not block the UI.
-      (async () => {
-        try {
-          const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
-
-          // loadSessionHistory internally calls restoreSession + loadSessionTurns.
-          await context.flowChatStore.loadSessionHistory(
-            sessionId,
-            workspacePath,
-            undefined,
-            session.remoteConnectionId,
-            session.remoteSshHost
-          );
-        } catch (error) {
-          log.error('Failed to load session history', { sessionId, error });
-          notificationService.warning('Failed to load session history, showing empty session', {
-            duration: 3000
-          });
-        }
-      })();
+      void hydrateHistoricalSession(context, sessionId, true);
     }
   } catch (error) {
     log.error('Failed to switch chat session', { sessionId, error });
@@ -376,10 +405,15 @@ export async function ensureBackendSession(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+  if (session.isHistorical) {
+    await hydrateHistoricalSession(context, sessionId, false);
+  }
 
-  const isHistoricalSession = session.isHistorical === true;
-  const isFirstTurn = session.dialogTurns.length <= 1;
+  const latestSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
+  const workspacePath = requireSessionWorkspacePath(latestSession.workspacePath, sessionId);
+
+  const isHistoricalSession = latestSession.isHistorical === true;
+  const isFirstTurn = latestSession.dialogTurns.length <= 1;
   const needsBackendSetup = isHistoricalSession || isFirstTurn;
   /** Avoid createSession when historical data is already loaded but backend files are missing (e.g. new SSH connection id). */
   const allowRecreateOnCoordinatorFailure =
@@ -401,8 +435,8 @@ export async function ensureBackendSession(
     await agentAPI.ensureCoordinatorSession({
       sessionId,
       workspacePath,
-      remoteConnectionId: session.remoteConnectionId,
-      remoteSshHost: session.remoteSshHost,
+      remoteConnectionId: latestSession.remoteConnectionId,
+      remoteSshHost: latestSession.remoteSshHost,
     });
     clearHistoricalFlag();
   } catch (e: any) {
@@ -418,17 +452,17 @@ export async function ensureBackendSession(
     log.debug('Coordinator session missing, creating backend session', { sessionId, error: e });
     await agentAPI.createSession({
       sessionId: sessionId,
-      sessionName: session.title || `Session ${sessionId.slice(0, 8)}`,
-      agentType: session.mode || 'agentic',
+      sessionName: latestSession.title || `Session ${sessionId.slice(0, 8)}`,
+      agentType: latestSession.mode || 'agentic',
       workspacePath,
-      remoteConnectionId: session.remoteConnectionId,
-      remoteSshHost: session.remoteSshHost,
+      remoteConnectionId: latestSession.remoteConnectionId,
+      remoteSshHost: latestSession.remoteSshHost,
       config: {
-        modelName: session.config.modelName || 'auto',
+        modelName: latestSession.config.modelName || 'auto',
         enableTools: true,
         safeMode: true,
-        remoteConnectionId: session.remoteConnectionId,
-        remoteSshHost: session.remoteSshHost,
+        remoteConnectionId: latestSession.remoteConnectionId,
+        remoteSshHost: latestSession.remoteSshHost,
       }
     });
     clearHistoricalFlag();

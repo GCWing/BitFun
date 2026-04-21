@@ -9,15 +9,19 @@
 
 use crate::agentic::tools::browser_control::actions::BrowserActions;
 use crate::agentic::tools::browser_control::browser_launcher::{
-    BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
+    BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
 use crate::agentic::tools::browser_control::cdp_client::CdpClient;
 use crate::agentic::tools::browser_control::session_registry::{
     BrowserSession, BrowserSessionRegistry,
 };
+use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
+use crate::agentic::tools::computer_use_host::ComputerUseForegroundApplication;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::types::AIConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -52,6 +56,355 @@ impl ControlHubTool {
         Self
     }
 
+    fn browser_connect_mode_from_params(params: &Value) -> &'static str {
+        match params.get("mode").and_then(|v| v.as_str()) {
+            Some("headless") => "headless",
+            Some("default") => "default",
+            _ => "default",
+        }
+    }
+
+    fn default_browser_connect_hints(kind: &BrowserKind, port: u16) -> Vec<String> {
+        let exe = BrowserLauncher::browser_executable(kind);
+        vec![
+            "For login/cookies/extensions, use the user's default browser via CDP — never fall back to desktop mouse/keyboard automation.".to_string(),
+            format!(
+                "If CDP is not ready, restart the browser with the test port enabled: \"{}\" --remote-debugging-port={}",
+                exe, port
+            ),
+            "After the browser is listening on the test port, use browser.connect / snapshot / click / fill to drive the DOM directly.".to_string(),
+        ]
+    }
+
+    fn headless_browser_connect_hints(port: u16) -> Vec<String> {
+        vec![
+            "For project Web UI testing that does not depend on user login state, use the dedicated headless browser flow instead of the user's browser.".to_string(),
+            format!(
+                "Start or attach a headless test browser on the test port {} and then drive it through browser DOM actions only.",
+                port
+            ),
+            "Do not switch to desktop mouse/keyboard browser control in headless mode.".to_string(),
+        ]
+    }
+
+    fn desktop_browser_guard_error(
+        action: &str,
+        foreground: Option<&ComputerUseForegroundApplication>,
+    ) -> ControlHubError {
+        let app_name = foreground
+            .and_then(|app| app.name.as_deref())
+            .unwrap_or("a web browser");
+        ControlHubError::new(
+            ErrorCode::GuardRejected,
+            format!(
+                "desktop.{} is blocked while {} is frontmost. Use ControlHub domain=\"browser\" for all browser interaction; desktop mouse/keyboard browser control is forbidden.",
+                action, app_name
+            ),
+        )
+        .with_hints([
+            "Use browser.connect to attach via the test port, then drive the page with snapshot/click/fill/press_key",
+            "For login/cookies/extensions, guide the user to start their default browser with the test port enabled before calling browser.connect",
+            "For isolated project Web UI testing, use the headless browser flow instead of desktop automation",
+        ])
+    }
+
+    fn is_probably_browser_app(foreground: &ComputerUseForegroundApplication) -> bool {
+        let name = foreground.name.as_deref().unwrap_or("").to_ascii_lowercase();
+        let bundle = foreground
+            .bundle_id
+            .as_deref()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+
+        const NAME_HINTS: &[&str] = &[
+            "chrome",
+            "chromium",
+            "edge",
+            "brave",
+            "arc",
+            "firefox",
+            "safari",
+            "browser",
+            "浏览器",
+        ];
+        const BUNDLE_HINTS: &[&str] = &[
+            "chrome",
+            "chromium",
+            "edge",
+            "brave",
+            "arc",
+            "firefox",
+            "safari",
+            "browser",
+        ];
+
+        NAME_HINTS.iter().any(|hint| name.contains(hint))
+            || BUNDLE_HINTS.iter().any(|hint| bundle.contains(hint))
+    }
+
+    async fn desktop_action_targets_browser(
+        &self,
+        action: &str,
+        context: &ToolUseContext,
+    ) -> Option<ControlHubError> {
+        let guarded_actions = [
+            "click",
+            "click_element",
+            "mouse_move",
+            "pointer_move_rel",
+            "scroll",
+            "drag",
+            "key_chord",
+            "type_text",
+            "paste",
+            "locate",
+            "move_to_text",
+        ];
+        if !guarded_actions.contains(&action) {
+            return None;
+        }
+        let host = context.computer_use_host.as_ref()?;
+        let snapshot = host.computer_use_session_snapshot().await;
+        let foreground = snapshot.foreground_application.as_ref()?;
+        if Self::is_probably_browser_app(foreground) {
+            return Some(Self::desktop_browser_guard_error(action, Some(foreground)));
+        }
+        None
+    }
+
+    async fn desktop_domain_enabled() -> bool {
+        if !computer_use_desktop_available() {
+            return false;
+        }
+        let Ok(service) = GlobalConfigManager::get_service().await else {
+            return false;
+        };
+        let ai: AIConfig = service.get_config(Some("ai")).await.unwrap_or_default();
+        ai.computer_use_enabled
+    }
+
+    fn description_text(desktop_enabled: bool) -> String {
+        let desktop_domain_doc = if desktop_enabled {
+            r#"### domain: "desktop"  (Computer Use — only available in the BitFun desktop app)
+- screenshot, click, click_element, mouse_move, pointer_move_rel,
+  scroll, drag, key_chord, type_text, paste, wait, locate, move_to_text.
+- **`screenshot`** — exactly two possible outputs: the focused application
+  window (default, via Accessibility) OR the full display (fallback when
+  AX cannot resolve the window). No crop / quadrant / mouse-centered
+  options exist anymore. Old crop parameters (`screenshot_crop_center_x/y`,
+  `screenshot_navigate_quadrant`, `screenshot_reset_navigation`,
+  `screenshot_implicit_center`, `point_crop_half_extent_native`) are
+  silently ignored. The only param that still has meaning is
+  `screenshot_window: true` — and it just reaffirms the default; you
+  rarely need to pass it.
+- **`paste { text, clear_first?, submit?, submit_keys? }`** — STRONGLY PREFER
+  this over `type_text` for any non-trivial input (CJK, emoji, multi-line,
+  contact names, message bodies, anything > ~15 chars). Internally does
+  `clipboard_set` + cmd/ctrl+v, optionally cmd/ctrl+a first to replace
+  existing content, and optionally Return after to submit. Collapses the
+  canonical "type a name into search and press enter" / "send a message"
+  sequence into a single tool call AND avoids every IME failure mode that
+  `type_text` is subject to. Use `submit_keys: ["command","return"]` for
+  Slack-style apps where Return inserts a newline.
+- `type_text` is a fallback for short Latin-only text into a focused input
+  where you have no clipboard helper (Linux without wl-clipboard / xclip).
+  In every other case `paste` is faster and more reliable.
+- `key_chord` accepts EITHER `{"keys":["command","v"]}` (canonical) OR a
+  bare `{"keys":"escape"}` / `{"key":"return"}` for single keys; both
+  shapes are coerced. Modifier names: command, control, option/alt, shift.
+- Multi-display routing (FIRST step on multi-monitor setups):
+  * `list_displays` — returns every attached screen with `display_id`,
+    `is_primary`, `is_active`, `has_pointer`, origin/size, and `scale_factor`.
+    Always inspect this list before issuing screen-coordinate actions when
+    `interaction_state.displays` has more than one entry; do NOT assume the
+    cursor is on the screen the user is looking at.
+  * `focus_display` — `{ display_id }` pins ALL subsequent screenshots /
+    clicks / locates to that display until cleared. Pass `{ display_id: null }`
+    (or omit) to fall back to the legacy "screen under the mouse" behavior.
+    Pinning invalidates any cached screenshot, so the next `screenshot` is
+    guaranteed to come from the chosen display.
+- `interaction_state.displays` and `interaction_state.active_display_id`
+  are present in every desktop tool result and tell you which display the
+  next action will target. If that does not match the user's intent,
+  either call `desktop.focus_display` BEFORE the next `screenshot` / `click`,
+  OR pass `display_id: <id>` directly inside the next action's params —
+  every desktop action accepts it as a one-shot pin equivalent (sticky:
+  the pin persists for follow-up actions until you set `display_id: null`).
+- Single-display setup (most users): you do NOT need `list_displays` /
+  `focus_display`. Just call `screenshot` / `click_element` / etc.
+  directly — `interaction_state.displays.length === 1` is your signal.
+"#
+        } else {
+            r#"### domain: "desktop"
+- Not available in this session because Computer Use is disabled.
+- Do not attempt mouse, keyboard, OCR, display, or external desktop app control actions.
+- To enable these actions, turn on the `computer use` setting in session configuration and use the BitFun desktop app.
+"#
+        };
+
+        format!(
+            r#"ControlHub — the SOLE control entry point for everything the agent can drive.
+
+You will not find a separate `ComputerUse` or `SelfControl` tool: every desktop, browser,
+app-self-control, terminal-signalling and system action is reachable through this one tool
+via `{{ domain, action, params }}`.
+
+## Decision tree — which domain do I use?
+
+1. The user wants to change something inside the BitFun app itself
+   (settings, models, scenes, BitFun's own buttons / forms)?
+   → **domain: "app"**  (operates BitFun's own React UI through the SelfControl bridge)
+
+2. The user wants to drive a website / web app in their *real* browser
+   (preserving cookies, login, extensions)?
+   → **domain: "browser"** (drives the user's default Chromium-family browser via CDP)
+
+3. The user wants to operate another desktop application
+   (third-party app windows, OS dialogs, system-wide keyboard / mouse, accessibility)?
+   → **domain: "desktop"** (Computer Use: screenshot, click, key_chord, locate, ...)
+
+4. The user wants to launch an app, run a shell / AppleScript, or query OS info?
+   → **domain: "system"**
+
+5. The user wants to signal an existing terminal session
+   (kill, send SIGINT) — *not* run new commands; for that use the `Bash` tool?
+   → **domain: "terminal"**
+
+If you are unsure between two domains: prefer the smallest blast radius
+(`app` < `browser` < `desktop` < `system`).
+
+## Unified response envelope
+
+Every call returns a JSON object with a stable shape:
+
+  // success
+  {{ "ok": true,  "domain": "...", "action": "...", "data": {{ ... }} }}
+  // failure (still delivered as a normal tool result, NOT an exception)
+  {{ "ok": false, "domain": "...", "action": "...",
+    "error": {{ "code": "STALE_REF" | "NOT_FOUND" | "AMBIGUOUS" | "GUARD_REJECTED"
+                       | "WRONG_DISPLAY" | "WRONG_TAB" | "INVALID_PARAMS"
+                       | "PERMISSION_DENIED" | "TIMEOUT" | "NOT_AVAILABLE"
+                       | "MISSING_SESSION" | "FRONTEND_ERROR" | "INTERNAL",
+               "message": "...", "hints": [ "...next step..." ] }} }}
+
+Branch on `ok` and on `error.code` deterministically. Never scrape the English `message`
+for control flow.
+
+## Domains and actions
+
+### domain: "browser"  (DOM/CDP-only browser control; never use desktop mouse/keyboard for browser interaction)
+- Two browser modes:
+  * `connect {{ mode: "headless" }}` — attach to a headless test browser on the test port for project Web UI testing that does **not** depend on user login state.
+  * `connect {{ mode: "default" }}` (default) — attach to the user's default browser via CDP for flows that require login state, cookies, extensions, or the user's real profile.
+- In **all** browser cases, control the page through DOM/CDP actions only. Do **not** use `domain: "desktop"` mouse/keyboard actions to drive a browser.
+- connect, navigate, snapshot, click, fill, type, select, press_key, scroll, wait,
+  get_text, get_url, get_title, screenshot, evaluate, close, list_pages, tab_query,
+  switch_page, list_sessions.
+- Fast path (target a known tab in ONE call):
+  * `connect {{ target_url? , target_title? , activate? }}` finds the first
+    open tab whose URL / title contains the substring, registers it as the
+    default session AND brings it to the front. Use this instead of
+    `connect` → `list_pages` → `switch_page` for the common
+    "drive my Gmail / GitHub PR / docs tab" flow. If the filter matches no
+    tab you get `error.code = WRONG_TAB` (no silent fallback).
+- Tab routing:
+  * `list_pages` returns every page/tab the browser exposes; each entry
+    carries `is_default_session` so you can tell which one ControlHub will
+    drive next without an extra `list_sessions` round-trip.
+  * `tab_query` (`{{ url_contains?, title_contains?, only_pages?, limit? }}`)
+    is the preferred filter when you need to inspect candidates before
+    committing to one.
+  * `switch_page` (`{{ page_id, activate? }}`) sets the default CDP session
+    AND, by default, calls `Page.bringToFront` so the user actually sees
+    the tab being driven. Pass `activate: false` to keep the operation
+    invisible (e.g. background scraping).
+- Workflow: connect → navigate → snapshot (returns @e1, @e2 ... refs) → click/fill using refs.
+- `snapshot` now traverses **open shadow roots** and **same-origin iframes**;
+  each element entry includes `scope` (`document`/`shadow`/`iframe`) and
+  `frame_path` so you can tell where in the DOM tree it lives. Pass
+  `with_backend_node_ids: true` to also receive a stable
+  `backend_node_id` per element (CDP DOM id, survives re-renders).
+- Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
+
+{desktop_domain_doc}
+### domain: "app"  (BitFun's own GUI via the SelfControl bridge)
+- Introspection (pure-Rust, no UI round-trip — call these BEFORE bash/fs):
+  * `app_self_describe` — one-shot snapshot: `{{ scenes, settingsTabs, miniapps, miniappSubsystemAvailable }}`. Use this whenever the user asks "what can BitFun do / what's installed / what scenes are there / what mini-apps are available" — DO NOT scan the user's workspace directories looking for app features, those directories are USER files, not BitFun installations.
+  * `list_miniapps {{ includeRuntime?: bool }}` — installed mini-apps with `id / name / description / icon / category / openSceneId`.
+  * `list_scenes` — all scene ids you can pass to `open_scene` (plus dynamic `miniapp:<id>` for installed mini-apps).
+  * `list_settings_tabs` — all tab ids you can pass to `open_settings_tab`.
+  * `list_tasks` — catalog of named recipes for `execute_task`.
+- Navigation / mutation: get_page_state, wait_for_selector, click,
+  click_by_text, input, scroll, open_scene, open_settings_tab, set_config,
+  get_config, list_models, set_default_model, delete_model, execute_task,
+  select_option, wait, press_key, read_text.
+- `get_page_state` supports `{{ offset, limit }}` pagination (default
+  `offset=0, limit=60`) and returns `pagination` + `webview_id` so you can
+  page through long settings panels and tell which webview produced the
+  response.
+- `wait_for_selector` (`{{ selector, timeoutMs?, state? }}`) blocks until
+  the element appears (state 'visible' also waits for a non-zero box).
+  Errors with `code='TIMEOUT'`. Prefer it over a fixed `wait {{ durationMs }}`
+  when the right delay isn't known.
+- For well-known requests, prefer `execute_task` recipes:
+  * "set Kimi as the main model" → `set_primary_model {{ modelQuery: "kimi" }}`
+  * "open the mini app gallery / show me installed mini apps" → first
+    `list_miniapps`, then `execute_task task=open_miniapp_gallery`
+    (or `open_miniapp {{ miniAppId: "<id>" }}` to open a specific one).
+- HARD RULE: when the user asks "BitFun 里有哪些 X" / "what mini-apps /
+  scenes / settings does BitFun have" — answer with `app.app_self_describe`
+  or the targeted `list_*` action. NEVER answer this kind of question by
+  running `Bash` `ls` against the user's workspace; that path is for
+  user files, not BitFun's own catalog.
+
+### domain: "terminal"
+- list_sessions, kill (`terminal_session_id`), interrupt (`terminal_session_id`).
+  Use the `Bash` tool to *run* commands; this domain only signals existing sessions.
+- Fast path: if there is exactly ONE live terminal session, you may omit
+  `terminal_session_id` and ControlHub will target it automatically. With
+  zero live sessions you get `error.code = MISSING_SESSION`; with multiple
+  you get `AMBIGUOUS` plus the candidate ids in `error.hints`. Otherwise
+  call `list_sessions` first.
+
+### domain: "system"
+- open_app (`app_name`), open_url (`url`), open_file (`path`, `app?`),
+  clipboard_get (`max_bytes?`), clipboard_set (`text`),
+  run_script (`script`, `script_type` = applescript|shell, optional
+  `timeout_ms` ≤ 5 min, `max_output_bytes` ≤ 256 KB), get_os_info.
+- `open_url` is the right tool when the goal is "show this URL to the user"
+  (no CDP, no driving). Use `domain: "browser"` only when you actually need
+  to interact with the page.
+- `open_file` opens a local file with its default handler (or an explicit
+  `app` on macOS) — high-frequency for "open this PDF / picture / spreadsheet".
+- `clipboard_get` / `clipboard_set` are the universal cross-app bridge:
+  the cheapest way to move text between apps that you'd otherwise have to
+  drive separately. `clipboard_get` returns `{{ text, byte_length, truncated }}`;
+  `clipboard_set {{ text }}` is the inverse. On Linux this requires
+  wl-clipboard / xclip / xsel; missing-helper failures return `NOT_AVAILABLE`.
+- `run_script` enforces the timeout and truncates large stdout/stderr; on
+  timeout it returns `error.code = TIMEOUT` and the child process is killed.
+  `get_os_info` includes `os`, `arch`, `os_version`, `hostname`.
+
+### domain: "meta"  (introspection — call this BEFORE long control flows)
+- `capabilities` — returns `{{ domains: {{ desktop, browser, app, terminal, system, meta }},
+  host: {{ os, arch }}, schema_version }}`. Use it to confirm which domains are
+  actually wired up on this runtime instead of guessing from the description.
+- `route_hint` (`{{ intent }}`) — heuristic mapping of a free-form user intent
+  ("把 BitFun 默认模型改成 Kimi") to a ranked list of candidate domains so the
+  model has a sanity check before it commits to one. Always confirm with
+  `meta.capabilities` and the domain docs; this is only a hint.
+
+## Workflow tips
+1. For cross-domain workflows (browser data → desktop paste, app config → external nav),
+   call actions sequentially and verify each step's `ok` field before chaining.
+2. After any UI mutation, re-acquire state (browser: snapshot, desktop: screenshot,
+   app: get_page_state) before the next action.
+3. When the model is the only one driving inputs, `wait` 200–500 ms after a click that
+   triggers an animation before re-observing."#,
+            desktop_domain_doc = desktop_domain_doc,
+        )
+    }
+
     async fn dispatch(
         &self,
         domain: &str,
@@ -60,7 +413,22 @@ impl ControlHubTool {
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         match domain {
-            "desktop" => self.handle_desktop(action, params, context).await,
+            "desktop" => {
+                if !Self::desktop_domain_enabled().await {
+                    return Ok(err_response(
+                        "desktop",
+                        action,
+                        ControlHubError::new(
+                            ErrorCode::NotAvailable,
+                            "Computer Use is disabled for this session.",
+                        )
+                        .with_hint(
+                            "Enable computer use in session settings to expose desktop control actions.",
+                        ),
+                    ));
+                }
+                self.handle_desktop(action, params, context).await
+            },
             "browser" => self.handle_browser(action, params).await,
             "app" => self.handle_app(action, params, context).await,
             "terminal" => self.handle_terminal(action, params, context).await,
@@ -86,11 +454,11 @@ impl ControlHubTool {
         &self,
         action: &str,
         params: &Value,
-        context: &ToolUseContext,
+        _context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         match action {
             "capabilities" => {
-                let desktop_available = context.computer_use_host.is_some();
+                let desktop_available = Self::desktop_domain_enabled().await;
                 // `app` (SelfControl bridge) and `terminal` (TerminalApi) are
                 // both delivered through global registries rather than fields
                 // on the context, so we can't be 100% sure here without
@@ -425,6 +793,10 @@ impl ControlHubTool {
             _ => {}
         }
 
+        if let Some(err) = self.desktop_action_targets_browser(action, context).await {
+            return Ok(err_response("desktop", action, err));
+        }
+
         // UX shortcut: every screen-coordinate action accepts an optional
         // `display_id`. If present (and different from the currently pinned
         // display), pin it BEFORE forwarding so the model doesn't need a
@@ -473,12 +845,34 @@ impl ControlHubTool {
 
         match action {
             "connect" => {
+                let mode = Self::browser_connect_mode_from_params(params);
                 let kind = BrowserLauncher::detect_default_browser()?;
+
+                if mode == "headless" {
+                    if !BrowserLauncher::is_cdp_available(port).await {
+                        return Ok(err_response(
+                            "browser",
+                            "connect",
+                            ControlHubError::new(
+                                ErrorCode::NotAvailable,
+                                format!(
+                                    "Headless browser test port {} is not available. Start the dedicated headless browser first, then connect via ControlHub browser actions.",
+                                    port
+                                ),
+                            )
+                            .with_hints(Self::headless_browser_connect_hints(port)),
+                        ));
+                    }
+                }
+
                 let user_data_dir = params
                     .get("user_data_dir")
                     .and_then(|v| v.as_str());
-                let launch_result =
-                    BrowserLauncher::launch_with_cdp_opts(&kind, port, user_data_dir).await?;
+                let launch_result = if mode == "headless" {
+                    LaunchResult::AlreadyConnected
+                } else {
+                    BrowserLauncher::launch_with_cdp_opts(&kind, port, user_data_dir).await?
+                };
 
                 // UX shortcut: a frequent flow is "drive my Gmail tab" /
                 // "drive the GitHub PR I'm looking at". Without `target_*`
@@ -504,6 +898,11 @@ impl ControlHubTool {
                 match &launch_result {
                     LaunchResult::AlreadyConnected | LaunchResult::Launched => {
                         let pages = CdpClient::list_pages(port).await?;
+                        let connected_browser = if mode == "headless" {
+                            "Headless test browser".to_string()
+                        } else {
+                            kind.to_string()
+                        };
 
                         // Selection: explicit target_* > first real page > first.
                         let matched_by_target = if target_url.is_some() || target_title.is_some() {
@@ -592,7 +991,8 @@ impl ControlHubTool {
 
                         let mut result = json!({
                             "success": true,
-                            "browser": kind.to_string(),
+                            "browser": connected_browser,
+                            "browser_mode": mode,
                             "browser_version": version.browser,
                             "port": port,
                             "session_id": session.session_id,
@@ -600,36 +1000,46 @@ impl ControlHubTool {
                             "page_title": page.title,
                             "matched_by_target": targeted,
                             "activated": activated,
-                            "status": if matches!(launch_result, LaunchResult::AlreadyConnected) { "already_connected" } else { "launched" },
+                            "status": if mode == "headless" {
+                                "attached"
+                            } else if matches!(launch_result, LaunchResult::AlreadyConnected) {
+                                "already_connected"
+                            } else {
+                                "launched"
+                            },
                         });
                         if let Some(w) = activate_warning {
                             result["warning"] = json!(w);
                         }
                         let summary = if targeted {
                             format!(
-                                "Connected to {} (session {}, page '{}')",
-                                kind, session.session_id, page.title
+                                "Connected to {} via DOM/CDP (session {}, page '{}')",
+                                connected_browser, session.session_id, page.title
                             )
                         } else {
                             format!(
-                                "Connected to {} on CDP port {} (session {})",
-                                kind, port, session.session_id
+                                "Connected to {} on test port {} via DOM/CDP (session {})",
+                                connected_browser, port, session.session_id
                             )
                         };
                         Ok(vec![ToolResult::ok(result, Some(summary))])
                     }
-                    LaunchResult::LaunchedButCdpNotReady { message, .. } => {
-                        Ok(vec![ToolResult::ok(
-                            json!({ "success": false, "status": "cdp_not_ready", "message": message }),
-                            Some(message.clone()),
-                        )])
-                    }
-                    LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => {
-                        Ok(vec![ToolResult::ok(
-                            json!({ "success": false, "status": "needs_restart", "instructions": instructions }),
-                            Some(instructions.clone()),
-                        )])
-                    }
+                    LaunchResult::LaunchedButCdpNotReady { message, .. } => Ok(err_response(
+                        "browser",
+                        "connect",
+                        ControlHubError::new(ErrorCode::Timeout, message.clone())
+                            .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                    )),
+                    LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => Ok(err_response(
+                        "browser",
+                        "connect",
+                        ControlHubError::new(
+                            ErrorCode::NotAvailable,
+                            "The user's default browser is running without the test port enabled.",
+                        )
+                        .with_hint(instructions)
+                        .with_hints(Self::default_browser_connect_hints(&kind, port)),
+                    )),
                 }
             }
 
@@ -2610,209 +3020,14 @@ impl Tool for ControlHubTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"ControlHub — the SOLE control entry point for everything the agent can drive.
+        Ok(Self::description_text(Self::desktop_domain_enabled().await))
+    }
 
-You will not find a separate `ComputerUse` or `SelfControl` tool: every desktop, browser,
-app-self-control, terminal-signalling and system action is reachable through this one tool
-via `{ domain, action, params }`.
-
-## Decision tree — which domain do I use?
-
-1. The user wants to change something inside the BitFun app itself
-   (settings, models, scenes, BitFun's own buttons / forms)?
-   → **domain: "app"**  (operates BitFun's own React UI through the SelfControl bridge)
-
-2. The user wants to drive a website / web app in their *real* browser
-   (preserving cookies, login, extensions)?
-   → **domain: "browser"** (drives the user's default Chromium-family browser via CDP)
-
-3. The user wants to operate another desktop application
-   (third-party app windows, OS dialogs, system-wide keyboard / mouse, accessibility)?
-   → **domain: "desktop"** (Computer Use: screenshot, click, key_chord, locate, ...)
-
-4. The user wants to launch an app, run a shell / AppleScript, or query OS info?
-   → **domain: "system"**
-
-5. The user wants to signal an existing terminal session
-   (kill, send SIGINT) — *not* run new commands; for that use the `Bash` tool?
-   → **domain: "terminal"**
-
-If you are unsure between two domains: prefer the smallest blast radius
-(`app` < `browser` < `desktop` < `system`).
-
-## Unified response envelope
-
-Every call returns a JSON object with a stable shape:
-
-  // success
-  { "ok": true,  "domain": "...", "action": "...", "data": { ... } }
-  // failure (still delivered as a normal tool result, NOT an exception)
-  { "ok": false, "domain": "...", "action": "...",
-    "error": { "code": "STALE_REF" | "NOT_FOUND" | "AMBIGUOUS" | "GUARD_REJECTED"
-                       | "WRONG_DISPLAY" | "WRONG_TAB" | "INVALID_PARAMS"
-                       | "PERMISSION_DENIED" | "TIMEOUT" | "NOT_AVAILABLE"
-                       | "MISSING_SESSION" | "FRONTEND_ERROR" | "INTERNAL",
-               "message": "...", "hints": [ "...next step..." ] } }
-
-Branch on `ok` and on `error.code` deterministically. Never scrape the English `message`
-for control flow.
-
-## Domains and actions
-
-### domain: "browser"  (CDP-driven control of the user's default browser)
-- connect, navigate, snapshot, click, fill, type, select, press_key, scroll, wait,
-  get_text, get_url, get_title, screenshot, evaluate, close, list_pages, tab_query,
-  switch_page, list_sessions.
-- Fast path (target a known tab in ONE call):
-  * `connect { target_url? , target_title? , activate? }` finds the first
-    open tab whose URL / title contains the substring, registers it as the
-    default session AND brings it to the front. Use this instead of
-    `connect` → `list_pages` → `switch_page` for the common
-    "drive my Gmail / GitHub PR / docs tab" flow. If the filter matches no
-    tab you get `error.code = WRONG_TAB` (no silent fallback).
-- Tab routing:
-  * `list_pages` returns every page/tab the browser exposes; each entry
-    carries `is_default_session` so you can tell which one ControlHub will
-    drive next without an extra `list_sessions` round-trip.
-  * `tab_query` (`{ url_contains?, title_contains?, only_pages?, limit? }`)
-    is the preferred filter when you need to inspect candidates before
-    committing to one.
-  * `switch_page` (`{ page_id, activate? }`) sets the default CDP session
-    AND, by default, calls `Page.bringToFront` so the user actually sees
-    the tab being driven. Pass `activate: false` to keep the operation
-    invisible (e.g. background scraping).
-- Workflow: connect → navigate → snapshot (returns @e1, @e2 ... refs) → click/fill using refs.
-- `snapshot` now traverses **open shadow roots** and **same-origin iframes**;
-  each element entry includes `scope` (`document`/`shadow`/`iframe`) and
-  `frame_path` so you can tell where in the DOM tree it lives. Pass
-  `with_backend_node_ids: true` to also receive a stable
-  `backend_node_id` per element (CDP DOM id, survives re-renders).
-- Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
-
-### domain: "desktop"  (Computer Use — only available in the BitFun desktop app)
-- screenshot, click, click_element, mouse_move, pointer_move_rel,
-  scroll, drag, key_chord, type_text, paste, wait, locate, move_to_text.
-- **`screenshot`** — exactly two possible outputs: the focused application
-  window (default, via Accessibility) OR the full display (fallback when
-  AX cannot resolve the window). No crop / quadrant / mouse-centered
-  options exist anymore. Old crop parameters (`screenshot_crop_center_x/y`,
-  `screenshot_navigate_quadrant`, `screenshot_reset_navigation`,
-  `screenshot_implicit_center`, `point_crop_half_extent_native`) are
-  silently ignored. The only param that still has meaning is
-  `screenshot_window: true` — and it just reaffirms the default; you
-  rarely need to pass it.
-- **`paste { text, clear_first?, submit?, submit_keys? }`** — STRONGLY PREFER
-  this over `type_text` for any non-trivial input (CJK, emoji, multi-line,
-  contact names, message bodies, anything > ~15 chars). Internally does
-  `clipboard_set` + cmd/ctrl+v, optionally cmd/ctrl+a first to replace
-  existing content, and optionally Return after to submit. Collapses the
-  canonical "type a name into search and press enter" / "send a message"
-  sequence into a single tool call AND avoids every IME failure mode that
-  `type_text` is subject to. Use `submit_keys: ["command","return"]` for
-  Slack-style apps where Return inserts a newline.
-- `type_text` is a fallback for short Latin-only text into a focused input
-  where you have no clipboard helper (Linux without wl-clipboard / xclip).
-  In every other case `paste` is faster and more reliable.
-- `key_chord` accepts EITHER `{"keys":["command","v"]}` (canonical) OR a
-  bare `{"keys":"escape"}` / `{"key":"return"}` for single keys; both
-  shapes are coerced. Modifier names: command, control, option/alt, shift.
-- Multi-display routing (FIRST step on multi-monitor setups):
-  * `list_displays` — returns every attached screen with `display_id`,
-    `is_primary`, `is_active`, `has_pointer`, origin/size, and `scale_factor`.
-    Always inspect this list before issuing screen-coordinate actions when
-    `interaction_state.displays` has more than one entry; do NOT assume the
-    cursor is on the screen the user is looking at.
-  * `focus_display` — `{ display_id }` pins ALL subsequent screenshots /
-    clicks / locates to that display until cleared. Pass `{ display_id: null }`
-    (or omit) to fall back to the legacy "screen under the mouse" behavior.
-    Pinning invalidates any cached screenshot, so the next `screenshot` is
-    guaranteed to come from the chosen display.
-- `interaction_state.displays` and `interaction_state.active_display_id`
-  are present in every desktop tool result and tell you which display the
-  next action will target. If that does not match the user's intent,
-  either call `desktop.focus_display` BEFORE the next `screenshot` / `click`,
-  OR pass `display_id: <id>` directly inside the next action's params —
-  every desktop action accepts it as a one-shot pin equivalent (sticky:
-  the pin persists for follow-up actions until you set `display_id: null`).
-- Single-display setup (most users): you do NOT need `list_displays` /
-  `focus_display`. Just call `screenshot` / `click_element` / etc.
-  directly — `interaction_state.displays.length === 1` is your signal.
-
-### domain: "app"  (BitFun's own GUI via the SelfControl bridge)
-- Introspection (pure-Rust, no UI round-trip — call these BEFORE bash/fs):
-  * `app_self_describe` — one-shot snapshot: `{ scenes, settingsTabs, miniapps, miniappSubsystemAvailable }`. Use this whenever the user asks "what can BitFun do / what's installed / what scenes are there / what mini-apps are available" — DO NOT scan the user's workspace directories looking for app features, those directories are USER files, not BitFun installations.
-  * `list_miniapps { includeRuntime?: bool }` — installed mini-apps with `id / name / description / icon / category / openSceneId`.
-  * `list_scenes` — all scene ids you can pass to `open_scene` (plus dynamic `miniapp:<id>` for installed mini-apps).
-  * `list_settings_tabs` — all tab ids you can pass to `open_settings_tab`.
-  * `list_tasks` — catalog of named recipes for `execute_task`.
-- Navigation / mutation: get_page_state, wait_for_selector, click,
-  click_by_text, input, scroll, open_scene, open_settings_tab, set_config,
-  get_config, list_models, set_default_model, delete_model, execute_task,
-  select_option, wait, press_key, read_text.
-- `get_page_state` supports `{ offset, limit }` pagination (default
-  `offset=0, limit=60`) and returns `pagination` + `webview_id` so you can
-  page through long settings panels and tell which webview produced the
-  response.
-- `wait_for_selector` (`{ selector, timeoutMs?, state? }`) blocks until
-  the element appears (state `'visible'` also waits for a non-zero box).
-  Errors with `code='TIMEOUT'`. Prefer it over a fixed `wait { durationMs }`
-  when the right delay isn't known.
-- For well-known requests, prefer `execute_task` recipes:
-  * "set Kimi as the main model" → `set_primary_model { modelQuery: "kimi" }`
-  * "open the mini app gallery / show me installed mini apps" → first
-    `list_miniapps`, then `execute_task task=open_miniapp_gallery`
-    (or `open_miniapp { miniAppId: "<id>" }` to open a specific one).
-- HARD RULE: when the user asks "BitFun 里有哪些 X" / "what mini-apps /
-  scenes / settings does BitFun have" — answer with `app.app_self_describe`
-  or the targeted `list_*` action. NEVER answer this kind of question by
-  running `Bash` `ls` against the user's workspace; that path is for
-  user files, not BitFun's own catalog.
-
-### domain: "terminal"
-- list_sessions, kill (`terminal_session_id`), interrupt (`terminal_session_id`).
-  Use the `Bash` tool to *run* commands; this domain only signals existing sessions.
-- Fast path: if there is exactly ONE live terminal session, you may omit
-  `terminal_session_id` and ControlHub will target it automatically. With
-  zero live sessions you get `error.code = MISSING_SESSION`; with multiple
-  you get `AMBIGUOUS` plus the candidate ids in `error.hints`. Otherwise
-  call `list_sessions` first.
-
-### domain: "system"
-- open_app (`app_name`), open_url (`url`), open_file (`path`, `app?`),
-  clipboard_get (`max_bytes?`), clipboard_set (`text`),
-  run_script (`script`, `script_type` = applescript|shell, optional
-  `timeout_ms` ≤ 5 min, `max_output_bytes` ≤ 256 KB), get_os_info.
-- `open_url` is the right tool when the goal is "show this URL to the user"
-  (no CDP, no driving). Use `domain: "browser"` only when you actually need
-  to interact with the page.
-- `open_file` opens a local file with its default handler (or an explicit
-  `app` on macOS) — high-frequency for "open this PDF / picture / spreadsheet".
-- `clipboard_get` / `clipboard_set` are the universal cross-app bridge:
-  the cheapest way to move text between apps that you'd otherwise have to
-  drive separately. `clipboard_get` returns `{ text, byte_length, truncated }`;
-  `clipboard_set { text }` is the inverse. On Linux this requires
-  wl-clipboard / xclip / xsel; missing-helper failures return `NOT_AVAILABLE`.
-- `run_script` enforces the timeout and truncates large stdout/stderr; on
-  timeout it returns `error.code = TIMEOUT` and the child process is killed.
-  `get_os_info` includes `os`, `arch`, `os_version`, `hostname`.
-
-### domain: "meta"  (introspection — call this BEFORE long control flows)
-- `capabilities` — returns `{ domains: { desktop, browser, app, terminal, system, meta },
-  host: { os, arch }, schema_version }`. Use it to confirm which domains are
-  actually wired up on this runtime instead of guessing from the description.
-- `route_hint` (`{ intent }`) — heuristic mapping of a free-form user intent
-  ("把 BitFun 默认模型改成 Kimi") to a ranked list of candidate domains so the
-  model has a sanity check before it commits to one. Always confirm with
-  `meta.capabilities` and the domain docs; this is only a hint.
-
-## Workflow tips
-1. For cross-domain workflows (browser data → desktop paste, app config → external nav),
-   call actions sequentially and verify each step's `ok` field before chaining.
-2. After any UI mutation, re-acquire state (browser: snapshot, desktop: screenshot,
-   app: get_page_state) before the next action.
-3. When the model is the only one driving inputs, `wait` 200–500 ms after a click that
-   triggers an animation before re-observing."#
-            .to_string())
+    async fn description_with_context(
+        &self,
+        _context: Option<&ToolUseContext>,
+    ) -> BitFunResult<String> {
+        Ok(Self::description_text(Self::desktop_domain_enabled().await))
     }
 
     fn input_schema(&self) -> Value {
@@ -3389,6 +3604,23 @@ mod control_hub_tests {
     }
 
     #[tokio::test]
+    async fn description_documents_two_browser_modes_and_forbids_desktop_browser_automation() {
+        let desc = ControlHubTool::new().description().await.unwrap();
+        assert!(
+            desc.contains("Two browser modes"),
+            "description must describe the two browser control modes"
+        );
+        assert!(
+            desc.contains("mode: \"headless\"") && desc.contains("mode: \"default\""),
+            "description must mention both browser connect modes"
+        );
+        assert!(
+            desc.contains("Do **not** use `domain: \"desktop\"` mouse/keyboard actions to drive a browser."),
+            "description must explicitly forbid desktop browser automation"
+        );
+    }
+
+    #[tokio::test]
     async fn desktop_paste_without_host_returns_clean_error() {
         // In `cargo test -p bitfun-core` there is no ComputerUseHost
         // (desktop runtime not booted). The tool must surface a structured
@@ -3409,6 +3641,33 @@ mod control_hub_tests {
             err.to_string().contains("Desktop control"),
             "expected desktop-host availability hint, got: {}",
             err
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_connect_headless_requires_existing_test_port() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch(
+                "browser",
+                "connect",
+                &json!({ "mode": "headless", "port": 1 }),
+                &ctx,
+            )
+            .await
+            .expect("dispatch should succeed and return a structured error");
+        let payload: serde_json::Value =
+            serde_json::from_value(results[0].content().clone()).unwrap();
+        assert_eq!(payload["ok"], serde_json::Value::Bool(false));
+        assert_eq!(payload["error"]["code"], "NOT_AVAILABLE");
+        let hints = payload["error"]["hints"]
+            .as_array()
+            .expect("hints should be present");
+        assert!(
+            hints.iter().any(|v| v.as_str().unwrap_or("").contains("headless")),
+            "expected headless guidance in hints: {}",
+            payload
         );
     }
 
