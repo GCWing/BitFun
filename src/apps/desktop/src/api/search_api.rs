@@ -56,7 +56,12 @@ pub(crate) async fn search_file_contents_via_workspace_search(
             exclude_file_types: Vec::new(),
         })
         .await
-        .map_err(|error| format!("Failed to search file contents via workspace search: {}", error))
+        .map_err(|error| {
+            format!(
+                "Failed to search file contents via workspace search: {}",
+                error
+            )
+        })
 }
 
 pub(crate) fn group_search_results(results: Vec<FileSearchResult>) -> Vec<FileSearchResultGroup> {
@@ -109,8 +114,9 @@ pub async fn search_get_repo_status(
     request: SearchRepoIndexRequest,
 ) -> Result<serde_json::Value, String> {
     if !should_use_workspace_search(&request.root_path).await {
-        return Err("Remote workspace search status is not managed by BitFun workspace search"
-            .to_string());
+        return Err(
+            "Remote workspace search status is not managed by BitFun workspace search".to_string(),
+        );
     }
 
     state
