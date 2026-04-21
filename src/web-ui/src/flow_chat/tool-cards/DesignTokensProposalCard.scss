@@ -109,26 +109,30 @@
 .design-tokens-proposal-card__item {
   position: relative;
   border: none;
-  border-radius: 0;
+  border-radius: 14px;
   padding: 12px;
   background: transparent;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: padding 160ms ease, background 160ms ease, border-radius 160ms ease;
+  transition: background 160ms ease;
 
   &:not(.is-collapsed):hover {
-    background: var(--element-bg-base, rgba(255, 255, 255, 0.06));
-    border-radius: 8px;
+    background: var(--element-bg-base, rgba(255, 255, 255, 0.05));
+  }
+
+  &.is-awaiting {
+    background: var(--element-bg-base, rgba(255, 255, 255, 0.04));
+    box-shadow: inset 0 0 0 1px var(--border-base, rgba(255, 255, 255, 0.08));
   }
 
   &.is-collapsed {
     padding: 0;
     gap: 0;
+    border-radius: 10px;
 
     &:hover {
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.06));
-      border-radius: 8px;
+      background: var(--element-bg-base, rgba(255, 255, 255, 0.05));
     }
   }
 }
@@ -233,7 +237,7 @@
   span {
     width: 12px;
     height: 12px;
-    border-radius: 3px;
+    border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 }
@@ -359,7 +363,7 @@
 .design-tokens-proposal-card__swatch-chip {
   aspect-ratio: 1 / 1;
   width: 100%;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
@@ -413,7 +417,7 @@
 .design-tokens-proposal-card__shadow-chip {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--element-bg-medium, rgba(255, 255, 255, 0.08));
   border: 1px solid var(--border-base, rgba(255, 255, 255, 0.08));
 }
@@ -429,30 +433,27 @@
 
 .dtp-preview {
   position: relative;
-  border: 1px solid;
   /* Preview frame: stay softly rounded even when token radius is 0 */
-  border-radius: max(14px, var(--mp-radius-md));
-  padding: 24px 10px 12px;
+  border-radius: max(16px, var(--mp-radius-md));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mp-border) 70%, transparent);
+  padding: 16px 16px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
   overflow: hidden;
 }
 
-.dtp-preview__label {
+.dtp-preview__mode {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: 10px;
+  right: 12px;
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--mp-text-muted);
   font-family: ui-monospace, SFMono-Regular, monospace;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mp-surface) 75%, transparent);
-  border: 1px solid color-mix(in srgb, var(--mp-border) 55%, transparent);
+  pointer-events: none;
 }
 
 @media (max-width: 480px) {
@@ -463,27 +464,33 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  font-weight: 600;
-  letter-spacing: 0;
+  font-weight: 640;
+  letter-spacing: -0.02em;
   min-width: 0;
+  max-width: calc(100% - 48px);
   overflow: hidden;
   white-space: nowrap;
-  padding: 8px 10px;
-  border-radius: max(10px, var(--mp-radius-md));
-  background: color-mix(in srgb, var(--mp-surface) 88%, var(--mp-text) 4%);
-  border: 1px solid color-mix(in srgb, var(--mp-border) 70%, transparent);
-
-  span {
-    font-weight: 400;
-    letter-spacing: 0;
-  }
+  color: var(--mp-text);
+  line-height: 1.1;
 }
 
-.dtp-preview__components {
+.dtp-preview__type-body {
+  font-weight: 450;
+  color: var(--mp-text);
+  letter-spacing: 0;
+}
+
+.dtp-preview__type-caption {
+  font-weight: 400;
+  color: var(--mp-text-muted);
+  letter-spacing: 0.02em;
+}
+
+.dtp-preview__row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -491,59 +498,44 @@
   appearance: none;
   cursor: default;
   border: 1px solid transparent;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 6px 14px;
+  font-size: 11.5px;
+  font-weight: 550;
   line-height: 1.2;
   /* Tokens may be 0 — floor so controls never read as harsh squares */
-  border-radius: max(10px, var(--mp-radius-md));
+  border-radius: max(8px, var(--mp-radius-md));
   color: var(--mp-text);
   background: transparent;
-  transition: filter 160ms ease;
-  box-shadow: var(--mp-shadow);
   white-space: nowrap;
+  transition: filter 160ms ease;
 }
 
 .dtp-preview__btn--primary {
   background: var(--mp-primary);
   color: #fff;
-  border-color: transparent;
 }
 
 .dtp-preview__btn--ghost {
-  background: var(--mp-surface);
-  border-color: var(--mp-border);
-  box-shadow: none;
-}
-
-.dtp-preview__input {
-  flex: 1 1 140px;
-  min-width: 120px;
-  max-width: 100%;
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: max(8px, var(--mp-radius-sm));
-  background: var(--mp-surface);
-  border: 1px solid var(--mp-border);
+  background: transparent;
   color: var(--mp-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mp-border) 80%, transparent);
 }
 
 .dtp-preview__switch {
   flex: 0 0 auto;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
+  cursor: default;
 
   input { display: none; }
 }
 
 .dtp-preview__switch-track {
-  width: 32px;
-  height: 20px;
-  /* `full` token is often 0; switches should always read as pills */
-  border-radius: max(9999px, var(--mp-radius-full));
+  width: 30px;
+  height: 18px;
+  /* Always read as a pill regardless of token radius */
+  border-radius: 999px;
   background: var(--mp-primary);
   position: relative;
   display: inline-flex;
@@ -553,17 +545,33 @@
 }
 
 .dtp-preview__switch-thumb {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   background: #fff;
   border-radius: 50%;
   transform: translateX(0);
   transition: transform 160ms ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
 }
 
 .dtp-preview__switch input:checked + .dtp-preview__switch-track .dtp-preview__switch-thumb {
   transform: translateX(12px);
+}
+
+.dtp-preview__palette {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+
+  span {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    /* Keep the chips visibly rounded even when token sm is small/0 */
+    border-radius: max(999px, var(--mp-radius-full));
+  }
 }
 
 /* ── Actions / errors ─────────────────────── */
@@ -580,8 +588,9 @@
   }
 }
 
-.design-tokens-proposal-card .icon-btn {
-  border-radius: 6px;
+/* Override component-library radius token for all buttons/icon-buttons inside this card */
+.design-tokens-proposal-card {
+  --size-radius-sm: 10px;
 }
 
 .design-tokens-proposal-card__failure-header {

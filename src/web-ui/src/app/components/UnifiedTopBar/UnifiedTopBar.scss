@@ -252,16 +252,87 @@
     color: var(--color-accent-500);
   }
 
-  // Unified context nav: back arrow + context title (overlay or session)
+  // Context nav: one capsule; only the back segment is interactive (title is read-only)
   &__context-nav {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
     flex-shrink: 0;
     min-width: 0;
   }
 
-  &__back-btn,
+  &__context-capsule {
+    display: inline-flex;
+    align-items: stretch;
+    height: 28px;
+    max-width: min(320px, calc(100vw - 200px));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: 9999px;
+    overflow: hidden;
+    flex-shrink: 1;
+    min-width: 0;
+    background: transparent;
+
+    :root[data-theme-type='light'] & {
+      background: color-mix(in srgb, var(--color-bg-secondary) 25%, transparent);
+    }
+  }
+
+  &__context-capsule-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    padding: 0 6px 0 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--color-accent-500);
+      background: var(--element-bg-soft);
+    }
+
+    &:active {
+      background: var(--element-bg-medium);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: -2px;
+      z-index: 1;
+    }
+  }
+
+  &__context-capsule-split {
+    align-self: stretch;
+    width: 1px;
+    margin: 5px 0;
+    flex-shrink: 0;
+    background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+    pointer-events: none;
+  }
+
+  &__context-capsule-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+    padding: 0 10px 0 6px;
+    color: var(--color-text-secondary);
+    text-align: left;
+    cursor: default;
+    user-select: text;
+
+    .unified-top-bar__context-title {
+      max-width: 100%;
+      min-width: 0;
+    }
+  }
+
   &__task-list-btn {
     display: flex;
     align-items: center;
@@ -455,7 +526,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .unified-top-bar {
-    &__back-btn,
+    &__context-capsule-back,
     &__task-list-btn,
     &__search-trigger {
       transition: none;

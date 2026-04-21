@@ -27,6 +27,12 @@ function parseResult(raw: unknown): any {
 
 const pick = pickString;
 
+/** Token values may be bare numbers (e.g. "12") — ensure they carry a CSS unit. */
+function withUnit(val: string | undefined, fallback: string): string {
+  if (!val) return fallback;
+  return /^\d+(\.\d+)?$/.test(val.trim()) ? `${val}px` : val;
+}
+
 interface PreviewProps {
   proposal: any;
   mode: 'native' | 'inverse';
@@ -75,9 +81,12 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
 
   const fontFamily = pick(typography, 'fontFamily', 'family') || 'Inter, system-ui, sans-serif';
   const primary = pick(colors, 'primary', 'accent', 'brand') || '#161616';
-  const mdRadius = pick(radius, 'md', 'base') || '8px';
-  const smRadius = pick(radius, 'sm', 'xs') || '4px';
-  const fullRadius = pick(radius, 'full', 'pill') || '999px';
+  const accent = pick(colors, 'accent', 'accentSecondary', 'secondary') || primary;
+  const success = pick(colors, 'success', 'positive') || '#22c55e';
+  const danger = pick(colors, 'danger', 'error', 'warning') || '#ef4444';
+  const mdRadius = withUnit(pick(radius, 'md', 'base'), '8px');
+  const smRadius = withUnit(pick(radius, 'sm', 'xs'), '4px');
+  const fullRadius = withUnit(pick(radius, 'full', 'pill'), '999px');
 
   const realBackground = pick(colors, 'background', 'bg');
   const realSurface = pick(colors, 'surface', 'surfaceElevated') || realBackground;
@@ -128,7 +137,6 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
     fontFamily,
     background: bg,
     color: text,
-    borderColor: border,
     '--mp-surface': surface,
     '--mp-border': border,
     '--mp-text': text,
@@ -147,29 +155,33 @@ const MiniSystemPreview: React.FC<PreviewProps> = ({ proposal, mode }) => {
 
   return (
     <div className={`dtp-preview dtp-preview--${mode}`} style={style}>
-      <div className="dtp-preview__label">{modeLabel}</div>
+      <span className="dtp-preview__mode">{modeLabel}</span>
+
       <div className="dtp-preview__type" style={{ fontSize: titleSize }}>
         Aa
-        <span style={{ fontSize: bodySize }}>Ag</span>
-        <span style={{ fontSize: captionSize, color: textMuted }}>ag</span>
+        <span className="dtp-preview__type-body" style={{ fontSize: bodySize }}>Ag</span>
+        <span className="dtp-preview__type-caption" style={{ fontSize: captionSize }}>ag</span>
       </div>
 
-      <div className="dtp-preview__components">
+      <div className="dtp-preview__row">
         <button type="button" className="dtp-preview__btn dtp-preview__btn--primary">
           {t('toolCards.designTokens.previewPrimary')}
         </button>
         <button type="button" className="dtp-preview__btn dtp-preview__btn--ghost">
           {t('toolCards.designTokens.previewGhost')}
         </button>
-      </div>
-      <div className="dtp-preview__components">
-        <div className="dtp-preview__input">
-          <span>{t('toolCards.designTokens.previewPlaceholder')}</span>
-        </div>
         <label className="dtp-preview__switch" aria-label={t('toolCards.designTokens.switchAriaLabel')}>
           <input type="checkbox" defaultChecked readOnly />
           <span className="dtp-preview__switch-track"><span className="dtp-preview__switch-thumb" /></span>
         </label>
+      </div>
+
+      <div className="dtp-preview__palette" aria-hidden="true">
+        <span style={{ background: primary }} />
+        <span style={{ background: accent }} />
+        <span style={{ background: success }} />
+        <span style={{ background: danger }} />
+        <span style={{ background: surface, boxShadow: `inset 0 0 0 1px ${border}` }} />
       </div>
     </div>
   );

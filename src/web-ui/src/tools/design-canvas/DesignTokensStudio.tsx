@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Orbit, Palette } from 'lucide-react';
+import { Apple, ArrowDown, Check, Monitor, Orbit, Palette, Terminal } from 'lucide-react';
 import { Button, Input } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
@@ -15,6 +15,18 @@ interface Props {
 }
 
 const pick = pickString;
+
+/** Token values may be bare numbers (e.g. "12") — ensure they carry a CSS unit. */
+function withUnit(val: string | undefined, fallback: string): string {
+  if (!val) return fallback;
+  return /^\d+(\.\d+)?$/.test(val.trim()) ? `${val}px` : val;
+}
+
+function withMs(val: string | undefined, fallback: string): string {
+  if (!val) return fallback;
+  if (/^\d+(\.\d+)?$/.test(val.trim())) return `${val}ms`;
+  return val;
+}
 
 function entries(obj: unknown): Array<[string, string]> {
   if (!obj || typeof obj !== 'object') return [];
@@ -141,7 +153,6 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
   const document = useDesignTokensStore((s) => s.byScope[scopeKey]);
   const proposals = document?.proposals || [];
   const [selectedId, setSelectedId] = useState<string>(document?.committed_id || proposals[0]?.id || '');
-  const [switchOn, setSwitchOn] = useState(true);
   const [activePreviewMode, setActivePreviewMode] = useState<'native' | 'inverse'>('native');
 
   const selected = useMemo<DesignTokenProposal | undefined>(
@@ -322,14 +333,14 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
     '--dt-font-title': resolvedCanonical['--dt-font-title'],
     '--dt-font-body': resolvedCanonical['--dt-font-body'],
     '--dt-font-caption': resolvedCanonical['--dt-font-caption'],
-    '--dt-radius-sm': pick(radius, 'sm', 'xs') || '4px',
-    '--dt-radius-md': pick(radius, 'md', 'base') || '8px',
-    '--dt-radius-lg': pick(radius, 'lg') || '14px',
-    '--dt-radius-full': pick(radius, 'full', 'pill') || '999px',
+    '--dt-radius-sm': withUnit(pick(radius, 'sm', 'xs'), '4px'),
+    '--dt-radius-md': withUnit(pick(radius, 'md', 'base'), '8px'),
+    '--dt-radius-lg': withUnit(pick(radius, 'lg'), '14px'),
+    '--dt-radius-full': withUnit(pick(radius, 'full', 'pill'), '999px'),
     '--dt-shadow-sm': pick(shadow, 'sm') || '0 1px 2px rgba(0,0,0,0.06)',
     '--dt-shadow-md': pick(shadow, 'md', 'base') || '0 2px 8px rgba(0,0,0,0.08)',
     '--dt-shadow-lg': pick(shadow, 'lg') || '0 10px 28px rgba(0,0,0,0.14)',
-    '--dt-duration': pick(motion.duration as any, 'normal', 'base') || '200ms',
+    '--dt-duration': withMs(pick(motion.duration as any, 'normal', 'base'), '200ms'),
     '--dt-ease': (motion.ease as string) || 'cubic-bezier(0.4, 0, 0.2, 1)',
     '--dt-space-xs': resolvedCanonical['--dt-space-xs'],
     '--dt-space-sm': pick(spacing, 'sm', 'xs') || '8px',
@@ -713,243 +724,147 @@ export const DesignTokensStudio: React.FC<Props> = ({ artifactId, scopePath }) =
                       <span className="preview-landing__mark" aria-hidden="true">
                         <Orbit size={14} strokeWidth={2} />
                       </span>
-                      <span title={draftProposal.name}>{draftProposal.name}</span>
+                      <span title="BitFun">BitFun</span>
                     </div>
-                    <button className="preview-btn preview-btn--ghost" type="button">
-                      {t('designCanvas.studio.previewLandingNavAction')}
+                    <nav className="preview-landing__navlinks" aria-label={t('designCanvas.studio.previewBitfunNavAria')}>
+                      <span>{t('designCanvas.studio.previewBitfunNavAgents')}</span>
+                      <span>{t('designCanvas.studio.previewBitfunNavWorkflows')}</span>
+                      <span>{t('designCanvas.studio.previewBitfunNavDocs')}</span>
+                    </nav>
+                    <button className="preview-btn preview-btn--primary preview-landing__cta" type="button">
+                      {t('designCanvas.studio.previewBitfunNavCta')}
                     </button>
                   </div>
 
                   <section className="preview-landing__hero">
-                    <h4>{t('designCanvas.studio.previewLandingTitle')}</h4>
-                    <p>
-                      {surface.mode === 'native'
-                        ? t('designCanvas.studio.previewLandingNativeDesc')
-                        : t('designCanvas.studio.previewLandingStressDesc')}
-                    </p>
-                    <div className="preview-landing__actions">
-                      <button className="preview-btn preview-btn--primary" type="button">
-                        {t('designCanvas.studio.btnPrimary')}
-                      </button>
-                      <button className="preview-btn preview-btn--secondary" type="button">
-                        {t('designCanvas.studio.btnSecondary')}
-                      </button>
-                    </div>
-                  </section>
-
-                  <div className="preview-landing__proof">
-                    <span>{t('designCanvas.studio.previewLandingProofOne')}</span>
-                    <span>{t('designCanvas.studio.previewLandingProofTwo')}</span>
-                    <span>{t('designCanvas.studio.previewLandingProofThree')}</span>
-                  </div>
-                </div>
-
-                <div className="preview-app">
-                  <div className="preview-app__topbar">
-                    <div className="preview-app__brand">
-                      <span className="preview-app__mark" aria-hidden="true">
-                        <Orbit size={15} strokeWidth={2} />
-                      </span>
-                      <div className="preview-app__brand-copy">
-                        <strong title={draftProposal.name}>{draftProposal.name}</strong>
-                        <span title={draftProposal.mood}>{draftProposal.mood}</span>
-                      </div>
-                    </div>
-                    <div className="preview-app__status">
-                      <span className="preview-dot preview-dot--success" />
-                      {t('designCanvas.studio.previewStatusSuccess')}
-                    </div>
-                  </div>
-
-                  <div className="preview-app__body">
-                    <nav className="preview-app__nav" aria-label={t('designCanvas.studio.previewNavAria')}>
-                      <button className="preview-app__nav-item is-active" type="button">
-                        <span className="preview-app__nav-icon" />
-                        {t('designCanvas.studio.previewNavOverview')}
-                      </button>
-                      <button className="preview-app__nav-item" type="button">
-                        <span className="preview-app__nav-icon preview-app__nav-icon--accent" />
-                        {t('designCanvas.studio.previewNavDesign')}
-                      </button>
-                      <button className="preview-app__nav-item" type="button">
-                        <span className="preview-app__nav-icon preview-app__nav-icon--muted" />
-                        {t('designCanvas.studio.previewNavSettings')}
-                      </button>
-                    </nav>
-
-                    <div className="preview-app__content">
-                      <section className="preview-hero">
-                        <div className="preview-hero__copy">
-                          <h4>{t('designCanvas.studio.previewAppTitle')}</h4>
-                          <p>
-                            {surface.mode === 'native'
-                              ? t('designCanvas.studio.previewNativeDesc')
-                              : t('designCanvas.studio.previewStressDesc')}
-                          </p>
-                        </div>
-                        <div className="preview-row preview-row--actions">
-                          <button className="preview-btn preview-btn--primary" type="button">
-                            {t('designCanvas.studio.btnPrimary')}
-                          </button>
-                          <button className="preview-btn preview-btn--secondary" type="button">
-                            {t('designCanvas.studio.btnSecondary')}
-                          </button>
-                          <button className="preview-btn preview-btn--ghost" type="button">
-                            {t('designCanvas.studio.btnGhost')}
-                          </button>
-                        </div>
-                      </section>
-
-                      <section className="preview-metrics">
-                        <div className="preview-metric">
-                          <span>{t('designCanvas.studio.previewMetricHealth')}</span>
-                          <strong>98%</strong>
-                          <div className="preview-progress"><span style={{ width: '82%' }} /></div>
-                        </div>
-                        <div className="preview-metric preview-metric--accent">
-                          <span>{t('designCanvas.studio.previewMetricTasks')}</span>
-                          <strong>24</strong>
-                          <div className="preview-progress"><span style={{ width: '58%' }} /></div>
-                        </div>
-                        <div className="preview-metric preview-metric--danger">
-                          <span>{t('designCanvas.studio.previewMetricRisk')}</span>
-                          <strong>3</strong>
-                          <div className="preview-progress"><span style={{ width: '28%' }} /></div>
-                        </div>
-                      </section>
-
-                      <section className="preview-workspace">
-                        <div className="preview-card preview-card--primary">
-                          <div className="preview-card__head">
-                            <div>
-                              <span className="preview-card__kicker">{t('designCanvas.studio.previewActivityTitle')}</span>
-                              <h5>{t('designCanvas.studio.previewFormTitle')}</h5>
-                            </div>
-                            <span className="preview-pill">{t('designCanvas.studio.pillAccent')}</span>
-                          </div>
-
-                          <div className="preview-row preview-row--split">
-                            <div className="preview-field">
-                              <label>{t('designCanvas.studio.fieldEmail')}</label>
-                              <div className="preview-input">
-                                <input type="email" placeholder="name@studio.com" defaultValue="" />
-                              </div>
-                            </div>
-                            <div className="preview-field preview-field--inline">
-                              <label>{t('designCanvas.studio.fieldNotify')}</label>
-                              <button
-                                type="button"
-                                className={`preview-switch${switchOn ? ' is-on' : ''}`}
-                                onClick={() => setSwitchOn((v) => !v)}
-                                aria-pressed={switchOn}
-                              >
-                                <span className="preview-switch__thumb" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="preview-alerts">
-                            <span className="preview-alert preview-alert--success">
-                              {t('designCanvas.studio.previewStatusSuccess')}
-                            </span>
-                            <span className="preview-alert preview-alert--warning">
-                              {t('designCanvas.studio.previewStatusWarning')}
-                            </span>
-                            <span className="preview-alert preview-alert--danger">
-                              {t('designCanvas.studio.previewStatusDanger')}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="preview-card preview-card--stats">
-                          <div className="preview-stat">
-                            <span className="preview-stat__label">{t('designCanvas.studio.statRadius')}</span>
-                            <strong>{pick(radius, 'md', 'base') || '-'}</strong>
-                          </div>
-                          <div className="preview-stat">
-                            <span className="preview-stat__label">{t('designCanvas.studio.statShadow')}</span>
-                            <div className="preview-stat__shadow" aria-hidden>
-                              <span className="preview-stat__shadow-step" style={{ boxShadow: 'var(--dt-shadow-sm)' }} />
-                              <span className="preview-stat__shadow-step" style={{ boxShadow: 'var(--dt-shadow-md)' }} />
-                              <span className="preview-stat__shadow-step" style={{ boxShadow: 'var(--dt-shadow-lg)' }} />
-                            </div>
-                          </div>
-                          <div className="preview-stat">
-                            <span className="preview-stat__label">{t('designCanvas.studio.statMotion')}</span>
-                            <strong>{pick(motion.duration as any, 'normal', 'base') || '-'}</strong>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-                </div>
-                <div className="preview-grid">
-                  <div className="preview-card preview-card--primary">
-                    <div className="preview-chip">{draftProposal.mood}</div>
-                    <h4>{draftProposal.name}</h4>
-                    <p>
-                      {surface.mode === 'native'
-                        ? t('designCanvas.studio.previewNativeDesc')
-                        : t('designCanvas.studio.previewStressDesc')}
-                    </p>
-
-                    <div className="preview-row">
-                      <button className="preview-btn preview-btn--primary" type="button">
-                        {t('designCanvas.studio.btnPrimary')}
-                      </button>
-                      <button className="preview-btn preview-btn--secondary" type="button">
-                        {t('designCanvas.studio.btnSecondary')}
-                      </button>
-                      <button className="preview-btn preview-btn--ghost" type="button">
-                        {t('designCanvas.studio.btnGhost')}
-                      </button>
-                    </div>
-
-                    <div className="preview-row preview-row--split">
-                      <div className="preview-field">
-                        <label>{t('designCanvas.studio.fieldEmail')}</label>
-                        <div className="preview-input">
-                          <input type="email" placeholder="name@studio.com" defaultValue="" />
-                        </div>
-                      </div>
-                      <div className="preview-field preview-field--inline">
-                        <label>{t('designCanvas.studio.fieldNotify')}</label>
-                        <button
-                          type="button"
-                          className={`preview-switch${switchOn ? ' is-on' : ''}`}
-                          onClick={() => setSwitchOn((v) => !v)}
-                          aria-pressed={switchOn}
-                        >
-                          <span className="preview-switch__thumb" />
+                    <div className="preview-landing__hero-copy">
+                      <h4>
+                        <em>{draftProposal.name}</em>
+                        {t('designCanvas.studio.previewBitfunHeadingSuffix')}
+                      </h4>
+                      <p>
+                        {surface.mode === 'native'
+                          ? t('designCanvas.studio.previewBitfunNativeDesc')
+                          : t('designCanvas.studio.previewBitfunStressDesc')}
+                      </p>
+                      <div className="preview-landing__actions">
+                        <button className="preview-btn preview-btn--primary" type="button">
+                          {t('designCanvas.studio.previewBitfunCtaPrimary')}
+                        </button>
+                        <button className="preview-btn preview-btn--ghost" type="button">
+                          {t('designCanvas.studio.previewBitfunCtaSecondary')}
                         </button>
                       </div>
                     </div>
 
-                    <div className="preview-chips">
-                      <span className="preview-pill">{t('designCanvas.studio.pillAccent')}</span>
-                      <span className="preview-pill preview-pill--muted">{t('designCanvas.studio.pillMuted')}</span>
-                      <span className="preview-pill preview-pill--outline">{t('designCanvas.studio.pillOutline')}</span>
-                    </div>
-                  </div>
-
-                  <div className="preview-card preview-card--stats">
-                    <div className="preview-stat">
-                      <span className="preview-stat__label">{t('designCanvas.studio.statRadius')}</span>
-                            <strong>{pick(radius, 'md', 'base') || '-'}</strong>
-                    </div>
-                    <div className="preview-stat">
-                      <span className="preview-stat__label">{t('designCanvas.studio.statShadow')}</span>
-                      <div className="preview-stat__shadow" aria-hidden>
-                        <span className="preview-stat__shadow-step" style={{ boxShadow: 'var(--dt-shadow-sm)' }} />
-                        <span className="preview-stat__shadow-step" style={{ boxShadow: 'var(--dt-shadow-md)' }} />
-                        <span className="preview-stat__shadow-step" style={{ boxShadow: 'var(--dt-shadow-lg)' }} />
+                    <div className="preview-landing__stage" aria-hidden="true">
+                      <div className="preview-landing__orbit">
+                        <span className="preview-landing__orbit-ring preview-landing__orbit-ring--outer" />
+                        <span className="preview-landing__orbit-ring preview-landing__orbit-ring--mid" />
+                        <span className="preview-landing__orbit-ring preview-landing__orbit-ring--inner" />
+                        <span className="preview-landing__orbit-core">
+                          <Orbit size={20} strokeWidth={1.75} />
+                        </span>
+                        <span className="preview-landing__orbit-node preview-landing__orbit-node--a" />
+                        <span className="preview-landing__orbit-node preview-landing__orbit-node--b" />
+                        <span className="preview-landing__orbit-node preview-landing__orbit-node--c" />
                       </div>
                     </div>
-                    <div className="preview-stat">
-                      <span className="preview-stat__label">{t('designCanvas.studio.statMotion')}</span>
-                            <strong>{pick(motion.duration as any, 'normal', 'base') || '-'}</strong>
-                    </div>
+                  </section>
+
+                  <div className="preview-landing__proof">
+                    <span>
+                      <strong>12+</strong>
+                      {t('designCanvas.studio.previewBitfunProofOne')}
+                    </span>
+                    <span>
+                      <strong>OSS</strong>
+                      {t('designCanvas.studio.previewBitfunProofTwo')}
+                    </span>
+                    <span>
+                      <strong>0-Cloud</strong>
+                      {t('designCanvas.studio.previewBitfunProofThree')}
+                    </span>
                   </div>
+                </div>
+
+                <div className="preview-download">
+                  <header className="preview-download__head">
+                    <div className="preview-download__brand">
+                      <span className="preview-app__mark" aria-hidden="true">
+                        <Orbit size={14} strokeWidth={2} />
+                      </span>
+                      <span>{t('designCanvas.studio.previewBitfunDownloadBrand')}</span>
+                    </div>
+                    <span className="preview-download__version">v1.8.0 · 2026-04-12</span>
+                  </header>
+
+                  <section className="preview-download__hero">
+                    <h4>{t('designCanvas.studio.previewBitfunDownloadTitle')}</h4>
+                    <p>{t('designCanvas.studio.previewBitfunDownloadDesc')}</p>
+                  </section>
+
+                  <section className="preview-download__platforms" aria-label={t('designCanvas.studio.previewBitfunDownloadPlatformsAria')}>
+                    <article className="preview-platform is-primary">
+                      <span className="preview-platform__icon" aria-hidden="true">
+                        <Apple size={16} strokeWidth={1.9} />
+                      </span>
+                      <div className="preview-platform__meta">
+                        <strong>macOS</strong>
+                        <span>Apple Silicon · Intel</span>
+                      </div>
+                      <span className="preview-platform__size">14.2 MB · .dmg</span>
+                      <button className="preview-btn preview-btn--primary preview-platform__cta" type="button">
+                        <ArrowDown size={12} strokeWidth={2.2} />
+                        {t('designCanvas.studio.previewBitfunDownloadCta')}
+                      </button>
+                    </article>
+
+                    <article className="preview-platform">
+                      <span className="preview-platform__icon" aria-hidden="true">
+                        <Monitor size={16} strokeWidth={1.9} />
+                      </span>
+                      <div className="preview-platform__meta">
+                        <strong>Windows</strong>
+                        <span>Windows 10+</span>
+                      </div>
+                      <span className="preview-platform__size">12.8 MB · .msi</span>
+                      <button className="preview-btn preview-btn--ghost preview-platform__cta" type="button">
+                        <ArrowDown size={12} strokeWidth={2.2} />
+                        {t('designCanvas.studio.previewBitfunDownloadCta')}
+                      </button>
+                    </article>
+
+                    <article className="preview-platform">
+                      <span className="preview-platform__icon" aria-hidden="true">
+                        <Terminal size={16} strokeWidth={1.9} />
+                      </span>
+                      <div className="preview-platform__meta">
+                        <strong>Linux</strong>
+                        <span>.AppImage · .deb · .rpm</span>
+                      </div>
+                      <span className="preview-platform__size">15.1 MB</span>
+                      <button className="preview-btn preview-btn--ghost preview-platform__cta" type="button">
+                        <ArrowDown size={12} strokeWidth={2.2} />
+                        {t('designCanvas.studio.previewBitfunDownloadCta')}
+                      </button>
+                    </article>
+                  </section>
+
+                  <footer className="preview-download__meta">
+                    <span>
+                      <Check size={11} strokeWidth={2.4} />
+                      {t('designCanvas.studio.previewBitfunDownloadMetaSigned')}
+                    </span>
+                    <span>
+                      <Check size={11} strokeWidth={2.4} />
+                      {t('designCanvas.studio.previewBitfunDownloadMetaChecksum')}
+                    </span>
+                    <span>
+                      <Check size={11} strokeWidth={2.4} />
+                      {t('designCanvas.studio.previewBitfunDownloadMetaOss')}
+                    </span>
+                  </footer>
                 </div>
               </div>
             ))}

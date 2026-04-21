@@ -6,7 +6,7 @@
  *
  * Layout (left → right):
  *   [macOS traffic-lights reserve] [Logo▼ menu: toolbar, about]
- *   [Arrow back button (conditional)] [context title] ─drag─
+ *   [context capsule: ← | title] (conditional) ─drag─
  *   [search trigger] ─drag─ [📱 Remote] [_][□][×]
  *
  * Unified back button / title logic:
@@ -309,7 +309,6 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
 
   // Back + title: overlays always; base layer only for non-Dispatcher sessions (hide "Agentic OS" on Dispatcher).
   const showContextNav = hasOverlay || (!!sessionContext && !isDispatcherSession);
-  const showBackBtn = hasOverlay || (!!sessionContext && !isDispatcherSession);
   const contextTitle = hasOverlay ? overlayTitle : sessionTitle;
   const backTooltip = t('overlay.returnToAgenticOS');
 
@@ -319,7 +318,7 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
       return;
     }
     void openDispatcherSession();
-  }, [hasOverlay, closeOverlay]);
+  }, [hasOverlay, closeOverlay, openDispatcherSession]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const now = Date.now();
@@ -594,11 +593,11 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
 
         {showContextNav && (
           <div className="unified-top-bar__context-nav">
-            {showBackBtn && (
+            <div className="unified-top-bar__context-capsule">
               <Tooltip content={backTooltip} placement="bottom" followCursor>
                 <button
                   type="button"
-                  className="unified-top-bar__back-btn"
+                  className="unified-top-bar__context-capsule-back"
                   onClick={handleContextBack}
                   aria-label={backTooltip}
                   data-testid="unified-top-bar-back"
@@ -606,27 +605,32 @@ const UnifiedTopBar: React.FC<UnifiedTopBarProps> = ({
                   <ArrowLeft size={14} strokeWidth={2.25} aria-hidden="true" />
                 </button>
               </Tooltip>
-            )}
-            {contextTitle && (
-              <div className="unified-top-bar__context-title">
-                {!hasOverlay && sessionWorkspaceName && !isDispatcherSession && (
-                  <span className="unified-top-bar__context-mode">
-                    {sessionContext?.mode}
-                  </span>
-                )}
-                {!hasOverlay && sessionWorkspaceName && !isDispatcherSession && (
-                  <span className="unified-top-bar__context-sep" aria-hidden="true">/</span>
-                )}
-                {!hasOverlay && sessionWorkspaceName && !isDispatcherSession ? (
-                  <span className="unified-top-bar__context-workspace">
-                    <FolderOpen size={11} aria-hidden="true" />
-                    <span>{sessionWorkspaceName}</span>
-                  </span>
-                ) : (
-                  <span className="unified-top-bar__context-label">{contextTitle}</span>
-                )}
-              </div>
-            )}
+              {contextTitle ? (
+                <>
+                  <span className="unified-top-bar__context-capsule-split" aria-hidden="true" />
+                  <div className="unified-top-bar__context-capsule-title">
+                    <div className="unified-top-bar__context-title">
+                      {!hasOverlay && sessionWorkspaceName && !isDispatcherSession && (
+                        <span className="unified-top-bar__context-mode">
+                          {sessionContext?.mode}
+                        </span>
+                      )}
+                      {!hasOverlay && sessionWorkspaceName && !isDispatcherSession && (
+                        <span className="unified-top-bar__context-sep" aria-hidden="true">/</span>
+                      )}
+                      {!hasOverlay && sessionWorkspaceName && !isDispatcherSession ? (
+                        <span className="unified-top-bar__context-workspace">
+                          <FolderOpen size={11} aria-hidden="true" />
+                          <span>{sessionWorkspaceName}</span>
+                        </span>
+                      ) : (
+                        <span className="unified-top-bar__context-label">{contextTitle}</span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         )}
       </div>
