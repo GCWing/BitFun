@@ -148,9 +148,9 @@ impl ToolRegistry {
         self.register_tool(Arc::new(InitMiniAppTool::new()));
 
         // ControlHub — sole unified control entry point that aggregates ALL control
-        // capabilities (desktop, browser, app, terminal, system, meta) into a single
-        // tool. SelfControlTool and ComputerUseTool are intentionally NOT registered
-        // here: their implementations are kept as internal modules and reused by
+        // capabilities (desktop, browser, terminal, system, meta) into a single
+        // tool. Legacy split control tools are intentionally NOT registered
+        // here: their implementations are kept internal where needed and reused by
         // ControlHub, but the model only ever sees one control tool to eliminate
         // cross-tool selection mistakes.
         self.register_tool(Arc::new(ControlHubTool::new()));
@@ -205,9 +205,9 @@ mod tests {
         assert!(registry.get_tool("Cron").is_some());
     }
 
-    /// Phase 0 contract: ControlHub is the sole control entry point. The
-    /// legacy `SelfControl` and `ComputerUse` tools must NOT be visible to the
-    /// model; their implementations are reused internally only.
+    /// Phase 0 contract: ControlHub is the sole control entry point. Legacy
+    /// split control tools must NOT be visible to the model; their
+    /// implementations are reused internally only.
     #[test]
     fn registry_exposes_controlhub_only_for_control_capabilities() {
         let registry = create_tool_registry();
@@ -216,12 +216,8 @@ mod tests {
             "ControlHub must be registered as the unified control tool"
         );
         assert!(
-            registry.get_tool("SelfControl").is_none(),
-            "SelfControl must be down-registered (Phase 0 dedup)"
-        );
-        assert!(
             registry.get_tool("ComputerUse").is_none(),
-            "ComputerUse must be down-registered (Phase 0 dedup)"
+            "Legacy split control tools must remain hidden (Phase 0 dedup)"
         );
     }
 

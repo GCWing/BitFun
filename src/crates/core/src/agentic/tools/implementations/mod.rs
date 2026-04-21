@@ -29,7 +29,6 @@ pub mod mcp_tools;
 pub mod mermaid_interactive_tool;
 pub mod miniapp_init_tool;
 pub mod playbook_tool;
-pub mod self_control_tool;
 pub mod session_control_tool;
 pub mod session_history_tool;
 pub mod session_message_tool;
@@ -68,7 +67,6 @@ pub use mcp_tools::{
 pub use mermaid_interactive_tool::MermaidInteractiveTool;
 pub use miniapp_init_tool::InitMiniAppTool;
 pub use playbook_tool::PlaybookTool;
-pub use self_control_tool::SelfControlTool;
 pub use session_control_tool::SessionControlTool;
 pub use session_history_tool::SessionHistoryTool;
 pub use session_message_tool::SessionMessageTool;

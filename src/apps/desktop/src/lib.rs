@@ -694,7 +694,6 @@ pub async fn run() {
             api::browser_control_api::browser_control_launch,
             api::browser_control_api::browser_control_restart_with_cdp,
             api::browser_control_api::browser_control_create_launcher,
-            api::self_control_api::submit_self_control_response,
             // Insights API
             api::insights_api::generate_insights,
             api::insights_api::get_latest_insights,

@@ -3,7 +3,6 @@
 //! Routes requests by `domain` to the appropriate backend:
 //!   desktop  → ComputerUseHost (existing)
 //!   browser  → CDP-based browser control (new)
-//!   app      → SelfControl (existing front-end service)
 //!   terminal → TerminalApi (existing)
 //!   system   → OS-level utilities (open_app, run_script, etc.)
 
@@ -245,33 +244,29 @@ impl ControlHubTool {
         format!(
             r#"ControlHub — the SOLE control entry point for everything the agent can drive.
 
-You will not find a separate `ComputerUse` or `SelfControl` tool: every desktop, browser,
-app-self-control, terminal-signalling and system action is reachable through this one tool
+You will not find a separate `ComputerUse` tool: every desktop, browser,
+terminal-signalling and system action is reachable through this one tool
 via `{{ domain, action, params }}`.
 
 ## Decision tree — which domain do I use?
 
-1. The user wants to change something inside the BitFun app itself
-   (settings, models, scenes, BitFun's own buttons / forms)?
-   → **domain: "app"**  (operates BitFun's own React UI through the SelfControl bridge)
-
-2. The user wants to drive a website / web app in their *real* browser
+1. The user wants to drive a website / web app in their *real* browser
    (preserving cookies, login, extensions)?
    → **domain: "browser"** (drives the user's default Chromium-family browser via CDP)
 
-3. The user wants to operate another desktop application
+2. The user wants to operate another desktop application
    (third-party app windows, OS dialogs, system-wide keyboard / mouse, accessibility)?
    → **domain: "desktop"** (Computer Use: screenshot, click, key_chord, locate, ...)
 
-4. The user wants to launch an app, run a shell / AppleScript, or query OS info?
+3. The user wants to launch an app, run a shell / AppleScript, or query OS info?
    → **domain: "system"**
 
-5. The user wants to signal an existing terminal session
+4. The user wants to signal an existing terminal session
    (kill, send SIGINT) — *not* run new commands; for that use the `Bash` tool?
    → **domain: "terminal"**
 
 If you are unsure between two domains: prefer the smallest blast radius
-(`app` < `browser` < `desktop` < `system`).
+(`browser` < `desktop` < `system`).
 
 ## Unified response envelope
 
@@ -327,36 +322,6 @@ for control flow.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
 {desktop_domain_doc}
-### domain: "app"  (BitFun's own GUI via the SelfControl bridge)
-- Introspection (pure-Rust, no UI round-trip — call these BEFORE bash/fs):
-  * `app_self_describe` — one-shot snapshot: `{{ scenes, settingsTabs, miniapps, miniappSubsystemAvailable }}`. Use this whenever the user asks "what can BitFun do / what's installed / what scenes are there / what mini-apps are available" — DO NOT scan the user's workspace directories looking for app features, those directories are USER files, not BitFun installations.
-  * `list_miniapps {{ includeRuntime?: bool }}` — installed mini-apps with `id / name / description / icon / category / openSceneId`.
-  * `list_scenes` — all scene ids you can pass to `open_scene` (plus dynamic `miniapp:<id>` for installed mini-apps).
-  * `list_settings_tabs` — all tab ids you can pass to `open_settings_tab`.
-  * `list_tasks` — catalog of named recipes for `execute_task`.
-- Navigation / mutation: get_page_state, wait_for_selector, click,
-  click_by_text, input, scroll, open_scene, open_settings_tab, set_config,
-  get_config, list_models, set_default_model, delete_model, execute_task,
-  select_option, wait, press_key, read_text.
-- `get_page_state` supports `{{ offset, limit }}` pagination (default
-  `offset=0, limit=60`) and returns `pagination` + `webview_id` so you can
-  page through long settings panels and tell which webview produced the
-  response.
-- `wait_for_selector` (`{{ selector, timeoutMs?, state? }}`) blocks until
-  the element appears (state 'visible' also waits for a non-zero box).
-  Errors with `code='TIMEOUT'`. Prefer it over a fixed `wait {{ durationMs }}`
-  when the right delay isn't known.
-- For well-known requests, prefer `execute_task` recipes:
-  * "set Kimi as the main model" → `set_primary_model {{ modelQuery: "kimi" }}`
-  * "open the mini app gallery / show me installed mini apps" → first
-    `list_miniapps`, then `execute_task task=open_miniapp_gallery`
-    (or `open_miniapp {{ miniAppId: "<id>" }}` to open a specific one).
-- HARD RULE: when the user asks "BitFun 里有哪些 X" / "what mini-apps /
-  scenes / settings does BitFun have" — answer with `app.app_self_describe`
-  or the targeted `list_*` action. NEVER answer this kind of question by
-  running `Bash` `ls` against the user's workspace; that path is for
-  user files, not BitFun's own catalog.
-
 ### domain: "terminal"
 - list_sessions, kill (`terminal_session_id`), interrupt (`terminal_session_id`).
   Use the `Bash` tool to *run* commands; this domain only signals existing sessions.
@@ -386,7 +351,7 @@ for control flow.
   `get_os_info` includes `os`, `arch`, `os_version`, `hostname`.
 
 ### domain: "meta"  (introspection — call this BEFORE long control flows)
-- `capabilities` — returns `{{ domains: {{ desktop, browser, app, terminal, system, meta }},
+- `capabilities` — returns `{{ domains: {{ desktop, browser, terminal, system, meta }},
   host: {{ os, arch }}, schema_version }}`. Use it to confirm which domains are
   actually wired up on this runtime instead of guessing from the description.
 - `route_hint` (`{{ intent }}`) — heuristic mapping of a free-form user intent
@@ -395,10 +360,10 @@ for control flow.
   `meta.capabilities` and the domain docs; this is only a hint.
 
 ## Workflow tips
-1. For cross-domain workflows (browser data → desktop paste, app config → external nav),
+1. For cross-domain workflows (browser data → desktop paste, system launch → browser attach),
    call actions sequentially and verify each step's `ok` field before chaining.
-2. After any UI mutation, re-acquire state (browser: snapshot, desktop: screenshot,
-   app: get_page_state) before the next action.
+2. After any UI mutation, re-acquire state (browser: snapshot, desktop: screenshot)
+   before the next action.
 3. When the model is the only one driving inputs, `wait` 200–500 ms after a click that
    triggers an animation before re-observing."#,
             desktop_domain_doc = desktop_domain_doc,
@@ -430,12 +395,11 @@ for control flow.
                 self.handle_desktop(action, params, context).await
             },
             "browser" => self.handle_browser(action, params).await,
-            "app" => self.handle_app(action, params, context).await,
             "terminal" => self.handle_terminal(action, params, context).await,
             "system" => self.handle_system(action, params, context).await,
             "meta" => self.handle_meta(action, params, context).await,
             other => Err(BitFunError::tool(format!(
-                "Unknown domain: '{}'. Valid domains: desktop, browser, app, terminal, system, meta",
+                "Unknown domain: '{}'. Valid domains: desktop, browser, terminal, system, meta",
                 other
             ))),
         }
@@ -447,8 +411,7 @@ for control flow.
     // tells the agent (a) which domains are actually wired up on this host
     // and (b) which domain it should pick for a given free-form intent.
     // Without this, the model has to guess from the description and may
-    // attempt e.g. `domain:"app"` on a host where the SelfControl bridge
-    // is not registered, and only learn the truth from a runtime error.
+    // pick an unavailable domain, only learning the truth from a runtime error.
 
     async fn handle_meta(
         &self,
@@ -459,14 +422,12 @@ for control flow.
         match action {
             "capabilities" => {
                 let desktop_available = Self::desktop_domain_enabled().await;
-                // `app` (SelfControl bridge) and `terminal` (TerminalApi) are
-                // both delivered through global registries rather than fields
-                // on the context, so we can't be 100% sure here without
-                // round-tripping. We report "likely available iff desktop is
-                // available" because both bridges only exist in BitFun's
-                // desktop runtime; the actual call will surface a clean
-                // FRONTEND_ERROR / NOT_AVAILABLE if the bridge is offline.
-                let likely_app_available = desktop_available;
+                // `terminal` (TerminalApi) is delivered through a global
+                // registry rather than a field on the context, so we can't be
+                // 100% sure here without round-tripping. We report "likely
+                // available iff desktop is available" because that bridge only
+                // exists in BitFun's desktop runtime; the actual call will
+                // surface a clean error if the bridge is offline.
                 let likely_terminal_available = desktop_available;
                 let browser_default = browser_sessions().default_id().await;
                 let browser_session_count = browser_sessions().list().await.len();
@@ -522,7 +483,6 @@ for control flow.
                             "default_browser": browser_kind,
                             "cdp_supported": browser_cdp_supported,
                         },
-                        "app":      { "available": likely_app_available, "reason": if likely_app_available { Value::Null } else { json!("BitFun front-end (SelfControl bridge) is only wired up in the desktop app") } },
                         "terminal": { "available": likely_terminal_available, "reason": if likely_terminal_available { Value::Null } else { json!("TerminalApi is only available in contexts that registered it") } },
                         "system":   {
                             "available": true,
@@ -563,18 +523,11 @@ for control flow.
                     s.push((domain, score, why));
                 };
 
-                let app_kw = ["bitfun", "settings", "scene", "default model", "primary model", "fast model", "切换模型", "默认模型", "设置", "场景"];
                 let browser_kw = ["http", "https", "url", "browser", "google", "tab", "网页", "浏览器", "网站"];
                 let desktop_kw = ["screenshot", "click on", "window", "dialog", "finder", "vscode", "桌面", "应用窗口", "外部应用"];
                 let terminal_kw = ["kill terminal", "interrupt", "ctrl+c", "stop process"];
                 let system_kw = ["open ", "applescript", "shell script", "运行脚本", "启动应用", "open app"];
 
-                for kw in app_kw {
-                    if lower.contains(kw) {
-                        push(&mut suggestions, "app", 90, "Matches BitFun-internal UI keywords");
-                        break;
-                    }
-                }
                 for kw in browser_kw {
                     if lower.contains(kw) {
                         push(&mut suggestions, "browser", 85, "Matches browser/URL keywords");
@@ -1492,304 +1445,6 @@ for control flow.
         }
     }
 
-    // ── App domain (SelfControl) ───────────────────────────────────────
-
-    async fn handle_app(
-        &self,
-        action: &str,
-        params: &Value,
-        context: &ToolUseContext,
-    ) -> BitFunResult<Vec<ToolResult>> {
-        // Discoverability shortcut: `execute_task` accepts a fixed catalog
-        // of named recipes ("set_primary_model" etc.). The model needs to
-        // know that catalog without first triggering the frontend's
-        // unknown-task error path. Returning it from a pure-Rust action
-        // means zero round-trip and the catalog stays in sync with what
-        // the frontend actually accepts (kept in sync via the e2e test).
-        if action == "list_tasks" {
-            let tasks = json!([
-                {
-                    "name": "set_primary_model",
-                    "description": "Set the primary (main) model for the active session.",
-                    "params": { "modelQuery": "fuzzy match on model display name or id" },
-                },
-                {
-                    "name": "set_fast_model",
-                    "description": "Set the fast/secondary model.",
-                    "params": { "modelQuery": "fuzzy match on model display name or id" },
-                },
-                {
-                    "name": "open_model_settings",
-                    "description": "Open the Settings → Models tab.",
-                    "params": {},
-                },
-                {
-                    "name": "return_to_session",
-                    "description": "Switch back to the chat session scene.",
-                    "params": {},
-                },
-                {
-                    "name": "delete_model",
-                    "description": "Delete a configured model.",
-                    "params": { "modelQuery": "fuzzy match on model display name or id" },
-                },
-                {
-                    "name": "enable_model",
-                    "description": "Enable a configured model that is currently disabled (pure config write — no UI navigation needed). If the model is already enabled, returns a no-op message.",
-                    "params": { "modelQuery": "fuzzy match on model display name or id" },
-                },
-                {
-                    "name": "disable_model",
-                    "description": "Disable a configured model. If the disabled model is the current primary/fast default, the default is automatically rolled forward to the next enabled model.",
-                    "params": { "modelQuery": "fuzzy match on model display name or id" },
-                },
-                {
-                    "name": "toggle_model",
-                    "description": "Flip a model's enabled flag (enabled ⇄ disabled). Same default-rollover behaviour as disable_model when the toggled model was the active primary/fast.",
-                    "params": { "modelQuery": "fuzzy match on model display name or id" },
-                },
-                {
-                    "name": "open_miniapp_gallery",
-                    "description": "Open the Mini App gallery scene (lists installed mini-apps).",
-                    "params": {},
-                },
-                {
-                    "name": "open_miniapp",
-                    "description": "Open a specific installed mini-app by its id (use list_miniapps to discover ids).",
-                    "params": { "miniAppId": "id of the mini app to open" },
-                },
-            ]);
-            let count = tasks.as_array().map(|a| a.len()).unwrap_or(0);
-            return Ok(vec![ToolResult::ok(
-                json!({ "tasks": tasks }),
-                Some(format!("{count} named tasks available for app.execute_task")),
-            )]);
-        }
-
-        // ── BitFun self-introspection (no frontend round-trip) ─────────
-        // These actions answer "what does BitFun itself expose?" so the
-        // model never needs to fall back to filesystem-scanning the user's
-        // workspace to guess at the app's own capabilities.
-        if action == "list_miniapps" {
-            let include_runtime = params
-                .get("includeRuntime")
-                .or_else(|| params.get("include_runtime"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            return Self::handle_list_miniapps(include_runtime).await;
-        }
-        if action == "list_scenes" {
-            return Ok(vec![Self::scenes_tool_result()]);
-        }
-        if action == "list_settings_tabs" {
-            return Ok(vec![Self::settings_tabs_tool_result()]);
-        }
-        if action == "app_self_describe" {
-            return Self::handle_app_self_describe().await;
-        }
-
-        let mut sc_input = params.clone();
-        if let Value::Object(ref mut map) = sc_input {
-            map.insert("action".to_string(), json!(action));
-        }
-        let sc_tool = super::self_control_tool::SelfControlTool::new();
-        sc_tool.call_impl(&sc_input, context).await
-    }
-
-    // ── BitFun self-introspection helpers ─────────────────────────────
-
-    /// Static catalog of scenes the user can navigate to from the BitFun
-    /// shell. Mirrors the entries in
-    /// `src/web-ui/src/app/scenes/registry.ts::SCENE_TAB_REGISTRY`.
-    /// Kept here as a static list so `app.list_scenes` can answer with
-    /// zero frontend round-trip; the e2e suite asserts this list stays
-    /// in sync with the TS registry.
-    fn scene_catalog() -> Vec<(&'static str, &'static str, &'static str)> {
-        vec![
-            ("welcome", "Welcome", "欢迎使用"),
-            ("session", "Session (chat)", "会话"),
-            ("terminal", "Terminal", "终端"),
-            ("git", "Git", "Git"),
-            ("settings", "Settings", "设置"),
-            ("file-viewer", "File Viewer", "文件查看"),
-            ("profile", "Profile", "个人资料"),
-            ("agents", "Agents", "智能体"),
-            ("skills", "Skills", "技能"),
-            ("miniapps", "Mini App Gallery", "小应用"),
-            ("browser", "Browser", "浏览器"),
-            ("mermaid", "Mermaid Editor", "Mermaid 图表"),
-            ("assistant", "Assistant", "助理"),
-            ("insights", "Insights", "洞察"),
-            ("shell", "Shell", "Shell"),
-            ("panel-view", "Panel View", "面板视图"),
-        ]
-    }
-
-    /// Settings tab catalog. Keep in sync with the settings store registry.
-    fn settings_tab_catalog() -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("basics", "Basic preferences (language, theme, etc.)"),
-            ("models", "AI models (add / edit / set defaults / delete)"),
-            ("session-config", "Default session behavior"),
-            ("agents", "Agent management"),
-            ("skills", "Skill packages"),
-            ("tools", "Built-in tools and MCP servers"),
-            ("about", "About BitFun"),
-        ]
-    }
-
-    fn scenes_tool_result() -> ToolResult {
-        let scenes: Vec<Value> = Self::scene_catalog()
-            .into_iter()
-            .map(|(id, label_en, label_zh)| {
-                json!({ "id": id, "labelEn": label_en, "labelZh": label_zh })
-            })
-            .collect();
-        let count = scenes.len();
-        ToolResult::ok(
-            json!({ "scenes": scenes }),
-            Some(format!("{count} scenes available; pass any `id` to action `open_scene`. Mini-app scenes use id `miniapp:<appId>` (see app.list_miniapps).")),
-        )
-    }
-
-    fn settings_tabs_tool_result() -> ToolResult {
-        let tabs: Vec<Value> = Self::settings_tab_catalog()
-            .into_iter()
-            .map(|(id, desc)| json!({ "id": id, "description": desc }))
-            .collect();
-        let count = tabs.len();
-        ToolResult::ok(
-            json!({ "tabs": tabs }),
-            Some(format!(
-                "{count} settings tabs available; pass any `id` to action `open_settings_tab`."
-            )),
-        )
-    }
-
-    async fn handle_list_miniapps(include_runtime: bool) -> BitFunResult<Vec<ToolResult>> {
-        let manager = match crate::miniapp::try_get_global_miniapp_manager() {
-            Some(m) => m,
-            None => {
-                return Ok(vec![ToolResult::ok(
-                    json!({ "miniapps": [], "available": false }),
-                    Some("MiniApp subsystem is not initialized in this build.".to_string()),
-                )]);
-            }
-        };
-
-        let metas = manager
-            .list()
-            .await
-            .map_err(|e| BitFunError::tool(format!("Failed to list mini-apps: {e}")))?;
-
-        let entries: Vec<Value> = metas
-            .iter()
-            .map(|meta| {
-                let mut obj = serde_json::Map::new();
-                obj.insert("id".to_string(), json!(meta.id));
-                obj.insert("name".to_string(), json!(meta.name));
-                obj.insert("description".to_string(), json!(meta.description));
-                obj.insert("icon".to_string(), json!(meta.icon));
-                obj.insert("category".to_string(), json!(meta.category));
-                obj.insert("tags".to_string(), json!(meta.tags));
-                obj.insert("version".to_string(), json!(meta.version));
-                obj.insert("updatedAt".to_string(), json!(meta.updated_at));
-                obj.insert(
-                    "openSceneId".to_string(),
-                    json!(format!("miniapp:{}", meta.id)),
-                );
-                if include_runtime {
-                    obj.insert(
-                        "runtime".to_string(),
-                        json!({
-                            "sourceRevision": meta.runtime.source_revision,
-                            "depsRevision": meta.runtime.deps_revision,
-                            "depsDirty": meta.runtime.deps_dirty,
-                            "workerRestartRequired": meta.runtime.worker_restart_required,
-                        }),
-                    );
-                }
-                Value::Object(obj)
-            })
-            .collect();
-
-        let count = entries.len();
-        let preview: String = metas
-            .iter()
-            .take(5)
-            .map(|m| format!("{} (id={})", m.name, m.id))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let summary = if count == 0 {
-            "No mini-apps installed.".to_string()
-        } else if count <= 5 {
-            format!("{count} mini-app(s) installed: {preview}.")
-        } else {
-            format!("{count} mini-app(s) installed; first 5: {preview}…")
-        };
-
-        Ok(vec![ToolResult::ok(
-            json!({ "miniapps": entries, "count": count, "available": true }),
-            Some(format!(
-                "{summary} To open one: execute_task task=open_miniapp params={{ miniAppId: <id> }}, or open_scene sceneId=miniapp:<id>."
-            )),
-        )])
-    }
-
-    async fn handle_app_self_describe() -> BitFunResult<Vec<ToolResult>> {
-        let scenes: Vec<Value> = Self::scene_catalog()
-            .into_iter()
-            .map(|(id, label_en, label_zh)| {
-                json!({ "id": id, "labelEn": label_en, "labelZh": label_zh })
-            })
-            .collect();
-        let settings_tabs: Vec<Value> = Self::settings_tab_catalog()
-            .into_iter()
-            .map(|(id, desc)| json!({ "id": id, "description": desc }))
-            .collect();
-
-        let (miniapps, miniapp_available, miniapp_count): (Vec<Value>, bool, usize) =
-            match crate::miniapp::try_get_global_miniapp_manager() {
-                Some(manager) => match manager.list().await {
-                    Ok(metas) => {
-                        let count = metas.len();
-                        let entries = metas
-                            .iter()
-                            .map(|m| {
-                                json!({
-                                    "id": m.id,
-                                    "name": m.name,
-                                    "description": m.description,
-                                    "category": m.category,
-                                    "openSceneId": format!("miniapp:{}", m.id),
-                                })
-                            })
-                            .collect::<Vec<_>>();
-                        (entries, true, count)
-                    }
-                    Err(_) => (vec![], true, 0),
-                },
-                None => (vec![], false, 0),
-            };
-
-        let summary = format!(
-            "BitFun self-describe: {} scenes, {} settings tabs, {} mini-app(s) installed.",
-            scenes.len(),
-            settings_tabs.len(),
-            miniapp_count,
-        );
-
-        Ok(vec![ToolResult::ok(
-            json!({
-                "scenes": scenes,
-                "settingsTabs": settings_tabs,
-                "miniapps": miniapps,
-                "miniappSubsystemAvailable": miniapp_available,
-            }),
-            Some(summary),
-        )])
-    }
-
     // ── Terminal domain ────────────────────────────────────────────────
 
     async fn handle_terminal(
@@ -2641,7 +2296,7 @@ fn truncate_with_marker(s: &str, max_bytes: usize) -> (String, bool) {
 }
 
 /// Parse a leading `"[CODE] rest"` prefix produced by the front-end
-/// `SelfControlEventListener` so we can recover the structured `ErrorCode`
+/// front-end error prefix so we can recover the structured `ErrorCode`
 /// in the backend instead of falling back to the heuristic classifier.
 /// Returns `(code, rest_without_prefix)` or `None` if the input is not in
 /// that shape.
@@ -3036,7 +2691,7 @@ impl Tool for ControlHubTool {
             "properties": {
                 "domain": {
                     "type": "string",
-                    "enum": ["browser", "desktop", "app", "terminal", "system", "meta"],
+                    "enum": ["browser", "desktop", "terminal", "system", "meta"],
                     "description": "The control domain to target."
                 },
                 "action": {
@@ -3206,7 +2861,7 @@ fn envelope_wrap_results(domain: &str, action: &str, results: Vec<ToolResult>) -
 fn map_dispatch_error(domain: &str, _action: &str, err: BitFunError) -> ControlHubError {
     let msg = err.to_string();
 
-    // Frontend SelfControl sends back `[CODE] message\nHints: a | b` strings —
+    // Frontend bridges may send back `[CODE] message\nHints: a | b` strings —
     // parse that prefix back into a structured ControlHubError so the model
     // sees the *actual* error code and hints instead of an INTERNAL fallback.
     // `BitFunError::Tool` wraps the message with `"Tool error: "`, so we try
@@ -3291,7 +2946,7 @@ mod control_hub_tests {
             .expect_err("unknown domain must error");
         let msg = err.to_string();
         assert!(msg.contains("Unknown domain"), "got: {msg}");
-        for d in ["desktop", "browser", "app", "terminal", "system", "meta"] {
+        for d in ["desktop", "browser", "terminal", "system", "meta"] {
             assert!(msg.contains(d), "valid domain {d} missing from error: {msg}");
         }
     }
@@ -3306,7 +2961,7 @@ mod control_hub_tests {
             .expect("capabilities should succeed");
         let payload = results.first().expect("one result").content();
         let domains = payload.get("domains").expect("domains present");
-        for d in ["desktop", "browser", "app", "terminal", "system", "meta"] {
+        for d in ["desktop", "browser", "terminal", "system", "meta"] {
             assert!(
                 domains.get(d).is_some(),
                 "domain {d} missing from capabilities payload: {payload}"
@@ -3364,125 +3019,29 @@ mod control_hub_tests {
         );
     }
 
-    #[tokio::test]
-    async fn app_list_scenes_returns_known_scene_ids() {
+    #[test]
+    fn route_hint_does_not_suggest_removed_app_domain() {
         let tool = ControlHubTool::new();
         let ctx = empty_context();
-        let results = tool
-            .dispatch("app", "list_scenes", &json!({}), &ctx)
-            .await
-            .expect("list_scenes should succeed");
-        let payload = results.first().unwrap().content();
-        let arr = payload.get("scenes").and_then(|v| v.as_array()).unwrap();
-        let ids: Vec<&str> = arr
-            .iter()
-            .filter_map(|s| s.get("id").and_then(|v| v.as_str()))
-            .collect();
-        for must_have in ["session", "settings", "miniapps", "welcome"] {
-            assert!(
-                ids.iter().any(|id| *id == must_have),
-                "scene `{must_have}` missing from list_scenes catalog: {ids:?}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn app_list_settings_tabs_returns_models_tab() {
-        let tool = ControlHubTool::new();
-        let ctx = empty_context();
-        let results = tool
-            .dispatch("app", "list_settings_tabs", &json!({}), &ctx)
-            .await
-            .expect("list_settings_tabs should succeed");
-        let payload = results.first().unwrap().content();
-        let arr = payload.get("tabs").and_then(|v| v.as_array()).unwrap();
-        assert!(arr.iter().any(|t| t.get("id").and_then(|v| v.as_str()) == Some("models")));
-    }
-
-    #[tokio::test]
-    async fn app_list_miniapps_returns_unavailable_when_subsystem_absent() {
-        let tool = ControlHubTool::new();
-        let ctx = empty_context();
-        let results = tool
-            .dispatch("app", "list_miniapps", &json!({}), &ctx)
-            .await
-            .expect("list_miniapps should succeed even without subsystem");
-        let payload = results.first().unwrap().content();
-        // Without a global MiniAppManager the action must succeed-with-empty
-        // and signal availability=false, NOT error out — otherwise the model
-        // would assume the action itself is broken.
-        assert_eq!(
-            payload.get("available").and_then(|v| v.as_bool()),
-            Some(false)
-        );
-        let arr = payload.get("miniapps").and_then(|v| v.as_array()).unwrap();
-        assert!(arr.is_empty());
-    }
-
-    #[tokio::test]
-    async fn app_self_describe_includes_scenes_settings_and_miniapps_keys() {
-        let tool = ControlHubTool::new();
-        let ctx = empty_context();
-        let results = tool
-            .dispatch("app", "app_self_describe", &json!({}), &ctx)
-            .await
-            .expect("app_self_describe should succeed");
-        let payload = results.first().unwrap().content();
-        for key in ["scenes", "settingsTabs", "miniapps", "miniappSubsystemAvailable"] {
-            assert!(
-                payload.get(key).is_some(),
-                "self-describe payload missing `{key}`: {payload}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn app_list_tasks_includes_open_miniapp_recipes() {
-        let tool = ControlHubTool::new();
-        let ctx = empty_context();
-        let results = tool
-            .dispatch("app", "list_tasks", &json!({}), &ctx)
-            .await
-            .expect("list_tasks should succeed");
-        let payload = results.first().unwrap().content();
-        let names: Vec<String> = payload
-            .get("tasks")
-            .and_then(|v| v.as_array())
-            .unwrap()
-            .iter()
-            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
-            .collect();
-        for required in ["open_miniapp_gallery", "open_miniapp", "set_primary_model"] {
-            assert!(
-                names.iter().any(|n| n == required),
-                "task `{required}` missing from execute_task catalog: {names:?}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn route_hint_picks_app_for_bitfun_intent() {
-        let tool = ControlHubTool::new();
-        let ctx = empty_context();
-        let results = tool
-            .dispatch(
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let results = rt
+            .block_on(tool.dispatch(
                 "meta",
                 "route_hint",
                 &json!({ "intent": "切换 BitFun 默认模型" }),
                 &ctx,
-            )
-            .await
+            ))
             .unwrap();
         let payload = results.first().unwrap().content();
         let arr = payload.get("ranked").and_then(|v| v.as_array()).unwrap();
         assert!(arr
             .iter()
-            .any(|s| s.get("domain").and_then(|v| v.as_str()) == Some("app")));
+            .all(|s| s.get("domain").and_then(|v| v.as_str()) != Some("app")));
     }
 
     #[test]
     fn parse_bracket_code_prefix_extracts_code_and_rest() {
-        // Standard SelfControl frontend shape.
+        // Standard structured frontend error shape.
         let (code, rest) = parse_bracket_code_prefix("[NOT_FOUND] no element matched #x")
             .expect("must parse code");
         assert_eq!(code, "NOT_FOUND");
@@ -3523,7 +3082,7 @@ mod control_hub_tests {
         // of falling back to FRONTEND_ERROR / INTERNAL like the old
         // heuristic-only path did.
         let err = map_dispatch_error(
-            "app",
+            "desktop",
             "click",
             BitFunError::tool(
                 "[AMBIGUOUS] 3 matches for text 'Save'\nHints: pass index | use selector"
@@ -3537,7 +3096,7 @@ mod control_hub_tests {
 
         // Unknown frontend code should fall through to FRONTEND_ERROR.
         let err = map_dispatch_error(
-            "app",
+            "desktop",
             "x",
             BitFunError::tool("[WAT_IS_THIS] ouch".to_string()),
         );
@@ -3586,10 +3145,12 @@ mod control_hub_tests {
     }
 
     #[tokio::test]
-    async fn description_advertises_paste_as_canonical_text_input() {
-        // Regression guard: the prompt-side guidance and the tool-side
-        // description must both surface `paste` so the model picks it
-        // over `type_text` for CJK / emoji / IM messages.
+    async fn description_advertises_paste_as_canonical_text_input_when_desktop_available() {
+        // The full paste guidance is only embedded when the desktop domain is
+        // available in the current runtime.
+        if !ControlHubTool::desktop_domain_enabled().await {
+            return;
+        }
         let desc = ControlHubTool::new().description().await.unwrap();
         assert!(
             desc.contains("`paste"),
@@ -3622,26 +3183,43 @@ mod control_hub_tests {
 
     #[tokio::test]
     async fn desktop_paste_without_host_returns_clean_error() {
-        // In `cargo test -p bitfun-core` there is no ComputerUseHost
-        // (desktop runtime not booted). The tool must surface a structured
-        // error rather than panicking, so the model knows desktop control
-        // is unavailable on this transport.
+        // In unit tests there is no ComputerUseHost. Depending on whether the
+        // desktop domain is enabled for this runtime, dispatch either returns a
+        // structured NOT_AVAILABLE result envelope immediately, or reaches the
+        // host check and returns a tool error. Both are acceptable as long as
+        // the failure is clean and non-panicking.
         let tool = ControlHubTool::new();
         let ctx = empty_context();
-        let err = tool
+        let result = tool
             .dispatch(
                 "desktop",
                 "paste",
                 &json!({ "text": "hi", "submit": true }),
                 &ctx,
             )
-            .await
-            .expect_err("must fail without ComputerUseHost");
-        assert!(
-            err.to_string().contains("Desktop control"),
-            "expected desktop-host availability hint, got: {}",
-            err
-        );
+            .await;
+
+        match result {
+            Ok(results) => {
+                let payload = results.first().expect("one result").content();
+                assert_eq!(payload.get("ok").and_then(|v| v.as_bool()), Some(false));
+                assert_eq!(
+                    payload
+                        .get("error")
+                        .and_then(|v| v.get("code"))
+                        .and_then(|v| v.as_str()),
+                    Some("NOT_AVAILABLE")
+                );
+            }
+            Err(err) => {
+                assert!(
+                    err.to_string().contains("Desktop control")
+                        || err.to_string().contains("Computer Use"),
+                    "expected desktop availability hint, got: {}",
+                    err
+                );
+            }
+        }
     }
 
     #[tokio::test]

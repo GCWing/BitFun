@@ -5,12 +5,8 @@
 //!
 //! * [`result`]   — unified `{ ok, domain, action, data, error?, capability?, warnings? }` envelope.
 //! * [`errors`]   — structured machine-readable error codes returned in the envelope.
-//! * [`migration`] — historical action → new (domain, action) mapping. The matching
-//!   unit tests guarantee that no legacy action was dropped when SelfControl and
-//!   ComputerUse were down-registered.
 
 pub mod errors;
-pub mod migration;
 pub mod result;
 
 pub use errors::ErrorCode;
