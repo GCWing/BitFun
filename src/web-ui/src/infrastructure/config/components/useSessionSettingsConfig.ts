@@ -3,6 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import { configManager } from '../services/ConfigManager';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { notificationService } from '@/shared/notification-system';
 import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate } from '../types';
 import {
@@ -24,10 +25,18 @@ type ComputerUseStatusPayload = {
   platformNote: string | null;
 };
 
+type BrowserControlLaunchResponse = {
+  success: boolean;
+  status: string;
+  message: string | null;
+  browserKind: string;
+};
+
 export function useSessionSettingsConfig() {
   const { t } = useTranslation('settings/personalization');
   const { t: tTools } = useTranslation('settings/agentic-tools');
   const { t: tDebug } = useTranslation('settings/debug');
+  const { t: tPermissions } = useTranslation('settings/permissions');
 
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
@@ -42,6 +51,14 @@ export function useSessionSettingsConfig() {
   const [computerUseAccess, setComputerUseAccess] = useState(false);
   const [computerUseScreen, setComputerUseScreen] = useState(false);
   const [computerUseBusy, setComputerUseBusy] = useState(false);
+
+  const [browserCdpAvailable, setBrowserCdpAvailable] = useState(false);
+  const [browserKind, setBrowserKind] = useState('');
+  const [browserVersion, setBrowserVersion] = useState<string | null>(null);
+  const [browserPageCount, setBrowserPageCount] = useState(0);
+  const [browserControlBusy, setBrowserControlBusy] = useState(false);
+  const [browserRestartPrompt, setBrowserRestartPrompt] = useState<BrowserControlLaunchResponse | null>(null);
+  const [platform, setPlatform] = useState<string>('');
 
   const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
   const [debugHasChanges, setDebugHasChanges] = useState(false);
@@ -61,6 +78,26 @@ export function useSessionSettingsConfig() {
     } catch (error) {
       log.error('computer_use_get_status failed', error);
       return false;
+    }
+  }, []);
+
+  const refreshBrowserControlStatus = useCallback(async () => {
+    if (!IS_TAURI_DESKTOP) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const s = await invoke<{
+        cdpAvailable: boolean;
+        browserKind: string;
+        browserVersion: string | null;
+        port: number;
+        pageCount: number;
+      }>('browser_control_get_status', { request: { port: 9222 } });
+      setBrowserCdpAvailable(s.cdpAvailable);
+      setBrowserKind(s.browserKind);
+      setBrowserVersion(s.browserVersion);
+      setBrowserPageCount(s.pageCount);
+    } catch (error) {
+      log.error('browser_control_get_status failed', error);
     }
   }, []);
 
@@ -98,6 +135,13 @@ export function useSessionSettingsConfig() {
       if (IS_TAURI_DESKTOP) {
         const ok = await refreshComputerUseStatus();
         if (!ok) setComputerUseEnabled(computerUseCfg ?? false);
+        await refreshBrowserControlStatus();
+        try {
+          const info = await systemAPI.getSystemInfo();
+          setPlatform(info.platform || '');
+        } catch (error) {
+          log.warn('getSystemInfo failed', error);
+        }
       } else {
         setComputerUseEnabled(computerUseCfg ?? false);
       }
@@ -107,7 +151,7 @@ export function useSessionSettingsConfig() {
     } finally {
       setIsLoading(false);
     }
-  }, [refreshComputerUseStatus]);
+  }, [refreshBrowserControlStatus, refreshComputerUseStatus]);
 
   useEffect(() => {
     loadAllData();
@@ -208,6 +252,73 @@ export function useSessionSettingsConfig() {
     } catch (error) {
       log.error('computer_use_open_system_settings failed', error);
       notificationService.error(t('messages.saveFailed'));
+    }
+  };
+
+  const handleBrowserControlLaunch = async () => {
+    setBrowserControlBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
+      if (result.success) {
+        notificationService.success(
+          tPermissions('browserControl.connectSuccess', { browser: result.browserKind }),
+          { duration: 3000 }
+        );
+      } else if (result.status === 'needs_restart') {
+        setBrowserRestartPrompt(result);
+      } else if (result.message) {
+        notificationService.info(result.message, { duration: 8000 });
+      }
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_launch failed', error);
+      notificationService.error(tPermissions('browserControl.connectFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlRestart = async () => {
+    if (!browserRestartPrompt) return;
+    setBrowserControlBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<BrowserControlLaunchResponse>('browser_control_restart_with_cdp', {
+        request: { port: 9222 },
+      });
+      if (result.success) {
+        notificationService.success(
+          tPermissions('browserControl.restartSuccess', { browser: result.browserKind }),
+          { duration: 3000 }
+        );
+        setBrowserRestartPrompt(null);
+      } else if (result.message) {
+        notificationService.info(result.message, { duration: 8000 });
+      }
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_restart_with_cdp failed', error);
+      notificationService.error(tPermissions('browserControl.restartFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlCreateLauncher = async () => {
+    setBrowserControlBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const path = await invoke<string>('browser_control_create_launcher');
+      notificationService.success(
+        tPermissions('browserControl.createLauncherSuccess', { path }),
+        { duration: 5000 }
+      );
+    } catch (error) {
+      log.error('browser_control_create_launcher failed', error);
+      notificationService.error(tPermissions('browserControl.createLauncherFailed'));
+    } finally {
+      setBrowserControlBusy(false);
     }
   };
 
@@ -364,6 +475,13 @@ export function useSessionSettingsConfig() {
     computerUseAccess,
     computerUseScreen,
     computerUseBusy,
+    browserCdpAvailable,
+    browserKind,
+    browserVersion,
+    browserPageCount,
+    browserControlBusy,
+    browserRestartPrompt,
+    platform,
     debugConfig,
     debugHasChanges,
     debugSaving,
@@ -376,6 +494,11 @@ export function useSessionSettingsConfig() {
     handleComputerUseEnabledChange,
     handleComputerUseOpenSettings,
     refreshComputerUseStatus,
+    refreshBrowserControlStatus,
+    handleBrowserControlLaunch,
+    handleBrowserControlRestart,
+    handleBrowserControlCreateLauncher,
+    setBrowserRestartPrompt,
     handleToolTimeoutChange,
     updateDebugConfig,
     saveDebugConfig,

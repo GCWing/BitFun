@@ -21,6 +21,33 @@
     "desktopOnly": "Computer use settings are only available in the BitFun desktop app.",
     "platformNote": "Note"
   },
+  "browserControl": {
+    "sectionTitle": "Browser control (CDP)",
+    "sectionDescription": "Connect BitFun to your Chromium-family browser through the local debugging port.",
+    "desktopOnly": "Browser control settings are only available in the BitFun desktop app.",
+    "status": "Browser status",
+    "statusDesc": "BitFun uses port 9222 to control browser tabs directly through CDP.",
+    "notConnected": "Not connected",
+    "tabs": "tabs",
+    "refreshStatus": "Refresh status",
+    "connect": "Connect",
+    "connectSuccess": "Connected to {{browser}}",
+    "connectFailed": "Failed to connect browser",
+    "restartSuccess": "Restarted {{browser}} with debugging enabled",
+    "restartFailed": "Failed to restart browser with debugging enabled",
+    "createLauncher": "Create launcher",
+    "createLauncherDesc": "Create a macOS launcher that starts the browser with the CDP debugging port enabled.",
+    "createLauncherSuccess": "Launcher created at {{path}}",
+    "createLauncherFailed": "Failed to create launcher",
+    "restartModal": {
+      "title": "Restart browser?",
+      "description": "{{browser}} is already running without the debugging port. BitFun needs to restart it with debugging enabled before it can control tabs.",
+      "warning": "This will close current browser windows and reopen the browser.",
+      "cancel": "Cancel",
+      "confirm": "Restart and enable debugging",
+      "restarting": "Restarting..."
+    }
+  },
   "loading": {
     "text": "Loading configuration..."
   },

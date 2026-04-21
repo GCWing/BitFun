@@ -21,6 +21,33 @@
     "desktopOnly": "Computer use 仅在 BitFun 桌面应用中可用。",
     "platformNote": "说明"
   },
+  "browserControl": {
+    "sectionTitle": "浏览器控制（CDP）",
+    "sectionDescription": "通过本地调试端口把 BitFun 连接到 Chromium 系浏览器。",
+    "desktopOnly": "浏览器控制仅在 BitFun 桌面应用中可用。",
+    "status": "浏览器状态",
+    "statusDesc": "BitFun 使用 9222 端口通过 CDP 直接控制浏览器标签页。",
+    "notConnected": "未连接",
+    "tabs": "个标签页",
+    "refreshStatus": "刷新状态",
+    "connect": "连接",
+    "connectSuccess": "已连接 {{browser}}",
+    "connectFailed": "连接浏览器失败",
+    "restartSuccess": "已重启 {{browser}} 并启用调试",
+    "restartFailed": "重启浏览器并启用调试失败",
+    "createLauncher": "创建启动器",
+    "createLauncherDesc": "创建一个 macOS 启动器，用于以 CDP 调试端口启动浏览器。",
+    "createLauncherSuccess": "启动器已创建：{{path}}",
+    "createLauncherFailed": "创建启动器失败",
+    "restartModal": {
+      "title": "重启浏览器？",
+      "description": "检测到 {{browser}} 已在运行，但未启用调试端口。BitFun 需要先以调试模式重启浏览器，才能控制标签页。",
+      "warning": "这会关闭当前浏览器窗口，并重新打开浏览器。",
+      "cancel": "取消",
+      "confirm": "重启并启用调试",
+      "restarting": "正在重启..."
+    }
+  },
   "loading": {
     "text": "加载配置中..."
   },

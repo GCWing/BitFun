@@ -5,6 +5,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use std::time::Duration;
 
 /// Default CDP debug port.
 pub const DEFAULT_CDP_PORT: u16 = 9222;
@@ -393,6 +394,97 @@ impl BrowserLauncher {
                 kind, e
             ))),
         }
+    }
+
+    pub async fn restart_with_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
+        Self::terminate_browser(kind)?;
+        Self::wait_for_browser_exit(kind, Duration::from_secs(8)).await?;
+        Self::launch_with_cdp_opts(kind, port, None).await
+    }
+
+    fn terminate_browser(kind: &BrowserKind) -> BitFunResult<()> {
+        #[cfg(target_os = "macos")]
+        {
+            let app_name = match kind {
+                BrowserKind::Chrome => "Google Chrome",
+                BrowserKind::Edge => "Microsoft Edge",
+                BrowserKind::Brave => "Brave Browser",
+                BrowserKind::Arc => "Arc",
+                BrowserKind::Chromium => "Chromium",
+                BrowserKind::Unknown(name) => name.as_str(),
+            };
+            let script = format!("tell application \"{}\" to quit", app_name.replace('"', "\\\""));
+            let output = silent_command("osascript")
+                .args(["-e", &script])
+                .output()
+                .map_err(|e| BitFunError::tool(format!("Failed to quit {}: {}", kind, e)))?;
+            if output.status.success() {
+                return Ok(());
+            }
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BitFunError::tool(format!("Failed to quit {}: {}", kind, stderr.trim())));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let process_names: &[&str] = match kind {
+                BrowserKind::Chrome => &["chrome.exe"],
+                BrowserKind::Edge => &["msedge.exe"],
+                BrowserKind::Brave => &["brave.exe"],
+                BrowserKind::Arc => &["arc.exe"],
+                BrowserKind::Chromium => &["chromium.exe", "chrome.exe"],
+                BrowserKind::Unknown(_) => {
+                    return Err(BitFunError::tool(
+                        "Unsupported browser kind for restart on Windows".to_string(),
+                    ))
+                }
+            };
+            for process_name in process_names {
+                let output = silent_command("taskkill")
+                    .args(["/IM", process_name, "/F"])
+                    .output()
+                    .map_err(|e| BitFunError::tool(format!("Failed to terminate {}: {}", process_name, e)))?;
+                let stdout = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+                if output.status.success()
+                    || stdout.contains("no instance")
+                    || stdout.contains("not found")
+                    || stderr.contains("no instance")
+                    || stderr.contains("not found")
+                {
+                    continue;
+                }
+                return Err(BitFunError::tool(format!(
+                    "Failed to terminate {}: {}{}",
+                    process_name,
+                    String::from_utf8_lossy(&output.stdout).trim(),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                )));
+            }
+            return Ok(());
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            let _ = kind;
+            Err(BitFunError::tool(
+                "Browser restart with CDP is not supported on this platform".to_string(),
+            ))
+        }
+    }
+
+    async fn wait_for_browser_exit(kind: &BrowserKind, timeout: Duration) -> BitFunResult<()> {
+        let started = std::time::Instant::now();
+        while Self::is_browser_running(kind) {
+            if started.elapsed() >= timeout {
+                return Err(BitFunError::tool(format!(
+                    "Timed out waiting for {} to exit before restart",
+                    kind
+                )));
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        Ok(())
     }
 
     /// Check if a browser process is currently running.

@@ -5,12 +5,14 @@ import {
   Button,
   ConfigPageLoading,
   IconButton,
+  Modal,
   NumberInput,
   Switch,
 } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { IS_TAURI_DESKTOP, useSessionSettingsConfig } from './useSessionSettingsConfig';
 import './AIFeaturesConfig.scss';
+import './DebugConfig.scss';
 
 const PermissionsConfig: React.FC = () => {
   const { t } = useTranslation('settings/permissions');
@@ -25,10 +27,22 @@ const PermissionsConfig: React.FC = () => {
     computerUseAccess,
     computerUseScreen,
     computerUseBusy,
+    browserCdpAvailable,
+    browserKind,
+    browserVersion,
+    browserPageCount,
+    browserControlBusy,
+    browserRestartPrompt,
+    platform,
     handleSkipToolConfirmationChange,
     handleComputerUseEnabledChange,
     handleComputerUseOpenSettings,
     refreshComputerUseStatus,
+    refreshBrowserControlStatus,
+    handleBrowserControlLaunch,
+    handleBrowserControlRestart,
+    handleBrowserControlCreateLauncher,
+    setBrowserRestartPrompt,
     handleToolTimeoutChange,
     tTools,
   } = useSessionSettingsConfig();
@@ -199,6 +213,136 @@ const PermissionsConfig: React.FC = () => {
             </>
           ) : null}
         </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('browserControl.sectionTitle')}
+          description={
+            IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
+          }
+        >
+          {IS_TAURI_DESKTOP ? (
+            <>
+              <ConfigPageRow
+                label={t('browserControl.status')}
+                description={t('browserControl.statusDesc') || undefined}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-func-agent-config__row-control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      minWidth: 0,
+                      maxWidth: '100%',
+                    }}
+                    title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
+                  >
+                    <span
+                      className={browserCdpAvailable ? 'bitfun-func-agent-config__perm-status--granted' : undefined}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                    >
+                      {browserCdpAvailable
+                        ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
+                        : t('browserControl.notConnected')}
+                    </span>
+                    <IconButton
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      aria-label={t('browserControl.refreshStatus')}
+                      tooltip={t('browserControl.refreshStatus')}
+                      disabled={browserControlBusy}
+                      onClick={() => void refreshBrowserControlStatus()}
+                    >
+                      <RefreshCw size={14} />
+                    </IconButton>
+                  </span>
+                  {!browserCdpAvailable && (
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={browserControlBusy}
+                      onClick={() => void handleBrowserControlLaunch()}
+                    >
+                      {t('browserControl.connect')}
+                    </Button>
+                  )}
+                </div>
+              </ConfigPageRow>
+              {platform === 'macos' && (
+                <ConfigPageRow
+                  label={t('browserControl.createLauncher')}
+                  description={t('browserControl.createLauncherDesc')}
+                  align="center"
+                >
+                  <div className="bitfun-func-agent-config__row-control">
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={browserControlBusy}
+                      onClick={() => void handleBrowserControlCreateLauncher()}
+                    >
+                      {t('browserControl.createLauncher')}
+                    </Button>
+                  </div>
+                </ConfigPageRow>
+              )}
+            </>
+          ) : null}
+        </ConfigPageSection>
+
+        <Modal
+          isOpen={browserRestartPrompt !== null}
+          onClose={() => {
+            if (!browserControlBusy) setBrowserRestartPrompt(null);
+          }}
+          title={t('browserControl.restartModal.title')}
+          size="small"
+          closeOnOverlayClick={!browserControlBusy}
+        >
+          <div className="bitfun-debug-config__modal-body">
+            <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
+            <p>{t('browserControl.restartModal.warning')}</p>
+            {browserRestartPrompt?.message ? (
+              <p className="bitfun-func-agent-config__hint">{browserRestartPrompt.message}</p>
+            ) : null}
+          </div>
+          <div className="bitfun-debug-config__modal-footer">
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => setBrowserRestartPrompt(null)}
+              disabled={browserControlBusy}
+            >
+              {t('browserControl.restartModal.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="small"
+              onClick={() => void handleBrowserControlRestart()}
+              disabled={browserControlBusy}
+            >
+              {browserControlBusy
+                ? t('browserControl.restartModal.restarting')
+                : t('browserControl.restartModal.confirm')}
+            </Button>
+          </div>
+        </Modal>
       </ConfigPageContent>
     </ConfigPageLayout>
   );
