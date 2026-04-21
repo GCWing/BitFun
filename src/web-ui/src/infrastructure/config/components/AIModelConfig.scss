@@ -2025,7 +2025,7 @@
   }
 
   &__cli-empty {
-    padding: $size-gap-3 0;
+    padding: var(--size-gap-4, 16px);
 
     p {
       margin: 0;
