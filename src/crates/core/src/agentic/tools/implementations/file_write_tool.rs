@@ -35,6 +35,7 @@ Usage:
 - If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
 - The file_path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
+- Keep writes focused. Avoid sending hundreds of lines in one Write call; prefer Read + Edit for targeted updates, and split large rewrites into smaller chunks when possible.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked."#.to_string())
     }
@@ -49,7 +50,7 @@ Usage:
                 },
                 "content": {
                     "type": "string",
-                    "description": "The content to write to the file"
+                    "description": "The content to write to the file. Keep writes focused; avoid sending hundreds of lines in one call. Prefer Read + Edit for targeted changes, and split large rewrites into smaller chunks when possible."
                 }
             },
             "required": ["file_path", "content"],

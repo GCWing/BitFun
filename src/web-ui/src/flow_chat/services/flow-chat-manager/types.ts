@@ -19,6 +19,8 @@ export interface FlowChatContext {
     lastActivityAt: number;
     timer: ReturnType<typeof setTimeout> | null;
   }>;
+  /** In-flight historical session hydration: sessionId -> promise */
+  pendingHistoryLoads: Map<string, Promise<void>>;
   /** Content buffers: sessionId -> (roundId -> content) */
   contentBuffers: Map<string, Map<string, string>>;
   /** Active text items: sessionId -> (roundId -> textItemId) */

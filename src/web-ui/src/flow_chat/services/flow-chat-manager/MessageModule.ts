@@ -119,10 +119,30 @@ export async function sendMessage(
   }
 
   try {
-    const isFirstMessage = session.dialogTurns.length === 0 && session.titleStatus !== 'generated';
-    
+    const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
+    const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
+
+    if (
+      agentType?.trim() &&
+      !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
+      refreshedSession.mode !== currentAgentType
+    ) {
+      context.flowChatStore.updateSessionMode(sessionId, currentAgentType);
+    }
+
+    if (context.pendingHistoryLoads.has(sessionId)) {
+      throw new Error('Session history is still restoring, please retry once loading finishes');
+    }
+
+    await ensureBackendSession(context, sessionId);
+
+    const readySession = context.flowChatStore.getState().sessions.get(sessionId);
+    if (!readySession) {
+      throw new Error(`Session lost before starting dialog turn: ${sessionId}`);
+    }
+
+    const isFirstMessage = readySession.dialogTurns.length === 0 && readySession.titleStatus !== 'generated';
     const dialogTurnId = `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
     const hasImages = (options?.imageContexts?.length ?? 0) > 0;
 
     const dialogTurn: DialogTurn = {
@@ -152,18 +172,20 @@ export async function sendMessage(
     };
     globalEventBus.emit(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, pinRequest, 'MessageModule');
 
+    const isRestoringHistoricalSession =
+      readySession.isHistorical || context.pendingHistoryLoads.has(sessionId);
+    if (isRestoringHistoricalSession) {
+      context.processingManager.clearSessionStatus(sessionId);
+      context.flowChatStore.deleteDialogTurn(sessionId, dialogTurnId);
+      throw new Error('Session history is still restoring, please retry once loading finishes');
+    }
+
     const startOk = await stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
       taskId: sessionId,
       dialogTurnId,
     });
-    // START is only valid from IDLE/ERROR (see STATE_TRANSITIONS). If the previous turn left the
-    // machine in PROCESSING/FINISHING, transition fails — but the backend still runs this turnId.
-    // Sync context so TextChunk/ModelRound events are not dropped (turn_id_mismatch).
     if (!startOk) {
-      const machine = stateMachineManager.get(sessionId);
-      if (machine) {
-        machine.getContext().currentDialogTurnId = dialogTurnId;
-      }
+      throw new Error('Session is still busy finishing the previous turn');
     }
 
     if (isFirstMessage) {
@@ -176,22 +198,6 @@ export async function sendMessage(
       message: '',
       metadata: { sessionId: sessionId, dialogTurnId }
     });
-
-    const currentAgentType = (agentType?.trim() || session.mode || 'agentic').trim();
-
-    if (
-      agentType?.trim() &&
-      !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
-      session.mode !== currentAgentType
-    ) {
-      context.flowChatStore.updateSessionMode(sessionId, currentAgentType);
-    }
-
-    try {
-      await ensureBackendSession(context, sessionId);
-    } catch (createError: any) {
-      log.warn('Backend session create/restore failed', { sessionId: sessionId, error: createError });
-    }
 
     await syncSessionModelSelection(context, sessionId, currentAgentType);
 

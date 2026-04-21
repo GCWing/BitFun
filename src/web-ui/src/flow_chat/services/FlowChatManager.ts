@@ -68,6 +68,7 @@ export class FlowChatManager {
         onFlush: (events) => this.processBatchedEvents(events)
       }),
       pendingTurnCompletions: new Map(),
+      pendingHistoryLoads: new Map(),
       contentBuffers: new Map(),
       activeTextItems: new Map(),
       saveDebouncers: new Map(),

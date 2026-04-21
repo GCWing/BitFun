@@ -1006,6 +1006,7 @@
   &__control-stack {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: 6px;
     width: 100%;
     min-width: 0;
@@ -1015,6 +1016,16 @@
       min-width: 0;
       box-sizing: border-box;
     }
+  }
+
+  &__cli-auth-hint {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    line-height: 1.5;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   &__form,

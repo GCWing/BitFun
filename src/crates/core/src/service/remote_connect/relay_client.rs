@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::tungstenite::Message;
+#[cfg(windows)]
+use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -402,8 +404,74 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
         max_write_buffer_size: 64 * 1024 * 1024,
         ..Default::default()
     };
-    let (stream, _) = tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
+
+    #[cfg(windows)]
+    {
+        let request = ws_url
+            .into_client_request()
+            .map_err(|e| anyhow!("dial {ws_url}: build request failed: {e}"))?;
+        let connector = build_windows_rustls_connector()?;
+        let (stream, _) = tokio_tungstenite::connect_async_tls_with_config(
+            request,
+            Some(config),
+            false,
+            Some(connector),
+        )
         .await
         .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
-    Ok(stream)
+        return Ok(stream);
+    }
+
+    #[cfg(not(windows))]
+    {
+        let (stream, _) = tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
+            .await
+            .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
+        Ok(stream)
+    }
+}
+
+#[cfg(windows)]
+fn build_windows_rustls_connector() -> Result<Connector> {
+    let mut root_store = rustls::RootCertStore::empty();
+
+    let native_certs = rustls_native_certs::load_native_certs();
+    if !native_certs.errors.is_empty() {
+        warn!(
+            "Windows native root certificate loading errors: {:?}",
+            native_certs.errors
+        );
+    }
+    let (added, ignored) = root_store.add_parsable_certificates(native_certs.certs);
+    debug!(
+        "Loaded current-user Windows root certificates, added={}, ignored={}",
+        added, ignored
+    );
+
+    if let Ok(local_machine_root) = schannel::cert_store::CertStore::open_local_machine("ROOT") {
+        let local_machine_der_certs = local_machine_root
+            .certs()
+            .map(|cert| rustls::pki_types::CertificateDer::from(cert.to_der().to_vec()))
+            .collect::<Vec<_>>();
+        let total = local_machine_der_certs.len();
+        let (added, ignored) = root_store.add_parsable_certificates(local_machine_der_certs);
+        debug!(
+            "Loaded local-machine Windows root certificates, total={}, added={}, ignored={}",
+            total, added, ignored
+        );
+    } else {
+        warn!("Failed to open local-machine Windows ROOT certificate store");
+    }
+
+    if root_store.is_empty() {
+        return Err(anyhow!(
+            "No trusted Windows root certificates available for relay connection"
+        ));
+    }
+
+    let client_config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    Ok(Connector::Rustls(std::sync::Arc::new(client_config)))
 }
