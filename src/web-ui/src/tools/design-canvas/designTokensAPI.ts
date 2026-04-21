@@ -1,5 +1,5 @@
 import { toolAPI } from '@/infrastructure/api';
-import { useDesignTokensStore, type DesignTokensDocument } from './store/designTokensStore';
+import { useDesignTokensStore, type DesignTokenProposal, type DesignTokensDocument } from './store/designTokensStore';
 import { canonicalScopeKey } from './tokensSchema';
 
 interface TokensResponse {
@@ -73,6 +73,13 @@ export const designTokensAPI = {
   commit(proposalId: string, artifactId?: string, workspacePath?: string) {
     return invoke(
       { action: 'commit', artifact_id: artifactId, proposal_id: proposalId },
+      workspacePath,
+      artifactId
+    );
+  },
+  updateProposal(proposal: DesignTokenProposal, artifactId?: string, workspacePath?: string) {
+    return invoke(
+      { action: 'update', artifact_id: artifactId, proposal },
       workspacePath,
       artifactId
     );

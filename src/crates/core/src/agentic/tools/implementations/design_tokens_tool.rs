@@ -258,7 +258,7 @@ impl Tool for DesignTokensTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["propose", "await_selection", "commit", "preview", "get", "list"],
+                    "enum": ["propose", "await_selection", "commit", "update", "preview", "get", "list"],
                     "description": "propose — write proposals and (when running under a UI with tool_call_id) block up to 600s for the user to pick. await_selection — block on an already-written proposals doc; use this for resumed UIs. commit — explicit pick by proposal_id. preview/get — read. list — enumerate."
                 },
                 "artifact_id": { "type": "string" },
@@ -273,7 +273,11 @@ impl Tool for DesignTokensTool {
                         "additionalProperties": true
                     }
                 },
-                "proposal_id": { "type": "string", "description": "Proposal id to commit." }
+                "proposal_id": { "type": "string", "description": "Proposal id to commit." },
+                "proposal": {
+                    "type": "object",
+                    "description": "Full edited proposal object used by update. The id must match an existing proposal."
+                }
             }
         })
     }
@@ -327,6 +331,29 @@ impl Tool for DesignTokensTool {
                 error_code: Some(400),
                 meta: None,
             };
+        }
+        if action == "update" {
+            let Some(proposal) = input.get("proposal").and_then(|v| v.as_object()) else {
+                return ValidationResult {
+                    result: false,
+                    message: Some("DesignTokens.update requires proposal".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            };
+            if proposal
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
+                return ValidationResult {
+                    result: false,
+                    message: Some("DesignTokens.update requires proposal.id".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
         }
         ValidationResult::default()
     }
@@ -592,6 +619,42 @@ impl Tool for DesignTokensTool {
                 Ok(vec![Self::make_event(
                     json!({ "tokens": doc, "path": target_path }),
                     "tokens-committed",
+                )])
+            }
+            "update" => {
+                let mut edited: DesignTokenProposal = serde_json::from_value(
+                    input
+                        .get("proposal")
+                        .cloned()
+                        .ok_or_else(|| BitFunError::tool("DesignTokens.update requires proposal"))?,
+                )
+                .map_err(|e| {
+                    BitFunError::tool(format!("DesignTokens.update invalid proposal: {}", e))
+                })?;
+                let mut doc = Self::load_or_default(&target_path).await?;
+                let Some(existing_index) = doc
+                    .proposals
+                    .iter()
+                    .position(|proposal| proposal.id == edited.id)
+                else {
+                    return Err(BitFunError::tool(format!(
+                        "DesignTokens.update: proposal_id '{}' not found",
+                        edited.id
+                    )));
+                };
+
+                if edited.created_at.trim().is_empty() {
+                    edited.created_at = doc.proposals[existing_index].created_at.clone();
+                }
+                doc.proposals[existing_index] = edited.clone();
+                if doc.committed_id.as_deref() == Some(edited.id.as_str()) {
+                    doc.committed_at = Some(Utc::now().to_rfc3339());
+                }
+                Self::save(&target_path, &doc).await?;
+                debug!("DesignTokens.update saved edited proposal: {}", edited.id);
+                Ok(vec![Self::make_event(
+                    json!({ "tokens": doc, "path": target_path, "proposal_id": edited.id }),
+                    "tokens-updated",
                 )])
             }
             "preview" | "get" => {

@@ -233,7 +233,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
   const proposals: any[] = resultTokens?.proposals?.length ? resultTokens.proposals : inputProposals;
   const committedId: string | undefined = resultTokens?.committed_id || undefined;
 
-  /** 与 AskUserQuestionCard 一致：流式拼接参数未完成前不允许提交选择，避免点到不完整提案。 */
+  /** Same as AskUserQuestionCard: no selection until streaming tool args finish (avoids partial proposals). */
   const paramsReady = !isParamsStreaming;
   const awaitingSelection =
     !isCompleted && !isFailed && proposals.length > 0 && paramsReady;
@@ -356,7 +356,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
             )}
             {isCompleted && committedId && (
               <span className="design-tokens-proposal-card__committed-chip">
-                <Check size={10} /> {t('toolCards.designTokens.adopted')}
+                <Check size={14} strokeWidth={2.5} /> {t('toolCards.designTokens.adopted')}
               </span>
             )}
             {isCompleted && !committedId && selectionStatus && (
@@ -415,6 +415,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
     const isCollapsed = isCompleted && committedId
       ? (!isCommitted && !expandedIds[proposal.id])
       : false;
+    const canCollapseHeader = isCompleted && Boolean(committedId) && !isCommitted;
 
     const classes = [
       'design-tokens-proposal-card__item',
@@ -432,9 +433,13 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
             className="design-tokens-proposal-card__collapsed"
             onClick={() => toggleExpand(proposal.id)}
           >
-            <ChevronRight size={12} />
-            <span className="design-tokens-proposal-card__collapsed-name">{proposal.name}</span>
-            <span className="design-tokens-proposal-card__collapsed-mood">{proposal.mood}</span>
+            <span className="design-tokens-proposal-card__disclosure-rail" aria-hidden>
+              <ChevronRight className="design-tokens-proposal-card__disclosure-icon" size={16} strokeWidth={2} />
+            </span>
+            <span className="design-tokens-proposal-card__collapsed-text">
+              <span className="design-tokens-proposal-card__collapsed-name">{proposal.name}</span>
+              <span className="design-tokens-proposal-card__collapsed-mood">{proposal.mood}</span>
+            </span>
             <span className="design-tokens-proposal-card__collapsed-swatches">
               {colorEntries.slice(0, 5).map(([name, value]) => (
                 <span key={name} style={{ background: String(value) }} title={`${name} · ${value}`} />
@@ -449,26 +454,35 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
     return (
       <article key={proposal.id} className={classes}>
         <header className="design-tokens-proposal-card__head">
-          <div className="design-tokens-proposal-card__name">
-            <div className="design-tokens-proposal-card__name-row">
-              {isCompleted && committedId && !isCommitted && (
-                <button
-                  type="button"
-                  className="design-tokens-proposal-card__collapse-btn"
-                  onClick={() => toggleExpand(proposal.id)}
-                  title={t('toolCards.designTokens.collapse')}
-                >
-                  <ChevronDown size={12} />
-                </button>
-              )}
-              <strong>{proposal.name}</strong>
+          {canCollapseHeader ? (
+            <button
+              type="button"
+              className="design-tokens-proposal-card__head-toggle"
+              onClick={() => toggleExpand(proposal.id)}
+              title={t('toolCards.designTokens.collapse')}
+            >
+              <span className="design-tokens-proposal-card__disclosure-rail" aria-hidden>
+                <ChevronDown className="design-tokens-proposal-card__disclosure-icon" size={16} strokeWidth={2} />
+              </span>
+              <div className="design-tokens-proposal-card__name">
+                <div className="design-tokens-proposal-card__name-row">
+                  <strong>{proposal.name}</strong>
+                </div>
+                <span className="design-tokens-proposal-card__mood">{proposal.mood}</span>
+              </div>
+            </button>
+          ) : (
+            <div className="design-tokens-proposal-card__name">
+              <div className="design-tokens-proposal-card__name-row">
+                {isCommitted && (
+                  <span className="design-tokens-proposal-card__badge">
+                    <Check size={14} strokeWidth={2.5} /> {t('toolCards.designTokens.adopted')}
+                  </span>
+                )}
+                <strong>{proposal.name}</strong>
+              </div>
+              <span className="design-tokens-proposal-card__mood">{proposal.mood}</span>
             </div>
-            <span className="design-tokens-proposal-card__mood">{proposal.mood}</span>
-          </div>
-          {isCommitted && (
-            <span className="design-tokens-proposal-card__badge">
-              <Check size={10} /> {t('toolCards.designTokens.adopted')}
-            </span>
           )}
         </header>
 
@@ -515,7 +529,7 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
                 <>{t('toolCards.designTokens.submitting')}</>
               ) : (
                 <>
-                  <Check size={12} />
+                  <Check size={14} strokeWidth={2.5} />
                   {t('toolCards.designTokens.adoptThisSystem')}
                 </>
               )}
@@ -523,11 +537,11 @@ export const DesignTokensProposalCard: React.FC<ToolCardProps> = ({ toolItem }) 
           ) : isCompleted ? (
             isCommitted ? (
               <Button size="small" variant="ghost" type="button" disabled>
-                <Check size={12} /> {t('toolCards.designTokens.adopted')}
+                <Check size={14} strokeWidth={2.5} /> {t('toolCards.designTokens.adopted')}
               </Button>
             ) : (
               <Button size="small" variant="ghost" type="button" onClick={() => recommit(proposal.id)}>
-                <Check size={12} /> {t('toolCards.designTokens.switchToThisSystem')}
+                <Check size={14} strokeWidth={2.5} /> {t('toolCards.designTokens.switchToThisSystem')}
               </Button>
             )
           ) : null}
