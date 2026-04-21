@@ -160,15 +160,15 @@ const resolveAgentType = (
   return requestedMode || 'agentic';
 };
 
-const requireSessionWorkspacePath = (
+function requireSessionWorkspacePath(
   workspacePath: string | undefined,
   sessionId: string
-): string => {
+): string {
   if (!workspacePath) {
     throw new Error(`Workspace path is required for session: ${sessionId}`);
   }
   return workspacePath;
-};
+}
 
 /**
  * Get model's maximum token count
