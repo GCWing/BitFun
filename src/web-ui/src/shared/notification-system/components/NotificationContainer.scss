@@ -13,27 +13,43 @@
   @include search-surface.match-nav-search-card-dark-shadow;
 }
 
+.notification-container .notification-item,
+.notification-container .progress-notification,
+.notification-container .loading-notification {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+}
+
+:root[data-theme-type='dark'] .notification-container .notification-item,
+:root[data-theme-type='dark'] .notification-container .progress-notification,
+:root[data-theme-type='dark'] .notification-container .loading-notification {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #fff 6%, transparent),
+    0 1px 0 color-mix(in srgb, #fff 5%, transparent);
+}
+
 .notification-container {
   position: fixed;
-  right: 16px;
+  right: -8px;
   left: auto;
-  bottom: 60px;
+  bottom: 36px;
   z-index: $z-notification;
   display: flex;
   flex-direction: column-reverse;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
+  padding: 24px;
   pointer-events: none;
 
   > * {
     pointer-events: auto;
+    flex-shrink: 0;
   }
 
-  
-  max-height: calc(100vh - 120px); 
+  max-height: calc(100vh - 72px);
   overflow-y: auto;
-  
-  
+  overscroll-behavior: contain;
+
   scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
@@ -51,15 +67,18 @@
 
 @media (max-width: 768px) {
   .notification-container {
-    right: 12px;
+    right: -8px;
     left: auto;
-    max-width: calc(100vw - 24px);
-    bottom: 64px; 
+    max-width: calc(100vw - 4px);
+    bottom: 44px;
+    padding: 20px;
 
     .notification-item,
-    .progress-notification {
+    .progress-notification,
+    .loading-notification {
+      width: min(320px, calc(100vw - 48px));
       min-width: unset;
-      max-width: unset;
+      max-width: calc(100vw - 48px);
     }
   }
 }

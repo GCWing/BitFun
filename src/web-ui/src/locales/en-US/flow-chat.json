@@ -440,7 +440,9 @@
       "noSessions": "No sessions created in Agentic OS yet",
       "sessionRunning": "Session running",
       "sessionIdle": "Idle",
-      "globalTag": "Global"
+      "globalTag": "Global",
+      "sessionUnavailable": "This agent session is no longer available. It may have been deleted.",
+      "openSessionFailed": "Unable to open this agent session."
     },
     "file": {
       "write": "Write File",
