@@ -12,13 +12,19 @@ import { DotMatrixLoader } from '@/component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard } from './BaseToolCard';
 import { openMainSession } from '../services/openBtwSession';
+import { flowChatStore } from '../store/FlowChatStore';
 import { useSessionsExecutionRunning } from '../hooks/useSessionsExecutionRunning';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { sessionAPI } from '@/infrastructure/api';
+import { notificationService } from '@/shared/notification-system';
+import { createLogger } from '@/shared/utils/logger';
 import './AgentDispatchCard.scss';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const log = createLogger('AgentDispatchCard');
 
 function parseData<T>(value: unknown): T | null {
   if (!value) return null;
@@ -68,6 +74,41 @@ interface AgentDispatchResult {
   workspaces?: WorkspaceEntry[];
   dispatcher_session_count?: number;
   sessions?: DispatcherSession[];
+}
+
+async function ensureSessionAvailable(sessionId: string, workspace?: string): Promise<boolean> {
+  if (flowChatStore.getState().sessions.has(sessionId)) {
+    return true;
+  }
+
+  const workspacePath = workspace?.trim();
+  if (!workspacePath || workspacePath === 'global') {
+    return false;
+  }
+
+  try {
+    const metadata = await sessionAPI.loadSessionMetadata(sessionId, workspacePath);
+    if (!metadata) {
+      return false;
+    }
+
+    await flowChatStore.hydrateWorkspaceSessionsMetadata(
+      [metadata],
+      metadata.workspacePath || workspacePath,
+      metadata.remoteConnectionId,
+      metadata.remoteSshHost,
+      metadata.storageScope
+    );
+
+    return flowChatStore.getState().sessions.has(sessionId);
+  } catch (error) {
+    log.warn('Failed to hydrate dispatched session before navigation', {
+      sessionId,
+      workspacePath,
+      error,
+    });
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -206,17 +247,39 @@ export const AgentDispatchCard: React.FC<ToolCardProps> = React.memo(
     const canNavigate =
       action === 'create' && status === 'completed' && !!createdSessionId;
 
+    const openDispatchedSession = useCallback(
+      async (sessionId: string, sessionWorkspace?: string) => {
+        const available = await ensureSessionAvailable(sessionId, sessionWorkspace);
+        if (!available) {
+          notificationService.warning(t('toolCards.agentDispatch.sessionUnavailable'), {
+            duration: 4000,
+          });
+          return;
+        }
+
+        try {
+          await openMainSession(sessionId);
+        } catch (error) {
+          log.warn('Failed to open dispatched session', { sessionId, error });
+          notificationService.warning(t('toolCards.agentDispatch.openSessionFailed'), {
+            duration: 4000,
+          });
+        }
+      },
+      [t]
+    );
+
     const handleCardClick = useCallback(
       () => {
         if (action === 'create' && status === 'completed' && createdSessionId) {
-          void openMainSession(createdSessionId);
+          void openDispatchedSession(createdSessionId, workspace);
           return;
         }
         if (action !== 'create' || !createdSessionId) {
           applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
         }
       },
-      [action, applyExpandedState, createdSessionId, isExpanded, status]
+      [action, applyExpandedState, createdSessionId, isExpanded, openDispatchedSession, status, workspace]
     );
 
     // Expanded content (for list/status or create details)
@@ -283,7 +346,7 @@ export const AgentDispatchCard: React.FC<ToolCardProps> = React.memo(
                 <div
                   key={sid ?? `row-${i}`}
                   className={`agent-dispatch-session-item${sid ? ' agent-dispatch-session-item--clickable' : ''}`}
-                  onClick={sid ? () => openMainSession(sid) : undefined}
+                  onClick={sid ? () => void openDispatchedSession(sid, s.workspace) : undefined}
                 >
                   <div className="agent-dispatch-session-item-main">
                     <span className="agent-dispatch-session-name">{s.session_name ?? s.session_id}</span>
@@ -323,7 +386,7 @@ export const AgentDispatchCard: React.FC<ToolCardProps> = React.memo(
       }
 
       return null;
-    }, [action, createdSessionId, resultData, runningSessionIds, t, workspace]);
+    }, [action, createdSessionId, openDispatchedSession, resultData, runningSessionIds, t, workspace]);
 
     const hasExpandedContent = !!expandedContent;
 

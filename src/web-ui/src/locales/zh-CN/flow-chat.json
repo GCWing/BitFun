@@ -432,7 +432,9 @@
       "noSessions": "Agentic OS 中尚未创建任何会话",
       "sessionRunning": "会话执行中",
       "sessionIdle": "空闲",
-      "globalTag": "全局"
+      "globalTag": "全局",
+      "sessionUnavailable": "这个 Agent 会话已不可用，可能已被删除。",
+      "openSessionFailed": "无法打开这个 Agent 会话。"
     },
     "file": {
       "write": "写入文件",
