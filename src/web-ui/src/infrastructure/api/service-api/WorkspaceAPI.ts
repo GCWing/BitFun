@@ -44,7 +44,9 @@ export interface FileMetadata {
 interface WorkspaceSearchRepoStatusRaw {
   repoId: string;
   repoPath: string;
-  indexPath: string;
+  storageRoot: string;
+  baseSnapshotRoot: string;
+  workspaceOverlayRoot: string;
   phase: WorkspaceSearchIndexStatus['repoStatus']['phase'];
   snapshotKey?: string | null;
   lastProbeUnixSecs?: number | null;
@@ -56,8 +58,9 @@ interface WorkspaceSearchRepoStatusRaw {
   };
   rebuildRecommended: boolean;
   activeTaskId?: string | null;
-  watcherHealthy: boolean;
+  probeHealthy: boolean;
   lastError?: string | null;
+  overlay?: WorkspaceSearchIndexStatus['repoStatus']['overlay'] | null;
 }
 
 interface WorkspaceSearchTaskStatusRaw {
@@ -116,7 +119,9 @@ function mapWorkspaceSearchRepoStatus(raw: WorkspaceSearchRepoStatusRaw): Worksp
   return {
     repoId: raw.repoId,
     repoPath: raw.repoPath,
-    indexPath: raw.indexPath,
+    storageRoot: raw.storageRoot,
+    baseSnapshotRoot: raw.baseSnapshotRoot,
+    workspaceOverlayRoot: raw.workspaceOverlayRoot,
     phase: raw.phase,
     snapshotKey: raw.snapshotKey ?? null,
     lastProbeUnixSecs: raw.lastProbeUnixSecs ?? null,
@@ -124,8 +129,9 @@ function mapWorkspaceSearchRepoStatus(raw: WorkspaceSearchRepoStatusRaw): Worksp
     dirtyFiles: raw.dirtyFiles,
     rebuildRecommended: raw.rebuildRecommended,
     activeTaskId: raw.activeTaskId ?? null,
-    watcherHealthy: raw.watcherHealthy,
+    probeHealthy: raw.probeHealthy,
     lastError: raw.lastError ?? null,
+    overlay: raw.overlay ?? null,
   };
 }
 

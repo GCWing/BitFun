@@ -74,7 +74,7 @@ function getSearchBackendBadgeVariant(
 ): 'neutral' | 'success' | 'warning' | 'info' {
   switch (metadata?.backend) {
     case 'indexed':
-    case 'indexed_repair':
+    case 'indexed_workspace':
       return 'success';
     case 'text_fallback':
     case 'scan_fallback':

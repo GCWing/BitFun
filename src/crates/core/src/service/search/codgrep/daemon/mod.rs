@@ -1,4 +1,4 @@
 mod managed;
-pub mod protocol;
+pub(crate) mod protocol;
 
-pub use managed::{ManagedDaemonClient, OpenedRepo};
+pub(crate) use managed::{ManagedDaemonClient, OpenedRepo};

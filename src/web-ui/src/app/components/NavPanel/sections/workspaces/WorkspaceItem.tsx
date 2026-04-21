@@ -254,7 +254,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       progressPercentLabel,
       dirtyFilesLabel,
       rebuildRecommended: Boolean(repoStatus?.rebuildRecommended),
-      watcherHealthy: repoStatus?.watcherHealthy ?? true,
+      probeHealthy: repoStatus?.probeHealthy ?? true,
       errorText,
       ariaLabel: `${tFiles('search.index.indicator.label')}: ${title} · ${phaseLabel}`,
     };
@@ -900,9 +900,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       {tFiles('search.index.indicator.rebuildRecommended')}
                     </div>
                   ) : null}
-                  {!searchIndexIndicator.watcherHealthy ? (
+                  {!searchIndexIndicator.probeHealthy ? (
                     <div className="bitfun-nav-panel__workspace-index-tooltip-meta is-warning">
-                      {tFiles('search.index.indicator.watcherDegraded')}
+                      {tFiles('search.index.indicator.probeDegraded')}
                     </div>
                   ) : null}
                   {searchIndexIndicator.errorText ? (

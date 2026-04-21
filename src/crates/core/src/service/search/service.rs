@@ -260,7 +260,7 @@ impl WorkspaceSearchService {
 
         let params = OpenRepoParams {
             repo_path: repo_root.clone(),
-            index_path: Some(default_index_path(&repo_root)),
+            storage_root: Some(default_storage_root(&repo_root)),
             config: RepoConfig::default(),
             refresh: RefreshPolicyConfig::default(),
         };
@@ -399,7 +399,7 @@ fn push_exe_relative_bundle_candidates(
     }
 }
 
-fn default_index_path(repo_root: &Path) -> PathBuf {
+fn default_storage_root(repo_root: &Path) -> PathBuf {
     repo_root
         .join(".bitfun")
         .join("search")

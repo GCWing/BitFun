@@ -8,7 +8,7 @@ fn default_jsonrpc_version() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequestEnvelope {
+pub(crate) struct RequestEnvelope {
     #[serde(default = "default_jsonrpc_version")]
     pub jsonrpc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -19,34 +19,48 @@ pub struct RequestEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case")]
-pub enum Request {
-    #[serde(rename = "index/build")]
-    IndexBuild { params: RepoRef },
-    #[serde(rename = "index/rebuild")]
-    IndexRebuild { params: RepoRef },
+pub(crate) enum Request {
+    #[serde(rename = "base_snapshot/build")]
+    BaseSnapshotBuild {
+        params: RepoRef,
+    },
+    #[serde(rename = "base_snapshot/rebuild")]
+    BaseSnapshotRebuild {
+        params: RepoRef,
+    },
     #[serde(rename = "task/status")]
-    TaskStatus { params: TaskRef },
-    OpenRepo { params: OpenRepoParams },
-    GetRepoStatus { params: RepoRef },
-    Search { params: SearchParams },
-    Glob { params: GlobParams },
-    Shutdown,
+    TaskStatus {
+        params: TaskRef,
+    },
+    OpenRepo {
+        params: OpenRepoParams,
+    },
+    GetRepoStatus {
+        params: RepoRef,
+    },
+    Search {
+        params: SearchParams,
+    },
+    Glob {
+        params: GlobParams,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoRef {
+pub(crate) struct RepoRef {
     pub repo_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskRef {
+pub(crate) struct TaskRef {
     pub task_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenRepoParams {
+pub(crate) struct OpenRepoParams {
     pub repo_path: PathBuf,
-    pub index_path: Option<PathBuf>,
+    #[serde(default)]
+    pub storage_root: Option<PathBuf>,
     #[serde(default)]
     pub config: RepoConfig,
     #[serde(default)]
@@ -54,7 +68,7 @@ pub struct OpenRepoParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchParams {
+pub(crate) struct SearchParams {
     pub repo_id: String,
     pub query: QuerySpec,
     #[serde(default)]
@@ -66,14 +80,14 @@ pub struct SearchParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlobParams {
+pub(crate) struct GlobParams {
     pub repo_id: String,
     #[serde(default)]
     pub scope: PathScope,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuerySpec {
+pub(crate) struct QuerySpec {
     pub pattern: String,
     #[serde(default)]
     pub patterns: Vec<String>,
@@ -104,7 +118,7 @@ pub struct QuerySpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct PathScope {
+pub(crate) struct PathScope {
     #[serde(default)]
     pub roots: Vec<PathBuf>,
     #[serde(default)]
@@ -122,7 +136,7 @@ pub struct PathScope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoConfig {
+pub(crate) struct RepoConfig {
     #[serde(default)]
     pub tokenizer: TokenizerModeConfig,
     #[serde(default)]
@@ -151,22 +165,32 @@ impl Default for RepoConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RefreshPolicyConfig {
+pub(crate) struct RefreshPolicyConfig {
     #[serde(default = "default_rebuild_dirty_threshold")]
     pub rebuild_dirty_threshold: usize,
+    #[serde(default = "default_overlay_auto_checkpoint_max_uncommitted_ops")]
+    pub overlay_auto_checkpoint_max_uncommitted_ops: u64,
+    #[serde(default = "default_overlay_merge_min_delay_ms")]
+    pub overlay_merge_min_delay_ms: u64,
+    #[serde(default = "default_overlay_merge_retry_delay_ms")]
+    pub overlay_merge_retry_delay_ms: u64,
 }
 
 impl Default for RefreshPolicyConfig {
     fn default() -> Self {
         Self {
             rebuild_dirty_threshold: default_rebuild_dirty_threshold(),
+            overlay_auto_checkpoint_max_uncommitted_ops:
+                default_overlay_auto_checkpoint_max_uncommitted_ops(),
+            overlay_merge_min_delay_ms: default_overlay_merge_min_delay_ms(),
+            overlay_merge_retry_delay_ms: default_overlay_merge_retry_delay_ms(),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum TokenizerModeConfig {
+pub(crate) enum TokenizerModeConfig {
     Trigram,
     #[default]
     SparseNgram,
@@ -174,7 +198,7 @@ pub enum TokenizerModeConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum CorpusModeConfig {
+pub(crate) enum CorpusModeConfig {
     #[default]
     RespectIgnore,
     NoIgnore,
@@ -182,7 +206,7 @@ pub enum CorpusModeConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum SearchModeConfig {
+pub(crate) enum SearchModeConfig {
     CountOnly,
     CountMatches,
     FirstHitOnly,
@@ -192,7 +216,7 @@ pub enum SearchModeConfig {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum ConsistencyMode {
+pub(crate) enum ConsistencyMode {
     SnapshotOnly,
     #[default]
     WorkspaceEventual,
@@ -201,7 +225,7 @@ pub enum ConsistencyMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ResponseEnvelope {
+pub(crate) struct ResponseEnvelope {
     #[serde(default = "default_jsonrpc_version")]
     pub jsonrpc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -213,7 +237,7 @@ pub struct ResponseEnvelope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorResponse {
+pub(crate) struct ErrorResponse {
     pub code: i64,
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -222,7 +246,7 @@ pub struct ErrorResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Response {
+pub(crate) enum Response {
     RepoOpened {
         repo_id: String,
         status: RepoStatus,
@@ -248,14 +272,15 @@ pub enum Response {
         status: RepoStatus,
         paths: Vec<String>,
     },
-    ShutdownAck,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RepoStatus {
+pub(crate) struct RepoStatus {
     pub repo_id: String,
     pub repo_path: String,
-    pub index_path: String,
+    pub storage_root: String,
+    pub base_snapshot_root: String,
+    pub workspace_overlay_root: String,
     pub phase: RepoPhase,
     pub snapshot_key: Option<String>,
     pub last_probe_unix_secs: Option<u64>,
@@ -263,31 +288,50 @@ pub struct RepoStatus {
     pub dirty_files: DirtyFileStats,
     pub rebuild_recommended: bool,
     pub active_task_id: Option<String>,
-    pub watcher_healthy: bool,
+    pub probe_healthy: bool,
     pub last_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overlay: Option<WorkspaceOverlayStatus>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RepoPhase {
+pub(crate) enum RepoPhase {
     Opening,
-    MissingIndex,
-    Indexing,
+    MissingBaseSnapshot,
+    BuildingBaseSnapshot,
     ReadyClean,
     ReadyDirty,
-    Rebuilding,
+    RebuildingBaseSnapshot,
     Degraded,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DirtyFileStats {
+pub(crate) struct DirtyFileStats {
     pub modified: usize,
     pub deleted: usize,
     pub new: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskStatus {
+pub(crate) struct WorkspaceOverlayStatus {
+    pub committed_seq_no: u64,
+    pub last_seq_no: u64,
+    pub uncommitted_ops: u64,
+    pub pending_docs: usize,
+    pub active_segments: usize,
+    pub active_delete_segments: usize,
+    pub merge_requested: bool,
+    pub merge_running: bool,
+    pub merge_attempts: u64,
+    pub merge_completed: u64,
+    pub merge_failed: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_merge_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct TaskStatus {
     pub task_id: String,
     pub workspace_id: String,
     pub kind: TaskKind,
@@ -305,15 +349,15 @@ pub struct TaskStatus {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskKind {
-    BuildIndex,
-    RebuildIndex,
+pub(crate) enum TaskKind {
+    BuildBaseSnapshot,
+    RebuildBaseSnapshot,
     RefreshWorkspace,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskState {
+pub(crate) enum TaskState {
     Queued,
     Running,
     Completed,
@@ -321,9 +365,9 @@ pub enum TaskState {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskPhase {
+pub(crate) enum TaskPhase {
     Scanning,
     Tokenizing,
     Writing,
@@ -333,63 +377,54 @@ pub enum TaskPhase {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SearchBackend {
+pub(crate) enum SearchBackend {
     IndexedSnapshot,
     IndexedClean,
-    IndexedWorkspaceRepair,
+    IndexedWorkspaceView,
     RgFallback,
     ScanFallback,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResults {
+pub(crate) struct SearchResults {
     pub candidate_docs: usize,
-    pub searches_with_match: usize,
-    pub bytes_searched: u64,
     pub matched_lines: usize,
     pub matched_occurrences: usize,
     #[serde(default)]
     pub file_counts: Vec<FileCount>,
     #[serde(default)]
-    pub file_match_counts: Vec<FileMatchCount>,
     pub hits: Vec<SearchHit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileCount {
+pub(crate) struct FileCount {
     pub path: String,
     pub matched_lines: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMatchCount {
-    pub path: String,
-    pub matched_occurrences: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchHit {
+pub(crate) struct SearchHit {
     pub path: String,
     pub matches: Vec<FileMatch>,
     pub lines: Vec<SearchLine>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMatch {
+pub(crate) struct FileMatch {
     pub location: MatchLocation,
     pub snippet: String,
     pub matched_text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MatchLocation {
+pub(crate) struct MatchLocation {
     pub line: usize,
     pub column: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum SearchLine {
+pub(crate) enum SearchLine {
     Match { value: FileMatch },
     Context { line_number: usize, snippet: String },
     ContextBreak,
@@ -413,4 +448,16 @@ fn default_max_sparse_len() -> usize {
 
 fn default_rebuild_dirty_threshold() -> usize {
     256
+}
+
+fn default_overlay_auto_checkpoint_max_uncommitted_ops() -> u64 {
+    1_024
+}
+
+fn default_overlay_merge_min_delay_ms() -> u64 {
+    2_000
+}
+
+fn default_overlay_merge_retry_delay_ms() -> u64 {
+    10_000
 }

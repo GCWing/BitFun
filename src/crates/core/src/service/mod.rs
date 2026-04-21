@@ -60,9 +60,10 @@ pub use search::{
     ContentSearchResult, GlobSearchRequest, GlobSearchResult, IndexTaskHandle,
     WorkspaceIndexStatus, WorkspaceSearchBackend, WorkspaceSearchContextLine,
     WorkspaceSearchDirtyFiles, WorkspaceSearchFileCount, WorkspaceSearchHit, WorkspaceSearchLine,
-    WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchRepoPhase,
-    WorkspaceSearchRepoStatus, WorkspaceSearchService, WorkspaceSearchTaskKind,
-    WorkspaceSearchTaskPhase, WorkspaceSearchTaskState, WorkspaceSearchTaskStatus,
+    WorkspaceSearchMatch, WorkspaceSearchMatchLocation, WorkspaceSearchOverlayStatus,
+    WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus, WorkspaceSearchService,
+    WorkspaceSearchTaskKind, WorkspaceSearchTaskPhase, WorkspaceSearchTaskState,
+    WorkspaceSearchTaskStatus,
 };
 pub use snapshot::SnapshotService;
 pub use system::{

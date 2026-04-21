@@ -1,8 +1,7 @@
 use std::{
     ffi::OsString,
     fs::{self, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Write},
-    net::TcpStream,
+    io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{Duration, Instant},
@@ -19,14 +18,14 @@ const DEFAULT_DAEMON_START_LOCK_FILE: &str = "daemon-state.lock";
 const MIN_STALE_STARTUP_LOCK_AGE: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
-pub struct ManagedDaemonClient {
+pub(crate) struct ManagedDaemonClient {
     daemon_program: Option<OsString>,
     start_timeout: Duration,
     retry_interval: Duration,
 }
 
 #[derive(Debug, Clone)]
-pub struct OpenedRepo {
+pub(crate) struct OpenedRepo {
     pub addr: String,
     pub repo_id: String,
 }
@@ -47,27 +46,27 @@ impl Default for ManagedDaemonClient {
 }
 
 impl ManagedDaemonClient {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_daemon_program(mut self, program: impl Into<OsString>) -> Self {
+    pub(crate) fn with_daemon_program(mut self, program: impl Into<OsString>) -> Self {
         self.daemon_program = Some(program.into());
         self
     }
 
-    pub fn with_start_timeout(mut self, timeout: Duration) -> Self {
+    pub(crate) fn with_start_timeout(mut self, timeout: Duration) -> Self {
         self.start_timeout = timeout;
         self
     }
 
-    pub fn with_retry_interval(mut self, interval: Duration) -> Self {
+    pub(crate) fn with_retry_interval(mut self, interval: Duration) -> Self {
         self.retry_interval = interval;
         self
     }
 
-    pub fn open_repo(&self, params: OpenRepoParams) -> Result<OpenedRepo> {
-        let state_file = daemon_state_file_path_from_open(&params);
+    pub(crate) fn open_repo(&self, params: OpenRepoParams) -> Result<OpenedRepo> {
+        let state_file = daemon_state_file_path_from_open(&params)?;
         let lock_file = daemon_start_lock_file_path(&state_file);
         if let Ok(repo) = self.try_open_repo(&state_file, &params) {
             return Ok(repo);
@@ -111,7 +110,12 @@ impl ManagedDaemonClient {
 
     fn try_open_repo(&self, state_file: &Path, params: &OpenRepoParams) -> Result<OpenedRepo> {
         let state = read_state_file(state_file)?;
-        match send_request(&state.addr, Request::OpenRepo { params: params.clone() })? {
+        match send_request(
+            &state.addr,
+            Request::OpenRepo {
+                params: params.clone(),
+            },
+        )? {
             Response::RepoOpened { repo_id, status: _ } => Ok(OpenedRepo {
                 addr: state.addr,
                 repo_id,
@@ -210,10 +214,10 @@ fn send_request(addr: &str, request: Request) -> Result<Response> {
         request,
     };
 
-    let stream = TcpStream::connect(addr)?;
+    let stream = std::net::TcpStream::connect(addr)?;
     let reader_stream = stream.try_clone()?;
-    let mut reader = BufReader::new(reader_stream);
-    let mut writer = BufWriter::new(stream);
+    let mut reader = std::io::BufReader::new(reader_stream);
+    let mut writer = std::io::BufWriter::new(stream);
 
     serde_json::to_writer(&mut writer, &envelope)
         .map_err(|error| AppError::Protocol(format!("failed to encode request: {error}")))?;
@@ -221,7 +225,7 @@ fn send_request(addr: &str, request: Request) -> Result<Response> {
     writer.flush()?;
 
     let mut line = String::new();
-    let read = reader.read_line(&mut line)?;
+    let read = std::io::BufRead::read_line(&mut reader, &mut line)?;
     if read == 0 {
         return Err(AppError::Protocol(
             "daemon closed connection without a response".into(),
@@ -247,12 +251,12 @@ fn send_request(addr: &str, request: Request) -> Result<Response> {
         .ok_or_else(|| AppError::Protocol("daemon response missing result".into()))
 }
 
-fn daemon_state_file_path_from_open(params: &OpenRepoParams) -> PathBuf {
-    let index_path = params
-        .index_path
+fn daemon_state_file_path_from_open(params: &OpenRepoParams) -> Result<PathBuf> {
+    let storage_root = params
+        .storage_root
         .clone()
-        .unwrap_or_else(|| params.repo_path.join(".codgrep-index"));
-    index_path.join(DEFAULT_DAEMON_STATE_FILE)
+        .unwrap_or_else(|| params.repo_path.join(".codgrep-index-engine"));
+    Ok(storage_root.join(DEFAULT_DAEMON_STATE_FILE))
 }
 
 fn daemon_start_lock_file_path(state_file: &Path) -> PathBuf {

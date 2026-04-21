@@ -243,7 +243,7 @@ export interface FileSearchErrorEvent {
 
 export type SearchBackendKind =
   | 'indexed'
-  | 'indexed_repair'
+  | 'indexed_workspace'
   | 'text_fallback'
   | 'scan_fallback';
 
@@ -293,7 +293,9 @@ export interface WorkspaceSearchDirtyFiles {
 export interface WorkspaceSearchRepoStatus {
   repoId: string;
   repoPath: string;
-  indexPath: string;
+  storageRoot: string;
+  baseSnapshotRoot: string;
+  workspaceOverlayRoot: string;
   phase: WorkspaceSearchRepoPhase;
   snapshotKey?: string | null;
   lastProbeUnixSecs?: number | null;
@@ -301,8 +303,24 @@ export interface WorkspaceSearchRepoStatus {
   dirtyFiles: WorkspaceSearchDirtyFiles;
   rebuildRecommended: boolean;
   activeTaskId?: string | null;
-  watcherHealthy: boolean;
+  probeHealthy: boolean;
   lastError?: string | null;
+  overlay?: WorkspaceSearchOverlayStatus | null;
+}
+
+export interface WorkspaceSearchOverlayStatus {
+  committedSeqNo: number;
+  lastSeqNo: number;
+  uncommittedOps: number;
+  pendingDocs: number;
+  activeSegments: number;
+  activeDeleteSegments: number;
+  mergeRequested: boolean;
+  mergeRunning: boolean;
+  mergeAttempts: number;
+  mergeCompleted: number;
+  mergeFailed: number;
+  lastMergeError?: string | null;
 }
 
 export interface WorkspaceSearchTaskStatus {

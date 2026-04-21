@@ -11,7 +11,7 @@
     "backendSummary": "候选文档 {{candidateDocs}} 个，命中行 {{matchedLines}} 行，命中片段 {{matchedOccurrences}} 个。",
     "backend": {
       "indexed": "索引命中",
-      "indexed_repair": "索引修复",
+      "indexed_workspace": "工作区索引",
       "text_fallback": "文本回退",
       "scan_fallback": "扫描回退"
     },
@@ -58,7 +58,7 @@
         "progressUnknown": "已处理 {{processed}} 项",
         "dirtyFiles": "待同步变更：修改 {{modified}}，删除 {{deleted}}，新增 {{new}}",
         "rebuildRecommended": "当前建议执行重建。",
-        "watcherDegraded": "工作区监听状态异常，索引可能不会自动跟进。"
+        "probeDegraded": "工作区探测状态异常，工作区索引视图可能不再持续跟进变更。"
       },
       "taskState": {
         "queued": "排队中",

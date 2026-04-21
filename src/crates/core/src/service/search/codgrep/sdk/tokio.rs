@@ -13,22 +13,25 @@ use tokio::{
 use crate::service::search::codgrep::{
     daemon::{
         protocol::{
-            GlobParams, RepoRef, Request, RequestEnvelope, Response, ResponseEnvelope, SearchParams,
-            TaskRef,
+            GlobParams, RepoRef, Request, RequestEnvelope, Response, ResponseEnvelope,
+            SearchParams, TaskRef,
         },
         ManagedDaemonClient, OpenedRepo,
     },
     error::{AppError, Result},
-    sdk::{GlobOutcome, GlobRequest, OpenRepoParams, RepoStatus, SearchOutcome, SearchRequest, TaskStatus},
+    sdk::{
+        GlobOutcome, GlobRequest, OpenRepoParams, RepoStatus, SearchOutcome, SearchRequest,
+        TaskStatus,
+    },
 };
 
 #[derive(Debug, Clone)]
-pub struct ManagedClient {
+pub(crate) struct ManagedClient {
     inner: ManagedDaemonClient,
 }
 
 #[derive(Debug)]
-pub struct RepoSession {
+pub(crate) struct RepoSession {
     repo_id: String,
     client: AsyncDaemonClient,
 }
@@ -55,30 +58,32 @@ impl Default for ManagedClient {
 }
 
 impl ManagedClient {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_daemon_program(mut self, program: impl Into<std::ffi::OsString>) -> Self {
+    pub(crate) fn with_daemon_program(mut self, program: impl Into<std::ffi::OsString>) -> Self {
         self.inner = self.inner.with_daemon_program(program);
         self
     }
 
-    pub fn with_start_timeout(mut self, timeout: std::time::Duration) -> Self {
+    pub(crate) fn with_start_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.inner = self.inner.with_start_timeout(timeout);
         self
     }
 
-    pub fn with_retry_interval(mut self, interval: std::time::Duration) -> Self {
+    pub(crate) fn with_retry_interval(mut self, interval: std::time::Duration) -> Self {
         self.inner = self.inner.with_retry_interval(interval);
         self
     }
 
-    pub async fn open_repo(&self, params: OpenRepoParams) -> Result<RepoSession> {
+    pub(crate) async fn open_repo(&self, params: OpenRepoParams) -> Result<RepoSession> {
         let inner = self.inner.clone();
         let opened = task::spawn_blocking(move || inner.open_repo(params))
             .await
-            .map_err(|error| AppError::Protocol(format!("async open_repo task failed: {error}")))??;
+            .map_err(|error| {
+                AppError::Protocol(format!("async open_repo task failed: {error}"))
+            })??;
         Ok(RepoSession::from_opened(opened))
     }
 }
@@ -91,7 +96,7 @@ impl RepoSession {
         }
     }
 
-    pub async fn status(&self) -> Result<RepoStatus> {
+    pub(crate) async fn status(&self) -> Result<RepoStatus> {
         match self
             .client
             .get_repo_status_isolated(self.repo_id.clone())
@@ -102,7 +107,7 @@ impl RepoSession {
         }
     }
 
-    pub async fn search(&self, request: SearchRequest) -> Result<SearchOutcome> {
+    pub(crate) async fn search(&self, request: SearchRequest) -> Result<SearchOutcome> {
         match self
             .client
             .search(SearchParams {
@@ -129,7 +134,7 @@ impl RepoSession {
         }
     }
 
-    pub async fn glob(&self, request: GlobRequest) -> Result<GlobOutcome> {
+    pub(crate) async fn glob(&self, request: GlobRequest) -> Result<GlobOutcome> {
         match self
             .client
             .glob(GlobParams {
@@ -142,29 +147,34 @@ impl RepoSession {
                 repo_id: _,
                 status,
                 paths,
-            } => Ok(GlobOutcome {
-                status,
-                paths,
-            }),
+            } => Ok(GlobOutcome { status, paths }),
             other => unexpected_response("glob", other),
         }
     }
 
-    pub async fn index_build(&self) -> Result<TaskStatus> {
-        match self.client.index_build(self.repo_id.clone()).await? {
+    pub(crate) async fn index_build(&self) -> Result<TaskStatus> {
+        match self
+            .client
+            .base_snapshot_build(self.repo_id.clone())
+            .await?
+        {
             Response::TaskStarted { task } => Ok(task),
-            other => unexpected_response("index/build", other),
+            other => unexpected_response("base_snapshot/build", other),
         }
     }
 
-    pub async fn index_rebuild(&self) -> Result<TaskStatus> {
-        match self.client.index_rebuild(self.repo_id.clone()).await? {
+    pub(crate) async fn index_rebuild(&self) -> Result<TaskStatus> {
+        match self
+            .client
+            .base_snapshot_rebuild(self.repo_id.clone())
+            .await?
+        {
             Response::TaskStarted { task } => Ok(task),
-            other => unexpected_response("index/rebuild", other),
+            other => unexpected_response("base_snapshot/rebuild", other),
         }
     }
 
-    pub async fn task_status(&self, task_id: impl Into<String>) -> Result<TaskStatus> {
+    pub(crate) async fn task_status(&self, task_id: impl Into<String>) -> Result<TaskStatus> {
         match self.client.task_status(task_id).await? {
             Response::TaskStatus { task } => Ok(task),
             other => unexpected_response("task/status", other),
@@ -198,8 +208,8 @@ impl AsyncDaemonClient {
         .await
     }
 
-    async fn index_build(&self, repo_id: impl Into<String>) -> Result<Response> {
-        self.send(Request::IndexBuild {
+    async fn base_snapshot_build(&self, repo_id: impl Into<String>) -> Result<Response> {
+        self.send(Request::BaseSnapshotBuild {
             params: RepoRef {
                 repo_id: repo_id.into(),
             },
@@ -207,8 +217,8 @@ impl AsyncDaemonClient {
         .await
     }
 
-    async fn index_rebuild(&self, repo_id: impl Into<String>) -> Result<Response> {
-        self.send(Request::IndexRebuild {
+    async fn base_snapshot_rebuild(&self, repo_id: impl Into<String>) -> Result<Response> {
+        self.send(Request::BaseSnapshotRebuild {
             params: RepoRef {
                 repo_id: repo_id.into(),
             },
@@ -238,7 +248,8 @@ impl AsyncDaemonClient {
             Ok(response) => response,
             Err(_) => {
                 *connection = None;
-                self.send_with_connection(&mut connection, &envelope).await?
+                self.send_with_connection(&mut connection, &envelope)
+                    .await?
             }
         };
 
@@ -254,7 +265,9 @@ impl AsyncDaemonClient {
         };
 
         let mut connection = Some(self.connect().await?);
-        let response = self.send_with_connection(&mut connection, &envelope).await?;
+        let response = self
+            .send_with_connection(&mut connection, &envelope)
+            .await?;
         decode_response(request_id, response)
     }
 

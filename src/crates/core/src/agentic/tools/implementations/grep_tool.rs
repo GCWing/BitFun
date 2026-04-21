@@ -674,7 +674,10 @@ mod tests {
             repo_status: WorkspaceSearchRepoStatus {
                 repo_id: "repo".to_string(),
                 repo_path: "/repo".to_string(),
-                index_path: "/repo/.bitfun/search/codgrep-index".to_string(),
+                storage_root: "/repo/.bitfun/search/codgrep-index".to_string(),
+                base_snapshot_root: "/repo/.bitfun/search/codgrep-index/base-snapshot".to_string(),
+                workspace_overlay_root: "/repo/.bitfun/search/codgrep-index/workspace-overlay"
+                    .to_string(),
                 phase: WorkspaceSearchRepoPhase::Ready,
                 snapshot_key: None,
                 last_probe_unix_secs: None,
@@ -686,8 +689,9 @@ mod tests {
                 },
                 rebuild_recommended: false,
                 active_task_id: None,
-                watcher_healthy: true,
+                probe_healthy: true,
                 last_error: None,
+                overlay: None,
             },
             candidate_docs: 1,
             matched_lines: 1,

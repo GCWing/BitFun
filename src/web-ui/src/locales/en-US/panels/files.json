@@ -11,7 +11,7 @@
     "backendSummary": "{{candidateDocs}} candidate docs, {{matchedLines}} matched lines, {{matchedOccurrences}} matched occurrences.",
     "backend": {
       "indexed": "Indexed",
-      "indexed_repair": "Indexed Repair",
+      "indexed_workspace": "Indexed Workspace",
       "text_fallback": "Text Fallback",
       "scan_fallback": "Scan Fallback"
     },
@@ -58,7 +58,7 @@
         "progressUnknown": "{{processed}} items processed",
         "dirtyFiles": "Pending changes: {{modified}} modified, {{deleted}} deleted, {{new}} new",
         "rebuildRecommended": "A rebuild is recommended.",
-        "watcherDegraded": "Workspace watcher is degraded and the index may stop updating."
+        "probeDegraded": "Workspace probe is degraded and the indexed workspace view may stop tracking changes."
       },
       "taskState": {
         "queued": "Queued",

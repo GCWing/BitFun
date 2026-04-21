@@ -8,6 +8,7 @@ use crate::service::search::codgrep::sdk::{
     RepoPhase as CodgrepRepoPhase, RepoStatus as CodgrepRepoStatus,
     SearchBackend as CodgrepSearchBackend, SearchModeConfig, TaskKind as CodgrepTaskKind,
     TaskPhase as CodgrepTaskPhase, TaskState as CodgrepTaskState, TaskStatus as CodgrepTaskStatus,
+    WorkspaceOverlayStatus as CodgrepWorkspaceOverlayStatus,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -20,7 +21,7 @@ pub enum ContentSearchOutputMode {
 }
 
 impl ContentSearchOutputMode {
-    pub fn search_mode(self) -> SearchModeConfig {
+    pub(crate) fn search_mode(self) -> SearchModeConfig {
         match self {
             Self::Content => SearchModeConfig::MaterializeMatches,
             Self::Count => SearchModeConfig::CountOnly,
@@ -59,7 +60,7 @@ pub struct GlobSearchRequest {
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceSearchBackend {
     Indexed,
-    IndexedRepair,
+    IndexedWorkspace,
     TextFallback,
     ScanFallback,
 }
@@ -70,7 +71,7 @@ impl From<CodgrepSearchBackend> for WorkspaceSearchBackend {
             CodgrepSearchBackend::IndexedSnapshot | CodgrepSearchBackend::IndexedClean => {
                 Self::Indexed
             }
-            CodgrepSearchBackend::IndexedWorkspaceRepair => Self::IndexedRepair,
+            CodgrepSearchBackend::IndexedWorkspaceView => Self::IndexedWorkspace,
             CodgrepSearchBackend::RgFallback => Self::TextFallback,
             CodgrepSearchBackend::ScanFallback => Self::ScanFallback,
         }
@@ -93,11 +94,11 @@ impl From<CodgrepRepoPhase> for WorkspaceSearchRepoPhase {
     fn from(value: CodgrepRepoPhase) -> Self {
         match value {
             CodgrepRepoPhase::Opening => Self::Preparing,
-            CodgrepRepoPhase::MissingIndex => Self::NeedsIndex,
-            CodgrepRepoPhase::Indexing => Self::Building,
+            CodgrepRepoPhase::MissingBaseSnapshot => Self::NeedsIndex,
+            CodgrepRepoPhase::BuildingBaseSnapshot => Self::Building,
             CodgrepRepoPhase::ReadyClean => Self::Ready,
             CodgrepRepoPhase::ReadyDirty => Self::Stale,
-            CodgrepRepoPhase::Rebuilding => Self::Refreshing,
+            CodgrepRepoPhase::RebuildingBaseSnapshot => Self::Refreshing,
             CodgrepRepoPhase::Degraded => Self::Limited,
         }
     }
@@ -114,8 +115,8 @@ pub enum WorkspaceSearchTaskKind {
 impl From<CodgrepTaskKind> for WorkspaceSearchTaskKind {
     fn from(value: CodgrepTaskKind) -> Self {
         match value {
-            CodgrepTaskKind::BuildIndex => Self::Build,
-            CodgrepTaskKind::RebuildIndex => Self::Rebuild,
+            CodgrepTaskKind::BuildBaseSnapshot => Self::Build,
+            CodgrepTaskKind::RebuildBaseSnapshot => Self::Rebuild,
             CodgrepTaskKind::RefreshWorkspace => Self::Refresh,
         }
     }
@@ -185,10 +186,48 @@ impl From<CodgrepDirtyFileStats> for WorkspaceSearchDirtyFiles {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceSearchOverlayStatus {
+    pub committed_seq_no: u64,
+    pub last_seq_no: u64,
+    pub uncommitted_ops: u64,
+    pub pending_docs: usize,
+    pub active_segments: usize,
+    pub active_delete_segments: usize,
+    pub merge_requested: bool,
+    pub merge_running: bool,
+    pub merge_attempts: u64,
+    pub merge_completed: u64,
+    pub merge_failed: u64,
+    pub last_merge_error: Option<String>,
+}
+
+impl From<CodgrepWorkspaceOverlayStatus> for WorkspaceSearchOverlayStatus {
+    fn from(value: CodgrepWorkspaceOverlayStatus) -> Self {
+        Self {
+            committed_seq_no: value.committed_seq_no,
+            last_seq_no: value.last_seq_no,
+            uncommitted_ops: value.uncommitted_ops,
+            pending_docs: value.pending_docs,
+            active_segments: value.active_segments,
+            active_delete_segments: value.active_delete_segments,
+            merge_requested: value.merge_requested,
+            merge_running: value.merge_running,
+            merge_attempts: value.merge_attempts,
+            merge_completed: value.merge_completed,
+            merge_failed: value.merge_failed,
+            last_merge_error: value.last_merge_error,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchRepoStatus {
     pub repo_id: String,
     pub repo_path: String,
-    pub index_path: String,
+    pub storage_root: String,
+    pub base_snapshot_root: String,
+    pub workspace_overlay_root: String,
     pub phase: WorkspaceSearchRepoPhase,
     pub snapshot_key: Option<String>,
     pub last_probe_unix_secs: Option<u64>,
@@ -196,8 +235,9 @@ pub struct WorkspaceSearchRepoStatus {
     pub dirty_files: WorkspaceSearchDirtyFiles,
     pub rebuild_recommended: bool,
     pub active_task_id: Option<String>,
-    pub watcher_healthy: bool,
+    pub probe_healthy: bool,
     pub last_error: Option<String>,
+    pub overlay: Option<WorkspaceSearchOverlayStatus>,
 }
 
 impl From<CodgrepRepoStatus> for WorkspaceSearchRepoStatus {
@@ -205,7 +245,9 @@ impl From<CodgrepRepoStatus> for WorkspaceSearchRepoStatus {
         Self {
             repo_id: value.repo_id,
             repo_path: value.repo_path,
-            index_path: value.index_path,
+            storage_root: value.storage_root,
+            base_snapshot_root: value.base_snapshot_root,
+            workspace_overlay_root: value.workspace_overlay_root,
             phase: value.phase.into(),
             snapshot_key: value.snapshot_key,
             last_probe_unix_secs: value.last_probe_unix_secs,
@@ -213,8 +255,9 @@ impl From<CodgrepRepoStatus> for WorkspaceSearchRepoStatus {
             dirty_files: value.dirty_files.into(),
             rebuild_recommended: value.rebuild_recommended,
             active_task_id: value.active_task_id,
-            watcher_healthy: value.watcher_healthy,
+            probe_healthy: value.probe_healthy,
             last_error: value.last_error,
+            overlay: value.overlay.map(Into::into),
         }
     }
 }
