@@ -76,6 +76,35 @@ pub struct BrowserControlLaunchResponse {
     pub browser_kind: String,
 }
 
+fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserControlLaunchResponse {
+    match result {
+        LaunchResult::AlreadyConnected => BrowserControlLaunchResponse {
+            success: true,
+            status: "already_connected".into(),
+            message: None,
+            browser_kind: kind.to_string(),
+        },
+        LaunchResult::Launched => BrowserControlLaunchResponse {
+            success: true,
+            status: "launched".into(),
+            message: None,
+            browser_kind: kind.to_string(),
+        },
+        LaunchResult::LaunchedButCdpNotReady { message, .. } => BrowserControlLaunchResponse {
+            success: false,
+            status: "cdp_not_ready".into(),
+            message: Some(message),
+            browser_kind: kind.to_string(),
+        },
+        LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => BrowserControlLaunchResponse {
+            success: false,
+            status: "needs_restart".into(),
+            message: Some(instructions),
+            browser_kind: kind.to_string(),
+        },
+    }
+}
+
 /// Launch the user's default browser with CDP debug port.
 #[tauri::command]
 pub async fn browser_control_launch(
@@ -88,34 +117,22 @@ pub async fn browser_control_launch(
         .await
         .map_err(|e| e.to_string())?;
 
-    match result {
-        LaunchResult::AlreadyConnected => Ok(BrowserControlLaunchResponse {
-            success: true,
-            status: "already_connected".into(),
-            message: None,
-            browser_kind: kind.to_string(),
-        }),
-        LaunchResult::Launched => Ok(BrowserControlLaunchResponse {
-            success: true,
-            status: "launched".into(),
-            message: None,
-            browser_kind: kind.to_string(),
-        }),
-        LaunchResult::LaunchedButCdpNotReady { message, .. } => Ok(BrowserControlLaunchResponse {
-            success: false,
-            status: "cdp_not_ready".into(),
-            message: Some(message),
-            browser_kind: kind.to_string(),
-        }),
-        LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => {
-            Ok(BrowserControlLaunchResponse {
-                success: false,
-                status: "needs_restart".into(),
-                message: Some(instructions),
-                browser_kind: kind.to_string(),
-            })
-        }
-    }
+    Ok(to_launch_response(&kind, result))
+}
+
+/// Restart the user's default browser with CDP debug port enabled.
+#[tauri::command]
+pub async fn browser_control_restart_with_cdp(
+    request: BrowserControlLaunchRequest,
+) -> Result<BrowserControlLaunchResponse, String> {
+    let port = request.port;
+    let kind = BrowserLauncher::detect_default_browser().map_err(|e| e.to_string())?;
+
+    let result = BrowserLauncher::restart_with_cdp(&kind, port)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(to_launch_response(&kind, result))
 }
 
 /// Create a macOS .app wrapper for the browser with CDP enabled.

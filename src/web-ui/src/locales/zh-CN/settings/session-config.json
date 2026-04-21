@@ -44,6 +44,16 @@
     "connect": "连接浏览器",
     "connectSuccess": "已连接 {{browser}}",
     "connectFailed": "连接浏览器失败",
+    "restartSuccess": "已重启 {{browser}} 并启用调试模式",
+    "restartFailed": "重启浏览器并启用调试失败",
+    "restartModal": {
+      "title": "启用浏览器调试模式",
+      "description": "检测到 {{browser}} 已在运行，当前实例未启用调试端口。要让 BitFun 控制浏览器，需要先重启浏览器并以调试模式启动。",
+      "warning": "此操作会关闭当前浏览器窗口。",
+      "cancel": "取消",
+      "confirm": "重启并启用调试",
+      "restarting": "正在重启..."
+    },
     "createLauncher": "创建启动器",
     "createLauncherSuccess": "启动器已创建：{{path}}",
     "createLauncherFailed": "创建启动器失败",

@@ -44,6 +44,16 @@
     "connect": "Connect",
     "connectSuccess": "Connected to {{browser}}",
     "connectFailed": "Failed to connect to browser",
+    "restartSuccess": "Restarted {{browser}} with debug mode enabled",
+    "restartFailed": "Failed to restart browser with debug mode enabled",
+    "restartModal": {
+      "title": "Enable browser debug mode",
+      "description": "{{browser}} is already running and the current instance was not started with the debug port enabled. BitFun needs to restart the browser in debug mode before it can control it.",
+      "warning": "This will close the current browser windows.",
+      "cancel": "Cancel",
+      "confirm": "Restart and enable debug",
+      "restarting": "Restarting..."
+    },
     "createLauncher": "Create launcher",
     "createLauncherSuccess": "Launcher created at {{path}}",
     "createLauncherFailed": "Failed to create launcher",

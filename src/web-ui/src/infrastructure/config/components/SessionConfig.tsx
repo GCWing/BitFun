@@ -44,6 +44,13 @@ type ComputerUseStatusPayload = {
   platformNote: string | null;
 };
 
+type BrowserControlLaunchResponse = {
+  success: boolean;
+  status: string;
+  message: string | null;
+  browserKind: string;
+};
+
 const SessionConfig: React.FC = () => {
   const { t } = useTranslation('settings/session-config');
   const { t: tTools } = useTranslation('settings/agentic-tools');
@@ -72,6 +79,7 @@ const SessionConfig: React.FC = () => {
   const [browserPageCount, setBrowserPageCount] = useState(0);
   const [browserControlBusy, setBrowserControlBusy] = useState(false);
   const [platform, setPlatform] = useState<string>('');
+  const [browserRestartPrompt, setBrowserRestartPrompt] = useState<BrowserControlLaunchResponse | null>(null);
 
   // ── Debug mode config state ──────────────────────────────────────────────
   const [debugConfig, setDebugConfig] = useState<DebugModeConfig>(DEFAULT_DEBUG_MODE_CONFIG);
@@ -278,17 +286,14 @@ const SessionConfig: React.FC = () => {
     setBrowserControlBusy(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<{
-        success: boolean;
-        status: string;
-        message: string | null;
-        browserKind: string;
-      }>('browser_control_launch', { request: { port: 9222 } });
+      const result = await invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
       if (result.success) {
         notificationService.success(
           t('browserControl.connectSuccess', { browser: result.browserKind }),
           { duration: 3000 }
         );
+      } else if (result.status === 'needs_restart') {
+        setBrowserRestartPrompt(result);
       } else if (result.message) {
         notificationService.info(result.message, { duration: 8000 });
       }
@@ -296,6 +301,32 @@ const SessionConfig: React.FC = () => {
     } catch (error) {
       log.error('browser_control_launch failed', error);
       notificationService.error(t('browserControl.connectFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlRestart = async () => {
+    if (!browserRestartPrompt) return;
+    setBrowserControlBusy(true);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<BrowserControlLaunchResponse>('browser_control_restart_with_cdp', {
+        request: { port: 9222 },
+      });
+      if (result.success) {
+        notificationService.success(
+          t('browserControl.restartSuccess', { browser: result.browserKind }),
+          { duration: 3000 }
+        );
+        setBrowserRestartPrompt(null);
+      } else if (result.message) {
+        notificationService.info(result.message, { duration: 8000 });
+      }
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_restart_with_cdp failed', error);
+      notificationService.error(t('browserControl.restartFailed'));
     } finally {
       setBrowserControlBusy(false);
     }
@@ -995,6 +1026,44 @@ const SessionConfig: React.FC = () => {
               </Button>
             </div>
           )}
+        </Modal>
+
+        <Modal
+          isOpen={browserRestartPrompt !== null}
+          onClose={() => {
+            if (!browserControlBusy) setBrowserRestartPrompt(null);
+          }}
+          title={t('browserControl.restartModal.title')}
+          size="small"
+          closeOnOverlayClick={!browserControlBusy}
+        >
+          <div className="bitfun-debug-config__modal-body">
+            <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
+            <p>{t('browserControl.restartModal.warning')}</p>
+            {browserRestartPrompt?.message ? (
+              <p className="bitfun-func-agent-config__hint">{browserRestartPrompt.message}</p>
+            ) : null}
+          </div>
+          <div className="bitfun-debug-config__modal-footer">
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => setBrowserRestartPrompt(null)}
+              disabled={browserControlBusy}
+            >
+              {t('browserControl.restartModal.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="small"
+              onClick={() => void handleBrowserControlRestart()}
+              disabled={browserControlBusy}
+            >
+              {browserControlBusy
+                ? t('browserControl.restartModal.restarting')
+                : t('browserControl.restartModal.confirm')}
+            </Button>
+          </div>
         </Modal>
 
       </ConfigPageContent>
