@@ -451,8 +451,7 @@ fn build_windows_rustls_connector() -> Result<Connector> {
     if let Ok(local_machine_root) = schannel::cert_store::CertStore::open_local_machine("ROOT") {
         let local_machine_der_certs = local_machine_root
             .certs()
-            .filter_map(|cert| cert.to_der().ok())
-            .map(rustls::pki_types::CertificateDer::from)
+            .map(|cert| rustls::pki_types::CertificateDer::from(cert.to_der().to_vec()))
             .collect::<Vec<_>>();
         let total = local_machine_der_certs.len();
         let (added, ignored) = root_store.add_parsable_certificates(local_machine_der_certs);
