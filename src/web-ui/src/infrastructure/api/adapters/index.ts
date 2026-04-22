@@ -3,6 +3,7 @@
 import { ITransportAdapter } from './base';
 import { TauriTransportAdapter } from './tauri-adapter';
 import { WebSocketTransportAdapter } from './websocket-adapter';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 export * from './base';
 export * from './tauri-adapter';
 export * from './websocket-adapter';
@@ -10,17 +11,11 @@ export * from './websocket-adapter';
  
 export function detectEnvironment(): 'tauri' | 'web' {
   
-  if (typeof window !== 'undefined' && '__TAURI__' in window) {
+  if (isTauriRuntime()) {
     return 'tauri';
   }
-  
-  
-  if (import.meta.env.VITE_BUILD_TARGET === 'web') {
-    return 'web';
-  }
-  
-  
-  return 'tauri';
+
+  return 'web';
 }
 
  

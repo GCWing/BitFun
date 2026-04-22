@@ -34,6 +34,7 @@ import { WorkspaceKind } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { useSessionModeStore } from '../stores/sessionModeStore';
+import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import './AppLayout.scss';
 
 const log = createLogger('AppLayout');
@@ -62,7 +63,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { isToolbarMode } = useToolbarModeContext();
   const { ensureForWorkspace: ensureAssistantBootstrapForWorkspace } = useAssistantBootstrap();
 
-  const { handleMinimize, handleMaximize, handleClose, isMaximized } =
+  const { handleMinimize, handleMaximize, handleClose, isMaximized, canUseNativeWindowControls } =
     useWindowControls({ isToolbarMode });
 
   const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
@@ -158,8 +159,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   // macOS native menubar events (previously in TitleBar)
   const isMacOS = useMemo(() => {
-    const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
-    return isTauri && typeof navigator?.platform === 'string' && navigator.platform.toUpperCase().includes('MAC');
+    return isMacOSDesktopRuntime();
   }, []);
 
   useEffect(() => {
@@ -295,6 +295,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     let unlistenFn: (() => void) | null = null;
 
     const setupWindowCloseListener = async () => {
+      if (!canUseNativeWindowControls) return;
+
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const currentWindow = getCurrentWindow();
@@ -317,7 +319,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     setupWindowCloseListener();
     return () => { if (unlistenFn) unlistenFn(); };
-  }, []);
+  }, [canUseNativeWindowControls]);
 
   // Handle switch-to-files-panel event
   React.useEffect(() => {
@@ -456,9 +458,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
         <main className="bitfun-app-main-workspace" data-testid="app-main-content">
           <WorkspaceBody
-            onMinimize={isMacOS ? undefined : handleMinimize}
-            onMaximize={handleMaximize}
-            onClose={isMacOS ? undefined : handleClose}
+            onMinimize={canUseNativeWindowControls && !isMacOS ? handleMinimize : undefined}
+            onMaximize={canUseNativeWindowControls ? handleMaximize : undefined}
+            onClose={canUseNativeWindowControls && !isMacOS ? handleClose : undefined}
             isMaximized={isMaximized}
             isEntering={transitionDir === 'entering'}
             isExiting={transitionDir === 'returning'}

@@ -5,6 +5,7 @@ import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { useI18n } from '@/infrastructure/i18n';
+import { isMacOSDesktopRuntime, supportsNativeWindowControls } from '@/infrastructure/runtime';
 
 const log = createLogger('useWindowControls');
 
@@ -18,6 +19,7 @@ const formatErrorMessage = (error: unknown) =>
 export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
   const { t } = useI18n('errors');
   const isToolbarMode = options?.isToolbarMode ?? false;
+  const canUseNativeWindowControls = supportsNativeWindowControls();
   const { hasWorkspace, closeWorkspace } = useWorkspaceContext();
   
   // Maximized state
@@ -31,17 +33,14 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
 
   // Listen for window state changes
   useEffect(() => {
+    if (!canUseNativeWindowControls) return;
+
     let unlistenResized: (() => void) | undefined;
     
     // Debounce timer
     let resizeTimer: NodeJS.Timeout | null = null;
 
-    const isMacOSDesktop =
-      typeof window !== 'undefined' &&
-      '__TAURI__' in window &&
-      typeof navigator !== 'undefined' &&
-      typeof navigator.platform === 'string' &&
-      navigator.platform.toUpperCase().includes('MAC');
+    const isMacOSDesktop = isMacOSDesktopRuntime();
 
     const restoreMacOSOverlayTitlebar = async (appWindow: any) => {
       if (!isMacOSDesktop || isToolbarMode) return;
@@ -189,10 +188,12 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       // Remove page visibility listener
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isToolbarMode]);
+  }, [canUseNativeWindowControls, isToolbarMode]);
 
   // Window control handlers
   const handleMinimize = useCallback(async () => {
+    if (!canUseNativeWindowControls) return;
+
     // Save active element to restore focus after window restore
     const activeElement = document.activeElement as HTMLElement;
     const wasInputFocused = activeElement && (
@@ -241,9 +242,11 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       log.error('Failed to minimize window', error);
       // Avoid error toast when minimized to prevent UI blockage
     }
-  }, []);
+  }, [canUseNativeWindowControls]);
 
   const handleMaximize = useCallback(async () => {
+    if (!canUseNativeWindowControls) return;
+
     // Debounce: ignore while in progress
     if (isMaximizeInProgress.current) {
       return;
@@ -327,9 +330,11 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
         shouldSkipStateUpdate.current = false;
       }, 200);
     }
-  }, [t]);
+  }, [canUseNativeWindowControls, t]);
 
   const handleClose = useCallback(async () => {
+    if (!canUseNativeWindowControls) return;
+
     try {
       const appWindow = getCurrentWindow();
       await appWindow.close();
@@ -337,7 +342,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       log.error('Failed to close window', error);
       notificationService.error(t('window.closeFailed', { error: formatErrorMessage(error) }));
     }
-  }, [t]);
+  }, [canUseNativeWindowControls, t]);
 
   // Home button: reset to startup page
   const handleHomeClick = useCallback(async () => {
@@ -359,6 +364,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
     handleMaximize,
     handleClose,
     handleHomeClick,
-    isMaximized
+    isMaximized,
+    canUseNativeWindowControls
   };
 };

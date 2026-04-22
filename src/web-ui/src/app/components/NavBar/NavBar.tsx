@@ -16,6 +16,7 @@ import { useNavSceneStore } from '../../stores/navSceneStore';
 import { useI18n } from '../../../infrastructure/i18n';
 import { PanelLeftIcon } from '../TitleBar/PanelIcons';
 import { createLogger } from '@/shared/utils/logger';
+import { isMacOSDesktopRuntime, supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './NavBar.scss';
 
 const log = createLogger('NavBar');
@@ -38,14 +39,9 @@ const NavBar: React.FC<NavBarProps> = ({
 }) => {
   const { t } = useI18n('common');
   const isMacOS = useMemo(() => {
-    const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
-    return (
-      isTauri &&
-      typeof navigator !== 'undefined' &&
-      typeof navigator.platform === 'string' &&
-      navigator.platform.toUpperCase().includes('MAC')
-    );
+    return isMacOSDesktopRuntime();
   }, []);
+  const canDragWindow = supportsNativeWindowDragging();
   const showSceneNav = useNavSceneStore(s => s.showSceneNav);
   const navSceneId   = useNavSceneStore(s => s.navSceneId);
   const goBack       = useNavSceneStore(s => s.goBack);
@@ -55,6 +51,8 @@ const NavBar: React.FC<NavBarProps> = ({
   const lastMouseDownTimeRef = useRef<number>(0);
 
   const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!canDragWindow) return;
+
     const now = Date.now();
     const timeSinceLastMouseDown = now - lastMouseDownTimeRef.current;
     lastMouseDownTimeRef.current = now;
@@ -73,7 +71,7 @@ const NavBar: React.FC<NavBarProps> = ({
         log.debug('startDragging failed', error);
       }
     })();
-  }, []);
+  }, [canDragWindow]);
 
   const handleBarDoubleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
