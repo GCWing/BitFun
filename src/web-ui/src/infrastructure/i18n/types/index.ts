@@ -1,48 +1,11 @@
  
 
- 
-export type LocaleId = 'zh-CN' | 'en-US';
+import type { ALL_NAMESPACES } from '../presets/namespaceRegistry';
+import type { LocaleId, LocaleMetadata } from '../presets/localeRegistry';
 
- 
-export interface LocaleMetadata {
-   
-  id: LocaleId;
-   
-  name: string;
-   
-  englishName: string;
-   
-  nativeName: string;
-   
-  rtl: boolean;
-   
-  dateFormat: string;
-   
-  numberFormat: {
-    decimal: string;
-    thousands: string;
-  };
-   
-  builtin: boolean;
-}
+export type { LocaleId, LocaleMetadata };
 
- 
-export type I18nNamespace = 
-  | 'common'           
-  | 'flow-chat'        
-  | 'tools'            
-  | 'settings'         
-  | 'errors'           
-  | 'notifications'    
-  | 'components'
-  | 'panels/git'
-  | 'panels/terminal'
-  | 'mermaid-editor'
-  | 'scenes/miniapp'
-  | 'scenes/capabilities'
-  | 'scenes/agents'
-  | 'scenes/profile'
-  | 'scenes/skills';      
+export type I18nNamespace = (typeof ALL_NAMESPACES)[number];
 
  
 export interface I18nConfig {

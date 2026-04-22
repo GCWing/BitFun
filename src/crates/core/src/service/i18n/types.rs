@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Locale identifier.
-/// Currently supports Chinese and English only.
+/// Add new variants here when a backend-supported locale is introduced.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum LocaleId {
     #[serde(rename = "zh-CN")]
@@ -61,7 +61,6 @@ pub struct LocaleMetadata {
 
 impl LocaleMetadata {
     /// Returns metadata for all locales.
-    /// Currently supports Chinese and English only.
     pub fn all() -> Vec<LocaleMetadata> {
         vec![
             LocaleMetadata {
@@ -79,6 +78,31 @@ impl LocaleMetadata {
                 rtl: false,
             },
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locale_parser_accepts_registered_locales_only() {
+        for locale in LocaleId::all() {
+            assert_eq!(LocaleId::from_str(locale.as_str()), Some(locale));
+        }
+
+        assert_eq!(LocaleId::from_str("fr-FR"), None);
+    }
+
+    #[test]
+    fn locale_metadata_matches_supported_locale_ids() {
+        let ids: Vec<_> = LocaleId::all();
+        let metadata_ids: Vec<_> = LocaleMetadata::all()
+            .into_iter()
+            .map(|metadata| metadata.id)
+            .collect();
+
+        assert_eq!(metadata_ids, ids);
     }
 }
 

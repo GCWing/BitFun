@@ -6,15 +6,17 @@
 //! `I18nService::get_current_locale`, which historically synced from `i18n.currentLanguage` only.
 
 use super::GlobalConfigManager;
+use crate::service::i18n::LocaleId;
 use log::debug;
 
-/// Returns `zh-CN` or `en-US` from global config when valid; otherwise `zh-CN` (matches [`crate::service::config::AppConfig::default`]).
+/// Returns a supported `app.language` from global config; otherwise `zh-CN`
+/// (matches [`crate::service::config::AppConfig::default`]).
 pub async fn get_app_language_code() -> String {
     let Ok(svc) = GlobalConfigManager::get_service().await else {
         return "zh-CN".to_string();
     };
     match svc.get_config::<String>(Some("app.language")).await {
-        Ok(code) if code == "zh-CN" || code == "en-US" => code,
+        Ok(code) if LocaleId::from_str(&code).is_some() => code,
         Ok(other) => {
             debug!("Unknown app.language {}, defaulting to zh-CN", other);
             "zh-CN".to_string()

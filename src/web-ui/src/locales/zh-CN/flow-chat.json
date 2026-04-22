@@ -398,9 +398,17 @@
     "toolCallLabel": "🔧 工具调用: {{name}}"
   },
   "exploreRegion": {
+    "readFiles_one": "读取了 {{count}} 个文件",
+    "readFiles_other": "读取了 {{count}} 个文件",
     "readFiles": "读取了 {{count}} 个文件",
+    "searchCount_one": "进行了 {{count}} 次搜索",
+    "searchCount_other": "进行了 {{count}} 次搜索",
     "searchCount": "进行了 {{count}} 次搜索",
+    "thinkingCount_one": "思考了 {{count}} 次",
+    "thinkingCount_other": "思考了 {{count}} 次",
     "thinkingCount": "思考了 {{count}} 次",
+    "exploreCount_one": "执行了 {{count}} 次探索",
+    "exploreCount_other": "执行了 {{count}} 次探索",
     "exploreCount": "执行了 {{count}} 次探索",
     "separator": "，",
     "collapse": "收起探索过程"

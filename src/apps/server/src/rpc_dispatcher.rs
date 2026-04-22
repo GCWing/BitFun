@@ -8,6 +8,7 @@ use crate::bootstrap::ServerAppState;
 use anyhow::{anyhow, Result};
 use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
 use bitfun_core::agentic::core::SessionConfig;
+use bitfun_core::service::i18n::{LocaleId, LocaleMetadata};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -328,11 +329,19 @@ pub async fn dispatch(
                 .get_config(Some("app.language"))
                 .await
                 .unwrap_or_else(|_| "zh-CN".to_string());
+            let lang = if LocaleId::from_str(&lang).is_some() {
+                lang
+            } else {
+                "zh-CN".to_string()
+            };
             Ok(serde_json::json!(lang))
         }
         "i18n_set_language" => {
             let request = extract_request(&params)?;
             let language = get_string(&request, "language")?;
+            if LocaleId::from_str(&language).is_none() {
+                return Err(anyhow!("Unsupported language: {}", language));
+            }
             state
                 .config_service
                 .set_config("app.language", language.clone())
@@ -340,10 +349,21 @@ pub async fn dispatch(
                 .map_err(|e| anyhow!("{}", e))?;
             Ok(serde_json::json!(language))
         }
-        "i18n_get_supported_languages" => Ok(serde_json::json!([
-            {"id": "zh-CN", "name": "Chinese (Simplified)", "englishName": "Chinese (Simplified)", "nativeName": "简体中文", "rtl": false},
-            {"id": "en-US", "name": "English", "englishName": "English", "nativeName": "English", "rtl": false}
-        ])),
+        "i18n_get_supported_languages" => {
+            let locales: Vec<_> = LocaleMetadata::all()
+                .into_iter()
+                .map(|locale| {
+                    serde_json::json!({
+                        "id": locale.id.as_str(),
+                        "name": locale.name,
+                        "englishName": locale.english_name,
+                        "nativeName": locale.native_name,
+                        "rtl": locale.rtl,
+                    })
+                })
+                .collect();
+            Ok(serde_json::json!(locales))
+        }
 
         // ── Tools ────────────────────────────────────────────
         "get_all_tools_info" => {

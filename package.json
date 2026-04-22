@@ -17,6 +17,7 @@
     "dev:web": "pnpm --dir src/web-ui dev",
     "lint:web": "pnpm --dir src/web-ui run lint",
     "lint:web:fix": "pnpm --dir src/web-ui run lint:fix",
+    "i18n:audit": "node scripts/i18n-audit.mjs",
     "prebuild": "pnpm run prebuild:web",
     "prebuild:web": "pnpm run copy-assets --silent && pnpm run generate-all --silent",
     "type-check:web": "pnpm --dir src/web-ui run type-check",

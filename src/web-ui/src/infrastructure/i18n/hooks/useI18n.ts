@@ -62,7 +62,7 @@ export function useI18n(
 
   const currentLocaleMetadata = useMemo(
     () => i18nService.getCurrentLocaleMetadata(),
-    []
+    [currentLanguage]
   );
 
   const supportedLocales = useMemo(
@@ -100,7 +100,7 @@ export function useI18n(
 
   const isRTL = useMemo(
     () => i18nService.isRTL(),
-    []
+    [currentLanguage]
   );
 
   return {

@@ -1,42 +1,13 @@
  
 
-import type { LocaleId, LocaleMetadata } from '../types';
+import { builtinLocales } from './localeRegistry';
+import type { LocaleId, LocaleMetadata } from './localeRegistry';
+export { ALL_NAMESPACES } from './namespaceRegistry';
+export { builtinLocales };
 
- 
-export const DEFAULT_LOCALE: LocaleId = 'zh-CN';
+export const DEFAULT_LOCALE = 'zh-CN' satisfies LocaleId;
 
- 
-export const DEFAULT_FALLBACK_LOCALE: LocaleId = 'en-US';
-
- 
-export const builtinLocales: LocaleMetadata[] = [
-  {
-    id: 'zh-CN',
-    name: '简体中文',
-    englishName: 'Simplified Chinese',
-    nativeName: '简体中文',
-    rtl: false,
-    dateFormat: 'YYYY年MM月DD日',
-    numberFormat: {
-      decimal: '.',
-      thousands: ',',
-    },
-    builtin: true,
-  },
-  {
-    id: 'en-US',
-    name: 'English',
-    englishName: 'English (US)',
-    nativeName: 'English',
-    rtl: false,
-    dateFormat: 'MM/DD/YYYY',
-    numberFormat: {
-      decimal: '.',
-      thousands: ',',
-    },
-    builtin: true,
-  },
-];
+export const DEFAULT_FALLBACK_LOCALE = 'en-US' satisfies LocaleId;
 
  
 export function getLocaleMetadata(localeId: LocaleId): LocaleMetadata | undefined {
@@ -55,14 +26,3 @@ export function getSupportedLocaleIds(): LocaleId[] {
 
  
 export const DEFAULT_NAMESPACE = 'common';
-
- 
-export const ALL_NAMESPACES = [
-  'common',
-  'flow-chat',
-  'tools',
-  'settings',
-  'errors',
-  'notifications',
-  'components',
-] as const;

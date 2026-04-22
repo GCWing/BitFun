@@ -1,7 +1,7 @@
 //! I18n API
 
 use crate::api::app_state::AppState;
-use bitfun_core::service::i18n::{get_global_i18n_service, LocaleId};
+use bitfun_core::service::i18n::{get_global_i18n_service, LocaleId, LocaleMetadata};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -48,8 +48,7 @@ pub async fn i18n_set_language(
     _app: tauri::AppHandle,
     request: SetLanguageRequest,
 ) -> Result<String, String> {
-    let supported = ["zh-CN", "en-US"];
-    if !supported.contains(&request.language.as_str()) {
+    if LocaleId::from_str(&request.language).is_none() {
         return Err(format!("Unsupported language: {}", request.language));
     }
 
@@ -105,24 +104,16 @@ pub async fn i18n_set_language(
 
 #[tauri::command]
 pub async fn i18n_get_supported_languages() -> Result<Vec<LocaleMetadataResponse>, String> {
-    let locales = vec![
-        LocaleMetadataResponse {
-            id: "zh-CN".to_string(),
-            name: "简体中文".to_string(),
-            english_name: "Simplified Chinese".to_string(),
-            native_name: "简体中文".to_string(),
-            rtl: false,
-        },
-        LocaleMetadataResponse {
-            id: "en-US".to_string(),
-            name: "English".to_string(),
-            english_name: "English (US)".to_string(),
-            native_name: "English".to_string(),
-            rtl: false,
-        },
-    ];
-
-    Ok(locales)
+    Ok(LocaleMetadata::all()
+        .into_iter()
+        .map(|locale| LocaleMetadataResponse {
+            id: locale.id.as_str().to_string(),
+            name: locale.name,
+            english_name: locale.english_name,
+            native_name: locale.native_name,
+            rtl: locale.rtl,
+        })
+        .collect())
 }
 
 #[tauri::command]
