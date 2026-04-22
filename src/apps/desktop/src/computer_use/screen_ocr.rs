@@ -428,6 +428,7 @@ pub fn crop_shot_to_ocr_region(
     let native_h = (native_bottom - native_top).round().max(1.0) as u32;
 
     Ok(ComputerScreenshot {
+        screenshot_id: None,
         bytes: buf,
         mime_type: "image/jpeg".to_string(),
         image_width: cropped.width(),
@@ -449,6 +450,14 @@ pub fn crop_shot_to_ocr_region(
             width: cropped.width(),
             height: cropped.height(),
         }),
+        image_global_bounds: Some(
+            bitfun_core::agentic::tools::computer_use_host::ComputerUseImageGlobalBounds {
+                left: native_left,
+                top: native_top,
+                width: native_w as f64,
+                height: native_h as f64,
+            },
+        ),
         implicit_confirmation_crop_applied: false,
         ui_tree_text: None,
     })

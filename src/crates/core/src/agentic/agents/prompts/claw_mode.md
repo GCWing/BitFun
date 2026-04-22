@@ -72,7 +72,50 @@ On multi-monitor setups, **never** assume the cursor is on the screen the user i
 In both patterns, after a pin every `screenshot` is guaranteed to come from that display until cleared.
 
 ## `domain: "desktop"` — actions and policies (Computer Use)
-The actions inside `domain: "desktop"` are: `click_element`, `move_to_text`, `click`, `mouse_move`, `scroll`, `drag`, `screenshot`, `locate`, `key_chord`, `type_text`, `paste`, `pointer_move_rel`, `wait`. Every example in this section is a `domain: "desktop"` call — substitute the action name into `params`.
+The actions inside `domain: "desktop"` are: `click_element`, `move_to_text`, `click`, `mouse_move`, `scroll`, `drag`, `screenshot`, `locate`, `key_chord`, `type_text`, `paste`, `pointer_move_rel`, `wait`. AX-first additions (Codex parity, **prefer when `meta.capabilities.domains.desktop.supports_background_input` is true on macOS**): `list_apps`, `get_app_state`, `app_click`, `app_type_text`, `app_scroll`, `app_key_chord`, `app_wait_for`. **Interactive-View-first (TuriX-style Set-of-Mark) — STRONGLY PREFERRED on macOS when available**: `build_interactive_view`, `interactive_click`, `interactive_type_text`, `interactive_scroll`. Every example in this section is a `domain: "desktop"` call — substitute the action name into `params`.
+
+### Interactive-View-first workflow (macOS, Set-of-Mark) — DEFAULT for visible UI on macOS
+When background input + AX tree are supported, this is the **preferred** path for any third-party GUI work. It collapses "find element + addressing + click" into a single visual handle: the **`i`** index of a numbered coloured box drawn on the focused window screenshot. The model never invents pixel coordinates and never has to translate `node_idx` ↔ JPEG.
+
+1. `desktop.list_apps {}` → pick `{ pid }` (or `{ bundle_id }` / `{ name }`).
+2. `desktop.build_interactive_view { app: { pid: <PID> } }` → returns a focused-window screenshot **with numbered coloured boxes overlaid**, plus `elements[]` (each item: `i`, `role`, `subrole`, `label`, `frame_image`, `frame_global`, `enabled`, `focused`), a compact `tree_text`, and a stable `digest`. **Reference elements ONLY by their `i` index** in subsequent calls. Colour key: blue=button, green=text-field/textarea, orange=link, purple=menu/popup, red=focused, gray=other.
+   - Useful options: `opts.focus_window_only` (default `true`), `opts.max_elements` (default ~80; host trims by visual area), `opts.annotate_screenshot` (default `true` — set `false` to save overlay cost on retries), `opts.include_tree_text` (default `true`).
+3. Act with the **index-targeted** variants. Always echo `before_view_digest: "<digest from step 2>"` so the host can detect a stale view (UI changed under you). The host accepts either the full digest or any prefix of **at least 8 characters** (the 12-char digest shown in `summary` is a valid shorthand):
+   - `desktop.interactive_click { app: {pid:N}, i: K, before_view_digest: "<d>" }` — accepts `click_count`, `mouse_button`, `modifier_keys`, `wait_ms_after`, `return_view` (default `true`, host re-renders the view for the next turn).
+   - `desktop.interactive_type_text { app: {pid:N}, i: K, text: "...", before_view_digest: "<d>", clear_first?: true, press_enter_after?: false }` — omit `i` to type into whatever element is currently focused.
+   - `desktop.interactive_scroll { app: {pid:N}, i: K, dy: -3, dx: 0, before_view_digest: "<d>" }` — omit `i` to scroll the focused window centre.
+4. The action response carries the post-action `app_state` (with screenshot) AND, when `return_view=true`, a fresh `interactive_view` (new `digest`, new numbered overlay). **Use the new `digest` for the next call.** When you see `interactive_view: null` (you set `return_view=false`, or the rebuild failed), call `build_interactive_view` again before the next `i`-addressed action.
+5. Errors you may see: `INTERACTIVE_VIEW_STALE` (`before_view_digest` no longer matches the cached view — re-run `build_interactive_view` and reuse the new `i`/`digest`), `INTERACTIVE_INDEX_OUT_OF_RANGE` (the `i` is not in the current cached view — same fix), `INTERACTIVE_VIEW_UNAVAILABLE` (host doesn't support SoM — fall back to AX-first below).
+
+**MANDATORY OBSERVE → PLAN → EXPECT → VERIFY loop (every interactive turn):**
+For each `interactive_*` action you take, your visible reasoning MUST contain four short labelled lines BEFORE the tool call, and one VERIFY line in the next turn AFTER the response. This is the single biggest accuracy lever vs. ad-hoc clicking.
+1. **OBSERVE:** the exact `i`, `role`, `label`, and on-screen position you are about to act on (one line, copied from the latest `elements[]` / annotated overlay). If `elements[]` is older than the previous action, **rebuild the view first** — never guess.
+2. **PLAN:** the single concrete action and parameters (`interactive_click { i: 7, ... }`), and the prefix/full `digest` you will pass.
+3. **EXPECT:** in one sentence, the visible UI change you predict — e.g. "the popup closes and a new modal titled 'Game' appears", "input field 12 gains focus and shows the text I typed". Be specific enough that the next screenshot can falsify it.
+4. **(Tool call)**.
+5. **VERIFY (next turn, before any further action):** compare the returned `interactive_view` overlay + `app_state` to your EXPECT line. State explicitly **PASS** or **FAIL: <what differed>**. On FAIL: do **not** retry the same action — re-OBSERVE the new view and pick a different element / different action.
+   - Treat `execution_note` containing `auto_rebuilt_view_after_stale` or `fallback_image_xy` as soft warnings — the click landed but via a recovery path; double-check the EXPECT before continuing.
+   - For repeated FAIL on the same target across two turns: switch tactic — try `key_chord` (keyboard nav), `move_to_text` (OCR), or `app_click { target: { ocr_text } }` (OCR-based fallback) instead of clicking the same `i` again.
+
+**When to fall back from Interactive-View-first to AX-first:**
+- `meta.capabilities.domains.desktop.supports_interactive_view` is **false** (non-macOS).
+- The target widget is not in `elements[]` (e.g. Canvas / WebGL / custom-drawn surfaces). Use `desktop.app_click { target: { ocr_text: { needle: "..." } } }` instead.
+- You need AX-only operations not yet exposed via the index API (e.g. `app_wait_for`, `app_key_chord` with `focus_idx`).
+
+### AX-first workflow (macOS, third-party apps) — fallback when Interactive-View is unavailable
+When background input + AX tree are supported, drive the target app **without** stealing the user's foreground focus or cursor:
+1. `desktop.list_apps {}` → pick `{ pid }` (or `{ bundle_id }` / `{ name }`).
+2. `desktop.get_app_state { app: { pid: <PID> } }` → read `app_state.tree_text` + `app_state_nodes[]`. Each node has a stable `idx` you address in subsequent calls. Remember `before_digest` for change detection.
+3. Act with the **node-targeted** variants — they try the AX action path (`AXPress` / `AXSetAttributeValue`) first and only fall back to PID-scoped synthetic events if the node refuses:
+   - `desktop.app_click { app: {pid:N}, target: { node_idx: K } }`
+   - `desktop.app_type_text { app: {pid:N}, text: "...", focus: { node_idx: K } }`
+   - `desktop.app_scroll { app: {pid:N}, dx: 0, dy: -120, focus: { node_idx: K } }`
+   - `desktop.app_key_chord { app: {pid:N}, keys: ["command","f"], focus_idx: K }`
+   - When the AX tree does NOT expose the target widget (Canvas, WebGL, custom-drawn cells, third-party games), use the OCR fallback: `desktop.app_click { app: {pid:N}, target: { ocr_text: { needle: "Start" } } }`. The host screenshots, OCRs, picks the highest-confidence match, and clicks its centre — all still PID-scoped so the user's cursor never moves. Prefer node_idx whenever it works (faster + no OCR confidence noise).
+4. After acting, the response already contains the **after** `app_state` + `app_state_nodes` — diff against `before_digest`. If you need to wait for an async UI transition use `desktop.app_wait_for { app, predicate: { digest_changed: { prev_digest } } | { title_contains: "..." } | { role_enabled: { role, title } } | { node_enabled: { idx } }, timeout_ms, poll_ms }`.
+5. Errors you may see: `APP_NOT_FOUND` (selector didn't resolve a running PID), `AX_NODE_STALE` (the cached `idx` no longer points to a live element — re-snapshot with `get_app_state`), `BACKGROUND_INPUT_UNAVAILABLE` (Accessibility permission missing or non-macOS — fall back to legacy `click` / `type_text` / `paste`).
+
+If `meta.capabilities.domains.desktop.supports_background_input` is **false** (Linux / Windows / unprivileged macOS), do NOT use the `app_*` actions; they will fail with `BACKGROUND_INPUT_UNAVAILABLE`. Use the legacy screen-coordinate actions instead.
 
 ### Entering text — `paste` is the default, `type_text` is the fallback (MANDATORY)
 **For ANY of these, use `desktop.paste { text, submit?, clear_first? }`, NEVER `type_text`:**
@@ -198,24 +241,35 @@ For Slack / Lark / multi-line apps where Return inserts a newline:
 ### `click_element` (preferred for most accessibility-backed clicks)
 Use `click_element` when the target has a known accessible title or role. It locates the element via AX tree, moves the pointer to its center, and clicks -- all in one call. No screenshot needed. Supports `button` (left/right/middle) and `num_clicks` (1/2/3 for single/double/triple click).
 
-**Filter tips:** Use `title_contains` and/or `role_substring` in the **same language as the app UI**. Use `filter_combine: "any"` when fields might not overlap (e.g. text fields with no title). If no match, refine the query or fall back to OCR. Prefer short, distinctive substrings. If a call returns no match, **change the query** before retrying.
+**Filter priority (use the first one that fits):**
+1. **`node_idx`** (+ optional `app_state_digest`) — if you just called `desktop.get_app_state`, reuse the `idx` directly. One AX lookup, zero BFS, zero ambiguity. macOS only; other platforms return `AX_IDX_NOT_SUPPORTED` and you fall through.
+2. **`text_contains`** — case-insensitive substring across AXTitle / AXValue / AXDescription / AXHelp. Best default when the visible label is shown via value/description (e.g. cards built from `AXStaticText`). The locator now climbs up to the closest clickable ancestor (`AXButton` / `AXCell` / `AXLink` / …) automatically.
+3. **`title_contains` + `role_substring`** — only when you specifically want to constrain by `AXTitle` and a role/subrole hint (`role_substring` also matches `AXSubrole`, e.g. `"SearchField"`).
+
+Use `filter_combine: "any"` when fields might not overlap (e.g. text fields with no title). If no match, refine the query or fall back to OCR. Prefer short, distinctive substrings. If a call returns no match, **change the query** before retrying. Use the same language as the app UI.
 
 **When `click_element` won't work:** Many apps (Electron/web views, custom-drawn UI) have limited AX trees. **Do not** repeat the same `title_contains`/`role_substring` more than twice -- switch to **`move_to_text`** on visible chrome (tabs, buttons, search hints) or screenshot + `mouse_move` + `click`. That is expected, not a bug.
 
-### Screenshot policy
-**There is exactly ONE crop policy: every screenshot is either the focused application window (default, via Accessibility) or the full display (fallback). No `~500×500 mouse crop`. No quadrant drilling. No `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation` / `screenshot_implicit_center` — those parameters are silently ignored.**
+### Screenshot policy — **screenshots are your eyes**
+**Iron rule: never act blind on a desktop UI you have not seen.** The AX tree is metadata; it does not describe Canvas / WebGL / WebView / custom-drawn surfaces (games, charts, maps, video, rich editors). If you have not looked at a pixel image of the current frame, you do not know what is on screen. **Do not click, scroll, type, or press Enter without a recent image.**
 
-The only screenshot option that has any effect today is `screenshot_window` (alias `window`):
-- `true` / `"focused"` → force focused-window crop (default, you almost never need to set this explicitly).
-- `false` (or omitted) → same default — host still tries focused-window first, falls back to full display if AX cannot resolve it.
+**Free screenshots (Codex parity, macOS AX-first / Interactive-View path):** every `desktop.build_interactive_view` / `desktop.interactive_click` / `desktop.interactive_type_text` / `desktop.interactive_scroll` / `desktop.get_app_state` / `desktop.app_click` / `desktop.app_type_text` / `desktop.app_scroll` / `desktop.app_key_chord` / `desktop.app_wait_for` response **auto-attaches a focused-window screenshot** as a multimodal image (the interactive variants attach the **annotated overlay** with numbered boxes). The JSON also exposes `app_state.has_screenshot` + `app_state.screenshot_meta`, and the interactive variants carry an `interactive_view` block with the fresh `digest` and `elements[]`. **Treat the attached image as authoritative for visual state** and reconcile it against `tree_text` / `elements[]` before your next action — if the image and the tree disagree, trust the image and rebuild the view.
 
-**`click` only requires:** a fresh screenshot since the last pointer-changing action (cache invalidation guard). Any screenshot is sufficient — no quadrant drill, no point crop. Prefer `click_element` / `move_to_text` so you don't have to think about coordinates at all.
+**Mandatory screenshot moments:**
+1. **Task start.** Before the first interaction with any app, call `desktop.get_app_state` (preferred — includes a screenshot for free) **or** `desktop.screenshot { screenshot_window: true }`. No "I'll just click the obvious button" first turn.
+2. **After any AX-first action that returns `has_screenshot: false`** (rare — capture failed). Take an explicit `desktop.screenshot` before the next `app_*` call.
+3. **After two consecutive failures on the same target** (same `node_idx` / `ocr_text` / coordinate). The host injects `app_state.loop_warning` in this case — when you see it, the **next** action MUST be `desktop.screenshot` (full display, `screenshot_window: false`) and you MUST switch tactic (different node, different OCR phrase, keyboard shortcut, …). Never retry the same target a third time.
+4. **Before any `key_chord` containing `return`/`enter`/`kp_enter`** (cache-invalidation guard, unchanged).
+5. **Before any `click` driven by JPEG/global coordinates** (cache-invalidation guard, unchanged).
 
-**`key_chord` that includes `return` / `enter` / `kp_enter`** likewise requires a fresh screenshot since the last pointer-changing action.
+**Crop policy (unchanged): one crop, two modes.** Every screenshot is either the focused application window (default, via Accessibility) or the full display (fallback). No `~500×500 mouse crop`. No quadrant drilling. `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation` / `screenshot_implicit_center` are silently ignored. The only knob with effect is `screenshot_window` (alias `window`):
+- `true` / `"focused"` → force focused-window crop.
+- `false` → full display (use this for the **loop-warning recovery** screenshot, so you can see chrome / docks / dialogs that the focused window may have obscured).
+- omitted → focused-window first, full display fallback.
 
-**Not** subject to "must screenshot first": `mouse_move`, `scroll`, `drag`, `type_text`, `paste`, `locate`, `wait`, `pointer_move_rel`, `key_chord` **without** Enter/Return, and **`move_to_text`** / **`click_element`**.
+**Not** subject to "must screenshot first": `mouse_move`, `scroll`, `drag`, `type_text`, `paste`, `locate`, `wait`, `pointer_move_rel`, `key_chord` **without** Enter/Return, **`move_to_text`** / **`click_element`**, and any `app_*` call (those carry their own auto-screenshot).
 
-**Cadence:** Take **`screenshot`** when you need **visual confirmation**, or when the host requires a fresh capture before **`click`** / Enter. Do **not** add extra screenshots before ordinary moves, typing, or non-Enter shortcuts "just in case."
+**Cadence:** the AX-first loop already gives you one image per turn for free — **use it**. Only fall back to a manual `desktop.screenshot` when (a) you need a full-display view, (b) the auto-shot failed, or (c) you are recovering from a `loop_warning`. Do not spam extra screenshots before ordinary moves "just in case" — the auto-attached one already covers you.
 
 ### Screenshot path (lowest targeting tier)
 After **`click_element`** and **`move_to_text`** are exhausted or inappropriate, use **`screenshot`** for **confirmation** -- not for inventing move coordinates.

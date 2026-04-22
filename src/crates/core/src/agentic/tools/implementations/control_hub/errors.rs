@@ -42,6 +42,34 @@ pub enum ErrorCode {
     /// The action requires a session / handle (e.g. `terminal_session_id`,
     /// `tab_handle`) that the caller did not provide.
     MissingSession,
+    /// AX-first desktop: the targeted application could not be resolved by
+    /// the supplied selector (name / bundle_id / pid). Distinct from
+    /// `NOT_FOUND` (which means a sub-element inside an app is missing).
+    AppNotFound,
+    /// AX-first desktop: a node `idx` provided by the caller is no longer
+    /// valid because the host has re-dumped the tree since the snapshot
+    /// the caller saw. Re-acquire via `desktop.get_app_state` and retry.
+    AxNodeStale,
+    /// AX-first desktop: this host cannot inject input events into the
+    /// target app without stealing user focus (e.g. macOS without
+    /// Accessibility permission, or non-macOS where the PID-event path is
+    /// not yet wired). Callers can fall back to the foreground
+    /// `desktop.click` path or escalate permissions.
+    BackgroundInputUnavailable,
+    /// AX-first desktop: the `node_idx` supplied to `click_element` /
+    /// `locate_element` is no longer present in the cached snapshot
+    /// (re-dump happened or window/state churned). Distinct from
+    /// `AX_NODE_STALE` which is for `app_*` actions; same recovery —
+    /// re-call `desktop.get_app_state` and reuse the new idx.
+    AxIdxStale,
+    /// AX-first desktop: this platform host does not support resolving
+    /// elements by `node_idx` (currently linux/windows). Caller should
+    /// fall back to `text_contains` / `title_contains` + `role_substring`.
+    AxIdxNotSupported,
+    /// `mouse_move(use_screen_coordinates=true)` got an `(x,y)` that
+    /// does not lie on any visible display. Almost always means the model
+    /// confused image-pixel coords with global screen coords.
+    DesktopCoordOutOfDisplay,
 }
 
 impl ErrorCode {
@@ -62,6 +90,12 @@ impl ErrorCode {
             ErrorCode::Internal => "INTERNAL",
             ErrorCode::FrontendError => "FRONTEND_ERROR",
             ErrorCode::MissingSession => "MISSING_SESSION",
+            ErrorCode::AppNotFound => "APP_NOT_FOUND",
+            ErrorCode::AxNodeStale => "AX_NODE_STALE",
+            ErrorCode::BackgroundInputUnavailable => "BACKGROUND_INPUT_UNAVAILABLE",
+            ErrorCode::AxIdxStale => "AX_IDX_STALE",
+            ErrorCode::AxIdxNotSupported => "AX_IDX_NOT_SUPPORTED",
+            ErrorCode::DesktopCoordOutOfDisplay => "DESKTOP_COORD_OUT_OF_DISPLAY",
         }
     }
 
@@ -88,6 +122,12 @@ impl ErrorCode {
             "INTERNAL" => Self::Internal,
             "FRONTEND_ERROR" => Self::FrontendError,
             "MISSING_SESSION" => Self::MissingSession,
+            "APP_NOT_FOUND" => Self::AppNotFound,
+            "AX_NODE_STALE" => Self::AxNodeStale,
+            "BACKGROUND_INPUT_UNAVAILABLE" => Self::BackgroundInputUnavailable,
+            "AX_IDX_STALE" => Self::AxIdxStale,
+            "AX_IDX_NOT_SUPPORTED" => Self::AxIdxNotSupported,
+            "DESKTOP_COORD_OUT_OF_DISPLAY" => Self::DesktopCoordOutOfDisplay,
             _ => return None,
         })
     }

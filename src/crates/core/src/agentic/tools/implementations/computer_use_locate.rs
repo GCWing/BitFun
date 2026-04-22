@@ -64,6 +64,18 @@ pub(crate) async fn execute_computer_use_locate(
             .get("filter_combine")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
+        text_contains: input
+            .get("text_contains")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        node_idx: input
+            .get("node_idx")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
+        app_state_digest: input
+            .get("app_state_digest")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     };
 
     let input_coords = json!({
@@ -71,6 +83,9 @@ pub(crate) async fn execute_computer_use_locate(
         "title_contains": query.title_contains.clone(),
         "role_substring": query.role_substring.clone(),
         "identifier_contains": query.identifier_contains.clone(),
+        "text_contains": query.text_contains.clone(),
+        "node_idx": query.node_idx,
+        "app_state_digest": query.app_state_digest.clone(),
         "max_depth": query.max_depth,
         "filter_combine": query.filter_combine.clone(),
     });
