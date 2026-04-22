@@ -29,17 +29,17 @@ pub struct WorkspaceBinding {
 
 impl WorkspaceBinding {
     pub fn new(workspace_id: Option<String>, root_path: PathBuf) -> Self {
-        let workspace_path = root_path.to_string_lossy().to_string();
+        let logical_workspace_path = root_path.to_string_lossy().to_string();
         let session_identity =
             crate::service::remote_ssh::workspace_state::workspace_session_identity(
-                &workspace_path,
+                &logical_workspace_path,
                 None,
                 None,
             )
             .unwrap_or(WorkspaceSessionIdentity {
                 hostname: crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST
                     .to_string(),
-                workspace_path,
+                logical_workspace_path,
                 remote_connection_id: None,
             });
         Self {
@@ -88,8 +88,37 @@ impl WorkspaceBinding {
     }
 
     /// The path to use for session persistence.
-    pub fn session_storage_path(&self) -> &Path {
-        Path::new(&self.session_identity.workspace_path)
+    pub fn session_storage_path(&self) -> PathBuf {
+        self.session_identity.session_storage_path()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{WorkspaceBackend, WorkspaceBinding};
+    use crate::service::remote_ssh::workspace_state::{
+        remote_workspace_session_mirror_dir, workspace_session_identity,
+    };
+    use std::path::PathBuf;
+
+    #[test]
+    fn remote_workspace_binding_uses_session_identity_storage_path() {
+        let session_identity =
+            workspace_session_identity("/home/wsp/projects/test", Some("conn-1"), Some("127.0.0.1"))
+                .expect("remote identity should resolve");
+        let binding = WorkspaceBinding::new_remote(
+            Some("workspace-1".to_string()),
+            PathBuf::from("/home/wsp/projects/test"),
+            "conn-1".to_string(),
+            "Localhost".to_string(),
+            session_identity,
+        );
+
+        assert!(matches!(binding.backend, WorkspaceBackend::Remote { .. }));
+        assert_eq!(
+            binding.session_storage_path(),
+            remote_workspace_session_mirror_dir("127.0.0.1", "/home/wsp/projects/test")
+        );
     }
 }
 

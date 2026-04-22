@@ -20,7 +20,9 @@ use tokio::sync::RwLock;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WorkspaceSessionIdentity {
     pub hostname: String,
-    pub workspace_path: String,
+    /// Canonical local root or normalized remote root used to identify the
+    /// logical workspace. This is not always the on-disk session storage path.
+    pub logical_workspace_path: String,
     pub remote_connection_id: Option<String>,
 }
 
@@ -29,19 +31,23 @@ impl WorkspaceSessionIdentity {
         self.hostname != LOCAL_WORKSPACE_SSH_HOST
     }
 
+    pub fn logical_workspace_path(&self) -> &str {
+        &self.logical_workspace_path
+    }
+
     pub fn session_storage_path(&self) -> PathBuf {
         if self.is_remote() {
-            remote_workspace_session_mirror_dir(&self.hostname, &self.workspace_path)
+            remote_workspace_session_mirror_dir(&self.hostname, &self.logical_workspace_path)
         } else {
-            PathBuf::from(&self.workspace_path)
+            PathBuf::from(&self.logical_workspace_path)
         }
     }
 }
 
 /// Build a unified session identity for local or remote workspaces.
 ///
-/// Local: `hostname=localhost`, `workspace_path=canonical local root`
-/// Remote: `hostname=ssh_host`, `workspace_path=normalized remote root`
+/// Local: `hostname=localhost`, `logical_workspace_path=canonical local root`
+/// Remote: `hostname=ssh_host`, `logical_workspace_path=normalized remote root`
 pub fn workspace_session_identity(
     workspace_path: &str,
     remote_connection_id: Option<&str>,
@@ -59,7 +65,7 @@ pub fn workspace_session_identity(
             .map(str::to_string)?;
         return Some(WorkspaceSessionIdentity {
             hostname,
-            workspace_path: normalize_remote_workspace_path(workspace_path),
+            logical_workspace_path: normalize_remote_workspace_path(workspace_path),
             remote_connection_id: Some(connection_id),
         });
     }
@@ -68,7 +74,7 @@ pub fn workspace_session_identity(
         normalize_local_workspace_root_for_stable_id(Path::new(workspace_path)).ok()?;
     Some(WorkspaceSessionIdentity {
         hostname: LOCAL_WORKSPACE_SSH_HOST.to_string(),
-        workspace_path: local_root,
+        logical_workspace_path: local_root,
         remote_connection_id: None,
     })
 }
@@ -94,14 +100,14 @@ pub async fn resolve_workspace_session_identity(
         {
             return Some(WorkspaceSessionIdentity {
                 hostname: entry.ssh_host,
-                workspace_path: entry.remote_root,
+                logical_workspace_path: entry.remote_root,
                 remote_connection_id: Some(entry.connection_id),
             });
         }
 
         return Some(WorkspaceSessionIdentity {
             hostname: "_unresolved".to_string(),
-            workspace_path: normalize_remote_workspace_path(workspace_path),
+            logical_workspace_path: normalize_remote_workspace_path(workspace_path),
             remote_connection_id: Some(connection_id.to_string()),
         });
     }
@@ -639,7 +645,7 @@ pub async fn get_effective_session_path(
             if let Some(connection_id) = identity.remote_connection_id.as_deref() {
                 return unresolved_remote_session_storage_dir(
                     connection_id,
-                    &identity.workspace_path,
+                    identity.logical_workspace_path(),
                 );
             }
         }
@@ -686,8 +692,13 @@ pub async fn is_remote_workspace_active() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_remote_workspace_path, sanitize_ssh_connection_id_for_local_dir};
+    use super::{
+        normalize_remote_workspace_path, remote_workspace_session_mirror_dir,
+        sanitize_ssh_connection_id_for_local_dir, workspace_session_identity,
+        LOCAL_WORKSPACE_SSH_HOST,
+    };
     use crate::infrastructure::PathManager;
+    use std::path::PathBuf;
 
     #[tokio::test]
     async fn local_assistant_path_not_remote_without_connection_id() {
@@ -833,5 +844,42 @@ mod tests {
         let name = a.file_name().and_then(|n| n.to_str()).unwrap();
         assert_eq!(name, "sessions");
         assert!(a.to_string_lossy().contains("_unresolved"));
+    }
+
+    #[test]
+    fn remote_workspace_session_identity_uses_mirror_dir_for_storage() {
+        let identity = workspace_session_identity("/home/wsp/projects/test", Some("conn-1"), Some("127.0.0.1"))
+            .expect("remote identity should resolve");
+
+        assert_eq!(identity.hostname, "127.0.0.1");
+        assert_eq!(identity.logical_workspace_path(), "/home/wsp/projects/test");
+        assert_eq!(
+            identity.session_storage_path(),
+            remote_workspace_session_mirror_dir("127.0.0.1", "/home/wsp/projects/test")
+        );
+    }
+
+    #[test]
+    fn local_workspace_session_identity_uses_workspace_root_for_storage() {
+        let workspace_root = std::env::temp_dir().join(format!(
+            "bitfun-workspace-identity-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_root).expect("workspace should exist");
+
+        let identity = workspace_session_identity(
+            &workspace_root.to_string_lossy(),
+            None,
+            None,
+        )
+        .expect("local identity should resolve");
+
+        assert_eq!(identity.hostname, LOCAL_WORKSPACE_SSH_HOST);
+        assert_eq!(
+            identity.session_storage_path(),
+            PathBuf::from(identity.logical_workspace_path())
+        );
+
+        let _ = std::fs::remove_dir_all(workspace_root);
     }
 }

@@ -3,6 +3,8 @@
 use crate::agentic::core::{SessionKind, SessionStorageScope};
 use serde::{Deserialize, Serialize};
 
+pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
+
 /// Session metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,6 +115,39 @@ pub struct SessionList {
     #[serde(alias = "last_updated")]
     pub last_updated: u64,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredSessionMetadataFile {
+    pub schema_version: u32,
+    #[serde(flatten)]
+    pub metadata: SessionMetadata,
+}
+
+impl StoredSessionMetadataFile {
+    pub fn new(metadata: SessionMetadata) -> Self {
+        Self {
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+            metadata,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredSessionIndexFile {
+    pub schema_version: u32,
+    pub updated_at: u64,
+    pub sessions: Vec<SessionMetadata>,
+}
+
+impl StoredSessionIndexFile {
+    pub fn new(updated_at: u64, sessions: Vec<SessionMetadata>) -> Self {
+        Self {
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+            updated_at,
+            sessions,
+        }
+    }
 }
 
 impl Default for SessionList {

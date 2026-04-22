@@ -121,7 +121,7 @@ impl ToolUseContext {
             let identity = &workspace.session_identity;
             Ok(remote_workspace_runtime_root(
                 &identity.hostname,
-                &identity.workspace_path,
+                identity.logical_workspace_path(),
             ))
         } else {
             Ok(get_path_manager_arc().project_runtime_root(workspace.root_path()))
