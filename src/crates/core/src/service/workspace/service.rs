@@ -100,9 +100,7 @@ struct AssistantWorkspaceDescriptor {
 }
 
 impl WorkspaceService {
-    fn collect_startup_restored_workspaces(
-        manager: &WorkspaceManager,
-    ) -> Vec<(PathBuf, WorkspaceKind)> {
+    fn collect_startup_restored_workspaces(manager: &WorkspaceManager) -> Vec<WorkspaceInfo> {
         let mut targets = Vec::new();
         let mut seen_workspace_ids = HashSet::new();
 
@@ -118,41 +116,70 @@ impl WorkspaceService {
     }
 
     fn push_startup_restored_workspace(
-        targets: &mut Vec<(PathBuf, WorkspaceKind)>,
+        targets: &mut Vec<WorkspaceInfo>,
         seen_workspace_ids: &mut HashSet<String>,
         workspace: &WorkspaceInfo,
     ) {
         if seen_workspace_ids.insert(workspace.id.clone()) {
-            targets.push((
-                workspace.root_path.clone(),
-                workspace.workspace_kind.clone(),
-            ));
+            targets.push(workspace.clone());
         }
     }
 
-    async fn prepare_startup_restored_workspaces(&self, workspaces: Vec<(PathBuf, WorkspaceKind)>) {
-        for (workspace_path, workspace_kind) in workspaces {
-            if workspace_kind == WorkspaceKind::Remote || !workspace_path.exists() {
-                continue;
-            }
-
-            if let Err(e) = self
-                .runtime_service
-                .ensure_local_workspace_runtime(&workspace_path)
-                .await
-            {
-                warn!(
-                    "Failed to initialize restored project storage: workspace_path={} error={}",
-                    workspace_path.display(),
-                    e
-                );
-            }
-
+    async fn prepare_startup_restored_workspaces(&self, workspaces: Vec<WorkspaceInfo>) {
+        for workspace in workspaces {
+            self.ensure_workspace_runtime_best_effort(&workspace, "restored")
+                .await;
             self.maintain_workspace_sessions_best_effort(
-                &workspace_path,
+                &workspace.root_path,
                 "workspace_history_restored",
             )
             .await;
+        }
+    }
+
+    async fn ensure_workspace_runtime_best_effort(&self, workspace: &WorkspaceInfo, trigger: &str) {
+        let result = match workspace.workspace_kind {
+            WorkspaceKind::Remote => {
+                let Some(ssh_host) = workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                else {
+                    warn!(
+                        "Skipping remote runtime ensure due to missing sshHost: workspace_id={} trigger={}",
+                        workspace.id,
+                        trigger
+                    );
+                    return;
+                };
+
+                self.runtime_service
+                    .ensure_remote_workspace_runtime(
+                        ssh_host,
+                        &workspace.root_path.to_string_lossy(),
+                    )
+                    .await
+            }
+            _ => {
+                if !workspace.root_path.exists() {
+                    return;
+                }
+
+                self.runtime_service
+                    .ensure_local_workspace_runtime(&workspace.root_path)
+                    .await
+            }
+        };
+
+        if let Err(e) = result {
+            warn!(
+                "Failed to initialize workspace runtime: workspace_path={} trigger={} error={}",
+                workspace.root_path.display(),
+                trigger,
+                e
+            );
         }
     }
 
@@ -272,19 +299,8 @@ impl WorkspaceService {
         };
 
         if let Ok(workspace) = result.as_ref() {
-            if workspace.workspace_kind != WorkspaceKind::Remote {
-                if let Err(e) = self
-                    .runtime_service
-                    .ensure_local_workspace_runtime(&workspace.root_path)
-                    .await
-                {
-                    warn!(
-                        "Failed to initialize project storage: workspace_path={} error={}",
-                        workspace.root_path.display(),
-                        e
-                    );
-                }
-            }
+            self.ensure_workspace_runtime_best_effort(workspace, "opened")
+                .await;
         }
 
         if result.is_ok() {
@@ -429,19 +445,8 @@ impl WorkspaceService {
 
         if result.is_ok() {
             if let Some(workspace) = self.get_workspace(workspace_id).await {
-                if workspace.workspace_kind != WorkspaceKind::Remote {
-                    if let Err(e) = self
-                        .runtime_service
-                        .ensure_local_workspace_runtime(&workspace.root_path)
-                        .await
-                    {
-                        warn!(
-                            "Failed to initialize activated project storage: workspace_path={} error={}",
-                            workspace.root_path.display(),
-                            e
-                        );
-                    }
-                }
+                self.ensure_workspace_runtime_best_effort(&workspace, "activated")
+                    .await;
                 self.maintain_workspace_sessions_best_effort(
                     &workspace.root_path,
                     "workspace_activated",

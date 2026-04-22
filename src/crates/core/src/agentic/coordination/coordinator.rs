@@ -141,17 +141,20 @@ impl ConversationCoordinator {
                 .await
                 .map(|e| e.connection_name)
                 .unwrap_or_else(|| rid.to_string());
-
-            return Some(WorkspaceBinding::new_remote(
+            let binding = WorkspaceBinding::new_remote(
                 None,
                 path_buf,
                 rid.to_string(),
                 connection_name,
                 identity,
-            ));
+            );
+
+            return Some(binding);
         }
 
-        Some(WorkspaceBinding::new(None, path_buf))
+        let binding = WorkspaceBinding::new(None, path_buf);
+
+        Some(binding)
     }
 
     /// Build `WorkspaceServices` from a resolved `WorkspaceBinding`.
