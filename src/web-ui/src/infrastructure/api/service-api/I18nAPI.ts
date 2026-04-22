@@ -2,6 +2,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { LocaleId, LocaleMetadata, I18nConfig } from '@/infrastructure/i18n/types';
+import { getLocaleMetadata } from '@/infrastructure/i18n/presets';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('I18nAPI');
@@ -39,19 +40,28 @@ class I18nAPIClass {
   async getSupportedLanguages(): Promise<LocaleMetadata[]> {
     const response = await invoke<LocaleMetadataResponse[]>('i18n_get_supported_languages');
     
-    return response.map(item => ({
-      id: item.id as LocaleId,
-      name: item.name,
-      englishName: item.englishName,
-      nativeName: item.nativeName,
-      rtl: item.rtl,
-      dateFormat: '',
-      numberFormat: {
-        decimal: '.',
-        thousands: ',',
-      },
-      builtin: true,
-    }));
+    return response.map(item => {
+      const id = item.id as LocaleId;
+      const registryMetadata = getLocaleMetadata(id);
+
+      return {
+        ...registryMetadata,
+        id,
+        name: item.name,
+        englishName: item.englishName,
+        nativeName: item.nativeName,
+        rtl: item.rtl,
+        dateFormat: registryMetadata?.dateFormat ?? '',
+        numberFormat: registryMetadata?.numberFormat ?? {
+          decimal: '.',
+          thousands: ',',
+        },
+        shortName: registryMetadata?.shortName ?? item.id,
+        aliases: registryMetadata?.aliases ?? [item.id],
+        contentFallbacks: registryMetadata?.contentFallbacks ?? ['en-US'],
+        builtin: true,
+      };
+    });
   }
 
    

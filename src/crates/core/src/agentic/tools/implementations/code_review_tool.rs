@@ -4,6 +4,7 @@
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::config::get_app_language_code;
+use crate::service::i18n::code_review_copy_for_language;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
 use log::warn;
@@ -27,40 +28,13 @@ impl CodeReviewTool {
     }
 
     pub fn description_for_language(lang_code: &str) -> String {
-        match lang_code {
-            "en-US" => "Submit code review results. After completing the review analysis, you must call this tool to submit a structured review report. All user-visible text fields must be in English (per app language setting).".to_string(),
-            "zh-TW" => "提交程式碼審查結果。完成審查分析後必須呼叫本工具提交結構化審查報告。所有使用者可見的文字欄位必須使用繁體中文。".to_string(),
-            _ => "提交代码审查结果。完成审查分析后必须调用本工具提交结构化审查报告。所有用户可见的文本字段必须使用简体中文。".to_string(),
-        }
+        code_review_copy_for_language(lang_code)
+            .description
+            .to_string()
     }
 
     pub fn input_schema_value_for_language(lang_code: &str) -> Value {
-        let (oa, conf, title, desc, sugg, strengths) = match lang_code {
-            "en-US" => (
-                "Overall assessment (2-3 sentences, in English)",
-                "Context limitation note (optional, in English)",
-                "Issue title (in English)",
-                "Issue description (in English)",
-                "Fix suggestion (in English, optional)",
-                "Code strengths (1-2 items, in English)",
-            ),
-            "zh-TW" => (
-                "整體評價（2-3 句，使用繁體中文）",
-                "上下文限制說明（可選，使用繁體中文）",
-                "問題標題（繁體中文）",
-                "問題描述（繁體中文）",
-                "修復建議（可選，繁體中文）",
-                "程式碼優點（1-2 條，繁體中文）",
-            ),
-            _ => (
-                "总体评价（2-3 句，使用简体中文）",
-                "上下文局限说明（可选，使用简体中文）",
-                "问题标题（简体中文）",
-                "问题描述（简体中文）",
-                "修复建议（可选，简体中文）",
-                "代码优点（1-2 条，简体中文）",
-            ),
-        };
+        let copy = code_review_copy_for_language(lang_code);
 
         json!({
             "type": "object",
@@ -71,7 +45,7 @@ impl CodeReviewTool {
                     "properties": {
                         "overall_assessment": {
                             "type": "string",
-                            "description": oa
+                            "description": copy.overall_assessment
                         },
                         "risk_level": {
                             "type": "string",
@@ -85,7 +59,7 @@ impl CodeReviewTool {
                         },
                         "confidence_note": {
                             "type": "string",
-                            "description": conf
+                            "description": copy.confidence_note
                         }
                     },
                     "required": ["overall_assessment", "risk_level", "recommended_action"]
@@ -120,15 +94,15 @@ impl CodeReviewTool {
                             },
                             "title": {
                                 "type": "string",
-                                "description": title
+                                "description": copy.issue_title
                             },
                             "description": {
                                 "type": "string",
-                                "description": desc
+                                "description": copy.issue_description
                             },
                             "suggestion": {
                                 "type": ["string", "null"],
-                                "description": sugg
+                                "description": copy.issue_suggestion
                             }
                         },
                         "required": ["severity", "certainty", "category", "file", "title", "description"]
@@ -136,7 +110,7 @@ impl CodeReviewTool {
                 },
                 "positive_points": {
                     "type": "array",
-                    "description": strengths,
+                    "description": copy.positive_points,
                     "items": {
                         "type": "string"
                     }

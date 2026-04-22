@@ -11,6 +11,7 @@ use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
+use crate::service::i18n::LocaleId;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
@@ -346,17 +347,13 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
 
     /// Format language instruction based on language code
     fn format_language_instruction(lang_code: &str) -> BitFunResult<String> {
-        let language = match lang_code {
-            "zh-CN" => "**Simplified Chinese**",
-            "zh-TW" => "**Traditional Chinese**",
-            "en-US" => "**English**",
-            _ => {
-                return Err(BitFunError::config(format!(
-                    "Unknown language code: {}",
-                    lang_code
-                )));
-            }
+        let Some(locale) = LocaleId::from_str(lang_code) else {
+            return Err(BitFunError::config(format!(
+                "Unknown language code: {}",
+                lang_code
+            )));
         };
+        let language = format!("**{}**", locale.model_language_name());
         Ok(format!("# Language Preference\nYou MUST respond in {} regardless of the user's input language. This is the system language setting and should be followed unless the user explicitly specifies a different language. This is crucial for smooth communication and user experience\n", language))
     }
 

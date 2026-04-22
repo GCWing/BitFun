@@ -329,25 +329,24 @@ pub async fn dispatch(
                 .get_config(Some("app.language"))
                 .await
                 .unwrap_or_else(|_| "zh-CN".to_string());
-            let lang = if LocaleId::from_str(&lang).is_some() {
-                lang
-            } else {
-                "zh-CN".to_string()
-            };
+            let lang = LocaleId::from_str(&lang)
+                .unwrap_or_default()
+                .as_str()
+                .to_string();
             Ok(serde_json::json!(lang))
         }
         "i18n_set_language" => {
             let request = extract_request(&params)?;
             let language = get_string(&request, "language")?;
-            if LocaleId::from_str(&language).is_none() {
+            let Some(locale_id) = LocaleId::from_str(&language) else {
                 return Err(anyhow!("Unsupported language: {}", language));
-            }
+            };
             state
                 .config_service
-                .set_config("app.language", language.clone())
+                .set_config("app.language", locale_id.as_str())
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
-            Ok(serde_json::json!(language))
+            Ok(serde_json::json!(locale_id.as_str()))
         }
         "i18n_get_supported_languages" => {
             let locales: Vec<_> = LocaleMetadata::all()

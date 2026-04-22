@@ -11,9 +11,10 @@
  */
 
 import type { MiniAppMeta, MiniAppLocaleStrings } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { getLocaleFallbackChain } from '@/infrastructure/i18n/presets';
 
 function getFallbackChain(currentLanguage: string): string[] {
-  return currentLanguage.startsWith('zh') ? ['zh-CN', 'en-US'] : ['en-US', 'zh-CN'];
+  return getLocaleFallbackChain(currentLanguage);
 }
 
 type LocalizableStringField = 'name' | 'description';

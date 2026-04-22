@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation, UseTranslationOptions } from 'react-i18next';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nService } from '../core/I18nService';
-import { builtinLocales } from '../presets';
+import { builtinLocales, resolveLocaleId } from '../presets';
 import type { LocaleId, I18nNamespace, LocaleMetadata } from '../types';
 
  
@@ -143,22 +143,8 @@ export function useLanguageSelector() {
 export function useLanguageDetect() {
   const detectBrowserLanguage = useCallback((): LocaleId | null => {
     const browserLang = navigator.language || (navigator as any).userLanguage;
-    
-    
-    const supportedLocales = i18nService.getSupportedLocales();
-    const exactMatch = supportedLocales.find(l => l.id === browserLang);
-    if (exactMatch) {
-      return exactMatch.id;
-    }
-    
-    
-    const langCode = browserLang.split('-')[0];
-    const partialMatch = supportedLocales.find(l => l.id.startsWith(langCode));
-    if (partialMatch) {
-      return partialMatch.id;
-    }
-    
-    return null;
+
+    return resolveLocaleId(browserLang);
   }, []);
 
   return {

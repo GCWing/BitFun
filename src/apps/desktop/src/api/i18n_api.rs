@@ -37,7 +37,10 @@ pub async fn i18n_get_current_language(state: State<'_, AppState>) -> Result<Str
         .get_config::<String>(Some("app.language"))
         .await
     {
-        Ok(language) => Ok(language),
+        Ok(language) => Ok(LocaleId::from_str(&language)
+            .unwrap_or_default()
+            .as_str()
+            .to_string()),
         Err(_) => Ok("zh-CN".to_string()),
     }
 }
@@ -48,29 +51,25 @@ pub async fn i18n_set_language(
     _app: tauri::AppHandle,
     request: SetLanguageRequest,
 ) -> Result<String, String> {
-    if LocaleId::from_str(&request.language).is_none() {
+    let Some(locale_id) = LocaleId::from_str(&request.language) else {
         return Err(format!("Unsupported language: {}", request.language));
-    }
+    };
+    let language = locale_id.as_str();
 
     let config_service = &state.config_service;
 
-    match config_service
-        .set_config("app.language", &request.language)
-        .await
-    {
+    match config_service.set_config("app.language", language).await {
         Ok(_) => {
-            info!("Language set to: {}", request.language);
+            info!("Language set to: {}", language);
 
             // Sync the in-memory I18nService so bot/remote-connect responses
             // use the newly selected language without requiring an app restart.
-            if let Some(locale_id) = LocaleId::from_str(&request.language) {
-                if let Some(i18n_service) = get_global_i18n_service().await {
-                    if let Err(e) = i18n_service.set_locale(locale_id).await {
-                        warn!(
-                            "Failed to sync I18nService locale after language change: language={}, error={}",
-                            request.language, e
-                        );
-                    }
+            if let Some(i18n_service) = get_global_i18n_service().await {
+                if let Err(e) = i18n_service.set_locale(locale_id).await {
+                    warn!(
+                        "Failed to sync I18nService locale after language change: language={}, error={}",
+                        language, e
+                    );
                 }
             }
 
@@ -84,19 +83,13 @@ pub async fn i18n_set_language(
                 };
                 let edit_mode = *state.macos_edit_menu_mode.read().await;
                 let _ = crate::macos_menubar::set_macos_menubar_with_mode(
-                    &_app,
-                    &request.language,
-                    mode,
-                    edit_mode,
+                    &_app, language, mode, edit_mode,
                 );
             }
-            Ok(format!("Language switched to: {}", request.language))
+            Ok(format!("Language switched to: {}", language))
         }
         Err(e) => {
-            error!(
-                "Failed to set language: language={}, error={}",
-                request.language, e
-            );
+            error!("Failed to set language: language={}, error={}", language, e);
             Err(format!("Failed to set language: {}", e))
         }
     }
@@ -124,7 +117,10 @@ pub async fn i18n_get_config(state: State<'_, AppState>) -> Result<Value, String
         .get_config::<String>(Some("app.language"))
         .await
     {
-        Ok(language) => language,
+        Ok(language) => LocaleId::from_str(&language)
+            .unwrap_or_default()
+            .as_str()
+            .to_string(),
         Err(_) => "zh-CN".to_string(),
     };
 
@@ -140,7 +136,14 @@ pub async fn i18n_set_config(state: State<'_, AppState>, config: Value) -> Resul
     let config_service = &state.config_service;
 
     if let Some(language) = config.get("currentLanguage").and_then(|v| v.as_str()) {
-        match config_service.set_config("app.language", language).await {
+        let Some(locale_id) = LocaleId::from_str(language) else {
+            return Err(format!("Unsupported language: {}", language));
+        };
+
+        match config_service
+            .set_config("app.language", locale_id.as_str())
+            .await
+        {
             Ok(_) => Ok("i18n config saved".to_string()),
             Err(e) => {
                 error!(

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import i18n from '../i18n';
+import { detectInstallerUiLanguage, mapUiLanguageToAppLanguage } from '../i18n/languages';
 import type {
   InstallStep,
   InstallOptions,
@@ -48,28 +49,6 @@ export interface UseInstallerReturn {
 const STEPS: InstallStep[] = ['lang', 'options', 'progress', 'model', 'theme'];
 const MOCK_INSTALL_FOR_DEBUG = import.meta.env.DEV && import.meta.env.VITE_MOCK_INSTALL === 'true';
 
-type InstallerUiLanguage = 'zh' | 'zh-TW' | 'en';
-
-function resolveUiLanguage(appLanguage?: string | null): InstallerUiLanguage {
-  if (appLanguage === 'zh-CN') return 'zh';
-  if (appLanguage === 'zh-TW') return 'zh-TW';
-  if (appLanguage === 'en-US') return 'en';
-  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : '';
-  if (browserLanguage === 'zh-tw' || browserLanguage === 'zh-hk' || browserLanguage === 'zh-mo' || browserLanguage.startsWith('zh-hant')) {
-    return 'zh-TW';
-  }
-  if (browserLanguage.startsWith('zh')) {
-    return 'zh';
-  }
-  return 'en';
-}
-
-function mapUiLanguageToAppLanguage(uiLanguage: InstallerUiLanguage): 'zh-CN' | 'zh-TW' | 'en-US' {
-  if (uiLanguage === 'zh') return 'zh-CN';
-  if (uiLanguage === 'zh-TW') return 'zh-TW';
-  return 'en-US';
-}
-
 export function useInstaller(): UseInstallerReturn {
   const [step, setStep] = useState<InstallStep>('lang');
   const [options, setOptions] = useState<InstallOptions>(DEFAULT_OPTIONS);
@@ -95,7 +74,7 @@ export function useInstaller(): UseInstallerReturn {
       try {
         const context = await invoke<LaunchContext>('get_launch_context');
         if (!mounted) return;
-        const uiLanguage = resolveUiLanguage(context.appLanguage ?? null);
+        const uiLanguage = detectInstallerUiLanguage(context.appLanguage ?? null);
         await i18n.changeLanguage(uiLanguage);
         if (!mounted) return;
         setOptions((prev) => ({

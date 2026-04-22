@@ -10,6 +10,7 @@ use std::sync::{Arc, LazyLock};
 use tokio::sync::RwLock;
 use unic_langid::LanguageIdentifier;
 
+use super::locale_registry::LOCALE_REGISTRY;
 use super::types::{FluentValue, LocaleId, LocaleMetadata, TranslationArgs};
 use crate::service::config::ConfigService;
 use crate::util::errors::*;
@@ -100,19 +101,10 @@ impl I18nService {
     async fn load_all_bundles(&self) -> BitFunResult<()> {
         let mut bundles = self.bundles.write().await;
 
-        let zh_cn_ftl = include_str!("../../../locales/zh-CN.ftl");
-        if let Some(bundle) = Self::create_bundle("zh-CN", zh_cn_ftl) {
-            bundles.insert(LocaleId::ZhCN, bundle);
-        }
-
-        let zh_tw_ftl = include_str!("../../../locales/zh-TW.ftl");
-        if let Some(bundle) = Self::create_bundle("zh-TW", zh_tw_ftl) {
-            bundles.insert(LocaleId::ZhTW, bundle);
-        }
-
-        let en_us_ftl = include_str!("../../../locales/en-US.ftl");
-        if let Some(bundle) = Self::create_bundle("en-US", en_us_ftl) {
-            bundles.insert(LocaleId::EnUS, bundle);
+        for locale in LOCALE_REGISTRY {
+            if let Some(bundle) = Self::create_bundle(locale.code, locale.fluent_source) {
+                bundles.insert(locale.id, bundle);
+            }
         }
 
         info!("Loaded {} locale bundle(s)", bundles.len());
@@ -132,15 +124,15 @@ impl I18nService {
 
     /// Returns the current locale.
     pub async fn get_current_locale(&self) -> LocaleId {
-        self.current_locale.read().await.clone()
+        *self.current_locale.read().await
     }
 
     /// Sets the current locale.
     pub async fn set_locale(&self, locale: LocaleId) -> BitFunResult<()> {
         let old_locale = {
             let mut current = self.current_locale.write().await;
-            let old = current.clone();
-            *current = locale.clone();
+            let old = *current;
+            *current = locale;
             old
         };
 
@@ -165,7 +157,7 @@ impl I18nService {
 
     /// Translates text.
     pub async fn translate(&self, key: &str, args: Option<TranslationArgs>) -> String {
-        let locale = self.current_locale.read().await.clone();
+        let locale = *self.current_locale.read().await;
         self.translate_with_locale(&locale, key, args).await
     }
 

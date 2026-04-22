@@ -13,6 +13,7 @@ use tokio::sync::{oneshot, Mutex};
 use tokio::time::{timeout, Duration};
 
 use crate::service::config::app_language::get_app_language_code;
+use crate::service::i18n::LocaleId;
 use crate::service::mcp::auth::{
     clear_stored_oauth_credentials, map_auth_error, prepare_remote_oauth_authorization,
     MCPRemoteOAuthSessionSnapshot, MCPRemoteOAuthStatus,
@@ -61,11 +62,10 @@ struct OAuthCallbackPageCopy {
 
 impl OAuthCallbackLocale {
     fn from_language_code(value: &str) -> Option<Self> {
-        match value {
-            "zh-CN" | "zh" => Some(Self::ZhCN),
-            "zh-TW" | "zh-Hant" => Some(Self::ZhTW),
-            "en-US" | "en" => Some(Self::EnUS),
-            _ => None,
+        match LocaleId::from_str(value)? {
+            LocaleId::ZhCN => Some(Self::ZhCN),
+            LocaleId::ZhTW => Some(Self::ZhTW),
+            LocaleId::EnUS => Some(Self::EnUS),
         }
     }
 

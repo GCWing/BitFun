@@ -1,22 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { INSTALLER_LANGUAGES, type InstallerUiLanguage } from '../i18n/languages';
 import logoUrl from '../Logo-ICON.png';
 
 interface LanguageSelectProps {
-  onSelect: (lang: string) => void;
+  onSelect: (lang: InstallerUiLanguage) => void;
 }
-
-const LANGUAGES = [
-  { code: 'en', label: 'English', native: 'English' },
-  { code: 'zh', label: 'Chinese', native: '\u7b80\u4f53\u4e2d\u6587' },
-  { code: 'zh-TW', label: 'Traditional Chinese', native: '繁體中文' },
-];
 
 export function LanguageSelect({ onSelect }: LanguageSelectProps) {
   const { i18n } = useTranslation();
-  const [selected, setSelected] = useState<string>('en');
+  const [selected, setSelected] = useState<InstallerUiLanguage>('en');
 
-  const handleSelect = (code: string) => {
+  const handleSelect = (code: InstallerUiLanguage) => {
     setSelected(code);
     i18n.changeLanguage(code);
   };
@@ -102,12 +97,12 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {LANGUAGES.map((lang) => {
-                  const isSelected = selected === lang.code;
+                {INSTALLER_LANGUAGES.map((lang) => {
+                  const isSelected = selected === lang.uiCode;
                   return (
                     <button
-                      key={lang.code}
-                      onClick={() => handleSelect(lang.code)}
+                      key={lang.uiCode}
+                      onClick={() => handleSelect(lang.uiCode)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 12,
                         padding: '14px 16px', width: '100%',
@@ -136,7 +131,7 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
                           fontSize: 14, fontWeight: 500,
                           color: isSelected ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                           transition: 'color 0.2s ease',
-                        }}>{lang.native}</div>
+                        }}>{lang.nativeName}</div>
                         <div style={{
                           fontSize: 11,
                           color: 'var(--color-text-muted)', opacity: 0.7,
@@ -160,7 +155,7 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
               justifyContent: 'center',
             }}
           >
-            {selected === 'en' ? 'Continue' : selected === 'zh-TW' ? '繼續' : '\u7ee7\u7eed'}
+            {INSTALLER_LANGUAGES.find(language => language.uiCode === selected)?.continueLabel}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>

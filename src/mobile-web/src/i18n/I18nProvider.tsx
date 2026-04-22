@@ -1,5 +1,10 @@
 import React, { createContext, useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { DEFAULT_LANGUAGE, messages, type MobileLanguage } from './messages';
+import {
+  getNextMobileLanguage,
+  isMobileLanguage,
+  resolveMobileLanguage,
+} from './localeRegistry';
 
 interface TranslateParams {
   [key: string]: string | number;
@@ -13,10 +18,6 @@ interface I18nContextValue {
 }
 
 const STORAGE_KEY = 'bitfun-mobile-language';
-
-function isLanguage(value: string | null | undefined): value is MobileLanguage {
-  return value === 'zh-CN' || value === 'zh-TW' || value === 'en-US';
-}
 
 function getByPath(source: unknown, path: string): string | null {
   const segments = path.split('.');
@@ -50,7 +51,7 @@ export function translate(language: MobileLanguage, key: string, params?: Transl
 function detectInitialLanguage(): MobileLanguage {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (isLanguage(stored)) return stored;
+    if (isMobileLanguage(stored)) return stored;
   } catch {
     // ignore storage failures
   }
@@ -58,10 +59,7 @@ function detectInitialLanguage(): MobileLanguage {
   const urlLanguage = detectLanguageFromUrl();
   if (urlLanguage) return urlLanguage;
 
-  const browserLanguage = navigator.language?.toLowerCase() || '';
-  if (browserLanguage === 'zh-tw' || browserLanguage === 'zh-hk' || browserLanguage === 'zh-mo' || browserLanguage.startsWith('zh-hant')) return 'zh-TW';
-  if (browserLanguage.startsWith('zh')) return 'zh-CN';
-  return DEFAULT_LANGUAGE;
+  return resolveMobileLanguage(navigator.language) ?? DEFAULT_LANGUAGE;
 }
 
 function detectLanguageFromUrl(): MobileLanguage | null {
@@ -85,9 +83,8 @@ function detectLanguageFromUrl(): MobileLanguage | null {
   }
 
   for (const candidate of candidates) {
-    if (isLanguage(candidate)) {
-      return candidate;
-    }
+    const language = resolveMobileLanguage(candidate);
+    if (language) return language;
   }
 
   return null;
@@ -117,11 +114,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const toggleLanguage = useCallback(() => {
-    setLanguageState((prev) => {
-      if (prev === 'zh-CN') return 'zh-TW';
-      if (prev === 'zh-TW') return 'en-US';
-      return 'zh-CN';
-    });
+    setLanguageState(getNextMobileLanguage);
   }, []);
 
   const value = useMemo<I18nContextValue>(() => ({

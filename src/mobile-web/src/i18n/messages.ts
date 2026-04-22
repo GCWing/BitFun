@@ -1,9 +1,10 @@
-export type MobileLanguage = 'zh-CN' | 'zh-TW' | 'en-US';
+import { DEFAULT_LANGUAGE, type MobileLanguage } from './localeRegistry';
+
+export { DEFAULT_LANGUAGE };
+export type { MobileLanguage };
 
 type MessageLeaf = string;
 type MessageTree = { [key: string]: MessageLeaf | MessageTree };
-
-export const DEFAULT_LANGUAGE: MobileLanguage = 'en-US';
 
 export const messages: Record<MobileLanguage, MessageTree> = {
   'en-US': {

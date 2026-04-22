@@ -9,27 +9,30 @@ use super::GlobalConfigManager;
 use crate::service::i18n::LocaleId;
 use log::debug;
 
+const DEFAULT_APP_LANGUAGE: LocaleId = LocaleId::ZhCN;
+
 /// Returns a supported `app.language` from global config; otherwise `zh-CN`
 /// (matches [`crate::service::config::AppConfig::default`]).
 pub async fn get_app_language_code() -> String {
     let Ok(svc) = GlobalConfigManager::get_service().await else {
-        return "zh-CN".to_string();
+        return DEFAULT_APP_LANGUAGE.as_str().to_string();
     };
     match svc.get_config::<String>(Some("app.language")).await {
-        Ok(code) if LocaleId::from_str(&code).is_some() => code,
-        Ok(other) => {
-            debug!("Unknown app.language {}, defaulting to zh-CN", other);
-            "zh-CN".to_string()
+        Ok(code) => {
+            if let Some(locale) = LocaleId::from_str(&code) {
+                locale.as_str().to_string()
+            } else {
+                debug!("Unknown app.language {}, defaulting to zh-CN", code);
+                DEFAULT_APP_LANGUAGE.as_str().to_string()
+            }
         }
-        Err(_) => "zh-CN".to_string(),
+        Err(_) => DEFAULT_APP_LANGUAGE.as_str().to_string(),
     }
 }
 
 /// Short instruction for models to answer in the app UI language (session titles, etc.).
 pub fn short_model_user_language_instruction(lang_code: &str) -> &'static str {
-    match lang_code {
-        "en-US" => "Use English",
-        "zh-TW" => "使用繁體中文",
-        _ => "使用简体中文",
-    }
+    LocaleId::from_str(lang_code)
+        .unwrap_or(DEFAULT_APP_LANGUAGE)
+        .short_model_instruction()
 }
