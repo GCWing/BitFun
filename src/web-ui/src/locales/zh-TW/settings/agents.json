@@ -1,0 +1,137 @@
+{
+  "title": "智能體",
+  "subtitle": "管理用戶級和項目級智能體",
+  "toolbar": {
+    "searchPlaceholder": "搜索Agent...",
+    "refreshTooltip": "刷新 Agent 列表",
+    "refreshSuccess": "Agent 列表已刷新",
+    "addTooltip": "添加Agent"
+  },
+  "filters": {
+    "all": "所有",
+    "builtin": "內置",
+    "user": "用戶級",
+    "project": "項目級"
+  },
+  "section": {
+    "builtin": { "description": "系統內置的 AI 子 Agent 與工作模式。" },
+    "user": { "description": "當前用戶自定義的 Agent。" },
+    "project": { "description": "當前工作區的項目級 Agent。" },
+    "customAgents": {
+      "title": "自定義 Agent",
+      "description": "用戶級與項目級 Agent，通過下方標籤切換。"
+    }
+  },
+  "form": {
+    "titleEdit": "編輯Agent",
+    "titleCreate": "添加Agent",
+    "fields": {
+      "level": "級別",
+      "levelUser": "用戶級（全局）",
+      "levelProject": "項目級（當前工作空間）",
+      "levelProjectDisabled": " - 需要先打開工作區",
+      "currentWorkspace": "當前工作區: {{path}}",
+      "name": "Agent名稱 *",
+      "namePlaceholder": "例如: code-writer",
+      "description": "描述 *",
+      "descriptionPlaceholder": "簡短描述Agent的功能",
+      "tools": "工具",
+      "toolsOptional": "可選",
+      "toolsPlaceholder": "例如: FileReadTool, FileWriteTool, BashTool",
+      "color": "顏色",
+      "colors": {
+        "blue": "藍色",
+        "red": "紅色",
+        "green": "綠色",
+        "purple": "紫色",
+        "orange": "橙色",
+        "yellow": "黃色"
+      },
+      "systemPrompt": "系統提示詞（Markdown格式）*",
+      "systemPromptPlaceholder": "輸入Agent的系統提示詞...",
+      "readonly": "只讀",
+      "readonlyDescription": "只讀 Agent 僅使用只讀工具，可與其它任務併發執行。",
+      "enabled": "啟用狀態"
+    },
+    "actions": {
+      "cancel": "取消",
+      "save": "保存",
+      "create": "創建"
+    }
+  },
+  "list": {
+    "loading": "加載中...",
+    "loadingBuiltin": "加載內置 Sub-Agent...",
+    "errorPrefix": "加載失敗: ",
+    "empty": {
+      "noMatch": "沒有找到匹配的 Agent",
+      "noMatchBuiltin": "沒有找到匹配的內置 Sub-Agent"
+    },
+    "item": {
+      "builtin": "內置",
+      "subAgent": "Sub-Agent",
+      "mode": "模式",
+      "toolsCount": "{{count}} 工具",
+      "editTooltip": "編輯",
+      "deleteTooltip": "刪除",
+      "toolsLabel": "可用工具:",
+      "modelLabel": "模型配置",
+      "systemPromptLabel": "系統提示詞:",
+      "updateTimePrefix": "更新時間: "
+    }
+  },
+  "messages": {
+    "noWorkspaceForProject": "請先打開一個工作區才能創建項目級Agent",
+    "nameRequired": "請輸入Agent名稱",
+    "nameFormatError": "名稱必須以英文字母開頭，僅允許英文字母、數字、-、_",
+    "descriptionRequired": "請輸入Agent描述",
+    "toolsRequired": "請至少添加一個工具",
+    "contentRequired": "請輸入系統提示詞",
+    "updateSuccess": "Agent\"{{name}}\"更新成功",
+    "createSuccess": "Agent\"{{name}}\"創建成功",
+    "operationFailed": "{{operation}}Agent失敗: {{error}}",
+    "deleteSuccess": "Agent\"{{name}}\"已刪除",
+    "deleteFailed": "刪除失敗: {{error}}",
+    "confirmDeleteSubagent": "確定要刪除 Agent「{{name}}」嗎？將刪除對應文件並從列表中移除。",
+    "toggleSuccess": "Agent\"{{name}}\"已{{status}}",
+    "toggleFailed": "切換狀態失敗: {{error}}",
+    "subagentToggleSuccess": "Sub Agent \"{{name}}\" 已{{status}}",
+    "subagentToggleFailed": "切換狀態失敗: {{error}}",
+    "enabled": "啟用",
+    "disabled": "禁用",
+    "update": "更新",
+    "create": "創建",
+    "modelUpdated": "\"{{name}}\" 將使用 {{model}}",
+    "modelUpdateFailed": "模型設置失敗",
+    "saveFailed": "保存失敗"
+  },
+  "model": {
+    "primary": "主力模型",
+    "fast": "快速模型"
+  },
+  "mode": {
+    "tools": {
+      "label": "可用工具",
+      "selectAll": "全選",
+      "clear": "清空",
+      "reset": "重置為默認",
+      "expand": "展開",
+      "collapse": "摺疊",
+      "enabled": "已啟用"
+    },
+    "messages": {
+      "confirmReset": "確定要重置該模式的工具配置嗎？",
+      "resetSuccess": "工具配置已重置",
+      "resetFailed": "重置失敗",
+      "confirmSelectAll": "確定要啟用所有工具嗎？",
+      "confirmClearAll": "確定要清空所有工具嗎？",
+      "allToolsEnabled": "已啟用所有工具",
+      "allToolsDisabled": "已清空所有工具",
+      "toolEnabled": "\"{{name}}\" 已啟用工具: {{tool}}",
+      "toolDisabled": "\"{{name}}\" 已禁用工具: {{tool}}",
+      "toolToggleFailed": "工具切換失敗",
+      "modelUpdated": "\"{{name}}\" 將使用 {{model}}",
+      "modelUpdateFailed": "模型設置失敗"
+    }
+  }
+}

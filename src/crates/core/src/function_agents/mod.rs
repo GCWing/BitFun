@@ -16,8 +16,10 @@ pub mod startchat_func_agent;
 pub use common::{AgentError, AgentErrorType, AgentResult, Language};
 
 // Re-export agents and specific types
-pub use git_func_agent::{GitFunctionAgent, CommitFormat, CommitMessage, CommitMessageOptions, CommitType};
+pub use git_func_agent::{
+    CommitFormat, CommitMessage, CommitMessageOptions, CommitType, GitFunctionAgent,
+};
 pub use startchat_func_agent::{
-    StartchatFunctionAgent, CurrentWorkState, GitWorkState, GreetingMessage, PredictedAction, QuickAction,
-    WorkStateAnalysis, WorkStateOptions,
+    CurrentWorkState, GitWorkState, GreetingMessage, PredictedAction, QuickAction,
+    StartchatFunctionAgent, WorkStateAnalysis, WorkStateOptions,
 };

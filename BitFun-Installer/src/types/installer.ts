@@ -4,7 +4,7 @@ export type InstallStep = 'lang' | 'options' | 'model' | 'progress' | 'theme' | 
 export interface LaunchContext {
   mode: 'install' | 'uninstall';
   uninstallPath: string | null;
-  appLanguage?: 'zh-CN' | 'en-US' | null;
+  appLanguage?: 'zh-CN' | 'zh-TW' | 'en-US' | null;
 }
 
 export interface InstallPathValidation {
@@ -67,7 +67,7 @@ export interface InstallOptions {
   contextMenu: boolean;
   addToPath: boolean;
   launchAfterInstall: boolean;
-  appLanguage: 'zh-CN' | 'en-US';
+  appLanguage: 'zh-CN' | 'zh-TW' | 'en-US';
   themePreference: ThemePreferenceId;
   modelConfig: ModelConfig | null;
 }

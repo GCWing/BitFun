@@ -362,8 +362,12 @@ impl ConfigService {
         let mut any_ref_to_id: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         for m in &config.ai.models {
-            any_ref_to_id.entry(m.id.clone()).or_insert_with(|| m.id.clone());
-            any_ref_to_id.entry(m.name.clone()).or_insert_with(|| m.id.clone());
+            any_ref_to_id
+                .entry(m.id.clone())
+                .or_insert_with(|| m.id.clone());
+            any_ref_to_id
+                .entry(m.name.clone())
+                .or_insert_with(|| m.id.clone());
             any_ref_to_id
                 .entry(m.model_name.clone())
                 .or_insert_with(|| m.id.clone());
@@ -377,25 +381,23 @@ impl ConfigService {
             // Special selectors are always considered active; their actual
             // resolution happens at runtime against the (already reconciled)
             // default slots.
-            matches!(reference, "auto" | "primary" | "fast")
-                || active_refs.contains(reference)
+            matches!(reference, "auto" | "primary" | "fast") || active_refs.contains(reference)
         };
 
-        let classify_invalid =
-            |reference: &str, invalidated: &mut HashSet<String>| -> bool {
-                if is_active(reference) {
-                    return false;
-                }
-                // Resolve back to the canonical id (if the reference is by
-                // name / model_name pointing at a now-disabled model) so we
-                // can report a stable identifier.
-                let canonical = any_ref_to_id
-                    .get(reference)
-                    .cloned()
-                    .unwrap_or_else(|| reference.to_string());
-                invalidated.insert(canonical);
-                true
-            };
+        let classify_invalid = |reference: &str, invalidated: &mut HashSet<String>| -> bool {
+            if is_active(reference) {
+                return false;
+            }
+            // Resolve back to the canonical id (if the reference is by
+            // name / model_name pointing at a now-disabled model) so we
+            // can report a stable identifier.
+            let canonical = any_ref_to_id
+                .get(reference)
+                .cloned()
+                .unwrap_or_else(|| reference.to_string());
+            invalidated.insert(canonical);
+            true
+        };
 
         let mut invalidated: HashSet<String> = HashSet::new();
         let mut agent_models_changed = false;

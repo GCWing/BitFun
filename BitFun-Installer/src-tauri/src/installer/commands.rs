@@ -1078,6 +1078,7 @@ fn read_saved_app_language() -> Option<String> {
 
     match lang {
         "zh-CN" => Some("zh-CN".to_string()),
+        "zh-TW" => Some("zh-TW".to_string()),
         "en-US" => Some("en-US".to_string()),
         "zh" => Some("zh-CN".to_string()),
         "en" => Some("en-US".to_string()),
@@ -1108,7 +1109,7 @@ fn write_root_config(app_config_file: &Path, root: &Value) -> Result<(), String>
 }
 
 fn apply_first_launch_language(app_language: &str) -> Result<(), String> {
-    let allowed = ["zh-CN", "en-US"];
+    let allowed = ["zh-CN", "zh-TW", "en-US"];
     if !allowed.contains(&app_language) {
         return Err("Unsupported app language".to_string());
     }

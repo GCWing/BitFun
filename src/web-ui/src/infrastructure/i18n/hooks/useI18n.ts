@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation, UseTranslationOptions } from 'react-i18next';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nService } from '../core/I18nService';
+import { builtinLocales } from '../presets';
 import type { LocaleId, I18nNamespace, LocaleMetadata } from '../types';
 
  
@@ -61,12 +62,12 @@ export function useI18n(
   );
 
   const currentLocaleMetadata = useMemo(
-    () => i18nService.getCurrentLocaleMetadata(),
+    () => builtinLocales.find(locale => locale.id === currentLanguage),
     [currentLanguage]
   );
 
   const supportedLocales = useMemo(
-    () => i18nService.getSupportedLocales(),
+    () => builtinLocales,
     []
   );
 
@@ -99,8 +100,8 @@ export function useI18n(
   );
 
   const isRTL = useMemo(
-    () => i18nService.isRTL(),
-    [currentLanguage]
+    () => currentLocaleMetadata?.rtl ?? false,
+    [currentLocaleMetadata]
   );
 
   return {

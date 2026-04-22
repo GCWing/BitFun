@@ -1,0 +1,85 @@
+{
+  "title": "記憶",
+  "subtitle": "管理 AI 記憶",
+  "section": {
+    "memoryList": {
+      "title": "知識記憶列表",
+      "description": "可新建與查看的知識記憶。"
+    }
+  },
+  "toolbar": {
+    "searchPlaceholder": "搜索記憶...",
+    "addTooltip": "添加記憶"
+  },
+  "filters": {
+    "all": "全部"
+  },
+  "memoryTypes": {
+    "tech_preference": "技術偏好",
+    "project_context": "項目上下文",
+    "user_habit": "用戶習慣",
+    "code_pattern": "代碼模式",
+    "decision": "架構決策",
+    "other": "其他"
+  },
+  "stats": {
+    "totalMemories": "共 {{total}} 個記憶點 ({{enabled}} 個已啟用)",
+    "totalTags": "{{count}} 個標籤",
+    "tags": "標籤"
+  },
+  "list": {
+    "loading": "加載中...",
+    "empty": {
+      "title": "暫無記憶",
+      "noMatch": "沒有找到匹配的記憶",
+      "hint": "點擊上方\"添加記憶\"按鈕創建你的第一個記憶點"
+    },
+    "item": {
+      "disabled": "已禁用",
+      "contentLabel": "記憶內容:",
+      "sourcePrefix": "來源: ",
+      "createdPrefix": "記錄時間: "
+    }
+  },
+  "actions": {
+    "enable": "啟用",
+    "disable": "禁用",
+    "edit": "編輯",
+    "delete": "刪除"
+  },
+  "date": {
+    "today": "今天",
+    "yesterday": "昨天",
+    "daysAgo": "{{days}}天前"
+  },
+  "dialog": {
+    "titleEdit": "編輯記憶點",
+    "titleCreate": "添加記憶點",
+    "fields": {
+      "title": "標題 *",
+      "titlePlaceholder": "簡短描述這個記憶點",
+      "type": "類型 *",
+      "importance": "重要程度",
+      "content": "內容 *",
+      "contentPlaceholder": "詳細描述這個記憶點的內容",
+      "tags": "標籤（用逗號分隔）",
+      "tagsPlaceholder": "例如：React, TypeScript, 最佳實踐"
+    },
+    "actions": {
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中..."
+    }
+  },
+  "messages": {
+    "loadFailed": "加載記憶點失敗: {{error}}",
+    "confirmDelete": "確定要刪除這個記憶點嗎？此操作無法撤銷。",
+    "deleteSuccess": "記憶點已刪除",
+    "deleteFailed": "刪除失敗: {{error}}",
+    "toggleFailed": "切換狀態失敗: {{error}}",
+    "validationError": "標題和內容不能為空",
+    "updateSuccess": "記憶點已更新",
+    "createSuccess": "記憶點已添加",
+    "saveFailed": "保存失敗: {{error}}"
+  }
+}

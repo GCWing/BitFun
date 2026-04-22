@@ -5,7 +5,7 @@
  * `src/web-ui/src/locales/<locale-id>/*.json` files. The i18n audit checks
  * that the registry and locale folders stay in sync.
  */
-export const LOCALE_IDS = ['zh-CN', 'en-US'] as const;
+export const LOCALE_IDS = ['zh-CN', 'zh-TW', 'en-US'] as const;
 export type LocaleId = (typeof LOCALE_IDS)[number];
 
 export const builtinLocales = [
@@ -14,6 +14,19 @@ export const builtinLocales = [
     name: '简体中文',
     englishName: 'Simplified Chinese',
     nativeName: '简体中文',
+    rtl: false,
+    dateFormat: 'YYYY年MM月DD日',
+    numberFormat: {
+      decimal: '.',
+      thousands: ',',
+    },
+    builtin: true,
+  },
+  {
+    id: 'zh-TW',
+    name: '繁體中文',
+    englishName: 'Traditional Chinese',
+    nativeName: '繁體中文',
     rtl: false,
     dateFormat: 'YYYY年MM月DD日',
     numberFormat: {

@@ -29,6 +29,7 @@ impl CodeReviewTool {
     pub fn description_for_language(lang_code: &str) -> String {
         match lang_code {
             "en-US" => "Submit code review results. After completing the review analysis, you must call this tool to submit a structured review report. All user-visible text fields must be in English (per app language setting).".to_string(),
+            "zh-TW" => "提交程式碼審查結果。完成審查分析後必須呼叫本工具提交結構化審查報告。所有使用者可見的文字欄位必須使用繁體中文。".to_string(),
             _ => "提交代码审查结果。完成审查分析后必须调用本工具提交结构化审查报告。所有用户可见的文本字段必须使用简体中文。".to_string(),
         }
     }
@@ -42,6 +43,14 @@ impl CodeReviewTool {
                 "Issue description (in English)",
                 "Fix suggestion (in English, optional)",
                 "Code strengths (1-2 items, in English)",
+            ),
+            "zh-TW" => (
+                "整體評價（2-3 句，使用繁體中文）",
+                "上下文限制說明（可選，使用繁體中文）",
+                "問題標題（繁體中文）",
+                "問題描述（繁體中文）",
+                "修復建議（可選，繁體中文）",
+                "程式碼優點（1-2 條，繁體中文）",
             ),
             _ => (
                 "总体评价（2-3 句，使用简体中文）",

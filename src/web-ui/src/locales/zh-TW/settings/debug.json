@@ -1,0 +1,97 @@
+{
+  "title": "調試配置",
+  "subtitle": "日誌和語言調試模板配置",
+  "sections": {
+    "combined": "調試模式設置",
+    "combinedDescription": "配置調試Agent的日誌路徑、Ingest 服務端口，以及各語言的代碼插樁模板。",
+    "settings": "調試設置",
+    "templates": "語言調試模板"
+  },
+  "languageLabels": {
+    "javascript": "JavaScript / TypeScript",
+    "python": "Python",
+    "rust": "Rust",
+    "go": "Go",
+    "java": "Java"
+  },
+  "settings": {
+    "logPath": {
+      "label": "日誌文件路徑",
+      "description": "Debug日誌保存路徑（相對於工作區根目錄），默認為 .bitfun/debug.log",
+      "placeholder": ".bitfun/debug.log",
+      "browse": "瀏覽"
+    },
+    "ingestPort": {
+      "label": "Ingest服務器端口",
+      "description": "用於接收Web應用日誌的HTTP服務器端口"
+    }
+  },
+  "templates": {
+    "description": "啟用模板後，將使用自定義模板覆蓋內置邏輯。關閉則使用系統內置的默認模板。",
+    "enableTooltip": "點擊啟用自定義模板",
+    "disableTooltip": "點擊禁用自定義模板",
+    "instrumentation": {
+      "label": "插樁代碼模板",
+      "placeholder": "輸入插樁代碼模板...",
+      "placeholders": "可用佔位符"
+    },
+    "region": {
+      "label": "Region標記",
+      "startPlaceholder": "開始標記",
+      "endPlaceholder": "結束標記"
+    },
+    "notes": "注意事項",
+    "configure": "配置模板",
+    "reset": "重置為默認模板",
+    "noteItems": {
+      "javascript": {
+        "postToIngest": "通過 HTTP POST 發送日誌到 ingest 服務器",
+        "replaceData": "{DATA} 需替換為 JavaScript 對象表達式"
+      },
+      "python": {
+        "appendNdjson": "直接追加 NDJSON 日誌到工作區的 LOG_PATH",
+        "ensureAscii": "使用 ensure_ascii=False 支持中文等非ASCII字符",
+        "replaceData": "{DATA} 需替換為 Python 表達式（如 {\"var\": var} 或 locals()）",
+        "importOnce": "導入語句只需在文件頂部寫一次"
+      },
+      "rust": {
+        "appendNdjson": "直接追加 NDJSON 日誌到 LOG_PATH",
+        "requireSerdeJson": "需要 serde_json 依賴: cargo add serde_json",
+        "replaceData": "{DATA} 需替換為 Rust 表達式（如 {\"var\": var}）",
+        "syncOnly": "在同步代碼中使用；異步代碼需改用 tokio::fs"
+      },
+      "go": {
+        "iife": "使用立即執行匿名函數，可在任意位置插入",
+        "appendNdjson": "直接追加 NDJSON 日誌到 LOG_PATH",
+        "imports": "需要導入 \"os\", \"encoding/json\", \"time\"",
+        "replaceData": "{DATA} 需替換為 Go 表達式（如 map[string]interface{}{\"var\": var}）"
+      },
+      "java": {
+        "appendNdjson": "直接追加 NDJSON 日誌到 LOG_PATH",
+        "requireGson": "需要 Gson 依賴（或可用 Jackson 替代）",
+        "replaceData": "{DATA} 需替換為 Java 對象（如 Map.of(\"var\", var)）",
+        "writeString": "Java 11+ 可用 Files.writeString；舊版需用 Files.write + getBytes()"
+      }
+    }
+  },
+  "actions": {
+    "save": "保存配置",
+    "saving": "保存中...",
+    "cancel": "取消"
+  },
+  "fileDialog": {
+    "logFile": "日誌文件"
+  },
+  "messages": {
+    "loading": "加載中...",
+    "loadFailed": "加載配置失敗",
+    "saveSuccess": "配置已保存",
+    "saveFailed": "保存配置失敗",
+    "resetSuccess": "已恢復默認配置",
+    "resetFailed": "重置配置失敗",
+    "logPathUpdated": "日誌文件路徑已更新",
+    "selectFileFailed": "選擇文件失敗",
+    "templateEnabled": "已啟用 {{name}} 模板",
+    "templateDisabled": "已禁用 {{name}} 模板"
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "general": {
+    "unknown": "發生未知錯誤",
+    "network": "網絡錯誤",
+    "timeout": "請求超時",
+    "serverError": "服務器錯誤",
+    "notFound": "未找到資源",
+    "unauthorized": "未授權",
+    "forbidden": "禁止訪問",
+    "badRequest": "請求無效",
+    "conflict": "資源衝突",
+    "tooManyRequests": "請求過於頻繁",
+    "copyFailed": "Copy failed. Please try again."
+  },
+  "file": {
+    "notFound": "文件未找到：{{path}}",
+    "readError": "讀取文件失敗：{{path}}",
+    "writeError": "寫入文件失敗：{{path}}",
+    "deleteError": "刪除文件失敗：{{path}}",
+    "permissionDenied": "權限不足：{{path}}",
+    "alreadyExists": "文件已存在：{{path}}",
+    "invalidPath": "無效的文件路徑：{{path}}",
+    "tooLarge": "文件過大：{{path}}",
+    "encodingError": "文件編碼錯誤：{{path}}",
+    "createFileFailed": "Failed to create file",
+    "createFolderFailed": "Failed to create folder",
+    "renameFailed": "Rename failed",
+    "revealFailed": "Failed to open file manager"
+  },
+  "workspace": {
+    "notFound": "工作區未找到",
+    "openError": "打開工作區失敗",
+    "invalidPath": "無效的工作區路徑",
+    "alreadyOpen": "工作區已打開"
+  },
+  "git": {
+    "notRepository": "當前目錄不是 Git 倉庫",
+    "cloneError": "克隆倉庫失敗",
+    "commitError": "提交失敗",
+    "pushError": "推送失敗",
+    "pullError": "拉取失敗",
+    "mergeConflict": "存在合併衝突",
+    "branchError": "分支操作失敗",
+    "stashError": "貯藏操作失敗",
+    "authError": "認證失敗",
+    "remoteError": "遠程倉庫錯誤"
+  },
+  "ai": {
+    "connectionError": "連接 AI 服務失敗",
+    "apiKeyInvalid": "API 密鑰無效",
+    "modelNotFound": "模型未找到",
+    "contextTooLong": "上下文超出限制",
+    "rateLimited": "請求頻率超出限制",
+    "generationError": "生成內容失敗",
+    "streamError": "流式響應錯誤",
+    "timeout": "AI 響應超時",
+    "initializeFailedTitle": "AI client initialization failed",
+    "configRequired": "Model configuration is required"
+  },
+  "aiRules": {
+    "loadFailed": "Failed to load AI rules",
+    "createFailed": "Failed to create rule",
+    "updateFailed": "Failed to update rule",
+    "deleteFailed": "Failed to delete rule",
+    "toggleFailed": "Failed to toggle rule status"
+  },
+  "terminal": {
+    "createError": "創建終端失敗",
+    "executeError": "執行命令失敗",
+    "killError": "終止進程失敗",
+    "shellNotFound": "Shell 未找到"
+  },
+  "window": {
+    "maximizeFailed": "最大化窗口失敗：{{error}}",
+    "closeFailed": "關閉窗口失敗：{{error}}"
+  },
+  "editor": {
+    "openError": "打開編輯器失敗",
+    "saveError": "保存文件失敗",
+    "formatError": "格式化失敗",
+    "parseError": "解析文件失敗",
+    "lspError": "語言服務器錯誤"
+  },
+  "config": {
+    "loadError": "加載配置失敗",
+    "saveError": "保存配置失敗",
+    "invalidFormat": "配置格式無效",
+    "validationError": "Configuration validation failed"
+  },
+  "snapshot": {
+    "createError": "創建快照失敗",
+    "restoreError": "恢復快照失敗",
+    "notFound": "快照未找到",
+    "corrupted": "快照已損壞",
+    "loadStatsFailed": "加載快照統計失敗",
+    "loadSessionsFailed": "加載快照會話失敗",
+    "loadOperationsFailed": "加載會話操作失敗",
+    "getDiffFailed": "獲取文件差異失敗",
+    "acceptOperationFailed": "接受操作失敗",
+    "rejectOperationFailed": "拒絕操作失敗",
+    "rollbackSessionFailed": "回滾會話失敗",
+    "cleanupFailed": "清理過期數據失敗"
+  },
+  "contextMenu": {
+    "noSelection": "No text selected",
+    "notEditable": "Content is not editable",
+    "readOnlyEditor": "Editor is read-only",
+    "clipboardUnavailable": "Clipboard access is unavailable",
+    "clipboardEmpty": "Clipboard is empty",
+    "copyFailed": "Copy failed",
+    "cutFailed": "Cut failed",
+    "pasteFailed": "Paste failed",
+    "selectAllFailed": "Select all failed",
+    "refreshFailed": "Refresh failed",
+    "deleteFailed": "Delete failed",
+    "deleteCancelled": "Delete canceled",
+    "editorModelUnavailable": "Editor model is unavailable",
+    "copyPathFailed": "Copy path failed",
+    "copyRelativePathFailed": "Copy relative path failed"
+  },
+  "core": {
+    "initializationFailed": "Core system initialization failed"
+  },
+  "boundary": {
+    "title": "Application Error",
+    "reload": "Reload",
+    "technicalDetails": "Technical Details",
+    "unknown": "Unknown error"
+  }
+}

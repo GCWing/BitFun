@@ -5,11 +5,11 @@ use bitfun_core::agentic::tools::computer_use_host::{
     clamp_point_crop_half_extent, ActionRecord, ComputerScreenshot, ComputerUseDisplayInfo,
     ComputerUseHost, ComputerUseImageContentRect, ComputerUseImplicitScreenshotCenter,
     ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseLastMutationKind,
-    ComputerUseNavigateQuadrant,
-    ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
-    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
-    OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery, UiElementLocateResult,
-    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
+    ComputerUseNavigateQuadrant, ComputerUseNavigationRect, ComputerUsePermissionSnapshot,
+    ComputerUseScreenshotParams, ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot,
+    LoopDetectionResult, OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery,
+    UiElementLocateResult, COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
+    COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use bitfun_core::agentic::tools::computer_use_host::{
@@ -148,7 +148,6 @@ fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
         plot(cx, cy + t, CORE);
     }
 }
-
 
 /// Returns the capture bitmap unchanged (no grid, rulers, or margins). Pointer overlays are applied later.
 fn compose_computer_use_frame(
@@ -1652,7 +1651,6 @@ end tell"#])
             }
         }
 
-
         #[cfg(target_os = "macos")]
         {
             let platform_note = if cfg!(debug_assertions) && !macos::ax_trusted() {
@@ -1676,8 +1674,7 @@ end tell"#])
             // exercises the same DXGI/GDI path used for actual capture, so a
             // failure here is a strong signal that capture won't work either
             // (e.g. running under Session 0 / blocked by group policy).
-            let screen_capture_granted =
-                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+            let screen_capture_granted = DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
 
             // Accessibility / input injection: there is no opt-in permission
             // on Windows, but UIPI silently blocks input into elevated windows
@@ -1691,9 +1688,8 @@ end tell"#])
                 );
             }
             if !elevated {
-                notes.push(
-                    "Not running elevated: UIPI may block input into Administrator windows.",
-                );
+                notes
+                    .push("Not running elevated: UIPI may block input into Administrator windows.");
             }
             ComputerUsePermissionSnapshot {
                 accessibility_granted: true,
@@ -1713,8 +1709,7 @@ end tell"#])
                 || session_type.eq_ignore_ascii_case("wayland");
             let x11_display = std::env::var("DISPLAY").is_ok();
 
-            let screen_capture_granted =
-                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+            let screen_capture_granted = DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
 
             // Global keyboard / mouse injection on Linux requires either an
             // X11 session with XTEST (`enigo` / `rdev` work) *or* uinput on
@@ -1730,7 +1725,9 @@ end tell"#])
                 );
             }
             if !x11_display && !wayland {
-                notes.push("DISPLAY not set: no X server reachable for input injection.".to_string());
+                notes.push(
+                    "DISPLAY not set: no X server reachable for input injection.".to_string(),
+                );
             }
             if !screen_capture_granted {
                 notes.push(
@@ -1826,11 +1823,8 @@ end tell"#])
     ) -> BitFunResult<(image::RgbaImage, Screen)> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
-        let target_display_id = preferred_display_id.or_else(|| {
-            Screen::from_point(mx, my)
-                .ok()
-                .map(|s| s.display_info.id)
-        });
+        let target_display_id = preferred_display_id
+            .or_else(|| Screen::from_point(mx, my).ok().map(|s| s.display_info.id));
 
         if let Some(cache) = cached {
             let screen_id_match = Some(cache.screen.display_info.id) == target_display_id;
@@ -1883,9 +1877,7 @@ end tell"#])
     ) -> Vec<ComputerUseDisplayInfo> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
-        let pointer_display_id = Screen::from_point(mx, my)
-            .ok()
-            .map(|s| s.display_info.id);
+        let pointer_display_id = Screen::from_point(mx, my).ok().map(|s| s.display_info.id);
         let active_id = preferred_display_id.or(pointer_display_id);
 
         let screens = match Screen::all() {
@@ -1984,13 +1976,8 @@ mod macos {
         use std::panic::AssertUnwindSafe;
         match objc2::exception::catch(AssertUnwindSafe(f)) {
             Ok(inner) => inner,
-            Err(Some(exc)) => Err(BitFunError::tool(format!(
-                "Objective-C exception: {}",
-                exc
-            ))),
-            Err(None) => Err(BitFunError::tool(
-                "Objective-C exception (nil)".to_string(),
-            )),
+            Err(Some(exc)) => Err(BitFunError::tool(format!("Objective-C exception: {}", exc))),
+            Err(None) => Err(BitFunError::tool("Objective-C exception (nil)".to_string())),
         }
     }
 
@@ -2415,8 +2402,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             // pinned a display via `desktop.focus_display` consistently sees
             // peek frames from that display, even if the cached screenshot
             // is from a different one.
-            let pinned_screen =
-                preferred_display_id.and_then(Self::find_screen_by_id);
+            let pinned_screen = preferred_display_id.and_then(Self::find_screen_by_id);
             let screen = pinned_screen
                 .or(cached_screen)
                 .or_else(|| Screen::from_point(mx, my).ok())
@@ -3127,11 +3113,7 @@ tell application "System Events" to get unix id of first process whose frontmost
     }
 
     async fn list_displays(&self) -> BitFunResult<Vec<ComputerUseDisplayInfo>> {
-        let preferred = self
-            .state
-            .lock()
-            .ok()
-            .and_then(|s| s.preferred_display_id);
+        let preferred = self.state.lock().ok().and_then(|s| s.preferred_display_id);
         let (mx, my) = Self::current_mouse_position();
         Ok(Self::enumerate_displays(preferred, mx, my))
     }
@@ -3165,9 +3147,6 @@ tell application "System Events" to get unix id of first process whose frontmost
     }
 
     fn focused_display_id(&self) -> Option<u32> {
-        self.state
-            .lock()
-            .ok()
-            .and_then(|s| s.preferred_display_id)
+        self.state.lock().ok().and_then(|s| s.preferred_display_id)
     }
 }

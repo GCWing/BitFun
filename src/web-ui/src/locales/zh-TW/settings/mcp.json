@@ -1,0 +1,271 @@
+{
+  "title": "MCP",
+  "subtitle": "管理 MCP 服務器連接",
+  "section": {
+    "serverList": {
+      "title": "MCP 服務列表",
+      "description": "統一管理 MCP 服務狀態與 JSON 配置。"
+    }
+  },
+  "tabs": {
+    "servers": "服務器",
+    "add": "添加服務器"
+  },
+  "server": {
+    "id": "服務器ID",
+    "idPlaceholder": "github-mcp",
+    "idHint": "服務器ID是唯一標識符，不可重複",
+    "name": "服務器名稱",
+    "namePlaceholder": "GitHub MCP Server",
+    "type": "服務器類型",
+    "typeLocal": "本地進程",
+    "typeRemote": "遠程服務",
+    "typeContainer": "容器服務",
+    "command": "啟動命令",
+    "commandPlaceholder": "node",
+    "commandHint": "例如: node, python, npx 等",
+    "args": "命令參數（每行一個）",
+    "argsPlaceholder": "server.js\n--port\n3000",
+    "argsHint": "每行一個參數",
+    "env": "環境變量",
+    "envPlaceholder": "JSON 格式，例如: {\"KEY\": \"value\"}",
+    "url": "服務器URL",
+    "urlPlaceholder": "http://localhost:3000",
+    "enabled": "啟用此服務器",
+    "autoStart": "應用啟動時自動運行",
+    "transport": "傳輸方式",
+    "statusDetail": "狀態詳情",
+    "remoteUrl": "遠程地址",
+    "remoteAuth": "認證狀態",
+    "remoteAuthConfigured": "已配置",
+    "remoteAuthConfiguredWithSource": "已通過 {{source}} 配置",
+    "remoteAuthMissing": "未配置",
+    "remoteOAuthReady": "已配置 OAuth，等待授權",
+    "remoteAuthMethod": "認證方式",
+    "remoteAuthMethodOAuthXaa": "已配置 OAuth，預留 XAA",
+    "remoteAuthMethodOAuth": "OAuth",
+    "remoteAuthMethodXaa": "XAA",
+    "remoteOAuthIdle": "尚未開始",
+    "remoteOAuthAwaitingBrowser": "等待打開瀏覽器",
+    "remoteOAuthAwaitingCallback": "等待提供方回調",
+    "remoteOAuthExchangingToken": "正在交換授權碼",
+    "remoteOAuthAuthorized": "已授權",
+    "remoteOAuthFailed": "失敗",
+    "remoteOAuthCancelled": "已取消",
+    "runtime": {
+      "source": "來源",
+      "path": "解析路徑",
+      "available": "命令可用",
+      "unavailable": "命令不可用",
+      "managed": "託管運行時",
+      "system": "系統環境",
+      "unknown": "未知",
+      "unsupportedReason": "不可用原因",
+      "unsupportedRemoteSse": "暫不支持遠程 MCP SSE 傳輸"
+    },
+    "authSource": {
+      "headers": "請求頭",
+      "env": "環境變量",
+      "oauth": "OAuth"
+    }
+  },
+  "status": {
+    "uninitialized": "未初始化",
+    "starting": "啟動中",
+    "connected": "已連接",
+    "healthy": "健康",
+    "needsAuth": "需要認證",
+    "reconnecting": "重連中",
+    "failed": "失敗",
+    "stopping": "停止中",
+    "stopped": "已停止",
+    "disconnected": "已斷開",
+    "connecting": "連接中",
+    "error": "錯誤"
+  },
+  "actions": {
+    "add": "添加服務器",
+    "addFirst": "添加第一個服務器",
+    "edit": "編輯",
+    "editServer": "編輯服務器",
+    "addServer": "添加服務器",
+    "delete": "刪除",
+    "start": "啟動",
+    "stop": "停止",
+    "restart": "重啟",
+    "refresh": "刷新",
+    "save": "保存",
+    "saveConfig": "保存配置",
+    "cancel": "取消",
+    "cancelAdd": "取消添加",
+    "close": "關閉",
+    "backToList": "返回列表",
+    "jsonConfig": "JSON 配置",
+    "remoteAuth": "遠程認證",
+    "startRemoteOAuth": "通過 OAuth 連接",
+    "restartRemoteOAuth": "重新發起 OAuth",
+    "reconnectRemoteOAuth": "重新通過 OAuth 連接",
+    "cancelRemoteOAuth": "取消 OAuth",
+    "saveRemoteAuth": "保存並重連"
+  },
+  "search": {
+    "placeholder": "搜索服務器..."
+  },
+  "empty": {
+    "noServers": "暫無配置的 MCP 服務器",
+    "noServersHint": "添加 MCP 服務器以擴展功能",
+    "noMatchingServers": "沒有找到匹配的服務器"
+  },
+  "loading": "加載中...",
+  "labels": {
+    "type": "類型",
+    "enabled": "啟用",
+    "autoStart": "自動啟動",
+    "status": "狀態",
+    "yes": "是",
+    "no": "否"
+  },
+  "modal": {
+    "remoteAuthTitle": "遠程認證：{{serverName}}",
+    "remoteOAuthHint": "使用 OAuth 連接這個遠程 MCP 服務器。BitFun 會監聽一個本地回調地址，並在授權完成後重新連接該服務器。",
+    "remoteOAuthCurrentStatus": "OAuth 狀態：{{status}}",
+    "remoteOAuthRedirectUri": "回調地址：{{redirectUri}}",
+    "remoteOAuthStatus": "OAuth 詳情：{{status}} - {{message}}",
+    "remoteAuthHint": "粘貼 Bearer token 或完整的 Authorization 請求頭值。保存後會重啟遠程 MCP 服務器。",
+    "remoteAuthServerUrl": "服務器地址：{{url}}",
+    "remoteAuthPlaceholder": "Bearer eyJ... 或 eyJ..."
+  },
+  "jsonEditor": {
+    "title": "MCP JSON 配置",
+    "hint1": "使用標準 Cursor 格式的 MCP 配置。配置將自動保存到用戶目錄下的 app.json 文件中。",
+    "hint2": "格式說明：可以省略 type 字段。提供 \"command\" 時按 stdio（本地進程）解析；提供 \"url\" 時按 sse（遠程服務）解析。也可顯式設置 type=\"stdio\"/\"sse\" 以保持兼容。",
+    "lintLocation": "（第 {{line}} 行，第 {{column}} 列）",
+    "lintError": "JSON 有語法錯誤{{location}}：{{message}}",
+    "exampleTitle": "配置示例：",
+    "localProcess": "本地進程（stdio）：",
+    "remoteService": "遠程服務（sse）："
+  },
+  "resourceBrowser": {
+    "title": "MCP 資源",
+    "actions": {
+      "refresh": "刷新",
+      "close": "關閉"
+    },
+    "search": {
+      "placeholder": "搜索資源..."
+    },
+    "loading": {
+      "resources": "正在加載資源...",
+      "content": "正在加載內容..."
+    },
+    "empty": {
+      "noMatch": "未找到資源",
+      "noResources": "暫無資源",
+      "selectToView": "選擇資源以查看內容"
+    },
+    "errors": {
+      "loadContentFailed": "加載資源內容失敗",
+      "binaryContent": "二進制資源內容無法在此預覽"
+    },
+    "mockContent": "# {{name}}\n\n這是 {{uri}} 的內容\n\nLorem ipsum dolor sit amet..."
+  },
+  "messages": {
+    "addSuccess": "服務器添加成功",
+    "addFailed": "添加服務器失敗",
+    "deleteSuccess": "服務器已刪除",
+    "deleteFailed": "刪除服務器失敗",
+    "deleteConfirm": "確定要刪除這個 MCP 服務器嗎？\n\n注意：刪除後配置無法恢復。",
+    "startSuccess": "服務器 \"{{serverId}}\" 已啟動",
+    "startFailed": "啟動服務器 \"{{serverId}}\" 失敗",
+    "stopSuccess": "服務器 \"{{serverId}}\" 已停止",
+    "stopFailed": "停止服務器 \"{{serverId}}\" 失敗",
+    "restartSuccess": "服務器 \"{{serverId}}\" 已重啟",
+    "restartFailed": "重啟服務器 \"{{serverId}}\" 失敗",
+    "saveSuccess": "MCP 配置已保存並生效",
+    "saveFailed": "配置保存失敗",
+    "partialStartFailed": "配置已保存，但部分服務器啟動失敗。請檢查服務器配置是否正確。",
+    "serverSaved": "服務器 \"{{name}}\" 已保存",
+    "jsonError": "JSON 格式錯誤",
+    "nameRequired": "請輸入服務器名稱",
+    "idRequired": "請輸入服務器 ID",
+    "commandRequired": "本地進程類型的服務器必須提供啟動命令",
+    "urlRequired": "遠程服務類型的服務器必須提供服務器地址",
+    "validationFailed": "校驗失敗",
+    "commandUnavailable": "服務器 \"{{serverId}}\" 的命令不可用，請檢查運行時安裝或命令配置。",
+    "remoteOAuthAuthorized": "服務器 \"{{serverId}}\" 的 OAuth 已連接。",
+    "remoteOAuthFailed": "服務器 \"{{serverId}}\" 的 OAuth 連接失敗。",
+    "remoteAuthRequired": "請提供 Bearer token 或完整的 Authorization 請求頭值。",
+    "remoteAuthUpdated": "已更新服務器 \"{{serverId}}\" 的遠程認證。",
+    "remoteOAuthStarted": "已為服務器 \"{{serverId}}\" 打開 OAuth 登錄。"
+  },
+  "errors": {
+    "unknownError": "未知錯誤",
+    "jsonFormatError": "JSON 格式錯誤",
+    "configStructureError": "配置結構錯誤",
+    "serverConfigError": "服務器配置錯誤",
+    "permissionError": "文件權限錯誤",
+    "fileOperationError": "文件操作失敗",
+    "resourceNotFound": "資源不存在",
+    "serverStartError": "服務器啟動失敗",
+    "operationFailed": "{{context}}失敗",
+    "suggestions": {
+      "jsonFormat": [
+        "使用在線 JSON 驗證工具檢查格式",
+        "確保所有字符串使用雙引號",
+        "檢查是否有多餘的逗號",
+        "確認所有括號正確閉合"
+      ],
+      "configStructure": [
+        "檢查配置是否包含 \"mcpServers\" 字段",
+        "確保 \"mcpServers\" 是一個對象類型",
+        "參考界面中的配置示例"
+      ],
+      "serverConfig": [
+        "提供 command（stdio）或 url（sse）字段",
+        "args 必須是數組格式",
+        "env 必須是對象格式"
+      ],
+      "permission": [
+        "以管理員身份運行應用",
+        "檢查配置文件的訪問權限",
+        "確認殺毒軟件沒有阻止文件寫入"
+      ],
+      "fileOperation": [
+        "檢查磁盤空間是否充足",
+        "確認配置目錄存在且可訪問",
+        "嘗試重啟應用"
+      ],
+      "serverStart": [
+        "檢查命令路徑是否正確",
+        "確認所需的運行環境已安裝（如 Node.js）",
+        "查看環境變量配置是否正確",
+        "檢查端口是否被佔用"
+      ],
+      "default": [
+        "檢查網絡連接",
+        "嘗試重新操作",
+        "查看日誌獲取更多信息",
+        "如果問題持續，請聯繫技術支持"
+      ]
+    },
+    "jsonParseError": "JSON 格式錯誤：{{message}}\n\n請檢查：\n• 所有鍵名和字符串值都用雙引號包圍\n• 沒有多餘的逗號\n• 所有括號正確閉合",
+    "mcpServersRequired": "配置必須包含 \"mcpServers\" 字段\n\n正確格式：\n{\n  \"mcpServers\": {\n    \"server-name\": { ... }\n  }\n}",
+    "mcpServersMustBeObject": "\"mcpServers\" 必須是一個對象（不能是數組或其他類型）\n\n正確格式：\n\"mcpServers\": {\n  \"server-id\": {...}\n}",
+    "deleteServerFailed": "刪除服務器 \"{{serverId}}\" 失敗：{{message}}"
+  },
+  "notifications": {
+    "startSuccess": "啟動成功",
+    "startFailed": "啟動失敗",
+    "stopSuccess": "停止成功",
+    "stopFailed": "停止失敗",
+    "restartSuccess": "重啟成功",
+    "restartFailed": "重啟失敗",
+    "saveSuccess": "保存成功",
+    "saveFailed": "保存失敗",
+    "deleteSuccess": "刪除成功",
+    "deleteFailed": "刪除失敗",
+    "operationFailed": "操作失敗",
+    "partialStartFailed": "部分服務器啟動失敗",
+    "suggestionPrefix": "建議："
+  }
+}

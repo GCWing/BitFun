@@ -1,0 +1,38 @@
+{
+  "title": "小應用",
+  "subtitle": "即時生成的小應用，打開就能用，也能繼續迭代。",
+  "searchPlaceholder": "搜索小應用...",
+  "importFromFolder": "從文件夾導入",
+  "running": "已啟動",
+  "allApps": "全部應用",
+  "noRunningApps": "暫無運行中的應用",
+  "all": "全部",
+  "count": "{{count}} 個",
+  "empty": {
+    "generate": "邊聊邊生成，馬上可用。和 AI 對話生成第一個小應用吧。",
+    "noMatch": "沒有匹配的應用。"
+  },
+  "selectFolderTitle": "選擇小應用目錄（需包含 meta.json 與 source/）",
+  "card": {
+    "start": "啟動",
+    "stop": "停止",
+    "delete": "刪除"
+  },
+  "detail": {
+    "stop": "停止",
+    "delete": "刪除",
+    "open": "打開"
+  },
+  "confirmDelete": {
+    "title": "刪除 \"{{name}}\"？",
+    "message": "此操作不可撤銷，應用及其所有數據將被永久刪除。",
+    "confirm": "刪除",
+    "cancel": "取消"
+  },
+  "scene": {
+    "loading": "加載中…",
+    "loadFailed": "加載失敗：{{error}}",
+    "retry": "重試",
+    "reload": "重新加載"
+  }
+}

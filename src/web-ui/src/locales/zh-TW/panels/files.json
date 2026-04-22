@@ -1,0 +1,70 @@
+{
+  "title": "文件瀏覽器",
+  "search": {
+    "placeholder": "搜索工作區...",
+    "noResults": "未找到匹配的結果",
+    "enterKeyword": "輸入關鍵詞開始搜索",
+    "modeFiles": "文件",
+    "modeContent": "內容",
+    "limitReachedFiles": "當前僅顯示前 {{count}} 個文件匹配結果，請繼續縮小查詢範圍。",
+    "limitReachedContent": "當前僅顯示前 {{count}} 個內容匹配結果，請繼續縮小查詢範圍。"
+  },
+  "options": {
+    "caseSensitive": "區分大小寫 (Aa)",
+    "wholeWord": "全字匹配 (Ab)",
+    "useRegex": "使用正則表達式 (.*)"
+  },
+  "actions": {
+    "switchToSearch": "切換到搜索",
+    "switchToTree": "切換到文件樹",
+    "retry": "重試"
+  },
+  "status": {
+    "searchingFilename": "搜索文件名...",
+    "searchingContent": "搜索內容...",
+    "loadingFileTree": "正在加載文件樹..."
+  },
+  "empty": {
+    "selectWorkspace": "選擇工作區後將顯示文件樹"
+  },
+  "dialog": {
+    "newFile": {
+      "title": "新建文件",
+      "placeholder": "請輸入文件名",
+      "confirm": "創建",
+      "cancel": "取消"
+    },
+    "newFolder": {
+      "title": "新建文件夾",
+      "placeholder": "請輸入文件夾名",
+      "confirm": "創建",
+      "cancel": "取消"
+    }
+  },
+  "validation": {
+    "invalidFilename": "文件名包含非法字符"
+  },
+  "transfer": {
+    "downloading": "正在下載",
+    "uploading": "正在上傳",
+    "missingConnection": "遠程工作區缺少 SSH 連接信息。",
+    "failed": "文件傳輸失敗：{{error}}",
+    "dropHint": "將文件拖放到此處以上傳"
+  },
+  "notifications": {
+    "createFileSuccess": "文件創建成功",
+    "createFileFailed": "創建文件失敗: {{error}}",
+    "createFolderSuccess": "文件夾創建成功",
+    "createFolderFailed": "創建文件夾失敗: {{error}}",
+    "renameSuccess": "重命名成功",
+    "renameFailed": "重命名失敗: {{error}}",
+    "deleteSuccess": "刪除成功",
+    "deleteFailed": "刪除失敗: {{error}}",
+    "pasteSuccess": "成功粘貼 {{count}} 個文件",
+    "pasteFailed": "{{count}} 個文件粘貼失敗",
+    "pasteNoFiles": "剪貼板中沒有文件",
+    "pastingFiles": "正在粘貼 {{count}} 個文件到 {{target}}...",
+    "openExplorerFailed": "打開文件管理器失敗: {{error}}",
+    "selectWorkspaceFirst": "請先打開工作區"
+  }
+}

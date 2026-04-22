@@ -1,0 +1,22 @@
+{
+  "skills": "Skill",
+  "subagents": "智能體",
+  "mcp": "MCP",
+  "refresh": "刷新能力狀態",
+  "reconnect": "重連",
+  "mcpWarning": "{{count}} 個 MCP 服務狀態異常",
+  "loadFailed": "能力狀態加載失敗",
+  "toggleFailed": "能力開關更新失敗",
+  "mcpReconnectSuccess": "{{name}} 重連成功",
+  "mcpReconnectFailed": "{{name}} 重連失敗",
+  "emptySkills": "暫無 Skill，可在設置中添加",
+  "emptySubagents": "暫無智能體",
+  "emptyAgents": "暫無智能體",
+  "emptyMcp": "暫無 MCP 服務",
+  "path": "路徑",
+  "toolCount": "工具數",
+  "serverType": "類型",
+  "clickToCopy": "點擊複製路徑",
+  "pathCopied": "路徑已複製",
+  "pathCopyFailed": "複製路徑失敗"
+}

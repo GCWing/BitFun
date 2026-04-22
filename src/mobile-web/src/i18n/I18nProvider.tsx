@@ -15,7 +15,7 @@ interface I18nContextValue {
 const STORAGE_KEY = 'bitfun-mobile-language';
 
 function isLanguage(value: string | null | undefined): value is MobileLanguage {
-  return value === 'zh-CN' || value === 'en-US';
+  return value === 'zh-CN' || value === 'zh-TW' || value === 'en-US';
 }
 
 function getByPath(source: unknown, path: string): string | null {
@@ -59,6 +59,7 @@ function detectInitialLanguage(): MobileLanguage {
   if (urlLanguage) return urlLanguage;
 
   const browserLanguage = navigator.language?.toLowerCase() || '';
+  if (browserLanguage === 'zh-tw' || browserLanguage === 'zh-hk' || browserLanguage === 'zh-mo' || browserLanguage.startsWith('zh-hant')) return 'zh-TW';
   if (browserLanguage.startsWith('zh')) return 'zh-CN';
   return DEFAULT_LANGUAGE;
 }
@@ -116,7 +117,11 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const toggleLanguage = useCallback(() => {
-    setLanguageState((prev) => (prev === 'zh-CN' ? 'en-US' : 'zh-CN'));
+    setLanguageState((prev) => {
+      if (prev === 'zh-CN') return 'zh-TW';
+      if (prev === 'zh-TW') return 'en-US';
+      return 'zh-CN';
+    });
   }, []);
 
   const value = useMemo<I18nContextValue>(() => ({

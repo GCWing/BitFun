@@ -1,0 +1,127 @@
+{
+  "title": "智能體",
+  "desc": "協作執行專項任務的子智能體 — 共 {{total}} 個，{{enabled}} 個啟用",
+  "manage": "管理",
+  "builtin": "內置",
+  "custom": "自定義",
+  "empty": "暫無子智能體",
+  "goManage": "前往管理",
+  "loading": "加載中…",
+  "page": {
+    "title": "專業智能體",
+    "subtitle": "查看與管理核心模式、Agent 與 Sub-Agent，配置工具與 Skills。",
+    "searchPlaceholder": "搜索 Agent 名稱或描述…",
+    "newAgent": "新建 Agent"
+  },
+  "nav": {
+    "coreAgents": "核心智能體",
+    "agents": "Agent"
+  },
+  "filters": {
+    "source": "來源",
+    "kind": "類型",
+    "builtin": "內置",
+    "user": "用戶",
+    "project": "項目",
+    "mode": "Agent",
+    "subagent": "Sub-Agent"
+  },
+  "coreAgentsZone": {
+    "title": "核心智能體",
+    "subtitle": "平臺內置的核心 Agent 模式，覆蓋主流 AI 工作流，開箱即用。",
+    "empty": "暫未檢測到核心智能體",
+    "roleLabel": "主要應用 · ",
+    "modes": {
+      "agentic": { "role": "編碼專業智能體" },
+      "cowork": { "role": "辦公智能體" }
+    }
+  },
+  "agentsZone": {
+    "title": "Agent 總覽",
+    "subtitle": "查看所有 Agent / Sub-Agent，並直接管理獨立啟用、工具與 Skills。",
+    "empty": {
+      "noAgents": "當前沒有可用的 Agent",
+      "noMatch": "沒有匹配的 Agent"
+    }
+  },
+  "agentCard": {
+    "badges": {
+      "agent": "Agent",
+      "subagent": "Sub-Agent",
+      "userSubagent": "用戶 Sub-Agent",
+      "projectSubagent": "項目 Sub-Agent",
+      "disabled": "已禁用"
+    },
+    "actions": {
+      "expand": "展開詳情"
+    },
+    "meta": {
+      "tools": "{{count}} 個工具",
+      "skills": "{{count}} 個 Skills"
+    }
+  },
+  "agentsOverview": {
+    "filterUser": "用戶級",
+    "filterProject": "項目級",
+    "backToOverview": "返回總覽",
+    "tools": "工具",
+    "toolsReset": "重置默認",
+    "toolsCancel": "取消編輯",
+    "toolsSave": "保存",
+    "toolsEdit": "管理工具",
+    "toolsResetSuccess": "已重置為默認工具",
+    "toolToggleFailed": "工具切換失敗",
+    "skills": "Skills",
+    "skillsCancel": "取消編輯",
+    "skillsSave": "保存",
+    "skillsEdit": "管理 Skills",
+    "enableGroup": "啟用分組",
+    "disableGroup": "禁用分組",
+    "clearGroup": "清空",
+    "skillToggleFailed": "Skill 切換失敗",
+    "skillShadowed": "該 Skill 被同名且優先級更高的 Skill 遮蔽，運行時不會生效",
+    "noSkills": "未啟用任何 Skill",
+    "skillGroups": {
+      "computerUse": "Computer Use",
+      "office": "Office",
+      "meta": "Meta",
+      "team": "Team",
+      "superpowers": "Superpowers",
+      "other": "其他"
+    },
+    "customActions": "自定義 Agent",
+    "editAgent": "編輯",
+    "deleteAgent": "刪除",
+    "deleteConfirm": "確定刪除自定義 Agent「{{name}}」？此操作不可恢復。",
+    "deleteSuccess": "已刪除「{{name}}」",
+    "deleteFailed": "刪除失敗：",
+    "form": {
+      "title": "新建 Sub-Agent",
+      "subtitle": "創建一個自定義的用戶級或項目級 Sub-Agent",
+      "titleEdit": "編輯 Sub-Agent",
+      "subtitleEdit": "可修改描述、系統提示詞、工具與只讀模式。名稱與級別不可更改。",
+      "loadingDetail": "加載中…",
+      "save": "保存",
+      "updateSuccess": "已保存「{{name}}」",
+      "updateFailed": "保存失敗：",
+      "name": "名稱",
+      "namePlaceholder": "字母開頭，可含字母/數字/下劃線",
+      "nameRequired": "名稱不能為空",
+      "nameFormat": "只能以字母開頭，包含字母/數字/下劃線/連字符",
+      "description": "描述",
+      "descPlaceholder": "簡要描述該 Agent 的用途",
+      "descRequired": "描述不能為空",
+      "prompt": "系統提示詞",
+      "promptPlaceholder": "輸入系統提示詞，定義 Agent 的行為…",
+      "promptRequired": "系統提示詞不能為空",
+      "readonly": "只讀模式",
+      "tools": "工具",
+      "toolsOptional": "可選",
+      "noWorkspace": "需要先打開項目",
+      "cancel": "取消",
+      "submit": "創建",
+      "createSuccess": "已創建 Agent「{{name}}」",
+      "createFailed": "創建失敗："
+    }
+  }
+}

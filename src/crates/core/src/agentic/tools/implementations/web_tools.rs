@@ -402,9 +402,7 @@ impl WebFetchTool {
             .unwrap()
             .replace_all(&text, "\n");
 
-        let text = Regex::new(r"<[^>]+>")
-            .unwrap()
-            .replace_all(&text, " ");
+        let text = Regex::new(r"<[^>]+>").unwrap().replace_all(&text, " ");
 
         let text = text
             .replace("&lt;", "<")
@@ -780,7 +778,10 @@ mod tests {
 
     #[test]
     fn webfetch_is_html_detects_html_content() {
-        assert!(WebFetchTool::is_html(Some("text/html; charset=utf-8"), "any"));
+        assert!(WebFetchTool::is_html(
+            Some("text/html; charset=utf-8"),
+            "any"
+        ));
         assert!(WebFetchTool::is_html(Some("application/xhtml+xml"), "any"));
         assert!(WebFetchTool::is_html(None, "<!DOCTYPE html><html></html>"));
         assert!(WebFetchTool::is_html(None, "<html lang=\"en\"></html>"));

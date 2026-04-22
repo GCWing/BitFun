@@ -96,12 +96,14 @@ fn to_launch_response(kind: &BrowserKind, result: LaunchResult) -> BrowserContro
             message: Some(message),
             browser_kind: kind.to_string(),
         },
-        LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => BrowserControlLaunchResponse {
-            success: false,
-            status: "needs_restart".into(),
-            message: Some(instructions),
-            browser_kind: kind.to_string(),
-        },
+        LaunchResult::BrowserRunningWithoutCdp { instructions, .. } => {
+            BrowserControlLaunchResponse {
+                success: false,
+                status: "needs_restart".into(),
+                message: Some(instructions),
+                browser_kind: kind.to_string(),
+            }
+        }
     }
 }
 

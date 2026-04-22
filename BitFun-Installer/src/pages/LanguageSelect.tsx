@@ -9,6 +9,7 @@ interface LanguageSelectProps {
 const LANGUAGES = [
   { code: 'en', label: 'English', native: 'English' },
   { code: 'zh', label: 'Chinese', native: '\u7b80\u4f53\u4e2d\u6587' },
+  { code: 'zh-TW', label: 'Traditional Chinese', native: '繁體中文' },
 ];
 
 export function LanguageSelect({ onSelect }: LanguageSelectProps) {
@@ -159,7 +160,7 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
               justifyContent: 'center',
             }}
           >
-            {selected === 'zh' ? '\u7ee7\u7eed' : 'Continue'}
+            {selected === 'en' ? 'Continue' : selected === 'zh-TW' ? '繼續' : '\u7ee7\u7eed'}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>

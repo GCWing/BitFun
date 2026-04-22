@@ -48,17 +48,26 @@ export interface UseInstallerReturn {
 const STEPS: InstallStep[] = ['lang', 'options', 'progress', 'model', 'theme'];
 const MOCK_INSTALL_FOR_DEBUG = import.meta.env.DEV && import.meta.env.VITE_MOCK_INSTALL === 'true';
 
-function resolveUiLanguage(appLanguage?: string | null): 'zh' | 'en' {
+type InstallerUiLanguage = 'zh' | 'zh-TW' | 'en';
+
+function resolveUiLanguage(appLanguage?: string | null): InstallerUiLanguage {
   if (appLanguage === 'zh-CN') return 'zh';
+  if (appLanguage === 'zh-TW') return 'zh-TW';
   if (appLanguage === 'en-US') return 'en';
-  if (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh')) {
+  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : '';
+  if (browserLanguage === 'zh-tw' || browserLanguage === 'zh-hk' || browserLanguage === 'zh-mo' || browserLanguage.startsWith('zh-hant')) {
+    return 'zh-TW';
+  }
+  if (browserLanguage.startsWith('zh')) {
     return 'zh';
   }
   return 'en';
 }
 
-function mapUiLanguageToAppLanguage(uiLanguage: 'zh' | 'en'): 'zh-CN' | 'en-US' {
-  return uiLanguage === 'zh' ? 'zh-CN' : 'en-US';
+function mapUiLanguageToAppLanguage(uiLanguage: InstallerUiLanguage): 'zh-CN' | 'zh-TW' | 'en-US' {
+  if (uiLanguage === 'zh') return 'zh-CN';
+  if (uiLanguage === 'zh-TW') return 'zh-TW';
+  return 'en-US';
 }
 
 export function useInstaller(): UseInstallerReturn {

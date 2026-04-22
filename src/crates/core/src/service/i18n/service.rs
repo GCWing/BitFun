@@ -105,6 +105,11 @@ impl I18nService {
             bundles.insert(LocaleId::ZhCN, bundle);
         }
 
+        let zh_tw_ftl = include_str!("../../../locales/zh-TW.ftl");
+        if let Some(bundle) = Self::create_bundle("zh-TW", zh_tw_ftl) {
+            bundles.insert(LocaleId::ZhTW, bundle);
+        }
+
         let en_us_ftl = include_str!("../../../locales/en-US.ftl");
         if let Some(bundle) = Self::create_bundle("en-US", en_us_ftl) {
             bundles.insert(LocaleId::EnUS, bundle);

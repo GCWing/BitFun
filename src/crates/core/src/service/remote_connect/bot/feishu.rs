@@ -566,8 +566,7 @@ impl FeishuBot {
     async fn upload_file_to_feishu(&self, file_path: &str) -> Result<String> {
         let token = self.get_access_token().await?;
 
-        let content =
-            super::read_workspace_file(file_path, MAX_FEISHU_FILE_BYTES, None).await?;
+        let content = super::read_workspace_file(file_path, MAX_FEISHU_FILE_BYTES, None).await?;
 
         // Feishu uses its own file_type enum rather than MIME types.
         let ext = std::path::Path::new(&content.name)

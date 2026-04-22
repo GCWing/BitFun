@@ -9,6 +9,8 @@ pub enum LocaleId {
     #[serde(rename = "zh-CN")]
     #[default]
     ZhCN,
+    #[serde(rename = "zh-TW")]
+    ZhTW,
     #[serde(rename = "en-US")]
     EnUS,
 }
@@ -18,6 +20,7 @@ impl LocaleId {
     pub fn as_str(&self) -> &'static str {
         match self {
             LocaleId::ZhCN => "zh-CN",
+            LocaleId::ZhTW => "zh-TW",
             LocaleId::EnUS => "en-US",
         }
     }
@@ -27,6 +30,7 @@ impl LocaleId {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "zh-CN" => Some(LocaleId::ZhCN),
+            "zh-TW" => Some(LocaleId::ZhTW),
             "en-US" => Some(LocaleId::EnUS),
             _ => None,
         }
@@ -34,7 +38,7 @@ impl LocaleId {
 
     /// Returns all supported locales.
     pub fn all() -> Vec<LocaleId> {
-        vec![LocaleId::ZhCN, LocaleId::EnUS]
+        vec![LocaleId::ZhCN, LocaleId::ZhTW, LocaleId::EnUS]
     }
 }
 
@@ -68,6 +72,13 @@ impl LocaleMetadata {
                 name: "简体中文".to_string(),
                 english_name: "Simplified Chinese".to_string(),
                 native_name: "简体中文".to_string(),
+                rtl: false,
+            },
+            LocaleMetadata {
+                id: LocaleId::ZhTW,
+                name: "繁體中文".to_string(),
+                english_name: "Traditional Chinese".to_string(),
+                native_name: "繁體中文".to_string(),
                 rtl: false,
             },
             LocaleMetadata {

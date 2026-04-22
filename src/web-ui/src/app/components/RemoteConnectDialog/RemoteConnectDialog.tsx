@@ -64,6 +64,7 @@ const NGROK_SETUP_URL = 'https://dashboard.ngrok.com/get-started/setup';
 const RELAY_SERVER_README_URL = 'https://github.com/GCWing/BitFun/blob/main/src/apps/relay-server/README.md';
 const FEISHU_SETUP_GUIDE_URLS = {
   'zh-CN': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.zh-CN.md',
+  'zh-TW': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.zh-CN.md',
   'en-US': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.md',
 } as const;
 

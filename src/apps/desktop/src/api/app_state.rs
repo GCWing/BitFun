@@ -532,8 +532,12 @@ fn resolve_worker_host_path() -> Option<std::path::PathBuf> {
         if let Some(exe_dir) = exe.parent() {
             candidates.push(exe_dir.join("resources").join("worker_host.js"));
             if let Some(parent) = exe_dir.parent() {
-                candidates
-                    .push(parent.join("Resources").join("resources").join("worker_host.js"));
+                candidates.push(
+                    parent
+                        .join("Resources")
+                        .join("resources")
+                        .join("worker_host.js"),
+                );
                 candidates.push(parent.join("Resources").join("worker_host.js"));
                 if let Some(bin_name) = exe.file_name().and_then(|s| s.to_str()) {
                     candidates.push(

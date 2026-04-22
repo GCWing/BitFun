@@ -3,8 +3,8 @@
  *
  * Resolution order:
  *   1. `meta.i18n.locales[currentLanguage].<field>` (exact match)
- *   2. `meta.i18n.locales['en-US'].<field>`         (universal fallback)
- *   3. `meta.i18n.locales['zh-CN'].<field>`         (project default)
+ *   2. Chinese variants fall back to `zh-CN`
+ *   3. `meta.i18n.locales['en-US'].<field>`         (universal fallback)
  *   4. The top-level `meta.<field>` value           (author default / legacy apps)
  *
  * Apps without an `i18n` block (legacy or user-authored) keep working transparently.
@@ -12,7 +12,9 @@
 
 import type { MiniAppMeta, MiniAppLocaleStrings } from '@/infrastructure/api/service-api/MiniAppAPI';
 
-const FALLBACK_CHAIN = ['en-US', 'zh-CN'] as const;
+function getFallbackChain(currentLanguage: string): string[] {
+  return currentLanguage.startsWith('zh') ? ['zh-CN', 'en-US'] : ['en-US', 'zh-CN'];
+}
 
 type LocalizableStringField = 'name' | 'description';
 
@@ -24,7 +26,7 @@ export function pickLocalizedString(
   const fromCurrent = meta.i18n?.locales?.[currentLanguage]?.[field];
   if (fromCurrent) return fromCurrent;
 
-  for (const fallbackLang of FALLBACK_CHAIN) {
+  for (const fallbackLang of getFallbackChain(currentLanguage)) {
     if (fallbackLang === currentLanguage) continue;
     const v = meta.i18n?.locales?.[fallbackLang]?.[field];
     if (v) return v;
@@ -40,7 +42,7 @@ export function pickLocalizedTags(
   const fromCurrent = meta.i18n?.locales?.[currentLanguage]?.tags;
   if (fromCurrent && fromCurrent.length) return fromCurrent;
 
-  for (const fallbackLang of FALLBACK_CHAIN) {
+  for (const fallbackLang of getFallbackChain(currentLanguage)) {
     if (fallbackLang === currentLanguage) continue;
     const v = meta.i18n?.locales?.[fallbackLang]?.tags;
     if (v && v.length) return v;

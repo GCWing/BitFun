@@ -1,0 +1,171 @@
+{
+  "title": "基礎",
+  "subtitle": "界面語言、主題、日誌、終端與登錄啟動",
+  "appearance": {
+    "title": "外觀",
+    "hint": "界面語言與視覺主題",
+    "language": "語言",
+    "themes": "主題",
+    "builtIn": "內置",
+    "custom": "自定義",
+    "export": "導出",
+    "delete": "刪除",
+    "confirmDelete": "確定刪除主題 \"{{name}}\" 嗎？",
+    "languageRowHint": "選擇一個語言包作為當前界面語言。",
+    "themeRowHint": "選擇界面配色主題。",
+    "systemTheme": "跟隨系統",
+    "systemThemeDescription": "根據系統淺色/深色外觀自動在亮暗主題間切換，並隨系統切換而更新。",
+    "presets": {
+      "bitfun-dark": {
+        "name": "暗色",
+        "description": "默認暗色主題"
+      },
+      "bitfun-light": {
+        "name": "亮色",
+        "description": "亮色主題 - 素雅高級，淡藍灰調"
+      },
+      "bitfun-midnight": {
+        "name": "午夜",
+        "description": "午夜灰暗色主題 - 專業優雅，靈感來自 JetBrains IDE"
+      },
+      "bitfun-china-style": {
+        "name": "墨韻",
+        "description": "中國風主題 - 宣紙墨香，青花硃砂，溫潤典雅"
+      },
+      "bitfun-china-night": {
+        "name": "墨夜",
+        "description": "中國風暗色主題 - 墨夜星辰，月華如水，沉靜典雅"
+      },
+      "bitfun-cyber": {
+        "name": "賽博",
+        "description": "科技感主題 - 深邃黑洞，霓虹未來，極致科技美學"
+      },
+      "bitfun-slate": {
+        "name": "石板灰",
+        "description": "石板灰幾何主題 - 極深沉浸，高對比度灰度美學"
+      }
+    },
+    "fontSize": {
+      "title": "字體大小",
+      "hint": "調整界面與對話區域的字體大小（編輯器字號在編輯器設置中配置）。",
+      "uiSizeLabel": "界面字體",
+      "uiSizeHint": "調整導航、面板、設置等所有界面元素的字體大小。",
+      "levels": {
+        "compact": "緊湊",
+        "small": "小",
+        "default": "默認",
+        "medium": "中等",
+        "large": "大",
+        "custom": "自定義"
+      },
+      "customPxLabel": "自定義大小（12–20 px）",
+      "customPxPlaceholder": "14",
+      "customPxOutOfRange": "請輸入 12–20 之間的整數",
+      "resetButton": "恢復默認",
+      "previewText": "BitFun 是一個由 AI 驅動的編程環境。The quick brown fox jumps over the lazy dog.",
+      "flowChatLabel": "對話區域",
+      "flowChatHint": "關閉時對話區域比界面大 1 px，並隨界面檔位變化。開啟後在下方從列表中選擇 12–20 px。",
+      "flowChatCustomToggle": "自定義對話字號",
+      "flowChatPxOption": "{{n}} px"
+    }
+  },
+  "launchAtLogin": {
+    "sections": {
+      "title": "登錄時啟動",
+      "hint": "登錄本用戶後是否自動運行 BitFun"
+    },
+    "toggleLabel": "開機自動啟動",
+    "toggleDescription": "登錄系統後自動啟動 BitFun；具體表現因操作系統而異。",
+    "messages": {
+      "loading": "加載中…",
+      "loadFailed": "無法讀取開機啟動設置",
+      "saveFailed": "無法更新開機啟動設置"
+    }
+  },
+  "logging": {
+    "sections": {
+      "logging": "日誌",
+      "loggingHint": "日誌級別與本次啟動日誌目錄",
+      "level": "日誌級別",
+      "path": "本次啟動日誌路徑"
+    },
+    "level": {
+      "description": "實時控制日誌輸出級別，修改後立即生效。"
+    },
+    "path": {
+      "description": "本次啟動寫入日誌文件所在的目錄。"
+    },
+    "levels": {
+      "trace": "Trace",
+      "debug": "Debug",
+      "info": "Info",
+      "warn": "Warn",
+      "error": "Error",
+      "off": "Off"
+    },
+    "actions": {
+      "refreshTooltip": "刷新運行時狀態",
+      "openFolder": "打開文件夾",
+      "openFolderTooltip": "在文件管理器中打開日誌文件夾"
+    },
+    "messages": {
+      "loading": "加載中...",
+      "loadFailed": "加載日誌配置失敗",
+      "saveFailed": "保存日誌級別失敗",
+      "levelUpdated": "日誌級別已更新",
+      "refreshed": "運行時狀態已刷新",
+      "openedFolder": "日誌文件夾已打開",
+      "openFailed": "打開日誌文件夾失敗",
+      "pathUnavailable": "日誌文件夾路徑不可用"
+    }
+  },
+  "terminal": {
+    "sections": {
+      "terminal": "終端",
+      "terminalHint": "默認 Shell 與新建終端行為",
+      "defaultTerminal": "默認終端"
+    },
+    "controls": {
+      "refreshTooltip": "刷新可用終端列表",
+      "autoDetect": "自動檢測 (推薦)",
+      "description": "新建終端時使用的默認 Shell 類型",
+      "placeholder": "選擇默認終端",
+      "noShells": "未檢測到可用的終端"
+    },
+    "warnings": {
+      "cmd": "CMD 不支持 Shell 集成，AI 命令將通過 PowerShell 執行。",
+      "gitBash": "Git Bash 安裝 oh-my-zsh 後可能導致 Shell 集成失效，如遇異常建議切換至 PowerShell。"
+    },
+    "recommendations": {
+      "pwsh": {
+        "prefix": "推薦安裝使用",
+        "name": "PowerShell Core",
+        "suffix": "以獲得更好的跨平臺體驗和現代化功能",
+        "link": "前往下載"
+      }
+    },
+    "messages": {
+      "loading": "加載中...",
+      "loadFailed": "加載配置失敗",
+      "updated": "默認終端已更新",
+      "saveFailed": "保存配置失敗",
+      "refreshed": "已刷新可用終端列表"
+    }
+  },
+  "notifications": {
+    "title": "通知",
+    "hint": "Toast 彈窗通知偏好設置",
+    "dialogCompletion": {
+      "label": "任務完成通知",
+      "description": "當 AI 任務完成且窗口不在焦點時，彈出 Toast 通知"
+    },
+    "startupTips": {
+      "label": "啟動時顯示使用技巧",
+      "description": "每次啟動時隨機展示一條使用技巧卡片，幫助發現更多功能"
+    },
+    "messages": {
+      "saveSuccess": "通知設置已保存",
+      "saveFailed": "保存通知設置失敗"
+    }
+  }
+}

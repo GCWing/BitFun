@@ -1,0 +1,19 @@
+{
+  "title": "終端",
+  "emptyState": "從 Shell 導航中打開終端",
+  "dialog": {
+    "editTerminal": {
+      "title": "編輯終端",
+      "nameLabel": "名稱",
+      "namePlaceholder": "終端名稱",
+      "workingDirectoryLabel": "啟動路徑",
+      "workingDirectoryPlaceholder": "終端啟動時打開的路徑",
+      "workingDirectoryHint": "重新打開已保存的終端時會使用這個路徑",
+      "startupCommandLabel": "啟動命令（可選）",
+      "startupCommandPlaceholder": "終端啟動後自動執行的命令",
+      "startupCommandHint": "終端啟動後將自動執行此命令",
+      "cancel": "取消",
+      "save": "保存"
+    }
+  }
+}

@@ -26,7 +26,7 @@ function App() {
     i18n.changeLanguage(lang);
     installer.setOptions((prev) => ({
       ...prev,
-      appLanguage: lang === 'en' ? 'en-US' : 'zh-CN',
+      appLanguage: lang === 'en' ? 'en-US' : lang === 'zh-TW' ? 'zh-TW' : 'zh-CN',
     }));
     installer.next();
   };

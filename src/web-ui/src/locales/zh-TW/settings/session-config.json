@@ -1,0 +1,83 @@
+{
+  "title": "會話配置",
+  "subtitle": "會話相關 AI 功能與工具執行行為",
+  "features": {
+    "sessionTitle": {
+      "title": "會話標題自動生成",
+      "subtitle": "新對話時 AI 自動生成簡潔標題",
+      "warning": "會話標題將使用用戶消息的前 20 個字符"
+    },
+    "agentCompanion": {
+      "title": "Agent 夥伴",
+      "subtitle": "在收起的會話輸入框中顯示BitFun夥伴。",
+      "enable": "顯示 Agent 夥伴"
+    }
+  },
+  "toolExecution": {
+    "sectionTitle": "工具執行行為",
+    "sectionDescription": "本會話中 AI 調用工具時的確認與超時策略。"
+  },
+  "computerUse": {
+    "sectionTitle": "Computer use（桌面自動化）",
+    "sectionDescription": "在 BitFun 桌面端允許助理截取屏幕並控制鍵鼠；需多模態模型理解畫面。",
+    "enable": "啟用 Computer use",
+    "enableDesc": "關閉時，任何會話模式都不會啟用 ComputerUse 工具。",
+    "accessibility": "輔助功能",
+    "accessibilityDesc": "",
+    "screenCapture": "屏幕錄製",
+    "screenCaptureDesc": "",
+    "granted": "已授權",
+    "notGranted": "未授權",
+    "openSettings": "系統設置",
+    "refreshStatus": "刷新狀態",
+    "desktopOnly": "Computer use 僅在 BitFun 桌面應用中可用。",
+    "platformNote": "說明"
+  },
+  "browserControl": {
+    "sectionTitle": "瀏覽器控制",
+    "sectionDescription": "複用你的默認瀏覽器，保留登錄態、Cookie 和擴展。",
+    "desktopOnly": "瀏覽器控制僅在 BitFun 桌面應用中可用。",
+    "status": "連接狀態",
+    "statusDesc": "",
+    "notConnected": "未連接",
+    "refreshStatus": "刷新狀態",
+    "connect": "連接瀏覽器",
+    "connectSuccess": "已連接 {{browser}}",
+    "connectFailed": "連接瀏覽器失敗",
+    "restartSuccess": "已重啟 {{browser}} 並啟用調試模式",
+    "restartFailed": "重啟瀏覽器並啟用調試失敗",
+    "restartModal": {
+      "title": "啟用瀏覽器調試模式",
+      "description": "檢測到 {{browser}} 已在運行，當前實例未啟用調試端口。要讓 BitFun 控制瀏覽器，需要先重啟瀏覽器並以調試模式啟動。",
+      "warning": "此操作會關閉當前瀏覽器窗口。",
+      "cancel": "取消",
+      "confirm": "重啟並啟用調試",
+      "restarting": "正在重啟..."
+    },
+    "createLauncher": "創建啟動器",
+    "createLauncherSuccess": "啟動器已創建：{{path}}",
+    "createLauncherFailed": "創建啟動器失敗",
+    "createLauncherDesc": "創建帶調試端口的瀏覽器快捷方式。",
+    "tabs": "個標籤頁"
+  },
+  "model": {
+    "label": "模型",
+    "primary": "主力模型",
+    "fast": "快速模型"
+  },
+  "common": {
+    "enable": "啟用"
+  },
+  "models": {
+    "empty": "暫無可用模型，請先在「模型」中添加模型。",
+    "updateSuccess": "{{agentName}} 將使用 {{modelName}}"
+  },
+  "loading": {
+    "text": "加載配置中..."
+  },
+  "messages": {
+    "saveSuccess": "設置已保存",
+    "saveFailed": "保存失敗",
+    "updateFailed": "設置失敗"
+  }
+}

@@ -348,6 +348,7 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
     fn format_language_instruction(lang_code: &str) -> BitFunResult<String> {
         let language = match lang_code {
             "zh-CN" => "**Simplified Chinese**",
+            "zh-TW" => "**Traditional Chinese**",
             "en-US" => "**English**",
             _ => {
                 return Err(BitFunError::config(format!(

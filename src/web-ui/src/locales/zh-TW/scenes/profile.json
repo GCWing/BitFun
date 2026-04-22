@@ -1,0 +1,204 @@
+{
+  "defaultDesc": "專注於編程的 AI 夥伴，擅長代碼分析與項目管理",
+
+  "modelSlots": {
+    "primary":     { "label": "主力", "desc": "通用對話與推理" },
+    "fast":        { "label": "快速", "desc": "輕量快速響應" },
+    "compression": { "label": "壓縮", "desc": "上下文長度壓縮" },
+    "image":       { "label": "圖像", "desc": "圖像生成與理解" },
+    "voice":       { "label": "語音", "desc": "語音合成與識別" },
+    "retrieval":   { "label": "檢索", "desc": "向量檢索與嵌入" }
+  },
+
+  "slotDefault": {
+    "primary":     "主力模型",
+    "fast":        "快速模型",
+    "unconfigured": "未配置"
+  },
+
+  "modelGroups": {
+    "presets": "系統預設",
+    "models":  "可用模型"
+  },
+
+  "hero": {
+    "editNameTitle":  "點擊編輯名稱",
+    "editDescTitle":  "點擊編輯描述",
+    "descPlaceholder": "添加描述...",
+    "radarTitle":     "點擊圖形放大 · 點擊維度文字可跳轉"
+  },
+
+  "identity": {
+    "emoji": "表情標識",
+    "emojiPlaceholder": "設置表情標識",
+    "creature": "角色類型",
+    "creaturePlaceholderShort": "設置角色類型",
+    "vibe": "氣質風格",
+    "vibePlaceholderShort": "設置氣質風格",
+    "resetTooltip": "重置助手人設",
+    "resetConfirmTitle": "重置助手人設",
+    "resetConfirmMessage": "這會將 BOOTSTRAP.md、SOUL.md、USER.md 和 IDENTITY.md 恢復為默認模板，並覆蓋當前內容。確定繼續嗎？",
+    "resetConfirmAction": "確認重置",
+    "resetCancel": "取消",
+    "resetSuccess": "已重置助手人設",
+    "resetFailed": "重置助手人設失敗"
+  },
+
+  "home": {
+    "descHint": "點擊編輯 IDENTITY.md 正文。"
+  },
+
+  "sections": {
+    "brain":        "大腦",
+    "capabilities": "能力",
+    "interaction":  "交互"
+  },
+
+  "cards": {
+    "model":       "模型",
+    "rules":       "行為守則",
+    "memory":      "記憶",
+    "toolsMcp":    "工具與MCP",
+    "skills":      "技能",
+    "preferences": "偏好"
+  },
+
+  "actions": {
+    "globalManage": "全局管理",
+    "manage":       "管理",
+    "selectAll":    "全選",
+    "clearAll":     "清空",
+    "reset":        "重置",
+    "collapse":     "收起"
+  },
+
+  "kpi": {
+    "rules":        "用戶 {{user}} · 項目 {{project}} · {{enabled}} 啟用",
+    "memory":       "{{count}} 條啟用",
+    "skills":       "{{count}} 個啟用",
+    "toolStats":    "{{enabled}}/{{total}} 內置",
+    "toolStatsMcp": "{{enabled}}/{{total}} 內置 · MCP {{mcpHealthy}}/{{mcpTotal}}"
+  },
+
+  "empty": {
+    "rules":     "暫無守則",
+    "memory":    "暫無記憶",
+    "tools":     "暫無工具信息",
+    "skills":    "暫無技能"
+  },
+
+  "notifications": {
+    "modelUpdated":  "模型已更新",
+    "updateFailed":  "更新失敗",
+    "toggleFailed":  "切換失敗",
+    "resetSuccess":  "已重置",
+    "resetFailed":   "重置失敗",
+    "resetConfirm":  "確定要重置工具配置嗎？"
+  },
+
+  "radar": {
+    "title":    "性格雷達",
+    "subtitle": "點擊維度標籤可跳轉至對應配置",
+    "dims": {
+      "creativity":   "創造力",
+      "rigor":        "嚴謹度",
+      "autonomy":     "自主性",
+      "memory":       "記憶力",
+      "expression":   "表達力",
+      "adaptability": "適應性"
+    }
+  },
+
+  "prefs": {
+    "visualMode":         "可視化模式",
+    "visualModeDesc":     "執行時顯示可視化反饋",
+    "sessionTitle":       "會話自動命名",
+    "sessionTitleDesc":   "新會話自動生成標題"
+  },
+
+  "nursery": {
+    "backToGallery": "助理",
+
+    "gallery": {
+      "title":              "助理",
+      "subtitle":           "管理你的所有助理實例",
+      "newAssistant":       "新建助理",
+      "assistantsTitle":    "已孵化的助理",
+      "assistantsSubtitle": "點擊助理卡片進行配置"
+    },
+
+    "template": {
+      "title":        "孵化模板",
+      "subtitle":     "新助理孵化時繼承這裡的配置",
+      "configure":    "配置模板",
+      "tokenTitle":   "上下文佔用估算",
+      "tokenSystemPrompt": "系統提示詞",
+      "tokenToolInjection": "工具描述注入",
+      "tokenRules":   "行為守則",
+      "tokenMemories": "記憶",
+      "tokenTotal":   "默認總佔用",
+      "stats": {
+        "primaryDefault": "主力模型",
+        "fastDefault":    "快速模型",
+        "tools":          "{{count}} 個工具",
+        "skills":         "{{count}} 個技能"
+      },
+      "groupCountEmpty": "空",
+      "builtinToolsSection": "內置工具",
+      "colEnabled": "已啟用",
+      "colDisabled": "未啟用",
+      "colEmpty": "暫無",
+      "mcpToolsSection": "MCP 工具",
+      "mcpEmptyTitle": "未連接 MCP 服務器",
+      "mcpEmptyHint": "在設置中添加 MCP 服務器後，其工具將顯示於此",
+      "sectionModelsSubtitle": "新助理孵化時繼承的主力與快速模型槽位",
+      "mcpServerNoTools": "該服務器暫無可用工具",
+      "closeDetail": "關閉詳情",
+      "detailPanel": "詳情面板",
+      "openServerDetail": "查看 MCP 服務詳情",
+      "toolTypeBuiltin": "內置工具",
+      "toolTypeMcp": "MCP 工具",
+      "readonlyTool": "只讀",
+      "serverToolsHeading": "該服務下的工具",
+      "skillLevel": "級別 {{level}}"
+    },
+
+    "tabs": {
+      "identity":    "身份",
+      "personality": "性格",
+      "ability":     "能力",
+      "memory":      "記憶"
+    },
+
+    "card": {
+      "unnamed":             "未命名助理",
+      "noVibe":              "一個等待定義的助理",
+      "configure":           "點擊配置",
+      "newSession":          "新建會話",
+      "tokenTitle":          "上下文佔用估算",
+      "primaryBadge":        "主助理",
+      "delete":              "刪除助理",
+      "deleteConfirmTitle":  "刪除助理",
+      "deleteConfirmMessage": "確定要刪除助理「{{name}}」嗎？此操作不可撤銷。",
+      "deleteConfirm":       "確認刪除",
+      "deleteCancel":        "取消"
+    },
+
+    "assistant": {
+      "inheritGroup":   "繼承模板",
+      "inheritPrimary": "繼承模板（主力）",
+      "inheritFast":    "繼承模板（快速）",
+      "personaDocsTitle": "關鍵文檔",
+      "sessionsSectionTitle": "會話",
+      "scheduledSessionsTitle": "定時會話",
+      "scheduledSessionsNoWorkspace": "請先選擇助理工作區後再管理定時會話。",
+      "personaDocs": {
+        "IDENTITY": "身份",
+        "SOUL":     "核心人設",
+        "USER":     "用戶畫像"
+      },
+      "personaDocSaveFailed": "保存文檔失敗",
+      "personaDocLoadFailed": "讀取文檔失敗"
+    }
+  }
+}

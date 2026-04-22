@@ -29,6 +29,7 @@ pub async fn get_app_language_code() -> String {
 pub fn short_model_user_language_instruction(lang_code: &str) -> &'static str {
     match lang_code {
         "en-US" => "Use English",
+        "zh-TW" => "使用繁體中文",
         _ => "使用简体中文",
     }
 }

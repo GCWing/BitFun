@@ -97,7 +97,12 @@ fn version_manager_roots() -> Vec<PathBuf> {
     if let Some(home) = home_dir() {
         v.push(home.join(".nvm").join("versions").join("node"));
         v.push(home.join(".fnm").join("node-versions"));
-        v.push(home.join("Library").join("Application Support").join("fnm").join("node-versions"));
+        v.push(
+            home.join("Library")
+                .join("Application Support")
+                .join("fnm")
+                .join("node-versions"),
+        );
     }
     v
 }

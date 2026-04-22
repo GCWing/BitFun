@@ -4,15 +4,35 @@
   "description": "每日一卡程序员塔罗：综合/工作/灵感/财运四维运势，含今日宜忌与机缘提示，每天 0 点焕新。",
   "icon": "Sparkles",
   "category": "lifestyle",
-  "tags": ["占卜", "运势", "趣味", "内置"],
+  "tags": [
+    "占卜",
+    "运势",
+    "趣味",
+    "内置"
+  ],
   "version": 1,
   "created_at": 0,
   "updated_at": 0,
   "permissions": {
-    "fs": { "read": ["{appdata}"], "write": ["{appdata}"] },
-    "shell": { "allow": [] },
-    "net": { "allow": [] },
-    "node": { "enabled": true, "max_memory_mb": 128, "timeout_ms": 5000 }
+    "fs": {
+      "read": [
+        "{appdata}"
+      ],
+      "write": [
+        "{appdata}"
+      ]
+    },
+    "shell": {
+      "allow": []
+    },
+    "net": {
+      "allow": []
+    },
+    "node": {
+      "enabled": true,
+      "max_memory_mb": 128,
+      "timeout_ms": 5000
+    }
   },
   "ai_context": null,
   "i18n": {
@@ -20,12 +40,32 @@
       "zh-CN": {
         "name": "每日占卜",
         "description": "每日一卡程序员塔罗：综合/工作/灵感/财运四维运势，含今日宜忌与机缘提示，每天 0 点焕新。",
-        "tags": ["占卜", "运势", "趣味", "内置"]
+        "tags": [
+          "占卜",
+          "运势",
+          "趣味",
+          "内置"
+        ]
       },
       "en-US": {
         "name": "Daily Divination",
         "description": "A daily programmer-tarot card with overall / work / inspiration / luck scores, today's do's & don'ts, refreshing at midnight.",
-        "tags": ["divination", "fortune", "fun", "built-in"]
+        "tags": [
+          "divination",
+          "fortune",
+          "fun",
+          "built-in"
+        ]
+      },
+      "zh-TW": {
+        "name": "每日佔卜",
+        "description": "每日一卡程序員塔羅：綜合/工作/靈感/財運四維運勢，含今日宜忌與機緣提示，每天 0 點煥新。",
+        "tags": [
+          "占卜",
+          "運勢",
+          "趣味",
+          "內置"
+        ]
       }
     }
   }

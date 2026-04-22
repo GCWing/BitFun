@@ -1,0 +1,81 @@
+{
+  "success": {
+    "fileSaved": "文件已保存",
+    "fileCreated": "文件已創建",
+    "fileDeleted": "文件已刪除",
+    "fileRenamed": "文件已重命名",
+    "folderCreated": "文件夾已創建",
+    "folderDeleted": "文件夾已刪除",
+    "copied": "已複製到剪貼板",
+    "settingsSaved": "設置已保存",
+    "configImported": "配置已導入",
+    "configExported": "配置已導出",
+    "gitCommit": "提交成功",
+    "gitPush": "推送成功",
+    "gitPull": "拉取成功",
+    "gitStash": "已貯藏更改",
+    "gitStashApply": "已應用貯藏",
+    "snapshotCreated": "快照已創建",
+    "snapshotRestored": "快照已恢復",
+    "languageChanged": "語言已切換",
+    "themeChanged": "主題已切換",
+    "connectionEstablished": "連接已建立"
+  },
+  "error": {
+    "fileSaveFailed": "保存文件失敗",
+    "fileCreateFailed": "創建文件失敗",
+    "fileDeleteFailed": "刪除文件失敗",
+    "operationFailed": "操作失敗",
+    "networkError": "網絡錯誤",
+    "unexpectedError": "發生意外錯誤"
+  },
+  "warning": {
+    "unsavedChanges": "有未保存的更改",
+    "largeFile": "文件較大，加載可能較慢",
+    "deprecatedFeature": "此功能即將棄用",
+    "experimentalFeature": "這是實驗性功能",
+    "lowMemory": "內存不足",
+    "diskSpace": "磁盤空間不足"
+  },
+  "info": {
+    "loading": "正在加載...",
+    "processing": "正在處理...",
+    "downloading": "正在下載...",
+    "uploading": "正在上傳...",
+    "indexing": "正在索引文件...",
+    "searching": "正在搜索...",
+    "updating": "正在更新...",
+    "installing": "正在安裝...",
+    "connecting": "正在連接...",
+    "syncing": "正在同步...",
+    "assistantBootstrapWaitingForModelConfiguration": "Assistant 引導正在等待 AI 模型配置。"
+  },
+  "announcements": {
+    "common": {
+      "learn_more": "查看詳情",
+      "got_it": "知道了",
+      "later": "稍後",
+      "close": "關閉",
+      "prev": "上一頁",
+      "next": "下一頁",
+      "done": "完成",
+      "never_show_again": "不再顯示",
+      "page": "第",
+      "more_count": "還有 {{count}} 條"
+    },
+    "welcome": {
+      "toast_title": "歡迎使用 BitFun",
+      "toast_desc": "AI 驅動的編程環境，助您事半功倍",
+      "modal_title": "歡迎來到 BitFun",
+      "modal_body": "BitFun 是一款以 AI 為核心的編程環境。\n\n通過多輪對話與工具協作，讓開發更高效。"
+    }
+  },
+  "confirm": {
+    "deleteFile": "確定要刪除此文件嗎？",
+    "deleteFolder": "確定要刪除此文件夾及其所有內容嗎？",
+    "discardChanges": "確定要放棄所有更改嗎？",
+    "resetSettings": "確定要重置所有設置嗎？",
+    "closeUnsaved": "有未保存的更改，確定要關閉嗎？",
+    "exitApp": "確定要退出應用嗎？"
+  }
+}
