@@ -8,12 +8,12 @@ use crate::agentic::core::{
 };
 use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
-    normalize_remote_workspace_path, remote_workspace_session_mirror_dir,
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionStatus, SessionTranscriptExport,
-    SessionTranscriptExportOptions, SessionTranscriptIndexEntry, ToolItemData, TranscriptLineRange,
+    SessionTranscriptExportOptions, SessionTranscriptIndexEntry, StoredSessionIndexFile,
+    StoredSessionMetadataFile, ToolItemData, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -28,7 +28,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::sync::Mutex;
 
-const SESSION_SCHEMA_VERSION: u32 = 2;
 const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
 const JSON_WRITE_MAX_RETRIES: usize = 5;
 const JSON_WRITE_RETRY_BASE_DELAY_MS: u64 = 30;
@@ -36,13 +35,6 @@ const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 
 static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static SESSION_INDEX_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredSessionMetadataFile {
-    schema_version: u32,
-    #[serde(flatten)]
-    metadata: SessionMetadata,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredDialogTurnFile {
@@ -66,13 +58,6 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredSessionIndex {
-    schema_version: u32,
-    updated_at: u64,
-    sessions: Vec<SessionMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -630,7 +615,7 @@ impl PersistenceManager {
 
         let workspace_root = resolved_identity
             .as_ref()
-            .map(|identity| identity.workspace_path.clone())
+            .map(|identity| identity.logical_workspace_path().to_string())
             .or_else(|| session.config.workspace_path.clone())
             .or_else(|| existing.and_then(|value| value.workspace_path.clone()))
             .unwrap_or_else(|| workspace_path.to_string_lossy().to_string());
@@ -1250,11 +1235,10 @@ impl PersistenceManager {
             .filter(|metadata| !metadata.should_hide_from_user_lists())
             .collect::<Vec<_>>();
 
-        let index = StoredSessionIndex {
-            schema_version: SESSION_SCHEMA_VERSION,
-            updated_at: Self::system_time_to_unix_ms(SystemTime::now()),
-            sessions: visible_sessions.clone(),
-        };
+        let index = StoredSessionIndexFile::new(
+            Self::system_time_to_unix_ms(SystemTime::now()),
+            visible_sessions.clone(),
+        );
         self.write_json_atomic(&self.index_path(workspace_path), &index)
             .await?;
 
@@ -1268,10 +1252,10 @@ impl PersistenceManager {
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
         let mut index = self
-            .read_json_optional::<StoredSessionIndex>(&index_path)
+            .read_json_optional::<StoredSessionIndexFile>(&index_path)
             .await?
-            .unwrap_or(StoredSessionIndex {
-                schema_version: SESSION_SCHEMA_VERSION,
+            .unwrap_or(StoredSessionIndexFile {
+                schema_version: SESSION_STORAGE_SCHEMA_VERSION,
                 updated_at: 0,
                 sessions: Vec::new(),
             });
@@ -1290,7 +1274,7 @@ impl PersistenceManager {
             .sessions
             .sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
         index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
-        index.schema_version = SESSION_SCHEMA_VERSION;
+        index.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
         self.write_json_atomic(&index_path, &index).await
     }
 
@@ -1301,7 +1285,7 @@ impl PersistenceManager {
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
         let Some(mut index) = self
-            .read_json_optional::<StoredSessionIndex>(&index_path)
+            .read_json_optional::<StoredSessionIndexFile>(&index_path)
             .await?
         else {
             return Ok(());
@@ -1352,7 +1336,7 @@ impl PersistenceManager {
         let _guard = lock.lock().await;
         let index_path = self.index_path(workspace_path);
         if let Some(index) = self
-            .read_json_optional::<StoredSessionIndex>(&index_path)
+            .read_json_optional::<StoredSessionIndexFile>(&index_path)
             .await?
         {
             let has_stale_entry = index.sessions.iter().any(|metadata| {
@@ -1397,10 +1381,7 @@ impl PersistenceManager {
         self.ensure_session_dir(workspace_path, &metadata.session_id)
             .await?;
 
-        let file = StoredSessionMetadataFile {
-            schema_version: SESSION_SCHEMA_VERSION,
-            metadata: metadata.clone(),
-        };
+        let file = StoredSessionMetadataFile::new(metadata.clone());
 
         self.write_json_atomic(
             &self.metadata_path(workspace_path, &metadata.session_id),
@@ -1462,7 +1443,7 @@ impl PersistenceManager {
             .await?;
 
         let snapshot = StoredTurnContextSnapshotFile {
-            schema_version: SESSION_SCHEMA_VERSION,
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             session_id: session_id.to_string(),
             turn_index,
             messages: Self::sanitize_messages_for_persistence(messages),
@@ -1598,7 +1579,7 @@ impl PersistenceManager {
             .await?;
 
         let state = StoredSessionStateFile {
-            schema_version: SESSION_SCHEMA_VERSION,
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             config: session.config.clone(),
             snapshot_session_id: session.snapshot_session_id.clone(),
             compression_state: session.compression_state.clone(),
@@ -1684,7 +1665,7 @@ impl PersistenceManager {
             .load_stored_session_state(workspace_path, session_id)
             .await?
             .unwrap_or(StoredSessionStateFile {
-                schema_version: SESSION_SCHEMA_VERSION,
+                schema_version: SESSION_STORAGE_SCHEMA_VERSION,
                 config: SessionConfig {
                     workspace_path: None,
                     ..Default::default()
@@ -1693,7 +1674,7 @@ impl PersistenceManager {
                 compression_state: CompressionState::default(),
                 runtime_state: SessionState::Idle,
             });
-        stored_state.schema_version = SESSION_SCHEMA_VERSION;
+        stored_state.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
         stored_state.runtime_state = Self::sanitize_runtime_state(state);
         self.save_stored_session_state(workspace_path, session_id, &stored_state)
             .await
@@ -1772,7 +1753,7 @@ impl PersistenceManager {
             .await?;
 
         let file = StoredDialogTurnFile {
-            schema_version: SESSION_SCHEMA_VERSION,
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             turn: turn.clone(),
         };
         self.write_json_atomic(
@@ -2169,177 +2150,6 @@ impl PersistenceManager {
         Ok(())
     }
 
-    /// Migrate sessions that were saved to the wrong on-disk location prior to the fix.
-    ///
-    /// Two failure modes existed for remote SSH workspaces:
-    ///
-    /// 1. The frontend-saved sessions for a remote workspace went through
-    ///    `desktop_effective_session_storage_path`, which returns
-    ///    `~/.bitfun/remote_ssh/{host}/{path}/sessions`. That path was then
-    ///    re-slugified by `PathManager::project_sessions_dir` and ended up at
-    ///    `~/.bitfun/projects/<slug-of-mirror-path>/sessions/`.
-    /// 2. The coordinator's safety-net writer did not pass remote SSH info, so
-    ///    the raw remote POSIX root (e.g. `/root/lwb/repo/BitFun`) was treated
-    ///    as a local workspace and slugified to
-    ///    `~/.bitfun/projects/<slug-of-remote-root>/sessions/Recovered Session…`.
-    ///
-    /// This routine scans `~/.bitfun/projects/*/sessions/` for any session whose
-    /// `metadata.json` records a non-`localhost` `workspaceHostname`, and moves
-    /// the session directory to the correct mirror dir at
-    /// `~/.bitfun/remote_ssh/{host}/{normalized path}/sessions/`.
-    /// Empty source `sessions` and project dirs are removed afterwards.
-    ///
-    /// Safe to call repeatedly; sessions already at the destination are left in place.
-    pub async fn migrate_misplaced_remote_sessions(&self) {
-        let projects_root = self.path_manager.projects_root();
-        let mut project_iter = match fs::read_dir(&projects_root).await {
-            Ok(it) => it,
-            Err(e) if e.kind() == ErrorKind::NotFound => return,
-            Err(e) => {
-                warn!(
-                    "migrate_misplaced_remote_sessions: cannot read {}: {}",
-                    projects_root.display(),
-                    e
-                );
-                return;
-            }
-        };
-
-        let mut moved_total: usize = 0;
-        let mut scanned_projects: usize = 0;
-
-        while let Ok(Some(project_entry)) = project_iter.next_entry().await {
-            let project_dir = project_entry.path();
-            let sessions_dir = project_dir.join("sessions");
-            if !sessions_dir.is_dir() {
-                continue;
-            }
-            scanned_projects += 1;
-
-            let mut session_iter = match fs::read_dir(&sessions_dir).await {
-                Ok(it) => it,
-                Err(_) => continue,
-            };
-
-            let mut moved_in_project: usize = 0;
-            let mut session_count: usize = 0;
-            while let Ok(Some(session_entry)) = session_iter.next_entry().await {
-                let session_dir = session_entry.path();
-                if !session_dir.is_dir() {
-                    continue;
-                }
-                session_count += 1;
-
-                let metadata_path = session_dir.join("metadata.json");
-                let raw = match fs::read(&metadata_path).await {
-                    Ok(b) => b,
-                    Err(_) => continue,
-                };
-                let stored: StoredSessionMetadataFile = match serde_json::from_slice(&raw) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                let metadata = stored.metadata;
-                let hostname = metadata
-                    .workspace_hostname
-                    .as_deref()
-                    .map(str::trim)
-                    .unwrap_or("");
-                let workspace_path = metadata
-                    .workspace_path
-                    .as_deref()
-                    .map(str::trim)
-                    .unwrap_or("");
-                if workspace_path.is_empty() {
-                    continue;
-                }
-                // Only handle records that are clearly remote workspaces.
-                if hostname.is_empty()
-                    || hostname == LOCAL_WORKSPACE_SSH_HOST
-                    || hostname == "_unresolved"
-                {
-                    continue;
-                }
-
-                let target_sessions_dir = remote_workspace_session_mirror_dir(
-                    hostname,
-                    &normalize_remote_workspace_path(workspace_path),
-                );
-                let target_dir = target_sessions_dir.join(&metadata.session_id);
-                if target_dir.exists() {
-                    // Destination already populated — drop the legacy copy.
-                    if let Err(e) = fs::remove_dir_all(&session_dir).await {
-                        warn!(
-                            "migrate_misplaced_remote_sessions: failed to remove duplicate {}: {}",
-                            session_dir.display(),
-                            e
-                        );
-                    } else {
-                        moved_in_project += 1;
-                    }
-                    continue;
-                }
-
-                if let Err(e) = fs::create_dir_all(&target_sessions_dir).await {
-                    warn!(
-                        "migrate_misplaced_remote_sessions: cannot create {}: {}",
-                        target_sessions_dir.display(),
-                        e
-                    );
-                    continue;
-                }
-                if let Err(e) = fs::rename(&session_dir, &target_dir).await {
-                    warn!(
-                        "migrate_misplaced_remote_sessions: failed to move {} -> {}: {}",
-                        session_dir.display(),
-                        target_dir.display(),
-                        e
-                    );
-                    continue;
-                }
-                info!(
-                    "migrate_misplaced_remote_sessions: moved session {} from {} to {}",
-                    metadata.session_id,
-                    session_dir.display(),
-                    target_dir.display()
-                );
-                moved_in_project += 1;
-
-                // Force the destination index to rebuild on next read.
-                let dest_index = target_sessions_dir.join("index.json");
-                if dest_index.exists() {
-                    let _ = fs::remove_file(&dest_index).await;
-                }
-            }
-
-            // If we drained every session from this legacy project dir, clean it up so
-            // it doesn't keep showing as an empty entry under ~/.bitfun/projects/.
-            if moved_in_project > 0 && moved_in_project == session_count {
-                let _ = fs::remove_file(sessions_dir.join("index.json")).await;
-                let _ = fs::remove_dir(&sessions_dir).await;
-                // Best-effort: only drop the project dir if it is now empty.
-                if let Ok(mut leftover) = fs::read_dir(&project_dir).await {
-                    if leftover
-                        .next_entry()
-                        .await
-                        .map(|e| e.is_none())
-                        .unwrap_or(false)
-                    {
-                        let _ = fs::remove_dir(&project_dir).await;
-                    }
-                }
-            }
-
-            moved_total += moved_in_project;
-        }
-
-        if moved_total > 0 {
-            info!(
-                "migrate_misplaced_remote_sessions: relocated {} session(s) across {} project dir(s)",
-                moved_total, scanned_projects
-            );
-        }
-    }
 }
 
 #[cfg(test)]
