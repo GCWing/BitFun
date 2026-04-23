@@ -61,6 +61,11 @@ pnpm --dir tests/e2e exec wdio run ./config/wdio.conf.ts --spec "./specs/<file>.
 - `pnpm run desktop:preview:debug` 会启动或复用 web dev server，并直接拉起现有的 `target/debug/bitfun-desktop(.exe)`，不会经过 `tauri dev`；前端改动后的桌面人工检查优先用它。
 - `pnpm run desktop:preview:debug:rebuild` 会先以 `CARGO_PROFILE_DEV_DEBUG=0` 和更高并行 codegen 重新构建 `bitfun-desktop`，再进入同样的快速预览流程；临时本地调试 Rust / Tauri 且更看重周转速度时优先用它。
 - 上面两个命令只是本地迭代加速手段，不能替代下方与改动范围匹配的最小验证集合。
+- 如果用户的意图是“快速看看效果”“本地跑起来看一下”这类人工预览，即使表述里同时出现了“编译”或“调试版本”，也优先使用上面的 preview 命令。
+- `pnpm run desktop:build:fast` 只保留给“明确要一个 debug 构建产物，且不需要顺手启动预览”的场景。
+- 意图示例：
+  - “本地编译一个调试版本快速看看效果” -> `pnpm run desktop:preview:debug:rebuild`
+  - “只编一个 debug 产物给我，不用启动” -> `pnpm run desktop:build:fast`
 
 ## 打包请求
 

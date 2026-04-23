@@ -61,6 +61,11 @@ pnpm --dir tests/e2e exec wdio run ./config/wdio.conf.ts --spec "./specs/<file>.
 - `pnpm run desktop:preview:debug` starts or reuses the web dev server and launches the existing `target/debug/bitfun-desktop(.exe)` without `tauri dev`; prefer it for frontend-only manual desktop checks.
 - `pnpm run desktop:preview:debug:rebuild` first rebuilds `bitfun-desktop` in dev mode with `CARGO_PROFILE_DEV_DEBUG=0` and high codegen parallelism, then launches the same preview flow; prefer it for temporary local Rust / Tauri debugging when you care most about turnaround time.
 - These preview commands are for local iteration speed only. They do not replace the minimum verification set below before you finish the task.
+- If the user intent is to "quickly check the effect", "run locally for a quick look", or similar manual inspection, prefer the preview commands above even when the request also mentions "build" or "debug version".
+- Reserve `pnpm run desktop:build:fast` for cases where the user explicitly wants a debug build artifact and does not need the app launched for preview.
+- Intent examples:
+  - "build a local debug version and quickly inspect it" -> `pnpm run desktop:preview:debug:rebuild`
+  - "build me a debug artifact only, no need to launch it" -> `pnpm run desktop:build:fast`
 
 ## Packaging Requests
 

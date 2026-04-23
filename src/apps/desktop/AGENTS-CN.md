@@ -23,6 +23,7 @@
 - 保持 Tauri command 一致：名称使用 `snake_case`，调用使用结构化 `request`
 - 桌面端专属集成留在这里，不要下沉到共享 core
 - 本地临时调试时，Rust / Tauri 改动后优先使用 `pnpm run desktop:preview:debug:rebuild`，仅共享前端改动时优先使用 `pnpm run desktop:preview:debug`；只有在需要完整 Tauri dev watcher，或正在排查启动 / 构建集成本身时，才回到 `pnpm run desktop:dev`
+- 当表述里同时出现“编译/调试版本”和“快速看看效果/先看一下”时，按更高层的“预览”意图处理，优先使用 preview 命令，而不是 `pnpm run desktop:build:fast`
 
 推荐命令形状：
 
@@ -63,6 +64,8 @@ cargo build -p bitfun-desktop
 ```
 
 上面的 preview 命令只是迭代捷径，完成任务前仍要按要求执行最小 Rust 检查，以及必要的 build / E2E 验证。
+
+`pnpm run desktop:build:fast` 只用于用户明确要 debug 构建产物、且不需要启动应用预览的场景。
 
 涉及打包或 release 请求时：
 
