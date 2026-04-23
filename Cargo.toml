@@ -118,6 +118,7 @@ unic-langid = "0.9"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 aes-gcm = "0.10"
 sha2 = "0.10"
+sha1 = "0.10"
 rand = "0.8"
 
 # Device/Network info (Remote Connect)

@@ -5,8 +5,17 @@ use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use screenshots::display_info::DisplayInfo;
 
 pub fn validate_query(q: &UiElementLocateQuery) -> BitFunResult<()> {
+    // node_idx alone is enough: it short-circuits BFS via the per-pid AX cache.
+    if q.node_idx.is_some() {
+        return Ok(());
+    }
     let t = q
         .title_contains
+        .as_ref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    let tx = q
+        .text_contains
         .as_ref()
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
@@ -20,13 +29,42 @@ pub fn validate_query(q: &UiElementLocateQuery) -> BitFunResult<()> {
         .as_ref()
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
-    if !t && !r && !i {
+    if !t && !tx && !r && !i {
         return Err(BitFunError::tool(
-            "Provide at least one of: title_contains, role_substring, identifier_contains (non-empty)."
+            "Provide at least one of: node_idx, text_contains, title_contains, role_substring, identifier_contains (non-empty)."
                 .to_string(),
         ));
     }
     Ok(())
+}
+
+/// All AX text-bearing attributes considered by `matches_filters` / ranking.
+/// Pass `None` for anything the platform host can't read (e.g. AT-SPI lacks `help`).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NodeAttrs<'a> {
+    pub role: Option<&'a str>,
+    pub subrole: Option<&'a str>,
+    pub title: Option<&'a str>,
+    pub value: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub identifier: Option<&'a str>,
+    pub help: Option<&'a str>,
+}
+
+impl<'a> NodeAttrs<'a> {
+    /// Convenience for the legacy three-field path (role/title/ident).
+    pub fn legacy(
+        role: Option<&'a str>,
+        title: Option<&'a str>,
+        identifier: Option<&'a str>,
+    ) -> Self {
+        Self {
+            role,
+            title,
+            identifier,
+            ..Self::default()
+        }
+    }
 }
 
 fn global_xy_to_native_with_display(d: &DisplayInfo, gx: f64, gy: f64) -> BitFunResult<(u32, u32)> {
@@ -133,35 +171,78 @@ fn combine_is_any(query: &UiElementLocateQuery) -> bool {
     matches!(query.filter_combine.as_deref(), Some("any") | Some("or"))
 }
 
+/// `role_substring` evaluator that also considers `subrole` (macOS often distinguishes
+/// "search field" from "plain text field" only via `AXSubrole`).
+fn role_or_subrole_matches(role: Option<&str>, subrole: Option<&str>, want: &str) -> bool {
+    if role_substring_matches_ax_role(role.unwrap_or(""), want) {
+        return true;
+    }
+    if let Some(sr) = subrole {
+        if !sr.is_empty() && contains_ci(sr, want) {
+            return true;
+        }
+    }
+    false
+}
+
+/// `text_contains` semantics: case-insensitive substring match against any of
+/// `title | value | description | help`.
+fn text_contains_matches(n: &NodeAttrs<'_>, want: &str) -> bool {
+    let w = want.trim();
+    if w.is_empty() {
+        return true;
+    }
+    if contains_ci(n.title.unwrap_or(""), w) {
+        return true;
+    }
+    if contains_ci(n.value.unwrap_or(""), w) {
+        return true;
+    }
+    if contains_ci(n.description.unwrap_or(""), w) {
+        return true;
+    }
+    if contains_ci(n.help.unwrap_or(""), w) {
+        return true;
+    }
+    false
+}
+
 /// OR semantics: element matches if **at least one** non-empty filter matches.
-pub fn matches_filters_any(
-    query: &UiElementLocateQuery,
-    role: Option<&str>,
-    title: Option<&str>,
-    ident: Option<&str>,
-) -> bool {
+pub fn matches_filters_any_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
     let mut has_filter = false;
     let mut matched = false;
     if let Some(ref want) = query.role_substring {
-        if !want.trim().is_empty() {
+        let w = want.trim();
+        if !w.is_empty() {
             has_filter = true;
-            if role_substring_matches_ax_role(role.unwrap_or(""), want.trim()) {
+            if role_or_subrole_matches(n.role, n.subrole, w) {
                 matched = true;
             }
         }
     }
     if let Some(ref want) = query.title_contains {
-        if !want.trim().is_empty() {
+        let w = want.trim();
+        if !w.is_empty() {
             has_filter = true;
-            if contains_ci(title.unwrap_or(""), want.trim()) {
+            if contains_ci(n.title.unwrap_or(""), w) {
+                matched = true;
+            }
+        }
+    }
+    if let Some(ref want) = query.text_contains {
+        let w = want.trim();
+        if !w.is_empty() {
+            has_filter = true;
+            if text_contains_matches(n, w) {
                 matched = true;
             }
         }
     }
     if let Some(ref want) = query.identifier_contains {
-        if !want.trim().is_empty() {
+        let w = want.trim();
+        if !w.is_empty() {
             has_filter = true;
-            if contains_ci(ident.unwrap_or(""), want.trim()) {
+            if contains_ci(n.identifier.unwrap_or(""), w) {
                 matched = true;
             }
         }
@@ -170,50 +251,73 @@ pub fn matches_filters_any(
 }
 
 /// AND semantics (default): **every** non-empty filter must match the same element.
-pub fn matches_filters_all(
-    query: &UiElementLocateQuery,
-    role: Option<&str>,
-    title: Option<&str>,
-    ident: Option<&str>,
-) -> bool {
+pub fn matches_filters_all_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
     if let Some(ref want) = query.role_substring {
-        if !want.trim().is_empty() {
-            let r = role.unwrap_or("");
-            if !role_substring_matches_ax_role(r, want.trim()) {
-                return false;
-            }
+        let w = want.trim();
+        if !w.is_empty() && !role_or_subrole_matches(n.role, n.subrole, w) {
+            return false;
         }
     }
     if let Some(ref want) = query.title_contains {
-        if !want.trim().is_empty() {
-            let t = title.unwrap_or("");
-            if !contains_ci(t, want.trim()) {
-                return false;
-            }
+        let w = want.trim();
+        if !w.is_empty() && !contains_ci(n.title.unwrap_or(""), w) {
+            return false;
+        }
+    }
+    if let Some(ref want) = query.text_contains {
+        let w = want.trim();
+        if !w.is_empty() && !text_contains_matches(n, w) {
+            return false;
         }
     }
     if let Some(ref want) = query.identifier_contains {
-        if !want.trim().is_empty() {
-            let i = ident.unwrap_or("");
-            if !contains_ci(i, want.trim()) {
-                return false;
-            }
+        let w = want.trim();
+        if !w.is_empty() && !contains_ci(n.identifier.unwrap_or(""), w) {
+            return false;
         }
     }
     true
 }
 
+/// Structured matcher (preferred, used by macOS host).
+pub fn matches_filters_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
+    if combine_is_any(query) {
+        matches_filters_any_attrs(query, n)
+    } else {
+        matches_filters_all_attrs(query, n)
+    }
+}
+
+/// Legacy three-field shim — preserved so linux/windows hosts compile while they migrate.
+/// New code should construct `NodeAttrs` and call [`matches_filters_attrs`] directly.
+#[allow(dead_code)]
 pub fn matches_filters(
     query: &UiElementLocateQuery,
     role: Option<&str>,
     title: Option<&str>,
     ident: Option<&str>,
 ) -> bool {
-    if combine_is_any(query) {
-        matches_filters_any(query, role, title, ident)
-    } else {
-        matches_filters_all(query, role, title, ident)
-    }
+    matches_filters_attrs(query, &NodeAttrs::legacy(role, title, ident))
+}
+
+#[allow(dead_code)]
+pub fn matches_filters_any(
+    query: &UiElementLocateQuery,
+    role: Option<&str>,
+    title: Option<&str>,
+    ident: Option<&str>,
+) -> bool {
+    matches_filters_any_attrs(query, &NodeAttrs::legacy(role, title, ident))
+}
+
+#[allow(dead_code)]
+pub fn matches_filters_all(
+    query: &UiElementLocateQuery,
+    role: Option<&str>,
+    title: Option<&str>,
+    ident: Option<&str>,
+) -> bool {
+    matches_filters_all_attrs(query, &NodeAttrs::legacy(role, title, ident))
 }
 
 #[allow(dead_code)] // Used by windows_ax_ui / linux_ax_ui (not compiled on macOS)
@@ -292,7 +396,47 @@ pub fn ok_result_with_context(
         parent_context,
         total_matches,
         other_matches,
+        matched_node_idx: None,
+        matched_via: None,
     })
+}
+
+/// Same as [`ok_result_with_context`] plus traceability fields for `matched_node_idx` /
+/// `matched_via`. New code should prefer this entry point.
+#[allow(clippy::too_many_arguments)]
+pub fn ok_result_with_context_full(
+    gx: f64,
+    gy: f64,
+    bounds_left: f64,
+    bounds_top: f64,
+    bounds_width: f64,
+    bounds_height: f64,
+    matched_role: String,
+    matched_title: Option<String>,
+    matched_identifier: Option<String>,
+    parent_context: Option<String>,
+    total_matches: u32,
+    other_matches: Vec<String>,
+    matched_node_idx: Option<u32>,
+    matched_via: Option<String>,
+) -> BitFunResult<UiElementLocateResult> {
+    let mut r = ok_result_with_context(
+        gx,
+        gy,
+        bounds_left,
+        bounds_top,
+        bounds_width,
+        bounds_height,
+        matched_role,
+        matched_title,
+        matched_identifier,
+        parent_context,
+        total_matches,
+        other_matches,
+    )?;
+    r.matched_node_idx = matched_node_idx;
+    r.matched_via = matched_via;
+    Ok(r)
 }
 
 #[cfg(test)]
@@ -344,6 +488,95 @@ mod tests {
         // A point at logical (1440 + 960, 540) = display center.
         let (nx, ny) = global_xy_to_native_with_display(&d, 2400.0, 540.0).unwrap();
         assert_eq!((nx, ny), (1440, 810));
+    }
+
+    fn q_text(needle: &str) -> UiElementLocateQuery {
+        UiElementLocateQuery {
+            text_contains: Some(needle.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn text_contains_matches_value_or_description() {
+        let q = q_text("五子棋");
+        let n_value = NodeAttrs {
+            role: Some("AXStaticText"),
+            value: Some("五子棋 - 经典对战"),
+            ..Default::default()
+        };
+        assert!(matches_filters_attrs(&q, &n_value));
+
+        let n_desc = NodeAttrs {
+            role: Some("AXButton"),
+            description: Some("打开五子棋"),
+            ..Default::default()
+        };
+        assert!(matches_filters_attrs(&q, &n_desc));
+
+        let n_help = NodeAttrs {
+            role: Some("AXImage"),
+            help: Some("Five In A Row 五子棋"),
+            ..Default::default()
+        };
+        assert!(matches_filters_attrs(&q, &n_help));
+    }
+
+    #[test]
+    fn text_contains_does_not_change_title_only_semantic() {
+        // title_contains MUST still only inspect AXTitle; value/description should be ignored.
+        let q = UiElementLocateQuery {
+            title_contains: Some("Send".to_string()),
+            ..Default::default()
+        };
+        let n = NodeAttrs {
+            role: Some("AXButton"),
+            title: None,
+            value: Some("Send"),
+            description: Some("Send message"),
+            ..Default::default()
+        };
+        assert!(!matches_filters_attrs(&q, &n));
+
+        let n2 = NodeAttrs {
+            role: Some("AXButton"),
+            title: Some("Send"),
+            ..Default::default()
+        };
+        assert!(matches_filters_attrs(&q, &n2));
+    }
+
+    #[test]
+    fn role_substring_matches_subrole() {
+        let q = UiElementLocateQuery {
+            role_substring: Some("SearchField".to_string()),
+            ..Default::default()
+        };
+        // Real role is generic AXTextField, but subrole carries AXSearchField.
+        let n = NodeAttrs {
+            role: Some("AXTextField"),
+            subrole: Some("AXSearchField"),
+            ..Default::default()
+        };
+        assert!(matches_filters_attrs(&q, &n));
+    }
+
+    #[test]
+    fn validate_query_accepts_node_idx_alone() {
+        let q = UiElementLocateQuery {
+            node_idx: Some(7),
+            ..Default::default()
+        };
+        assert!(validate_query(&q).is_ok());
+    }
+
+    #[test]
+    fn validate_query_accepts_text_contains_alone() {
+        let q = UiElementLocateQuery {
+            text_contains: Some("OK".to_string()),
+            ..Default::default()
+        };
+        assert!(validate_query(&q).is_ok());
     }
 
     #[test]

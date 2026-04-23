@@ -49,6 +49,7 @@ reqwest = { workspace = true }
 thiserror = "1.0"
 futures = { workspace = true }
 async-trait = { workspace = true }
+sha1 = { workspace = true }
 screenshots = "0.8"
 enigo = "0.2"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
@@ -57,7 +58,7 @@ fontdue = "0.9.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
-core-graphics = "0.23"
+core-graphics = { version = "0.23", features = ["elcapitan", "highsierra"] }
 dispatch = "0.2"
 objc2 = { version = "0.6", features = ["exception"] }
 objc2-foundation = "0.3"
