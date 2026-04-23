@@ -22,6 +22,7 @@ If a change affects shared product behavior across runtimes, the implementation 
 
 - Keep Tauri commands consistent: `snake_case` names, structured `request`
 - Keep desktop-only integrations here; do not move them into shared core
+- For local temporary debugging, prefer `pnpm run desktop:preview:debug:rebuild` after Rust / Tauri changes and `pnpm run desktop:preview:debug` after frontend-only shared-UI changes; use `pnpm run desktop:dev` only when you need the full Tauri dev watcher or are debugging startup/build integration itself
 
 Preferred command shape:
 
@@ -41,6 +42,8 @@ await api.invoke('your_command', { request: { ... } });
 
 ```bash
 pnpm run desktop:dev
+pnpm run desktop:preview:debug
+pnpm run desktop:preview:debug:rebuild
 cargo check -p bitfun-desktop
 cargo test -p bitfun-desktop
 cargo build -p bitfun-desktop
@@ -58,3 +61,11 @@ If the change affects startup, WebDriver, browser/computer-use, or packaged beha
 ```bash
 cargo build -p bitfun-desktop
 ```
+
+The preview commands above are iteration shortcuts only; keep using the minimum Rust checks and any required build / E2E verification before finishing.
+
+For packaging or release asks:
+
+- Confirm the package form when the user did not specify whether they want a local fast artifact, a standalone executable, or an installer.
+- Do not substitute preview/debug outputs for a real release deliverable.
+- On Windows, prefer `pnpm run desktop:build:nsis` for installer-style delivery and `pnpm run desktop:build:exe` only when the user explicitly wants a standalone executable.

@@ -21,7 +21,7 @@ BitFun 是一个由 Rust workspace 与共享 React 前端组成的项目。
 ## 3 步快速上手
 
 1. 在修改架构敏感代码前，先阅读 `README.md`、`CONTRIBUTING.md` 和本文件。
-2. 常规本地开发使用 `pnpm run desktop:dev`；仅前端改动使用 `pnpm run dev:web`。
+2. 共享前端改动后做桌面快速人工验证时，优先使用 `pnpm run desktop:preview:debug`（前提是已有较新的 debug 桌面二进制）；Rust / Tauri 改动后如果想要最快的本地重编译并预览循环，优先使用 `pnpm run desktop:preview:debug:rebuild`。`pnpm run desktop:dev` 保留给完整 Tauri dev 流程、首次初始化，或启动 / 构建链路本身的调试；仅浏览器前端验证时使用 `pnpm run dev:web`。
 3. 改完后按下方最小验证集合执行检查。
 
 ## 核心命令
@@ -33,6 +33,8 @@ pnpm run e2e:install
 
 # 主要开发流程
 pnpm run desktop:dev
+pnpm run desktop:preview:debug
+pnpm run desktop:preview:debug:rebuild
 pnpm run dev:web
 pnpm run cli:dev
 pnpm run installer:dev
@@ -53,6 +55,20 @@ cargo build -p bitfun-desktop
 pnpm run e2e:test:l0
 pnpm --dir tests/e2e exec wdio run ./config/wdio.conf.ts --spec "./specs/<file>.spec.ts"
 ```
+
+## 本地桌面快速迭代
+
+- `pnpm run desktop:preview:debug` 会启动或复用 web dev server，并直接拉起现有的 `target/debug/bitfun-desktop(.exe)`，不会经过 `tauri dev`；前端改动后的桌面人工检查优先用它。
+- `pnpm run desktop:preview:debug:rebuild` 会先以 `CARGO_PROFILE_DEV_DEBUG=0` 和更高并行 codegen 重新构建 `bitfun-desktop`，再进入同样的快速预览流程；临时本地调试 Rust / Tauri 且更看重周转速度时优先用它。
+- 上面两个命令只是本地迭代加速手段，不能替代下方与改动范围匹配的最小验证集合。
+
+## 打包请求
+
+- 当用户提出打包、release 或构建可分发桌面产物，但没有明确点名产物形式时，先确认目标打包类型，再执行构建。
+- 要区分“本地临时产物”和“正式 release 交付物”。除非用户明确要求，否则不要把 `desktop:preview:*`、debug 构建，或 `--no-bundle` 的快速产物当成最终给用户分发的 release。
+- 如果用户的语义明显是“给 Windows 最终用户安装”，优先使用 `pnpm run desktop:build:nsis`。
+- 如果用户明确要“独立可执行文件”而不是安装器，优先使用 `pnpm run desktop:build:exe`。
+- 如果用户已经明确点名目标格式，就不要重复确认，直接走对应打包流程。
 
 ## 架构
 

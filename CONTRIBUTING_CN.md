@@ -21,7 +21,7 @@
 
 桌面端包含 SSH 远程功能，会链接 OpenSSL。Windows 上**不使用 OpenSSL 源码编译（vendored）**，需使用**预编译**库。
 
-- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。额外参数：`pnpm run desktop:build -- <tauri build 参数>`。
+- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；`pnpm run desktop:preview:debug:rebuild` 在快速本地 `cargo build -p bitfun-desktop` 之前也会做同样的 OpenSSL 引导。所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。额外参数：`pnpm run desktop:build -- <tauri build 参数>`。
 - **手动 / CI**：下载 [FireDaemon ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后将 `OPENSSL_DIR` 指向 `x64`，并设 `OPENSSL_STATIC=1`，或运行 `scripts/ci/setup-openssl-windows.ps1`。
 - **关闭自动下载**：设置 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_DIR`。
 - **`desktop:dev:raw`** 不经过 `dev.cjs`（无 OpenSSL 引导）；请自行设置 `OPENSSL_DIR`、运行 `scripts/ci/setup-openssl-windows.ps1`，或执行 `node scripts/ensure-openssl-windows.mjs`（会预热 `.bitfun/cache/` 并打印可在 PowerShell 中粘贴的 `OPENSSL_*` 命令）。
@@ -37,11 +37,26 @@ pnpm install
 ```bash
 # Desktop
 pnpm run desktop:dev
+pnpm run desktop:preview:debug
+pnpm run desktop:preview:debug:rebuild
 pnpm run desktop:build
 
 # E2E
 pnpm run e2e:test
 ```
+
+本地迭代时建议这样选：
+
+- `desktop:preview:debug` 复用已有的 debug 桌面二进制，不经过 `tauri dev`，通常是前端改动后最快的桌面预览路径。
+- `desktop:preview:debug:rebuild` 会用较轻的 dev 调试信息配置先重编 `bitfun-desktop`，再进入同样的快速预览流程；适合临时本地调试 Rust / Tauri，且更看重迭代速度而不是调试符号的场景。
+- `desktop:dev` 保留给完整的 Tauri watcher / 启动链路；正式收尾时，仍要按真实改动范围执行对应验证命令。
+
+涉及打包与 release 时建议这样处理：
+
+- 如果请求里只说“打包”或“release”，但没有明确产物类型，先确认目标输出形式。
+- 对于 Windows 最终用户安装交付，优先使用 `pnpm run desktop:build:nsis`。
+- 对于独立 Windows 可执行文件，只有在用户明确提出时才使用 `pnpm run desktop:build:exe`。
+- 不要把本地快速/debug 产物与正式 release 交付物混淆。
 
 > 说明：仓库提供更细粒度的脚本（例如 `dev:web`、`cli:dev`、`website:dev`），详情见 `package.json`。
 

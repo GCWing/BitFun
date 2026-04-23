@@ -21,7 +21,7 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 
 The desktop app includes SSH remote support, which pulls in OpenSSL. On Windows the workspace **does not use vendored OpenSSL**; link against **pre-built** binaries (no Perl/NASM/OpenSSL source build).
 
-- **Default**: `pnpm run desktop:dev` calls `ensure-openssl-windows.mjs` on Windows. Every `desktop:build*` script runs via `scripts/desktop-tauri-build.mjs`, which does the same before `tauri build` (first run downloads FireDaemon OpenSSL 3.5.5 into `.bitfun/cache/`; later runs reuse the cache). Extra args: `pnpm run desktop:build -- <tauri-build-args>`.
+- **Default**: `pnpm run desktop:dev` calls `ensure-openssl-windows.mjs` on Windows. `pnpm run desktop:preview:debug:rebuild` also bootstraps OpenSSL before its fast local `cargo build -p bitfun-desktop` path. Every `desktop:build*` script runs via `scripts/desktop-tauri-build.mjs`, which does the same before `tauri build` (first run downloads FireDaemon OpenSSL 3.5.5 into `.bitfun/cache/`; later runs reuse the cache). Extra args: `pnpm run desktop:build -- <tauri-build-args>`.
 - **Manual / CI**: Download the [FireDaemon OpenSSL 3.5.5 LTS ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip), extract, set `OPENSSL_DIR` to the `x64` folder, `OPENSSL_STATIC=1`, or run `scripts/ci/setup-openssl-windows.ps1`.
 - **Opt out of auto-download**: `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and configure `OPENSSL_DIR` yourself.
 - **`desktop:dev:raw`** skips the dev script (no OpenSSL bootstrap); set `OPENSSL_DIR` yourself, run `scripts/ci/setup-openssl-windows.ps1`, or `node scripts/ensure-openssl-windows.mjs` (warms `.bitfun/cache/` and prints PowerShell `OPENSSL_*` lines to paste).
@@ -37,11 +37,26 @@ pnpm install
 ```bash
 # Desktop
 pnpm run desktop:dev
+pnpm run desktop:preview:debug
+pnpm run desktop:preview:debug:rebuild
 pnpm run desktop:build
 
 # E2E
 pnpm run e2e:test
 ```
+
+For local iteration:
+
+- `desktop:preview:debug` reuses the existing debug desktop binary and avoids `tauri dev`, which is usually the fastest path after frontend-only changes.
+- `desktop:preview:debug:rebuild` rebuilds `bitfun-desktop` in dev mode with reduced debug info, then launches the same preview flow; use it for temporary local Rust / Tauri debugging when iteration speed matters more than symbols.
+- Keep `desktop:dev` for the full Tauri watcher/startup flow, and keep the project verification commands aligned with the actual files you changed.
+
+For packaging and release work:
+
+- Confirm the intended output format if the request only says "package" or "release" without naming the artifact type.
+- For Windows end-user installer delivery, prefer `pnpm run desktop:build:nsis`.
+- For a standalone Windows executable, use `pnpm run desktop:build:exe` only when that is the explicit ask.
+- Do not confuse local fast/debug artifacts with real release deliverables.
 
 > Note: More granular scripts are available (e.g. `dev:web`, `cli:dev`, `website:dev`). See `package.json` for details.
 

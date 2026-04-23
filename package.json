@@ -28,6 +28,8 @@
     "prepare:mobile-web": "node scripts/mobile-web-build.cjs",
     "preview": "pnpm --dir src/web-ui preview",
     "desktop:dev": "node scripts/dev.cjs desktop",
+    "desktop:preview:debug": "node scripts/dev.cjs desktop-preview",
+    "desktop:preview:debug:rebuild": "node scripts/dev.cjs desktop-preview-rebuild",
     "desktop:dev:raw": "cross-env-shell CI=true \"cd src/apps/desktop && tauri dev\"",
     "desktop:build": "node scripts/desktop-tauri-build.mjs",
     "desktop:build:fast": "node scripts/desktop-tauri-build.mjs --debug --no-bundle",
