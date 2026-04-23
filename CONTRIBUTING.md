@@ -122,7 +122,7 @@ If your work is AI-assisted, please note it in the PR and indicate testing level
 
 ### Branch management
 
-**The `master` branch is for stable features and does not accept feature merges.** Since this repo encourages product managers and developers to use AI-generated code for rapid validation or idea submission, **please open all PRs targeting the `dev` branch**. We will periodically review and polish changes in `dev`, then merge back into `master`.
+**The `main` branch is the default collaboration branch and accepts feature PRs.** Since this repo encourages product managers and developers to use AI-generated code for rapid validation or idea submission, **please open all PRs targeting the `main` branch**.
 
 ### Scope
 
