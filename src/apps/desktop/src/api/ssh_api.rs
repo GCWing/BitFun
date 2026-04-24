@@ -122,20 +122,20 @@ pub async fn ssh_connect(
         }
     }
 
-    // First save the connection config so it persists across restarts
-    log::info!("ssh_connect: about to save connection config");
-    if let Err(e) = manager.save_connection(&config).await {
-        log::warn!(
-            "ssh_connect: Failed to save connection config before connect: {}",
-            e
-        );
-        // Continue anyway - connection might still work
-    } else {
-        log::info!("ssh_connect: Connection config saved successfully");
-    }
-
     log::info!("ssh_connect: about to establish connection");
+    let config_to_save = config.clone();
     let result = manager.connect(config).await.map_err(|e| e.to_string());
+    if result.is_ok() {
+        log::info!("ssh_connect: about to save successful connection config");
+        if let Err(e) = manager.save_connection(&config_to_save).await {
+            log::warn!(
+                "ssh_connect: Failed to save successful connection config: {}",
+                e
+            );
+        } else {
+            log::info!("ssh_connect: Connection config saved successfully");
+        }
+    }
     log::info!("ssh_connect result: {:?}", result);
     result
 }
@@ -450,6 +450,23 @@ pub async fn remote_open_workspace(
 pub async fn remote_close_workspace(state: State<'_, AppState>) -> Result<(), String> {
     state.clear_remote_workspace().await;
     log::info!("Closed remote workspace");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remote_remove_workspace(
+    state: State<'_, AppState>,
+    connection_id: String,
+    remote_path: String,
+) -> Result<(), String> {
+    state
+        .unregister_remote_workspace_entry(&connection_id, &remote_path)
+        .await;
+    log::info!(
+        "Removed remote workspace restore entry: connection_id={}, remote_path={}",
+        connection_id,
+        remote_path
+    );
     Ok(())
 }
 

@@ -759,6 +759,7 @@ pub async fn run() {
             api::ssh_api::remote_execute,
             api::ssh_api::remote_open_workspace,
             api::ssh_api::remote_close_workspace,
+            api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,
