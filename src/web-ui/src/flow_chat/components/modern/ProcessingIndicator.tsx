@@ -1,14 +1,14 @@
 /**
  * Processing indicator.
- * After 1s of continuous processing, shows a 3×3 Rubik-style dot matrix and
- * rotating fun hint text together (matrix on the left).
+ * After 1s of continuous processing, shows the logo frame animation and
+ * rotating fun hint text together (animation on the left).
  * reserveSpace keeps layout height even when hidden.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DotMatrixLoader } from '@/component-library';
 import { processingHintsZh, processingHintsEn } from '../../constants/processingHints';
+import { LogoFrameAnimation } from './LogoFrameAnimation';
 import './ProcessingIndicator.scss';
 
 interface ProcessingIndicatorProps {
@@ -67,7 +67,7 @@ export const ProcessingIndicator: React.FC<ProcessingIndicatorProps> = ({ visibl
       >
         {showHint && hints.length > 0 && (
           <>
-            <DotMatrixLoader size="medium" />
+            <LogoFrameAnimation size={30} className="processing-indicator__logo" />
             <span key={hintIndex} className="processing-indicator__hint">
               {hints[hintIndex]}
             </span>

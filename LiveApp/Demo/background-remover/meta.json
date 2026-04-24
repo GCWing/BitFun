@@ -1,0 +1,35 @@
+{
+  "id": "background-remover",
+  "name": "Logo Cutout",
+  "description": "Remove solid-color backgrounds from logos and graphics, then export a transparent PNG.",
+  "icon": "scissors",
+  "category": "image",
+  "tags": ["image", "logo", "transparent", "demo"],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": {
+      "read": ["{appdata}", "{user-selected}"],
+      "write": ["{appdata}", "{user-selected}"]
+    },
+    "shell": { "allow": [] },
+    "net": { "allow": [] },
+    "node": { "enabled": false, "max_memory_mb": 128, "timeout_ms": 5000 }
+  },
+  "ai_context": null,
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "Logo 抠图",
+        "description": "自动移除 logo 与图形的纯色背景，并导出透明 PNG。",
+        "tags": ["图片", "logo", "透明", "演示"]
+      },
+      "en-US": {
+        "name": "Logo Cutout",
+        "description": "Remove solid-color backgrounds from logos and graphics, then export a transparent PNG.",
+        "tags": ["image", "logo", "transparent", "demo"]
+      }
+    }
+  }
+}

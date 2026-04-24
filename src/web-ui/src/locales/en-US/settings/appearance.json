@@ -43,6 +43,10 @@
       "bitfun-slate": {
         "name": "Slate",
         "description": "Slate gray geometric theme - Deep immersion, high contrast grayscale aesthetics"
+      },
+      "sparo-light": {
+        "name": "Sparo Light",
+        "description": "Sparo brand light theme - Cloud surfaces, ink text, and print-red signals"
       }
     },
     "fontSize": {

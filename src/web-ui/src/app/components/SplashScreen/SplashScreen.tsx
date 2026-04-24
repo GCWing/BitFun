@@ -33,9 +33,15 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ isExiting, onExited }) => {
       <div className="splash-screen__center">
         <div className="splash-screen__logo-wrap">
           <img
-            src="/Logo-ICON.png"
+            src="/logo-dark-transparent.png"
             alt="BitFun"
-            className="splash-screen__logo"
+            className="splash-screen__logo splash-screen__logo--dark"
+            draggable={false}
+          />
+          <img
+            src="/logo-light-transparent.png"
+            alt=""
+            className="splash-screen__logo splash-screen__logo--light"
             draggable={false}
           />
         </div>

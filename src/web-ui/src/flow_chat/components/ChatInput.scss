@@ -1465,12 +1465,12 @@
   
   &__send-button {
     position: relative;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
-    border: 1px solid var(--color-accent-300);
-    background: var(--color-accent-200);
-    color: var(--color-accent-300);
+    border: none;
+    background: rgba(183, 55, 47, 0.8);
+    color: white;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1479,38 +1479,25 @@
     flex-shrink: 0;
     
     &:not(:disabled) {
-      background: linear-gradient(135deg, 
-        rgba(80, 130, 255, 0.85), 
-        rgba(120, 100, 255, 0.9));
-      border: 1px solid rgba(140, 160, 255, 0.6);
+      background: #B7372F;
+      border: none;
       color: white;
-      box-shadow: 
-        0 2px 8px rgba(100, 140, 255, 0.4),
-        0 0 12px rgba(120, 100, 255, 0.25);
+      box-shadow: none;
     }
     
     .bitfun-chat-input__box:focus-within &:not(:disabled) {
-      background: linear-gradient(135deg, 
-        rgba(80, 140, 255, 0.95), 
-        rgba(130, 110, 255, 1));
-      border: 1px solid rgba(150, 170, 255, 0.7);
+      background: #B7372F;
+      border: none;
       color: white;
       transform: scale(1.1);
-      box-shadow: 
-        0 4px 16px rgba(100, 140, 255, 0.5),
-        0 0 20px rgba(140, 100, 255, 0.35);
+      box-shadow: none;
     }
     
     &:hover:not(:disabled) {
-      background: linear-gradient(135deg, 
-        rgba(90, 150, 255, 1), 
-        rgba(140, 120, 255, 1));
-      border-color: rgba(160, 180, 255, 0.8);
+      background: #9E2F29;
       color: white;
       transform: scale(1.12);
-      box-shadow: 
-        0 6px 20px rgba(100, 140, 255, 0.55),
-        0 0 24px rgba(140, 100, 255, 0.4);
+      box-shadow: none;
     }
     
     &:active:not(:disabled) {
@@ -1518,10 +1505,10 @@
     }
     
     &:disabled {
-      background: var(--color-accent-100);
-      border-color: var(--color-accent-200);
-      color: var(--color-accent-400);
-      opacity: 0.35;
+      background: rgba(183, 55, 47, 0.8);
+      border: none;
+      color: white;
+      opacity: 0.45;
       cursor: default;
       box-shadow: none;
     }
@@ -1558,7 +1545,7 @@
   
   &__loading-spinner {
     position: absolute;
-    inset: 1.5px;
+    inset: 2px;
     border-radius: 50%;
     border: 1px solid transparent;
     border-top-color: white;

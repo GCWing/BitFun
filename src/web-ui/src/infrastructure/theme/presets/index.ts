@@ -7,6 +7,7 @@ export { bitfunChinaStyleTheme } from './china-style-theme';
 export { bitfunChinaNightTheme } from './china-night-theme';
 export { bitfunCyberTheme } from './cyber-theme';
 export { bitfunSlateTheme } from './slate-theme';
+export { sparoLightTheme } from './sparo-light-theme';
 
 import { bitfunDarkTheme } from './dark-theme';
 import { bitfunLightTheme } from './light-theme';
@@ -15,6 +16,7 @@ import { bitfunChinaStyleTheme } from './china-style-theme';
 import { bitfunChinaNightTheme } from './china-night-theme';
 import { bitfunCyberTheme } from './cyber-theme';
 import { bitfunSlateTheme } from './slate-theme';
+import { sparoLightTheme } from './sparo-light-theme';
 import { ThemeConfig, ThemeId } from '../types';
 
 /** Default light / dark builtin themes used when following system appearance. */
@@ -39,6 +41,7 @@ export const DEFAULT_THEME_ID: ThemeId = DEFAULT_LIGHT_THEME_ID;
 
  
 export const builtinThemes: ThemeConfig[] = [
+  sparoLightTheme,
   bitfunLightTheme,
   bitfunSlateTheme,
   bitfunDarkTheme,

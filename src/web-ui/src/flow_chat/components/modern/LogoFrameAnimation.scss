@@ -1,0 +1,18 @@
+.logo-frame-animation {
+  width: var(--logo-frame-animation-size, 28px);
+  height: var(--logo-frame-animation-size, 28px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.logo-frame-animation__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}

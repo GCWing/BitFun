@@ -54,7 +54,11 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
 /// Built-in app ids that have been retired. On startup we remove their on-disk
 /// directories so they disappear from the gallery for users who previously had
 /// them seeded.
-pub const RETIRED_BUILTIN_APP_IDS: &[&str] = &["builtin-regex-playground", "builtin-coding-selfie"];
+pub const RETIRED_BUILTIN_APP_IDS: &[&str] = &[
+    "builtin-regex-playground",
+    "builtin-coding-selfie",
+    "builtin-background-remover",
+];
 
 /// Seed all built-in Live Apps into the user data directory. Idempotent: skips apps
 /// whose on-disk marker version is >= the bundled version. User's `storage.json`

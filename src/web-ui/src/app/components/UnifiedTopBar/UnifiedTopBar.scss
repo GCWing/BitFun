@@ -78,6 +78,36 @@
     user-select: none;
   }
 
+  &__logo-mark {
+    position: relative;
+    display: block;
+    width: 22px;
+    height: 22px;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  &__logo-mark &__logo-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity $motion-fast $easing-standard;
+  }
+
+  &__logo-mark &__logo-img--dark {
+    opacity: 1;
+  }
+
+  :root[data-theme-type='light'] &__logo-mark &__logo-img--dark {
+    opacity: 0;
+  }
+
+  :root[data-theme-type='light'] &__logo-mark &__logo-img--light {
+    opacity: 1;
+  }
+
   // Portaled to document.body — must sit above FlowChat's glass header (z-index 20) and other scene chrome.
   &__menu-backdrop {
     position: fixed;

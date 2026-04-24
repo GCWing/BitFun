@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en-US" data-theme-type="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="title">Logo Cutout</title>
+</head>
+<body>
+  <div id="app" class="cutout-app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="2.5"></circle>
+            <circle cx="6" cy="18" r="2.5"></circle>
+            <path d="M8.1 8.1 19 19"></path>
+            <path d="M8.1 15.9 19 5"></path>
+          </svg>
+        </div>
+        <div class="brand__text">
+          <h1 data-i18n="title">Logo Cutout</h1>
+          <p data-i18n="subtitle">Transparent PNG export for solid-color backgrounds</p>
+        </div>
+      </div>
+      <div class="topbar__actions">
+        <button id="download-btn" class="btn btn--primary" type="button" disabled>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 2v8"></path><path d="m5 7 3 3 3-3"></path><path d="M3 13h10"></path>
+          </svg>
+          <span data-i18n="download">Download PNG</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="stage">
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" data-i18n-attr="aria-label" data-i18n="dropAria">
+          <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/bmp" hidden />
+          <div class="drop-zone__empty" id="empty-state">
+            <div class="drop-zone__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v10"></path><path d="m8 9 4-4 4 4"></path><path d="M5 19h14"></path>
+              </svg>
+            </div>
+            <h2 data-i18n="dropTitle">Drop a logo or graphic</h2>
+            <p data-i18n="dropHint">The app samples the image edges, detects the background color, and removes only the connected background.</p>
+            <button class="btn" type="button" id="pick-btn" data-i18n="pick">Choose image</button>
+          </div>
+
+          <div class="preview-grid" id="preview-grid" hidden>
+            <figure class="preview">
+              <figcaption data-i18n="original">Original</figcaption>
+              <canvas id="source-canvas"></canvas>
+            </figure>
+            <figure class="preview preview--checker">
+              <figcaption data-i18n="result">Transparent result</figcaption>
+              <canvas id="result-canvas"></canvas>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <aside class="control-panel">
+        <section class="panel-group">
+          <div class="panel-group__head">
+            <h2 data-i18n="background">Background</h2>
+            <span id="bg-chip" class="color-chip" title="Detected background"></span>
+          </div>
+          <label class="control">
+            <span data-i18n="tolerance">Tolerance</span>
+            <output id="tolerance-value">28</output>
+            <input id="tolerance" type="range" min="4" max="120" value="28" />
+          </label>
+          <label class="control">
+            <span data-i18n="edgeCleanup">Edge cleanup</span>
+            <output id="edge-value">24</output>
+            <input id="edge-cleanup" type="range" min="0" max="80" value="24" />
+          </label>
+          <label class="toggle">
+            <input id="auto-crop" type="checkbox" checked />
+            <span data-i18n="autoCrop">Trim transparent edges</span>
+          </label>
+        </section>
+
+        <section class="panel-group">
+          <h2 data-i18n="stats">Detection</h2>
+          <dl class="stats">
+            <div><dt data-i18n="size">Size</dt><dd id="stat-size">-</dd></div>
+            <div><dt data-i18n="removed">Removed</dt><dd id="stat-removed">-</dd></div>
+            <div><dt data-i18n="backgroundColor">Color</dt><dd id="stat-color">-</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel-group panel-group--note">
+          <p id="status" data-i18n="ready">Ready for PNG, JPG, WebP, SVG, or BMP.</p>
+        </section>
+      </aside>
+    </main>
+  </div>
+</body>
+</html>

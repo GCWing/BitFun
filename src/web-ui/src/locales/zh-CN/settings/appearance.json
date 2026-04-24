@@ -43,6 +43,10 @@
       "bitfun-slate": {
         "name": "石板灰",
         "description": "石板灰几何主题 - 极深沉浸，高对比度灰度美学"
+      },
+      "sparo-light": {
+        "name": "Sparo 浅色",
+        "description": "Sparo 品牌浅色主题 - 云白界面、墨色文字和印红信号"
       }
     },
     "fontSize": {

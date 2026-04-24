@@ -1,5 +1,5 @@
 /**
- * Processing indicator layout + fun hint text (dot matrix lives in DotMatrixLoader).
+ * Processing indicator layout + fun hint text.
  */
 
 .processing-indicator {
@@ -25,8 +25,12 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.75rem;
+  gap: 0.625rem;
   padding: 0.5rem 0;
+}
+
+.processing-indicator__logo {
+  margin-right: 0.125rem;
 }
 
 // Hint text — same breathe rhythm as tool cards (tool-card-text-fade: 1.6s 0%→25%→0%)
