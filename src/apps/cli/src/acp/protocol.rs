@@ -81,7 +81,9 @@ pub struct JsonRpcError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
-    pub protocol_version: u16,
+    /// Protocol version as string (e.g., "0.1.0")
+    #[serde(rename = "protocolVersion")]
+    pub protocol_version: String,
     #[serde(default)]
     pub client_capabilities: ClientCapabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -120,7 +122,9 @@ pub struct ClientInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeResult {
-    pub protocol_version: u16,
+    /// Protocol version as string (e.g., "0.1.0")
+    #[serde(rename = "protocolVersion")]
+    pub protocol_version: String,
     #[serde(default)]
     pub agent_capabilities: AgentCapabilities,
     #[serde(default)]
@@ -195,9 +199,17 @@ pub struct AuthMethod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionNewParams {
+    /// Working directory for the session (optional, defaults to current directory)
+    #[serde(default = "default_cwd")]
     pub cwd: String,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
+}
+
+fn default_cwd() -> String {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
 }
 
 /// MCP server configuration
@@ -305,15 +317,18 @@ pub struct SessionPromptResult {
 }
 
 /// Stop reason for prompt turn
+/// See ACP spec: https://agentclientprotocol.com/protocol/prompt-turn#stop-reasons
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
 pub enum StopReason {
-    Complete,
+    #[serde(rename = "end_turn")]
+    EndTurn,
+    #[serde(rename = "cancelled")]
     Cancelled,
-    #[serde(rename = "tool-use")]
+    #[serde(rename = "tool_use")]
     ToolUse,
-    #[serde(rename = "tool-error")]
+    #[serde(rename = "tool_error")]
     ToolError,
+    #[serde(rename = "error")]
     Error,
 }
 
@@ -372,21 +387,36 @@ pub struct SessionUpdateNotification {
     pub update: SessionUpdate,
 }
 
+/// Session update notification types
+/// See ACP spec: https://agentclientprotocol.com/protocol/session-lifecycle
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "sessionUpdate", rename_all = "snake_case")]
 pub enum SessionUpdate {
-    MessageChunk { content: ContentBlock },
-    ThoughtChunk { content: ContentBlock },
-    ToolCall { tool_call: ToolCallUpdate },
-    ModeChange { mode: String },
+    AgentMessageChunk { content: ContentBlock },
+    AgentThoughtChunk { content: ContentBlock },
+    ToolCall {
+        tool_call_id: String,
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        kind: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<ToolCallStatus>,
+    },
+    ToolResult {
+        tool_call_id: String,
+        content: Vec<ToolResultContent>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<ToolCallStatus>,
+    },
 }
 
+/// Tool call status
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCallUpdate {
-    pub tool_call_id: String,
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<Vec<ToolResultContent>>,
+#[serde(rename_all = "snake_case")]
+pub enum ToolCallStatus {
+    Pending,
+    InProgress,
+    Completed,
 }

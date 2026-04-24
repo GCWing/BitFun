@@ -88,7 +88,7 @@ fn handle_initialize(request: &JsonRpcRequest) -> Result<serde_json::Value> {
     );
 
     let result = InitializeResult {
-        protocol_version: 1, // We support ACP version 1
+        protocol_version: "0.1.0".to_string(), // ACP protocol version
         agent_capabilities: AgentCapabilities {
             load_session: true,
             mcp_capabilities: McpCapabilities {
@@ -291,7 +291,7 @@ async fn execute_prompt_turn(
 
     // Monitor EventQueue for events and send notifications
     let event_queue = agentic_system.event_queue.clone();
-    let mut stop_reason = StopReason::Complete;
+    let mut stop_reason = StopReason::EndTurn;
     let mut accumulated_text = String::new();
 
     loop {
@@ -320,7 +320,7 @@ async fn execute_prompt_turn(
                     // Send session/update notification
                     let notification = SessionUpdateNotification {
                         session_id: acp_session.acp_session_id.clone(),
-                        update: SessionUpdate::MessageChunk {
+                        update: SessionUpdate::AgentMessageChunk {
                             content: ContentBlock::Text { text },
                         },
                     };
@@ -339,7 +339,7 @@ async fn execute_prompt_turn(
                 // Dialog turn completed
                 CoreEvent::DialogTurnCompleted { .. } => {
                     tracing::info!("Dialog turn completed");
-                    stop_reason = StopReason::Complete;
+                    stop_reason = StopReason::EndTurn;
                     break;
                 }
 
@@ -351,7 +351,7 @@ async fn execute_prompt_turn(
                     // Send error notification
                     let notification = SessionUpdateNotification {
                         session_id: acp_session.acp_session_id.clone(),
-                        update: SessionUpdate::MessageChunk {
+                        update: SessionUpdate::AgentMessageChunk {
                             content: ContentBlock::Text {
                                 text: format!("Error: {}", error),
                             },
@@ -375,8 +375,8 @@ async fn execute_prompt_turn(
             }
         }
 
-        // Check if we should exit the loop
-        if stop_reason != StopReason::Complete {
+        // Exit loop when turn completes or errors
+        if matches!(stop_reason, StopReason::EndTurn | StopReason::Error) {
             break;
         }
     }
@@ -395,12 +395,11 @@ async fn handle_tool_event(
             let notification = SessionUpdateNotification {
                 session_id: session_id.to_string(),
                 update: SessionUpdate::ToolCall {
-                    tool_call: ToolCallUpdate {
-                        tool_call_id: tool_id,
-                        name: tool_name,
-                        status: Some("started".to_string()),
-                        content: None,
-                    },
+                    tool_call_id: tool_id,
+                    name: tool_name,
+                    title: None,
+                    kind: None,
+                    status: Some(ToolCallStatus::Pending),
                 },
             };
             send_notification(stdout, "session/update", &notification).await?;
@@ -410,15 +409,25 @@ async fn handle_tool_event(
             let notification = SessionUpdateNotification {
                 session_id: session_id.to_string(),
                 update: SessionUpdate::ToolCall {
-                    tool_call: ToolCallUpdate {
-                        tool_call_id: tool_id,
-                        name: tool_name,
-                        status: Some("progress".to_string()),
-                        content: Some(vec![ToolResultContent::Text { text: message }]),
-                    },
+                    tool_call_id: tool_id.clone(),
+                    name: tool_name.clone(),
+                    title: None,
+                    kind: None,
+                    status: Some(ToolCallStatus::InProgress),
                 },
             };
             send_notification(stdout, "session/update", &notification).await?;
+            
+            // Send tool result with progress message
+            let result_notification = SessionUpdateNotification {
+                session_id: session_id.to_string(),
+                update: SessionUpdate::ToolResult {
+                    tool_call_id: tool_id,
+                    content: vec![ToolResultContent::Text { text: message }],
+                    status: Some(ToolCallStatus::InProgress),
+                },
+            };
+            send_notification(stdout, "session/update", &result_notification).await?;
         }
 
         ToolEventData::Completed { tool_id, tool_name, result, duration_ms: _, .. } => {
@@ -428,42 +437,61 @@ async fn handle_tool_event(
             let notification = SessionUpdateNotification {
                 session_id: session_id.to_string(),
                 update: SessionUpdate::ToolCall {
-                    tool_call: ToolCallUpdate {
-                        tool_call_id: tool_id,
-                        name: tool_name,
-                        status: Some("completed".to_string()),
-                        content: Some(vec![ToolResultContent::Text { text: result_text }]),
-                    },
+                    tool_call_id: tool_id.clone(),
+                    name: tool_name.clone(),
+                    title: None,
+                    kind: None,
+                    status: Some(ToolCallStatus::Completed),
                 },
             };
             send_notification(stdout, "session/update", &notification).await?;
+            
+            // Send tool result
+            let result_notification = SessionUpdateNotification {
+                session_id: session_id.to_string(),
+                update: SessionUpdate::ToolResult {
+                    tool_call_id: tool_id,
+                    content: vec![ToolResultContent::Text { text: result_text }],
+                    status: Some(ToolCallStatus::Completed),
+                },
+            };
+            send_notification(stdout, "session/update", &result_notification).await?;
         }
 
         ToolEventData::Failed { tool_id, tool_name, error } => {
             let notification = SessionUpdateNotification {
                 session_id: session_id.to_string(),
                 update: SessionUpdate::ToolCall {
-                    tool_call: ToolCallUpdate {
-                        tool_call_id: tool_id,
-                        name: tool_name,
-                        status: Some("failed".to_string()),
-                        content: Some(vec![ToolResultContent::Text { text: error.clone() }]),
-                    },
+                    tool_call_id: tool_id.clone(),
+                    name: tool_name.clone(),
+                    title: None,
+                    kind: None,
+                    status: None,  // Failed - no specific status
                 },
             };
             send_notification(stdout, "session/update", &notification).await?;
+            
+            // Send tool result with error
+            let result_notification = SessionUpdateNotification {
+                session_id: session_id.to_string(),
+                update: SessionUpdate::ToolResult {
+                    tool_call_id: tool_id,
+                    content: vec![ToolResultContent::Text { text: error }],
+                    status: None,  // Failed
+                },
+            };
+            send_notification(stdout, "session/update", &result_notification).await?;
         }
 
         ToolEventData::ConfirmationNeeded { tool_id, tool_name, params: _ } => {
             let notification = SessionUpdateNotification {
                 session_id: session_id.to_string(),
                 update: SessionUpdate::ToolCall {
-                    tool_call: ToolCallUpdate {
-                        tool_call_id: tool_id,
-                        name: tool_name,
-                        status: Some("confirmation_needed".to_string()),
-                        content: None,
-                    },
+                    tool_call_id: tool_id,
+                    name: tool_name,
+                    title: None,
+                    kind: None,
+                    status: Some(ToolCallStatus::Pending),
                 },
             };
             send_notification(stdout, "session/update", &notification).await?;
