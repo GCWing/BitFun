@@ -200,7 +200,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     setIsConnecting(true);
     setLocalError(null);
     try {
-      await sshApi.saveConnection(config);
       await connect(config.id, config);
       // Don't call onClose() here - connect() handles closing the dialog via context
     } catch (e) {
@@ -329,7 +328,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           auth,
         };
         await connect(conn.id, full);
-        await sshApi.saveConnection(full);
       } else {
         const { entry, connectHost, port } = credentialsPrompt;
         const connectionId = generateConnectionId(connectHost, port, resolvedUsername);
@@ -342,7 +340,6 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           auth,
         };
         await connect(connectionId, full);
-        await sshApi.saveConnection(full);
         await loadSavedConnections();
       }
       setCredentialsPrompt(null);

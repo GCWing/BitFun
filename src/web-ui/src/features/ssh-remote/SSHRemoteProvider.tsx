@@ -94,6 +94,27 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     setWorkspaceStatuses(prev => ({ ...prev, [connId]: st }));
   }, []);
 
+  const clearWorkspaceStatus = useCallback((connId: string) => {
+    setWorkspaceStatuses(prev => {
+      if (!(connId in prev)) return prev;
+      const next = { ...prev };
+      delete next[connId];
+      return next;
+    });
+  }, []);
+
+  const forgetRemoteWorkspace = useCallback(async (workspace: RemoteWorkspace) => {
+    log.info('Forgetting remote workspace restore entry', {
+      connectionId: workspace.connectionId,
+      remotePath: workspace.remotePath,
+    });
+    clearWorkspaceStatus(workspace.connectionId);
+    await Promise.allSettled([
+      workspaceManager.removeRemoteWorkspace(workspace.connectionId, workspace.remotePath),
+      sshApi.removeWorkspace(workspace.connectionId, workspace.remotePath),
+    ]);
+  }, [clearWorkspaceStatus]);
+
   // Cleanup heartbeat on unmount
   useEffect(() => {
     return () => {
@@ -275,8 +296,13 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       const savedConnectionsList = await sshApi.listSavedConnections();
 
       const skipPasswordAutoReconnect = new Set<string>();
+      const missingSavedConnections = new Set<string>();
       for (const ws of reconnectList) {
         const sc = savedConnectionsList.find(c => c.id === ws.connectionId);
+        if (!sc) {
+          missingSavedConnections.add(ws.connectionId);
+          continue;
+        }
         if (sc?.authType.type === 'Password') {
           let hasVault = false;
           try {
@@ -292,7 +318,9 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
       const initialStatuses: Record<string, ConnectionStatus> = {};
       for (const [, ws] of toReconnect) {
-        initialStatuses[ws.connectionId] = skipPasswordAutoReconnect.has(ws.connectionId)
+        initialStatuses[ws.connectionId] =
+          skipPasswordAutoReconnect.has(ws.connectionId) ||
+          missingSavedConnections.has(ws.connectionId)
           ? 'error'
           : 'connecting';
       }
@@ -330,10 +358,20 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             return { ok: true as const, connected: { workspace, connectionId: workspace.connectionId } };
           }
 
+          if (missingSavedConnections.has(workspace.connectionId)) {
+            log.info('Skipping remote workspace restore because its saved connection is gone', {
+              connectionId: workspace.connectionId,
+              remotePath: workspace.remotePath,
+            });
+            await forgetRemoteWorkspace(workspace);
+            return { ok: false as const };
+          }
+
           if (skipPasswordAutoReconnect.has(workspace.connectionId)) {
             log.info('Skipping auto-reconnect: password auth but no stored password', {
               connectionId: workspace.connectionId,
             });
+            await forgetRemoteWorkspace(workspace);
             return { ok: false as const };
           }
 
@@ -341,7 +379,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             connectionId: workspace.connectionId,
             remotePath: workspace.remotePath,
           });
-          const result = await tryReconnectWithRetry(workspace, 5, 5000);
+          const result = await tryReconnectWithRetry(workspace, 1, 5000);
 
           if (result !== false) {
             log.info('Reconnection successful', { newConnectionId: result.connectionId });
@@ -373,14 +411,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             connectionId: workspace.connectionId,
             auth: savedConn?.authType.type,
           });
-          if (savedConn?.authType.type === 'Password') {
-            // Keep workspace in sidebar; user reconnects manually. No auto password dialog.
-            setWorkspaceStatus(workspace.connectionId, 'error');
-          } else {
-            await workspaceManager
-              .removeRemoteWorkspace(workspace.connectionId, workspace.remotePath)
-              .catch(() => {});
-          }
+          await forgetRemoteWorkspace(workspace);
           return { ok: false as const };
         })
       );
@@ -399,7 +430,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     } catch (e) {
       log.error('checkRemoteWorkspace failed', e);
     }
-  }, [setWorkspaceStatus, tryReconnectWithRetry]);
+  }, [forgetRemoteWorkspace, setWorkspaceStatus, tryReconnectWithRetry]);
   checkRemoteWorkspaceRef.current = checkRemoteWorkspace;
 
   // Wait for workspace manager to finish loading, then check remote workspaces
