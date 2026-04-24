@@ -178,7 +178,7 @@ function requireSessionWorkspacePath(
   workspacePath: string | undefined,
   sessionId: string,
   storageScope?: import('@/shared/types/session-history').SessionStorageScope
-): string => {
+): string {
   if (storageScope === 'agentic_os') {
     return workspacePath || '';
   }

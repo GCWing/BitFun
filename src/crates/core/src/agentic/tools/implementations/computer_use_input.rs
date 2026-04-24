@@ -143,6 +143,7 @@ pub fn parse_screenshot_params(input: &Value) -> BitFunResult<(ComputerUseScreen
                 reset_navigation,
                 point_crop_half_extent_native: None,
                 implicit_confirmation_center: implicit_center,
+                crop_to_focused_window: false,
             },
             ignored_crop,
         ));
@@ -162,6 +163,7 @@ pub fn parse_screenshot_params(input: &Value) -> BitFunResult<(ComputerUseScreen
             reset_navigation,
             point_crop_half_extent_native: half,
             implicit_confirmation_center: implicit_center,
+            crop_to_focused_window: false,
         },
         false,
     ))

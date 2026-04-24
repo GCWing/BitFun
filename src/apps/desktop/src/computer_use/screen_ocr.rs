@@ -458,8 +458,8 @@ pub fn crop_shot_to_ocr_region(
                 height: native_h as f64,
             },
         ),
+        ui_tree_text: None,
         implicit_confirmation_crop_applied: false,
-        som_labels: vec![],
     })
 }
 
