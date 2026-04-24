@@ -795,8 +795,43 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
     ))
 }
 
+async fn create_transient_ai_client_for_config(
+    state: &State<'_, AppState>,
+    model_config: bitfun_core::service::config::types::AIModelConfig,
+) -> Result<bitfun_core::infrastructure::ai::AIClient, String> {
+    let auth = model_config.auth.clone();
+    let mut ai_config: bitfun_core::util::types::AIConfig = model_config
+        .try_into()
+        .map_err(|e| format!("Failed to convert configuration: {}", e))?;
+
+    bitfun_core::infrastructure::ai::client_factory::apply_cli_credential(&auth, &mut ai_config)
+        .await
+        .map_err(|e| format!("Failed to resolve CLI credential: {}", e))?;
+
+    let global_config: bitfun_core::service::config::GlobalConfig = state
+        .config_service
+        .get_config(None)
+        .await
+        .map_err(|e| format!("Failed to get configuration: {}", e))?;
+    let proxy_config = if global_config.ai.proxy.enabled {
+        Some(global_config.ai.proxy.clone())
+    } else {
+        None
+    };
+    let stream_options = bitfun_core::infrastructure::ai::build_stream_options(&global_config.ai);
+
+    Ok(
+        bitfun_core::infrastructure::ai::AIClient::new_with_runtime_options(
+            ai_config,
+            proxy_config,
+            stream_options,
+        ),
+    )
+}
+
 #[tauri::command]
 pub async fn test_ai_config_connection(
+    state: State<'_, AppState>,
     request: TestAIConfigConnectionRequest,
 ) -> Result<bitfun_core::util::types::ConnectionTestResult, String> {
     let model_name = request.config.name.clone();
@@ -810,24 +845,12 @@ pub async fn test_ai_config_connection(
         bitfun_core::service::config::types::ModelCategory::Multimodal
     );
 
-    let auth = request.config.auth.clone();
-    let mut ai_config: bitfun_core::util::types::AIConfig = match request.config.try_into() {
-        Ok(config) => config,
-        Err(e) => {
-            error!("Failed to convert AI config: {}", e);
-            return Err(format!("Failed to convert configuration: {}", e));
-        }
-    };
-
-    if let Err(e) =
-        bitfun_core::infrastructure::ai::client_factory::apply_cli_credential(&auth, &mut ai_config)
-            .await
-    {
-        error!("Failed to resolve CLI credential during test: {}", e);
-        return Err(format!("Failed to resolve CLI credential: {}", e));
-    }
-
-    let ai_client = bitfun_core::infrastructure::ai::AIClient::new(ai_config);
+    let ai_client = create_transient_ai_client_for_config(&state, request.config)
+        .await
+        .map_err(|e| {
+            error!("Failed to create AI client during test: {}", e);
+            e
+        })?;
 
     match ai_client.test_connection().await {
         Ok(result) => {
@@ -903,18 +926,11 @@ pub async fn test_ai_config_connection(
 
 #[tauri::command]
 pub async fn list_ai_models_by_config(
+    state: State<'_, AppState>,
     request: ListAIModelsByConfigRequest,
 ) -> Result<Vec<bitfun_core::util::types::RemoteModelInfo>, String> {
     let config_name = request.config.name.clone();
-    let auth = request.config.auth.clone();
-    let mut ai_config: bitfun_core::util::types::AIConfig = request
-        .config
-        .try_into()
-        .map_err(|e| format!("Failed to convert configuration: {}", e))?;
-    bitfun_core::infrastructure::ai::client_factory::apply_cli_credential(&auth, &mut ai_config)
-        .await
-        .map_err(|e| format!("Failed to resolve CLI credential: {}", e))?;
-    let ai_client = bitfun_core::infrastructure::ai::AIClient::new(ai_config);
+    let ai_client = create_transient_ai_client_for_config(&state, request.config).await?;
 
     ai_client.list_models().await.map_err(|e| {
         error!(

@@ -134,6 +134,43 @@ fn jwt_chatgpt_account_id(token: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+fn parse_codex_cli_version(output: &str) -> Option<String> {
+    output.split_whitespace().find_map(|token| {
+        let version = token
+            .trim()
+            .trim_start_matches('v')
+            .trim_matches(|ch: char| matches!(ch, ',' | ';' | ')' | '('));
+        if version.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+            && version.contains('.')
+            && version
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '+'))
+        {
+            Some(version.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+async fn resolve_codex_cli_version() -> Option<String> {
+    let check = crate::service::system::check_command("codex");
+    let command = check.path.as_deref()?;
+    let args = vec!["--version".to_string()];
+    let output = crate::service::system::run_command(command, &args, None, None)
+        .await
+        .ok()?;
+    if !output.success {
+        log::debug!(
+            "codex CLI version command failed: exit_code={}, stderr={}",
+            output.exit_code,
+            output.stderr.trim()
+        );
+        return None;
+    }
+    parse_codex_cli_version(&output.stdout).or_else(|| parse_codex_cli_version(&output.stderr))
+}
+
 fn detect_mode(file: &CodexAuthFile) -> Option<CliCredentialMode> {
     let declared = file.auth_mode.as_deref().unwrap_or("");
     if declared.eq_ignore_ascii_case("chatgpt") {
@@ -346,10 +383,17 @@ impl CredentialResolver for CodexResolver {
                 // on a Codex-shaped User-Agent. Mirror the CLI's format
                 // (`codex_cli_rs/<ver>`) so requests aren't silently rejected
                 // / served an empty list.
-                headers.insert(
-                    "User-Agent".to_string(),
-                    format!("codex_cli_rs/{}", env!("CARGO_PKG_VERSION")),
-                );
+                let codex_cli_version = resolve_codex_cli_version().await;
+                let user_agent = codex_cli_version
+                    .as_deref()
+                    .map(|version| format!("codex_cli_rs/{version}"))
+                    .unwrap_or_else(|| {
+                        log::warn!(
+                            "Unable to detect codex CLI version; using BitFun user agent for Codex backend requests"
+                        );
+                        format!("BitFun/{}", env!("CARGO_PKG_VERSION"))
+                    });
+                headers.insert("User-Agent".to_string(), user_agent);
                 let exp = tokens.access_token.as_deref().and_then(jwt_exp);
                 Ok(ResolvedCredential {
                     api_key: access_token,
@@ -362,5 +406,27 @@ impl CredentialResolver for CodexResolver {
             }
             CliCredentialMode::OauthPersonal => Err(anyhow!("codex never uses OauthPersonal mode")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_codex_cli_version;
+
+    #[test]
+    fn parses_codex_cli_version_output() {
+        assert_eq!(
+            parse_codex_cli_version("codex-cli 0.124.0\n").as_deref(),
+            Some("0.124.0")
+        );
+        assert_eq!(
+            parse_codex_cli_version("codex v0.125.1-beta.2").as_deref(),
+            Some("0.125.1-beta.2")
+        );
+    }
+
+    #[test]
+    fn ignores_output_without_semver_like_token() {
+        assert_eq!(parse_codex_cli_version("codex-cli unknown"), None);
     }
 }

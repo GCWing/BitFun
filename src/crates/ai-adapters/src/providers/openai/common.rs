@@ -108,26 +108,46 @@ struct CodexBackendModelEntry {
 
 /// `chatgpt.com/backend-api/codex/models` returns each model's
 /// `minimal_client_version`, and only emits entries whose minimum is satisfied
-/// by the `client_version` query param. Sending BitFun's own
-/// `CARGO_PKG_VERSION` (e.g. `"0.2.3"`) makes the backend hide every modern
-/// model and only return the legacy `gpt-5.2` (whose minimum is `0.0.1`). We
-/// mirror a current Codex CLI release so the model picker matches what the
-/// user sees in `codex /model`. Bump this when codex CLI bumps further.
-const CODEX_CLIENT_VERSION_HEADER: &str = "0.121.0";
+/// by the `client_version` query param. Codex CLI credentials inject a
+/// Codex-shaped `User-Agent` containing the locally installed CLI version; use
+/// that same version here so the model picker matches what the user sees in
+/// `codex /model`.
+fn codex_client_version(client: &AIClient) -> Option<String> {
+    let headers = client.config.custom_headers.as_ref()?;
+    let user_agent = headers
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("User-Agent"))?
+        .1
+        .trim();
+    let version = user_agent
+        .strip_prefix("codex_cli_rs/")
+        .or_else(|| user_agent.strip_prefix("codex/"))?
+        .trim();
+
+    if version.is_empty() {
+        None
+    } else {
+        Some(version.to_string())
+    }
+}
 
 async fn list_codex_chatgpt_models(
     client: &AIClient,
     base_models_url: &str,
 ) -> Result<Vec<RemoteModelInfo>> {
-    let separator = if base_models_url.contains('?') {
-        '&'
+    let url = if let Some(version) = codex_client_version(client) {
+        let separator = if base_models_url.contains('?') {
+            '&'
+        } else {
+            '?'
+        };
+        format!("{base_models_url}{separator}client_version={version}")
     } else {
-        '?'
+        log::warn!(
+            "Codex backend model discovery is missing a codex CLI client version; requesting models without client_version"
+        );
+        base_models_url.to_string()
     };
-    let url = format!(
-        "{base_models_url}{separator}client_version={version}",
-        version = CODEX_CLIENT_VERSION_HEADER
-    );
 
     let response = apply_headers(client, client.client.get(&url))
         .send()
