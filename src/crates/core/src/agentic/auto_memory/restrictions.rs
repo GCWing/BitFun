@@ -13,5 +13,6 @@ pub fn build_auto_memory_runtime_restrictions(memory_dir: &str) -> ToolRuntimeRe
             edit_roots: vec![memory_dir.to_string()],
             delete_roots: vec![memory_dir.to_string()],
         },
+        disable_snapshot_tracking: true,
     }
 }

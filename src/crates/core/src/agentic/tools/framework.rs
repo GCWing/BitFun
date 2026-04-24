@@ -510,11 +510,6 @@ pub trait Tool: Send + Sync {
         format!("Using {}: {}", self.name(), input)
     }
 
-    /// Render tool use rejected message
-    fn render_tool_use_rejected_message(&self) -> String {
-        format!("{} tool use was rejected", self.name())
-    }
-
     /// Render tool result message
     fn render_tool_result_message(&self, _output: &Value) -> String {
         format!("{} completed", self.name())

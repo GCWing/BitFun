@@ -355,17 +355,30 @@ impl FileSnapshotSystem {
         }
 
         let optimized_content = self.optimize_content(&content);
+        let snapshot_content = match optimized_content {
+            OptimizedContent::Raw(data) => data,
+            OptimizedContent::Compressed(data) => data,
+            OptimizedContent::Reference(ref referenced_hash) => {
+                let referenced_content_path = self.get_content_path(referenced_hash);
+                if referenced_content_path.exists() {
+                    Vec::new()
+                } else {
+                    warn!(
+                        "Reference content file missing, materializing snapshot content from source bytes: content_hash={} file_path={}",
+                        referenced_hash,
+                        file_path.display()
+                    );
+                    content.clone()
+                }
+            }
+        };
 
         let snapshot = FileSnapshot {
             snapshot_id: Uuid::new_v4().to_string(),
             file_path: file_path.to_path_buf(),
             content_hash: content_hash.clone(),
             snapshot_type: SnapshotType::Before,
-            compressed_content: match optimized_content {
-                OptimizedContent::Raw(data) => data,
-                OptimizedContent::Compressed(data) => data,
-                OptimizedContent::Reference(_) => unreachable!(),
-            },
+            compressed_content: snapshot_content,
             timestamp: SystemTime::now(),
             metadata,
         };
@@ -835,5 +848,76 @@ impl FileSnapshotSystem {
     /// Checks whether the file has a baseline.
     pub async fn has_baseline(&self, file_path: &Path) -> bool {
         self.get_baseline_snapshot_id(file_path).await.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileSnapshotSystem;
+    use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
+    use std::fs;
+    use uuid::Uuid;
+
+    fn create_test_runtime_context() -> WorkspaceRuntimeContext {
+        let runtime_root =
+            std::env::temp_dir().join(format!("bitfun-snapshot-system-test-{}", Uuid::new_v4()));
+
+        let context = WorkspaceRuntimeContext::new(
+            WorkspaceRuntimeTarget::LocalWorkspace {
+                workspace_root: runtime_root.join("workspace"),
+            },
+            runtime_root,
+        );
+
+        for dir in context.required_directories() {
+            fs::create_dir_all(dir).expect("failed to create runtime test directory");
+        }
+
+        context
+    }
+
+    fn remove_test_runtime_context(context: &WorkspaceRuntimeContext) {
+        let _ = fs::remove_dir_all(&context.runtime_root);
+    }
+
+    #[tokio::test]
+    async fn create_snapshot_allows_metadata_only_reference_after_empty_baseline() {
+        let context = create_test_runtime_context();
+        let mut snapshot_system = FileSnapshotSystem::new(context.clone());
+        snapshot_system
+            .initialize()
+            .await
+            .expect("snapshot system should initialize");
+
+        let new_file_path = context.memory_dir.join("new-memory-file.md");
+        snapshot_system
+            .create_empty_baseline(&new_file_path)
+            .await
+            .expect("empty baseline should be created");
+
+        let existing_empty_file_path = context.memory_dir.join("MEMORY.md");
+        fs::write(&existing_empty_file_path, []).expect("existing empty file should be created");
+
+        let snapshot_id = snapshot_system
+            .create_snapshot(&existing_empty_file_path)
+            .await
+            .expect("snapshot creation should reuse hashed content without panic");
+
+        let snapshot = snapshot_system
+            .active_snapshots
+            .get(&snapshot_id)
+            .expect("snapshot metadata should be registered");
+        assert!(
+            snapshot.compressed_content.is_empty(),
+            "reference snapshots should store metadata only when content hash already exists"
+        );
+
+        let restored = snapshot_system
+            .restore_snapshot_content(&snapshot_id)
+            .await
+            .expect("metadata-only snapshot should restore via by-hash content");
+        assert_eq!(restored, Vec::<u8>::new());
+
+        remove_test_runtime_context(&context);
     }
 }

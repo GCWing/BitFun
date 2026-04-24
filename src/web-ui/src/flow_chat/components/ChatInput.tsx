@@ -46,6 +46,7 @@ import { aiExperienceConfigService } from '@/infrastructure/config/services/AIEx
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { deriveChatInputPetMood } from '../utils/chatInputPetMood';
 import { ChatInputPixelPet } from './ChatInputPixelPet';
+import { SessionBackgroundActivityBanner } from './SessionBackgroundActivityBanner';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
@@ -237,6 +238,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeBtwSessionTitle = activeBtwSessionId
     ? flowChatState.sessions.get(activeBtwSessionId)?.title?.trim() || t('btw.threadLabel')
     : '';
+  const visibleBackgroundActivity = useMemo(() => {
+    const activities = Object.values(currentSession?.backgroundActivities || {});
+    if (activities.length === 0) {
+      return null;
+    }
+
+    return [...activities].sort((left, right) => {
+      const priority = (status: string) => {
+        switch (status) {
+          case 'running':
+            return 3;
+          case 'failed':
+            return 2;
+          case 'completed':
+            return 1;
+          default:
+            return 0;
+        }
+      };
+
+      const priorityDelta = priority(right.status) - priority(left.status);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+
+      return right.updatedAt - left.updatedAt;
+    })[0];
+  }, [currentSession?.backgroundActivities]);
   
   // Memoize history so keyboard handlers don't see a fresh [] on every render.
   const inputHistory = useMemo(
@@ -2220,6 +2249,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             context={recommendationContext}
             className="bitfun-chat-input__recommendations"
           />
+        )}
+
+        {visibleBackgroundActivity && (
+          <div className="bitfun-chat-input__session-activity">
+            <SessionBackgroundActivityBanner activity={visibleBackgroundActivity} />
+          </div>
         )}
 
         <div className="bitfun-chat-input__container">

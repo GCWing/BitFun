@@ -21,6 +21,21 @@ export interface SessionModelAutoMigratedEvent {
   reason: string;
 }
 
+export type SessionBackgroundActivityKind = 'auto_memory';
+export type SessionBackgroundActivityStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'dismissed';
+
+export interface SessionBackgroundActivityEvent extends AgenticEvent {
+  activityId: string;
+  activityKind: SessionBackgroundActivityKind;
+  activityStatus: SessionBackgroundActivityStatus;
+  targetTurnId?: string;
+  detail?: string;
+}
+
  
 export interface SessionConfig {
   modelName?: string;
@@ -432,6 +447,15 @@ export class AgentAPI {
    
   onContextCompressionFailed(callback: (event: CompressionEvent) => void): () => void {
     return api.listen<CompressionEvent>('agentic://context-compression-failed', callback);
+  }
+
+  onSessionBackgroundActivityUpdated(
+    callback: (event: SessionBackgroundActivityEvent) => void
+  ): () => void {
+    return api.listen<SessionBackgroundActivityEvent>(
+      'agentic://session-background-activity-updated',
+      callback
+    );
   }
 
   onImageAnalysisStarted(callback: (event: ImageAnalysisEvent) => void): () => void {

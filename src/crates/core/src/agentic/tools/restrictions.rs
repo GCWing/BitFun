@@ -52,6 +52,8 @@ pub struct ToolRuntimeRestrictions {
     pub denied_tool_names: BTreeSet<String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
+    #[serde(default)]
+    pub disable_snapshot_tracking: bool,
 }
 
 impl ToolRuntimeRestrictions {
@@ -76,6 +78,10 @@ impl ToolRuntimeRestrictions {
         }
 
         Ok(())
+    }
+
+    pub fn snapshot_tracking_enabled(&self) -> bool {
+        !self.disable_snapshot_tracking
     }
 }
 
@@ -198,10 +204,28 @@ mod tests {
             allowed_tool_names: ["Write", "Edit"].into_iter().map(str::to_string).collect(),
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
             path_policy: ToolPathPolicy::default(),
+            disable_snapshot_tracking: false,
         };
 
         assert!(!restrictions.is_tool_allowed("Write"));
         assert!(restrictions.is_tool_allowed("Edit"));
+    }
+
+    #[test]
+    fn snapshot_tracking_is_enabled_by_default() {
+        let restrictions = ToolRuntimeRestrictions::default();
+
+        assert!(restrictions.snapshot_tracking_enabled());
+    }
+
+    #[test]
+    fn snapshot_tracking_can_be_disabled_per_runtime() {
+        let restrictions = ToolRuntimeRestrictions {
+            disable_snapshot_tracking: true,
+            ..ToolRuntimeRestrictions::default()
+        };
+
+        assert!(!restrictions.snapshot_tracking_enabled());
     }
 
     #[test]

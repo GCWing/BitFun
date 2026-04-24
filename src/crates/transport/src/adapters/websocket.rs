@@ -165,6 +165,24 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "hiddenSession": hidden_session,
                 })
             }
+            AgenticEvent::SessionBackgroundActivityUpdated {
+                session_id,
+                activity_id,
+                kind,
+                status,
+                target_turn_id,
+                detail,
+            } => {
+                json!({
+                    "type": "session-background-activity-updated",
+                    "sessionId": session_id,
+                    "activityId": activity_id,
+                    "activityKind": kind,
+                    "activityStatus": status,
+                    "targetTurnId": target_turn_id,
+                    "detail": detail,
+                })
+            }
             _ => return Ok(()),
         };
 

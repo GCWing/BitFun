@@ -14,6 +14,7 @@ use crate::agentic::core::{
 };
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, EventRouter, EventSubscriber,
+    SessionBackgroundActivityKind, SessionBackgroundActivityStatus,
 };
 use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, ExecutionEngine};
 use crate::agentic::fork::{ForkContextSnapshot, ForkExecutionRequest, ForkExecutionResult};
@@ -43,6 +44,7 @@ use tokio_util::sync::CancellationToken;
 const MANUAL_COMPACTION_COMMAND: &str = "/compact";
 const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
 const AUTO_MEMORY_FORK_MAX_TURNS: usize = 5;
+const AUTO_MEMORY_ACTIVITY_ID: &str = "auto_memory";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AutoMemoryPostTurnAction {
@@ -75,6 +77,22 @@ fn build_auto_memory_store_key(target: MemoryStoreTarget<'_>) -> String {
     memory_store_dir_path_for_target(target)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+fn build_auto_memory_activity_event(
+    session_id: &str,
+    status: SessionBackgroundActivityStatus,
+    target_turn_id: Option<String>,
+    detail: Option<String>,
+) -> AgenticEvent {
+    AgenticEvent::SessionBackgroundActivityUpdated {
+        session_id: session_id.to_string(),
+        activity_id: AUTO_MEMORY_ACTIVITY_ID.to_string(),
+        kind: SessionBackgroundActivityKind::AutoMemory,
+        status,
+        target_turn_id,
+        detail,
+    }
 }
 
 /// Subagent execution result
@@ -1375,6 +1393,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         self.auto_memory_manager.cancel_session(&session_id);
+        self.emit_event(build_auto_memory_activity_event(
+            &session_id,
+            SessionBackgroundActivityStatus::Dismissed,
+            None,
+            None,
+        ))
+        .await;
 
         let original_user_input = original_user_input.unwrap_or_else(|| user_input.clone());
 
@@ -1960,6 +1985,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     pub fn cancel_auto_memory_for_session(&self, session_id: &str) {
         self.auto_memory_manager.cancel_session(session_id);
+        let event_queue = self.event_queue.clone();
+        let session_id = session_id.to_string();
+        tokio::spawn(async move {
+            let _ = event_queue
+                .enqueue(
+                    build_auto_memory_activity_event(
+                        &session_id,
+                        SessionBackgroundActivityStatus::Dismissed,
+                        None,
+                        None,
+                    ),
+                    Some(EventPriority::High),
+                )
+                .await;
+        });
     }
 
     pub async fn has_pending_auto_memory(&self, session_id: &str) -> bool {
@@ -2012,21 +2052,123 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let Some(cursor) = self.session_manager.next_auto_memory_cursor(session_id) else {
             return Ok(false);
         };
+        let target_turn_id = session.dialog_turn_ids.get(cursor.through_turn).cloned();
 
         debug!(
             "Starting auto memory cycle: session_id={}, from_turn={}, through_turn={}, history_revision={}",
             session_id, cursor.from_turn, cursor.through_turn, cursor.history_revision
         );
 
-        let pending_turns = self
-            .session_manager
-            .load_turns_in_range(session_id, cursor.from_turn, cursor.through_turn)
-            .await?;
-        let has_model_visible_turns = pending_turns
-            .iter()
-            .any(|turn| turn.kind.is_model_visible());
+        self.emit_event(build_auto_memory_activity_event(
+            session_id,
+            SessionBackgroundActivityStatus::Running,
+            target_turn_id.clone(),
+            None,
+        ))
+        .await;
 
-        if !has_model_visible_turns {
+        let cycle_result = async {
+            let pending_turns = self
+                .session_manager
+                .load_turns_in_range(session_id, cursor.from_turn, cursor.through_turn)
+                .await?;
+            let has_model_visible_turns = pending_turns
+                .iter()
+                .any(|turn| turn.kind.is_model_visible());
+
+            if !has_model_visible_turns {
+                let advanced = self
+                    .session_manager
+                    .complete_auto_memory_extraction_if_revision_matches(
+                        session_id,
+                        cursor.through_turn,
+                        cursor.history_revision,
+                    )
+                    .await?;
+                let _ = advanced;
+                return Ok(true);
+            }
+
+            if cancel_token.is_cancelled() {
+                return Err(BitFunError::Cancelled(
+                    "Auto memory task has been cancelled".to_string(),
+                ));
+            }
+
+            let workspace_root =
+                PathBuf::from(session.config.workspace_path.clone().ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Session workspace_path is missing: {}",
+                        session_id
+                    ))
+                })?);
+            let memory_scope = resolve_auto_memory_scope(&session.agent_type, &workspace_root);
+            let memory_target = match memory_scope {
+                MemoryScope::WorkspaceProject => {
+                    MemoryStoreTarget::WorkspaceProject(workspace_root.as_path())
+                }
+                MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
+            };
+            ensure_memory_store_for_target(memory_target).await?;
+            let memory_dir = memory_store_dir_path_for_target(memory_target);
+            let memory_dir_display = memory_dir.to_string_lossy().replace('\\', "/");
+            let existing_memories = build_memory_manifest_for_target(memory_target).await?;
+            let snapshot = self.capture_fork_context_snapshot(session_id).await?;
+            let recent_message_count = count_recent_model_visible_messages(
+                &snapshot.messages,
+                cursor
+                    .from_turn
+                    .checked_sub(1)
+                    .and_then(|index| session.dialog_turn_ids.get(index))
+                    .map(String::as_str),
+            );
+
+            let prompt = build_extract_prompt(
+                recent_message_count,
+                &memory_dir_display,
+                existing_memories.as_deref(),
+                memory_scope,
+            );
+
+            debug!(
+                "Launching auto memory fork: session_id={}, from_turn={}, through_turn={}, pending_turns={}, recent_message_count={}, inherited_messages={}, has_existing_memory_manifest={}, scope={}",
+                session_id,
+                cursor.from_turn,
+                cursor.through_turn,
+                pending_turns.len(),
+                recent_message_count,
+                snapshot.inherited_message_count(),
+                existing_memories.is_some(),
+                memory_scope.as_label()
+            );
+
+            let result = self
+                .execute_forked_agent(
+                    ForkExecutionRequest {
+                        snapshot,
+                        agent_type: session.agent_type.clone(),
+                        description: "Auto memory extraction".to_string(),
+                        prompt_messages: vec![Message::user(prompt)],
+                        context: HashMap::new(),
+                        runtime_tool_restrictions: build_auto_memory_runtime_restrictions(
+                            &memory_dir.to_string_lossy(),
+                        ),
+                        max_turns: Some(AUTO_MEMORY_FORK_MAX_TURNS),
+                    },
+                    Some(cancel_token),
+                )
+                .await?;
+
+            debug!(
+                "Auto memory fork completed: session_id={}, from_turn={}, through_turn={}, inherited_messages={}, prompt_messages={}, child_text_len={}",
+                session_id,
+                cursor.from_turn,
+                cursor.through_turn,
+                result.inherited_message_count,
+                result.prompt_message_count,
+                result.text.len()
+            );
+
             let advanced = self
                 .session_manager
                 .complete_auto_memory_extraction_if_revision_matches(
@@ -2036,100 +2178,45 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
                 .await?;
             let _ = advanced;
-            return Ok(true);
-        }
 
-        if cancel_token.is_cancelled() {
-            return Err(BitFunError::Cancelled(
-                "Auto memory task has been cancelled".to_string(),
-            ));
+            Ok(true)
         }
+        .await;
 
-        let workspace_root =
-            PathBuf::from(session.config.workspace_path.clone().ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?);
-        let memory_scope = resolve_auto_memory_scope(&session.agent_type, &workspace_root);
-        let memory_target = match memory_scope {
-            MemoryScope::WorkspaceProject => {
-                MemoryStoreTarget::WorkspaceProject(workspace_root.as_path())
+        match cycle_result {
+            Ok(did_run) => {
+                if did_run {
+                    self.emit_event(build_auto_memory_activity_event(
+                        session_id,
+                        SessionBackgroundActivityStatus::Completed,
+                        target_turn_id,
+                        None,
+                    ))
+                    .await;
+                }
+                Ok(did_run)
             }
-            MemoryScope::GlobalAgenticOs => MemoryStoreTarget::GlobalAgenticOs,
-        };
-        ensure_memory_store_for_target(memory_target).await?;
-        let memory_dir = memory_store_dir_path_for_target(memory_target);
-        let memory_dir_display = memory_dir.to_string_lossy().replace('\\', "/");
-        let existing_memories = build_memory_manifest_for_target(memory_target).await?;
-        let snapshot = self.capture_fork_context_snapshot(session_id).await?;
-        let recent_message_count = count_recent_model_visible_messages(
-            &snapshot.messages,
-            cursor
-                .from_turn
-                .checked_sub(1)
-                .and_then(|index| session.dialog_turn_ids.get(index))
-                .map(String::as_str),
-        );
-
-        let prompt = build_extract_prompt(
-            recent_message_count,
-            &memory_dir_display,
-            existing_memories.as_deref(),
-            memory_scope,
-        );
-
-        debug!(
-            "Launching auto memory fork: session_id={}, from_turn={}, through_turn={}, pending_turns={}, recent_message_count={}, inherited_messages={}, has_existing_memory_manifest={}, scope={}",
-            session_id,
-            cursor.from_turn,
-            cursor.through_turn,
-            pending_turns.len(),
-            recent_message_count,
-            snapshot.inherited_message_count(),
-            existing_memories.is_some(),
-            memory_scope.as_label()
-        );
-
-        let result = self
-            .execute_forked_agent(
-                ForkExecutionRequest {
-                    snapshot,
-                    agent_type: session.agent_type.clone(),
-                    description: "Auto memory extraction".to_string(),
-                    prompt_messages: vec![Message::user(prompt)],
-                    context: HashMap::new(),
-                    runtime_tool_restrictions: build_auto_memory_runtime_restrictions(
-                        &memory_dir.to_string_lossy(),
-                    ),
-                    max_turns: Some(AUTO_MEMORY_FORK_MAX_TURNS),
-                },
-                Some(cancel_token),
-            )
-            .await?;
-
-        debug!(
-            "Auto memory fork completed: session_id={}, from_turn={}, through_turn={}, inherited_messages={}, prompt_messages={}, child_text_len={}",
-            session_id,
-            cursor.from_turn,
-            cursor.through_turn,
-            result.inherited_message_count,
-            result.prompt_message_count,
-            result.text.len()
-        );
-
-        let advanced = self
-            .session_manager
-            .complete_auto_memory_extraction_if_revision_matches(
-                session_id,
-                cursor.through_turn,
-                cursor.history_revision,
-            )
-            .await?;
-        let _ = advanced;
-
-        Ok(true)
+            Err(BitFunError::Cancelled(message)) => {
+                self.emit_event(build_auto_memory_activity_event(
+                    session_id,
+                    SessionBackgroundActivityStatus::Dismissed,
+                    target_turn_id,
+                    None,
+                ))
+                .await;
+                Err(BitFunError::Cancelled(message))
+            }
+            Err(error) => {
+                self.emit_event(build_auto_memory_activity_event(
+                    session_id,
+                    SessionBackgroundActivityStatus::Failed,
+                    target_turn_id,
+                    Some(error.to_string()),
+                ))
+                .await;
+                Err(error)
+            }
+        }
     }
 
     /// Cancel dialog turn execution
@@ -2263,6 +2350,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        self.auto_memory_manager.cancel_session(session_id);
+        self.emit_event(build_auto_memory_activity_event(
+            session_id,
+            SessionBackgroundActivityStatus::Dismissed,
+            None,
+            None,
+        ))
+        .await;
         self.session_manager
             .delete_session(workspace_path, session_id)
             .await?;

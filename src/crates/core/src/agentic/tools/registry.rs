@@ -192,7 +192,6 @@ impl ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::create_tool_registry;
-    use serde_json::json;
 
     #[test]
     fn registry_includes_webfetch_tool() {
@@ -229,15 +228,13 @@ mod tests {
             .get_tool("Write")
             .expect("Write tool should be registered");
 
-        let assistant_text = tool.render_result_for_assistant(&json!({
-            "success": true,
-            "file_path": "E:/Projects/demo.txt"
-        }));
-
         assert!(
-            assistant_text.contains("snapshot system"),
-            "expected snapshot wrapper text, got: {}",
-            assistant_text
+            !tool.is_concurrency_safe(None),
+            "snapshot-wrapped write tool should remain non-concurrency-safe"
+        );
+        assert!(
+            !tool.is_readonly(),
+            "write tool should remain mutating after wrapping"
         );
     }
 }

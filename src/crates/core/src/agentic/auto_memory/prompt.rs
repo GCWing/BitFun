@@ -62,7 +62,9 @@ pub fn build_extract_prompt(
         "You are now acting as the memory extraction subagent. Analyze the most recent ~{recent_message_count} messages above and use them to update your persistent memory systems.\n\n\
 Available tools: Read, Grep, Glob, and Write/Edit/Delete for paths inside `{memory_dir}` only. All other tools will be denied.\n\n\
 You have a limited turn budget. Edit requires a prior Read of the same file, so the efficient strategy is: turn 1 — issue all Read calls in parallel for every file you might update; turn 2 — issue all Write/Edit/Delete calls in parallel. Do not interleave reads and writes across multiple turns.\n\n\
-You MUST only use content from the last ~{recent_message_count} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further — no grepping source files, no reading code to confirm a pattern exists, no git commands.{manifest}\n\n{}",
+You MUST only use content from the last ~{recent_message_count} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further — no grepping source files, no reading code to confirm a pattern exists, no git commands.\n\n\
+The conversation may not contain anything worth adding to or changing in memory. If there is nothing to update, respond with exactly `Nothing to update`.\n\n\
+If you do update memory, do not include a summary of what changed. A brief confirmation that the update is complete is enough.{manifest}\n\n{}",
         match memory_scope {
             MemoryScope::WorkspaceProject => build_workspace_memory_policy_sections(
                 "MEMORY.md",

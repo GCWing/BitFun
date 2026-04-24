@@ -219,14 +219,6 @@ impl Tool for MCPToolWrapper {
         )
     }
 
-    fn render_tool_use_rejected_message(&self) -> String {
-        format!(
-            "MCP tool '{}' from '{}' was rejected by user",
-            self.tool_title(),
-            self.server_name
-        )
-    }
-
     fn render_tool_result_message(&self, output: &Value) -> String {
         format!(
             "MCP tool '{}' completed. Result: {}",

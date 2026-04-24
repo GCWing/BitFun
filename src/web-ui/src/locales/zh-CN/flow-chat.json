@@ -257,6 +257,14 @@
       "Design": "Design",
       "DeepResearch": "Deep Research"
     },
+    "backgroundActivities": {
+      "autoMemory": {
+        "eyebrow": "记忆",
+        "running": "更新记忆中",
+        "completed": "记忆已更新",
+        "failed": "记忆更新失败"
+      }
+    },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
     "switchWorkspaceFailed": "切换工作区失败：{{error}}"

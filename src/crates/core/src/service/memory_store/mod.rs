@@ -5,10 +5,10 @@ mod policy;
 mod prompt_context;
 
 use crate::util::errors::*;
-use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
+pub(crate) use global_overview::build_global_workspace_overviews_context;
 pub(crate) use manifest::build_memory_manifest_for_target;
 pub(crate) use paths::{ensure_memory_store_for_target, memory_store_dir_path_for_target};
 pub(crate) use policy::{
@@ -18,7 +18,6 @@ pub(crate) use policy::{
 pub(crate) use prompt_context::{
     build_memory_files_context_for_target, build_memory_prompt_for_target,
 };
-pub(crate) use global_overview::build_global_workspace_overviews_context;
 
 pub(crate) const MEMORY_INDEX_FILE: &str = "MEMORY.md";
 const MEMORY_DIR_NAME: &str = "memory";
@@ -141,37 +140,6 @@ pub(super) async fn list_memory_files_recursive(memory_dir: &Path) -> BitFunResu
 
     files.sort();
     Ok(files)
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct MemoryFrontmatter {
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default, rename = "type")]
-    pub memory_type: Option<String>,
-}
-
-pub(super) fn parse_memory_frontmatter(content: &str) -> Option<MemoryFrontmatter> {
-    let mut lines = content.lines();
-    if lines.next()?.trim() != "---" {
-        return None;
-    }
-
-    let mut yaml_lines = Vec::new();
-    let mut found_closing = false;
-    for line in lines {
-        if line.trim() == "---" {
-            found_closing = true;
-            break;
-        }
-        yaml_lines.push(line);
-    }
-
-    if !found_closing || yaml_lines.is_empty() {
-        return None;
-    }
-
-    serde_yaml::from_str::<MemoryFrontmatter>(&yaml_lines.join("\n")).ok()
 }
 
 pub(super) fn format_manifest_path(path: &Path, memory_dir: &Path) -> String {

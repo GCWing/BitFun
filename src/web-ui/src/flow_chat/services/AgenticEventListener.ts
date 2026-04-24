@@ -15,6 +15,7 @@ import type {
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
+  SessionBackgroundActivityEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -41,6 +42,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionFailed?: (event: AgenticEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
+  onSessionBackgroundActivityUpdated?: (event: SessionBackgroundActivityEvent) => void;
 }
 
 export class AgenticEventListener {
@@ -194,6 +196,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onSessionModelAutoMigrated((event) => {
           logger.info('Session model auto-migrated:', event);
           callbacks.onSessionModelAutoMigrated?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onSessionBackgroundActivityUpdated) {
+        const unlisten = agentAPI.onSessionBackgroundActivityUpdated((event) => {
+          logger.debug('Session background activity updated:', event);
+          callbacks.onSessionBackgroundActivityUpdated?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

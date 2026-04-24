@@ -9,7 +9,8 @@ pub mod emitter;
 pub mod types;
 
 pub use agentic::{
-    AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, SubagentParentInfo, ToolEventData,
+    AgenticEvent, AgenticEventEnvelope, AgenticEventPriority, SessionBackgroundActivityKind,
+    SessionBackgroundActivityStatus, SubagentParentInfo, ToolEventData,
 };
 pub use emitter::EventEmitter;
 pub use types::*;

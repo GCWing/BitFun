@@ -13,6 +13,7 @@ import {
   ImageAnalysisResult,
   AnyFlowItem,
   SessionConfig,
+  SessionBackgroundActivity,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
@@ -281,6 +282,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
+        backgroundActivities: {},
       };
 
       const newSessions = new Map(prev.sessions);
@@ -340,6 +342,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
+        backgroundActivities: {},
       };
 
       const newSessions = new Map(prev.sessions);
@@ -434,6 +437,51 @@ export class FlowChatStore {
       return {
         ...prev,
         sessions: newSessions,
+      };
+    });
+  }
+
+  public upsertSessionBackgroundActivity(
+    sessionId: string,
+    activity: SessionBackgroundActivity
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const nextSessions = new Map(prev.sessions);
+      nextSessions.set(sessionId, {
+        ...session,
+        backgroundActivities: {
+          ...(session.backgroundActivities || {}),
+          [activity.id]: activity,
+        },
+      });
+
+      return {
+        ...prev,
+        sessions: nextSessions,
+      };
+    });
+  }
+
+  public removeSessionBackgroundActivity(sessionId: string, activityId: string): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session?.backgroundActivities?.[activityId]) return prev;
+
+      const nextBackgroundActivities = { ...session.backgroundActivities };
+      delete nextBackgroundActivities[activityId];
+
+      const nextSessions = new Map(prev.sessions);
+      nextSessions.set(sessionId, {
+        ...session,
+        backgroundActivities: nextBackgroundActivities,
+      });
+
+      return {
+        ...prev,
+        sessions: nextSessions,
       };
     });
   }
@@ -1627,6 +1675,7 @@ export class FlowChatStore {
           sessionKind: relationship.sessionKind,
           btwThreads: [],
           btwOrigin: relationship.btwOrigin,
+          backgroundActivities: {},
         };
 
         const newSessions = new Map(prev.sessions);

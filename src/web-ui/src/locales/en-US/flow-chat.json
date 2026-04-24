@@ -257,6 +257,14 @@
       "Design": "Design",
       "DeepResearch": "Deep Research"
     },
+    "backgroundActivities": {
+      "autoMemory": {
+        "eyebrow": "Memory",
+        "running": "Updating memory",
+        "completed": "Memory updated",
+        "failed": "Memory update failed"
+      }
+    },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",
     "switchWorkspaceFailed": "Failed to switch workspace: {{error}}"

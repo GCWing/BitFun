@@ -21,6 +21,7 @@ import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import type {
   ImageAnalysisEvent,
+  SessionBackgroundActivityEvent,
   SessionModelAutoMigratedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { i18nService } from '@/infrastructure/i18n';
@@ -57,6 +58,8 @@ import {
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
+const SESSION_ACTIVITY_SUCCESS_CLEAR_MS = 3000;
+const SESSION_ACTIVITY_FAILURE_CLEAR_MS = 8000;
 
 interface MCPInteractionRequestEvent {
   interactionId: string;
@@ -82,6 +85,55 @@ function logDroppedDataEvent(
     turnId,
     ...details,
   });
+}
+
+function getSessionActivityTimerKey(sessionId: string, activityId: string): string {
+  return `${sessionId}:${activityId}`;
+}
+
+function clearSessionActivityTimer(
+  context: FlowChatContext,
+  sessionId: string,
+  activityId: string
+): void {
+  const timerKey = getSessionActivityTimerKey(sessionId, activityId);
+  const timer = context.sessionActivityClearTimers.get(timerKey);
+  if (!timer) {
+    return;
+  }
+
+  clearTimeout(timer);
+  context.sessionActivityClearTimers.delete(timerKey);
+}
+
+function clearSessionActivityTimersForSession(
+  context: FlowChatContext,
+  sessionId: string
+): void {
+  for (const [timerKey, timer] of context.sessionActivityClearTimers.entries()) {
+    if (!timerKey.startsWith(`${sessionId}:`)) {
+      continue;
+    }
+    clearTimeout(timer);
+    context.sessionActivityClearTimers.delete(timerKey);
+  }
+}
+
+function scheduleSessionActivityClear(
+  context: FlowChatContext,
+  sessionId: string,
+  activityId: string,
+  delayMs: number
+): void {
+  clearSessionActivityTimer(context, sessionId, activityId);
+
+  const timerKey = getSessionActivityTimerKey(sessionId, activityId);
+  const timer = setTimeout(() => {
+    context.sessionActivityClearTimers.delete(timerKey);
+    context.flowChatStore.removeSessionBackgroundActivity(sessionId, activityId);
+  }, delayMs);
+
+  context.sessionActivityClearTimers.set(timerKey, timer);
 }
 
 /**
@@ -252,6 +304,9 @@ export async function initializeEventListeners(
     },
     onSessionModelAutoMigrated: (event) => {
       handleSessionModelAutoMigrated(event);
+    },
+    onSessionBackgroundActivityUpdated: (event) => {
+      handleSessionBackgroundActivityUpdated(context, event);
     }
   };
 
@@ -261,6 +316,10 @@ export async function initializeEventListeners(
     unlistenProgress();
     unlistenTerminalReady();
     unlistenMcpInteractionRequest();
+    for (const timer of context.sessionActivityClearTimers.values()) {
+      clearTimeout(timer);
+    }
+    context.sessionActivityClearTimers.clear();
     agenticEventListener.stopListening();
   };
 }
@@ -553,6 +612,66 @@ function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): v
   });
 }
 
+function handleSessionBackgroundActivityUpdated(
+  context: FlowChatContext,
+  event: SessionBackgroundActivityEvent
+): void {
+  const {
+    sessionId,
+    activityId,
+    activityKind,
+    activityStatus,
+    targetTurnId,
+    detail,
+  } = event;
+
+  if (!sessionId || !activityId || !activityKind || !activityStatus) {
+    log.warn('Session background activity event missing required fields', { event });
+    return;
+  }
+
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  if (!session) {
+    log.debug('Session not found (background activity update)', { sessionId, activityId });
+    return;
+  }
+
+  if (activityStatus === 'dismissed') {
+    clearSessionActivityTimer(context, sessionId, activityId);
+    context.flowChatStore.removeSessionBackgroundActivity(sessionId, activityId);
+    return;
+  }
+
+  clearSessionActivityTimer(context, sessionId, activityId);
+  context.flowChatStore.upsertSessionBackgroundActivity(sessionId, {
+    id: activityId,
+    kind: activityKind,
+    status: activityStatus,
+    targetTurnId,
+    detail,
+    updatedAt: Date.now(),
+  });
+
+  if (activityStatus === 'completed') {
+    scheduleSessionActivityClear(
+      context,
+      sessionId,
+      activityId,
+      SESSION_ACTIVITY_SUCCESS_CLEAR_MS
+    );
+    return;
+  }
+
+  if (activityStatus === 'failed') {
+    scheduleSessionActivityClear(
+      context,
+      sessionId,
+      activityId,
+      SESSION_ACTIVITY_FAILURE_CLEAR_MS
+    );
+  }
+}
+
 /**
  * Handle session deleted event (backend already deleted; only remove from store)
  */
@@ -566,6 +685,7 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
   log.info('Remote session deleted', { sessionId });
   removedSessionIds.forEach(id => {
     clearPendingTurnCompletion(context, id);
+    clearSessionActivityTimersForSession(context, id);
     pendingImageAnalysisTurns.delete(id);
     stateMachineManager.delete(id);
     context.processingManager.clearSessionStatus(id);

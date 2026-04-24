@@ -1,0 +1,74 @@
+.bitfun-session-background-activity {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
+  color: var(--color-text-primary);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+
+  &--running {
+    border-color: color-mix(in srgb, var(--color-info, #3b82f6) 24%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-info-bg, rgba(59, 130, 246, 0.12)) 76%, var(--color-bg-elevated));
+  }
+
+  &--completed {
+    border-color: color-mix(in srgb, var(--color-success, #22c55e) 24%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-success-bg, rgba(34, 197, 94, 0.12)) 74%, var(--color-bg-elevated));
+  }
+
+  &--failed {
+    border-color: color-mix(in srgb, var(--color-error, #ef4444) 26%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-error-bg, rgba(239, 68, 68, 0.12)) 74%, var(--color-bg-elevated));
+  }
+
+  &__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+    color: var(--color-text-secondary);
+    flex: 0 0 auto;
+  }
+
+  &__icon-spin {
+    animation: bitfun-session-background-activity-spin 0.9s linear infinite;
+  }
+
+  &__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title {
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.35;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  &__detail {
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+}
+
+@keyframes bitfun-session-background-activity-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

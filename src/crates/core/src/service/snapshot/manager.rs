@@ -400,40 +400,24 @@ impl Tool for WrappedTool {
         original_validation
     }
 
-    fn render_result_for_assistant(&self, output: &Value) -> String {
-        let original_render = self.original_tool.render_result_for_assistant(output);
-        format!(
-            "{}\n\nModification recorded to snapshot system, can be reviewed and managed in the review panel.",
-            original_render
-        )
-    }
-
-    fn render_tool_use_message(
-        &self,
-        input: &Value,
-        options: &crate::agentic::tools::framework::ToolRenderOptions,
-    ) -> String {
-        let original_message = self.original_tool.render_tool_use_message(input, options);
-        original_message.to_string()
-    }
-
-    fn render_tool_use_rejected_message(&self) -> String {
-        self.original_tool
-            .render_tool_use_rejected_message()
-            .to_string()
-    }
-
-    fn render_tool_result_message(&self, output: &Value) -> String {
-        let original_message = self.original_tool.render_tool_result_message(output);
-        format!("{} recorded to snapshot", original_message)
-    }
-
     async fn call_impl(
         &self,
         input: &Value,
         context: &ToolUseContext,
     ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
         if Self::is_file_modification_tool_name(self.name()) {
+            if !context
+                .runtime_tool_restrictions
+                .snapshot_tracking_enabled()
+            {
+                debug!(
+                    "Skipping snapshot tracking due to runtime restrictions: tool_name={} session_id={}",
+                    self.name(),
+                    context.session_id.as_deref().unwrap_or("<unknown>")
+                );
+                return self.original_tool.call(input, context).await;
+            }
+
             debug!(
                 "Intercepting file modification tool: tool_name={}",
                 self.name()

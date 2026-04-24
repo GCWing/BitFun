@@ -156,6 +156,18 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
+export type SessionBackgroundActivityKind = 'auto_memory';
+export type SessionBackgroundActivityStatus = 'running' | 'completed' | 'failed';
+
+export interface SessionBackgroundActivity {
+  id: string;
+  kind: SessionBackgroundActivityKind;
+  status: SessionBackgroundActivityStatus;
+  targetTurnId?: string;
+  detail?: string;
+  updatedAt: number;
+}
+
 // Session state.
 export interface Session {
   sessionId: string;
@@ -240,6 +252,9 @@ export interface Session {
     parentDialogTurnId?: string;
     parentTurnIndex?: number;
   };
+
+  /** Session-scoped background work that should be visible in the UI without becoming transcript history. */
+  backgroundActivities?: Record<string, SessionBackgroundActivity>;
 }
 
 export interface SessionConfig {
