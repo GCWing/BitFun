@@ -33,7 +33,7 @@ pub fn set_mobile_web_resource_path(path: PathBuf) {
 /// and restore any previously paired bot connections.  Without this, bots
 /// only start listening after the user first opens the Remote Connect dialog.
 pub fn init_on_startup() {
-    tokio::spawn(async {
+    tauri::async_runtime::spawn(async {
         if let Err(e) = ensure_service().await {
             log::warn!("Remote connect startup init failed: {e}");
         }

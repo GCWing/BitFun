@@ -92,9 +92,27 @@ const fn u8_to_level_filter(value: u8) -> log::LevelFilter {
     }
 }
 
-// Default to Debug in early development for easier diagnostics
-fn resolve_default_level(_is_debug: bool) -> log::LevelFilter {
-    log::LevelFilter::Debug
+fn resolve_default_level(is_debug: bool) -> log::LevelFilter {
+    match std::env::var("BITFUN_LOG_LEVEL") {
+        Ok(val) => parse_log_level(&val).unwrap_or_else(|| {
+            eprintln!(
+                "Warning: Invalid BITFUN_LOG_LEVEL '{}', falling back to default",
+                val
+            );
+            if is_debug {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Info
+            }
+        }),
+        Err(_) => {
+            if is_debug {
+                log::LevelFilter::Debug
+            } else {
+                log::LevelFilter::Info
+            }
+        }
+    }
 }
 
 pub fn parse_log_level(value: &str) -> Option<log::LevelFilter> {
@@ -200,40 +218,13 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
     let session_dir = config.session_log_dir.clone();
     let use_stdout_only = is_embedded_webdriver_mode();
 
-    if config.is_debug || use_stdout_only {
+    if config.is_debug {
         targets.push(
             Target::new(TargetKind::Stdout)
                 .filter(|metadata| {
                     let target = metadata.target();
                     !target.starts_with("ai") && !target.starts_with("webview")
                 })
-                .format(|out, message, record| {
-                    let target = record.target();
-                    let simplified_target = if target.starts_with("webview:") {
-                        "webview"
-                    } else {
-                        target
-                    };
-
-                    let (level_color, reset) = match record.level() {
-                        log::Level::Error => ("\x1b[31m", "\x1b[0m"), // Red
-                        log::Level::Warn => ("\x1b[33m", "\x1b[0m"),  // Yellow
-                        log::Level::Info => ("\x1b[32m", "\x1b[0m"),  // Green
-                        log::Level::Debug => ("\x1b[36m", "\x1b[0m"), // Cyan
-                        log::Level::Trace => ("\x1b[90m", "\x1b[0m"), // Gray
-                    };
-
-                    out.finish(format_args!(
-                        "[{}][tid:{}][{}{}{}][{}] {}",
-                        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.3f"),
-                        get_thread_id(),
-                        level_color,
-                        record.level(),
-                        reset,
-                        simplified_target,
-                        message
-                    ))
-                }),
         );
     }
 
@@ -248,7 +239,6 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
                 let target = metadata.target();
                 !target.starts_with("ai") && !target.starts_with("webview")
             })
-            .format(format_log_plain),
         );
 
         let ai_log_dir = session_dir.clone();
@@ -258,7 +248,6 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
                 file_name: Some("ai".into()),
             })
             .filter(|metadata| metadata.target().starts_with("ai"))
-            .format(format_log_plain),
         );
 
         let webview_log_dir = session_dir;
@@ -268,7 +257,6 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
                 file_name: Some("webview".into()),
             })
             .filter(|metadata| metadata.target().starts_with("webview"))
-            .format(format_log_plain),
         );
     }
 
@@ -293,7 +281,6 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> 
         .rotation_strategy(RotationStrategy::KeepSome(2)) // 1 active + 2 backups
         .max_file_size(10 * 1024 * 1024)
         .timezone_strategy(TimezoneStrategy::UseLocal)
-        .clear_format()
         .build()
 }
 
@@ -381,7 +368,7 @@ async fn do_cleanup_log_sessions(
 }
 
 pub fn spawn_log_cleanup_task() {
-    tokio::spawn(async {
+    tauri::async_runtime::spawn(async {
         cleanup_old_log_sessions().await;
     });
 }

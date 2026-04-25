@@ -22,21 +22,7 @@ pub async fn get_url(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let session = get_session(&state, &session_id).await?;
-    let webview = state
-        .app
-        .get_webview(&session.current_window)
-        .ok_or_else(|| {
-            WebDriverErrorResponse::no_such_window(format!(
-                "Webview not found: {}",
-                session.current_window
-            ))
-        })?;
-
-    let url = webview.url().map_err(|error| {
-        WebDriverErrorResponse::unknown_error(format!("Failed to read URL: {error}"))
-    })?;
-
-    Ok(WebDriverResponse::success(url.to_string()))
+    Err(WebDriverErrorResponse::no_such_window("No such windows"))
 }
 
 pub async fn navigate(

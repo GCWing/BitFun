@@ -100,7 +100,6 @@ sha2 = { workspace = true }
 rand = { workspace = true }
 
 # Device/Network info (Remote Connect)
-mac_address = { workspace = true }
 local-ip-address = { workspace = true }
 hostname = { workspace = true }
 

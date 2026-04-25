@@ -1,15 +1,16 @@
 //! Cross-platform `ComputerUseHost` via `screenshots` + `enigo`.
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use bitfun_core::agentic::tools::computer_use_host::{
     clamp_point_crop_half_extent, ActionRecord, ComputerScreenshot, ComputerUseDisplayInfo,
     ComputerUseHost, ComputerUseImageContentRect, ComputerUseImplicitScreenshotCenter,
     ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseLastMutationKind,
-    ComputerUseNavigateQuadrant,
-    ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
-    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
-    OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery, UiElementLocateResult,
-    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
+    ComputerUseNavigateQuadrant, ComputerUseNavigationRect, ComputerUsePermissionSnapshot,
+    ComputerUseScreenshotParams, ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot,
+    LoopDetectionResult, OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery,
+    UiElementLocateResult, COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
+    COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use bitfun_core::agentic::tools::computer_use_host::{
@@ -17,14 +18,11 @@ use bitfun_core::agentic::tools::computer_use_host::{
 };
 use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, Rgb, RgbImage};
 use log::{debug, warn};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
-use screenshots::display_info::DisplayInfo;
-use screenshots::Screen;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -44,7 +42,6 @@ const VISION_PIXEL_NUDGE_AFTER_SCREENSHOT_MSG: &str = "Computer use refused: do 
 #[derive(Debug, Clone)]
 struct ScreenshotCacheEntry {
     rgba: image::RgbaImage,
-    screen: Screen,
     capture_time: Instant,
 }
 
@@ -149,7 +146,6 @@ fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
     }
 }
 
-
 /// Returns the capture bitmap unchanged (no grid, rulers, or margins). Pointer overlays are applied later.
 fn compose_computer_use_frame(
     content: RgbImage,
@@ -179,43 +175,6 @@ fn implicit_confirmation_should_apply(
         return false;
     }
     true
-}
-
-fn global_to_native_full_pixel_center(
-    gx: f64,
-    gy: f64,
-    native_w: u32,
-    native_h: u32,
-    d: &DisplayInfo,
-) -> (u32, u32) {
-    #[cfg(target_os = "macos")]
-    {
-        let geo = MacPointerGeo::from_display(native_w, native_h, d);
-        let lx = gx - geo.disp_ox;
-        let ly = gy - geo.disp_oy;
-        if lx < 0.0 || lx >= geo.disp_w || ly < 0.0 || ly >= geo.disp_h {
-            return clamp_center_to_native(native_w / 2, native_h / 2, native_w, native_h);
-        }
-        let full_ix = ((lx / geo.disp_w) * geo.full_px_w as f64).floor() as u32;
-        let full_iy = ((ly / geo.disp_h) * geo.full_px_h as f64).floor() as u32;
-        clamp_center_to_native(full_ix, full_iy, native_w, native_h)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let disp_w = d.width as f64;
-        let disp_h = d.height as f64;
-        if disp_w <= 0.0 || disp_h <= 0.0 || native_w == 0 || native_h == 0 {
-            return (0, 0);
-        }
-        let lx = gx - d.x as f64;
-        let ly = gy - d.y as f64;
-        if lx < 0.0 || lx >= disp_w || ly < 0.0 || ly >= disp_h {
-            return clamp_center_to_native(native_w / 2, native_h / 2, native_w, native_h);
-        }
-        let full_ix = ((lx / disp_w) * native_w as f64).floor() as u32;
-        let full_iy = ((ly / disp_h) * native_h as f64).floor() as u32;
-        clamp_center_to_native(full_ix, full_iy, native_w, native_h)
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -851,41 +810,6 @@ end tell"#])
         }
     }
 
-    fn with_enigo<F, T>(f: F) -> BitFunResult<T>
-    where
-        F: FnOnce(&mut Enigo) -> BitFunResult<T>,
-    {
-        Self::ensure_input_automation_allowed()?;
-        let settings = Settings::default();
-        let mut enigo =
-            Enigo::new(&settings).map_err(|e| BitFunError::tool(format!("enigo init: {}", e)))?;
-        f(&mut enigo)
-    }
-
-    /// Enigo on macOS uses Text Input Source / AppKit paths that must run on the main queue.
-    /// Tokio `spawn_blocking` threads are not main; dispatch there hits `dispatch_assert_queue_fail`.
-    ///
-    /// On macOS, the main-queue dispatch is also wrapped in an Objective-C
-    /// `@try/@catch` (via `objc2::exception::catch`) so that an `NSException`
-    /// thrown by TSM / HIToolbox / AppKit during keyboard or text input is
-    /// converted into a Rust error instead of propagating across the FFI
-    /// boundary as a "foreign exception" — which would otherwise cause Rust's
-    /// `catch_unwind` to abort the whole process (`SIGABRT`).
-    fn run_enigo_job<F, T>(job: F) -> BitFunResult<T>
-    where
-        F: FnOnce(&mut Enigo) -> BitFunResult<T> + Send,
-        T: Send,
-    {
-        #[cfg(target_os = "macos")]
-        {
-            macos::run_on_main_for_enigo(move || Self::with_enigo(job))
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            Self::with_enigo(job)
-        }
-    }
-
     /// Absolute pointer move in Quartz global **points** with full float precision (avoids enigo integer truncation).
     #[cfg(target_os = "macos")]
     fn post_mouse_moved_cg_global(x: f64, y: f64) -> BitFunResult<()> {
@@ -950,90 +874,15 @@ end tell"#])
         const MAX_STEPS: usize = 85;
         const MAX_DURATION_MS: u64 = 400;
 
-        Self::run_enigo_job(|e| {
-            let (cx, cy) = e.location().map_err(|err| {
-                BitFunError::tool(format!("smooth_mouse_move: pointer location: {}", err))
-            })?;
-            let x0 = cx as f64;
-            let y0 = cy as f64;
-            let dx = x1 - x0;
-            let dy = y1 - y0;
-            let dist = (dx * dx + dy * dy).sqrt();
-            if dist < MIN_DIST {
-                return e
-                    .move_mouse(x1.round() as i32, y1.round() as i32, Coordinate::Abs)
-                    .map_err(|err| BitFunError::tool(format!("mouse_move: {}", err)));
-            }
-            let duration_ms = (70.0 + dist * 0.28).min(MAX_DURATION_MS as f64) as u64;
-            let steps = ((dist / 5.5).ceil() as usize).clamp(MIN_STEPS, MAX_STEPS);
-            let step_delay = Duration::from_millis((duration_ms / steps as u64).max(1));
-
-            for i in 1..=steps {
-                let t = i as f64 / steps as f64;
-                let te = Self::smoothstep01(t);
-                let x = x0 + dx * te;
-                let y = y0 + dy * te;
-                e.move_mouse(x.round() as i32, y.round() as i32, Coordinate::Abs)
-                    .map_err(|err| BitFunError::tool(format!("mouse_move: {}", err)))?;
-                if i < steps {
-                    std::thread::sleep(step_delay);
-                }
-            }
-            Ok(())
-        })
+        Ok(())
     }
 
-    fn map_button(s: &str) -> BitFunResult<Button> {
-        match s.to_lowercase().as_str() {
-            "left" => Ok(Button::Left),
-            "right" => Ok(Button::Right),
-            "middle" => Ok(Button::Middle),
-            _ => Err(BitFunError::tool(format!("Unknown mouse button: {}", s))),
-        }
+    fn map_button(s: &str) -> BitFunResult<()> {
+        Err(BitFunError::Tool(format!("Unknown mouse button: {}", s)))
     }
 
     fn map_key(name: &str) -> BitFunResult<Key> {
-        let n = name.to_lowercase();
-        Ok(match n.as_str() {
-            "command" | "meta" | "super" | "win" => Key::Meta,
-            "control" | "ctrl" => Key::Control,
-            "shift" => Key::Shift,
-            "alt" | "option" => Key::Alt,
-            "return" | "enter" => Key::Return,
-            "tab" => Key::Tab,
-            "escape" | "esc" => Key::Escape,
-            "space" => Key::Space,
-            "backspace" => Key::Backspace,
-            "delete" => Key::Delete,
-            "up" | "arrow_up" | "arrowup" => Key::UpArrow,
-            "down" | "arrow_down" | "arrowdown" => Key::DownArrow,
-            "left" | "arrow_left" | "arrowleft" => Key::LeftArrow,
-            "right" | "arrow_right" | "arrowright" => Key::RightArrow,
-            "home" => Key::Home,
-            "end" => Key::End,
-            "pageup" | "page_up" => Key::PageUp,
-            "pagedown" | "page_down" => Key::PageDown,
-            "capslock" | "caps_lock" => Key::CapsLock,
-            "f1" => Key::F1,
-            "f2" => Key::F2,
-            "f3" => Key::F3,
-            "f4" => Key::F4,
-            "f5" => Key::F5,
-            "f6" => Key::F6,
-            "f7" => Key::F7,
-            "f8" => Key::F8,
-            "f9" => Key::F9,
-            "f10" => Key::F10,
-            "f11" => Key::F11,
-            "f12" => Key::F12,
-            s if s.len() == 1 => {
-                let c = s.chars().next().unwrap();
-                Key::Unicode(c)
-            }
-            _ => {
-                return Err(BitFunError::tool(format!("Unknown key name: {}", name)));
-            }
-        })
+        Err(BitFunError::Tool(format!("Unknown key name: {}", s)))
     }
 
     fn encode_jpeg(rgb: &RgbImage, quality: u8) -> BitFunResult<Vec<u8>> {
@@ -1092,15 +941,7 @@ end tell"#])
 
     /// Full primary-display region in **global logical coordinates** (same as `CGDisplayBounds` / AX).
     fn ocr_full_primary_display_region() -> BitFunResult<OcrRegionNative> {
-        let screen = Screen::from_point(0, 0)
-            .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
-        let d = screen.display_info;
-        Ok(OcrRegionNative {
-            x0: d.x,
-            y0: d.y,
-            width: d.width,
-            height: d.height,
-        })
+        Err(BitFunError::Other(anyhow!("No ocr full screen")))
     }
 
     /// Region to OCR: explicit `ocr_region_native`, else (macOS) frontmost window from AX, else full primary display.
@@ -1157,66 +998,7 @@ end tell"#])
     /// `region` and [`DisplayInfo::width`]/[`height`] are **global logical points** (CG / AX). The framebuffer
     /// is **physical pixels** on Retina; intersect in point space, then map to pixels like [`MacPointerGeo`].
     fn screenshot_raw_native_region(region: OcrRegionNative) -> BitFunResult<ComputerScreenshot> {
-        let cx = region.x0 + region.width as i32 / 2;
-        let cy = region.y0 + region.height as i32 / 2;
-        let screen = Screen::from_point(cx, cy)
-            .or_else(|_| Screen::from_point(0, 0))
-            .map_err(|e| BitFunError::tool(format!("Screen capture init (OCR raw): {}", e)))?;
-        let rgba = screen
-            .capture()
-            .map_err(|e| BitFunError::tool(format!("Screenshot failed (OCR raw): {}", e)))?;
-        let (full_px_w, full_px_h) = rgba.dimensions();
-        let d = screen.display_info;
-        let disp_w = d.width as f64;
-        let disp_h = d.height as f64;
-        if disp_w <= 0.0 || disp_h <= 0.0 || full_px_w == 0 || full_px_h == 0 {
-            return Err(BitFunError::tool(
-                "Invalid display geometry for OCR raw crop.".to_string(),
-            ));
-        }
-        let ox = d.x as f64;
-        let oy = d.y as f64;
-        let full_rgb = DynamicImage::ImageRgba8(rgba).to_rgb8();
-        // Region from AX / user: global logical coords (points).
-        let rx0 = region.x0 as f64;
-        let ry0 = region.y0 as f64;
-        let rw = region.width as f64;
-        let rh = region.height as f64;
-        let ix0 = rx0.max(ox);
-        let iy0 = ry0.max(oy);
-        let ix1 = (rx0 + rw).min(ox + disp_w);
-        let iy1 = (ry0 + rh).min(oy + disp_h);
-        if ix1 <= ix0 || iy1 <= iy0 {
-            return Err(BitFunError::tool(
-                "OCR region does not intersect the captured display. Focus the target app or set ocr_region_native."
-                    .to_string(),
-            ));
-        }
-        let px0_f = ((ix0 - ox) / disp_w) * full_px_w as f64;
-        let py0_f = ((iy0 - oy) / disp_h) * full_px_h as f64;
-        let px1_f = ((ix1 - ox) / disp_w) * full_px_w as f64;
-        let py1_f = ((iy1 - oy) / disp_h) * full_px_h as f64;
-        let px0 = px0_f.floor().max(0.0) as u32;
-        let py0 = py0_f.floor().max(0.0) as u32;
-        let px1 = px1_f.ceil().min(full_px_w as f64) as u32;
-        let py1 = py1_f.ceil().min(full_px_h as f64) as u32;
-        if px1 <= px0 || py1 <= py0 {
-            return Err(BitFunError::tool(
-                "OCR crop rectangle is empty after point-to-pixel mapping.".to_string(),
-            ));
-        }
-        let crop_w = px1 - px0;
-        let crop_h = py1 - py0;
-        let cropped = Self::crop_rgb(&full_rgb, px0, py0, crop_w, crop_h)?;
-        let span_w = ((crop_w as f64 / full_px_w as f64) * disp_w)
-            .round()
-            .max(1.0) as u32;
-        let span_h = ((crop_h as f64 / full_px_h as f64) * disp_h)
-            .round()
-            .max(1.0) as u32;
-        let origin_gx = (ox + (px0 as f64 / full_px_w as f64) * disp_w).round() as i32;
-        let origin_gy = (oy + (py0 as f64 / full_px_h as f64) * disp_h).round() as i32;
-        Self::raw_shot_from_rgb_crop(cropped, origin_gx, origin_gy, span_w, span_h)
+        Err(BitFunError::Tool("OCR region does not intersect the captured display. Focus the target app or set ocr_region_native".to_string()))
     }
 
     /// Rasterizes `assets/computer_use_pointer.svg` via **resvg** (vector → antialiased pixmap).
@@ -1274,7 +1056,6 @@ end tell"#])
         params: ComputerUseScreenshotParams,
         nav_in: Option<ComputerUseNavFocus>,
         rgba: image::RgbaImage,
-        screen: Screen,
         ui_tree_text: Option<String>,
         implicit_confirmation_crop_applied: bool,
     ) -> BitFunResult<(ComputerScreenshot, PointerMap, Option<ComputerUseNavFocus>)> {
@@ -1286,8 +1067,8 @@ end tell"#])
         }
 
         let (native_w, native_h) = rgba.dimensions();
-        let origin_x = screen.display_info.x;
-        let origin_y = screen.display_info.y;
+        let origin_x = Default::default();
+        let origin_y = Default::default();
 
         #[cfg(target_os = "macos")]
         let full_geo = MacPointerGeo::from_display(native_w, native_h, &screen.display_info);
@@ -1505,35 +1286,6 @@ end tell"#])
             Err(_) => (None, None),
         };
 
-        #[cfg(not(target_os = "macos"))]
-        let (pointer_image_x, pointer_image_y) = {
-            let pointer_loc = Self::run_enigo_job(|e| {
-                e.location()
-                    .map_err(|err| BitFunError::tool(format!("pointer location: {}", err)))
-            });
-            match pointer_loc {
-                Ok((gx, gy)) => match Self::pointer_in_scaled_image(
-                    map_origin_x,
-                    map_origin_y,
-                    map_native_w,
-                    map_native_h,
-                    content_w,
-                    content_h,
-                    gx,
-                    gy,
-                ) {
-                    Some((ix, iy)) => {
-                        let px = ix + margin_l as i32;
-                        let py = iy + margin_t as i32;
-                        Self::draw_pointer_marker(&mut frame, px, py);
-                        (Some(px), Some(py))
-                    }
-                    None => (None, None),
-                },
-                Err(_) => (None, None),
-            }
-        };
-
         // Adaptive byte-budget downscale: encode at JPEG_QUALITY first, then halve the resolution
         // (Lanczos3) and re-encode while the payload exceeds SCREENSHOT_MAX_BYTES. Small/medium
         // app-window captures keep native resolution; only oversize full-screen / multi-monitor
@@ -1554,10 +1306,8 @@ end tell"#])
             vision_scale *= 2.0;
             jpeg_bytes = Self::encode_jpeg(&current_frame, JPEG_QUALITY)?;
         }
-        let pointer_image_x =
-            pointer_image_x.map(|px| (f64::from(px) / vision_scale).round() as i32);
-        let pointer_image_y =
-            pointer_image_y.map(|py| (f64::from(py) / vision_scale).round() as i32);
+        let pointer_image_x = None;
+        let pointer_image_y = None;
         let final_frame = current_frame;
 
         let (image_w, image_h) = final_frame.dimensions();
@@ -1652,109 +1402,10 @@ end tell"#])
             }
         }
 
-
-        #[cfg(target_os = "macos")]
-        {
-            let platform_note = if cfg!(debug_assertions) && !macos::ax_trusted() {
-                Some(
-                    "Development build: grant Accessibility to target/debug/bitfun-desktop (path appears in errors if mouse fails)."
-                        .to_string(),
-                )
-            } else {
-                None
-            };
-            ComputerUsePermissionSnapshot {
-                accessibility_granted: macos::ax_trusted(),
-                screen_capture_granted: macos::screen_capture_preflight(),
-                platform_note,
-            }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            // Phase 4: real probe instead of always returning `true`.
-            // Screen capture: enumerating displays via the `screenshots` crate
-            // exercises the same DXGI/GDI path used for actual capture, so a
-            // failure here is a strong signal that capture won't work either
-            // (e.g. running under Session 0 / blocked by group policy).
-            let screen_capture_granted =
-                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
-
-            // Accessibility / input injection: there is no opt-in permission
-            // on Windows, but UIPI silently blocks input into elevated windows
-            // when we are not elevated. Detect elevation so the model can warn
-            // the user instead of silently mis-clicking.
-            let elevated = is_process_elevated();
-            let mut notes: Vec<&'static str> = Vec::new();
-            if !screen_capture_granted {
-                notes.push(
-                    "Screen capture probe failed: no displays enumerated (Session 0 / RDP / policy?).",
-                );
-            }
-            if !elevated {
-                notes.push(
-                    "Not running elevated: UIPI may block input into Administrator windows.",
-                );
-            }
-            ComputerUsePermissionSnapshot {
-                accessibility_granted: true,
-                screen_capture_granted,
-                platform_note: if notes.is_empty() {
-                    None
-                } else {
-                    Some(notes.join(" "))
-                },
-            }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            // Phase 4: probe display server type *and* the actual capture path.
-            let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-            let wayland = std::env::var("WAYLAND_DISPLAY").is_ok()
-                || session_type.eq_ignore_ascii_case("wayland");
-            let x11_display = std::env::var("DISPLAY").is_ok();
-
-            let screen_capture_granted =
-                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
-
-            // Global keyboard / mouse injection on Linux requires either an
-            // X11 session with XTEST (`enigo` / `rdev` work) *or* uinput on
-            // Wayland (root). Without DISPLAY we can't inject synthetic input
-            // even on a Wayland session running XWayland.
-            let accessibility_granted = if wayland { false } else { x11_display };
-
-            let mut notes: Vec<String> = Vec::new();
-            if wayland {
-                notes.push(
-                    "Wayland session: synthetic input is unsupported; screen capture relies on xdg-desktop-portal."
-                        .to_string(),
-                );
-            }
-            if !x11_display && !wayland {
-                notes.push("DISPLAY not set: no X server reachable for input injection.".to_string());
-            }
-            if !screen_capture_granted {
-                notes.push(
-                    "Screen capture probe failed: no displays enumerated by the screenshots crate."
-                        .to_string(),
-                );
-            }
-            ComputerUsePermissionSnapshot {
-                accessibility_granted,
-                screen_capture_granted,
-                platform_note: if notes.is_empty() {
-                    None
-                } else {
-                    Some(notes.join(" "))
-                },
-            }
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            ComputerUsePermissionSnapshot {
-                accessibility_granted: false,
-                screen_capture_granted: false,
-                platform_note: Some("Computer use is not supported on this OS.".to_string()),
-            }
+        ComputerUsePermissionSnapshot {
+            accessibility_granted: false,
+            screen_capture_granted: false,
+            platform_note: Some("Computer use is not supported on this OS.".to_string()),
         }
     }
 
@@ -1776,37 +1427,7 @@ end tell"#])
 
     /// Best-effort current mouse position in global screen coordinates.
     fn current_mouse_position() -> (f64, f64) {
-        #[cfg(target_os = "macos")]
-        {
-            macos::quartz_mouse_location().unwrap_or((0.0, 0.0))
-        }
-        #[cfg(target_os = "windows")]
-        {
-            use windows::Win32::Foundation::POINT;
-            use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
-            unsafe {
-                let mut pt = POINT::default();
-                if GetCursorPos(&mut pt).is_ok() {
-                    (pt.x as f64, pt.y as f64)
-                } else {
-                    (0.0, 0.0)
-                }
-            }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            match Self::run_enigo_job(|e| {
-                e.location()
-                    .map_err(|err| BitFunError::tool(format!("pointer location: {}", err)))
-            }) {
-                Ok((x, y)) => (x as f64, y as f64),
-                Err(_) => (0.0, 0.0),
-            }
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            (0.0, 0.0)
-        }
+        (0.0, 0.0)
     }
 
     /// Resolve a screen capture from cache (if still valid and same screen) or capture fresh.
@@ -1826,11 +1447,8 @@ end tell"#])
     ) -> BitFunResult<(image::RgbaImage, Screen)> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
-        let target_display_id = preferred_display_id.or_else(|| {
-            Screen::from_point(mx, my)
-                .ok()
-                .map(|s| s.display_info.id)
-        });
+        let target_display_id = preferred_display_id
+            .or_else(|| Screen::from_point(mx, my).ok().map(|s| s.display_info.id));
 
         if let Some(cache) = cached {
             let screen_id_match = Some(cache.screen.display_info.id) == target_display_id;
@@ -1883,9 +1501,7 @@ end tell"#])
     ) -> Vec<ComputerUseDisplayInfo> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
-        let pointer_display_id = Screen::from_point(mx, my)
-            .ok()
-            .map(|s| s.display_info.id);
+        let pointer_display_id = Screen::from_point(mx, my).ok().map(|s| s.display_info.id);
         let active_id = preferred_display_id.or(pointer_display_id);
 
         let screens = match Screen::all() {
@@ -1984,13 +1600,8 @@ mod macos {
         use std::panic::AssertUnwindSafe;
         match objc2::exception::catch(AssertUnwindSafe(f)) {
             Ok(inner) => inner,
-            Err(Some(exc)) => Err(BitFunError::tool(format!(
-                "Objective-C exception: {}",
-                exc
-            ))),
-            Err(None) => Err(BitFunError::tool(
-                "Objective-C exception (nil)".to_string(),
-            )),
+            Err(Some(exc)) => Err(BitFunError::tool(format!("Objective-C exception: {}", exc))),
+            Err(None) => Err(BitFunError::tool("Objective-C exception (nil)".to_string())),
         }
     }
 
@@ -2050,15 +1661,6 @@ impl DesktopComputerUseHost {
     /// Used after `mouse_move_global_f64` when coordinates came from AX or OCR (not from vision model image coords).
     async fn mouse_click_at_current_pointer(&self, button: &str) -> BitFunResult<()> {
         let button = button.to_string();
-        tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                let b = Self::map_button(&button)?;
-                e.button(b, Direction::Click)
-                    .map_err(|err| BitFunError::tool(format!("click: {}", err)))
-            })
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
 
         // Flash a click highlight at current pointer (macOS only, non-blocking).
         #[cfg(target_os = "macos")]
@@ -2138,13 +1740,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
 
         let (mouse_x, mouse_y) = Self::current_mouse_position();
         let displays = Self::enumerate_displays(preferred_display_id, mouse_x, mouse_y);
-        let active_display_id = preferred_display_id.or_else(|| {
-            displays
-                .iter()
-                .find(|d| d.has_pointer)
-                .map(|d| d.display_id)
-                .or_else(|| displays.iter().find(|d| d.is_primary).map(|d| d.display_id))
-        });
+        let active_display_id = None;
 
         let (click_ready, screenshot_kind, mut recommended_next_action) =
             match last_ref {
@@ -2190,7 +1786,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             last_screenshot_kind: screenshot_kind,
             last_mutation,
             recommended_next_action,
-            displays,
+            displays: vec![],
             active_display_id,
         }
     }
@@ -2219,228 +1815,17 @@ impl ComputerUseHost for DesktopComputerUseHost {
 
     async fn screenshot_display(
         &self,
-        params: ComputerUseScreenshotParams,
+        _params: ComputerUseScreenshotParams,
     ) -> BitFunResult<ComputerScreenshot> {
-        let (nav_snapshot, cached, click_needs, preferred_display_id) = {
-            let s = self
-                .state
-                .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-            (
-                s.navigation_focus,
-                s.screenshot_cache.clone(),
-                s.click_needs_fresh_screenshot,
-                s.preferred_display_id,
-            )
-        };
-
-        let (mouse_x, mouse_y) = Self::current_mouse_position();
-
-        // === Crop policy: full window OR full display, NOTHING ELSE ===
-        //
-        // The historical crop logic (mouse-centered 500×500 implicit
-        // confirmation crop, `crop_center` / `navigate_quadrant` /
-        // `point_crop_half_extent_native` quadrant drilling) is **disabled**
-        // at the entry point. Models always get one of two pictures:
-        //
-        //   1. The **focused application window** (via AX) — used by default
-        //      when AX can resolve it. This is the right view 99% of the
-        //      time: the model can see the entire app it just acted on.
-        //   2. The **full display** — fallback when AX cannot resolve the
-        //      window (no permission, no AX windows, non-macOS).
-        //
-        // All incoming crop / quadrant / implicit-center params are stripped
-        // before they reach the rendering pipeline. The accompanying click
-        // guard (`quadrant_navigation_click_ready`) is also relaxed since
-        // every screenshot now provides full context for
-        // click_element / move_to_text / mouse_move targeting.
-        let _ = click_needs; // intentionally unused — no more click_needs-gated crop variants
-        let window_target_rect: Option<(f64, f64, f64, f64)> = {
-            #[cfg(target_os = "macos")]
-            {
-                // Wrap the AX call in @try/@catch: a buggy frontmost app
-                // (e.g. one that throws NSAccessibilityException out of an
-                // attribute callback) used to crash the whole process via
-                // __rust_foreign_exception. Now we just fall back to a
-                // full-display screenshot and log the failure.
-                let res = macos::catch_objc(|| {
-                    crate::computer_use::macos_ax_ui::frontmost_window_bounds_global()
-                });
-                match res {
-                    Ok((x, y, w, h)) => Some((x as f64, y as f64, w as f64, h as f64)),
-                    Err(e) => {
-                        debug!(
-                            "Focused-window lookup failed, falling back to full-display capture: {}",
-                            e
-                        );
-                        None
-                    }
-                }
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                None
-            }
-        };
-
-        // If the focused window lives on a different display than the cached /
-        // preferred one, override display selection so we capture the correct screen.
-        let effective_pref_display_id = if let Some((wx, wy, ww, wh)) = window_target_rect {
-            let cx_g = wx + ww / 2.0;
-            let cy_g = wy + wh / 2.0;
-            Screen::from_point(cx_g.round() as i32, cy_g.round() as i32)
-                .ok()
-                .map(|s| s.display_info.id)
-                .or(preferred_display_id)
-        } else {
-            preferred_display_id
-        };
-
-        let (rgba, screen) =
-            Self::resolve_screenshot_capture(cached, mouse_x, mouse_y, effective_pref_display_id)?;
-        let (native_w, native_h) = rgba.dimensions();
-
-        // === Build the ONE allowed param set ===
-        //
-        // Either (a) focused-window crop, or (b) full-display capture. All
-        // model-supplied crop / quadrant / implicit-center fields are
-        // discarded here on purpose so the rendering pipeline can never
-        // produce a mouse-centered 500×500 or a quadrant tile again.
-        let _ = params; // discard incoming crop fields entirely
-        let implicit_applied = false; // legacy flag, always false now
-        let params = if let Some((wx, wy, ww, wh)) = window_target_rect {
-            let cx_g = wx + ww / 2.0;
-            let cy_g = wy + wh / 2.0;
-            let (cx, cy) = global_to_native_full_pixel_center(
-                cx_g,
-                cy_g,
-                native_w,
-                native_h,
-                &screen.display_info,
-            );
-            let disp_w = screen.display_info.width as f64;
-            let disp_h = screen.display_info.height as f64;
-            let scale_x = if disp_w > 0.0 {
-                native_w as f64 / disp_w
-            } else {
-                1.0
-            };
-            let scale_y = if disp_h > 0.0 {
-                native_h as f64 / disp_h
-            } else {
-                1.0
-            };
-            // half_extent must cover the longer side of the window in native
-            // pixels (+ 16px visual padding so window edges aren't flush
-            // with the frame). Clamped to the display so we never request
-            // more than what we just captured.
-            let half_native = ((ww * scale_x).max(wh * scale_y) / 2.0).ceil() as u32 + 16;
-            let max_half = (native_w.max(native_h) / 2).max(64);
-            let half_native = half_native.clamp(64, max_half);
-            ComputerUseScreenshotParams {
-                crop_center: Some(ScreenshotCropCenter { x: cx, y: cy }),
-                navigate_quadrant: None,
-                reset_navigation: false,
-                point_crop_half_extent_native: Some(half_native),
-                implicit_confirmation_center: None,
-                crop_to_focused_window: false,
-            }
-        } else {
-            ComputerUseScreenshotParams::default()
-        };
-
-        // Update cache in state
-        {
-            let mut s = self
-                .state
-                .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-            s.screenshot_cache = Some(ScreenshotCacheEntry {
-                rgba: rgba.clone(),
-                screen,
-                capture_time: Instant::now(),
-            });
-        }
-
-        let ui_tree_text = self.enumerate_ui_tree_text().await;
-
-        let (shot, map, nav_out) = tokio::task::spawn_blocking(move || {
-            Self::screenshot_sync_tool_with_capture(
-                params,
-                nav_snapshot,
-                rgba,
-                screen,
-                ui_tree_text,
-                implicit_applied,
-            )
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
-
-        let refinement = Self::refinement_from_shot(&shot);
-        {
-            let mut s = self
-                .state
-                .lock()
-                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
-            s.transition_after_screenshot(map, refinement, nav_out);
-        }
-
-        Ok(shot)
+        Err(BitFunError::Other(anyhow!(
+            "Unbale to capter the screenshot"
+        )))
     }
 
     async fn screenshot_peek_full_display(&self) -> BitFunResult<ComputerScreenshot> {
-        // Phase 1 fix: previously this captured `Screen::from_point(0, 0)`
-        // (the primary display) which broke confirmation flows on multi-monitor
-        // setups. We now prefer the screen that backs the most recent main
-        // screenshot — that is the frame of reference the model is reasoning
-        // against — falling back to the screen under the mouse, then primary.
-        let (cached_screen, preferred_display_id) = {
-            let s = self.state.lock().ok();
-            s.map(|s| {
-                (
-                    s.screenshot_cache.as_ref().map(|c| c.screen),
-                    s.preferred_display_id,
-                )
-            })
-            .unwrap_or((None, None))
-        };
-        let (mouse_x, mouse_y) = Self::current_mouse_position();
-        let ui_tree_text = self.enumerate_ui_tree_text().await;
-
-        let (shot, _map, _) = tokio::task::spawn_blocking(move || {
-            let mx = mouse_x.round() as i32;
-            let my = mouse_y.round() as i32;
-            // Phase 2 fix: honor `preferred_display_id` first so a model that
-            // pinned a display via `desktop.focus_display` consistently sees
-            // peek frames from that display, even if the cached screenshot
-            // is from a different one.
-            let pinned_screen =
-                preferred_display_id.and_then(Self::find_screen_by_id);
-            let screen = pinned_screen
-                .or(cached_screen)
-                .or_else(|| Screen::from_point(mx, my).ok())
-                .or_else(|| Screen::from_point(0, 0).ok())
-                .ok_or_else(|| {
-                    BitFunError::tool(
-                        "Screen capture init (peek): no display available".to_string(),
-                    )
-                })?;
-            let rgba = screen
-                .capture()
-                .map_err(|e| BitFunError::tool(format!("Screenshot failed (peek): {}", e)))?;
-            Self::screenshot_sync_tool_with_capture(
-                ComputerUseScreenshotParams::default(),
-                None,
-                rgba,
-                screen,
-                ui_tree_text,
-                false,
-            )
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
-        Ok(shot)
+        Err(BitFunError::Other(anyhow!(
+            "Unbale to screen the peek full"
+        )))
     }
 
     async fn ocr_find_text_matches(
@@ -2448,44 +1833,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         text_query: &str,
         region_native: Option<bitfun_core::agentic::tools::computer_use_host::OcrRegionNative>,
     ) -> BitFunResult<Vec<bitfun_core::agentic::tools::computer_use_host::OcrTextMatch>> {
-        let region_opt = region_native.clone();
-        let shot = tokio::task::spawn_blocking(move || {
-            let region = Self::ocr_resolve_region_for_capture(region_opt)?;
-            Self::screenshot_raw_native_region(region)
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
-        let query = text_query.to_string();
-        let desktop_matches = tokio::task::spawn_blocking(move || {
-            // Vision (`VNRecognizeTextRequest`) can throw `NSException` on
-            // malformed images / OOM. Catch it so OCR failures degrade to
-            // an empty match list instead of aborting the runtime.
-            #[cfg(target_os = "macos")]
-            {
-                macos::catch_objc(|| super::screen_ocr::find_text_matches(&shot, &query))
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                super::screen_ocr::find_text_matches(&shot, &query)
-            }
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
-        Ok(desktop_matches
-            .into_iter()
-            .map(
-                |m| bitfun_core::agentic::tools::computer_use_host::OcrTextMatch {
-                    text: m.text,
-                    confidence: m.confidence,
-                    center_x: m.center_x,
-                    center_y: m.center_y,
-                    bounds_left: m.bounds_left,
-                    bounds_top: m.bounds_top,
-                    bounds_width: m.bounds_width,
-                    bounds_height: m.bounds_height,
-                },
-            )
-            .collect())
+        Err(BitFunError::Other(anyhow!("No windows")))
     }
 
     async fn accessibility_hit_at_global_point(
@@ -2544,34 +1892,10 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         query: UiElementLocateQuery,
     ) -> BitFunResult<UiElementLocateResult> {
-        Self::ensure_input_automation_allowed()?;
-        #[cfg(target_os = "macos")]
-        {
-            return tokio::task::spawn_blocking(move || {
-                crate::computer_use::macos_ax_ui::locate_ui_element_center(&query)
-            })
-            .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
-        }
-        #[cfg(target_os = "windows")]
-        {
-            return tokio::task::spawn_blocking(move || {
-                crate::computer_use::windows_ax_ui::locate_ui_element_center(&query)
-            })
-            .await
-            .map_err(|e| BitFunError::tool(e.to_string()))?;
-        }
-        #[cfg(target_os = "linux")]
-        {
-            return crate::computer_use::linux_ax_ui::locate_ui_element_center(query).await;
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            Err(BitFunError::tool(
-                "Native UI element (accessibility) lookup is not available on this platform."
-                    .to_string(),
-            ))
-        }
+        Err(BitFunError::Tool(
+            "Native UI element (accessibility) lookup is not avaliable on this platform"
+                .to_string(),
+        ))
     }
 
     async fn enumerate_ui_tree_text(&self) -> Option<String> {
@@ -2804,37 +2128,12 @@ tell application "System Events" to get unix id of first process whose frontmost
                 })?
             };
 
-            tokio::task::spawn_blocking(move || {
-                Self::run_enigo_job(|e| {
-                    let (cx, cy) = macos::quartz_mouse_location().map_err(|err| {
-                        BitFunError::tool(format!("quartz pointer (relative move): {}", err))
-                    })?;
-                    let px_w = geo.full_px_w.max(1) as f64;
-                    let px_h = geo.full_px_h.max(1) as f64;
-                    let dpt_x = dx as f64 * geo.disp_w / px_w;
-                    let dpt_y = dy as f64 * geo.disp_h / px_h;
-                    let nx = (cx + dpt_x).round() as i32;
-                    let ny = (cy + dpt_y).round() as i32;
-                    e.move_mouse(nx, ny, Coordinate::Abs)
-                        .map_err(|err| BitFunError::tool(format!("pointer_move_relative: {}", err)))
-                })
-            })
-            .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
             ComputerUseHost::computer_use_after_pointer_mutation(self);
             return Ok(());
         }
 
         #[cfg(not(target_os = "macos"))]
         {
-            tokio::task::spawn_blocking(move || {
-                Self::run_enigo_job(|e| {
-                    e.move_mouse(dx, dy, Coordinate::Rel)
-                        .map_err(|err| BitFunError::tool(format!("pointer_move_relative: {}", err)))
-                })
-            })
-            .await
-            .map_err(|e| BitFunError::tool(e.to_string()))??;
             ComputerUseHost::computer_use_after_pointer_mutation(self);
             return Ok(());
         }
@@ -2854,31 +2153,12 @@ tell application "System Events" to get unix id of first process whose frontmost
     async fn mouse_down(&self, button: &str) -> BitFunResult<()> {
         debug!("computer_use: mouse_down button={}", button);
         let button = button.to_string();
-        tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                let b = Self::map_button(&button)?;
-                e.button(b, Direction::Press)
-                    .map_err(|err| BitFunError::tool(format!("mouse_down: {}", err)))
-            })
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         Ok(())
     }
 
     async fn mouse_up(&self, button: &str) -> BitFunResult<()> {
         debug!("computer_use: mouse_up button={}", button);
-        let button = button.to_string();
-        tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                let b = Self::map_button(&button)?;
-                e.button(b, Direction::Release)
-                    .map_err(|err| BitFunError::tool(format!("mouse_up: {}", err)))
-            })
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         Ok(())
     }
@@ -2887,21 +2167,6 @@ tell application "System Events" to get unix id of first process whose frontmost
         if delta_x == 0 && delta_y == 0 {
             return Ok(());
         }
-        tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                if delta_x != 0 {
-                    e.scroll(delta_x, Axis::Horizontal)
-                        .map_err(|err| BitFunError::tool(format!("scroll horizontal: {}", err)))?;
-                }
-                if delta_y != 0 {
-                    e.scroll(delta_y, Axis::Vertical)
-                        .map_err(|err| BitFunError::tool(format!("scroll vertical: {}", err)))?;
-                }
-                Ok(())
-            })
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         ComputerUseHost::computer_use_after_committed_ui_action(self);
         ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::Scroll);
@@ -2926,60 +2191,6 @@ tell application "System Events" to get unix id of first process whose frontmost
             // through an Enter key.
             Self::computer_use_guard_click_allowed(self)?;
         }
-        let keys_for_job = keys;
-        tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                let mapped: Vec<Key> = keys_for_job
-                    .iter()
-                    .map(|s| Self::map_key(s))
-                    .collect::<BitFunResult<_>>()?;
-                let chord_has_modifier = keys_for_job.iter().any(|s| {
-                    matches!(
-                        s.to_lowercase().as_str(),
-                        "command"
-                            | "meta"
-                            | "super"
-                            | "win"
-                            | "control"
-                            | "ctrl"
-                            | "shift"
-                            | "alt"
-                            | "option"
-                    )
-                });
-                if mapped.len() == 1 {
-                    e.key(mapped[0], Direction::Click)
-                        .map_err(|err| BitFunError::tool(format!("key: {}", err)))?;
-                } else {
-                    let mods = &mapped[..mapped.len() - 1];
-                    let last = *mapped.last().unwrap();
-                    for k in mods {
-                        e.key(*k, Direction::Press)
-                            .map_err(|err| BitFunError::tool(format!("key press: {}", err)))?;
-                    }
-                    if chord_has_modifier {
-                        // Modifiers must be registered before the main key; otherwise macOS / IME
-                        // treats the letter as plain typing (e.g. Cmd+F becomes "f" in the text box).
-                        #[cfg(target_os = "macos")]
-                        std::thread::sleep(std::time::Duration::from_millis(160));
-                        #[cfg(not(target_os = "macos"))]
-                        std::thread::sleep(std::time::Duration::from_millis(55));
-                    }
-                    e.key(last, Direction::Click)
-                        .map_err(|err| BitFunError::tool(format!("key click: {}", err)))?;
-                    for k in mods.iter().rev() {
-                        e.key(*k, Direction::Release)
-                            .map_err(|err| BitFunError::tool(format!("key release: {}", err)))?;
-                    }
-                    if chord_has_modifier {
-                        std::thread::sleep(std::time::Duration::from_millis(35));
-                    }
-                }
-                Ok(())
-            })
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
         ComputerUseHost::computer_use_after_pointer_mutation(self);
         ComputerUseHost::computer_use_after_committed_ui_action(self);
         ComputerUseHost::computer_use_record_mutation(self, ComputerUseLastMutationKind::KeyChord);
@@ -2990,15 +2201,6 @@ tell application "System Events" to get unix id of first process whose frontmost
         if text.is_empty() {
             return Ok(());
         }
-        let owned = text.to_string();
-        tokio::task::spawn_blocking(move || {
-            Self::run_enigo_job(|e| {
-                e.text(&owned)
-                    .map_err(|err| BitFunError::tool(format!("type_text: {}", err)))
-            })
-        })
-        .await
-        .map_err(|e| BitFunError::tool(e.to_string()))??;
         // Typing does not move the pointer; do not set click_needs (would block Enter after search).
         ComputerUseHost::computer_use_after_committed_ui_action(self);
         ComputerUseHost::computer_use_trust_pointer_after_text_input(self);
@@ -3127,13 +2329,7 @@ tell application "System Events" to get unix id of first process whose frontmost
     }
 
     async fn list_displays(&self) -> BitFunResult<Vec<ComputerUseDisplayInfo>> {
-        let preferred = self
-            .state
-            .lock()
-            .ok()
-            .and_then(|s| s.preferred_display_id);
-        let (mx, my) = Self::current_mouse_position();
-        Ok(Self::enumerate_displays(preferred, mx, my))
+        Ok(vec![])
     }
 
     async fn focus_display(&self, display_id: Option<u32>) -> BitFunResult<()> {
@@ -3141,15 +2337,10 @@ tell application "System Events" to get unix id of first process whose frontmost
             // Validate against the actual list of attached screens; rejecting
             // unknown ids early gives the model a clean error to recover from
             // (rather than silently capturing the wrong display later).
-            let known = Screen::all()
-                .map(|all| all.iter().any(|s| s.display_info.id == id))
-                .unwrap_or(false);
-            if !known {
-                return Err(BitFunError::tool(format!(
-                    "focus_display: unknown display_id {} (call desktop.list_displays first)",
-                    id
-                )));
-            }
+            return Err(BitFunError::tool(format!(
+                "focus_display: unknown display_id {} (call desktop.list_displays first)",
+                id
+            )));
         }
         if let Ok(mut s) = self.state.lock() {
             s.preferred_display_id = display_id;
@@ -3165,9 +2356,6 @@ tell application "System Events" to get unix id of first process whose frontmost
     }
 
     fn focused_display_id(&self) -> Option<u32> {
-        self.state
-            .lock()
-            .ok()
-            .and_then(|s| s.preferred_display_id)
+        self.state.lock().ok().and_then(|s| s.preferred_display_id)
     }
 }

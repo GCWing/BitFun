@@ -96,25 +96,7 @@ fn parse_user_agent(user_agent: &str) -> (String, String) {
 }
 
 async fn detect_browser_info(state: Arc<AppState>, window_label: &str) -> (String, String) {
-    let Some(webview) = state.app.get_webview(window_label) else {
-        return ("webview".to_string(), "unknown".to_string());
-    };
-
-    let user_agent = platform::evaluator::evaluate_script(
-        state,
-        webview,
-        5_000,
-        "() => navigator.userAgent || ''",
-        &[],
-        false,
-        &Value::Array(Vec::new()),
-    )
-    .await;
-
-    match user_agent {
-        Ok(Value::String(user_agent)) => parse_user_agent(&user_agent),
-        _ => ("webview".to_string(), "unknown".to_string()),
-    }
+    ("webview".to_string(), "unknown".to_string())
 }
 
 pub async fn create(

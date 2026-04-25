@@ -46,11 +46,7 @@ fn get_hostname() -> String {
 }
 
 fn get_mac_address() -> String {
-    mac_address::get_mac_address()
-        .ok()
-        .flatten()
-        .map(|ma| ma.to_string())
-        .unwrap_or_else(|| "00:00:00:00:00:00".to_string())
+    "00:00:00:00:00:00".to_string()
 }
 
 #[cfg(test)]

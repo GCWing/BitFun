@@ -180,11 +180,5 @@ pub async fn send_system_notification(
     app: tauri::AppHandle,
     request: SendNotificationRequest,
 ) -> Result<(), String> {
-    use tauri_plugin_notification::NotificationExt;
-
-    let mut builder = app.notification().builder().title(&request.title);
-    if let Some(body) = &request.body {
-        builder = builder.body(body);
-    }
-    builder.show().map_err(|e| e.to_string())
+    Err("No notification provided".to_string())
 }

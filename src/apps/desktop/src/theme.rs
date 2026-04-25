@@ -2,7 +2,6 @@
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;
-use dark_light::Mode;
 use log::{debug, error, warn};
 use tauri::WebviewUrl;
 
@@ -162,13 +161,7 @@ impl ThemeConfig {
     /// Maps config `themes.current` to a built-in id for splash / window chrome.
     /// `system` follows OS light/dark (aligned with web-ui `getSystemPreferredDefaultThemeId`).
     fn resolve_builtin_theme_id(theme_id: &str) -> &str {
-        if theme_id == "system" {
-            return match dark_light::detect() {
-                Mode::Dark => "bitfun-dark",
-                Mode::Light | Mode::Default => "bitfun-light",
-            };
-        }
-        theme_id
+        "system"
     }
 
     pub fn generate_init_script(&self) -> String {
@@ -250,11 +243,6 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
 
     #[allow(unused_mut)]
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
-        .title("BitFun")
-        .inner_size(1200.0, 800.0)
-        .resizable(true)
-        .fullscreen(false)
-        .visible(false)
         .background_color(bg_color)
         .accept_first_mouse(true)
         .initialization_script(&init_script);
@@ -302,18 +290,6 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
 
     if let Some(main_window) = app.get_webview_window("main") {
-        #[cfg(target_os = "windows")]
-        {
-            // Work around Windows startup flicker: avoid creating the native window
-            // in maximized mode, and maximize it right before showing instead.
-            main_window.maximize().map_err(|e| {
-                error!("Failed to maximize main window: {}", e);
-                format!("Failed to maximize main window: {}", e)
-            })?;
-
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-        }
-
         main_window.show().map_err(|e| {
             error!("Failed to show main window: {}", e);
             format!("Failed to show main window: {}", e)

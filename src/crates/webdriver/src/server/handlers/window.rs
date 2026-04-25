@@ -89,15 +89,6 @@ pub async fn close_window(
     Path(session_id): Path<String>,
 ) -> WebDriverResult {
     let current_window = get_session(&state, &session_id).await?.current_window;
-    let window = state
-        .app
-        .get_webview_window(&current_window)
-        .ok_or_else(|| {
-            WebDriverErrorResponse::no_such_window(format!("Window not found: {current_window}"))
-        })?;
-    window.destroy().map_err(|error| {
-        WebDriverErrorResponse::unknown_error(format!("Failed to close window: {error}"))
-    })?;
 
     let handles = state.window_labels();
     let next_handle = handles.first().cloned();
