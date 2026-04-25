@@ -109,6 +109,10 @@ pub struct AIExperienceConfig {
     pub enable_visual_mode: bool,
     /// Whether to show the pixel Agent companion in the collapsed chat input.
     pub enable_agent_companion: bool,
+    /// Whether to show model thinking process in FlowChat.
+    pub show_thinking_process: bool,
+    /// Whether completed thinking blocks remain as expandable collapsed items.
+    pub show_completed_thinking_item: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1214,6 +1218,8 @@ impl Default for AIExperienceConfig {
             enable_session_title_generation: true,
             enable_visual_mode: false,
             enable_agent_companion: true,
+            show_thinking_process: true,
+            show_completed_thinking_item: true,
         }
     }
 }

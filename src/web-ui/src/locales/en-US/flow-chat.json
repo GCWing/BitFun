@@ -352,7 +352,9 @@
     "searchPrevious": "Previous matching turn",
     "searchNext": "Next matching turn",
     "searchClose": "Close search",
-    "searchOpen": "Search in turns"
+    "searchOpen": "Search in turns",
+    "hideCompletedThinkingItems": "Hide completed thinking items",
+    "showCompletedThinkingItems": "Show completed thinking items"
   },
   "sessionFilesBadge": {
     "files": "files",
@@ -418,6 +420,9 @@
     "searchCount_one": "{{count}} search",
     "searchCount_other": "{{count}} searches",
     "searchCount": "{{count}} search(es)",
+    "commandCount_one": "{{count}} command",
+    "commandCount_other": "{{count}} commands",
+    "commandCount": "{{count}} command(s)",
     "thinkingCount_one": "Thought {{count}} time",
     "thinkingCount_other": "Thought {{count}} times",
     "thinkingCount": "Thought {{count}} time(s)",

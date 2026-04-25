@@ -641,7 +641,7 @@ $skills-column-gap:  clamp(14px, 1.6vw, 20px);
 
 .skills-split__pagination--installed {
   flex-shrink: 0;
-  padding: $size-gap-2 0 0;
+  padding: $size-gap-2 $size-gap-2 $size-gap-3;
   margin-top: auto;
 }
 

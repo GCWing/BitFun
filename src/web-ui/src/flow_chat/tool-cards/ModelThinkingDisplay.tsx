@@ -14,6 +14,7 @@ import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
+import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import './ModelThinkingDisplay.scss';
 
 interface ModelThinkingDisplayProps {
@@ -32,6 +33,13 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
   const displayContent = useTypewriter(content, isActive);
 
   const [isExpanded, setIsExpanded] = useState(isLastItem);
+  const [thinkingDisplaySettings, setThinkingDisplaySettings] = useState(() => {
+    const settings = aiExperienceConfigService.getSettings();
+    return {
+      showThinkingProcess: settings.show_thinking_process,
+      showCompletedThinkingItem: settings.show_completed_thinking_item,
+    };
+  });
   const userToggledRef = useRef(false);
   const { applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
@@ -42,6 +50,29 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
       return contentScrollHeight ?? wrapperHeight;
     },
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    aiExperienceConfigService.getSettingsAsync().then(settings => {
+      if (cancelled) return;
+      setThinkingDisplaySettings({
+        showThinkingProcess: settings.show_thinking_process,
+        showCompletedThinkingItem: settings.show_completed_thinking_item,
+      });
+    });
+
+    const unsubscribe = aiExperienceConfigService.addChangeListener(settings => {
+      setThinkingDisplaySettings({
+        showThinkingProcess: settings.show_thinking_process,
+        showCompletedThinkingItem: settings.show_completed_thinking_item,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (userToggledRef.current) return;
@@ -108,6 +139,13 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
   ].filter(Boolean).join(' ');
 
   const renderedContent = isActive ? displayContent : content;
+
+  if (
+    !thinkingDisplaySettings.showThinkingProcess ||
+    (!isActive && !thinkingDisplaySettings.showCompletedThinkingItem)
+  ) {
+    return null;
+  }
 
   return (
     <div ref={wrapperRef} data-tool-card-id={thinkingItem.id} className={wrapperClassName}>

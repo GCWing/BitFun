@@ -30,6 +30,88 @@
   border-radius: 0 0 7px 7px;
 }
 
+/* Collapsed terminal cards should sit with compact read/search tool rows instead of looking like a callout. */
+.base-tool-card-wrapper.terminal-tool-card:not(:has(> .base-tool-card-expanded)):not(:has(> .base-tool-card-error)) {
+  margin: 0;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  overflow: visible;
+
+  &:hover,
+  &:active {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  &.requires-confirmation {
+    border-color: transparent;
+    border-width: 1px;
+    box-shadow: none;
+    animation: none;
+
+    &:hover {
+      border-color: transparent;
+      box-shadow: none;
+    }
+  }
+
+  .base-tool-card-header {
+    --tool-card-header-pad-y: 0px;
+    --tool-card-header-pad-x: 0px;
+
+    gap: 8px;
+    padding: 0 8px 0 0;
+    line-height: 1.65;
+    overflow: visible;
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+
+  .tool-card-icon-slot {
+    align-self: center;
+    padding-right: 0;
+    margin-right: 0;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  .tool-card-icon-marks {
+    width: auto;
+    height: auto;
+  }
+
+  .tool-card-icon.tool-identifier-icon.tool-card-icon-main svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .tool-card-action,
+  .tool-card-content {
+    font-size: var(--flowchat-font-size-base);
+    line-height: 1.65;
+    color: var(--color-text-muted);
+  }
+
+  &:hover {
+    .tool-card-action,
+    .tool-card-content {
+      color: var(--color-text-primary);
+    }
+
+    .terminal-command {
+      color: var(--color-text-primary);
+    }
+  }
+}
+
 /* ========== Fix scrollbar visibility on card hover ========== */
 .base-tool-card-wrapper.terminal-tool-card:hover {
   .terminal-execution-output,

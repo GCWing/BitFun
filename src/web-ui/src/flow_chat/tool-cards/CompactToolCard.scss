@@ -13,6 +13,32 @@
   gap: 0;
   font-size: var(--flowchat-font-size-base);
   line-height: 1.65;
+
+  &.compact-tool-card-wrapper--expanded {
+    margin: 4px 0;
+    border: 1px solid var(--border-base);
+    border-radius: 8px;
+    background: var(--color-bg-flowchat);
+    overflow: hidden;
+    box-shadow:
+      0 1px 4px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.02);
+
+    &:hover {
+      border-color: var(--border-medium);
+    }
+
+    > .compact-tool-card {
+      padding: 8px 10px !important;
+    }
+  }
+
+  &.compact-tool-card-wrapper--expanded.requires-confirmation {
+    border-color: var(--color-warning, #f59e0b);
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.14),
+      0 0 12px rgba(245, 158, 11, 0.16);
+  }
 }
 
 /* Tool item wrapper around .compact-tool-card-wrapper (see ModelRoundItem / FlowItemRenderer).
@@ -224,18 +250,15 @@
 /* ========== Expanded content area ========== */
 .compact-tool-card-expanded {
   position: relative;
-  margin-top: 8px;
-  margin-left: 1rem;
-  padding: 12px;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-base);
-  border-radius: 6px;
+  margin: 0;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
   animation: expandDown 0.2s ease-out;
-  box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(8px);
-  
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 /* ========== Common expanded content styles ========== */
@@ -243,12 +266,13 @@
 .compact-detail-info-inline {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px 12px;
   align-items: center;
-  margin-bottom: 12px;
+  margin: 0 0 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-subtle);
   font-size: 11px;
+  line-height: 1.45;
 }
 
 .compact-detail-inline-item {
@@ -275,19 +299,19 @@
 .compact-expanded-results-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   max-height: 400px;
   overflow-y: auto;
 
 }
 
 .compact-expanded-result-item {
-  padding: 8px;
-  border-radius: 4px;
+  padding: 6px 0;
+  border-radius: 0;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    background: var(--element-bg-soft);
+    background: transparent;
   }
 }
 
@@ -341,10 +365,11 @@
   margin-top: 0;
   
   pre {
+    margin: 0;
     background: var(--color-bg-secondary);
     border: 1px solid var(--border-subtle);
-    border-radius: 4px;
-    padding: 10px;
+    border-radius: 6px;
+    padding: 8px 10px;
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
     font-size: 11px;
@@ -362,11 +387,9 @@
 @keyframes expandDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
