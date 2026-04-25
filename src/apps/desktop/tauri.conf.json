@@ -18,8 +18,8 @@
     "app": {
         "windows": [{
             "title": "tauri-demo",
-            "width": "800",
-            "height": "600"
+            "width": 800,
+            "height": 600
         }],
         "security": {
             "csp": null

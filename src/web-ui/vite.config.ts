@@ -99,6 +99,7 @@ export default defineConfig(({ mode, command }) => {
     outDir: '../../dist',
     // Empty the output directory
     emptyOutDir: true,
+    minify: false,
   }
   };
 });

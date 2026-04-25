@@ -17,6 +17,7 @@ import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config';
+import { sessionStorageAdapter } from '@/shared';
 
 type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
@@ -191,10 +192,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       // Always initialize FlowChat so historical sessions list even when SSH is not connected yet.
       try {
         const explicitPreferredMode =
-          sessionStorage.getItem('bitfun:flowchat:preferredMode') ||
+          sessionStorageAdapter.getItem('bitfun:flowchat:preferredMode') ||
           undefined;
         if (explicitPreferredMode) {
-          sessionStorage.removeItem('bitfun:flowchat:preferredMode');
+          sessionStorageAdapter.removeItem('bitfun:flowchat:preferredMode');
         }
 
         const initializationPreferredMode =
@@ -229,9 +230,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           ensureAssistantBootstrapForWorkspace(currentWorkspace, activeSessionId);
         }
 
-        const pendingDescription = sessionStorage.getItem('pendingProjectDescription');
+        const pendingDescription = sessionStorageAdapter.getItem('pendingProjectDescription');
         if (pendingDescription && pendingDescription.trim()) {
-          sessionStorage.removeItem('pendingProjectDescription');
+          sessionStorageAdapter.removeItem('pendingProjectDescription');
 
           setTimeout(async () => {
             try {
@@ -257,9 +258,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           }, 500);
         }
 
-        const pendingSettings = sessionStorage.getItem('pendingOpenSettings');
+        const pendingSettings = sessionStorageAdapter.getItem('pendingOpenSettings');
         if (pendingSettings) {
-          sessionStorage.removeItem('pendingOpenSettings');
+          sessionStorageAdapter.removeItem('pendingOpenSettings');
           setTimeout(async () => {
             try {
               const { quickActions } = await import('@/shared/services/ide-control');

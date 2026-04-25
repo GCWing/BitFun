@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ModelConfig } from '../shared/types';
 import { modelConfigManager } from '../infrastructure/config/services/modelConfigs';
+import { storage } from '@/shared';
 export const useModelConfigs = () => {
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,9 +38,9 @@ export const useCurrentModelConfig = (initialConfigId?: string) => {
   const setCurrentConfigWithPersistence = (config: ModelConfig | null) => {
     setCurrentConfig(config);
     if (config) {
-      localStorage.setItem(CURRENT_CONFIG_KEY, config.id);
+      storage.setItem(CURRENT_CONFIG_KEY, config.id);
     } else {
-      localStorage.removeItem(CURRENT_CONFIG_KEY);
+      storage.removeItem(CURRENT_CONFIG_KEY);
     }
     
     // Notify other components via storage event
@@ -75,14 +76,14 @@ export const useCurrentModelConfig = (initialConfigId?: string) => {
     }
 
     if (!currentConfig) {
-      const savedConfigId = localStorage.getItem(CURRENT_CONFIG_KEY);
+      const savedConfigId = storage.getItem(CURRENT_CONFIG_KEY);
       const targetConfigId = initialConfigId || savedConfigId;
       
       if (targetConfigId) {
         const foundConfig = configs.find(c => c.id === targetConfigId);
         if (foundConfig) {
           setCurrentConfig(foundConfig);
-          localStorage.setItem(CURRENT_CONFIG_KEY, foundConfig.id);
+          storage.setItem(CURRENT_CONFIG_KEY, foundConfig.id);
           return;
         }
       }
@@ -91,7 +92,7 @@ export const useCurrentModelConfig = (initialConfigId?: string) => {
       const firstConfig = configs[0];
       if (firstConfig) {
         setCurrentConfig(firstConfig);
-        localStorage.setItem(CURRENT_CONFIG_KEY, firstConfig.id);
+        storage.setItem(CURRENT_CONFIG_KEY, firstConfig.id);
       }
       return;
     }
@@ -102,10 +103,10 @@ export const useCurrentModelConfig = (initialConfigId?: string) => {
       const firstConfig = configs[0];
       if (firstConfig) {
         setCurrentConfig(firstConfig);
-        localStorage.setItem(CURRENT_CONFIG_KEY, firstConfig.id);
+        storage.setItem(CURRENT_CONFIG_KEY, firstConfig.id);
       } else {
         setCurrentConfig(null);
-        localStorage.removeItem(CURRENT_CONFIG_KEY);
+        storage.removeItem(CURRENT_CONFIG_KEY);
       }
     } else {
       // Sync with latest version (config may have been edited)

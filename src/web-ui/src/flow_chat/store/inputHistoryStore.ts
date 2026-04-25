@@ -4,8 +4,9 @@
  * History is now session-scoped - each session maintains its own input history.
  */
 
+import { storage } from '@/shared';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export interface InputHistoryState {
   /** Map of sessionId to list of previously sent messages (most recent first) */
@@ -92,6 +93,7 @@ export const useInputHistoryStore = create<InputHistoryState>()(
     {
       name: 'bitfun-input-history',
       version: 2, // Bump version to migrate from old format
+      storage: createJSONStorage(() => storage),
       migrate: (persistedState: any, version: number) => {
         if (version < 2) {
           // Migrate from old global format to new session-scoped format

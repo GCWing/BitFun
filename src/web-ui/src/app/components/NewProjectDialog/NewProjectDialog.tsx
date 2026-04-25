@@ -12,7 +12,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { open } from '@tauri-apps/plugin-dialog';
+// import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input } from '@/component-library';
@@ -49,13 +49,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   // Open directory picker dialog
   const handleSelectParentPath = useCallback(async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('newProject.selectParentDirectory'),
-        defaultPath: parentPath || defaultParentPath
-      }) as string;
-
+      let selected = "/data/storage/el2/base/files";
       if (selected && typeof selected === 'string') {
         setParentPath(selected);
         setError('');

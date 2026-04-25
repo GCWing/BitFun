@@ -1,3 +1,4 @@
+import { storage } from '@/shared';
 import { STORAGE_KEYS } from '@/shared/constants/app';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -73,7 +74,7 @@ function normalizeState(raw: unknown): ManualTerminalProfilesState {
 
 export function loadManualTerminalProfiles(workspacePath: string): ManualTerminalProfilesState {
   try {
-    const raw = localStorage.getItem(getStorageKey(workspacePath));
+    const raw = storage.getItem(getStorageKey(workspacePath));
     if (raw) {
       return normalizeState(JSON.parse(raw));
     }
@@ -89,7 +90,7 @@ export function saveManualTerminalProfiles(
   state: ManualTerminalProfilesState,
 ): void {
   try {
-    localStorage.setItem(getStorageKey(workspacePath), JSON.stringify(normalizeState(state)));
+    storage.setItem(getStorageKey(workspacePath), JSON.stringify(normalizeState(state)));
   } catch (error) {
     logger.error('Failed to save manual terminal profiles', { workspacePath, error });
   }

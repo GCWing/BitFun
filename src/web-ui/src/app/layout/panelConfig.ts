@@ -13,6 +13,7 @@
  * - expanded: expanded mode (wide content, more information)
  */
 
+import { storage } from '@/shared';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('PanelConfig');
@@ -194,7 +195,7 @@ export const STORAGE_KEYS = {
  */
 export function savePanelWidth(key: string, width: number): void {
   try {
-    localStorage.setItem(key, String(width));
+    storage.setItem(key, String(width));
   } catch (e) {
     log.warn('Failed to save panel width', { key, width, error: e });
   }
@@ -205,7 +206,7 @@ export function savePanelWidth(key: string, width: number): void {
  */
 export function loadPanelWidth(key: string, defaultValue: number): number {
   try {
-    const stored = localStorage.getItem(key);
+    const stored = storage.getItem(key);
     if (stored) {
       const parsed = parseInt(stored, 10);
       if (!isNaN(parsed) && parsed > 0) {

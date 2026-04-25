@@ -239,11 +239,12 @@ const MainNav: React.FC<MainNavProps> = ({
 
   const handleOpenProject = useCallback(async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({ directory: true, multiple: false, title: t('header.selectProjectDirectory') });
-      if (selected && typeof selected === 'string') {
-        await workspaceManager.openWorkspace(selected);
-      }
+      // const { open } = await import('@tauri-apps/plugin-dialog');
+      // const selected = await open({ directory: true, multiple: false, title: t('header.selectProjectDirectory') });
+      // if (selected && typeof selected === 'string') {
+      let path_manager = "/data/storage/el2/base/files/test";
+      await workspaceManager.openWorkspace(path_manager);
+      // }
     } catch (err) {
       log.error('Failed to open project', err);
     }
@@ -388,28 +389,28 @@ const MainNav: React.FC<MainNavProps> = ({
           {recentWorkspaces.map((workspace) => {
             const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
             return (
-            <button
-              key={workspace.id}
-              type="button"
-              className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
-              role="menuitem"
-              title={tooltip}
-              onClick={() => { void handleSwitchWorkspace(workspace.id); }}
-            >
-              <FolderOpen size={13} aria-hidden="true" />
-              <span className="bitfun-nav-panel__workspace-menu-item-main">
-                {hostPrefix ? (
-                  <>
-                    <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
-                    <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
-                      ·
-                    </span>
-                  </>
-                ) : null}
-                <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
-              </span>
-              {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
-            </button>
+              <button
+                key={workspace.id}
+                type="button"
+                className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
+                role="menuitem"
+                title={tooltip}
+                onClick={() => { void handleSwitchWorkspace(workspace.id); }}
+              >
+                <FolderOpen size={13} aria-hidden="true" />
+                <span className="bitfun-nav-panel__workspace-menu-item-main">
+                  {hostPrefix ? (
+                    <>
+                      <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
+                      <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
+                        ·
+                      </span>
+                    </>
+                  ) : null}
+                  <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
+                </span>
+                {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
+              </button>
             );
           })}
         </div>

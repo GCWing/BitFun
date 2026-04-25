@@ -1,9 +1,10 @@
  
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LocaleId, I18nNamespace, I18nState, I18nActions } from '../types';
 import { DEFAULT_LOCALE, DEFAULT_FALLBACK_LOCALE } from '../presets';
+import { storage } from '@/shared';
 
  
 const initialState: I18nState = {
@@ -59,6 +60,7 @@ export const useI18nStore = create<I18nState & I18nActions>()(
     }),
     {
       name: 'bitfun-i18n-state',
+      storage: createJSONStorage(() => storage),
       partialize: (state) => ({
         currentLanguage: state.currentLanguage,
         fallbackLanguage: state.fallbackLanguage,

@@ -55,12 +55,7 @@ const WelcomeScene: React.FC = () => {
   const handleOpenFolder = useCallback(async () => {
     try {
       setIsSelecting(true);
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('startup.selectWorkspaceDirectory'),
-      });
+      let selected = "/data/storage/el2/base/files/test";
       if (selected && typeof selected === 'string') {
         await openWorkspace(selected);
         openScene('session' as SceneTabId);

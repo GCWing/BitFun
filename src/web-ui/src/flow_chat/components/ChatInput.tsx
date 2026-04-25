@@ -58,6 +58,7 @@ import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import './ChatInput.scss';
+import { sessionStorageAdapter } from '@/shared';
 
 const log = createLogger('ChatInput');
 
@@ -782,7 +783,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         log.debug('Session switched, syncing mode', { sessionId, mode });
         dispatchMode({ type: 'SET_CURRENT_MODE', payload: mode });
         try {
-          sessionStorage.setItem('bitfun:flowchat:lastMode', mode);
+          sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', mode);
         } catch {
           // ignore
         }
@@ -812,7 +813,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       });
       dispatchMode({ type: 'SET_CURRENT_MODE', payload: nextMode });
       try {
-        sessionStorage.setItem('bitfun:flowchat:lastMode', nextMode);
+        sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', session.mode);
       } catch {
         // ignore
       }
@@ -1700,7 +1701,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
 
     try {
-      sessionStorage.setItem('bitfun:flowchat:lastMode', modeId);
+      sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', modeId);
     } catch {
       // ignore
     }
