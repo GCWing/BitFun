@@ -246,7 +246,9 @@
       "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
       "Design": "设计模式：创建 HTML 原型、视觉稿和更完整的设计交付物",
-      "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告"
+      "ComputerUse": "独立电脑操作智能体：感知本机环境，操作应用、浏览器与系统界面",
+      "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告",
+      "Team": "虚拟工程团队：CEO、工程经理、设计师、QA 负责人、安全官、发布工程师 — 按完整冲刺流程协同工作"
     },
     "modeNames": {
       "agentic": "Agentic",
@@ -255,7 +257,9 @@
       "debug": "Debug",
       "Cowork": "Cowork",
       "Design": "Design",
-      "DeepResearch": "Deep Research"
+      "ComputerUse": "Computer Use",
+      "DeepResearch": "Deep Research",
+      "Team": "Team"
     },
     "backgroundActivities": {
       "autoMemory": {

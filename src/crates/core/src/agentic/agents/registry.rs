@@ -1,7 +1,7 @@
 use super::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DebugMode, DeepResearchAgent,
-    DesignMode, DesignReviewAgent, DispatcherMode, ExploreAgent, FileFinderAgent, GenerateDocAgent,
-    InitAgent, PlanMode,
+    Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode,
+    DeepResearchAgent, DesignMode, DesignReviewAgent, DispatcherMode, ExploreAgent,
+    FileFinderAgent, GenerateDocAgent, InitAgent, PlanMode, TeamMode,
 };
 use crate::agentic::agents::custom_subagents::{
     CustomSubagent, CustomSubagentKind, CustomSubagentLoader,
@@ -129,7 +129,8 @@ pub struct CustomSubagentDetail {
 
 fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" | "Cowork" | "Design" | "Plan" | "debug" | "Claw" | "Dispatcher" => "auto",
+        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
+        | "Team" | "Design" | "Dispatcher" => "auto",
         _ => "primary",
     }
 }
@@ -297,6 +298,8 @@ impl AgentRegistry {
             Arc::new(PlanMode::new()),
             Arc::new(ClawMode::new()),
             Arc::new(DispatcherMode::new()),
+            Arc::new(DeepResearchAgent::new()),
+            Arc::new(TeamMode::new()),
         ];
         for mode in modes {
             register(&mut agents, mode, AgentCategory::Mode, None);
@@ -304,9 +307,9 @@ impl AgentRegistry {
 
         // Register built-in sub-agents
         let builtin_subagents: Vec<Arc<dyn Agent>> = vec![
+            Arc::new(ComputerUseMode::new()),
             Arc::new(ExploreAgent::new()),
             Arc::new(FileFinderAgent::new()),
-            Arc::new(DeepResearchAgent::new()),
             Arc::new(DesignReviewAgent::new()),
         ];
         for subagent in builtin_subagents {
@@ -1072,7 +1075,7 @@ pub fn get_agent_registry() -> Arc<AgentRegistry> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_model_id_for_builtin_agent, merge_dynamic_mcp_tools};
+    use super::{default_model_id_for_builtin_agent, merge_dynamic_mcp_tools, AgentRegistry};
 
     #[test]
     fn top_level_modes_default_to_auto() {
@@ -1087,6 +1090,28 @@ mod tests {
         ] {
             assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
         }
+    }
+
+    #[tokio::test]
+    async fn computer_use_is_builtin_subagent_not_mode() {
+        let registry = AgentRegistry::new();
+        let modes = registry.get_modes_info().await;
+        assert!(
+            !modes.iter().any(|agent| agent.id == "ComputerUse"),
+            "ComputerUse should be delegated through Task as a built-in sub-agent, not exposed as a top-level mode"
+        );
+
+        let subagents = registry.get_subagents_info(None).await;
+        let computer_use = subagents
+            .iter()
+            .find(|agent| agent.id == "ComputerUse")
+            .expect("ComputerUse should be registered as a built-in sub-agent");
+        assert!(computer_use
+            .default_tools
+            .contains(&"ControlHub".to_string()));
+        assert!(computer_use
+            .default_tools
+            .contains(&"ComputerUse".to_string()));
     }
 
     #[test]
