@@ -10,8 +10,7 @@ import {
   ChevronUp,
   X,
   MessageSquare,
-  RotateCcw,
-  Settings,
+  Play,
   Copy,
 } from 'lucide-react';
 import { Button, Checkbox, Tooltip } from '@/component-library';
@@ -23,7 +22,8 @@ import { flowChatManager } from '../../services/FlowChatManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
-import { openModelSettings } from '@/shared/ai-errors/aiErrorActions';
+import { getAiErrorPresentation } from '@/shared/ai-errors/aiErrorPresenter';
+import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import './DeepReviewActionBar.scss';
 
 const log = createLogger('DeepReviewActionBar');
@@ -174,11 +174,22 @@ export const ReviewActionBar: React.FC = () => {
 
   const handleContinueReview = useCallback(async () => {
     if (!interruption) return;
+
     if (!interruption.canResume) {
-      notificationService.warning(t('deepReviewActionBar.resumeBlockedHint', {
-        defaultValue: 'Resolve the model configuration or quota issue before continuing.',
-      }));
-      return;
+      const confirmed = await confirmWarning(
+        t('deepReviewActionBar.resumeBlockedConfirmTitle', {
+          defaultValue: 'Continue review?',
+        }),
+        t('deepReviewActionBar.resumeBlockedConfirmMessage', {
+          defaultValue: 'The error that interrupted the review has not been resolved. Continuing may fail again. Do you want to proceed?',
+        }),
+        {
+          confirmText: t('deepReviewActionBar.resumeBlockedConfirmAction', {
+            defaultValue: 'Continue anyway',
+          }),
+        },
+      );
+      if (!confirmed) return;
     }
 
     store.setActiveAction('resume');
@@ -186,7 +197,7 @@ export const ReviewActionBar: React.FC = () => {
     try {
       await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay', {
         defaultValue: 'Continue interrupted Deep Review',
-      }));
+      }), { force: !interruption.canResume });
     } catch (error) {
       log.error('Failed to continue interrupted Deep Review', { childSessionId, error });
       const message = t('deepReviewActionBar.resumeFailedMessage', {
@@ -199,18 +210,44 @@ export const ReviewActionBar: React.FC = () => {
     }
   }, [childSessionId, interruption, store, t]);
 
-  const handleOpenModelSettings = useCallback(() => {
-    openModelSettings();
-  }, []);
-
   const handleCopyDiagnostics = useCallback(() => {
     const detail = interruption?.errorDetail;
-    const diagnostics = [
-      `category=${detail?.category ?? 'unknown'}`,
-      detail?.provider ? `provider=${detail.provider}` : null,
-      detail?.providerCode ? `code=${detail.providerCode}` : null,
-      detail?.requestId ? `request_id=${detail.requestId}` : null,
-    ].filter(Boolean).join(', ');
+    if (!detail) return;
+
+    const presentation = getAiErrorPresentation(detail);
+
+    const lines: string[] = [];
+    lines.push(t('deepReviewActionBar.diagnosticsTitle', { defaultValue: '=== Deep Review Interruption Diagnostics ===' }));
+    lines.push('');
+
+    const categoryLabel = t(presentation.titleKey, { defaultValue: presentation.category });
+    const categoryMessage = t(presentation.messageKey, { defaultValue: '' });
+    lines.push(`${t('deepReviewActionBar.diagnosticsErrorType', { defaultValue: 'Error type' })}: ${categoryLabel} (${presentation.category})`);
+    if (categoryMessage) {
+      lines.push(`${t('deepReviewActionBar.diagnosticsDescription', { defaultValue: 'Description' })}: ${categoryMessage}`);
+    }
+    lines.push('');
+
+    if (presentation.actions.length > 0) {
+      const actionLabels = presentation.actions.map((action) => {
+        return t(action.labelKey, { defaultValue: action.code });
+      });
+      lines.push(`${t('deepReviewActionBar.diagnosticsSuggestedActions', { defaultValue: 'Suggested actions' })}: ${actionLabels.join(', ')}`);
+      lines.push('');
+    }
+
+    lines.push(`${t('deepReviewActionBar.diagnosticsTechnicalDetails', { defaultValue: 'Technical details' })}:`);
+    lines.push(`  - category: ${detail.category ?? 'unknown'}`);
+    if (detail.provider) lines.push(`  - provider: ${detail.provider}`);
+    if (detail.providerCode) lines.push(`  - provider code: ${detail.providerCode}`);
+    if (detail.providerMessage) lines.push(`  - provider message: ${detail.providerMessage}`);
+    if (detail.httpStatus) lines.push(`  - HTTP status: ${detail.httpStatus}`);
+    if (detail.requestId) lines.push(`  - request ID: ${detail.requestId}`);
+    if (detail.rawMessage) {
+      lines.push(`  - raw message: ${detail.rawMessage}`);
+    }
+
+    const diagnostics = lines.join('\n');
     void navigator.clipboard?.writeText(diagnostics);
     notificationService.success(t('deepReviewActionBar.diagnosticsCopied', {
       defaultValue: 'Diagnostics copied',
@@ -415,24 +452,14 @@ export const ReviewActionBar: React.FC = () => {
 
         {hasInterruption && (
           <>
-            {interruption?.recommendedActions.some((action) => action.code === 'open_model_settings') && (
-              <Button
-                variant={interruption.canResume ? 'secondary' : 'primary'}
-                size="small"
-                onClick={handleOpenModelSettings}
-              >
-                <Settings size={13} />
-                {t('deepReviewActionBar.openModelSettings', { defaultValue: 'Open model settings' })}
-              </Button>
-            )}
             <Button
-              variant={interruption?.canResume ? 'primary' : 'secondary'}
+              variant="primary"
               size="small"
               isLoading={activeAction === 'resume'}
-              disabled={activeAction !== null || !interruption?.canResume}
+              disabled={activeAction !== null}
               onClick={() => void handleContinueReview()}
             >
-              <RotateCcw size={13} />
+              <Play size={13} />
               {t('deepReviewActionBar.resumeReview', { defaultValue: 'Continue review' })}
             </Button>
             <Button

@@ -379,12 +379,20 @@
     "resumeRunning": "正在繼續審查...",
     "resumeFailed": "繼續失敗",
     "resumeBlockedHint": "請先處理模型配置或額度問題，再繼續審查。",
+    "resumeBlockedConfirmTitle": "繼續審查？",
+    "resumeBlockedConfirmMessage": "導致審查中斷的錯誤尚未解決，繼續審查可能會再次失敗。是否仍要繼續？",
+    "resumeBlockedConfirmAction": "仍然繼續",
     "resumeReview": "繼續審查",
     "resumeRequestDisplay": "繼續中斷的深度審查",
     "resumeFailedMessage": "無法繼續深度審查。請檢查模型設置，或稍後重試。",
     "openModelSettings": "打開模型設置",
     "copyDiagnostics": "複製診斷信息",
-    "diagnosticsCopied": "診斷信息已複製"
+    "diagnosticsCopied": "診斷信息已複製",
+    "diagnosticsTitle": "=== 深度審查中斷診斷信息 ===",
+    "diagnosticsErrorType": "錯誤類型",
+    "diagnosticsDescription": "錯誤描述",
+    "diagnosticsSuggestedActions": "建議操作",
+    "diagnosticsTechnicalDetails": "技術詳情"
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "審查已完成",

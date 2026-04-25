@@ -388,12 +388,20 @@
     "resumeRunning": "正在继续审查...",
     "resumeFailed": "继续失败",
     "resumeBlockedHint": "请先处理模型配置或额度问题，再继续审查。",
+    "resumeBlockedConfirmTitle": "继续审查？",
+    "resumeBlockedConfirmMessage": "导致审查中断的错误尚未解决，继续审查可能会再次失败。是否仍要继续？",
+    "resumeBlockedConfirmAction": "仍然继续",
     "resumeReview": "继续审查",
     "resumeRequestDisplay": "继续中断的深度审查",
     "resumeFailedMessage": "无法继续深度审查。请检查模型设置，或稍后重试。",
     "openModelSettings": "打开模型设置",
     "copyDiagnostics": "复制诊断信息",
-    "diagnosticsCopied": "诊断信息已复制"
+    "diagnosticsCopied": "诊断信息已复制",
+    "diagnosticsTitle": "=== 深度审查中断诊断信息 ===",
+    "diagnosticsErrorType": "错误类型",
+    "diagnosticsDescription": "错误描述",
+    "diagnosticsSuggestedActions": "建议操作",
+    "diagnosticsTechnicalDetails": "技术详情"
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "审查已完成",

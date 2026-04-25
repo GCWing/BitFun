@@ -388,12 +388,20 @@
     "resumeRunning": "Continuing review...",
     "resumeFailed": "Continue failed",
     "resumeBlockedHint": "Resolve the model configuration or quota issue before continuing.",
+    "resumeBlockedConfirmTitle": "Continue review?",
+    "resumeBlockedConfirmMessage": "The error that interrupted the review has not been resolved. Continuing may fail again. Do you want to proceed?",
+    "resumeBlockedConfirmAction": "Continue anyway",
     "resumeReview": "Continue review",
     "resumeRequestDisplay": "Continue interrupted Deep Review",
     "resumeFailedMessage": "Unable to continue Deep Review. Check the model settings or try again later.",
     "openModelSettings": "Open model settings",
     "copyDiagnostics": "Copy diagnostics",
-    "diagnosticsCopied": "Diagnostics copied"
+    "diagnosticsCopied": "Diagnostics copied",
+    "diagnosticsTitle": "=== Deep Review Interruption Diagnostics ===",
+    "diagnosticsErrorType": "Error type",
+    "diagnosticsDescription": "Description",
+    "diagnosticsSuggestedActions": "Suggested actions",
+    "diagnosticsTechnicalDetails": "Technical details"
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "Review completed",

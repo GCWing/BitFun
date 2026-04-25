@@ -7,8 +7,9 @@ import {
 export async function continueDeepReviewSession(
   interruption: DeepReviewInterruption,
   displayMessage: string,
+  { force = false }: { force?: boolean } = {},
 ): Promise<void> {
-  if (!interruption.canResume) {
+  if (!interruption.canResume && !force) {
     throw new Error('deep_review_resume_blocked');
   }
 
