@@ -6,6 +6,7 @@ import {
   Orbit,
   RotateCcw,
   User,
+  Brain,
   AppWindow,
   ChevronDown,
   Puzzle,
@@ -136,6 +137,11 @@ const WorkspaceFooterActions: React.FC = () => {
     switchLeftPanelTab,
   ]);
 
+  const handleOpenMemory = useCallback(() => {
+    closeMenu();
+    openOverlay('memory');
+  }, [closeMenu, openOverlay]);
+
   const handleOpenApps = useCallback(() => {
     closeMenu();
     openOverlay('apps');
@@ -162,6 +168,7 @@ const WorkspaceFooterActions: React.FC = () => {
   }, [closeMenu, openOverlay]);
 
   const isAssistantActive = activeOverlay === 'assistant';
+  const isMemoryActive = activeOverlay === 'memory';
   const isAppsActive = activeOverlay === 'apps'
     || (typeof activeOverlay === 'string' && activeOverlay.startsWith('live-app:'));
   const isSkillsActive = activeOverlay === 'skills';
@@ -213,6 +220,16 @@ const WorkspaceFooterActions: React.FC = () => {
                     >
                       <User size={14} />
                       <span>{t('nav.items.persona')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`bitfun-nav-panel__footer-menu-item${isMemoryActive ? ' is-active' : ''}`}
+                      role="menuitem"
+                      onClick={handleOpenMemory}
+                    >
+                      <Brain size={14} />
+                      <span>{t('nav.items.memory')}</span>
                     </button>
 
                     <button

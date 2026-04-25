@@ -13,6 +13,7 @@ export type OverlaySceneId =
   | 'terminal'
   | 'settings'
   | 'file-viewer'
+  | 'memory'
   | 'profile'
   | 'apps'
   | 'subagents'

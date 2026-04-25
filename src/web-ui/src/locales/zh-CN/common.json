@@ -93,6 +93,7 @@
       "sessions": "任务",
       "project": "目录",
       "persona": "助理",
+      "memory": "记忆",
       "agents": "思维应用",
       "skills": "技能",
       "tools": "工具",
@@ -860,6 +861,7 @@
     "git": "Git",
     "settings": "设置",
     "fileViewer": "文件查看",
+    "memory": "记忆",
     "projectContext": "项目概况",
     "apps": "应用",
     "subagents": "SubAgent",
@@ -873,6 +875,73 @@
   },
   "overlay": {
     "returnToAgenticOS": "返回 Agentic OS"
+  },
+  "memoryLibrary": {
+    "title": "记忆库",
+    "subtitle": "查看 Agentic OS 长期记住的用户偏好、协作反馈和工作区背景。",
+    "loading": "正在读取记忆…",
+    "searchPlaceholder": "搜索记忆、类型或内容…",
+    "scopeFilters": {
+      "all": "全部记忆",
+      "global": "Agentic OS",
+      "workspace": "当前工作区",
+      "workspace_overview": "工作区概览"
+    },
+    "scopes": {
+      "global": "全局记忆",
+      "workspace": "工作区记忆"
+    },
+    "types": {
+      "all": "全部",
+      "index": "索引",
+      "user": "用户",
+      "feedback": "反馈",
+      "project": "项目",
+      "reference": "引用",
+      "workspace_overview": "工作区概览",
+      "unknown": "未分类"
+    },
+    "autoMemory": {
+      "title": "自动记忆",
+      "loading": "正在读取自动记忆状态…",
+      "summary": "全局：{{global}}；工作区：{{workspace}}。",
+      "enabledEvery": "每 {{count}} 轮",
+      "disabled": "已关闭"
+    },
+    "actions": {
+      "openSettings": "自动记忆设置",
+      "edit": "编辑",
+      "save": "保存",
+      "cancel": "取消",
+      "reveal": "打开位置",
+      "forget": "遗忘"
+    },
+    "usageHints": {
+      "index": "索引会被优先加载，用来帮助 Agent 快速判断有哪些记忆可用。",
+      "user": "这类记忆会影响 Agent 如何理解用户身份、偏好和沟通方式。",
+      "feedback": "这类记忆会约束 Agent 未来的工作方式，避免重复违背已确认的协作规则。",
+      "project": "这类记忆补充当前工作区的背景、动机和非代码可推导的信息。",
+      "reference": "这类记忆记录外部系统或信息源，帮助 Agent 在需要时找到权威上下文。",
+      "workspace_overview": "这类记忆帮助 Agentic OS 判断工作应路由到哪个工作区。",
+      "unknown": "这条记忆缺少明确类型；建议补充 frontmatter 以便未来更准确地使用。"
+    },
+    "empty": {
+      "noResults": "没有匹配的记忆",
+      "noSelection": "选择一条记忆查看详情",
+      "emptyFile": "这个记忆文件还是空的。",
+      "unavailable": "当前不可用"
+    },
+    "messages": {
+      "loadFailed": "记忆加载失败",
+      "saveSuccess": "记忆已保存",
+      "saveFailed": "记忆保存失败",
+      "deleteSuccess": "记忆已遗忘",
+      "deleteFailed": "遗忘失败"
+    },
+    "deleteDialog": {
+      "title": "遗忘这条记忆？",
+      "message": "“{{name}}” 将从记忆库中移除，未来 Agent 不会再主动使用它。"
+    }
   },
   "taskDetailScene": {
     "pageTitle": "任务中心",

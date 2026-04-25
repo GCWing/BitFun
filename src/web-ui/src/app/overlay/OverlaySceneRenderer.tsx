@@ -17,6 +17,7 @@ import AssistantScene from '../scenes/assistant/AssistantScene';
 
 const TerminalScene     = lazy(() => import('../scenes/terminal/TerminalScene'));
 const FileViewerScene   = lazy(() => import('../scenes/file-viewer/FileViewerScene'));
+const MemoryScene       = lazy(() => import('../scenes/memory/MemoryScene'));
 const ProfileScene      = lazy(() => import('../scenes/profile/ProfileScene'));
 import AppsScene from '../scenes/apps/AppsScene';
 const SubagentsScene    = lazy(() => import('../scenes/subagents/SubagentsScene'));
@@ -66,6 +67,8 @@ function renderOverlayScene(id: OverlaySceneId, workspacePath?: string): React.R
       return <SettingsScene />;
     case 'file-viewer':
       return <FileViewerScene workspacePath={workspacePath} />;
+    case 'memory':
+      return <MemoryScene />;
     case 'profile':
       return <ProfileScene />;
     case 'apps':

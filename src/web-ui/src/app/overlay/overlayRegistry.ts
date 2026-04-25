@@ -9,6 +9,7 @@ import {
   Terminal,
   Settings,
   FileCode2,
+  Brain,
   CircleUserRound,
   Users,
   Puzzle,
@@ -38,6 +39,12 @@ export const OVERLAY_SCENE_REGISTRY: OverlaySceneDef[] = [
     label: 'File Viewer',
     labelKey: 'scenes.fileViewer',
     Icon: FileCode2,
+  },
+  {
+    id: 'memory',
+    label: 'Memory',
+    labelKey: 'scenes.memory',
+    Icon: Brain,
   },
   {
     id: 'profile',

@@ -93,6 +93,7 @@
       "sessions": "Tasks",
       "project": "Directory",
       "persona": "Nursery",
+      "memory": "Memory",
       "agents": "Think AApp",
       "skills": "Skills",
       "tools": "Tools",
@@ -860,6 +861,7 @@
     "git": "Git",
     "settings": "Settings",
     "fileViewer": "File Viewer",
+    "memory": "Memory",
     "projectContext": "Profile",
     "apps": "Apps",
     "subagents": "SubAgents",
@@ -873,6 +875,73 @@
   },
   "overlay": {
     "returnToAgenticOS": "Return to Agentic OS"
+  },
+  "memoryLibrary": {
+    "title": "Memory Library",
+    "subtitle": "Review what Agentic OS remembers about preferences, collaboration feedback, and workspace context.",
+    "loading": "Loading memories...",
+    "searchPlaceholder": "Search memories, types, or content...",
+    "scopeFilters": {
+      "all": "All memories",
+      "global": "Agentic OS",
+      "workspace": "Current workspace",
+      "workspace_overview": "Workspace overview"
+    },
+    "scopes": {
+      "global": "Global memory",
+      "workspace": "Workspace memory"
+    },
+    "types": {
+      "all": "All",
+      "index": "Index",
+      "user": "User",
+      "feedback": "Feedback",
+      "project": "Project",
+      "reference": "Reference",
+      "workspace_overview": "Workspace overview",
+      "unknown": "Unclassified"
+    },
+    "autoMemory": {
+      "title": "Auto memory",
+      "loading": "Loading auto-memory status...",
+      "summary": "Global: {{global}}; workspace: {{workspace}}.",
+      "enabledEvery": "every {{count}} turns",
+      "disabled": "off"
+    },
+    "actions": {
+      "openSettings": "Auto-memory settings",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "reveal": "Open location",
+      "forget": "Forget"
+    },
+    "usageHints": {
+      "index": "The index is loaded first so the agent can quickly decide which memories are available.",
+      "user": "This memory shapes how the agent understands the user's identity, preferences, and communication style.",
+      "feedback": "This memory guides future agent behavior and helps avoid repeating rejected collaboration patterns.",
+      "project": "This memory adds background, motivation, and non-obvious context for the current workspace.",
+      "reference": "This memory points to external systems or sources of truth the agent may need later.",
+      "workspace_overview": "This memory helps Agentic OS decide which workspace a task should route to.",
+      "unknown": "This memory has no clear type. Add frontmatter so future use can be more precise."
+    },
+    "empty": {
+      "noResults": "No matching memories",
+      "noSelection": "Select a memory to view details",
+      "emptyFile": "This memory file is empty.",
+      "unavailable": "Unavailable"
+    },
+    "messages": {
+      "loadFailed": "Failed to load memories",
+      "saveSuccess": "Memory saved",
+      "saveFailed": "Failed to save memory",
+      "deleteSuccess": "Memory forgotten",
+      "deleteFailed": "Failed to forget memory"
+    },
+    "deleteDialog": {
+      "title": "Forget this memory?",
+      "message": "\"{{name}}\" will be removed from the memory library and the agent will no longer use it proactively."
+    }
   },
   "taskDetailScene": {
     "pageTitle": "Task Center",

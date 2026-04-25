@@ -813,6 +813,24 @@
   .table-wrapper tbody tr:hover {
     background: #eef4ff;
   }
+
+  /*
+   * Blockquotes: base styles use white-alpha tints for dark UIs. On light / cream
+   * scene surfaces (e.g. Agentic OS) those read as “no background”. Mix against
+   * the scene + text tokens so the fill and left rule stay legible.
+   */
+  blockquote,
+  .custom-blockquote {
+    background: color-mix(in srgb, var(--color-text-primary) 5%, var(--color-bg-scene, #ffffff));
+    border-left-color: color-mix(in srgb, var(--color-text-primary) 30%, var(--color-bg-scene, #ffffff));
+    color: var(--color-text-secondary, var(--color-text-muted, #4b5563));
+  }
+
+  blockquote:hover,
+  .custom-blockquote:hover {
+    background: color-mix(in srgb, var(--color-text-primary) 7.5%, var(--color-bg-scene, #ffffff));
+    border-left-color: color-mix(in srgb, var(--color-text-primary) 40%, var(--color-bg-scene, #ffffff));
+  }
 }
 
 

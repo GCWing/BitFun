@@ -1546,6 +1546,10 @@
         border: none !important;
         box-shadow: none !important;
       }
+      
+      &:hover .bitfun-chat-input__breathing-circle {
+        background: #941f1c;
+      }
     }
   }
   
@@ -1559,11 +1563,24 @@
   }
   
   &__breathing-circle {
+    position: relative;
+    flex-shrink: 0;
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: rgba(234, 179, 8, 0.6); // yellow-500 with opacity
+    background: #b22c28;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
     animation: breathing-pulse 2.5s ease-in-out infinite;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 8px;
+      height: 8px;
+      background: #fff;
+    }
   }
 
   &__queued-badge {

@@ -50,7 +50,8 @@
   --flowchat-md-pre-hover-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
   --flowchat-md-pre-code-fg: var(--color-text-primary, #24292f);
 
-  --flowchat-md-bq-bg: rgba(0, 0, 0, 0.03);
-  --flowchat-md-bq-border: rgba(0, 0, 0, 0.12);
-  --flowchat-md-bq-fg: var(--color-text-muted, #57606a);
+  /* Match Markdown.scss light blockquotes: scene-aware fill/border (cream/off-white scenes). */
+  --flowchat-md-bq-bg: color-mix(in srgb, var(--color-text-primary) 5%, var(--color-bg-scene, #ffffff));
+  --flowchat-md-bq-border: color-mix(in srgb, var(--color-text-primary) 30%, var(--color-bg-scene, #ffffff));
+  --flowchat-md-bq-fg: var(--color-text-secondary, var(--color-text-muted, #57606a));
 }
