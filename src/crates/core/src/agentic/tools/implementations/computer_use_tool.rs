@@ -115,6 +115,28 @@ The **primary model cannot consume images** in tool results — **do not** use *
         )
     }
 
+    fn is_controlhub_migrated_desktop_action(action: &str) -> bool {
+        matches!(
+            action,
+            "list_displays"
+                | "focus_display"
+                | "paste"
+                | "list_apps"
+                | "get_app_state"
+                | "app_click"
+                | "app_type_text"
+                | "app_scroll"
+                | "app_key_chord"
+                | "app_wait_for"
+                | "build_interactive_view"
+                | "interactive_click"
+                | "interactive_type_text"
+                | "interactive_scroll"
+                | "build_visual_mark_view"
+                | "visual_click"
+        )
+    }
+
     /// JSON Schema without `screenshot` or screenshot-only fields.
     fn input_schema_text_only() -> Value {
         json!({
@@ -122,7 +144,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "open_app", "run_apple_script"],
+                    "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
                     "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -158,12 +180,37 @@ The **primary model cannot consume images** in tool results — **do not** use *
                 "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"SearchField\")." },
                 "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
                 "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Prefer this when the visible text is shown via value/description (e.g. AXStaticText cards) instead of title." },
-                "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`: jump straight to a node returned by the most recent `desktop.get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
+                "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`, `app_click`: jump straight to a node returned by the most recent `get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
                 "app_state_digest": { "type": "string", "description": "For `locate`, `click_element`: optional `state_digest` from the same `get_app_state` call that produced `node_idx`. Stale digest yields AX_IDX_STALE so you re-snapshot." },
                 "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48). Ignored when `node_idx` is supplied." },
                 "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination. Priority: `node_idx` > `text_contains` > `title_contains`+`role_substring`." },
                 "app_name": { "type": "string", "description": "For `open_app`: the application name to launch." },
+                "url": { "type": "string", "description": "For `open_url`: URL to open with the system/default browser." },
+                "path": { "type": "string", "description": "For `open_file`: local file path to open with its default handler." },
+                "app": { "type": ["string", "object"], "description": "For `open_file`: optional app name. For app-scoped actions: selector object such as `{ \"name\": \"Safari\" }`, `{ \"bundle_id\": \"...\" }`, or `{ \"pid\": 123 }`." },
                 "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute. macOS only." },
+                "script_type": { "type": "string", "enum": ["applescript", "shell", "bash", "powershell", "cmd"], "description": "For `run_script`: script interpreter/type." },
+                "timeout_ms": { "type": "integer", "description": "For `run_script`: timeout in milliseconds." },
+                "max_output_bytes": { "type": "integer", "description": "For `run_script` / `clipboard_get`: maximum bytes to return." },
+                "clear_first": { "type": "boolean", "description": "For `paste`: select all before pasting." },
+                "submit": { "type": "boolean", "description": "For `paste`: press submit keys after pasting." },
+                "submit_keys": { "type": "array", "items": { "type": "string" }, "description": "For `paste`: key chord to submit, default `[\"return\"]`." },
+                "display_id": { "type": ["integer", "null"], "description": "For `focus_display` or display-pinned desktop actions: display id, or null to clear the pin." },
+                "include_hidden": { "type": "boolean", "description": "For `list_apps`: include hidden/background apps." },
+                "only_visible": { "type": "boolean", "description": "For `list_apps`: list only visible apps when true." },
+                "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
+                "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
+                "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
+                "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
+                "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
+                "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
+                "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
+                "mouse_button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For app/interactive/visual click actions." },
+                "click_count": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For app click actions." },
+                "modifier_keys": { "type": "array", "items": { "type": "string" }, "description": "For app click actions: modifier keys to hold." },
+                "wait_ms_after": { "type": "integer", "description": "For app click actions: post-click wait in milliseconds." },
+                "focus_idx": { "type": "integer", "minimum": 0, "description": "For `app_key_chord`: optional node index to focus first." },
+                "poll_ms": { "type": "integer", "description": "For `app_wait_for`: polling interval." },
                 "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to scroll at. Use with `scroll_y`." },
                 "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to scroll at. Use with `scroll_x`." }
             },
@@ -1246,7 +1293,7 @@ impl Tool for ComputerUseTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["screenshot", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "open_app", "run_apple_script"],
+                    "enum": ["screenshot", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
                     "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call) before lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -1282,7 +1329,7 @@ impl Tool for ComputerUseTool {
                 "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"TextField\", \"SearchField\")." },
                 "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
                 "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Best default when the visible label lives in value/description (e.g. AXStaticText cards)." },
-                "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`: jump straight to a node returned by the most recent `desktop.get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
+                "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`, `app_click`: jump straight to a node returned by the most recent `get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
                 "app_state_digest": { "type": "string", "description": "For `locate`, `click_element`: optional `state_digest` from the same `get_app_state` call that produced `node_idx`. Stale digest yields AX_IDX_STALE so you re-snapshot." },
                 "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48). Ignored when `node_idx` is supplied." },
                 "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination. Priority: `node_idx` > `text_contains` > `title_contains`+`role_substring`." },
@@ -1293,7 +1340,32 @@ impl Tool for ComputerUseTool {
                 "screenshot_reset_navigation": { "type": "boolean", "description": "For `screenshot`: reset to full display before this capture." },
                 "screenshot_implicit_center": { "type": "string", "enum": ["mouse", "text_caret"], "description": "For `screenshot` when `requires_fresh_screenshot_before_click` / `requires_fresh_screenshot_before_enter` is true: center the implicit ~500×500 on the mouse (`mouse`, default) or on the focused text control (`text_caret`, macOS AX; falls back to mouse). Applies to the **first** confirmation capture too. Ignored when you set `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation`." },
                 "app_name": { "type": "string", "description": "For `open_app`: the application name to launch (e.g. \"Safari\", \"WeChat\", \"Visual Studio Code\")." },
+                "url": { "type": "string", "description": "For `open_url`: URL to open with the system/default browser." },
+                "path": { "type": "string", "description": "For `open_file`: local file path to open with its default handler." },
+                "app": { "type": ["string", "object"], "description": "For `open_file`: optional app name. For app-scoped actions: selector object such as `{ \"name\": \"Safari\" }`, `{ \"bundle_id\": \"...\" }`, or `{ \"pid\": 123 }`." },
                 "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute via `osascript`. macOS only." },
+                "script_type": { "type": "string", "enum": ["applescript", "shell", "bash", "powershell", "cmd"], "description": "For `run_script`: script interpreter/type." },
+                "timeout_ms": { "type": "integer", "description": "For `run_script`: timeout in milliseconds." },
+                "max_output_bytes": { "type": "integer", "description": "For `run_script` / `clipboard_get`: maximum bytes to return." },
+                "clear_first": { "type": "boolean", "description": "For `paste`: select all before pasting." },
+                "submit": { "type": "boolean", "description": "For `paste`: press submit keys after pasting." },
+                "submit_keys": { "type": "array", "items": { "type": "string" }, "description": "For `paste`: key chord to submit, default `[\"return\"]`." },
+                "display_id": { "type": ["integer", "null"], "description": "For `focus_display` or display-pinned desktop actions: display id, or null to clear the pin." },
+                "include_hidden": { "type": "boolean", "description": "For `list_apps`: include hidden/background apps." },
+                "only_visible": { "type": "boolean", "description": "For `list_apps`: list only visible apps when true." },
+                "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
+                "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
+                "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
+                "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
+                "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
+                "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
+                "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
+                "mouse_button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For app/interactive/visual click actions." },
+                "click_count": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For app click actions." },
+                "modifier_keys": { "type": "array", "items": { "type": "string" }, "description": "For app click actions: modifier keys to hold." },
+                "wait_ms_after": { "type": "integer", "description": "For app click actions: post-click wait in milliseconds." },
+                "focus_idx": { "type": "integer", "minimum": 0, "description": "For `app_key_chord`: optional node index to focus first." },
+                "poll_ms": { "type": "integer", "description": "For `app_wait_for`: polling interval." },
                 "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to move pointer before scrolling. Use with `scroll_y`. Requires `use_screen_coordinates`: true." },
                 "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to move pointer before scrolling. Use with `scroll_x`. Requires `use_screen_coordinates`: true." }
             },
@@ -1347,6 +1419,28 @@ impl Tool for ComputerUseTool {
                 "ComputerUse cannot run while the session workspace is remote (SSH).".to_string(),
             ));
         }
+
+        let action = input
+            .get("action")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| BitFunError::tool("action is required".to_string()))?;
+
+        match action {
+            "open_url" | "open_file" | "clipboard_get" | "clipboard_set" | "run_script"
+            | "get_os_info" => {
+                return super::computer_use_actions::ComputerUseActions::new()
+                    .handle_system(action, input, context)
+                    .await;
+            }
+            _ => {}
+        }
+
+        if Self::is_controlhub_migrated_desktop_action(action) {
+            return super::computer_use_actions::ComputerUseActions::new()
+                .handle_desktop(action, input, context)
+                .await;
+        }
+
         let host = context.computer_use_host.as_ref().ok_or_else(|| {
             BitFunError::tool(
                 "Computer use is only available in the BitFun desktop app.".to_string(),
@@ -1354,11 +1448,6 @@ impl Tool for ComputerUseTool {
         })?;
 
         let host_ref = host.as_ref();
-
-        let action = input
-            .get("action")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("action is required".to_string()))?;
 
         match action {
             "locate" => execute_computer_use_locate(input, context).await,

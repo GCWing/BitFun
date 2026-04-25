@@ -32,10 +32,9 @@ impl ClawMode {
                 "SessionMessage".to_string(),
                 "SessionHistory".to_string(),
                 "Cron".to_string(),
-                // All control capabilities (desktop, browser, app, terminal, system)
-                // are unified under the ControlHub tool. Use ControlHub for
-                // screenshot, click, click_element, mouse_move, scroll, drag,
-                // locate, browser CDP automation, and BitFun self-UI control.
+                // Browser, terminal, and routing metadata live under ControlHub.
+                // Local desktop/system control is delegated to the ComputerUse
+                // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
             ],
         }

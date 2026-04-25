@@ -254,6 +254,7 @@
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
+      "ComputerUse": "Dedicated desktop automation agent for perceiving and operating apps, browsers, and OS UI",
       "DeepResearch": "Deep research with parallel sub-agents: dispatches multiple agents to investigate concurrently, producing comprehensive sourced reports",
       "Team": "Virtual engineering team: CEO, Eng Manager, Designer, QA Lead, Security Officer, Release Engineer — orchestrated through a full sprint workflow"
     },
@@ -263,6 +264,7 @@
       "Plan": "Plan",
       "debug": "Debug",
       "Cowork": "Cowork",
+      "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",
       "Team": "Team"
     },

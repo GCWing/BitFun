@@ -8,6 +8,7 @@ mod registry;
 // Modes
 mod agentic_mode;
 mod claw_mode;
+mod computer_use_mode;
 mod cowork_mode;
 mod debug_mode;
 mod plan_mode;
@@ -26,6 +27,7 @@ pub use agentic_mode::AgenticMode;
 use async_trait::async_trait;
 pub use claw_mode::ClawMode;
 pub use code_review_agent::CodeReviewAgent;
+pub use computer_use_mode::ComputerUseMode;
 pub use cowork_mode::CoworkMode;
 pub use custom_subagents::{CustomSubagent, CustomSubagentKind};
 pub use debug_mode::DebugMode;

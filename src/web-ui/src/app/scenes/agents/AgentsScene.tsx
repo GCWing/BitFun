@@ -220,6 +220,11 @@ const AgentsHomeView: React.FC = () => {
       accentColor: '#14b8a6',
       accentBg: 'rgba(20,184,166,0.10)',
     },
+    ComputerUse: {
+      role: t('coreAgentsZone.modes.computerUse.role'),
+      accentColor: '#f59e0b',
+      accentBg: 'rgba(245,158,11,0.10)',
+    },
   }), [t]);
 
   const coreAgents = useMemo(() => allAgents.filter((agent) => CORE_AGENT_IDS.has(agent.id)), [allAgents]);

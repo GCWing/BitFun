@@ -28,12 +28,19 @@
   },
   "coreAgentsZone": {
     "title": "核心智能体",
-    "subtitle": "平台内置的核心 Agent 模式，覆盖主流 AI 工作流，开箱即用。",
+    "subtitle": "平台内置的核心 Agent，覆盖主流 AI 工作流，开箱即用。",
     "empty": "暂未检测到核心智能体",
     "roleLabel": "主要应用 · ",
     "modes": {
-      "agentic": { "role": "编码专业智能体" },
-      "cowork": { "role": "办公智能体" }
+      "agentic": {
+        "role": "编码专业智能体"
+      },
+      "cowork": {
+        "role": "办公智能体"
+      },
+      "computerUse": {
+        "role": "电脑操作智能体"
+      }
     }
   },
   "agentsZone": {

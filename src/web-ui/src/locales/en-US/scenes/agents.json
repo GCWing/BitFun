@@ -28,12 +28,19 @@
   },
   "coreAgentsZone": {
     "title": "Core Agents",
-    "subtitle": "Built-in core agent modes covering mainstream AI workflows, ready to use out of the box.",
+    "subtitle": "Built-in core agents covering mainstream AI workflows, ready to use out of the box.",
     "empty": "No core agents detected",
     "roleLabel": "Primary Use · ",
     "modes": {
-      "agentic": { "role": "Coding specialist agent" },
-      "cowork": { "role": "Office & collaboration agent" }
+      "agentic": {
+        "role": "Coding specialist agent"
+      },
+      "cowork": {
+        "role": "Office & collaboration agent"
+      },
+      "computerUse": {
+        "role": "Desktop automation agent"
+      }
     }
   },
   "agentsZone": {

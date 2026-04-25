@@ -28,12 +28,19 @@
   },
   "coreAgentsZone": {
     "title": "核心智能體",
-    "subtitle": "平臺內置的核心 Agent 模式，覆蓋主流 AI 工作流，開箱即用。",
+    "subtitle": "平臺內置的核心 Agent，覆蓋主流 AI 工作流，開箱即用。",
     "empty": "暫未檢測到核心智能體",
     "roleLabel": "主要應用 · ",
     "modes": {
-      "agentic": { "role": "編碼專業智能體" },
-      "cowork": { "role": "辦公智能體" }
+      "agentic": {
+        "role": "編碼專業智能體"
+      },
+      "cowork": {
+        "role": "辦公智能體"
+      },
+      "computerUse": {
+        "role": "電腦操作智能體"
+      }
     }
   },
   "agentsZone": {

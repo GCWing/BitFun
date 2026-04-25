@@ -147,13 +147,10 @@ impl ToolRegistry {
         // MiniApp Agent tool (single InitMiniApp)
         self.register_tool(Arc::new(InitMiniAppTool::new()));
 
-        // ControlHub — sole unified control entry point that aggregates ALL control
-        // capabilities (desktop, browser, terminal, system, meta) into a single
-        // tool. Legacy split control tools are intentionally NOT registered
-        // here: their implementations are kept internal where needed and reused by
-        // ControlHub, but the model only ever sees one control tool to eliminate
-        // cross-tool selection mistakes.
+        // ControlHub — unified browser/terminal/meta control entry point.
+        // Local desktop and OS/system Computer Use is exposed as a dedicated tool.
         self.register_tool(Arc::new(ControlHubTool::new()));
+        self.register_tool(Arc::new(ComputerUseTool::new()));
 
         // Playbook — predefined step-by-step operation guides for common tasks.
         self.register_tool(Arc::new(PlaybookTool::new()));
@@ -205,19 +202,16 @@ mod tests {
         assert!(registry.get_tool("Cron").is_some());
     }
 
-    /// Phase 0 contract: ControlHub is the sole control entry point. Legacy
-    /// split control tools must NOT be visible to the model; their
-    /// implementations are reused internally only.
     #[test]
-    fn registry_exposes_controlhub_only_for_control_capabilities() {
+    fn registry_exposes_controlhub_and_computer_use() {
         let registry = create_tool_registry();
         assert!(
             registry.get_tool("ControlHub").is_some(),
-            "ControlHub must be registered as the unified control tool"
+            "ControlHub must remain registered for browser/terminal/meta control"
         );
         assert!(
-            registry.get_tool("ComputerUse").is_none(),
-            "Legacy split control tools must remain hidden (Phase 0 dedup)"
+            registry.get_tool("ComputerUse").is_some(),
+            "ComputerUse must be registered as the dedicated desktop automation tool"
         );
     }
 
