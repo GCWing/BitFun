@@ -163,6 +163,7 @@ impl RoundExecutor {
                 .stream_processor
                 .process_stream(
                     ai_stream,
+                    StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout()),
                     raw_sse_rx, // Pass raw SSE data receiver (for error diagnosis)
                     context.session_id.clone(),
                     context.dialog_turn_id.clone(),
