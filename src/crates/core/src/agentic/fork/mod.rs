@@ -16,7 +16,6 @@ pub struct ForkContextSnapshot {
     pub workspace_path: String,
     pub remote_connection_id: Option<String>,
     pub remote_ssh_host: Option<String>,
-    pub storage_scope: Option<crate::agentic::core::SessionStorageScope>,
     pub session_model_id: Option<String>,
     pub session_config: SessionConfig,
     pub messages: Vec<Message>,
@@ -44,7 +43,6 @@ impl ForkContextSnapshot {
             workspace_path,
             remote_connection_id: parent_session.config.remote_connection_id.clone(),
             remote_ssh_host: parent_session.config.remote_ssh_host.clone(),
-            storage_scope: parent_session.config.storage_scope,
             session_model_id: parent_session.config.model_id.clone(),
             session_config: parent_session.config.clone(),
             messages,
@@ -60,7 +58,6 @@ impl ForkContextSnapshot {
         config.workspace_path = Some(self.workspace_path.clone());
         config.remote_connection_id = self.remote_connection_id.clone();
         config.remote_ssh_host = self.remote_ssh_host.clone();
-        config.storage_scope = self.storage_scope;
         config.model_id = self.session_model_id.clone();
         if let Some(max_turns) = max_turns_override {
             config.max_turns = max_turns;
@@ -108,14 +105,13 @@ pub struct ForkExecutionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::core::{Message, Session, SessionConfig, SessionStorageScope};
+    use crate::agentic::core::{Message, Session, SessionConfig};
 
     fn parent_session() -> Session {
         let config = SessionConfig {
             workspace_path: Some("/workspace/project".to_string()),
             remote_connection_id: Some("remote-1".to_string()),
             remote_ssh_host: Some("prod-box".to_string()),
-            storage_scope: Some(SessionStorageScope::AgenticOs),
             model_id: Some("primary".to_string()),
             max_turns: 42,
             ..SessionConfig::default()
@@ -159,10 +155,6 @@ mod tests {
             Some("remote-1")
         );
         assert_eq!(child_config.remote_ssh_host.as_deref(), Some("prod-box"));
-        assert_eq!(
-            child_config.storage_scope,
-            Some(SessionStorageScope::AgenticOs)
-        );
         assert_eq!(child_config.model_id.as_deref(), Some("primary"));
         assert_eq!(child_config.max_turns, 7);
     }
