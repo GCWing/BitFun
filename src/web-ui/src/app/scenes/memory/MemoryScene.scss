@@ -15,8 +15,8 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 14px;
+  gap: 22px;
+  padding: 20px 14px;
   border-right: 1px solid var(--border-subtle);
   background: var(--color-bg-scene, var(--color-bg-primary));
   overflow-y: auto;
@@ -25,8 +25,13 @@
 .memory-scene__brand {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
-  padding: 4px 4px 10px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px 0;
+
+  > div {
+    min-width: 0;
+  }
 
   h2 {
     margin: 0;
@@ -43,22 +48,39 @@
   }
 }
 
-.memory-scene__brand-icon {
-  width: 34px;
-  height: 34px;
+.memory-scene__header-settings {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  border-radius: 12px;
-  color: var(--memory-seal-red);
-  background: var(--element-bg-soft);
+  margin-top: -2px;
+  border: 0;
+  border-radius: $size-radius-sm;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background $motion-fast $easing-standard,
+              color $motion-fast $easing-standard;
+
+  &:hover {
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+  }
 }
 
 .memory-scene__scope-list {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.memory-scene__section-label {
+  margin: 0 8px 4px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .memory-scene__scope-item {
@@ -68,7 +90,7 @@
   gap: 10px;
   width: 100%;
   min-height: 34px;
-  padding: 0 10px;
+  padding: 0 10px 0 13px;
   border: 1px solid transparent;
   border-radius: $size-radius-sm;
   background: transparent;
@@ -92,86 +114,181 @@
     color: var(--color-text-primary);
   }
 
+  &:disabled {
+    color: var(--color-text-disabled, var(--color-text-muted));
+    cursor: default;
+    opacity: 0.55;
+
+    &:hover {
+      background: transparent;
+    }
+  }
+
   &.is-active {
     color: var(--color-text-primary);
-    border-color: var(--border-subtle);
     background: var(--element-bg-soft);
+    border-color: transparent;
 
     &::before {
       content: '';
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
+      width: 2px;
+      height: 16px;
+      border-radius: 999px;
       background: var(--memory-seal-red);
       position: absolute;
-      left: 4px;
+      left: 3px;
       top: 50%;
       transform: translateY(-50%);
     }
   }
 }
 
-.memory-scene__status-card,
-.memory-scene__path-card {
-  padding: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: $size-radius-base;
-  background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+.memory-scene__scope-note {
+  margin: 3px 8px 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-.memory-scene__status-title {
-  display: inline-flex;
+.memory-scene__status-section {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memory-scene__section-heading {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
+  padding: 0 8px;
 
-.memory-scene__status-card {
-  p {
-    margin: 8px 0 10px;
+  > span {
     color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    line-height: 1.45;
+    font-size: 11px;
+    font-weight: 650;
   }
 
-  button {
+}
+
+.memory-scene__status-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memory-scene__status-row {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 8px;
+  border-radius: $size-radius-sm;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+
+  span {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 28px;
-    padding: 0 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 999px;
-    background: var(--element-bg-soft);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-    cursor: pointer;
+    min-width: 0;
+  }
 
-    &:hover {
-      color: var(--color-text-primary);
-      background: var(--element-bg-medium);
-    }
+  svg {
+    color: var(--color-text-muted);
+  }
+
+  strong {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 550;
+  }
+
+  strong.is-on {
+    color: var(--color-text-secondary);
   }
 }
 
-.memory-scene__path-card {
+.memory-scene__paths {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+    padding: 0 8px;
+    border-radius: $size-radius-sm;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: '+';
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    &:hover {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+  }
+
+  &[open] summary::after {
+    content: '-';
+  }
+}
+
+.memory-scene__path-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  padding: 10px 8px 0;
+}
+
+.memory-scene__path-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 
   span {
+    min-width: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     font-weight: 600;
   }
 
-  code {
+  button {
+    flex-shrink: 0;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-sm;
+    background: transparent;
     color: var(--color-text-muted);
     font-size: 11px;
-    line-height: 1.45;
-    word-break: break-all;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-primary);
+      background: var(--element-bg-soft);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
   }
 }
 
@@ -227,7 +344,7 @@
 .memory-scene__type-pills {
   display: flex;
   gap: 6px;
-  padding: 0 16px 12px;
+  padding: 0 16px 10px;
   overflow-x: auto;
 }
 
@@ -262,6 +379,22 @@
       vertical-align: 1px;
       background: var(--memory-seal-red);
     }
+  }
+}
+
+.memory-scene__result-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 18px 10px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+
+  span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -325,6 +458,20 @@
   white-space: nowrap;
 }
 
+.memory-scene__record-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+
+  > span:last-child {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    font-size: 11px;
+  }
+}
+
 .memory-scene__record-desc {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
@@ -342,6 +489,7 @@
   flex-wrap: wrap;
   color: var(--color-text-muted);
   font-size: 11px;
+
 }
 
 .memory-scene__detail-pane {
@@ -392,10 +540,28 @@
   justify-content: flex-end;
 }
 
-.memory-scene__explain-card {
+.memory-scene__detail-metadata {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 550;
+  }
+}
+
+.memory-scene__explain-card {
   margin: 16px 24px 0;
   padding: 10px 12px;
   border: 1px solid var(--border-subtle);
@@ -404,10 +570,6 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: 1.45;
-
-  svg {
-    color: var(--memory-seal-red);
-  }
 }
 
 .memory-scene__markdown {

@@ -881,6 +881,16 @@
     "subtitle": "查看 Agentic OS 长期记住的用户偏好、协作反馈和工作区背景。",
     "loading": "正在读取记忆…",
     "searchPlaceholder": "搜索记忆、类型或内容…",
+    "results": {
+      "showing": "显示 {{shown}} / {{total}} 条记忆"
+    },
+    "sidebar": {
+      "scope": "范围",
+      "settings": "设置",
+      "storage": "存储位置",
+      "noWorkspace": "未打开工作区",
+      "workspaceUnavailable": "当前工作区记忆不可用"
+    },
     "scopeFilters": {
       "all": "全部记忆",
       "global": "Agentic OS",
@@ -910,6 +920,8 @@
     },
     "actions": {
       "openSettings": "自动记忆设置",
+      "refresh": "刷新",
+      "openStorage": "打开",
       "edit": "编辑",
       "save": "保存",
       "cancel": "取消",
@@ -935,6 +947,7 @@
       "loadFailed": "记忆加载失败",
       "saveSuccess": "记忆已保存",
       "saveFailed": "记忆保存失败",
+      "revealFailed": "打开位置失败",
       "deleteSuccess": "记忆已遗忘",
       "deleteFailed": "遗忘失败"
     },

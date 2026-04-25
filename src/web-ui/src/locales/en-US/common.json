@@ -881,6 +881,16 @@
     "subtitle": "Review what Agentic OS remembers about preferences, collaboration feedback, and workspace context.",
     "loading": "Loading memories...",
     "searchPlaceholder": "Search memories, types, or content...",
+    "results": {
+      "showing": "{{shown}} of {{total}} memories"
+    },
+    "sidebar": {
+      "scope": "Scope",
+      "settings": "Settings",
+      "storage": "Storage location",
+      "noWorkspace": "No workspace open",
+      "workspaceUnavailable": "Workspace memory is unavailable"
+    },
     "scopeFilters": {
       "all": "All memories",
       "global": "Agentic OS",
@@ -910,6 +920,8 @@
     },
     "actions": {
       "openSettings": "Auto-memory settings",
+      "refresh": "Refresh",
+      "openStorage": "Open",
       "edit": "Edit",
       "save": "Save",
       "cancel": "Cancel",
@@ -935,6 +947,7 @@
       "loadFailed": "Failed to load memories",
       "saveSuccess": "Memory saved",
       "saveFailed": "Failed to save memory",
+      "revealFailed": "Failed to open location",
       "deleteSuccess": "Memory forgotten",
       "deleteFailed": "Failed to forget memory"
     },

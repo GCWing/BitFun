@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Brain,
   Database,
-  ExternalLink,
   FileText,
   FolderOpen,
   RefreshCcw,
@@ -53,6 +51,12 @@ function formatDate(timestamp?: number): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(timestamp));
+}
+
+function getRecordExcerpt(record: MemoryRecord): string {
+  return (record.description || record.body || record.relativePath)
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 const MemoryScene: React.FC = () => {
@@ -174,6 +178,15 @@ const MemoryScene: React.FC = () => {
     overview: records.filter((record) => record.isWorkspaceOverview).length,
   }), [records]);
 
+  const workspaceSpace = spaces.find((space) => space.scope === 'workspace');
+  const workspaceUnavailable = !hasWorkspace || workspaceSpace?.available === false;
+
+  useEffect(() => {
+    if (scopeFilter === 'workspace' && workspaceUnavailable) {
+      setScopeFilter('all');
+    }
+  }, [scopeFilter, workspaceUnavailable]);
+
   const handleSave = async () => {
     if (!selectedRecord) return;
     setIsSaving(true);
@@ -208,70 +221,124 @@ const MemoryScene: React.FC = () => {
     openOverlay('settings');
   };
 
+  const handleOpenMemorySpace = async (space: MemorySpace) => {
+    if (!space.available) return;
+    try {
+      await memoryLibraryAPI.revealMemorySpace(space);
+    } catch {
+      notificationService.error(t('memoryLibrary.messages.revealFailed'));
+    }
+  };
+
   const selectedCanDelete = selectedRecord && !selectedRecord.isIndex;
 
   return (
     <div className="memory-scene">
       <aside className="memory-scene__sidebar">
         <div className="memory-scene__brand">
-          <span className="memory-scene__brand-icon"><Brain size={18} /></span>
           <div>
             <h2>{t('memoryLibrary.title')}</h2>
             <p>{t('memoryLibrary.subtitle')}</p>
           </div>
-        </div>
-
-        <div className="memory-scene__scope-list">
-          {SCOPE_FILTERS.map((scope) => (
-            <button
-              key={scope}
-              type="button"
-              className={`memory-scene__scope-item${scopeFilter === scope ? ' is-active' : ''}`}
-              onClick={() => setScopeFilter(scope)}
-            >
-              <span>{t(`memoryLibrary.scopeFilters.${scope}`)}</span>
-              <strong>
-                {scope === 'all'
-                  ? records.length
-                  : scope === 'global'
-                    ? counts.global
-                    : scope === 'workspace'
-                      ? counts.workspace
-                      : counts.overview}
-              </strong>
-            </button>
-          ))}
-        </div>
-
-        <div className="memory-scene__status-card">
-          <div className="memory-scene__status-title">
-            <Sparkles size={14} />
-            {t('memoryLibrary.autoMemory.title')}
-          </div>
-          <p>
-            {autoMemoryStatus
-              ? t('memoryLibrary.autoMemory.summary', {
-                global: autoMemoryStatus.globalEnabled
-                  ? t('memoryLibrary.autoMemory.enabledEvery', { count: autoMemoryStatus.globalEvery })
-                  : t('memoryLibrary.autoMemory.disabled'),
-                workspace: autoMemoryStatus.workspaceEnabled
-                  ? t('memoryLibrary.autoMemory.enabledEvery', { count: autoMemoryStatus.workspaceEvery })
-                  : t('memoryLibrary.autoMemory.disabled'),
-              })
-              : t('memoryLibrary.autoMemory.loading')}
-          </p>
-          <button type="button" onClick={handleOpenSettings}>
-            <Settings size={13} />
-            {t('memoryLibrary.actions.openSettings')}
+          <button
+            type="button"
+            className="memory-scene__header-settings"
+            onClick={handleOpenSettings}
+            aria-label={t('memoryLibrary.actions.openSettings')}
+            title={t('memoryLibrary.actions.openSettings')}
+          >
+            <Settings size={15} />
           </button>
         </div>
 
-        {spaces.map((space) => (
-          <div key={space.scope} className="memory-scene__path-card">
-            <span>{space.label}</span>
-            <code>{space.available ? space.memoryDir : t('memoryLibrary.empty.unavailable')}</code>
+        <div className="memory-scene__scope-list">
+          <div className="memory-scene__section-label">{t('memoryLibrary.sidebar.scope')}</div>
+          {SCOPE_FILTERS.map((scope) => {
+            const isDisabled = scope === 'workspace' && workspaceUnavailable;
+            return (
+              <button
+                key={scope}
+                type="button"
+                className={`memory-scene__scope-item${scopeFilter === scope ? ' is-active' : ''}`}
+                onClick={() => !isDisabled && setScopeFilter(scope)}
+                disabled={isDisabled}
+              >
+                <span>{t(`memoryLibrary.scopeFilters.${scope}`)}</span>
+                <strong>
+                  {scope === 'all'
+                    ? records.length
+                    : scope === 'global'
+                      ? counts.global
+                      : scope === 'workspace'
+                        ? counts.workspace
+                        : counts.overview}
+                </strong>
+              </button>
+            );
+          })}
+          {workspaceUnavailable ? (
+            <div className="memory-scene__scope-note">
+              {hasWorkspace
+                ? t('memoryLibrary.sidebar.workspaceUnavailable')
+                : t('memoryLibrary.sidebar.noWorkspace')}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="memory-scene__status-section">
+          <div className="memory-scene__section-heading">
+            <span>{t('memoryLibrary.autoMemory.title')}</span>
           </div>
-        ))}
+          <div className="memory-scene__status-rows">
+            <div className="memory-scene__status-row">
+              <span>
+                <Sparkles size={13} />
+                {t('memoryLibrary.scopes.global')}
+              </span>
+              <strong className={autoMemoryStatus?.globalEnabled ? 'is-on' : ''}>
+                {autoMemoryStatus
+                  ? autoMemoryStatus.globalEnabled
+                    ? t('memoryLibrary.autoMemory.enabledEvery', { count: autoMemoryStatus.globalEvery })
+                    : t('memoryLibrary.autoMemory.disabled')
+                  : t('memoryLibrary.autoMemory.loading')}
+              </strong>
+            </div>
+            <div className="memory-scene__status-row">
+              <span>
+                <Sparkles size={13} />
+                {t('memoryLibrary.scopes.workspace')}
+              </span>
+              <strong className={autoMemoryStatus?.workspaceEnabled ? 'is-on' : ''}>
+                {autoMemoryStatus
+                  ? autoMemoryStatus.workspaceEnabled
+                    ? t('memoryLibrary.autoMemory.enabledEvery', { count: autoMemoryStatus.workspaceEvery })
+                    : t('memoryLibrary.autoMemory.disabled')
+                  : t('memoryLibrary.autoMemory.loading')}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <details className="memory-scene__paths">
+          <summary>{t('memoryLibrary.sidebar.storage')}</summary>
+          <div className="memory-scene__path-list">
+            {spaces.map((space) => (
+              <div key={space.scope} className="memory-scene__path-row">
+                <span>{space.label}</span>
+                <button
+                  type="button"
+                  title={space.available ? space.memoryDir : t('memoryLibrary.empty.unavailable')}
+                  disabled={!space.available}
+                  onClick={() => void handleOpenMemorySpace(space)}
+                >
+                  {space.available
+                    ? t('memoryLibrary.actions.openStorage')
+                    : t('memoryLibrary.empty.unavailable')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
       </aside>
 
       <main className="memory-scene__main">
@@ -302,6 +369,14 @@ const MemoryScene: React.FC = () => {
             ))}
           </div>
 
+          <div className="memory-scene__result-line">
+            <span>{t('memoryLibrary.results.showing', {
+              shown: filteredRecords.length,
+              total: records.length,
+            })}</span>
+            <span>{t(`memoryLibrary.scopeFilters.${scopeFilter}`)}</span>
+          </div>
+
           <div className="memory-scene__records" aria-busy={isLoading}>
             {isLoading ? (
               <div className="memory-scene__empty">{t('memoryLibrary.loading')}</div>
@@ -318,14 +393,16 @@ const MemoryScene: React.FC = () => {
                   {record.isIndex ? <Database size={15} /> : <FileText size={15} />}
                 </span>
                 <span className="memory-scene__record-body">
-                  <span className="memory-scene__record-title">{record.title}</span>
+                  <span className="memory-scene__record-title-row">
+                    <span className="memory-scene__record-title">{record.title}</span>
+                    {record.updatedAt ? <span>{formatDate(record.updatedAt)}</span> : null}
+                  </span>
                   <span className="memory-scene__record-desc">
-                    {record.description || record.relativePath}
+                    {getRecordExcerpt(record)}
                   </span>
                   <span className="memory-scene__record-meta">
                     <Badge variant="neutral">{t(`memoryLibrary.types.${record.type}`)}</Badge>
                     <span>{t(`memoryLibrary.scopes.${record.scope}`)}</span>
-                    {record.updatedAt ? <span>{formatDate(record.updatedAt)}</span> : null}
                   </span>
                 </span>
               </button>
@@ -343,16 +420,20 @@ const MemoryScene: React.FC = () => {
                   </div>
                   <h3>{selectedRecord.title}</h3>
                   {selectedRecord.description ? <p>{selectedRecord.description}</p> : null}
+                  <div className="memory-scene__detail-metadata">
+                    <span>{t(`memoryLibrary.types.${selectedRecord.type}`)}</span>
+                    {selectedRecord.updatedAt ? <span>{formatDate(selectedRecord.updatedAt)}</span> : null}
+                  </div>
                 </div>
                 <div className="memory-scene__detail-actions">
                   {isEditing ? (
                     <>
                       <Button size="small" variant="primary" onClick={() => void handleSave()} disabled={isSaving}>
-                        <Save size={14} />
+                          <Save size={14} />
                         {t('memoryLibrary.actions.save')}
                       </Button>
                       <Button size="small" variant="secondary" onClick={() => setIsEditing(false)} disabled={isSaving}>
-                        <X size={14} />
+                          <X size={14} />
                         {t('memoryLibrary.actions.cancel')}
                       </Button>
                     </>
@@ -362,7 +443,7 @@ const MemoryScene: React.FC = () => {
                         {t('memoryLibrary.actions.edit')}
                       </Button>
                       <Button size="small" variant="secondary" onClick={() => void memoryLibraryAPI.revealMemoryRecord(selectedRecord)}>
-                        <FolderOpen size={14} />
+                          <FolderOpen size={14} />
                         {t('memoryLibrary.actions.reveal')}
                       </Button>
                       <Button
@@ -371,7 +452,7 @@ const MemoryScene: React.FC = () => {
                         disabled={!selectedCanDelete}
                         onClick={() => selectedCanDelete && setDeleteTarget(selectedRecord)}
                       >
-                        <Trash2 size={14} />
+                          <Trash2 size={14} />
                         {t('memoryLibrary.actions.forget')}
                       </Button>
                     </>
@@ -380,8 +461,7 @@ const MemoryScene: React.FC = () => {
               </header>
 
               <div className="memory-scene__explain-card">
-                <ExternalLink size={14} />
-                <span>{t(`memoryLibrary.usageHints.${selectedRecord.type}`)}</span>
+                {t(`memoryLibrary.usageHints.${selectedRecord.type}`)}
               </div>
 
               {isEditing ? (

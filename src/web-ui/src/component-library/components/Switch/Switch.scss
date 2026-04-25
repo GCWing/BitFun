@@ -4,6 +4,11 @@
 @use '../../styles/tokens.scss' as tokens;
 
 .bitfun-switch {
+  --bitfun-switch-on-bg: var(--btn-primary-bg, var(--color-accent-500));
+  --bitfun-switch-on-hover-bg: var(--btn-primary-hover-bg, var(--bitfun-switch-on-bg));
+  --bitfun-switch-on-border: var(--btn-primary-border, var(--bitfun-switch-on-bg));
+  --bitfun-switch-on-thumb-bg: var(--btn-primary-color, var(--color-bg-elevated, #fff));
+
   display: inline-flex;
   align-items: flex-start;
   gap: tokens.$size-gap-3;
@@ -52,12 +57,16 @@
     background: transparent;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
+    box-shadow: inset 0 0 0 1px transparent;
     transition: all 0.2s ease;
     pointer-events: none;
 
     &--checked {
-      background: var(--color-accent-100);
-      border-color: var(--color-accent-300);
+      background: var(--bitfun-switch-on-bg);
+      border-color: var(--bitfun-switch-on-border);
+      box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--bitfun-switch-on-thumb-bg) 18%, transparent),
+        0 0 0 2px color-mix(in srgb, var(--bitfun-switch-on-bg) 18%, transparent);
     }
   }
 
@@ -95,8 +104,11 @@
 
   &__input:checked + &__track &__thumb {
     left: calc(100% - 18px);
-    background: var(--btn-primary-bg, var(--color-accent-500));
-    border-color: var(--btn-primary-bg, var(--color-accent-500));
+    background: var(--bitfun-switch-on-thumb-bg);
+    border-color: color-mix(in srgb, var(--bitfun-switch-on-bg) 42%, transparent);
+    box-shadow:
+      0 1px 3px color-mix(in srgb, #000 22%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--bitfun-switch-on-thumb-bg) 34%, transparent);
   }
 
   &__input:focus-visible + &__track {
@@ -114,13 +126,16 @@
   }
 
   &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track {
-    background: var(--color-accent-200);
-    border-color: var(--color-accent-400);
+    background: var(--bitfun-switch-on-hover-bg);
+    border-color: var(--bitfun-switch-on-hover-bg);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--bitfun-switch-on-thumb-bg) 22%, transparent),
+      0 0 0 2px color-mix(in srgb, var(--bitfun-switch-on-hover-bg) 24%, transparent);
   }
 
   &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
-    background: var(--btn-primary-hover-bg, var(--color-accent-400));
-    border-color: var(--btn-primary-hover-bg, var(--color-accent-400));
+    background: var(--bitfun-switch-on-thumb-bg);
+    border-color: color-mix(in srgb, var(--bitfun-switch-on-hover-bg) 48%, transparent);
   }
 
   &__input:active:not(:disabled) + &__track {
@@ -216,6 +231,19 @@
       font-size: var(--font-size-xs);
     }
   }
+}
+
+:root[data-theme-type='dark'] .bitfun-switch {
+  --bitfun-switch-on-bg: var(--color-accent-500);
+  --bitfun-switch-on-hover-bg: var(--color-accent-600, var(--color-accent-500));
+  --bitfun-switch-on-border: color-mix(in srgb, var(--color-accent-500) 78%, #fff);
+  --bitfun-switch-on-thumb-bg: #ffffff;
+}
+
+:root[data-theme='bitfun-slate'] .bitfun-switch {
+  --bitfun-switch-on-bg: var(--color-purple-500, var(--color-accent-500));
+  --bitfun-switch-on-hover-bg: var(--color-purple-600, var(--color-accent-600));
+  --bitfun-switch-on-border: color-mix(in srgb, var(--color-purple-500, var(--color-accent-500)) 82%, #fff);
 }
 
 @keyframes bitfun-switch-spin {

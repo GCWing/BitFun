@@ -218,6 +218,10 @@ export class MemoryLibraryAPI {
     await workspaceAPI.revealInExplorer(record.path);
   }
 
+  async revealMemorySpace(space: MemorySpace): Promise<void> {
+    await workspaceAPI.revealInExplorer(space.memoryDir);
+  }
+
   private async collectMarkdownFiles(memoryDir: string): Promise<string[]> {
     const collected: string[] = [];
 
