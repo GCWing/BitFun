@@ -83,26 +83,7 @@ pub async fn run_script(
 ) -> Result<Value, WebDriverErrorResponse> {
     let session = state.sessions.read().await.get_cloned(session_id)?;
     let timeout_ms = session.timeouts.script.max(5_000);
-    let webview = state
-        .app
-        .get_webview(&session.current_window)
-        .ok_or_else(|| {
-            WebDriverErrorResponse::no_such_window(format!(
-                "Webview not found: {}",
-                session.current_window
-            ))
-        })?;
 
     let frame_context = script::serialize_frame_context(&session.frame_context);
-
-    platform::evaluator::evaluate_script(
-        state,
-        webview,
-        timeout_ms,
-        script_source,
-        &args,
-        async_mode,
-        &frame_context,
-    )
-    .await
+    Err(WebDriverErrorResponse::no_such_window("No such windows"))
 }

@@ -1434,7 +1434,7 @@ pub enum AppWaitPredicate {
 /// `interaction_state.displays` so it can pick the right screen explicitly
 /// instead of falling back to whichever screen the mouse pointer happens
 /// to be on (the original "computer use 在多屏时搞错操作的屏幕" failure mode).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ComputerUseDisplayInfo {
     /// Stable per-session id of the display. Pass back to
     /// [`ComputerUseHost::focus_display`] to pin subsequent screenshots /

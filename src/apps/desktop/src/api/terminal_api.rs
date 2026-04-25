@@ -828,7 +828,7 @@ pub async fn terminal_get_history(
 }
 
 pub fn start_terminal_event_loop(terminal_state: TerminalState, app_handle: AppHandle) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let api = match terminal_state.get_or_init_api().await {
             Ok(api) => api,
             Err(e) => {

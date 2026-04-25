@@ -581,15 +581,7 @@ pub fn spawn_pty(
                         .await;
                     }
 
-                    // Kill the process
-                    let code = match child.try_wait() {
-                        Ok(Some(status)) => Some(status.exit_code()),
-                        _ => {
-                            let _ = child.kill();
-                            child.try_wait().ok().flatten().map(|s| s.exit_code())
-                        }
-                    };
-
+                    let code = None;
                     let _ = event_tx.send(PtyEvent::Exit { exit_code: code }).await;
                     break;
                 }

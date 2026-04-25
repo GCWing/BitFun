@@ -29,8 +29,8 @@ tauri-plugin-opener = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-fs = { workspace = true }
 tauri-plugin-log = { workspace = true }
-tauri-plugin-autostart = { workspace = true }
-tauri-plugin-notification = { workspace = true }
+napi-ohos = { workspace = true }
+napi-derive-ohos = { workspace = true }
 
 # Inherited from workspace
 tokio = { workspace = true }
@@ -41,7 +41,6 @@ log = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
-dark-light = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
@@ -50,8 +49,6 @@ thiserror = "1.0"
 futures = { workspace = true }
 async-trait = { workspace = true }
 sha1 = { workspace = true }
-screenshots = "0.8"
-enigo = "0.2"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
 resvg = { version = "0.47.0", default-features = false }
 
@@ -79,6 +76,5 @@ windows = { version = "0.61.3", features = [
 ] }
 windows-core = "0.61.2"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-atspi = "0.29"
+[target.'cfg(all(target_os = "linux"), not(target_env = "ohos))'.dependencies]
 leptess = "0.14.0"

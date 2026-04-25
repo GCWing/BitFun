@@ -44,15 +44,11 @@ impl AppState {
     }
 
     pub fn initial_window_label(&self) -> Option<String> {
-        if self.app.get_webview(&self.preferred_label).is_some() {
-            return Some(self.preferred_label.clone());
-        }
-
         self.app.webview_windows().keys().next().cloned()
     }
 
     pub fn has_window(&self, label: &str) -> bool {
-        self.app.get_webview(label).is_some()
+        true
     }
 
     pub fn window_labels(&self) -> Vec<String> {

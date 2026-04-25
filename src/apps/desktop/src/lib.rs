@@ -62,21 +62,47 @@ pub struct SchedulerState {
     pub scheduler: Arc<bitfun_core::agentic::coordination::DialogScheduler>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WebdriverBridgeResultRequest {
-    payload: serde_json::Value,
+#[tauri::command]
+fn greet(name: &str) -> String {
+    format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-#[tauri::command]
-async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
-    log::debug!("webdriver_bridge_result command invoked");
-    bitfun_webdriver::handle_bridge_result(request.payload)
+pub struct OhosPlatform {
+    pub version: String,
+    pub devic_type: String,
+    pub api_level: i32,
+    pub feature: Vec<String>,
+}
+
+impl Defaut for OhosPlatform {
+    fn default() -> Self {
+        Self {
+            version: "6.0.0".to_string(),
+            devic_type: "2in".to_string(),
+            api_level: 12,
+            feature: vec![
+                "webview".to_string(),
+                "file_system".to_string(),
+                "network".to_string(),
+                "storage".to_string(),
+            ],
+        }
+    }
 }
 
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub async fn run() {
+pub fn run() {
+    let runtime = tokio::runtime::Builder::new_multi_thread
+        .worker_threads(16)
+        .enable_all()
+        .build()
+        .expect("multi thread runtime failed");
+    runtime.block_on(_run());
+}
+
+/// Tauri entry point.
+pub async fn _run() {
     let startup_started = Instant::now();
     let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
@@ -160,19 +186,19 @@ pub async fn run() {
 
     let path_manager = get_path_manager_arc();
 
-    setup_panic_hook();
+    // setup_panic_hook();
 
     let run_result = tauri::Builder::default()
         .plugin(logging::build_log_plugin(log_targets))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
+        // .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .app_name("BitFun")
-                .build(),
-        )
-        .plugin(tauri_plugin_notification::init())
+        // .plugin(
+        //     tauri_plugin_autostart::Builder::new()
+        //         .app_name("BitFun")
+        //         .build(),
+        // )
+        // .plugin(tauri_plugin_notification::init())
         .manage(app_state)
         .manage(coordinator_state)
         .manage(scheduler_state)
@@ -195,6 +221,7 @@ pub async fn run() {
             }
 
             logging::register_runtime_log_state(startup_log_level, session_log_dir.clone());
+
             for step in startup_timings.steps() {
                 log::debug!(
                     "Desktop startup step completed: step={}, duration_ms={}",
@@ -303,12 +330,10 @@ pub async fn run() {
                     app.state();
                 let terminal_state_inner = api::terminal_api::TerminalState::new();
                 let app_handle_clone = app_handle.clone();
-                tokio::spawn(async move {
-                    api::terminal_api::start_terminal_event_loop(
-                        terminal_state_inner,
-                        app_handle_clone,
-                    );
-                });
+                api::terminal_api::start_terminal_event_loop(
+                    terminal_state_inner,
+                    app_handle_clone,
+                );
             }
 
             init_mcp_servers(app_handle.clone());
@@ -807,14 +832,12 @@ async fn init_agentic_system() -> anyhow::Result<(
     let tool_registry = tools::registry::get_global_tool_registry();
     let tool_state_manager = Arc::new(tools::pipeline::ToolStateManager::new(event_queue.clone()));
 
-    let computer_use_host: ComputerUseHostRef =
-        Arc::new(computer_use::DesktopComputerUseHost::new());
-    set_computer_use_desktop_available(true);
+    set_computer_use_desktop_available(false);
 
     let tool_pipeline = Arc::new(tools::pipeline::ToolPipeline::new(
         tool_registry,
         tool_state_manager,
-        Some(computer_use_host),
+        None,
     ));
 
     let stream_processor = Arc::new(execution::StreamProcessor::new(event_queue.clone()));
@@ -897,7 +920,7 @@ async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow
 }
 
 fn init_mcp_servers(app_handle: tauri::AppHandle) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let _ = app_handle;
     });
 }
@@ -950,7 +973,7 @@ fn start_event_loop_with_transport(
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
     transport: Arc<TauriTransportAdapter>,
 ) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         loop {
             event_queue.wait_for_events().await;
             loop {
@@ -981,7 +1004,7 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
     spawn_ingest_server_with_config_listener();
     spawn_runtime_log_level_listener(default_log_level);
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let transport = Arc::new(TauriTransportAdapter::new(app_handle.clone()));
         let emitter = create_event_emitter(transport);
         let workspace_identity_watch_service = {
@@ -1037,7 +1060,7 @@ async fn resolve_runtime_log_level(default_level: log::LevelFilter) -> log::Leve
 fn spawn_runtime_log_level_listener(default_level: log::LevelFilter) {
     use bitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         if let Some(mut receiver) = subscribe_config_updates() {
             loop {
                 match receiver.recv().await {
@@ -1084,7 +1107,7 @@ fn spawn_ingest_server_with_config_listener() {
         get_global_config_service, subscribe_config_updates, ConfigUpdateEvent,
     };
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let initial_config = if let Ok(config_service) = get_global_config_service().await {
             if let Ok(config) = config_service
                 .get_config::<bitfun_core::service::config::GlobalConfig>(None)

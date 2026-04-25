@@ -20,13 +20,7 @@ pub async fn browser_webview_eval(
     app: tauri::AppHandle,
     request: WebviewEvalRequest,
 ) -> Result<(), String> {
-    let webview = app
-        .get_webview(&request.label)
-        .ok_or_else(|| format!("Webview not found: {}", request.label))?;
-
-    webview
-        .eval(&request.script)
-        .map_err(|e| format!("eval failed: {e}"))
+    Err("Webview not found".to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,15 +39,5 @@ pub async fn browser_get_url(
     app: tauri::AppHandle,
     request: WebviewLabelRequest,
 ) -> Result<String, String> {
-    let webview = app
-        .get_webview(&request.label)
-        .ok_or_else(|| format!("Webview not found: {}", request.label))?;
-
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| webview.url()));
-
-    match result {
-        Ok(Ok(url)) => Ok(url.to_string()),
-        Ok(Err(e)) => Err(format!("url failed: {e}")),
-        Err(_) => Err("url unavailable (webview URL is nil)".to_string()),
-    }
+    Err("Url is unavailable (webview URL is nil)".to_string())
 }

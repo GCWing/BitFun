@@ -51,36 +51,14 @@ impl BridgeExecutor {
     }
 
     pub async fn take_screenshot(&self) -> Result<String, WebDriverErrorResponse> {
-        let webview = self
-            .state
-            .app
-            .get_webview(&self.session.current_window)
-            .ok_or_else(|| {
-                WebDriverErrorResponse::no_such_window(format!(
-                    "Webview not found: {}",
-                    self.session.current_window
-                ))
-            })?;
-
-        platform::take_screenshot(webview, self.session.timeouts.script).await
+        Err(WebDriverErrorResponse::no_such_window("No such windows"))
     }
-
+    
     pub async fn print_page(
         &self,
         options: PrintOptions,
     ) -> Result<String, WebDriverErrorResponse> {
-        let webview = self
-            .state
-            .app
-            .get_webview(&self.session.current_window)
-            .ok_or_else(|| {
-                WebDriverErrorResponse::no_such_window(format!(
-                    "Webview not found: {}",
-                    self.session.current_window
-                ))
-            })?;
-
-        platform::print_page(webview, self.session.timeouts.script, &options).await
+        Err(WebDriverErrorResponse::no_such_window("No such windows"))
     }
 
     pub(crate) fn webview_window(&self) -> Result<WebviewWindow, WebDriverErrorResponse> {

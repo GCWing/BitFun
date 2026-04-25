@@ -84,7 +84,7 @@ toml = "0.8"
 git2 = { version = "0.18", default-features = false, features = ["https", "vendored-libgit2"] }
 
 # Terminal
-portable-pty = "0.8"
+portable-pty = "0.9.0"
 vte = "0.15.0"
 
 # Grep (search)
@@ -101,14 +101,16 @@ similar = "2.5"
 urlencoding = "2.1"
 
 # Tauri (desktop only)
- tauri = { version = "2", features = ["unstable"] }
+ tauri = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony", features = [] }
+tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2.6"
 tauri-plugin-fs = "2"
 tauri-plugin-log = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
-tauri-build = { version = "2", features = [] }
+tauri-build = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony", features = [] }
+napi-ohos = { version = "1.1" }
+napi-derive-ohos = { version = "1.1" }
 
 # Windows-specific dependencies
 win32job = "2.0"
@@ -150,3 +152,13 @@ lto = false
 codegen-units = 16
 strip = false
 incremental = true
+
+[patch.crates-io]
+wry = { git = "https://github.com/richerfu/wry"}
+tao = { git = "https://github.com/richerfu/tao", branch = "feat-ohos-webview"}
+openharmony-ability = {git = "https://github.com/harmony-contrib/openharmony-ability.git"}
+openharmony-ability-derive = {git = "https://github.com/harmony-contrib/openharmony-ability.git"}
+tauri = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
+tauri-runtime = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
+tauri-macros = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}
+tauri-runtime-wry = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony"}

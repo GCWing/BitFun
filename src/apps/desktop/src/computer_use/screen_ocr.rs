@@ -817,7 +817,7 @@ mod windows_backend {
 // ---------------------------------------------------------------------------
 // Linux: Tesseract OCR via leptess bindings
 // ---------------------------------------------------------------------------
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "ohos")))]
 mod linux_backend {
     use super::{
         filter_and_rank, fuzzy_text_matches_query, image_box_to_global_match,
