@@ -151,9 +151,8 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     try {
       setWorkspaceDropdownOpen(false);
       setIsSelectingWorkspace(true);
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === 'string') await openWorkspace(selected);
+      let path_manager = "/data/storage/el2/base/files/test";
+      await openWorkspace(path_manager);
     } catch (err) {
       log.warn('Failed to open workspace folder', err);
     } finally {

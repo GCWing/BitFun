@@ -8,6 +8,7 @@ import { lspService } from '@/tools/lsp/services/LspService';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './LspConfig.scss';
+import { storage } from '@/shared';
 
 const log = createLogger('LspConfig');
 
@@ -29,7 +30,7 @@ const LspConfig: React.FC = () => {
 
   function loadSettings() {
     try {
-      const saved = localStorage.getItem(LSP_SETTINGS_KEY);
+      const saved = storage.getItem(LSP_SETTINGS_KEY);
       if (saved) setSettings({ ...DEFAULT_LSP_SETTINGS, ...JSON.parse(saved) });
     } catch (error) {
       log.error('Failed to load settings', error);
@@ -40,7 +41,7 @@ const LspConfig: React.FC = () => {
 
   const saveSettings = () => {
     try {
-      localStorage.setItem(LSP_SETTINGS_KEY, JSON.stringify(settings));
+      storage.setItem(LSP_SETTINGS_KEY, JSON.stringify(settings));
       setHasSettingsChanges(false);
       setInstallMessage({ type: 'success', text: t('messages.settingsSaved') });
       setTimeout(() => setInstallMessage(null), 2000);

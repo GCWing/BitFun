@@ -13,6 +13,7 @@ import {
 import { globalEventBus } from '../../../infrastructure/event-bus';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
+import { storage } from '@/shared';
 
 const log = createLogger('EditorManager');
 
@@ -416,7 +417,7 @@ export class EditorManager implements IEditorManager {
 
   private loadConfig(): void {
     try {
-      const savedConfig = localStorage.getItem('editor-config');
+      const savedConfig = storage.getItem('editor-config');
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
         this.config = { ...DEFAULT_CONFIG, ...parsed };
@@ -428,7 +429,7 @@ export class EditorManager implements IEditorManager {
 
   private saveConfig(): void {
     try {
-      localStorage.setItem('editor-config', JSON.stringify(this.config));
+      storage.setItem('editor-config', JSON.stringify(this.config));
     } catch (error) {
       log.warn('Failed to save config', error);
     }

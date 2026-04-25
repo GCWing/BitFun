@@ -47,6 +47,7 @@ import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } fro
 import { deriveChatInputPetMood } from '../utils/chatInputPetMood';
 import { ChatInputPixelPet } from './ChatInputPixelPet';
 import './ChatInput.scss';
+import { sessionStorageAdapter } from '@/shared';
 
 const log = createLogger('ChatInput');
 
@@ -728,7 +729,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         log.debug('Session switched, syncing mode', { sessionId, mode });
         dispatchMode({ type: 'SET_CURRENT_MODE', payload: mode });
         try {
-          sessionStorage.setItem('bitfun:flowchat:lastMode', mode);
+          sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', mode);
         } catch {
           // ignore
         }
@@ -753,7 +754,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.debug('Session ID changed, syncing mode', { sessionId: effectiveTargetSessionId, mode: session.mode });
       dispatchMode({ type: 'SET_CURRENT_MODE', payload: session.mode });
       try {
-        sessionStorage.setItem('bitfun:flowchat:lastMode', session.mode);
+        sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', session.mode);
       } catch {
         // ignore
       }
@@ -1533,7 +1534,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
 
     try {
-      sessionStorage.setItem('bitfun:flowchat:lastMode', modeId);
+      sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', modeId);
     } catch {
       // ignore
     }

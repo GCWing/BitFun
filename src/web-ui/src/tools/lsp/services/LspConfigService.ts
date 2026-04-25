@@ -2,6 +2,7 @@
  * LSP config service (user-facing settings).
  */
 
+import { storage } from '@/shared';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('LspConfigService');
@@ -30,7 +31,7 @@ class LspConfigService {
 
   getSettings(): LspSettings {
     try {
-      const saved = localStorage.getItem(LSP_SETTINGS_KEY);
+      const saved = storage.getItem(LSP_SETTINGS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         return { ...DEFAULT_LSP_SETTINGS, ...parsed };
@@ -43,7 +44,7 @@ class LspConfigService {
 
   saveSettings(settings: LspSettings): void {
     try {
-      localStorage.setItem(LSP_SETTINGS_KEY, JSON.stringify(settings));
+      storage.setItem(LSP_SETTINGS_KEY, JSON.stringify(settings));
     } catch (error) {
       log.error('Failed to save settings', { error });
       throw error;
