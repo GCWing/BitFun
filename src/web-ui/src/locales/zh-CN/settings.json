@@ -11,7 +11,7 @@
       "appearance": "语言、主题与界面字体大小。",
       "basics": "日志、终端 Shell、开机启动与通知。",
       "models": "AI 模型、API 密钥、供应商与代理。",
-      "personalization": "标题生成、Agent 伙伴与调试模式。",
+      "personalization": "标题生成、Agent 伙伴、思考过程与调试模式。",
       "permissions": "工具执行确认、超时与桌面自动化授权。",
       "memory": "自动记忆开关与提炼频率。",
       "editor": "编辑器字体、显示与格式化。",

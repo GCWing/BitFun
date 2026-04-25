@@ -1,6 +1,6 @@
 {
   "title": "个性化",
-  "subtitle": "标题生成、Agent 伙伴与调试模式",
+  "subtitle": "标题生成、Agent 伙伴、思考过程与调试模式",
   "features": {
     "sessionTitle": {
       "title": "会话标题自动生成",
@@ -11,6 +11,14 @@
       "title": "Agent 伙伴",
       "subtitle": "在收起的会话输入框中显示像素风格伙伴动画。",
       "enable": "显示 Agent 伙伴"
+    },
+    "thinkingProcess": {
+      "title": "思考过程",
+      "subtitle": "控制 FlowChat 中模型思考内容的显示方式。",
+      "showProcess": "显示思考过程",
+      "showProcessDescription": "关闭后，FlowChat 不再展示模型的思考输出。",
+      "keepCompletedItem": "完成后保留可展开条目",
+      "keepCompletedItemDescription": "思考输出完成并自动收起后，仍在 FlowChat 中保留可展开的思考条目。"
     }
   },
   "model": {

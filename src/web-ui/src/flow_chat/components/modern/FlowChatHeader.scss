@@ -70,12 +70,17 @@
   }
 
   // ==================== Search (right-aligned strip; does not span full header) ====================
-  &__search-btn {
+  &__search-btn,
+  &__thinking-toggle {
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
     }
+  }
+
+  &__thinking-toggle {
+    color: var(--color-text-secondary);
   }
 
   &__search {

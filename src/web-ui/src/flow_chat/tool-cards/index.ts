@@ -521,11 +521,11 @@ export type { PlanDisplayProps } from './CreatePlanDisplay';
 import type { FlowItem, FlowToolItem } from '../types/flow-chat';
 
 /**
- * Collapsible explorer tools (only these 5).
+ * Collapsible explorer tools.
  * They are auto-collapsed during streaming to reduce visual noise.
  */
 export const COLLAPSIBLE_TOOL_NAMES = new Set([
-  'Read', 'LS', 'Grep', 'Glob', 'WebSearch'
+  'Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash'
 ]);
 
 /** Read tools (counted in readCount). */
@@ -533,6 +533,9 @@ export const READ_TOOL_NAMES = new Set(['Read', 'LS']);
 
 /** Search tools (counted in searchCount). */
 export const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
+
+/** Command tools (counted in commandCount). */
+export const COMMAND_TOOL_NAMES = new Set(['Bash']);
 
 /** Check whether a tool is collapsible. */
 export function isCollapsibleTool(toolName: string): boolean {
@@ -544,7 +547,7 @@ export function isCollapsibleTool(toolName: string): boolean {
  * - Subagent items are never collapsed.
  * - Text needs context (use isCollapsibleItemWithContext).
  * - Thinking can be collapsed with explorer tools.
- * - Only the 5 explorer tools are collapsible.
+ * - Only explorer tools are collapsible.
  */
 export function isCollapsibleItem(item: FlowItem): boolean {
   // Subagent items are never collapsed.
@@ -556,7 +559,7 @@ export function isCollapsibleItem(item: FlowItem): boolean {
   // Thinking can be collapsed with explorer tools.
   if (item.type === 'thinking') return true;
   
-  // Tools: only the 5 explorer tools are collapsible.
+  // Tools: only explorer tools are collapsible.
   if (item.type === 'tool') {
     return isCollapsibleTool((item as FlowToolItem).toolName);
   }
@@ -597,7 +600,7 @@ export function isCollapsibleItemWithContext(
     return false;
   }
   
-  // Tools: only the 5 explorer tools are collapsible.
+  // Tools: only explorer tools are collapsible.
   if (item.type === 'tool') {
     return isCollapsibleTool((item as FlowToolItem).toolName);
   }

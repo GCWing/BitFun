@@ -619,7 +619,11 @@ pub(crate) fn migrate_0_0_0_to_1_0_0(mut config: Value) -> BitFunResult<Value> {
             app.insert(
                 "ai_experience".to_string(),
                 serde_json::json!({
-                    "enable_session_title_generation": true
+                    "enable_session_title_generation": true,
+                    "enable_visual_mode": false,
+                    "enable_agent_companion": true,
+                    "show_thinking_process": true,
+                    "show_completed_thinking_item": true
                 }),
             );
         }

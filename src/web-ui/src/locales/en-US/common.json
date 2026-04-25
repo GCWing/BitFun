@@ -529,14 +529,14 @@
     "disclaimerAgree": "Agree and Continue"
   },
   "about": {
-    "productTitle": "BitFun Agentic OS",
+    "productTitle": "Sparo OS",
     "close": "Close",
     "copy": "Copy",
     "version": "Version {{version}}",
     "buildDate": "Build Date",
     "commit": "Commit",
     "branch": "Branch",
-    "copyright": "© 2025 BitFun. All rights reserved."
+    "copyright": "© 2026 Spora OS Development Team. All rights reserved."
   },
   "actions": {
     "confirm": "Confirm",

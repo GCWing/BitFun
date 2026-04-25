@@ -14,6 +14,7 @@ import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { useToolCardHeightContract } from '../../tool-cards/useToolCardHeightContract';
 import { useFlowChatStaticContext, useFlowChatViewContext } from './FlowChatContext';
+import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import './ExploreRegion.scss';
 
 export interface ExploreGroupRendererProps {
@@ -28,6 +29,13 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   const { t } = useTranslation('flow-chat');
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
+  const [thinkingDisplaySettings, setThinkingDisplaySettings] = useState(() => {
+    const settings = aiExperienceConfigService.getSettings();
+    return {
+      showThinkingProcess: settings.show_thinking_process,
+      showCompletedThinkingItem: settings.show_completed_thinking_item,
+    };
+  });
   
   const {
     exploreGroupStates, 
@@ -62,6 +70,29 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   const isExpanded = hasExplicitState ? explicitExpanded : isGroupStreaming;
   const isCollapsed = !isExpanded;
   const allowManualToggle = !isGroupStreaming;
+
+  useEffect(() => {
+    let cancelled = false;
+    aiExperienceConfigService.getSettingsAsync().then(settings => {
+      if (cancelled) return;
+      setThinkingDisplaySettings({
+        showThinkingProcess: settings.show_thinking_process,
+        showCompletedThinkingItem: settings.show_completed_thinking_item,
+      });
+    });
+
+    const unsubscribe = aiExperienceConfigService.addChangeListener(settings => {
+      setThinkingDisplaySettings({
+        showThinkingProcess: settings.show_thinking_process,
+        showCompletedThinkingItem: settings.show_completed_thinking_item,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const checkScrollState = useCallback(() => {
     const el = containerRef.current;
@@ -146,10 +177,14 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   
   // Build summary text with i18n.
   const displaySummary = useMemo(() => {
-    const { readCount, searchCount, thinkingCount } = stats;
+    const { readCount, searchCount, commandCount, thinkingCount } = stats;
     
     const parts: string[] = [];
-    if (thinkingCount > 0) {
+    if (
+      thinkingCount > 0 &&
+      thinkingDisplaySettings.showThinkingProcess &&
+      thinkingDisplaySettings.showCompletedThinkingItem
+    ) {
       parts.push(t('exploreRegion.thinkingCount', { count: thinkingCount }));
     }
     if (readCount > 0) {
@@ -158,13 +193,16 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     if (searchCount > 0) {
       parts.push(t('exploreRegion.searchCount', { count: searchCount }));
     }
+    if (commandCount > 0) {
+      parts.push(t('exploreRegion.commandCount', { count: commandCount }));
+    }
     
     if (parts.length === 0) {
       return t('exploreRegion.exploreCount', { count: allItems.length });
     }
     
     return parts.join(t('exploreRegion.separator'));
-  }, [stats, allItems.length, t]);
+  }, [stats, allItems.length, t, thinkingDisplaySettings]);
   
   const handleToggle = useCallback(() => {
     if (isCollapsed) {

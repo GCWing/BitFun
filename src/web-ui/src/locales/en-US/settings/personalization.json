@@ -1,6 +1,6 @@
 {
   "title": "Personalization",
-  "subtitle": "Title generation, Agent companion, and debug mode",
+  "subtitle": "Title generation, Agent companion, thinking process, and debug mode",
   "features": {
     "sessionTitle": {
       "title": "Auto Session Title",
@@ -11,6 +11,14 @@
       "title": "Agent companion",
       "subtitle": "Show a pixel-style companion animation in the collapsed chat input.",
       "enable": "Show Agent companion"
+    },
+    "thinkingProcess": {
+      "title": "Thinking process",
+      "subtitle": "Control how model thinking content is shown in FlowChat.",
+      "showProcess": "Show thinking process",
+      "showProcessDescription": "When off, FlowChat no longer shows model thinking output.",
+      "keepCompletedItem": "Keep expandable item after completion",
+      "keepCompletedItemDescription": "After a thinking output finishes and auto-collapses, keep an expandable thinking item in FlowChat."
     }
   },
   "model": {

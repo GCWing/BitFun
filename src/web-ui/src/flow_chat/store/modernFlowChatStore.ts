@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
 import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem } from '../types/flow-chat';
-import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES } from '../tool-cards';
+import { COMMAND_TOOL_NAMES, isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES } from '../tool-cards';
 import { flowChatStore } from './FlowChatStore';
 
 /**
@@ -17,6 +17,7 @@ import { flowChatStore } from './FlowChatStore';
 export interface ExploreGroupStats {
   readCount: number;
   searchCount: number;
+  commandCount: number;
   thinkingCount: number;
 }
 
@@ -114,9 +115,10 @@ function isExploreOnlyRound(round: ModelRound): boolean {
 /**
  * Compute statistics for a single ModelRound
  */
-function computeRoundStats(round: ModelRound): { readCount: number; searchCount: number; thinkingCount: number } {
+function computeRoundStats(round: ModelRound): ExploreGroupStats {
   let readCount = 0;
   let searchCount = 0;
+  let commandCount = 0;
   let thinkingCount = 0;
   
   for (const item of round.items) {
@@ -124,12 +126,13 @@ function computeRoundStats(round: ModelRound): { readCount: number; searchCount:
       const toolName = (item as FlowToolItem).toolName;
       if (READ_TOOL_NAMES.has(toolName)) readCount++;
       else if (SEARCH_TOOL_NAMES.has(toolName)) searchCount++;
+      else if (COMMAND_TOOL_NAMES.has(toolName)) commandCount++;
     } else if (item.type === 'thinking') {
       thinkingCount++;
     }
   }
   
-  return { readCount, searchCount, thinkingCount };
+  return { readCount, searchCount, commandCount, thinkingCount };
 }
 
 let cachedSession: Session | null = null;
@@ -196,6 +199,7 @@ function canReuseVirtualItem(previous: VirtualItem | undefined, next: VirtualIte
         previousExploreGroup.data.isLastGroupInTurn === next.data.isLastGroupInTurn &&
         previousExploreGroup.data.stats.readCount === next.data.stats.readCount &&
         previousExploreGroup.data.stats.searchCount === next.data.stats.searchCount &&
+        previousExploreGroup.data.stats.commandCount === next.data.stats.commandCount &&
         previousExploreGroup.data.stats.thinkingCount === next.data.stats.thinkingCount &&
         areRoundArraysReferentiallyEqual(previousExploreGroup.data.rounds, next.data.rounds) &&
         areFlowItemArraysReferentiallyEqual(previousExploreGroup.data.allItems, next.data.allItems)
@@ -271,6 +275,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       allItems: FlowItem[];
       readCount: number;
       searchCount: number;
+      commandCount: number;
       thinkingCount: number;
       startIndex: number;
       endIndex: number;
@@ -288,6 +293,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           currentGroup.allItems.push(...round.items);
           currentGroup.readCount += stats.readCount;
           currentGroup.searchCount += stats.searchCount;
+          currentGroup.commandCount += stats.commandCount;
           currentGroup.thinkingCount += stats.thinkingCount;
           currentGroup.endIndex = index;
         } else {
@@ -296,6 +302,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             allItems: [...round.items],
             readCount: stats.readCount,
             searchCount: stats.searchCount,
+            commandCount: stats.commandCount,
             thinkingCount: stats.thinkingCount,
             startIndex: index,
             endIndex: index,
@@ -330,7 +337,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             groupId: group.rounds.map(r => r.id).join('-'),
             rounds: group.rounds,
             allItems: group.allItems,
-            stats: { readCount: group.readCount, searchCount: group.searchCount, thinkingCount: group.thinkingCount },
+            stats: {
+              readCount: group.readCount,
+              searchCount: group.searchCount,
+              commandCount: group.commandCount,
+              thinkingCount: group.thinkingCount,
+            },
             isGroupStreaming,
             isLastGroupInTurn: isLastGroup,
           }

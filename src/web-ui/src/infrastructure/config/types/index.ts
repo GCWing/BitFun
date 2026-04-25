@@ -64,6 +64,12 @@ export interface AIExperienceConfig {
 
   /** Whether to show the pixel Agent companion in the collapsed chat input. */
   enable_agent_companion: boolean;
+
+  /** Whether to show model thinking process in FlowChat. */
+  show_thinking_process: boolean;
+
+  /** Whether completed thinking blocks remain as expandable collapsed items. */
+  show_completed_thinking_item: boolean;
 }
 
 export type ModelCapability =

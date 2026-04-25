@@ -11,7 +11,7 @@
       "appearance": "Language, theme, and interface font size.",
       "basics": "Logging, terminal shell, launch at login, and notifications.",
       "models": "AI models, API keys, providers, and proxy.",
-      "personalization": "Title generation, Agent companion, and debug mode.",
+      "personalization": "Title generation, Agent companion, thinking process, and debug mode.",
       "permissions": "Tool confirmation, timeouts, and desktop automation access.",
       "memory": "Automatic memory extraction cadence and enablement.",
       "editor": "Editor font, display, and formatting.",

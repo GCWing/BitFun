@@ -7,14 +7,18 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { ChevronDown, ChevronUp, CornerUpLeft, List, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, CornerUpLeft, Eye, EyeOff, List, Search, X } from 'lucide-react';
 import { IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import type { Session } from '../../types/flow-chat';
 import { FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest } from '../../events/flowchatNavigation';
+import { aiExperienceConfigService, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { createLogger } from '@/shared/utils/logger';
 import './FlowChatHeader.scss';
+
+const log = createLogger('FlowChatHeader');
 
 export interface FlowChatHeaderTurnSummary {
   turnId: string;
@@ -79,6 +83,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [aiExperienceSettings, setAiExperienceSettings] = useState<AIExperienceSettings>(() =>
+    aiExperienceConfigService.getSettings()
+  );
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const parentLabel = btwParentTitle || t('btw.parent', { defaultValue: 'parent session' });
@@ -95,7 +102,27 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const turnListTooltip = t('flowChatHeader.turnList', {
     defaultValue: 'Turn list',
   });
+  const keepThinkingItemEnabled = aiExperienceSettings.show_completed_thinking_item;
+  const thinkingItemToggleTooltip = keepThinkingItemEnabled
+    ? t('flowChatHeader.hideCompletedThinkingItems', { defaultValue: 'Hide completed thinking items' })
+    : t('flowChatHeader.showCompletedThinkingItems', { defaultValue: 'Show completed thinking items' });
   const hasTurnNavigation = turns.length > 0 && !!onJumpToTurn;
+
+  useEffect(() => {
+    let cancelled = false;
+    aiExperienceConfigService.getSettingsAsync().then(settings => {
+      if (!cancelled) {
+        setAiExperienceSettings(settings);
+      }
+    });
+
+    const unsubscribe = aiExperienceConfigService.addChangeListener(setAiExperienceSettings);
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   // When collapsing the turn list with an active query, reopen the header search bar.
   const prevTurnListOpenRef = useRef(turnListOpen);
@@ -173,6 +200,20 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     onTurnListOpenChange?.(!turnListOpen);
   };
 
+  const handleToggleCompletedThinkingItems = async () => {
+    const nextSettings: AIExperienceSettings = {
+      ...aiExperienceSettings,
+      show_completed_thinking_item: !keepThinkingItemEnabled,
+    };
+    setAiExperienceSettings(nextSettings);
+    try {
+      await aiExperienceConfigService.saveSettings(nextSettings);
+    } catch (error) {
+      log.error('Failed to toggle completed thinking items', error);
+      setAiExperienceSettings(aiExperienceSettings);
+    }
+  };
+
   if (!visible) {
     return null;
   }
@@ -248,6 +289,20 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             </IconButton>
           </div>
         ) : null}
+        {!turnListOpen && !isSearchOpen && (
+          <IconButton
+            className="flowchat-header__thinking-toggle"
+            variant="ghost"
+            size="xs"
+            onClick={handleToggleCompletedThinkingItems}
+            tooltip={thinkingItemToggleTooltip}
+            aria-label={thinkingItemToggleTooltip}
+            aria-pressed={keepThinkingItemEnabled}
+            data-testid="flowchat-header-thinking-toggle"
+          >
+            {keepThinkingItemEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
+          </IconButton>
+        )}
         {!turnListOpen && !isSearchOpen && (
           <IconButton
             className="flowchat-header__search-btn"

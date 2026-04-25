@@ -185,6 +185,14 @@
   }
 
   &.requires-confirmation {
+    &.compact-tool-card-wrapper--expanded {
+      border-color: var(--color-warning, #f59e0b);
+      box-shadow:
+        0 0 0 1px rgba(245, 158, 11, 0.14),
+        0 0 12px rgba(245, 158, 11, 0.16);
+      animation: defaultToolConfirmationPulse 2s ease-in-out infinite;
+    }
+
     .compact-tool-card {
       border-radius: 8px;
       background: rgba(245, 158, 11, 0.05) !important;

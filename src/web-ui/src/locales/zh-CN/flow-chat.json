@@ -352,7 +352,9 @@
     "searchPrevious": "上一个匹配轮次",
     "searchNext": "下一个匹配轮次",
     "searchClose": "关闭搜索",
-    "searchOpen": "搜索对话轮次"
+    "searchOpen": "搜索对话轮次",
+    "hideCompletedThinkingItems": "隐藏已完成的思考条目",
+    "showCompletedThinkingItems": "显示已完成的思考条目"
   },
   "sessionFilesBadge": {
     "files": "文件",
@@ -414,6 +416,7 @@
   "exploreRegion": {
     "readFiles": "读取了 {{count}} 个文件",
     "searchCount": "进行了 {{count}} 次搜索",
+    "commandCount": "执行了 {{count}} 条命令",
     "thinkingCount": "思考了 {{count}} 次",
     "exploreCount": "执行了 {{count}} 次探索",
     "separator": "，",

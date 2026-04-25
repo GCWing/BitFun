@@ -4,7 +4,7 @@
  * 
  * Features:
  * - Collapsed: transparent background, no border, single-line display
- * - Expanded: shows detailed content with dark background box
+ * - Expanded: keeps header and details in one lightweight card surface
  * - Simple gray style, text brightens on hover
  */
 
@@ -58,10 +58,17 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
     status === 'streaming' ||
     status === 'running' ||
     status === 'analyzing';
+  const hasExpandedContent = Boolean(expandedContent);
 
   return (
     <div
-      className={`compact-tool-card-wrapper${loadingShimmer ? ' compact-tool-card-wrapper--loading-shimmer' : ''} ${className}`.trim()}
+      className={[
+        'compact-tool-card-wrapper',
+        loadingShimmer ? 'compact-tool-card-wrapper--loading-shimmer' : '',
+        hasExpandedContent ? 'compact-tool-card-wrapper--has-expanded-content' : '',
+        isExpanded && hasExpandedContent ? 'compact-tool-card-wrapper--expanded' : '',
+        className,
+      ].filter(Boolean).join(' ')}
     >
       <div
         className={`compact-tool-card status-${status} ${clickable ? 'clickable' : ''} ${isExpanded ? 'expanded' : ''}`}
