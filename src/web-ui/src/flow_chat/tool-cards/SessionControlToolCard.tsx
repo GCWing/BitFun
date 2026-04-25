@@ -12,7 +12,7 @@ interface SessionSummary {
 }
 
 interface SessionControlInput {
-  action?: 'create' | 'delete' | 'list';
+  action?: 'create' | 'cancel' | 'delete' | 'list';
   workspace?: string;
   session_id?: string;
   session_name?: string;
@@ -21,10 +21,13 @@ interface SessionControlInput {
 
 interface SessionControlResult {
   success?: boolean;
-  action?: 'create' | 'delete' | 'list';
+  action?: 'create' | 'cancel' | 'delete' | 'list';
   workspace?: string;
   count?: number;
   session_id?: string;
+  had_active_turn?: boolean;
+  cancelled_turn_id?: string;
+  status?: 'cancel_requested' | 'no_active_turn';
   session?: SessionSummary;
   sessions?: SessionSummary[];
 }
@@ -69,7 +72,20 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
   const agentType = session?.agent_type ?? inputData.agent_type;
   const sessions = Array.isArray(resultData?.sessions) ? resultData.sessions : [];
   const sessionCount = resultData?.count ?? sessions.length;
-  const hasDetails = Boolean(workspace || sessionId || sessionName || agentType || sessions.length || toolResult?.error);
+  const cancelStatus = resultData?.status;
+  const hadActiveTurn = resultData?.had_active_turn;
+  const cancelledTurnId = resultData?.cancelled_turn_id;
+  const hasDetails = Boolean(
+    workspace ||
+    sessionId ||
+    sessionName ||
+    agentType ||
+    sessions.length ||
+    cancelStatus ||
+    hadActiveTurn !== undefined ||
+    cancelledTurnId ||
+    toolResult?.error
+  );
 
   const getStatusIcon = () => {
     switch (status) {
@@ -92,6 +108,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     switch (action) {
       case 'create':
         return sessionName || t('toolCards.sessionControl.defaultSessionName');
+      case 'cancel':
       case 'delete':
         return sessionId || t('toolCards.sessionControl.unknownSession');
       case 'list':
@@ -107,6 +124,11 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
       switch (action) {
         case 'create':
           return <>{t('toolCards.sessionControl.createdSession', { session: label })}</>;
+        case 'cancel':
+          if (cancelStatus === 'no_active_turn') {
+            return <>{t('toolCards.sessionControl.noActiveTurn', { session: label })}</>;
+          }
+          return <>{t('toolCards.sessionControl.cancelledSession', { session: label })}</>;
         case 'delete':
           return <>{t('toolCards.sessionControl.deletedSession', { session: label })}</>;
         case 'list':
@@ -119,6 +141,8 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
       switch (action) {
         case 'create':
           return <>{t('toolCards.sessionControl.creatingSession', { session: label })}...</>;
+        case 'cancel':
+          return <>{t('toolCards.sessionControl.cancellingSession', { session: label })}...</>;
         case 'delete':
           return <>{t('toolCards.sessionControl.deletingSession', { session: label })}...</>;
         case 'list':
@@ -134,6 +158,8 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     switch (action) {
       case 'create':
         return <>{t('toolCards.sessionControl.preparingCreate', { session: label })}</>;
+      case 'cancel':
+        return <>{t('toolCards.sessionControl.preparingCancel', { session: label })}</>;
       case 'delete':
         return <>{t('toolCards.sessionControl.preparingDelete', { session: label })}</>;
       case 'list':
@@ -169,6 +195,35 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
         <div className="detail-item">
           <span className="detail-label">{t('toolCards.sessionControl.agentType')}:</span>
           <span className="detail-value">{agentType}</span>
+        </div>
+      )}
+
+      {action === 'cancel' && cancelStatus && (
+        <div className="detail-item">
+          <span className="detail-label">{t('toolCards.sessionControl.cancelStatus')}:</span>
+          <span className="detail-value">
+            {cancelStatus === 'no_active_turn'
+              ? t('toolCards.sessionControl.noActiveTurnStatus')
+              : t('toolCards.sessionControl.cancelRequestedStatus')}
+          </span>
+        </div>
+      )}
+
+      {action === 'cancel' && cancelledTurnId && (
+        <div className="detail-item">
+          <span className="detail-label">{t('toolCards.sessionControl.cancelledTurnId')}:</span>
+          <span className="detail-value">{cancelledTurnId}</span>
+        </div>
+      )}
+
+      {action === 'cancel' && hadActiveTurn !== undefined && (
+        <div className="detail-item">
+          <span className="detail-label">{t('toolCards.sessionControl.hadActiveTurn')}:</span>
+          <span className="detail-value">
+            {hadActiveTurn
+              ? t('toolCards.sessionControl.booleanYes')
+              : t('toolCards.sessionControl.booleanNo')}
+          </span>
         </div>
       )}
 
