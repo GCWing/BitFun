@@ -14,7 +14,7 @@ use crate::infrastructure::ai::tool_call_accumulator::{
 };
 use crate::util::errors::BitFunError;
 use crate::util::types::ai::GeminiUsage;
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use log::{debug, error, trace};
 use serde_json::Value;
 use std::sync::Arc;
@@ -121,7 +121,8 @@ pub struct StreamResult {
     /// Whether this stream produced any user-visible output (text/thinking/tool events)
     pub has_effective_output: bool,
     /// When set, the stream terminated abnormally but was recovered with partial output.
-    /// Contains a human-readable reason (e.g. "Stream processing error: ..." or "Stream data timeout ...").
+    /// Contains a human-readable reason (e.g. "Stream processing error: ..." or
+    /// "Stream processor watchdog timeout ...").
     pub partial_recovery_reason: Option<String>,
 }
 
@@ -259,14 +260,52 @@ impl StreamContext {
     }
 }
 
+enum TimedStreamItem<T> {
+    Item(T),
+    End,
+    TimedOut,
+}
+
+async fn next_stream_item<S>(
+    stream: &mut S,
+    watchdog_timeout: Option<std::time::Duration>,
+) -> TimedStreamItem<S::Item>
+where
+    S: Stream + Unpin,
+{
+    match watchdog_timeout {
+        Some(timeout) => match tokio::time::timeout(timeout, stream.next()).await {
+            Ok(Some(item)) => TimedStreamItem::Item(item),
+            Ok(None) => TimedStreamItem::End,
+            Err(_) => TimedStreamItem::TimedOut,
+        },
+        None => match stream.next().await {
+            Some(item) => TimedStreamItem::Item(item),
+            None => TimedStreamItem::End,
+        },
+    }
+}
+
 /// Stream processor
 pub struct StreamProcessor {
     event_queue: Arc<EventQueue>,
 }
 
 impl StreamProcessor {
+    const WATCHDOG_GRACE_SECS: u64 = 5;
+
     pub fn new(event_queue: Arc<EventQueue>) -> Self {
         Self { event_queue }
+    }
+
+    pub fn derive_watchdog_timeout(
+        stream_idle_timeout: Option<std::time::Duration>,
+    ) -> Option<std::time::Duration> {
+        stream_idle_timeout.map(|timeout| {
+            timeout
+                .checked_add(std::time::Duration::from_secs(Self::WATCHDOG_GRACE_SECS))
+                .unwrap_or(std::time::Duration::MAX)
+        })
     }
 
     fn merge_json_value(target: &mut Value, overlay: Value) {
@@ -623,6 +662,7 @@ impl StreamProcessor {
     pub async fn process_stream(
         &self,
         mut stream: futures::stream::BoxStream<'static, Result<UnifiedResponse, anyhow::Error>>,
+        watchdog_timeout: Option<std::time::Duration>,
         raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
         session_id: String,
         dialog_turn_id: String,
@@ -630,7 +670,6 @@ impl StreamProcessor {
         subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &tokio_util::sync::CancellationToken,
     ) -> Result<StreamResult, StreamProcessError> {
-        let chunk_timeout = std::time::Duration::from_secs(600);
         let mut ctx =
             StreamContext::new(session_id, dialog_turn_id, round_id, subagent_parent_info);
         // Start SSE log collector (if raw_sse_rx is provided)
@@ -678,15 +717,15 @@ impl StreamProcessor {
                     ));
                 }
 
-                // Wait for next chunk (with timeout)
-                next_result = tokio::time::timeout(chunk_timeout, stream.next()) => {
+                // Watch the adapter -> processor stream only when the upstream stream idle timeout is configured.
+                next_result = next_stream_item(&mut stream, watchdog_timeout) => {
                     let response = match next_result {
-                        Ok(Some(Ok(response))) => response,
-                        Ok(None) => {
+                        TimedStreamItem::Item(Ok(response)) => response,
+                        TimedStreamItem::End => {
                             debug!("Stream ended normally (no more data)");
                             break;
                         }
-                        Ok(Some(Err(e))) => {
+                        TimedStreamItem::Item(Err(e)) => {
                             let error_msg = format!("Stream processing error: {}", e);
                             error!("{}", error_msg);
                             if ctx.can_recover_as_partial_result() {
@@ -705,9 +744,17 @@ impl StreamProcessor {
                                 ctx.has_effective_output,
                             ));
                         }
-                        Err(_) => {
-                            let error_msg = format!("Stream data timeout (no data received for {} seconds)", chunk_timeout.as_secs());
-                            error!("Stream data timeout ({} seconds), forcing termination", chunk_timeout.as_secs());
+                        TimedStreamItem::TimedOut => {
+                            let timeout_secs =
+                                watchdog_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                            let error_msg = format!(
+                                "Stream processor watchdog timeout (no data received for {} seconds)",
+                                timeout_secs
+                            );
+                            error!(
+                                "Stream processor watchdog timeout ({} seconds), forcing termination",
+                                timeout_secs
+                            );
                             // log SSE for timeout errors
                             flush_sse_on_error(&sse_collector, &error_msg).await;
                             if ctx.can_recover_as_partial_result() {
@@ -816,11 +863,21 @@ mod tests {
     use futures::StreamExt;
     use serde_json::json;
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio_stream::iter;
     use tokio_util::sync::CancellationToken;
 
     fn build_processor() -> StreamProcessor {
         StreamProcessor::new(Arc::new(EventQueue::new(EventQueueConfig::default())))
+    }
+
+    #[test]
+    fn derives_watchdog_timeout_from_stream_idle_timeout() {
+        assert_eq!(StreamProcessor::derive_watchdog_timeout(None), None);
+        assert_eq!(
+            StreamProcessor::derive_watchdog_timeout(Some(Duration::from_secs(10))),
+            Some(Duration::from_secs(15))
+        );
     }
 
     fn sample_usage(total_tokens: u32) -> UnifiedTokenUsage {
@@ -866,6 +923,7 @@ mod tests {
             .process_stream(
                 stream,
                 None,
+                None,
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
@@ -904,6 +962,7 @@ mod tests {
             .process_stream(
                 stream,
                 None,
+                None,
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
@@ -937,6 +996,7 @@ mod tests {
         let result = processor
             .process_stream(
                 stream,
+                None,
                 None,
                 "session_1".to_string(),
                 "turn_1".to_string(),
@@ -985,6 +1045,7 @@ mod tests {
         let result = processor
             .process_stream(
                 stream,
+                None,
                 None,
                 "session_1".to_string(),
                 "turn_1".to_string(),
@@ -1053,6 +1114,7 @@ mod tests {
         let result = processor
             .process_stream(
                 stream,
+                None,
                 None,
                 "session_1".to_string(),
                 "turn_1".to_string(),
