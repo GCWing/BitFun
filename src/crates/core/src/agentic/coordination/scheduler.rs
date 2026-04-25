@@ -21,7 +21,7 @@ use log::{debug, info, warn};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -95,14 +95,16 @@ pub struct AgentSessionReplyRoute {
 
 #[derive(Debug, Clone)]
 struct ActiveTurn {
+    turn_id: String,
     workspace_path: Option<String>,
     policy: DialogSubmissionPolicy,
     reply_route: Option<AgentSessionReplyRoute>,
 }
 
 impl ActiveTurn {
-    fn from_queued_turn(turn: &QueuedTurn) -> Self {
+    fn from_queued_turn(turn: &QueuedTurn, turn_id: String) -> Self {
         Self {
+            turn_id,
             workspace_path: turn.workspace_path.clone(),
             policy: turn.policy,
             reply_route: turn.reply_route.clone(),
@@ -112,6 +114,14 @@ impl ActiveTurn {
     fn is_agent_session_request(&self) -> bool {
         self.policy.trigger_source == DialogTriggerSource::AgentSession
             && self.reply_route.is_some()
+    }
+
+    fn should_suppress_cancelled_reply_for_requester(&self, requester_session_id: &str) -> bool {
+        self.is_agent_session_request()
+            && self
+                .reply_route
+                .as_ref()
+                .is_some_and(|reply_route| reply_route.source_session_id == requester_session_id)
     }
 }
 
@@ -142,6 +152,9 @@ pub struct DialogScheduler {
     queues: Arc<DashMap<String, VecDeque<QueuedTurn>>>,
     /// Currently active turn metadata keyed by target session ID
     active_turns: Arc<DashMap<String, ActiveTurn>>,
+    /// Turns whose cancelled auto-reply should be suppressed because the source
+    /// agent explicitly cancelled its own outstanding SessionMessage request.
+    suppressed_cancelled_replies: Arc<DashMap<(String, String), ()>>,
     /// Cloneable sender given to ConversationCoordinator for turn outcome notifications
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
     /// When a user submits while `Processing`, engine yields after the current model round.
@@ -165,6 +178,7 @@ impl DialogScheduler {
             session_manager,
             queues: Arc::new(DashMap::new()),
             active_turns: Arc::new(DashMap::new()),
+            suppressed_cancelled_replies: Arc::new(DashMap::new()),
             outcome_tx,
             round_yield_flags: Arc::new(SessionRoundYieldFlags::default()),
         });
@@ -305,6 +319,59 @@ impl DialogScheduler {
         self.queues.get(session_id).map(|q| q.len()).unwrap_or(0)
     }
 
+    /// Cancel the target session's active turn on behalf of a requester session.
+    ///
+    /// If the requester is the same source session that originally sent the
+    /// in-flight SessionMessage request, the scheduler suppresses the automatic
+    /// cancelled-reply bounce-back for that specific turn.
+    pub async fn cancel_active_turn_for_session_from_requester(
+        &self,
+        target_session_id: &str,
+        requester_session_id: &str,
+        wait_timeout: Duration,
+    ) -> crate::util::errors::BitFunResult<Option<String>> {
+        let suppression_key = self
+            .active_turns
+            .get(target_session_id)
+            .and_then(|active_turn| {
+                active_turn
+                    .should_suppress_cancelled_reply_for_requester(requester_session_id)
+                    .then(|| (target_session_id.to_string(), active_turn.turn_id.clone()))
+            });
+
+        if let Some((session_id, turn_id)) = suppression_key.as_ref() {
+            debug!(
+                "Suppressing cancelled auto-reply for agent-session turn: target_session_id={}, turn_id={}, requester_session_id={}",
+                session_id, turn_id, requester_session_id
+            );
+            self.suppressed_cancelled_replies
+                .insert((session_id.clone(), turn_id.clone()), ());
+        }
+
+        match self
+            .coordinator
+            .cancel_active_turn_for_session(target_session_id, wait_timeout)
+            .await
+        {
+            Ok(cancelled_turn_id) => {
+                if cancelled_turn_id.is_none() {
+                    if let Some((session_id, turn_id)) = suppression_key {
+                        self.suppressed_cancelled_replies
+                            .remove(&(session_id, turn_id));
+                    }
+                }
+                Ok(cancelled_turn_id)
+            }
+            Err(error) => {
+                if let Some((session_id, turn_id)) = suppression_key {
+                    self.suppressed_cancelled_replies
+                        .remove(&(session_id, turn_id));
+                }
+                Err(error)
+            }
+        }
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────────
 
     fn enqueue(&self, session_id: &str, queued_turn: QueuedTurn) -> Result<(), String> {
@@ -441,11 +508,6 @@ impl DialogScheduler {
 
         res.map_err(|e| e.to_string())?;
 
-        self.active_turns.insert(
-            session_id.to_string(),
-            ActiveTurn::from_queued_turn(queued_turn),
-        );
-
         let resolved = self
             .session_manager
             .get_session(session_id)
@@ -461,6 +523,11 @@ impl DialogScheduler {
                     session_id
                 )
             })?;
+
+        self.active_turns.insert(
+            session_id.to_string(),
+            ActiveTurn::from_queued_turn(queued_turn, resolved.clone()),
+        );
 
         Ok(resolved)
     }
@@ -508,6 +575,19 @@ impl DialogScheduler {
         }
     }
 
+    fn take_suppressed_cancelled_reply(&self, session_id: &str, turn_id: &str) -> bool {
+        self.suppressed_cancelled_replies
+            .remove(&(session_id.to_string(), turn_id.to_string()))
+            .is_some()
+    }
+
+    fn should_skip_agent_session_reply(
+        outcome: &TurnOutcome,
+        suppressed_cancelled_reply: bool,
+    ) -> bool {
+        matches!(outcome, TurnOutcome::Cancelled { .. }) && suppressed_cancelled_reply
+    }
+
     fn format_agent_session_reply(
         responder_session_id: &str,
         responder_workspace: &str,
@@ -535,11 +615,21 @@ Status: {status}"
     async fn run_outcome_handler(&self, mut outcome_rx: mpsc::Receiver<(String, TurnOutcome)>) {
         while let Some((session_id, outcome)) = outcome_rx.recv().await {
             self.round_yield_flags.clear(&session_id);
+            let suppressed_cancelled_reply =
+                self.take_suppressed_cancelled_reply(&session_id, outcome.turn_id());
 
             let active_turn = self.active_turns.remove(&session_id).map(|(_, turn)| turn);
             if let Some(active_turn) = active_turn.as_ref() {
-                self.forward_agent_session_reply(&session_id, active_turn, &outcome)
-                    .await;
+                if Self::should_skip_agent_session_reply(&outcome, suppressed_cancelled_reply) {
+                    debug!(
+                        "Skipping cancelled auto-reply because the source session explicitly cancelled its own SessionMessage request: session_id={}, turn_id={}",
+                        session_id,
+                        outcome.turn_id()
+                    );
+                } else {
+                    self.forward_agent_session_reply(&session_id, active_turn, &outcome)
+                        .await;
+                }
             }
 
             let status = outcome.status();
@@ -580,4 +670,49 @@ pub fn get_global_scheduler() -> Option<Arc<DialogScheduler>> {
 
 pub fn set_global_scheduler(scheduler: Arc<DialogScheduler>) {
     let _ = GLOBAL_SCHEDULER.set(scheduler);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn agent_session_active_turn(source_session_id: &str) -> ActiveTurn {
+        ActiveTurn {
+            turn_id: "turn_1".to_string(),
+            workspace_path: Some("/workspace".to_string()),
+            policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+            reply_route: Some(AgentSessionReplyRoute {
+                source_session_id: source_session_id.to_string(),
+                source_workspace_path: "/source".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn requester_matching_reply_route_suppresses_cancelled_reply() {
+        let active_turn = agent_session_active_turn("session_a");
+        assert!(active_turn.should_suppress_cancelled_reply_for_requester("session_a"));
+        assert!(!active_turn.should_suppress_cancelled_reply_for_requester("session_c"));
+    }
+
+    #[test]
+    fn cancelled_reply_is_skipped_only_when_suppressed() {
+        let cancelled = TurnOutcome::Cancelled {
+            turn_id: "turn_1".to_string(),
+        };
+        let completed = TurnOutcome::Completed {
+            turn_id: "turn_1".to_string(),
+            final_response: "done".to_string(),
+        };
+
+        assert!(DialogScheduler::should_skip_agent_session_reply(
+            &cancelled, true
+        ));
+        assert!(!DialogScheduler::should_skip_agent_session_reply(
+            &cancelled, false
+        ));
+        assert!(!DialogScheduler::should_skip_agent_session_reply(
+            &completed, true
+        ));
+    }
 }
