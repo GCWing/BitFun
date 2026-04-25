@@ -10,7 +10,7 @@ export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking';
   timestamp: number;
-  status: 'pending' | 'preparing' | 'running' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  status: 'pending' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
   
   // Subagent markers.
   parentTaskToolId?: string; // Parent Task tool ID.

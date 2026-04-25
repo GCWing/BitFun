@@ -555,6 +555,7 @@
       "cancelled": "Cancelled",
       "completed": "Completed",
       "failed": "Execution failed",
+      "receivingParams": "Receiving parameters...",
       "executingCommand": "Executing command...",
       "workingDirectory": "Working directory:",
       "exitCode": "Exit code: {{code}}",

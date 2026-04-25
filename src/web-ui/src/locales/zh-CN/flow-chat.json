@@ -545,6 +545,7 @@
       "cancelled": "已取消",
       "completed": "已完成",
       "failed": "执行失败",
+      "receivingParams": "接收参数中...",
       "executingCommand": "正在执行命令...",
       "workingDirectory": "工作目录:",
       "exitCode": "退出码: {{code}}",

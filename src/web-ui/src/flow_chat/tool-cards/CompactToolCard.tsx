@@ -17,6 +17,7 @@ export interface CompactToolCardProps {
     | 'pending'
     | 'preparing'
     | 'streaming'
+    | 'receiving'
     | 'running'
     | 'completed'
     | 'error'
@@ -56,6 +57,7 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
   const loadingShimmer =
     status === 'preparing' ||
     status === 'streaming' ||
+    status === 'receiving' ||
     status === 'running' ||
     status === 'analyzing';
   const hasExpandedContent = Boolean(expandedContent);
