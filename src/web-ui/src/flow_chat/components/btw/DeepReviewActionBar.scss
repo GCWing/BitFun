@@ -108,7 +108,7 @@
   }
 
   &__status-title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--color-text-primary);
     white-space: nowrap;
@@ -117,7 +117,7 @@
   }
 
   &__error-message {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--color-error, #ef4444);
     margin-left: 4px;
     overflow: hidden;
@@ -141,7 +141,7 @@
     padding: 2px 0;
     cursor: pointer;
     color: var(--color-text-secondary);
-    font-size: 11px;
+    font-size: 12px;
     width: 100%;
     text-align: left;
 
@@ -170,7 +170,7 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.4;
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -206,8 +206,30 @@
 
   &__empty-selection {
     color: color-mix(in srgb, var(--color-warning, #f59e0b) 80%, var(--color-text-secondary));
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.45;
+  }
+
+  // ---- no issues found ----
+  &__no-issues {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-success, #22c55e) 8%, transparent);
+    color: var(--color-text-primary);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  &__no-issues-icon {
+    flex-shrink: 0;
+    color: var(--color-success, #22c55e);
+  }
+
+  &__no-issues-text {
+    font-weight: 500;
   }
 
   // ---- custom instructions ----
@@ -226,7 +248,7 @@
     padding: 2px 0;
     cursor: pointer;
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: 12px;
 
     &:hover {
       color: var(--color-text-primary);

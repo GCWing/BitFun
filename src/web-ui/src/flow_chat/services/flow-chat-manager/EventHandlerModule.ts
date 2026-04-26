@@ -630,9 +630,6 @@ function finalizeTurnCompletionState(
   const activeSessionId = store.getState().activeSessionId;
   if (sessionId !== activeSessionId) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
-    updateSessionMetadata(context, sessionId).catch(err => {
-      log.warn('Failed to persist unread completion metadata', { sessionId, err });
-    });
   }
 
   clearPendingTurnCompletion(context, sessionId, turnId);
@@ -1758,9 +1755,6 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   const activeSessionIdForError = store.getState().activeSessionId;
   if (sessionId !== activeSessionIdForError) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'error');
-    updateSessionMetadata(context, sessionId).catch(err => {
-      log.warn('Failed to persist unread error metadata', { sessionId, err });
-    });
   }
 }
 

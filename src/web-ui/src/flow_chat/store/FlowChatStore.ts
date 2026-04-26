@@ -47,8 +47,8 @@ export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
-  
   private silentMode = false;
+  private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | undefined) => void;
 
   private constructor() {
     this.clearOldStorage();
@@ -194,6 +194,16 @@ export class FlowChatStore {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  /**
+   * Register a callback to persist unread completion changes.
+   * Called by FlowChatManager during initialization.
+   */
+  public registerPersistUnreadCompletionCallback(
+    callback: (sessionId: string, value: 'completed' | 'error' | undefined) => void
+  ): void {
+    this.onPersistUnreadCompletion = callback;
   }
 
   public createSession(
@@ -1291,6 +1301,7 @@ export class FlowChatStore {
 
       return { ...prev, sessions: newSessions };
     });
+    this.onPersistUnreadCompletion?.(sessionId, completionKind);
   }
 
   public clearSessionUnreadCompletion(sessionId: string): void {
@@ -1308,6 +1319,7 @@ export class FlowChatStore {
 
       return { ...prev, sessions: newSessions };
     });
+    this.onPersistUnreadCompletion?.(sessionId, undefined);
   }
 
   public async updateSessionTitle(

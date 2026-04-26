@@ -515,6 +515,7 @@ impl SessionMetadata {
             todos: None,
             workspace_path: None,
             workspace_hostname: None,
+            unread_completion: None,
         }
     }
 

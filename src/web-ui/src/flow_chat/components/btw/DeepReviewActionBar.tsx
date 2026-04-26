@@ -64,7 +64,7 @@ export const ReviewActionBar: React.FC = () => {
   } = store;
 
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [showRemediationList, setShowRemediationList] = useState(false);
+  const [showRemediationList, setShowRemediationList] = useState(true);
 
   const selectedCount = selectedRemediationIds.size;
   const totalCount = remediationItems.length;
@@ -328,7 +328,7 @@ export const ReviewActionBar: React.FC = () => {
         )}
       </div>
 
-      {/* Remediation selection (only when review completed) */}
+      {/* Remediation selection (only when review completed and has items) */}
       {phase === 'review_completed' && remediationItems.length > 0 && (
         <div className="deep-review-action-bar__remediation">
           <button
@@ -384,8 +384,20 @@ export const ReviewActionBar: React.FC = () => {
         </div>
       )}
 
+      {/* Friendly message when review completed with no remediation items */}
+      {phase === 'review_completed' && remediationItems.length === 0 && (
+        <div className="deep-review-action-bar__no-issues">
+          <CheckCircle size={16} className="deep-review-action-bar__no-issues-icon" />
+          <span className="deep-review-action-bar__no-issues-text">
+            {t('reviewActionBar.noIssuesFound', {
+              defaultValue: 'No issues found. Great job!',
+            })}
+          </span>
+        </div>
+      )}
+
       {/* Custom instructions input */}
-      {phase === 'review_completed' && (
+      {phase === 'review_completed' && remediationItems.length > 0 && (
         <div className="deep-review-action-bar__custom">
           <button
             type="button"
@@ -415,7 +427,7 @@ export const ReviewActionBar: React.FC = () => {
 
       {/* Action buttons */}
       <div className="deep-review-action-bar__actions">
-        {phase === 'review_completed' && (
+        {phase === 'review_completed' && remediationItems.length > 0 && (
           <>
             <Button
               variant="primary"
