@@ -3,11 +3,10 @@
 //! Top-level component that integrates all subsystems and provides a unified interface
 
 use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
-use crate::agentic::WorkspaceBinding;
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::core::{
-    Message, MessageContent, ProcessingPhase, PromptEnvelope, Session, SessionConfig, SessionKind,
-    SessionState, SessionSummary, TurnStats, has_prompt_markup,
+    has_prompt_markup, Message, MessageContent, ProcessingPhase, PromptEnvelope, Session,
+    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -17,8 +16,9 @@ use crate::agentic::fork::{ForkContextSnapshot, ForkExecutionRequest, ForkExecut
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::DialogRoundPreemptSource;
 use crate::agentic::session::SessionManager;
-use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
+use crate::agentic::tools::ToolRuntimeRestrictions;
+use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
@@ -29,8 +29,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::{OwnedSemaphorePermit, RwLock, Semaphore, mpsc, watch};
-use tokio::time::{Duration, Instant, sleep};
+use tokio::sync::{mpsc, watch, OwnedSemaphorePermit, RwLock, Semaphore};
+use tokio::time::{sleep, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 const MANUAL_COMPACTION_COMMAND: &str = "/compact";
@@ -2231,8 +2231,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
 
         // Create dynamic deadline via watch channel so it can be adjusted at runtime.
-        let initial_deadline = timeout_seconds
-            .map(|seconds| Instant::now() + Duration::from_secs(seconds));
+        let initial_deadline =
+            timeout_seconds.map(|seconds| Instant::now() + Duration::from_secs(seconds));
         let (deadline_tx, mut deadline_rx) = watch::channel(initial_deadline);
 
         // Check cancel token (before creating session)

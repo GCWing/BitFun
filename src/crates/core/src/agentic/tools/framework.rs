@@ -96,7 +96,8 @@ impl ToolUseContext {
     }
 
     pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
-        self.runtime_tool_restrictions.ensure_tool_allowed(tool_name)
+        self.runtime_tool_restrictions
+            .ensure_tool_allowed(tool_name)
     }
 
     pub fn enforce_path_operation(

@@ -980,7 +980,11 @@ impl AgentRegistry {
             description,
             tools,
             prompt,
-            if review { true } else { readonly.unwrap_or(old.readonly) },
+            if review {
+                true
+            } else {
+                readonly.unwrap_or(old.readonly)
+            },
             old.path.clone(),
             old.kind,
         );

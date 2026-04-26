@@ -195,10 +195,7 @@ mod tests {
     #[test]
     fn denied_tool_names_override_allow_list() {
         let restrictions = ToolRuntimeRestrictions {
-            allowed_tool_names: ["Write", "Edit"]
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
+            allowed_tool_names: ["Write", "Edit"].into_iter().map(str::to_string).collect(),
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
             path_policy: ToolPathPolicy::default(),
         };
@@ -221,7 +218,8 @@ mod tests {
 
     #[test]
     fn local_path_containment_handles_missing_children() {
-        let root = std::env::temp_dir().join(format!("bitfun-restrictions-{}", uuid::Uuid::new_v4()));
+        let root =
+            std::env::temp_dir().join(format!("bitfun-restrictions-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(root.join("allowed")).expect("create temp root");
 
         let allowed_child = root.join("allowed").join("nested").join("file.txt");

@@ -364,7 +364,7 @@ impl FileSnapshotSystem {
             compressed_content: match optimized_content {
                 OptimizedContent::Raw(data) => data,
                 OptimizedContent::Compressed(data) => data,
-                OptimizedContent::Reference(_) => unreachable!(),
+                OptimizedContent::Reference(_) => Vec::new(),
             },
             timestamp: SystemTime::now(),
             metadata,
@@ -435,7 +435,8 @@ impl FileSnapshotSystem {
     fn optimize_content(&self, content: &[u8]) -> OptimizedContent {
         if self.dedup_enabled {
             let hash = self.calculate_content_hash(content);
-            if self.hash_to_path.contains_key(&hash) {
+            let content_path = self.get_content_path(&hash);
+            if self.hash_to_path.contains_key(&hash) && content_path.exists() {
                 return OptimizedContent::Reference(hash);
             }
         }
@@ -835,5 +836,62 @@ impl FileSnapshotSystem {
     /// Checks whether the file has a baseline.
     pub async fn has_baseline(&self, file_path: &Path) -> bool {
         self.get_baseline_snapshot_id(file_path).await.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
+
+    fn test_runtime_context() -> WorkspaceRuntimeContext {
+        let runtime_root =
+            std::env::temp_dir().join(format!("bitfun_snapshot_test_{}", Uuid::new_v4()));
+        WorkspaceRuntimeContext::new(
+            WorkspaceRuntimeTarget::LocalWorkspace {
+                workspace_root: runtime_root.join("workspace"),
+            },
+            runtime_root,
+        )
+    }
+
+    fn create_runtime_dirs(context: &WorkspaceRuntimeContext) {
+        for directory in context.required_directories() {
+            fs::create_dir_all(directory).expect("create runtime directory");
+        }
+    }
+
+    #[tokio::test]
+    async fn create_snapshot_reuses_empty_baseline_content_without_panicking() {
+        let context = test_runtime_context();
+        create_runtime_dirs(&context);
+
+        let file_path = context.runtime_root.join("workspace").join("empty.txt");
+        fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create parent");
+
+        let mut snapshot_system = FileSnapshotSystem::new(context.clone());
+        snapshot_system
+            .initialize()
+            .await
+            .expect("initialize snapshots");
+        snapshot_system
+            .create_empty_baseline(&file_path)
+            .await
+            .expect("create empty baseline");
+
+        fs::write(&file_path, []).expect("write empty file");
+
+        let snapshot_id = snapshot_system
+            .create_snapshot(&file_path)
+            .await
+            .expect("create snapshot");
+        let restored = snapshot_system
+            .restore_snapshot_content(&snapshot_id)
+            .await
+            .expect("restore snapshot content");
+
+        assert!(restored.is_empty());
+
+        fs::remove_dir_all(&context.runtime_root).expect("cleanup runtime root");
     }
 }

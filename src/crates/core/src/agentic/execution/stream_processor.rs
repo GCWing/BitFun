@@ -404,7 +404,8 @@ impl StreamProcessor {
         for tool_call in tool_calls {
             trace!(
                 "Cleaning up tool: {} ({})",
-                tool_call.tool_name, tool_call.tool_id
+                tool_call.tool_name,
+                tool_call.tool_id
             );
 
             let tool_event = if is_user_cancellation {
