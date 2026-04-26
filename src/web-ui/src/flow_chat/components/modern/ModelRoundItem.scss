@@ -73,6 +73,11 @@
     height: 14px;
     flex-shrink: 0;
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
 // Copy button
@@ -80,6 +85,12 @@
   &.copied {
     color: #22c55e;
     background: rgba(34, 197, 94, 0.1);
+  }
+}
+
+.model-round-item__fork-btn {
+  .spinning {
+    animation: spin 1s linear infinite;
   }
 }
 

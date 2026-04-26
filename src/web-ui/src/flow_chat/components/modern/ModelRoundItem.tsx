@@ -19,6 +19,7 @@ import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
+import { ForkSessionButton } from './ForkSessionButton';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './ModelRoundItem.scss';
@@ -108,6 +109,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
 export const ModelRoundItem = React.memo<ModelRoundItemProps>(
   ({ round, turnId, isLastRound = false }) => {
     const { t } = useTranslation('flow-chat');
+    const { sessionId } = useFlowChatContext();
     const [copied, setCopied] = useState(false);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     
@@ -422,6 +424,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         
         {isLastRound && hasContent && !round.isStreaming && (
           <div className="model-round-item__footer">
+            <ForkSessionButton sessionId={sessionId} turnId={turnId} />
+
             <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
               <button
                 ref={copyButtonRef}

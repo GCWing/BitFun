@@ -509,6 +509,8 @@
   "modelRound": {
     "copyDialog": "複製對話",
     "copiedDialog": "已複製!",
+    "forkDialog": "從這裡分叉會話",
+    "forkFailed": "建立分叉會話失敗",
     "like": "點贊",
     "dislike": "點踩",
     "report": "舉報",

@@ -42,7 +42,8 @@ export {
   createChatSession,
   switchChatSession,
   deleteChatSession,
-  renameChatSessionTitle
+  renameChatSessionTitle,
+  forkChatSession,
 } from './SessionModule';
 
 export {

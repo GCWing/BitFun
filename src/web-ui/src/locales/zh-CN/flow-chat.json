@@ -518,6 +518,8 @@
   "modelRound": {
     "copyDialog": "复制对话",
     "copiedDialog": "已复制!",
+    "forkDialog": "从这里分叉会话",
+    "forkFailed": "创建分叉会话失败",
     "like": "点赞",
     "dislike": "点踩",
     "report": "举报",

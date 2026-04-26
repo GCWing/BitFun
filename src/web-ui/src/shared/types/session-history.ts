@@ -14,6 +14,11 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
   parentRequestId?: string | null;
   parentDialogTurnId?: string | null;
   parentTurnIndex?: number | null;
+  forkOrigin?: {
+    sessionId?: string | null;
+    turnId?: string | null;
+    turnIndex?: number | null;
+  } | null;
   lastFinishedAt?: number | null;
   titleSource?: SessionTitleSource | null;
   titleKey?: string | null;

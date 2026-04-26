@@ -20,8 +20,8 @@ pub mod tools;
 pub mod coordination;
 pub mod deep_review_policy;
 
-// Shared-context fork execution module
-pub mod fork;
+// Shared-context fork-agent execution module
+pub mod fork_agent;
 
 /// Round-boundary yield when user queues a message during an active turn
 pub mod round_preempt;
@@ -47,7 +47,7 @@ pub use coordination::*;
 pub use core::*;
 pub use events::{queue, router, types as event_types};
 pub use execution::*;
-pub use fork::*;
+pub use fork_agent::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
 pub use round_preempt::{

@@ -545,6 +545,7 @@ pub async fn run() {
             delete_persisted_session,
             touch_session_activity,
             load_persisted_session_metadata,
+            fork_session,
             // AI Memory API
             api::ai_memory_api::get_all_memories,
             api::ai_memory_api::add_memory,

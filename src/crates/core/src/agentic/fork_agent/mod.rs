@@ -1,6 +1,6 @@
-//! Shared-context fork execution primitives.
+//! Shared-context fork-agent execution primitives.
 //!
-//! A fork is a hidden child execution that inherits the parent session's
+//! A fork agent is a hidden child execution that inherits the parent session's
 //! model-visible message context, but still runs as an isolated session with
 //! its own rounds, tools, cancellation, and cleanup lifecycle.
 
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 /// Immutable snapshot of a parent session's runtime context at fork time.
 #[derive(Debug, Clone)]
-pub struct ForkContextSnapshot {
+pub struct ForkAgentContextSnapshot {
     pub parent_session_id: String,
     pub parent_agent_type: String,
     pub workspace_path: String,
@@ -22,7 +22,7 @@ pub struct ForkContextSnapshot {
     pub messages: Vec<Message>,
 }
 
-impl ForkContextSnapshot {
+impl ForkAgentContextSnapshot {
     pub fn from_parent_session(
         parent_session: &Session,
         messages: Vec<Message>,
@@ -73,10 +73,10 @@ impl ForkContextSnapshot {
     }
 }
 
-/// Semantic fork request.
+/// Semantic fork-agent request.
 #[derive(Debug, Clone)]
-pub struct ForkExecutionRequest {
-    pub snapshot: ForkContextSnapshot,
+pub struct ForkAgentExecutionRequest {
+    pub snapshot: ForkAgentContextSnapshot,
     pub agent_type: String,
     pub description: String,
     pub prompt_messages: Vec<Message>,
@@ -85,7 +85,7 @@ pub struct ForkExecutionRequest {
     pub max_turns: Option<usize>,
 }
 
-impl ForkExecutionRequest {
+impl ForkAgentExecutionRequest {
     pub fn composed_initial_messages(&self) -> Vec<Message> {
         self.snapshot
             .compose_initial_messages(&self.prompt_messages)
@@ -96,9 +96,9 @@ impl ForkExecutionRequest {
     }
 }
 
-/// Result returned by a completed semantic fork.
+/// Result returned by a completed semantic fork-agent run.
 #[derive(Debug, Clone)]
-pub struct ForkExecutionResult {
+pub struct ForkAgentExecutionResult {
     pub text: String,
     pub inherited_message_count: usize,
     pub prompt_message_count: usize,
@@ -126,8 +126,8 @@ mod tests {
         let parent = parent_session();
         let inherited = vec![Message::user("hello".to_string())];
         let prompt = vec![Message::user("fork directive".to_string())];
-        let snapshot =
-            ForkContextSnapshot::from_parent_session(&parent, inherited.clone()).expect("snapshot");
+        let snapshot = ForkAgentContextSnapshot::from_parent_session(&parent, inherited.clone())
+            .expect("snapshot");
 
         let combined = snapshot.compose_initial_messages(&prompt);
 
@@ -144,7 +144,7 @@ mod tests {
     fn snapshot_builds_child_session_config_from_parent() {
         let parent = parent_session();
         let snapshot =
-            ForkContextSnapshot::from_parent_session(&parent, Vec::new()).expect("snapshot");
+            ForkAgentContextSnapshot::from_parent_session(&parent, Vec::new()).expect("snapshot");
 
         let child_config = snapshot.build_child_session_config(Some(7));
 

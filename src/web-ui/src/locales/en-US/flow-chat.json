@@ -518,6 +518,8 @@
   "modelRound": {
     "copyDialog": "Copy dialog",
     "copiedDialog": "Copied!",
+    "forkDialog": "Fork session from here",
+    "forkFailed": "Failed to fork session",
     "like": "Like",
     "dislike": "Dislike",
     "report": "Report",
