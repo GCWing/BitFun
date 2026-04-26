@@ -514,7 +514,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         </span>
         {taskInput?.agentType && (
           <span className="task-detail-panel__header-badge">
-            {taskInput.agentType}
+            {rc
+              ? tAgents(`reviewTeams.members.${rc.definitionKey}.funName`, {
+                  defaultValue: rc.roleName,
+                })
+              : taskInput.agentType}
           </span>
         )}
         <ToolTimeoutIndicator

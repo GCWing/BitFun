@@ -1,15 +1,16 @@
 use super::{
-    Agent, AgenticMode, BusinessLogicReviewerAgent, ClawMode, CodeReviewAgent, ComputerUseMode,
-    CoworkMode, DebugMode, DeepResearchAgent, DeepReviewAgent, ExploreAgent, FileFinderAgent,
-    GenerateDocAgent, InitAgent, PerformanceReviewerAgent, PlanMode, ReviewFixerAgent,
-    ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
+    Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
+    CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchAgent, DeepReviewAgent,
+    ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GenerateDocAgent, InitAgent,
+    PerformanceReviewerAgent, PlanMode, ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
+    TeamMode,
 };
 use crate::agentic::agents::custom_subagents::{
     CustomSubagent, CustomSubagentKind, CustomSubagentLoader,
 };
 use crate::agentic::deep_review_policy::{
-    REVIEWER_BUSINESS_LOGIC_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
-    REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
+    REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
 };
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
@@ -146,6 +147,7 @@ fn is_review_agent_entry(entry: &AgentEntry) -> bool {
         REVIEWER_BUSINESS_LOGIC_AGENT_TYPE
             | REVIEWER_PERFORMANCE_AGENT_TYPE
             | REVIEWER_SECURITY_AGENT_TYPE
+            | REVIEWER_ARCHITECTURE_AGENT_TYPE
             | REVIEW_JUDGE_AGENT_TYPE
     )
 }
@@ -158,6 +160,8 @@ fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
         | "ReviewBusinessLogic"
         | "ReviewPerformance"
         | "ReviewSecurity"
+        | "ReviewArchitecture"
+        | "ReviewFrontend"
         | "ReviewJudge"
         | "ReviewFixer" => "fast",
         "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" | "Init" => "primary",
@@ -341,6 +345,8 @@ impl AgentRegistry {
             Arc::new(BusinessLogicReviewerAgent::new()),
             Arc::new(PerformanceReviewerAgent::new()),
             Arc::new(SecurityReviewerAgent::new()),
+            Arc::new(ArchitectureReviewerAgent::new()),
+            Arc::new(FrontendReviewerAgent::new()),
             Arc::new(ReviewJudgeAgent::new()),
             Arc::new(ReviewFixerAgent::new()),
         ];
@@ -1340,6 +1346,8 @@ mod tests {
             "ReviewBusinessLogic",
             "ReviewPerformance",
             "ReviewSecurity",
+            "ReviewArchitecture",
+            "ReviewFrontend",
             "ReviewJudge",
             "ReviewFixer",
         ] {
