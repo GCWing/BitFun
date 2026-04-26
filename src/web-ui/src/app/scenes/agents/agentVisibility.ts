@@ -5,6 +5,8 @@ export const HIDDEN_AGENT_IDS = new Set<string>([
   'ReviewBusinessLogic',
   'ReviewPerformance',
   'ReviewSecurity',
+  'ReviewArchitecture',
+  'ReviewFrontend',
   'ReviewJudge',
 ]);
 

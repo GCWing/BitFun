@@ -1,5 +1,6 @@
 use crate::agentic::deep_review_policy::{
-    REVIEWER_BUSINESS_LOGIC_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
+    REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
+    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
     REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
 };
 use crate::define_readonly_subagent;
@@ -32,6 +33,24 @@ define_readonly_subagent!(
 );
 
 define_readonly_subagent!(
+    ArchitectureReviewerAgent,
+    REVIEWER_ARCHITECTURE_AGENT_TYPE,
+    "Architecture Reviewer",
+    r#"Independent read-only reviewer focused on structural and architectural issues such as module boundary violations, API contract design, abstraction integrity, dependency direction, and cross-cutting concern impact in the review target."#,
+    "review_architecture_agent",
+    &["Read", "Grep", "Glob", "LS", "GetFileDiff", "Git"]
+);
+
+define_readonly_subagent!(
+    FrontendReviewerAgent,
+    REVIEWER_FRONTEND_AGENT_TYPE,
+    "Frontend Reviewer",
+    r#"Independent read-only reviewer focused on frontend-specific issues such as i18n key synchronization, React performance patterns, accessibility, state management, frontend-backend API contract alignment, and platform boundary compliance in the review target."#,
+    "review_frontend_agent",
+    &["Read", "Grep", "Glob", "LS", "GetFileDiff", "Git"]
+);
+
+define_readonly_subagent!(
     ReviewJudgeAgent,
     REVIEW_JUDGE_AGENT_TYPE,
     "Review Quality Inspector",
@@ -43,8 +62,8 @@ define_readonly_subagent!(
 #[cfg(test)]
 mod tests {
     use super::{
-        BusinessLogicReviewerAgent, PerformanceReviewerAgent, ReviewJudgeAgent,
-        SecurityReviewerAgent,
+        ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
+        PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
     };
     use crate::agentic::agents::{Agent, RequestContextPolicy};
 
@@ -54,6 +73,8 @@ mod tests {
             Box::new(BusinessLogicReviewerAgent::new()),
             Box::new(PerformanceReviewerAgent::new()),
             Box::new(SecurityReviewerAgent::new()),
+            Box::new(ArchitectureReviewerAgent::new()),
+            Box::new(FrontendReviewerAgent::new()),
             Box::new(ReviewJudgeAgent::new()),
         ];
 

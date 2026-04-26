@@ -87,7 +87,7 @@
   &__body {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-2;
+    justify-content: center;
     flex: 1;
     min-height: 0;
     padding: $size-gap-2 $size-gap-3;
@@ -96,49 +96,55 @@
     z-index: 1;
   }
 
-  &__meta {
+  &__metrics {
     display: grid;
-    gap: 4px;
+    grid-template-columns: 1.35fr 1fr 1fr;
+    gap: 8px;
+    min-width: 0;
   }
 
-  &__meta-item {
+  &__metric {
+    min-width: 0;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    font-size: var(--font-size-xs);
-    line-height: 1.5;
-    color: var(--color-text-muted);
-    min-width: 0;
-    white-space: nowrap;
+    min-height: 42px;
+    padding: 0 9px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--team-card-accent) 16%, var(--border-subtle));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--team-card-accent) 8%, transparent), transparent),
+      color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    line-height: 1.2;
     overflow: hidden;
-    text-overflow: ellipsis;
 
     svg {
       flex-shrink: 0;
+      color: color-mix(in srgb, var(--team-card-accent) 74%, var(--color-text-secondary));
+    }
+
+    span,
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: var(--color-text-primary);
+      font-weight: $font-weight-semibold;
     }
   }
 
-  &__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  &__chip {
-    display: inline-flex;
-    align-items: center;
-    min-height: 22px;
-    padding: 0 8px;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--team-card-accent) 20%, var(--border-subtle));
-    background: color-mix(in srgb, var(--element-bg-soft) 84%, transparent);
-    color: var(--color-text-secondary);
-    font-size: 10px;
-    line-height: 1.4;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  &__metric--primary {
+    justify-content: flex-start;
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, var(--team-card-accent) 22%, transparent), transparent 62%),
+      color-mix(in srgb, var(--team-card-accent) 9%, var(--element-bg-soft));
   }
 
   &__footer {

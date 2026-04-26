@@ -540,7 +540,7 @@ const AgentsHomeView: React.FC = () => {
                 })}
                 subtitle={t('reviewTeams.default.summary', {
                   defaultValue:
-                    'A deep-review code team with locked logic, performance, security, and quality-gate roles.',
+                    'A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.',
                 })}
                 localOnlyLabel={t('reviewTeams.detail.localOnly', {
                   defaultValue: 'Code review',

@@ -70,6 +70,14 @@
     "judge": {
       "name": "审核质量检查员",
       "role": "审核质量检查员"
+    },
+    "architecture": {
+      "name": "架构审核员",
+      "role": "架构审核员"
+    },
+    "frontend": {
+      "name": "前端审核员",
+      "role": "前端审核员"
     }
   },
   "extra": {
