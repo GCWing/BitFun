@@ -168,7 +168,6 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
     affordanceKind !== undefined ? affordanceKind : layout.headerAffordanceKind;
   const expandedForChevron =
     headerExpanded !== undefined ? headerExpanded : layout.isExpanded;
-  const isPanelAffordance = resolvedAffordanceKind === 'open-panel-right';
 
   return (
     <>

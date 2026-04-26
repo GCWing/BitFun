@@ -580,15 +580,15 @@
   }
 
   &__workspace-item-sessions {
-    overflow: hidden;
-    max-height: 600px;
-    transition: max-height $motion-base $easing-standard,
-                opacity $motion-fast $easing-standard;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: opacity $motion-fast $easing-standard;
     opacity: 1;
 
     &.is-collapsed {
       max-height: 0;
       opacity: 0;
+      overflow: hidden;
       pointer-events: none;
     }
 
@@ -876,15 +876,15 @@
   }
 
   &__assistant-item-sessions {
-    overflow: hidden;
-    max-height: 600px;
-    transition: max-height $motion-base $easing-standard,
-                opacity $motion-fast $easing-standard;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: opacity $motion-fast $easing-standard;
     opacity: 1;
 
     &.is-collapsed {
       max-height: 0;
       opacity: 0;
+      overflow: hidden;
       pointer-events: none;
     }
 

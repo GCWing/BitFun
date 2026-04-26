@@ -806,9 +806,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 className="file-op-open-full-button"
                 onClick={handleOpenFullCodeClick}
                 aria-label={t('toolCards.file.openFullCodeHint')}
-                title={t('toolCards.file.openFullCodeHint')}
               >
-                <ChevronRight size={18} strokeWidth={2} absoluteStrokeWidth />
+                <ChevronRight size={14} strokeWidth={2} absoluteStrokeWidth />
               </button>
             </Tooltip>
           )}

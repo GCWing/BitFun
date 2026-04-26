@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Split,
   ChevronRight,
-  ChevronDown,
 } from 'lucide-react';
 
 import { useTranslation } from 'react-i18next';
@@ -15,6 +14,8 @@ import { CubeLoading, Button } from '../../component-library';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard } from './BaseToolCard';
+import { ToolCardIconSlot } from './ToolCardIconSlot';
+import { ToolCardStatusIcon } from './ToolCardStatusIcon';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
@@ -256,23 +257,14 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
 
   const renderHeader = () => (
     <div className="task-header-wrapper">
-      <div
-        className={`task-icon-container ${isRunning ? 'is-running' : ''}${
-          showHeaderExpandHint ? ' task-icon-container--expandable' : ''
-        }`}
-      >
-        <div className="task-task-icon-marks">
-          <div className="task-task-icon-main">{renderToolIcon()}</div>
-          {showHeaderExpandHint && (
-            <span
-              className={`task-task-icon-hint${isExpanded ? ' task-task-icon-hint--open' : ''}`}
-              aria-hidden
-            >
-              <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth />
-            </span>
-          )}
-        </div>
-      </div>
+      <ToolCardIconSlot
+        icon={renderToolIcon()}
+        iconClassName={`task-icon ${isRunning ? 'is-running' : ''}`}
+        expandable={showHeaderExpandHint}
+        affordanceKind="expand"
+        isExpanded={isExpanded}
+        onAffordanceClick={handleCardClick}
+      />
 
       <div className="task-content-wrapper">
         <div className="task-body-columns">
@@ -311,10 +303,8 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               title={t('toolCards.taskTool.openInPanel')}
             />
             <div className="task-header-rail__visual" aria-hidden>
-              <ChevronRight size={18} strokeWidth={2} absoluteStrokeWidth />
-              <div className="task-status-icon task-status-icon--rail">
-                {renderStatusIcon()}
-              </div>
+              <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />
+              <ToolCardStatusIcon icon={renderStatusIcon()} className="task-status-icon--rail" />
             </div>
           </div>
         </div>

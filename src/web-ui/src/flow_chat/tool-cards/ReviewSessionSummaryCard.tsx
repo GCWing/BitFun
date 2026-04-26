@@ -104,7 +104,7 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
       className="review-session-summary-card"
       header={(
         <ToolCardHeader
-          icon={<Icon size={13} />}
+          icon={<Icon size={16} />}
           iconClassName="review-session-summary-card__icon"
           content={(
             <span>
@@ -113,14 +113,14 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
           )}
           extra={changedFiles.length > 0 ? (
             <span className="review-session-summary-card__file-count">
-              <FileText size={12} />
+              <FileText size={14} />
               {t('toolCards.reviewSessionSummary.filesChanged', {
                 count: changedFiles.length,
                 defaultValue: '{{count}} files',
               })}
             </span>
           ) : null}
-          statusIcon={running ? <Loader2 className="animate-spin" size={12} /> : undefined}
+          statusIcon={running ? <Loader2 className="animate-spin" size={14} /> : undefined}
         />
       )}
       expandedContent={(

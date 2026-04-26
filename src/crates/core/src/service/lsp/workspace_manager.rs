@@ -432,7 +432,9 @@ impl WorkspaceLspManager {
                 let is_related = (language == "c" && lang == "cpp")
                     || (language == "cpp" && lang == "c")
                     || (language == "javascript" && lang == "typescript")
-                    || (language == "typescript" && lang == "javascript");
+                    || (language == "typescript" && lang == "javascript")
+                    || (language == "javascriptreact" && lang == "javascript")
+                    || (language == "typescriptreact" && lang == "typescript");
 
                 if is_related {
                     return Some(lang.clone());
@@ -458,7 +460,9 @@ impl WorkspaceLspManager {
                 let is_related = (language == "c" && lang == "cpp")
                     || (language == "cpp" && lang == "c")
                     || (language == "javascript" && lang == "typescript")
-                    || (language == "typescript" && lang == "javascript");
+                    || (language == "typescript" && lang == "javascript")
+                    || (language == "javascriptreact" && lang == "javascript")
+                    || (language == "typescriptreact" && lang == "typescript");
 
                 if is_related {
                     return lang.clone();

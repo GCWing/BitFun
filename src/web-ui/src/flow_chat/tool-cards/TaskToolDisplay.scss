@@ -8,79 +8,8 @@
     width: 100%;
   }
 
-  .task-icon-container {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    align-self: stretch;
-    width: var(--tool-card-header-icon-slot, 34px);
-    margin-right: 8px;
-    box-sizing: border-box;
-    min-height: 0;
+  .task-icon {
     color: var(--color-text-secondary, #6b7280);
-
-    &::after {
-      content: '';
-      position: absolute;
-      right: 0;
-      top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-      bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
-      width: 0;
-      border-right: 1px solid var(--border-base);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .task-task-icon-marks {
-      position: relative;
-      z-index: 1;
-      width: var(--tool-card-header-icon-rail, 28px);
-      height: var(--tool-card-header-icon-rail, 28px);
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .task-task-icon-main {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: opacity 0.18s ease;
-
-      svg {
-        width: 16px;
-        height: 16px;
-      }
-    }
-
-    &.task-icon-container--expandable .task-task-icon-hint {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      padding: 0;
-      opacity: 0;
-      pointer-events: none;
-      color: var(--color-text-secondary);
-      transition: opacity 0.18s ease;
-
-      svg {
-        width: 16px;
-        height: 16px;
-        flex-shrink: 0;
-        transition: transform 0.2s ease;
-      }
-    }
-
-    &.task-icon-container--expandable .task-task-icon-hint--open svg {
-      transform: rotate(180deg);
-    }
 
     &.is-running {
       color: var(--color-primary, #3b82f6);
@@ -89,15 +18,15 @@
 
   &.base-tool-card-wrapper:hover
     .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
-    .task-icon-container.task-icon-container--expandable
-    .task-task-icon-main {
+    .tool-card-icon-slot--expandable
+    .tool-card-icon-main {
     opacity: 0;
   }
 
   &.base-tool-card-wrapper:hover
     .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
-    .task-icon-container.task-icon-container--expandable
-    .task-task-icon-hint {
+    .tool-card-icon-slot--expandable
+    .tool-card-icon-expand-hint {
     opacity: 1;
   }
 
@@ -137,7 +66,7 @@
     justify-content: center;
     align-self: stretch;
     flex-shrink: 0;
-    width: 40px;
+    width: var(--tool-card-header-icon-slot, 34px);
     padding: 0;
     margin-left: 4px;
 
@@ -286,31 +215,11 @@
     }
   }
 
-  .task-status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-left: 4px;
-    padding-left: 4px;
-    border-left: 1px solid var(--border-base);
-    
-    .icon-completed {
-      color: var(--color-success);
-    }
-    
-    .loading {
-      width: 16px !important;
-      height: 16px !important;
-    }
-  }
-
   .task-status-icon--rail {
     position: relative;
     z-index: 1;
     margin-left: 0;
     padding-left: 0;
-    border-left: none;
   }
 
   /* Prompt uses the thinking markdown typography, but needs its own clipping box.
@@ -602,7 +511,7 @@
 }
 
 /* Loading: task status icon (cube) hidden; border-pulse + text-fade from BaseToolCard handle the rest */
-.task-tool-display.base-tool-card-wrapper--loading-shimmer .task-status-icon:has(.cube-loading) {
+.task-tool-display.base-tool-card-wrapper--loading-shimmer .tool-card-status-icon:has(.cube-loading) {
   display: none !important;
 }
 

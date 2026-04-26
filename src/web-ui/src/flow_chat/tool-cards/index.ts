@@ -487,6 +487,10 @@ export type {
   ToolCardHeaderLayoutContextValue,
   ToolCardHeaderAffordanceKind,
 } from './ToolCardHeaderLayoutContext';
+export { ToolCardIconSlot } from './ToolCardIconSlot';
+export type { ToolCardIconSlotProps } from './ToolCardIconSlot';
+export { ToolCardStatusIcon } from './ToolCardStatusIcon';
+export type { ToolCardStatusIconProps } from './ToolCardStatusIcon';
 export { PlanDisplay } from './CreatePlanDisplay';
 export type { PlanDisplayProps } from './CreatePlanDisplay';
 
