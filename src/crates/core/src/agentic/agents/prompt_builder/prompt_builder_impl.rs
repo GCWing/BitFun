@@ -467,10 +467,10 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if self.context.supports_image_understanding == Some(false) {
             result.push_str(
                 "\n\n# Computer use (text-only primary model)\n\n\
-The configured **primary model does not accept image inputs**. When using **ComputerUse**:\n\
-- **Do not** use **`screenshot`** or **`click_label`**.\n\
-- **ACTION PRIORITY:** 1) Terminal/CLI/system commands (Bash tool) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**.\n\
-- **Never guess coordinates** — always use precise methods (AX, OCR, system coordinates from tool results).\n",
+The configured **primary model does not accept image inputs**. When using **`ComputerUse`** (or **`ControlHub`** with **`domain: \"browser\"`**):\n\
+- **Do not** use **`screenshot`** (desktop) and **avoid** `domain:\"browser\" action:\"screenshot\"` — the JPEG bytes will be unreadable.\n\
+- **ACTION PRIORITY:** 1) Terminal/CLI/system commands (`Bash` tool, or `ComputerUse` `run_script`) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**. For browser work prefer `snapshot` → click by `@e*` ref over screenshots.\n\
+- **Never guess coordinates** — always use precise methods (AX, OCR, system coordinates from tool results, or browser snapshot refs).\n",
             );
         }
 

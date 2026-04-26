@@ -48,7 +48,8 @@ pub enum ErrorCode {
     AppNotFound,
     /// AX-first desktop: a node `idx` provided by the caller is no longer
     /// valid because the host has re-dumped the tree since the snapshot
-    /// the caller saw. Re-acquire via `desktop.get_app_state` and retry.
+    /// the caller saw. Re-acquire via `ComputerUse` action `get_app_state`
+    /// and retry.
     AxNodeStale,
     /// AX-first desktop: this host cannot inject input events into the
     /// target app without stealing user focus (e.g. macOS without
@@ -59,8 +60,8 @@ pub enum ErrorCode {
     /// AX-first desktop: the `node_idx` supplied to `click_element` /
     /// `locate_element` is no longer present in the cached snapshot
     /// (re-dump happened or window/state churned). Distinct from
-    /// `AX_NODE_STALE` which is for `app_*` actions; same recovery —
-    /// re-call `desktop.get_app_state` and reuse the new idx.
+    /// `AX_NODE_STALE` which is for `app_*` actions; same recovery: re-call
+    /// `ComputerUse` action `get_app_state` and reuse the new idx.
     AxIdxStale,
     /// AX-first desktop: this platform host does not support resolving
     /// elements by `node_idx` (currently linux/windows). Caller should
