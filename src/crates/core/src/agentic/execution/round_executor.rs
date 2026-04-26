@@ -2,14 +2,14 @@
 //!
 //! Executes a single model round: calls AI, processes streaming responses, executes tools
 
-use super::stream_processor::StreamProcessor;
+use super::stream_processor::{StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
-use crate::agentic::MessageContent;
-use crate::agentic::core::Message;
-use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
+use crate::agentic::core::{Message, ToolCall};
+use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -174,6 +174,39 @@ impl RoundExecutor {
                 .await
             {
                 Ok(result) => {
+                    if Self::is_interrupted_invalid_tool_only(&result) {
+                        let err_msg = result.partial_recovery_reason.clone().unwrap_or_else(|| {
+                            "Interrupted while streaming tool arguments".to_string()
+                        });
+                        self.emit_failed_partial_tool_calls(
+                            &context,
+                            &result.tool_calls,
+                            &err_msg,
+                            event_subagent_parent_info.clone(),
+                        )
+                        .await;
+
+                        if attempt_index < max_attempts - 1
+                            && Self::is_transient_network_error(&err_msg)
+                        {
+                            let delay_ms = Self::retry_delay_ms(attempt_index);
+                            warn!(
+                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                                context.session_id,
+                                round_id,
+                                attempt_index + 1,
+                                max_attempts,
+                                delay_ms,
+                                err_msg
+                            );
+                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            attempt_index += 1;
+                            continue;
+                        }
+
+                        return Err(BitFunError::AIClient(err_msg));
+                    }
+
                     let no_effective_output = !result.has_effective_output;
                     if no_effective_output && attempt_index < max_attempts - 1 {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
@@ -575,6 +608,41 @@ impl RoundExecutor {
         let _ = self.event_queue.enqueue(event, Some(priority)).await;
     }
 
+    async fn emit_failed_partial_tool_calls(
+        &self,
+        context: &RoundContext,
+        tool_calls: &[ToolCall],
+        error: &str,
+        subagent_parent_info: Option<crate::agentic::events::SubagentParentInfo>,
+    ) {
+        for tool_call in tool_calls {
+            self.emit_event(
+                AgenticEvent::ToolEvent {
+                    session_id: context.session_id.clone(),
+                    turn_id: context.dialog_turn_id.clone(),
+                    tool_event: ToolEventData::Failed {
+                        tool_id: tool_call.tool_id.clone(),
+                        tool_name: tool_call.tool_name.clone(),
+                        error: format!("Tool arguments stream interrupted: {}", error),
+                    },
+                    subagent_parent_info: subagent_parent_info.clone(),
+                },
+                EventPriority::High,
+            )
+            .await;
+        }
+    }
+
+    fn is_interrupted_invalid_tool_only(result: &StreamResult) -> bool {
+        result.partial_recovery_reason.is_some()
+            && result.full_text.is_empty()
+            && !result.tool_calls.is_empty()
+            && result
+                .tool_calls
+                .iter()
+                .all(|tool_call| !tool_call.is_valid())
+    }
+
     fn retry_delay_ms(attempt_index: usize) -> u64 {
         Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
     }
@@ -689,5 +757,47 @@ mod tests {
 
         assert!(!RoundExecutor::is_transient_network_error(auth));
         assert!(!RoundExecutor::is_transient_network_error(billing));
+    }
+
+    #[test]
+    fn detects_interrupted_invalid_tool_only_recovery() {
+        let result = crate::agentic::execution::stream_processor::StreamResult {
+            full_thinking: String::new(),
+            thinking_signature: None,
+            full_text: String::new(),
+            tool_calls: vec![crate::agentic::core::ToolCall {
+                tool_id: "call_1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({}),
+                is_error: true,
+            }],
+            usage: None,
+            provider_metadata: None,
+            has_effective_output: true,
+            partial_recovery_reason: Some("Stream processing error: SSE stream error".to_string()),
+        };
+
+        assert!(RoundExecutor::is_interrupted_invalid_tool_only(&result));
+    }
+
+    #[test]
+    fn keeps_partial_text_recovery_as_non_retryable_output() {
+        let result = crate::agentic::execution::stream_processor::StreamResult {
+            full_thinking: String::new(),
+            thinking_signature: None,
+            full_text: "I started answering before the stream failed.".to_string(),
+            tool_calls: vec![crate::agentic::core::ToolCall {
+                tool_id: "call_1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({}),
+                is_error: true,
+            }],
+            usage: None,
+            provider_metadata: None,
+            has_effective_output: true,
+            partial_recovery_reason: Some("Stream processing error: SSE stream error".to_string()),
+        };
+
+        assert!(!RoundExecutor::is_interrupted_invalid_tool_only(&result));
     }
 }

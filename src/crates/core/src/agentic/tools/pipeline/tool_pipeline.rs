@@ -17,7 +17,7 @@ use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use tokio::sync::{oneshot, RwLock as TokioRwLock};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
@@ -197,6 +197,61 @@ fn convert_to_framework_result(model_result: &ModelToolResult) -> FrameworkToolR
     }
 }
 
+fn elapsed_ms_since(time: SystemTime) -> u64 {
+    time.elapsed()
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
+}
+
+fn build_error_execution_result(
+    task_id: &str,
+    task: Option<ToolTask>,
+    error: &BitFunError,
+) -> ToolExecutionResult {
+    let (tool_id, tool_name, execution_time_ms) = if let Some(task) = task {
+        (
+            task.tool_call.tool_id,
+            task.tool_call.tool_name,
+            elapsed_ms_since(task.created_at),
+        )
+    } else {
+        warn!("Task not found in state manager: {}", task_id);
+        (task_id.to_string(), "unknown".to_string(), 0)
+    };
+    let error_message = error.to_string();
+
+    ToolExecutionResult {
+        tool_id: tool_id.clone(),
+        tool_name: tool_name.clone(),
+        result: ModelToolResult {
+            tool_id,
+            tool_name,
+            result: serde_json::json!({
+                "error": error_message,
+                "message": format!("Tool execution failed: {}", error_message)
+            }),
+            result_for_assistant: Some(format!("Tool execution failed: {}", error_message)),
+            is_error: true,
+            duration_ms: Some(execution_time_ms),
+            image_attachments: None,
+        },
+        execution_time_ms,
+    }
+}
+
+fn should_retry_tool_error(error: &BitFunError) -> bool {
+    matches!(
+        error,
+        BitFunError::Timeout(_)
+            | BitFunError::Io(_)
+            | BitFunError::Http(_)
+            | BitFunError::Service(_)
+            | BitFunError::MCPError(_)
+            | BitFunError::ProcessError(_)
+            | BitFunError::Other(_)
+    )
+}
+
 /// Confirmation response type
 #[derive(Debug, Clone)]
 pub enum ConfirmationResponse {
@@ -359,35 +414,12 @@ impl ToolPipeline {
                 Ok(r) => all_results.push(r),
                 Err(e) => {
                     error!("Tool execution failed: error={}", e);
-
                     let task_id = &task_ids[idx];
-                    let (tool_id, tool_name) =
-                        if let Some(task) = self.state_manager.get_task(task_id) {
-                            (
-                                task.tool_call.tool_id.clone(),
-                                task.tool_call.tool_name.clone(),
-                            )
-                        } else {
-                            warn!("Task not found in state manager: {}", task_id);
-                            (task_id.clone(), "unknown".to_string())
-                        };
-                    let error_result = ToolExecutionResult {
-                        tool_id: tool_id.clone(),
-                        tool_name: tool_name.clone(),
-                        result: ModelToolResult {
-                            tool_id,
-                            tool_name,
-                            result: serde_json::json!({
-                                "error": e.to_string(),
-                                "message": format!("Tool execution failed: {}", e)
-                            }),
-                            result_for_assistant: Some(format!("Tool execution failed: {}", e)),
-                            is_error: true,
-                            duration_ms: None,
-                            image_attachments: None,
-                        },
-                        execution_time_ms: 0,
-                    };
+                    let error_result = build_error_execution_result(
+                        task_id,
+                        self.state_manager.get_task(task_id),
+                        &e,
+                    );
                     all_results.push(error_result);
                 }
             }
@@ -408,34 +440,11 @@ impl ToolPipeline {
                 Ok(result) => results.push(result),
                 Err(e) => {
                     error!("Tool execution failed: error={}", e);
-
-                    let (tool_id, tool_name) =
-                        if let Some(task) = self.state_manager.get_task(&task_id) {
-                            (
-                                task.tool_call.tool_id.clone(),
-                                task.tool_call.tool_name.clone(),
-                            )
-                        } else {
-                            warn!("Task not found in state manager: {}", task_id);
-                            (task_id.clone(), "unknown".to_string())
-                        };
-                    let error_result = ToolExecutionResult {
-                        tool_id: tool_id.clone(),
-                        tool_name: tool_name.clone(),
-                        result: ModelToolResult {
-                            tool_id,
-                            tool_name,
-                            result: serde_json::json!({
-                                "error": e.to_string(),
-                                "message": format!("Tool execution failed: {}", e)
-                            }),
-                            result_for_assistant: Some(format!("Tool execution failed: {}", e)),
-                            is_error: true,
-                            duration_ms: None,
-                            image_attachments: None,
-                        },
-                        execution_time_ms: 0,
-                    };
+                    let error_result = build_error_execution_result(
+                        &task_id,
+                        self.state_manager.get_task(&task_id),
+                        &e,
+                    );
                     results.push(error_result);
                 }
             }
@@ -532,13 +541,6 @@ impl ToolPipeline {
             return Err(err);
         }
 
-        // Create cancellation token
-        let cancellation_token = CancellationToken::new();
-        self.cancellation_tokens
-            .insert(tool_id.clone(), cancellation_token.clone());
-
-        debug!("Executing tool: tool_name={}", tool_name);
-
         let tool = {
             let registry = self.tool_registry.read().await;
             registry
@@ -552,6 +554,40 @@ impl ToolPipeline {
                     BitFunError::tool(error_msg)
                 })?
         };
+
+        let cancellation_token = CancellationToken::new();
+        let tool_context = self.build_tool_use_context(&task, cancellation_token.clone());
+        let validation = tool.validate_input(&tool_args, Some(&tool_context)).await;
+        if !validation.result {
+            let error_msg = validation
+                .message
+                .unwrap_or_else(|| format!("Invalid input for tool '{}'", tool_name));
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg.clone(),
+                        is_retryable: false,
+                    },
+                )
+                .await;
+            return Err(BitFunError::Validation(error_msg));
+        }
+        if let Some(message) = validation
+            .message
+            .filter(|message| !message.trim().is_empty())
+        {
+            warn!(
+                "Tool input validation warning: tool_name={}, warning={}",
+                tool_name, message
+            );
+        }
+
+        // Register cancellation only after deterministic validation and registry lookup succeed.
+        self.cancellation_tokens
+            .insert(tool_id.clone(), cancellation_token.clone());
+
+        debug!("Executing tool: tool_name={}", tool_name);
 
         let is_streaming = tool.supports_streaming();
 
@@ -622,6 +658,8 @@ impl ToolPipeline {
                     )));
                 }
                 Some(Err(_)) => {
+                    self.confirmation_channels.remove(&tool_id);
+
                     // Channel closed
                     self.state_manager
                         .update_state(
@@ -635,6 +673,8 @@ impl ToolPipeline {
                     return Err(BitFunError::service("Confirmation channel closed"));
                 }
                 None => {
+                    self.confirmation_channels.remove(&tool_id);
+
                     self.state_manager
                         .update_state(
                             &tool_id,
@@ -702,6 +742,8 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
+                let mut tool_result = tool_result;
+                tool_result.duration_ms = Some(duration_ms);
 
                 self.state_manager
                     .update_state(
@@ -794,7 +836,7 @@ impl ToolPipeline {
             match result {
                 Ok(r) => return Ok(r),
                 Err(e) => {
-                    if attempts >= max_attempts {
+                    if attempts >= max_attempts || !should_retry_tool_error(&e) {
                         return Err(e);
                     }
 
@@ -824,8 +866,48 @@ impl ToolPipeline {
             ));
         }
 
-        // Build tool context (pass all resource IDs)
-        let tool_context = ToolUseContext {
+        let tool_context = self.build_tool_use_context(task, cancellation_token);
+
+        let execution_future = tool.call(&task.tool_call.arguments, &tool_context);
+
+        let tool_results = match task.options.timeout_secs {
+            Some(timeout_secs) => {
+                let timeout_duration = Duration::from_secs(timeout_secs);
+                let result = timeout(timeout_duration, execution_future)
+                    .await
+                    .map_err(|_| {
+                        BitFunError::Timeout(format!(
+                            "Tool execution timeout: {}",
+                            task.tool_call.tool_name
+                        ))
+                    })?;
+                result?
+            }
+            None => execution_future.await?,
+        };
+
+        if tool.supports_streaming() && tool_results.len() > 1 {
+            self.handle_streaming_results(task, &tool_results).await?;
+        }
+
+        tool_results
+            .into_iter()
+            .last()
+            .map(|r| convert_tool_result(r, &task.tool_call.tool_id, &task.tool_call.tool_name))
+            .ok_or_else(|| {
+                BitFunError::Tool(format!(
+                    "Tool did not return result: {}",
+                    task.tool_call.tool_name
+                ))
+            })
+    }
+
+    fn build_tool_use_context(
+        &self,
+        task: &ToolTask,
+        cancellation_token: CancellationToken,
+    ) -> ToolUseContext {
+        ToolUseContext {
             tool_call_id: Some(task.tool_call.tool_id.clone()),
             agent_type: Some(task.context.agent_type.clone()),
             session_id: Some(task.context.session_id.clone()),
@@ -867,40 +949,7 @@ impl ToolPipeline {
             cancellation_token: Some(cancellation_token),
             runtime_tool_restrictions: task.context.runtime_tool_restrictions.clone(),
             workspace_services: task.context.workspace_services.clone(),
-        };
-
-        let execution_future = tool.call(&task.tool_call.arguments, &tool_context);
-
-        let tool_results = match task.options.timeout_secs {
-            Some(timeout_secs) => {
-                let timeout_duration = Duration::from_secs(timeout_secs);
-                let result = timeout(timeout_duration, execution_future)
-                    .await
-                    .map_err(|_| {
-                        BitFunError::Timeout(format!(
-                            "Tool execution timeout: {}",
-                            task.tool_call.tool_name
-                        ))
-                    })?;
-                result?
-            }
-            None => execution_future.await?,
-        };
-
-        if tool.supports_streaming() && tool_results.len() > 1 {
-            self.handle_streaming_results(task, &tool_results).await?;
         }
-
-        tool_results
-            .into_iter()
-            .last()
-            .map(|r| convert_tool_result(r, &task.tool_call.tool_id, &task.tool_call.tool_name))
-            .ok_or_else(|| {
-                BitFunError::Tool(format!(
-                    "Tool did not return result: {}",
-                    task.tool_call.tool_name
-                ))
-            })
     }
 
     /// Handle streaming results

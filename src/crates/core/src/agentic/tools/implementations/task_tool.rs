@@ -15,6 +15,9 @@ use std::path::Path;
 
 pub struct TaskTool;
 
+const LARGE_TASK_PROMPT_SOFT_LINE_LIMIT: usize = 180;
+const LARGE_TASK_PROMPT_SOFT_BYTE_LIMIT: usize = 16 * 1024;
+
 impl Default for TaskTool {
     fn default() -> Self {
         Self::new()
@@ -178,7 +181,7 @@ impl Tool for TaskTool {
                 },
                 "prompt": {
                     "type": "string",
-                    "description": "The task for the agent to perform"
+                    "description": "The task for the agent to perform. Keep it scoped and concise. The 180-line / 16KB guideline is a soft reliability threshold, not a hard cap. For large delegations, split into multiple Task calls with clear ownership, and pass file paths, symbols, constraints, and exact questions instead of pasting large file contents."
                 },
                 "subagent_type": {
                     "type": "string",
@@ -231,10 +234,39 @@ impl Tool for TaskTool {
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        InputValidator::new(input)
+        let validation = InputValidator::new(input)
             .validate_required("prompt")
             .validate_required("subagent_type")
-            .finish()
+            .finish();
+        if !validation.result {
+            return validation;
+        }
+
+        if let Some(prompt) = input.get("prompt").and_then(|value| value.as_str()) {
+            let line_count = prompt.lines().count();
+            let byte_count = prompt.len();
+            if line_count > LARGE_TASK_PROMPT_SOFT_LINE_LIMIT
+                || byte_count > LARGE_TASK_PROMPT_SOFT_BYTE_LIMIT
+            {
+                return ValidationResult {
+                    result: true,
+                    message: Some(format!(
+                        "Large Task prompt: {} lines, {} bytes. This is allowed when necessary, but prefer staged delegation: split large work into multiple Task calls with clear ownership, and pass file paths, symbols, constraints, and exact questions instead of large pasted context.",
+                        line_count, byte_count
+                    )),
+                    error_code: None,
+                    meta: Some(json!({
+                        "large_task_prompt": true,
+                        "line_count": line_count,
+                        "byte_count": byte_count,
+                        "soft_line_limit": LARGE_TASK_PROMPT_SOFT_LINE_LIMIT,
+                        "soft_byte_limit": LARGE_TASK_PROMPT_SOFT_BYTE_LIMIT
+                    })),
+                };
+            }
+        }
+
+        validation
     }
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
@@ -494,13 +526,11 @@ mod tests {
         let schema = TaskTool::new().input_schema();
 
         assert_eq!(schema["properties"]["model_id"]["type"], "string");
-        assert!(
-            !schema["required"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|value| value.as_str() == Some("model_id"))
-        );
+        assert!(!schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value.as_str() == Some("model_id")));
     }
 
     #[test]
