@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, FileText, Loader2, SearchCheck, Sparkles } from 'lucide-react';
+import { FileText, Loader2, SearchCheck, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
@@ -120,9 +120,7 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
               })}
             </span>
           ) : null}
-          statusIcon={running ? <Loader2 className="animate-spin" size={12} /> : (
-            isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />
-          )}
+          statusIcon={running ? <Loader2 className="animate-spin" size={12} /> : undefined}
         />
       )}
       expandedContent={(

@@ -24,7 +24,7 @@ import {
 } from '@/flow_chat/services/openBtwSession';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
-  compareSessionsForDisplay,
+  compareSessionsForNavStable,
   sessionBelongsToWorkspaceNavRow,
 } from '@/flow_chat/utils/sessionOrdering';
 import { stateMachineManager } from '@/flow_chat/state-machine';
@@ -201,7 +201,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           }
           return !s.workspacePath;
         })
-        .sort(compareSessionsForDisplay),
+        .sort(compareSessionsForNavStable),
     [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
   );
 
@@ -223,11 +223,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
 
     for (const [pid, list] of childMap) {
-      childMap.set(pid, [...list].sort(compareSessionsForDisplay));
+      childMap.set(pid, [...list].sort(compareSessionsForNavStable));
     }
 
     return {
-      topLevelSessions: [...parents].sort(compareSessionsForDisplay),
+      topLevelSessions: [...parents].sort(compareSessionsForNavStable),
       childrenByParent: childMap,
     };
   }, [sessions]);

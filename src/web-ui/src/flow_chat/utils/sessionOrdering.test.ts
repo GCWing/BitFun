@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Session } from '../types/flow-chat';
 import {
   compareSessionsForDisplay,
+  compareSessionsForNavStable,
   getSessionSortTimestamp,
   sessionBelongsToWorkspaceNavRow,
 } from './sessionOrdering';
@@ -69,6 +70,15 @@ describe('sessionOrdering', () => {
 
     const orderedIds = [...sessions].sort(compareSessionsForDisplay).map(session => session.sessionId);
     expect(orderedIds).toEqual(['a', 'b']);
+  });
+
+  it('nav stable sort ignores lastActiveAt so order does not change on session switch', () => {
+    const sessions = [
+      createSession({ sessionId: 'first', createdAt: 3000, lastActiveAt: 100 }),
+      createSession({ sessionId: 'second', createdAt: 2000, lastActiveAt: 99999 }),
+    ];
+    const orderedIds = [...sessions].sort(compareSessionsForNavStable).map(s => s.sessionId);
+    expect(orderedIds).toEqual(['first', 'second']);
   });
 
   it('remote SSH: same host but different remote root does not share nav row', () => {

@@ -8,6 +8,7 @@
 
 import { useCallback } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 import { useCanvasStore } from '../stores';
 import type { EditorGroupId } from '../types';
 
@@ -40,6 +41,16 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
   const getVisibleTabs = useCallback(() => {
     return getActiveGroup().tabs.filter((t) => !t.isHidden);
   }, [getActiveGroup]);
+
+  // Find in file (Monaco) — only when `data-shortcut-scope="editor"` is innermost
+  useShortcut(
+    'editor.findInFile',
+    { key: 'f', ctrl: true, scope: 'editor', allowInInput: true },
+    () => {
+      activeEditTargetService.openMonacoFind();
+    },
+    { enabled, priority: 20, description: 'keyboard.shortcuts.editor.findInFile' }
+  );
 
   // Mission control
   useShortcut(

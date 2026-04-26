@@ -82,3 +82,18 @@ export function compareSessionsForDisplay(
 
   return a.sessionId.localeCompare(b.sessionId);
 }
+
+/**
+ * Left-nav session list order: newest-created first, stable while switching sessions
+ * (does not use `lastActiveAt`, so rows do not jump to the top on click).
+ */
+export function compareSessionsForNavStable(
+  a: Pick<Session, 'sessionId' | 'createdAt'>,
+  b: Pick<Session, 'sessionId' | 'createdAt'>
+): number {
+  const createdAtDiff = b.createdAt - a.createdAt;
+  if (createdAtDiff !== 0) {
+    return createdAtDiff;
+  }
+  return a.sessionId.localeCompare(b.sessionId);
+}

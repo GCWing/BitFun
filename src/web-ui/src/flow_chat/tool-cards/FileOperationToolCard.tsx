@@ -44,6 +44,7 @@ import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
+import { useGitState } from '@/tools/git/hooks/useGitState';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -87,6 +88,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   } = useSnapshotState(sessionId);
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const { isRepository: workspaceIsGitRepo } = useGitState({
+    repositoryPath: currentWorkspace?.rootPath ?? '',
+    layers: ['basic'],
+    participateInWindowFocusRefresh: false,
+  });
 
   const getFilePath = useCallback((): string => {
     const params = partialParams || toolCall?.input;
@@ -777,7 +783,9 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 {currentFileDiffStats.deletions > 0 && (
                   <span className="deletions">-{currentFileDiffStats.deletions}</span>
                 )}
-                  <GitBranch size={12} strokeWidth={2} aria-hidden />
+                  {workspaceIsGitRepo ? (
+                    <GitBranch size={12} strokeWidth={2} aria-hidden />
+                  ) : null}
                 </button>
               </Tooltip>
             )}

@@ -82,7 +82,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         id: 'keyboard',
         labelKey: 'configCenter.tabs.keyboard',
         descriptionKey: 'configCenter.tabDescriptions.keyboard',
-        beta: true,
         keywords: [
           'keyboard',
           'shortcut',
@@ -91,7 +90,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'shortcut key',
           '\u5feb\u6377\u952e',
           '\u952e\u4f4d',
-          'beta',
         ],
       },
     ],

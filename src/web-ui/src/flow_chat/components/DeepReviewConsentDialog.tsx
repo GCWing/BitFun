@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Clock, Coins, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Clock, Coins, ShieldCheck, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, Modal } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
@@ -66,9 +66,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     >
       <div className="deep-review-consent">
         <div className="deep-review-consent__header">
-          <div className="deep-review-consent__badge" aria-hidden="true">
-            <Sparkles size={18} />
-          </div>
           <div className="deep-review-consent__heading">
             <span className="deep-review-consent__eyebrow">
               {t('deepReviewConsent.eyebrow', { defaultValue: 'Code review team' })}

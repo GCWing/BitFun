@@ -7,6 +7,11 @@
 
 /* ========== Tool icon styles ========== */
 .code-review-card {
+  /* icon={null}: no left rail; a small nudge so title is not flush to the border. */
+  .base-tool-card-header {
+    padding-left: 10px;
+  }
+
   .tool-identifier-icon.code-review-icon {
     color: var(--color-accent-500, #60a5fa);
   }

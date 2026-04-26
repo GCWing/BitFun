@@ -19,6 +19,8 @@ export interface EditTarget {
   copy?: () => boolean;
   paste?: () => boolean;
   selectAll?: () => boolean;
+  /** Monaco: open the in-editor find widget (Ctrl/Cmd+F). */
+  findInEditor?: () => boolean;
   containsElement?: (element: Element | null) => boolean;
 }
 
@@ -226,6 +228,15 @@ export function createMonacoEditTarget(editor: monaco.editor.IStandaloneCodeEdit
       editor.trigger('edit-target', 'editor.action.selectAll', null);
       return true;
     },
+    findInEditor: () => {
+      const findAction = editor.getAction('actions.find');
+      if (findAction) {
+        void findAction.run();
+        return true;
+      }
+      editor.trigger('edit-target', 'editor.action.startFindWidget', null);
+      return true;
+    },
     containsElement: (element: Element | null) => {
       const domNode = editor.getDomNode();
       return !!domNode && !!element && domNode.contains(element);
@@ -268,6 +279,24 @@ export class ActiveEditTargetService {
 
     this.activeTargetId = null;
     void this.setMenuMode('system');
+  }
+
+  /**
+   * Open Monaco find in the currently focused code editor, if any.
+   * Used by the editor shortcut scope (data-shortcut-scope="editor") via ShortcutManager.
+   */
+  openMonacoFind(): void {
+    const focused = this.findFocusedTarget();
+    if (focused?.findInEditor) {
+      focused.findInEditor();
+      return;
+    }
+    for (const target of this.targets.values()) {
+      if (target.hasTextFocus() && target.findInEditor) {
+        target.findInEditor();
+        return;
+      }
+    }
   }
 
   executeAction(action: EditMenuAction): boolean {

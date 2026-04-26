@@ -336,7 +336,10 @@
 
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
-  padding: 10px 10px;
+  /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
+  --tool-card-expanded-pad-x: 10px;
+  --tool-card-expanded-pad-y: 10px;
+  padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
   animation: expandDown 0.2s ease-out;

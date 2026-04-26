@@ -347,7 +347,7 @@
   .task-interruption-divider {
     height: 1px;
     background: var(--border-base);
-    margin: -2px calc(-1 * var(--tool-card-header-pad-x, 10px)) 0;
+    margin: -2px calc(-1 * var(--tool-card-expanded-pad-x, 10px)) 0;
   }
 
   .task-expanded-content .task-prompt-markdown {

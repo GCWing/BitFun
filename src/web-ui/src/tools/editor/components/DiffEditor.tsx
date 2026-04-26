@@ -17,6 +17,7 @@ import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
 import { AlertCircle } from 'lucide-react';
+import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import './DiffEditor.scss';
 
 const log = createLogger('DiffEditor');
@@ -177,6 +178,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
     let editor: monaco.editor.IStandaloneDiffEditor | null = null;
     let originalModel: monaco.editor.ITextModel | null = null;
     let modifiedModel: monaco.editor.ITextModel | null = null;
+    let unbindEditTargets: (() => void) | null = null;
 
     const initDiffEditor = async () => {
       try {
@@ -285,6 +287,15 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
 
         setModifiedEditorInstance(editor.getModifiedEditor());
         setDiffEditor(editor);
+
+        const originalEditor = editor.getOriginalEditor();
+        const modifiedEditor = editor.getModifiedEditor();
+        const u1 = activeEditTargetService.bindTarget(createMonacoEditTarget(originalEditor));
+        const u2 = activeEditTargetService.bindTarget(createMonacoEditTarget(modifiedEditor));
+        unbindEditTargets = () => {
+          u1();
+          u2();
+        };
         
         // Force set background color immediately to avoid white flash
         requestAnimationFrame(() => {
@@ -334,7 +345,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
             }
           });
 
-          const modifiedEditor = editor.getModifiedEditor();
           modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             const content = modifiedModel!.getValue();
             onSaveRef.current?.(content);
@@ -372,6 +382,11 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
 
     return () => {
       isUnmountedRef.current = true;
+
+      if (unbindEditTargets) {
+        unbindEditTargets();
+        unbindEditTargets = null;
+      }
 
       if (changeListenerRef.current) {
         changeListenerRef.current.dispose();
@@ -613,6 +628,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         <div 
           ref={containerRef} 
           className="diff-editor-content"
+          data-shortcut-scope="editor"
           style={{ 
             width: '100%', 
             height: '100%',

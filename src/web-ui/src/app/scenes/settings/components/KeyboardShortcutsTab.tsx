@@ -25,6 +25,7 @@ import { configManager } from '@/infrastructure/config';
 import type { ShortcutConfig, ShortcutScope } from '@/shared/types/shortcut';
 import {
   ALL_SHORTCUTS,
+  compareShortcutScope,
   SCOPE_ORDER,
   SCOPE_LABEL_KEYS,
   getShortcutDescriptionI18nKey,
@@ -102,10 +103,10 @@ function mergeCatalogWithLive(live: ShortcutRegistration[]): ShortcutRegistratio
     out.push(r);
   }
   out.sort((a, b) => {
-    const scopeOrder: Record<ShortcutScope, number> = { app: 0, chat: 1, canvas: 2, filetree: 3, git: 4 };
-    const sa = scopeOrder[a.config.scope ?? 'app'];
-    const sb = scopeOrder[b.config.scope ?? 'app'];
-    if (sa !== sb) return sa - sb;
+    const c = compareShortcutScope(a.config.scope, b.config.scope);
+    if (c !== 0) {
+      return c;
+    }
     return b.priority - a.priority;
   });
   return out;

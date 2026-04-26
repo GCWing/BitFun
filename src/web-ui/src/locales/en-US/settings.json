@@ -166,6 +166,7 @@
     "scopes": {
       "app": "Global",
       "canvas": "Editor Canvas",
+      "editor": "Code editor (text focus)",
       "chat": "Agent Session",
       "filetree": "File Tree",
       "git": "Git"
@@ -196,6 +197,9 @@
         "anchorZone": "Toggle Anchor Zone",
         "maximize": "Maximize Editor",
         "closePreview": "Close Preview"
+      },
+      "editor": {
+        "findInFile": "Find in file (Monaco)"
       },
       "tab": {
         "close": "Close Current Tab",

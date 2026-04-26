@@ -1,6 +1,6 @@
 
 import type { ShortcutConfig, ShortcutScope } from '@/shared/types/shortcut';
-import { NON_USER_CUSTOMIZABLE_SHORTCUT_IDS } from '@/shared/constants/shortcuts';
+import { compareShortcutScope, NON_USER_CUSTOMIZABLE_SHORTCUT_IDS } from '@/shared/constants/shortcuts';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ShortcutManager');
@@ -269,13 +269,30 @@ export class ShortcutManager {
 
     // Check panel-scope registrations (if inside a scoped panel)
     if (activeScope !== 'app') {
-      const panelKey = makeEventKey(activeScope, event);
-      const panelList = this.lookupMap.get(panelKey) ?? [];
-      for (const reg of panelList) {
-        if (inInput && !reg.config.allowInInput) continue;
-        // Panel-scope shortcuts get higher effective priority
-        results.unshift(...panelList.filter((r) => !inInput || r.config.allowInInput));
-        break;
+      // When the innermost scope is the Monaco editor surface, inherit canvas-registered
+      // shortcuts (tab switch, close tab, etc.) in addition to editor-scoped ones.
+      const panelScopes: ShortcutScope[] =
+        activeScope === 'editor' ? (['editor', 'canvas'] as const) : [activeScope];
+      const panelRegs: ShortcutRegistration[] = [];
+      for (const scope of panelScopes) {
+        for (const reg of this.lookupMap.get(makeEventKey(scope, event)) ?? []) {
+          if (inInput && !reg.config.allowInInput) {
+            continue;
+          }
+          panelRegs.push(reg);
+        }
+      }
+      const seenId = new Set<string>();
+      const deduped: ShortcutRegistration[] = [];
+      for (const reg of panelRegs) {
+        if (seenId.has(reg.id)) {
+          continue;
+        }
+        seenId.add(reg.id);
+        deduped.push(reg);
+      }
+      for (let i = deduped.length - 1; i >= 0; i--) {
+        results.unshift(deduped[i]);
       }
     }
 
@@ -298,7 +315,9 @@ export class ShortcutManager {
     const scope = el?.getAttribute('data-shortcut-scope') as ShortcutScope | null;
     // Only accept known panel scopes; canvas is included so canvas-scoped shortcuts
     // fire only when focus is inside the editor canvas area.
-    if (scope === 'canvas' || scope === 'chat' || scope === 'filetree' || scope === 'git') return scope;
+    if (scope === 'canvas' || scope === 'editor' || scope === 'chat' || scope === 'filetree' || scope === 'git') {
+      return scope;
+    }
     return 'app';
   }
 
@@ -411,10 +430,10 @@ export class ShortcutManager {
    */
   public getAllRegistrations(): ShortcutRegistration[] {
     return Array.from(this.registrations.values()).sort((a, b) => {
-      const scopeOrder: Record<ShortcutScope, number> = { app: 0, chat: 1, canvas: 2, filetree: 3, git: 4 };
-      const sa = scopeOrder[a.config.scope ?? 'app'];
-      const sb = scopeOrder[b.config.scope ?? 'app'];
-      if (sa !== sb) return sa - sb;
+      const c = compareShortcutScope(a.config.scope, b.config.scope);
+      if (c !== 0) {
+        return c;
+      }
       return b.priority - a.priority;
     });
   }

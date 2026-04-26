@@ -166,6 +166,7 @@
     "scopes": {
       "app": "全局",
       "canvas": "編輯器畫布",
+      "editor": "代碼編輯器（文字焦點）",
       "chat": "Agent 會話",
       "filetree": "文件樹",
       "git": "Git"
@@ -196,6 +197,9 @@
         "anchorZone": "切換錨點區",
         "maximize": "最大化編輯器",
         "closePreview": "關閉預覽"
+      },
+      "editor": {
+        "findInFile": "在檔案中尋找（Monaco）"
       },
       "tab": {
         "close": "關閉當前標籤頁",

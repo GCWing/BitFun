@@ -69,6 +69,12 @@ vi.mock('@/shared/notification-system', () => ({
   },
 }));
 
+vi.mock('@/tools/git/hooks/useGitState', () => ({
+  useGitState: () => ({
+    isRepository: false,
+  }),
+}));
+
 describe('FileOperationToolCard', () => {
   let dom: JSDOM;
   let container: HTMLDivElement;

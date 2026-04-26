@@ -2,6 +2,10 @@
   padding: 0;
 }
 
+.modal:has(.deep-review-consent) {
+  border-radius: 6px;
+}
+
 .deep-review-consent {
   --deep-review-accent: var(--color-accent-400, #0ea5e9);
   display: flex;
@@ -16,12 +20,11 @@
 
 .deep-review-consent__header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: flex-start;
 }
 
-.deep-review-consent__badge,
 .deep-review-consent__fact-icon {
   display: inline-flex;
   align-items: center;
@@ -30,13 +33,6 @@
   color: color-mix(in srgb, var(--deep-review-accent) 78%, var(--color-text-primary));
   background: color-mix(in srgb, var(--deep-review-accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--deep-review-accent) 22%, transparent);
-}
-
-.deep-review-consent__badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
 }
 
 .deep-review-consent__heading {
@@ -67,7 +63,7 @@
   width: 32px;
   height: 32px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -89,7 +85,7 @@
 }
 
 .deep-review-consent__lead {
-  margin: -4px 0 0 58px;
+  margin: -4px 0 0;
   max-width: 470px;
   color: var(--color-text-secondary);
   font-size: 13px;
@@ -115,7 +111,7 @@
 
 .deep-review-consent__safety-note {
   padding: 14px 16px;
-  border-radius: 17px;
+  border-radius: 8px;
   border-color: color-mix(in srgb, var(--deep-review-accent) 24%, var(--border-subtle));
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--deep-review-accent) 10%, transparent), transparent 72%),
@@ -131,13 +127,13 @@
 .deep-review-consent__fact {
   min-height: 118px;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: 8px;
 }
 
 .deep-review-consent__fact-icon {
   width: 30px;
   height: 30px;
-  border-radius: 11px;
+  border-radius: 8px;
 }
 
 .deep-review-consent__fact-title {
@@ -183,14 +179,13 @@
     padding: 20px;
   }
 
-  .deep-review-consent__header,
+  .deep-review-consent__header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .deep-review-consent__facts,
   .deep-review-consent__footer {
     grid-template-columns: 1fr;
-  }
-
-  .deep-review-consent__lead {
-    margin-left: 0;
   }
 
   .deep-review-consent__footer {

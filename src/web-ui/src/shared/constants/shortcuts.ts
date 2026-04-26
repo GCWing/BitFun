@@ -193,6 +193,18 @@ export const CANVAS_SHORTCUTS: ShortcutDef[] = [
   },
 ];
 
+// ─── Monaco code surface (scope: 'editor') ────────────────────────────────
+// Requires data-shortcut-scope="editor" on the Monaco host; active when the
+// text surface is focused (innermost scope wins over canvas).
+
+export const EDITOR_SHORTCUTS: ShortcutDef[] = [
+  {
+    id: 'editor.findInFile',
+    config: mod('f', { scope: 'editor', allowInInput: true }),
+    descriptionKey: 'keyboard.shortcuts.editor.findInFile',
+  },
+];
+
 // ─── Chat shortcuts (scope: 'chat') ───────────────────────────────────────
 
 export const CHAT_SHORTCUTS: ShortcutDef[] = [
@@ -289,6 +301,7 @@ export const ALL_SHORTCUTS: ShortcutDef[] = [
   ...APP_SHORTCUTS,
   ...SCENE_SHORTCUTS,
   ...CANVAS_SHORTCUTS,
+  ...EDITOR_SHORTCUTS,
   ...CHAT_SHORTCUTS,
   ...FILETREE_SHORTCUTS,
   ...GIT_SHORTCUTS,
@@ -308,13 +321,23 @@ export function getShortcutDescriptionI18nKey(id: string): string | undefined {
 }
 
 /** Scope display order for the settings UI. */
-export const SCOPE_ORDER: ShortcutScope[] = ['app', 'chat', 'canvas', 'filetree', 'git'];
+export const SCOPE_ORDER: ShortcutScope[] = ['app', 'chat', 'editor', 'canvas', 'filetree', 'git'];
 
 /** i18n keys for scope group labels in the settings UI. */
 export const SCOPE_LABEL_KEYS: Record<ShortcutScope, string> = {
   app:      'keyboard.scopes.app',
   chat:     'keyboard.scopes.chat',
+  editor:   'keyboard.scopes.editor',
   canvas:   'keyboard.scopes.canvas',
   filetree: 'keyboard.scopes.filetree',
   git:      'keyboard.scopes.git',
 };
+
+/** Sort order for scope in settings UI and registration lists (ascending). */
+export function compareShortcutScope(a: ShortcutScope | undefined, b: ShortcutScope | undefined): number {
+  const ia = SCOPE_ORDER.indexOf(a ?? 'app');
+  const ib = SCOPE_ORDER.indexOf(b ?? 'app');
+  const sa = ia === -1 ? SCOPE_ORDER.length : ia;
+  const sb = ib === -1 ? SCOPE_ORDER.length : ib;
+  return sa - sb;
+}
