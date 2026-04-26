@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckCircle,
@@ -13,6 +13,7 @@ import {
   Play,
   Copy,
   Minimize2,
+  Info,
 } from 'lucide-react';
 import { Button, Checkbox, Tooltip } from '@/component-library';
 import { useReviewActionBarStore, type ReviewActionPhase } from '../../store/deepReviewActionBarStore';
@@ -54,6 +55,23 @@ const GROUP_PRIORITY_META: Record<RemediationGroupId, { color: string }> = {
   should_improve: { color: 'var(--color-warning, #f59e0b)' },
   needs_decision: { color: 'var(--color-accent-500, #60a5fa)' },
   verification: { color: 'var(--color-success, #22c55e)' },
+};
+
+type ChatInputStateRequest = {
+  getValue?: () => string;
+};
+
+const getCurrentChatInputValue = (): string => {
+  const request: ChatInputStateRequest = {};
+  globalEventBus.emit('chat-input:get-state', request);
+  return request.getValue?.() ?? '';
+};
+
+const stopNestedScrollPropagation = (event: React.WheelEvent | React.TouchEvent) => {
+  event.stopPropagation();
+  if ('nativeEvent' in event && typeof event.nativeEvent.stopImmediatePropagation === 'function') {
+    event.nativeEvent.stopImmediatePropagation();
+  }
 };
 
 export const ReviewActionBar: React.FC = () => {
@@ -424,7 +442,11 @@ export const ReviewActionBar: React.FC = () => {
           </button>
 
           {showRemediationList && (
-            <div className="deep-review-action-bar__remediation-list">
+            <div
+              className="deep-review-action-bar__remediation-list"
+              onWheel={stopNestedScrollPropagation}
+              onTouchMove={stopNestedScrollPropagation}
+            >
               {groupOrder.map((groupId) => {
                 const items = groupedItems[groupId]!;
                 const groupSelectedCount = items.filter((i) => selectedRemediationIds.has(i.id)).length;
@@ -503,10 +525,13 @@ export const ReviewActionBar: React.FC = () => {
           </div>
 
           {selectedCount === 0 && (
-            <div className="deep-review-action-bar__empty-selection">
-              {t('toolCards.codeReview.remediationActions.noSelectionHint', {
-                defaultValue: 'Select at least one remediation item to start fixing.',
-              })}
+            <div className="deep-review-action-bar__empty-selection" role="note">
+              <Info size={14} className="deep-review-action-bar__empty-selection-icon" />
+              <span>
+                {t('toolCards.codeReview.remediationActions.noSelectionHint', {
+                  defaultValue: 'Select at least one remediation item to start fixing.',
+                })}
+              </span>
             </div>
           )}
         </div>

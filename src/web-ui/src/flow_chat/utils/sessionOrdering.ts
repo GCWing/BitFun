@@ -1,4 +1,5 @@
 import type { Session } from '../types/flow-chat';
+import type { SessionMetadata } from '@/shared/types/session-history';
 import { isSamePath, normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 
 /** Extract `host` from our saved form `ssh-{user}@{host}:{port}` (used when metadata omits `remoteSshHost`). */
@@ -62,15 +63,39 @@ export function sessionBelongsToWorkspaceNavRow(
   return true;
 }
 
-export function getSessionSortTimestamp(session: Pick<Session, 'createdAt' | 'lastActiveAt' | 'lastFinishedAt'>): number {
-  return session.lastActiveAt ?? session.lastFinishedAt ?? session.createdAt;
+export function getSessionSortTimestamp(session: Pick<Session, 'createdAt' | 'lastFinishedAt'>): number {
+  return session.lastFinishedAt ?? session.createdAt;
 }
 
 export function compareSessionsForDisplay(
-  a: Pick<Session, 'sessionId' | 'createdAt' | 'lastActiveAt' | 'lastFinishedAt'>,
-  b: Pick<Session, 'sessionId' | 'createdAt' | 'lastActiveAt' | 'lastFinishedAt'>
+  a: Pick<Session, 'sessionId' | 'createdAt' | 'lastFinishedAt'>,
+  b: Pick<Session, 'sessionId' | 'createdAt' | 'lastFinishedAt'>
 ): number {
   const timestampDiff = getSessionSortTimestamp(b) - getSessionSortTimestamp(a);
+  if (timestampDiff !== 0) {
+    return timestampDiff;
+  }
+
+  const createdAtDiff = b.createdAt - a.createdAt;
+  if (createdAtDiff !== 0) {
+    return createdAtDiff;
+  }
+
+  return a.sessionId.localeCompare(b.sessionId);
+}
+
+export function getSessionMetadataSortTimestamp(
+  session: Pick<SessionMetadata, 'createdAt' | 'customMetadata'>
+): number {
+  const lastFinishedAt = session.customMetadata?.lastFinishedAt;
+  return typeof lastFinishedAt === 'number' ? lastFinishedAt : session.createdAt;
+}
+
+export function compareSessionMetadataForDisplay(
+  a: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'customMetadata'>,
+  b: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'customMetadata'>
+): number {
+  const timestampDiff = getSessionMetadataSortTimestamp(b) - getSessionMetadataSortTimestamp(a);
   if (timestampDiff !== 0) {
     return timestampDiff;
   }
@@ -95,5 +120,6 @@ export function compareSessionsForNavStable(
   if (createdAtDiff !== 0) {
     return createdAtDiff;
   }
+
   return a.sessionId.localeCompare(b.sessionId);
 }

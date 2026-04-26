@@ -70,6 +70,101 @@ pub struct ResolvedSessionTitle {
     pub method: SessionTitleMethod,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{SessionManager, SessionManagerConfig};
+    use crate::agentic::core::{ProcessingPhase, Session, SessionConfig, SessionState};
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::SessionContextStore;
+    use crate::infrastructure::PathManager;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("bitfun-session-restore-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn test_manager(persistence_manager: Arc<PersistenceManager>) -> SessionManager {
+        SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn restore_session_resets_processing_state_without_marking_unread_completion() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Legacy processing session".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+        persistence_manager
+            .save_session_state(workspace.path(), &session_id, &session.state)
+            .await
+            .expect("processing state should save");
+
+        let manager = test_manager(persistence_manager.clone());
+        let restored = manager
+            .restore_session(workspace.path(), &session_id)
+            .await
+            .expect("session should restore");
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+
+        assert!(matches!(restored.state, SessionState::Idle));
+        assert_eq!(metadata.unread_completion, None);
+    }
+}
+
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
@@ -1160,33 +1255,10 @@ impl SessionManager {
             context_msg_count
         );
 
-        // Mark session as having unread completion if it was previously running (not Idle).
-        // This handles both normal app close and abnormal crash scenarios.
-        if previous_state_was_not_idle {
-            if let Ok(Some(mut metadata)) = self
-                .persistence_manager
-                .load_session_metadata(&session_storage_path, session_id)
-                .await
-            {
-                if metadata.unread_completion.is_none() {
-                    debug!(
-                        "Marking session as having unread completion (was interrupted during restore): session_id={}",
-                        session_id
-                    );
-                    metadata.unread_completion = Some("completed".to_string());
-                    if let Err(e) = self
-                        .persistence_manager
-                        .save_session_metadata(&session_storage_path, &metadata)
-                        .await
-                    {
-                        warn!(
-                            "Failed to save unread_completion metadata: session_id={}, error={}",
-                            session_id, e
-                        );
-                    }
-                }
-            }
-        }
+        // Do not infer unread completion from persisted runtime state during restore.
+        // Older IDE versions could leave sessions in non-idle states on disk; treating those
+        // as completed would surface misleading unread indicators after an upgrade.
+        // Unread completion is now written only by runtime completion/persist paths.
 
         // 4. Add to memory (will overwrite if already exists)
         self.sessions

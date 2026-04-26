@@ -18,6 +18,11 @@ import { sessionAPI } from '@/infrastructure/api';
 import { WorkspaceKind } from '@/shared/types';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolvePersistedSessionTitle, resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
+import {
+  compareSessionsForDisplay,
+  getSessionMetadataSortTimestamp,
+  getSessionSortTimestamp,
+} from '@/flow_chat/utils/sessionOrdering';
 import './NavSearchDialog.scss';
 
 interface NavSearchDialogProps {
@@ -39,9 +44,6 @@ const MAX_PER_GROUP = 20;
 
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
-
-const sessionRecencyTime = (session: Session): number =>
-  session.updatedAt ?? session.lastActiveAt ?? session.createdAt ?? 0;
 
 const matchesQuery = (query: string, ...fields: (string | undefined | null)[]): boolean => {
   const q = query.toLowerCase();
@@ -131,7 +133,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
         result.push({ session, workspace });
       }
     }
-    result.sort((a, b) => sessionRecencyTime(b.session) - sessionRecencyTime(a.session));
+    result.sort((a, b) => compareSessionsForDisplay(a.session, b.session));
     return result;
   }, [flowChatState.sessions, openedWorkspacesList, openedWorkspaceIdSet]);
 
@@ -192,13 +194,23 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     merged.sort((a, b) => {
       const ta =
         'session' in a
-          ? sessionRecencyTime(a.session)
-          : a.disk.lastActiveAt ?? a.disk.createdAt ?? 0;
+          ? getSessionSortTimestamp(a.session)
+          : getSessionMetadataSortTimestamp(a.disk);
       const tb =
         'session' in b
-          ? sessionRecencyTime(b.session)
-          : b.disk.lastActiveAt ?? b.disk.createdAt ?? 0;
-      return tb - ta;
+          ? getSessionSortTimestamp(b.session)
+          : getSessionMetadataSortTimestamp(b.disk);
+      const timestampDiff = tb - ta;
+      if (timestampDiff !== 0) return timestampDiff;
+
+      const createdAtA = 'session' in a ? a.session.createdAt : a.disk.createdAt;
+      const createdAtB = 'session' in b ? b.session.createdAt : b.disk.createdAt;
+      const createdAtDiff = createdAtB - createdAtA;
+      if (createdAtDiff !== 0) return createdAtDiff;
+
+      const sessionIdA = 'session' in a ? a.session.sessionId : a.disk.sessionId;
+      const sessionIdB = 'session' in b ? b.session.sessionId : b.disk.sessionId;
+      return sessionIdA.localeCompare(sessionIdB);
     });
 
     for (const entry of merged.slice(0, MAX_PER_GROUP)) {
