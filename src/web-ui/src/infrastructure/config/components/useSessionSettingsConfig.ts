@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
@@ -32,11 +32,17 @@ type BrowserControlLaunchResponse = {
   browserKind: string;
 };
 
-export function useSessionSettingsConfig() {
+type UseSessionSettingsConfigOptions = {
+  loadDesktopStatus?: boolean;
+};
+
+export function useSessionSettingsConfig(options: UseSessionSettingsConfigOptions = {}) {
+  const { loadDesktopStatus = true } = options;
   const { t } = useTranslation('settings/personalization');
   const { t: tTools } = useTranslation('settings/agentic-tools');
   const { t: tDebug } = useTranslation('settings/debug');
   const { t: tPermissions } = useTranslation('settings/permissions');
+  const isMountedRef = useRef(true);
 
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
@@ -66,11 +72,19 @@ export function useSessionSettingsConfig() {
   const [expandedTemplates, setExpandedTemplates] = useState<Set<string>>(new Set());
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const refreshComputerUseStatus = useCallback(async (): Promise<boolean> => {
     if (!IS_TAURI_DESKTOP) return false;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const s = await invoke<ComputerUseStatusPayload>('computer_use_get_status');
+      if (!isMountedRef.current) return true;
       setComputerUseEnabled(s.computerUseEnabled);
       setComputerUseAccess(s.accessibilityGranted);
       setComputerUseScreen(s.screenCaptureGranted);
@@ -92,6 +106,7 @@ export function useSessionSettingsConfig() {
         port: number;
         pageCount: number;
       }>('browser_control_get_status', { request: { port: 9222 } });
+      if (!isMountedRef.current) return;
       setBrowserCdpAvailable(s.cdpAvailable);
       setBrowserKind(s.browserKind);
       setBrowserVersion(s.browserVersion);
@@ -124,6 +139,7 @@ export function useSessionSettingsConfig() {
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
       ]);
 
+      if (!isMountedRef.current) return;
       setSettings(loadedSettings);
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
@@ -132,26 +148,31 @@ export function useSessionSettingsConfig() {
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
       if (debugConfigData) setDebugConfig(debugConfigData);
 
-      if (IS_TAURI_DESKTOP) {
-        const ok = await refreshComputerUseStatus();
-        if (!ok) setComputerUseEnabled(computerUseCfg ?? false);
-        await refreshBrowserControlStatus();
-        try {
-          const info = await systemAPI.getSystemInfo();
-          setPlatform(info.platform || '');
-        } catch (error) {
-          log.warn('getSystemInfo failed', error);
-        }
+      if (IS_TAURI_DESKTOP && loadDesktopStatus) {
+        void (async () => {
+          const ok = await refreshComputerUseStatus();
+          if (!isMountedRef.current) return;
+          if (!ok) setComputerUseEnabled(computerUseCfg ?? false);
+          await refreshBrowserControlStatus();
+          if (!isMountedRef.current) return;
+          try {
+            const info = await systemAPI.getSystemInfo();
+            if (isMountedRef.current) setPlatform(info.platform || '');
+          } catch (error) {
+            log.warn('getSystemInfo failed', error);
+          }
+        })();
       } else {
         setComputerUseEnabled(computerUseCfg ?? false);
       }
     } catch (error) {
       log.error('Failed to load session settings data', error);
-      setSettings(await aiExperienceConfigService.getSettingsAsync());
+      const fallbackSettings = await aiExperienceConfigService.getSettingsAsync();
+      if (isMountedRef.current) setSettings(fallbackSettings);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
     }
-  }, [refreshBrowserControlStatus, refreshComputerUseStatus]);
+  }, [loadDesktopStatus, refreshBrowserControlStatus, refreshComputerUseStatus]);
 
   useEffect(() => {
     loadAllData();
