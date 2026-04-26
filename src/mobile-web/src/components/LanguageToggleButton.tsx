@@ -1,5 +1,6 @@
 import React from 'react';
 import { useI18n } from '../i18n';
+import { getMobileLanguageShortName } from '../i18n/localeRegistry';
 
 interface LanguageToggleButtonProps {
   className?: string;
@@ -16,7 +17,7 @@ const LanguageToggleButton: React.FC<LanguageToggleButtonProps> = ({ className }
       aria-label={t('common.switchLanguage')}
       title={t('common.switchLanguage')}
     >
-      {language === 'zh-CN' ? '中' : 'EN'}
+      {getMobileLanguageShortName(language)}
     </button>
   );
 };

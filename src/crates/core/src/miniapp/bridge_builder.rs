@@ -127,11 +127,12 @@ pub fn build_bridge_script(
     onLocaleChange: (fn) => app._lifecycleHandlers.localeChange.push(fn),
 
     /// Pick the best-matching string from an i18n table for the current locale.
-    /// Resolution: current → en-US → zh-CN → first value → fallback.
-    /// Usage: app.t({{'en-US':'Hello','zh-CN':'你好'}}, 'Hello')
+    /// Resolution: current → zh-CN for Chinese variants → en-US → first value → fallback.
+    /// Usage: app.t({{'en-US':'Hello','zh-CN':'你好','zh-TW':'你好'}}, 'Hello')
     t: (table, fallback) => {{
       if (!table || typeof table !== 'object') return fallback != null ? fallback : '';
       if (table[_locale]) return table[_locale];
+      if (_locale && _locale.startsWith('zh') && table['zh-CN']) return table['zh-CN'];
       if (table['en-US']) return table['en-US'];
       if (table['zh-CN']) return table['zh-CN'];
       const keys = Object.keys(table);

@@ -63,6 +63,17 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/debug', key: 'templates.description' },
   ],
 
+  review: [
+    { ns: 'settings/review', key: 'title' },
+    { ns: 'settings/review', key: 'subtitle' },
+    { ns: 'settings/review', key: 'overview.title' },
+    { ns: 'settings/review', key: 'overview.description' },
+    { ns: 'settings/review', key: 'strategy.title' },
+    { ns: 'settings/review', key: 'execution.title' },
+    { ns: 'settings/review', key: 'members.title' },
+    { ns: 'settings/review', key: 'extra.title' },
+  ],
+
   'ai-context': [
     { ns: 'settings/ai-context', key: 'title' },
     { ns: 'settings/ai-context', key: 'subtitle' },

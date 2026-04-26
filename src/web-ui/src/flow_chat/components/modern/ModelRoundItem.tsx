@@ -14,11 +14,12 @@ import type { ModelRound, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
-import { isCollapsibleTool } from '../../tool-cards';
+import { isCollapsibleTool, isTerminalCollapsibleTool } from '../../tool-cards';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
+import { TerminalGroupRenderer } from './TerminalGroupRenderer';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './ModelRoundItem.scss';
@@ -72,6 +73,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     
     type ItemGroup = 
       | { type: 'explore'; items: FlowItem[]; isLast: boolean }
+      | { type: 'terminal'; items: FlowItem[]; isLast: boolean }
       | { type: 'critical'; item: FlowItem }
       | { type: 'subagent'; parentTaskToolId: string; items: FlowItem[] };
     
@@ -116,6 +118,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       
       const finalGroups: ItemGroup[] = [];
       let exploreBuffer: FlowItem[] = [];
+      let terminalBuffer: FlowItem[] = [];
       let pendingBuffer: FlowItem[] = [];
       
       const normalItems: FlowItem[] = [];
@@ -129,6 +132,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         if (exploreBuffer.length > 0) {
           finalGroups.push({ type: 'explore', items: [...exploreBuffer], isLast });
           exploreBuffer = [];
+        }
+      };
+      
+      const flushTerminalBuffer = (isLast: boolean) => {
+        if (terminalBuffer.length > 0) {
+          finalGroups.push({ type: 'terminal', items: [...terminalBuffer], isLast });
+          terminalBuffer = [];
         }
       };
       
@@ -147,6 +157,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         
         if (group.type === 'subagent') {
           flushExploreBuffer(false);
+          flushTerminalBuffer(false);
           flushPendingAsCritical();
           finalGroups.push(group);
         } else {
@@ -158,15 +169,18 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             
             if (isLastNormalItem) {
               flushExploreBuffer(false);
+              flushTerminalBuffer(false);
               flushPendingAsCritical();
             }
           } else if (item.type === 'tool') {
             const toolName = (item as FlowToolItem).toolName;
             const isExploreTool = isCollapsibleTool(toolName);
+            const isTerminalTool = isTerminalCollapsibleTool(toolName);
             
             if (isExploreTool) {
               if (deferExploreGrouping) {
                 flushExploreBuffer(false);
+                flushTerminalBuffer(false);
                 flushPendingAsCritical();
                 finalGroups.push({ type: 'critical', item });
                 normalItemIndex++;
@@ -178,8 +192,16 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               if (isLastNormalItem || isLastGroup) {
                 flushExploreBuffer(true);
               }
+            } else if (isTerminalTool) {
+              terminalBuffer.push(...pendingBuffer, item);
+              pendingBuffer = [];
+              
+              if (isLastNormalItem || isLastGroup) {
+                flushTerminalBuffer(true);
+              }
             } else {
               flushExploreBuffer(false);
+              flushTerminalBuffer(false);
               flushPendingAsCritical();
               finalGroups.push({ type: 'critical', item });
             }
@@ -190,6 +212,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       }
       
       flushExploreBuffer(true);
+      flushTerminalBuffer(true);
       flushPendingAsCritical();
       
       return finalGroups;
@@ -292,7 +315,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           switch (group.type) {
             case 'explore':
               return group.items.map((item, itemIdx) => (
-                <FlowItemRenderer 
+                <FlowItemRenderer
                   key={item.id}
                   item={item}
                   turnId={turnId}
@@ -300,7 +323,21 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   isLastItem={isLast && itemIdx === group.items.length - 1}
                 />
               ));
-            
+
+            case 'terminal': {
+              const terminalItems = group.items.filter((it) => it.type === 'tool') as FlowToolItem[];
+              return (
+                <TerminalGroupRenderer
+                  key={`terminal-group-${groupIndex}`}
+                  items={terminalItems}
+                  turnId={turnId}
+                  roundId={round.id}
+                  isLast={isLast}
+                  isGroupStreaming={round.isStreaming}
+                />
+              );
+            }
+
             case 'critical': {
               // If next group is the matching subagent, skip here — rendered by subagent case.
               const nextGroup = groupedItems[groupIndex + 1];
@@ -521,7 +558,7 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
 /**
  * Subagent item renderer (used inside the container, no collapse logic).
  */
-const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundId: string; isLastItem?: boolean }>(({ item, isLastItem }) => {
+const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundId: string; isLastItem?: boolean }>(({ item, turnId, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -559,6 +596,7 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
       return (
         <FlowTextBlock
           textItem={item as FlowTextItem}
+          className="flow-text-block--subagent-compact"
         />
       );
     
@@ -576,9 +614,10 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
           onOpenInEditor={handleOpenInEditor}
           onOpenInPanel={handleOpenInPanel}
           sessionId={sessionId}
+          turnId={turnId}
         />
       );
-    
+
     default:
       return null;
   }
@@ -595,7 +634,7 @@ interface FlowItemRendererProps {
 }
 
 // Do not memoize: streaming content updates frequently.
-const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, isLastItem }) => {
+const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -646,6 +685,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, isLastItem })
       return wrapContent(
         <FlowTextBlock
           textItem={item as FlowTextItem}
+          className={isSubagentItem ? 'flow-text-block--subagent-compact' : ''}
         />
       );
     
@@ -681,10 +721,11 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, isLastItem })
               }
             }}
             sessionId={sessionId}
+            turnId={turnId}
           />
         </div>
       );
-    
+
     default:
       return null;
   }

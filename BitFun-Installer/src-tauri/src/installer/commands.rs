@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use tauri::{Emitter, Manager, Window};
 
 #[cfg(target_os = "windows")]
@@ -28,6 +29,42 @@ const INSTALL_MANIFEST_FILE: &str = ".bitfun-install-manifest.json";
 const INSTALLER_STATE_FILE: &str = "installer-state.json";
 const EMBEDDED_PAYLOAD_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded_payload.zip"));
+
+struct InstallerAppLanguage {
+    code: &'static str,
+    aliases: &'static [&'static str],
+}
+
+const INSTALLER_APP_LANGUAGES: &[InstallerAppLanguage] = &[
+    InstallerAppLanguage {
+        code: "zh-CN",
+        aliases: &["zh", "zh-Hans", "zh-CN"],
+    },
+    InstallerAppLanguage {
+        code: "zh-TW",
+        aliases: &["zh-TW", "zh-Hant", "zh-HK", "zh-MO"],
+    },
+    InstallerAppLanguage {
+        code: "en-US",
+        aliases: &["en", "en-US"],
+    },
+];
+
+static INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY: LazyLock<Vec<(&'static str, &'static str)>> =
+    LazyLock::new(|| {
+        let mut aliases = INSTALLER_APP_LANGUAGES
+            .iter()
+            .flat_map(|language| {
+                language
+                    .aliases
+                    .iter()
+                    .map(move |alias| (language.code, *alias))
+            })
+            .collect::<Vec<_>>();
+        // Keep script-specific aliases ahead of broad prefixes like `zh`.
+        aliases.sort_by(|(_, a), (_, b)| b.len().cmp(&a.len()));
+        aliases
+    });
 
 #[derive(Debug, Clone, Deserialize)]
 struct PayloadManifest {
@@ -177,7 +214,7 @@ pub fn get_launch_context() -> LaunchContext {
         let uninstall_path = args
             .get(idx + 1)
             .map(|p| p.to_string())
-            .or_else(|| guess_uninstall_path_from_exe());
+            .or_else(guess_uninstall_path_from_exe);
         return LaunchContext {
             mode: "uninstall".to_string(),
             uninstall_path,
@@ -494,8 +531,7 @@ fn schedule_windows_self_uninstall_cleanup(uninstall_exe_path: &Path) -> Result<
     let script_path = temp_dir.join(format!("bitfun-uninstall-{}.cmd", pid));
     let log_path = temp_dir.join(format!("bitfun-uninstall-cleanup-{}.log", pid));
 
-    let script = format!(
-        r#"@echo off
+    let script = r#"@echo off
 setlocal enableextensions
 set "TARGET=%~1"
 set "LOG=%~2"
@@ -518,7 +554,7 @@ for /L %%i in (1,1,30) do (
 echo [%DATE% %TIME%] cleanup failed after retries >> "%LOG%"
 exit /b 1
 "#
-    );
+    .to_string();
 
     std::fs::write(&script_path, script)
         .map_err(|e| format!("Failed to write cleanup script: {}", e))?;
@@ -701,7 +737,7 @@ pub async fn test_model_config_connection(
                                 "Installer AI config connection test: model={}, success={}, response_time={}ms",
                                 model_name, merged.success, merged.response_time_ms
                             );
-                            return Ok(merged.into());
+                            return Ok(merged);
                         }
 
                         let merged = ConnectionTestResult {
@@ -715,7 +751,7 @@ pub async fn test_model_config_connection(
                             "Installer AI config connection test: model={}, success={}, response_time={}ms",
                             model_name, merged.success, merged.response_time_ms
                         );
-                        return Ok(merged.into());
+                        return Ok(merged);
                     }
                     Err(e) => {
                         log::error!(
@@ -1076,13 +1112,23 @@ fn read_saved_app_language() -> Option<String> {
     let root: Value = serde_json::from_str(&content).ok()?;
     let lang = root.get("app")?.get("language")?.as_str()?;
 
-    match lang {
-        "zh-CN" => Some("zh-CN".to_string()),
-        "en-US" => Some("en-US".to_string()),
-        "zh" => Some("zh-CN".to_string()),
-        "en" => Some("en-US".to_string()),
-        _ => None,
+    normalize_app_language(lang).map(str::to_string)
+}
+
+fn normalize_app_language(lang: &str) -> Option<&'static str> {
+    // Always persist the canonical app locale id so the desktop app, web UI,
+    // and installer do not have to handle mixed aliases from old configs.
+    let normalized = lang.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return None;
     }
+
+    INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY
+        .iter()
+        .find_map(|(code, alias)| {
+            let alias = alias.to_ascii_lowercase();
+            (normalized == alias || normalized.starts_with(&format!("{alias}-"))).then_some(*code)
+        })
 }
 
 fn read_or_create_root_config(app_config_file: &Path) -> Result<Value, String> {
@@ -1108,10 +1154,9 @@ fn write_root_config(app_config_file: &Path, root: &Value) -> Result<(), String>
 }
 
 fn apply_first_launch_language(app_language: &str) -> Result<(), String> {
-    let allowed = ["zh-CN", "en-US"];
-    if !allowed.contains(&app_language) {
+    let Some(app_language) = normalize_app_language(app_language) else {
         return Err("Unsupported app language".to_string());
-    }
+    };
 
     let app_config_file = ensure_app_config_path()?;
     let mut root = read_or_create_root_config(&app_config_file)?;
@@ -1607,5 +1652,30 @@ fn rollback_installation(install_path: &Path, install_dir_was_absent: bool) {
     log::warn!("Installation failed, starting rollback");
     if install_dir_was_absent && install_path.exists() {
         let _ = std::fs::remove_dir_all(install_path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_app_language;
+
+    #[test]
+    fn normalize_app_language_maps_aliases_to_canonical_ids() {
+        assert_eq!(normalize_app_language("zh-CN"), Some("zh-CN"));
+        assert_eq!(normalize_app_language("zh"), Some("zh-CN"));
+        assert_eq!(normalize_app_language("zh-Hans"), Some("zh-CN"));
+        assert_eq!(normalize_app_language("zh-TW"), Some("zh-TW"));
+        assert_eq!(normalize_app_language("zh-Hant"), Some("zh-TW"));
+        assert_eq!(normalize_app_language("zh-Hant-TW"), Some("zh-TW"));
+        assert_eq!(normalize_app_language("zh-HK"), Some("zh-TW"));
+        assert_eq!(normalize_app_language("  EN-us  "), Some("en-US"));
+        assert_eq!(normalize_app_language("en"), Some("en-US"));
+        assert_eq!(normalize_app_language("en-US"), Some("en-US"));
+    }
+
+    #[test]
+    fn normalize_app_language_rejects_unknown_language_codes() {
+        assert_eq!(normalize_app_language("fr-FR"), None);
+        assert_eq!(normalize_app_language(""), None);
     }
 }

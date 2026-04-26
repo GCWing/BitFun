@@ -1,10 +1,12 @@
+import type { AppLanguage } from '../i18n/languages';
+
 /** Installation step identifiers */
 export type InstallStep = 'lang' | 'options' | 'model' | 'progress' | 'theme' | 'uninstall';
 
 export interface LaunchContext {
   mode: 'install' | 'uninstall';
   uninstallPath: string | null;
-  appLanguage?: 'zh-CN' | 'en-US' | null;
+  appLanguage?: AppLanguage | null;
 }
 
 export interface InstallPathValidation {
@@ -67,7 +69,7 @@ export interface InstallOptions {
   contextMenu: boolean;
   addToPath: boolean;
   launchAfterInstall: boolean;
-  appLanguage: 'zh-CN' | 'en-US';
+  appLanguage: AppLanguage;
   themePreference: ThemePreferenceId;
   modelConfig: ModelConfig | null;
 }

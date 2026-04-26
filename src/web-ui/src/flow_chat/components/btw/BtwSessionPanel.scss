@@ -4,6 +4,7 @@
  */
 
 .btw-session-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -109,13 +110,22 @@
     white-space: nowrap;
   }
 
-  &__origin-button {
+  &__origin-button,
+  &__stop-button {
     flex-shrink: 0;
     color: var(--color-text-secondary);
 
     &:not(:disabled):hover {
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
       color: var(--color-text-primary);
+    }
+  }
+
+  &__stop-button:not(:disabled) {
+    color: color-mix(in srgb, var(--color-error, #ef4444) 84%, var(--color-text-primary));
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-error, #ef4444) 12%, transparent);
     }
   }
 
@@ -149,5 +159,19 @@
     color: var(--color-text-muted);
     font-size: 13px;
     text-align: center;
+  }
+
+  &__scroll-to-bottom {
+    bottom: 18px;
+    right: 18px;
+    width: 34px;
+    height: 34px;
+    border-width: 1px;
+    z-index: 12;
+  }
+
+  // Action bar is now a floating card above the bottom, so no extra scroll padding needed.
+  &--has-action-bar &__scroll-to-bottom {
+    bottom: 140px;
   }
 }

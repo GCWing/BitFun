@@ -76,3 +76,30 @@ Examples:
 4. Avoid logging sensitive data (tokens, passwords, PII)
 5. Avoid excessive logging in hot paths (loops, frequent callbacks)
 6. Use TRACE for expensive computations that may impact performance
+
+## Timing And Probes
+
+Use `src/web-ui/src/shared/utils/timing.ts` as the single timing helper for frontend diagnostics.
+
+```typescript
+import { createLogger } from '@/shared/utils/logger';
+import { measureAsyncAndLog, sendDebugProbe } from '@/shared/utils';
+
+const log = createLogger('ModuleName');
+
+await measureAsyncAndLog(log, 'Workspace loaded', () => loadWorkspace(), {
+  data: { workspacePath },
+});
+
+sendDebugProbe('ModuleName.ts:42', 'Workspace refresh completed', { workspacePath }, {
+  startedAt,
+});
+```
+
+Rules:
+
+1. Prefer `measureSync`, `measureAsync`, `measureSyncAndLog`, `measureAsyncAndLog`, `logDuration`, and `logElapsed` over handwritten `performance.now()` / `Date.now()` timing logs
+2. Use `durationMs` for frontend diagnostic log fields
+3. Treat `sendDebugProbe` as a thin wrapper over the shared logger/timing helpers, not as a separate logging system
+4. Do not replace protocol or persisted fields such as `duration_ms` when they are part of API payloads, events, or stored data
+5. Do not migrate animation, polling, or deadline logic that depends on raw clock semantics into the logging helper layer

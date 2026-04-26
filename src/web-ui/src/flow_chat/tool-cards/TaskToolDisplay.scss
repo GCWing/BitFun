@@ -303,8 +303,8 @@
 
   /* Prompt uses ModelThinkingDisplay shell + .thinking-markdown (see ModelThinkingDisplay.scss). */
   .task-expanded-content .thinking-content {
-    /* Override thinking card 300px cap: ~5 lines (matches .thinking-markdown line-height 1.45). */
-    max-height: calc(1.45em * 5);
+    /* Keep subagent task prompts compact; the detail panel still exposes the full text. */
+    max-height: calc(1.45em * 1);
   }
 
   /* Extra breathing room below header / divider before prompt + actions. */
@@ -453,11 +453,47 @@
   margin-bottom: 10px;
   transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-  // Expanded state: subtle default elevation.
+  // Expanded state: the wrapper becomes the unified visual container.
   &:has(.subagent-items-wrapper--expanded) {
+    // The wrapper itself provides the unified card appearance.
+    background: var(--color-bg-flowchat);
+    border: 1px solid var(--border-base);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
     box-shadow:
       0 2px 6px rgba(0, 0, 0, 0.15),
       0 1px 3px rgba(0, 0, 0, 0.1);
+
+    // Strip the BaseToolCard's own border/background/shadow so it merges
+    // into the wrapper; the wrapper provides the unified card chrome.
+    .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      backdrop-filter: none;
+      margin-bottom: 0;
+      box-shadow: none;
+
+      &:hover {
+        box-shadow: none;
+        border-color: transparent;
+      }
+    }
+
+    // Strip the subagent container's own border/background/shadow so it
+    // merges into the wrapper; the wrapper provides the unified card chrome.
+    .subagent-items-container {
+      border: none;
+      background: transparent;
+      backdrop-filter: none;
+    }
+
+    // Hide the header top accent line — the wrapper border already frames
+    // the unified card; keeping ::before would show a ghost divider above
+    // the title, making the header look like a floating frame.
+    .base-tool-card-header::before {
+      display: none;
+    }
   }
 
   // Hover over expanded card: stronger elevation.
@@ -466,19 +502,7 @@
       0 4px 16px rgba(0, 0, 0, 0.25),
       0 2px 8px rgba(0, 0, 0, 0.15),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
-
-  // Square the bottom corners of the task header card when expanded.
-  &:has(.subagent-items-wrapper--expanded) {
-    .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
-      border-radius: 8px 8px 0 0;
-      // Remove bottom margin so the subagent container connects flush.
-      margin-bottom: 0;
-      // Suppress the base card's own hover shadow; the wrapper handles it.
-      &:hover {
-        box-shadow: none;
-      }
-    }
+    border-color: var(--border-medium);
   }
 }
 

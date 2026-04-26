@@ -513,6 +513,16 @@ impl SnapshotCore {
             String::new()
         };
 
+        debug!(
+            "get_file_diff result: file_path={:?} session_id={} before_len={} after_len={} identical={} file_created_in_session={}",
+            file_path,
+            session_id,
+            before.len(),
+            after.len(),
+            before == after,
+            file_created_in_session
+        );
+
         Ok((before, after))
     }
 

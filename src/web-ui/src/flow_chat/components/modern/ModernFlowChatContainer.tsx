@@ -12,6 +12,7 @@ import { FlowChatHeader, type FlowChatHeaderTurnSummary } from './FlowChatHeader
 import { WelcomePanel } from '../WelcomePanel';
 import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
+import { useTerminalGroupState } from './useTerminalGroupState';
 import { useFlowChatFileActions } from './useFlowChatFileActions';
 import { useFlowChatNavigation } from './useFlowChatNavigation';
 import { useFlowChatCopyDialog } from './useFlowChatCopyDialog';
@@ -61,6 +62,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onExpandAllInTurn: handleExpandAllInTurn,
     onCollapseGroup: handleCollapseGroup,
   } = useExploreGroupState(virtualItems);
+  const {
+    terminalGroupStates,
+    onTerminalGroupToggle: handleTerminalGroupToggle,
+    onExpandTerminalGroup: handleExpandTerminalGroup,
+    onCollapseTerminalGroup: handleCollapseTerminalGroup,
+  } = useTerminalGroupState();
   const { handleToolConfirm, handleToolReject } = useFlowChatToolActions();
   const { handleFileViewRequest } = useFlowChatFileActions({
     workspacePath,
@@ -110,6 +117,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onExpandGroup: handleExpandGroup,
     onExpandAllInTurn: handleExpandAllInTurn,
     onCollapseGroup: handleCollapseGroup,
+    terminalGroupStates,
+    onTerminalGroupToggle: handleTerminalGroupToggle,
+    onExpandTerminalGroup: handleExpandTerminalGroup,
+    onCollapseTerminalGroup: handleCollapseTerminalGroup,
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
@@ -127,6 +138,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleExpandGroup,
     handleExpandAllInTurn,
     handleCollapseGroup,
+    terminalGroupStates,
+    handleTerminalGroupToggle,
+    handleExpandTerminalGroup,
+    handleCollapseTerminalGroup,
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
@@ -309,6 +324,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           btwParentTitle={btwParentTitle}
           turns={turnSummaries}
           onJumpToTurn={handleJumpToTurn}
+          onJumpToCurrentTurn={() => {
+            const turnId = effectiveVisibleTurnInfo?.turnId;
+            if (turnId) handleJumpToTurn(turnId);
+          }}
           onJumpToPreviousTurn={handleJumpToPreviousTurn}
           onJumpToNextTurn={handleJumpToNextTurn}
           searchQuery={searchQuery}

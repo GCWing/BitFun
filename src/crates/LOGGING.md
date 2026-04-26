@@ -29,3 +29,23 @@
 8. Use appropriate log levels - reserve ERROR for actual failures, not expected error conditions
 9. Keep log messages concise and actionable - focus on what happened and why it matters
 10. Use conditional logging for expensive operations: `if log::log_enabled!(log::Level::Debug) { ... }`
+
+## Timing And Duration Fields
+
+Use shared timing helpers from `bitfun_core::util::timing` when recording internal durations.
+
+```rust
+use bitfun_core::util::{elapsed_ms_u64, TimingCollector};
+use std::time::Instant;
+
+let started_at = Instant::now();
+let duration_ms = elapsed_ms_u64(started_at);
+debug!("Git status completed: repo_path={}, duration_ms={}", repo_path, duration_ms);
+```
+
+Rules:
+
+1. Prefer `elapsed_ms`, `elapsed_ms_u64`, and `TimingCollector` over repeated `Instant::now()` plus `elapsed().as_millis()` formatting
+2. Use `duration_ms` for Rust diagnostic log keys
+3. Preserve existing protocol and model field names such as `duration_ms`, `execution_time_ms`, or `response_time_ms` when they are part of events, API responses, or persisted state
+4. Avoid introducing timing logs into tight loops or high-frequency runtime paths unless the diagnostic value clearly justifies it

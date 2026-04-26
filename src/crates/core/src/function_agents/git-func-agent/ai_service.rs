@@ -1,4 +1,6 @@
-use super::types::{AICommitAnalysis, CommitFormat, CommitMessageOptions, CommitType, ProjectContext};
+use super::types::{
+    AICommitAnalysis, CommitFormat, CommitMessageOptions, CommitType, ProjectContext,
+};
 use crate::function_agents::common::{AgentError, AgentResult, Language};
 use crate::infrastructure::ai::AIClient;
 use crate::util::types::Message;

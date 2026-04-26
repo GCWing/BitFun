@@ -1,0 +1,121 @@
+/**
+ * Sticky task indicator styles.
+ * Fixed at the top of the flowchat message list with a gradient fade.
+ */
+
+.sticky-task-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 93px; // Below FlowChatHeader (36px) + ScrollToTurnHeaderButton hover zone (57px).
+  z-index: 10;
+  pointer-events: none;
+
+  // Trigger area height: 40px hover zone + 20px gradient.
+  height: 60px;
+
+  opacity: 0;
+  transition: opacity 0.25s ease;
+
+  // ========== Visible state ==========
+  &--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  // ========== Gradient background layer ==========
+  &__gradient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+
+    background: linear-gradient(
+      to bottom,
+      var(--color-bg-flowchat, var(--color-bg-scene, #1c1c1f)) 0%,
+      color-mix(in srgb, var(--color-bg-flowchat, var(--color-bg-scene, #1c1c1f)) 80%, transparent) 40%,
+      color-mix(in srgb, var(--color-bg-flowchat, var(--color-bg-scene, #1c1c1f)) 40%, transparent) 70%,
+      transparent 100%
+    );
+  }
+
+  // ========== Content layer ==========
+  &__content {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transition: transform 0.15s ease;
+  }
+
+  // ========== Task label button ==========
+  &__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: min(480px, 70vw);
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-base);
+    background: var(--color-bg-scene);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1;
+    white-space: nowrap;
+
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+
+    &:hover {
+      border-color: var(--border-medium);
+      color: var(--color-text-primary);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(-2px);
+    }
+
+    &:focus-visible {
+      outline: none;
+      border-color: var(--border-strong);
+      color: var(--color-text-primary);
+      box-shadow: 0 0 0 1.5px var(--border-strong);
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    opacity: 0.75;
+  }
+
+  &__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__arrow {
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+}
+
+// ========== Responsive tweaks ==========
+@media (max-width: 768px) {
+  .sticky-task-indicator {
+    top: 93px;
+    height: 52px;
+
+    &__btn {
+      height: 26px;
+      padding: 0 8px;
+      max-width: min(320px, 80vw);
+    }
+  }
+}

@@ -82,6 +82,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 turn_index,
                 original_user_input,
                 user_message_metadata,
+                subagent_parent_info,
                 ..
             } => {
                 json!({
@@ -91,19 +92,23 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "turnIndex": turn_index,
                     "originalUserInput": original_user_input,
                     "userMessageMetadata": user_message_metadata,
+                    "subagentParentInfo": subagent_parent_info,
                 })
             }
             AgenticEvent::ModelRoundStarted {
                 session_id,
                 turn_id,
                 round_id,
-                ..
+                round_index,
+                subagent_parent_info,
             } => {
                 json!({
                     "type": "model-round-started",
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "roundId": round_id,
+                    "roundIndex": round_index,
+                    "subagentParentInfo": subagent_parent_info,
                 })
             }
             AgenticEvent::TextChunk {
@@ -111,7 +116,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 turn_id,
                 round_id,
                 text,
-                ..
+                subagent_parent_info,
             } => {
                 json!({
                     "type": "text-chunk",
@@ -119,6 +124,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "turnId": turn_id,
                     "roundId": round_id,
                     "text": text,
+                    "subagentParentInfo": subagent_parent_info,
                 })
             }
             AgenticEvent::ThinkingChunk {
@@ -127,7 +133,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 round_id,
                 content,
                 is_end,
-                ..
+                subagent_parent_info,
             } => {
                 json!({
                     "type": "text-chunk",
@@ -137,30 +143,34 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "text": content,
                     "contentType": "thinking",
                     "isThinkingEnd": is_end,
+                    "subagentParentInfo": subagent_parent_info,
                 })
             }
             AgenticEvent::ToolEvent {
                 session_id,
                 turn_id,
                 tool_event,
-                ..
+                subagent_parent_info,
             } => {
                 json!({
                     "type": "tool-event",
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "toolEvent": tool_event,
+                    "subagentParentInfo": subagent_parent_info,
                 })
             }
             AgenticEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,
+                subagent_parent_info,
                 ..
             } => {
                 json!({
                     "type": "dialog-turn-completed",
                     "sessionId": session_id,
                     "turnId": turn_id,
+                    "subagentParentInfo": subagent_parent_info,
                 })
             }
             _ => return Ok(()),

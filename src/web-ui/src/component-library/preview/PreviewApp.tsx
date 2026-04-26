@@ -28,15 +28,19 @@ export const PreviewApp: React.FC = () => {
   const currentCategory = componentRegistry.find(
     (cat) => cat.id === selectedCategory
   );
-  const themeTypeLabel = themeType === 'light' ? '浅色' : '深色';
+  const themeTypeLabel = themeType === 'light'
+    ? t('componentLibrary.previewApp.themeTypeLight')
+    : t('componentLibrary.previewApp.themeTypeDark');
   const themeOptions = useMemo<SelectOption[]>(
     () =>
       themes.map((theme) => ({
         label: theme.name,
         value: theme.id,
-        description: theme.type === 'light' ? '浅色主题' : '深色主题',
+        description: theme.type === 'light'
+          ? t('componentLibrary.previewApp.themeDescriptionLight')
+          : t('componentLibrary.previewApp.themeDescriptionDark'),
       })),
-    [themes]
+    [t, themes]
   );
 
   return (
@@ -44,11 +48,13 @@ export const PreviewApp: React.FC = () => {
       <header className="preview-header">
         <div className="preview-logo">
           <h1>{t('componentLibrary.previewApp.title')}</h1>
-          <span className="preview-version">v0.2.3</span>
+          <span className="preview-version">v0.2.4</span>
         </div>
         <div className="preview-header-actions">
           <label className="preview-theme-selector">
-            <span className="preview-theme-selector__label">主题</span>
+            <span className="preview-theme-selector__label">
+              {t('componentLibrary.previewApp.themeLabel')}
+            </span>
             <div className="preview-theme-selector__control">
               <Select
                 className="preview-theme-selector__select-component"
@@ -76,14 +82,20 @@ export const PreviewApp: React.FC = () => {
         <aside className={`preview-sidebar ${isSidebarCollapsed ? 'preview-sidebar--collapsed' : ''}`}>
           <div className="preview-sidebar-header">
             {!isSidebarCollapsed && (
-              <span className="preview-sidebar-title">组件导航</span>
+              <span className="preview-sidebar-title">
+                {t('componentLibrary.previewApp.sidebarTitle')}
+              </span>
             )}
             <button
               type="button"
               className="preview-sidebar-toggle"
               onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-              aria-label={isSidebarCollapsed ? '展开导航' : '收起导航'}
-              title={isSidebarCollapsed ? '展开导航' : '收起导航'}
+              aria-label={isSidebarCollapsed
+                ? t('componentLibrary.previewApp.expandSidebar')
+                : t('componentLibrary.previewApp.collapseSidebar')}
+              title={isSidebarCollapsed
+                ? t('componentLibrary.previewApp.expandSidebar')
+                : t('componentLibrary.previewApp.collapseSidebar')}
             >
               <span className={`preview-sidebar-toggle__icon ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

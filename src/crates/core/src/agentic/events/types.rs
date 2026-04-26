@@ -5,6 +5,7 @@
 use crate::agentic::core::SessionState;
 
 // ============ Re-export events layer types ============
+pub use bitfun_events::agentic::ErrorCategory;
 pub use bitfun_events::{
     AgenticEvent as BaseAgenticEvent, AgenticEventEnvelope as EventEnvelope,
     AgenticEventPriority as EventPriority, SubagentParentInfo, ToolEventData,

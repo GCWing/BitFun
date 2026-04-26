@@ -4,6 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { createLogger } from '@/shared/utils/logger';
+import { measureAsync } from '@/shared/utils/timing';
 
 const log = createLogger('LspDiagnostics');
 
@@ -17,12 +18,13 @@ export class LspDiagnostics {
   /** Check backend LSP status. */
   static async checkBackendStatus(workspacePath: string): Promise<LspDiagnosticInfo> {
     try {
-      const startTime = Date.now();
-      await invoke('lsp_get_all_server_states', {
-        request: { workspacePath }
+      const result = await measureAsync(() => invoke('lsp_get_all_server_states', {
+        request: { workspacePath },
+      }));
+      log.debug('Got server states', {
+        workspacePath,
+        durationMs: result.durationMs,
       });
-      const elapsed = Date.now() - startTime;
-      log.debug('Got server states', { workspacePath, elapsed });
       
       return {
         backendInitialized: true,

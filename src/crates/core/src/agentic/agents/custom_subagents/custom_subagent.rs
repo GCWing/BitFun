@@ -20,11 +20,12 @@ pub struct CustomSubagent {
     pub tools: Vec<String>,
     pub prompt: String,
     pub readonly: bool,
+    pub review: bool,
     pub path: String,
     pub kind: CustomSubagentKind,
     /// Whether this subagent is enabled, default true
     pub enabled: bool,
-    /// Model ID to use, default "primary"
+    /// Model ID to use, default "fast"
     pub model: String,
 }
 
@@ -85,10 +86,11 @@ impl CustomSubagent {
             tools,
             prompt,
             readonly,
+            review: false,
             path,
             kind,
             enabled: true,
-            model: "primary".to_string(),
+            model: "fast".to_string(),
         }
     }
 
@@ -115,6 +117,11 @@ impl CustomSubagent {
             .and_then(|v| v.as_bool())
             .unwrap_or(Self::DEFAULT_READONLY);
 
+        let review = metadata
+            .get("review")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(Self::DEFAULT_REVIEW);
+
         let enabled = metadata
             .get("enabled")
             .and_then(|v| v.as_bool())
@@ -132,6 +139,7 @@ impl CustomSubagent {
             tools,
             prompt: content,
             readonly,
+            review,
             path: path.to_string(),
             kind,
             enabled,
@@ -141,8 +149,9 @@ impl CustomSubagent {
 
     const DEFAULT_TOOLS: &'static [&'static str] = &["LS", "Read", "Glob", "Grep"];
     const DEFAULT_READONLY: bool = true;
+    const DEFAULT_REVIEW: bool = false;
     const DEFAULT_ENABLED: bool = true;
-    const DEFAULT_MODEL: &'static str = "primary";
+    const DEFAULT_MODEL: &'static str = "fast";
 
     /// Check if tools match default values
     fn is_default_tools(tools: &[String]) -> bool {
@@ -186,6 +195,9 @@ impl CustomSubagent {
         if self.readonly != Self::DEFAULT_READONLY {
             metadata.insert(Value::String("readonly".into()), Value::Bool(self.readonly));
         }
+        if self.review != Self::DEFAULT_REVIEW {
+            metadata.insert(Value::String("review".into()), Value::Bool(self.review));
+        }
         if enabled != Self::DEFAULT_ENABLED {
             metadata.insert(Value::String("enabled".into()), Value::Bool(enabled));
         }
@@ -197,5 +209,45 @@ impl CustomSubagent {
         }
         let metadata = Value::Mapping(metadata);
         FrontMatterMarkdown::save(&self.path, &metadata, &self.prompt).map_err(BitFunError::Agent)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use uuid::Uuid;
+
+    fn temp_subagent_path(name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("bitfun-subagent-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).expect("temp subagent dir should be created");
+        dir.join(name).to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn review_metadata_round_trips_through_front_matter() {
+        let path = temp_subagent_path("review-agent.md");
+        let mut subagent = CustomSubagent::new(
+            "ReviewExtra".to_string(),
+            "Additional code reviewer".to_string(),
+            vec!["Read".to_string(), "Grep".to_string()],
+            "Review the selected files.".to_string(),
+            true,
+            path.clone(),
+            CustomSubagentKind::User,
+        );
+        subagent.review = true;
+
+        subagent
+            .save_to_file(None, None)
+            .expect("review subagent should save");
+
+        let saved = fs::read_to_string(&path).expect("saved subagent should be readable");
+        assert!(saved.contains("review: true"));
+
+        let loaded = CustomSubagent::from_file(&path, CustomSubagentKind::User)
+            .expect("review subagent should load");
+        assert!(loaded.review);
+        assert!(loaded.readonly);
     }
 }

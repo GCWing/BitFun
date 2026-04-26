@@ -3,14 +3,18 @@
  * Supports mixed streaming output.
  */
 
-import type { DialogTurnKind, SessionKind } from '@/shared/types/session-history';
+import type {
+  DialogTurnKind,
+  SessionKind,
+  SessionTitleSource,
+} from '@/shared/types/session-history';
 
 // Base type for streaming items.
 export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking';
   timestamp: number;
-  status: 'pending' | 'preparing' | 'running' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  status: 'pending' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
   
   // Subagent markers.
   parentTaskToolId?: string; // Parent Task tool ID.
@@ -158,6 +162,13 @@ export interface TodoItem {
 export interface Session {
   sessionId: string;
   title?: string;
+  /**
+   * Untouched default sessions keep an i18n key so locale changes can re-render
+   * their title. Once a real title is generated or renamed, we freeze it as text.
+   */
+  titleSource?: SessionTitleSource;
+  titleI18nKey?: string;
+  titleI18nParams?: Record<string, unknown>;
   titleStatus?: 'generating' | 'generated' | 'failed';
   dialogTurns: DialogTurn[];
   
@@ -235,6 +246,13 @@ export interface Session {
     parentDialogTurnId?: string;
     parentTurnIndex?: number;
   };
+
+  /**
+   * Set when a session finishes (completed / error / cancelled) while not the active session.
+   * Cleared after the user switches to it and the content renders.
+   * 'completed' → green dot, 'error' → red dot.
+   */
+  hasUnreadCompletion?: 'completed' | 'error';
 }
 
 export interface SessionConfig {
@@ -295,6 +313,7 @@ export interface ToolCardProps {
   onOpenInPanel?: (panelType: string, data: any) => void;
   onExpand?: () => void;
   sessionId?: string;
+  turnId?: string;
   /** Callback for MCP App ui/message requests. Returns whether the message was handled successfully. */
   onMcpAppMessage?: (params: import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageParams) => Promise<import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageResult>;
 }

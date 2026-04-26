@@ -30,6 +30,7 @@ impl DeepResearchAgent {
                 // Terminal — run commands to gather data (e.g. git log, curl, jq)
                 "Bash".to_string(),
                 "TerminalControl".to_string(),
+                "ControlHub".to_string(),
                 // Task tracking
                 "TodoWrite".to_string(),
             ],
@@ -85,6 +86,7 @@ mod tests {
         assert!(tools.contains(&"Write".to_string()));
         assert!(tools.contains(&"Bash".to_string()));
         assert!(tools.contains(&"TerminalControl".to_string()));
+        assert!(tools.contains(&"ControlHub".to_string()));
     }
 
     #[test]

@@ -481,6 +481,24 @@ export class AgentAPI {
     }
   }
 
+  async setSubagentTimeout(
+    sessionId: string,
+    action: { type: 'disable' } | { type: 'restore' } | { type: 'extend'; seconds: number },
+  ): Promise<void> {
+    const actionPayload = action.type === 'disable'
+      ? 'Disable'
+      : action.type === 'restore'
+        ? 'Restore'
+        : { Extend: { seconds: action.seconds } };
+    try {
+      await api.invoke<void>('set_subagent_timeout', {
+        request: { session_id: sessionId, action: actionPayload },
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_subagent_timeout', error, { sessionId, action: action.type });
+    }
+  }
+
   async getAgentInfo(agentType: string): Promise<ModeInfo & { agent_type: string; when_to_use: string; tools: string; location: string }> {
     return {
       id: agentType,

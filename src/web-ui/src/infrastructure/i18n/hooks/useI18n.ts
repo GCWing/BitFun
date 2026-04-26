@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation, UseTranslationOptions } from 'react-i18next';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nService } from '../core/I18nService';
+import { builtinLocales, resolveLocaleId } from '../presets';
 import type { LocaleId, I18nNamespace, LocaleMetadata } from '../types';
 
  
@@ -61,12 +62,12 @@ export function useI18n(
   );
 
   const currentLocaleMetadata = useMemo(
-    () => i18nService.getCurrentLocaleMetadata(),
-    []
+    () => builtinLocales.find(locale => locale.id === currentLanguage),
+    [currentLanguage]
   );
 
   const supportedLocales = useMemo(
-    () => i18nService.getSupportedLocales(),
+    () => builtinLocales,
     []
   );
 
@@ -99,8 +100,8 @@ export function useI18n(
   );
 
   const isRTL = useMemo(
-    () => i18nService.isRTL(),
-    []
+    () => currentLocaleMetadata?.rtl ?? false,
+    [currentLocaleMetadata]
   );
 
   return {
@@ -142,22 +143,8 @@ export function useLanguageSelector() {
 export function useLanguageDetect() {
   const detectBrowserLanguage = useCallback((): LocaleId | null => {
     const browserLang = navigator.language || (navigator as any).userLanguage;
-    
-    
-    const supportedLocales = i18nService.getSupportedLocales();
-    const exactMatch = supportedLocales.find(l => l.id === browserLang);
-    if (exactMatch) {
-      return exactMatch.id;
-    }
-    
-    
-    const langCode = browserLang.split('-')[0];
-    const partialMatch = supportedLocales.find(l => l.id.startsWith(langCode));
-    if (partialMatch) {
-      return partialMatch.id;
-    }
-    
-    return null;
+
+    return resolveLocaleId(browserLang);
   }, []);
 
   return {

@@ -2,6 +2,7 @@
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::truncate_at_char_boundary;
 use async_trait::async_trait;
 use log::{error, info};
 use serde::Deserialize;
@@ -378,7 +379,7 @@ impl WebFetchTool {
                 return true;
             }
         }
-        let sample = &content[..content.len().min(2048)];
+        let sample = truncate_at_char_boundary(content, 2048);
         let sample_lower = sample.to_lowercase();
         sample_lower.contains("<!doctype html")
             || sample_lower.contains("<html")
@@ -402,9 +403,7 @@ impl WebFetchTool {
             .unwrap()
             .replace_all(&text, "\n");
 
-        let text = Regex::new(r"<[^>]+>")
-            .unwrap()
-            .replace_all(&text, " ");
+        let text = Regex::new(r"<[^>]+>").unwrap().replace_all(&text, " ");
 
         let text = text
             .replace("&lt;", "<")
@@ -651,6 +650,7 @@ mod tests {
             custom_data: std::collections::HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
             workspace_services: None,
         }
     }
@@ -780,7 +780,10 @@ mod tests {
 
     #[test]
     fn webfetch_is_html_detects_html_content() {
-        assert!(WebFetchTool::is_html(Some("text/html; charset=utf-8"), "any"));
+        assert!(WebFetchTool::is_html(
+            Some("text/html; charset=utf-8"),
+            "any"
+        ));
         assert!(WebFetchTool::is_html(Some("application/xhtml+xml"), "any"));
         assert!(WebFetchTool::is_html(None, "<!DOCTYPE html><html></html>"));
         assert!(WebFetchTool::is_html(None, "<html lang=\"en\"></html>"));

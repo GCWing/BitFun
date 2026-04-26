@@ -2,14 +2,18 @@
 
 use async_trait::async_trait;
 use bitfun_core::agentic::tools::computer_use_host::{
-    clamp_point_crop_half_extent, ActionRecord, ComputerScreenshot, ComputerUseDisplayInfo,
-    ComputerUseHost, ComputerUseImageContentRect, ComputerUseImplicitScreenshotCenter,
-    ComputerUseInteractionScreenshotKind, ComputerUseInteractionState, ComputerUseLastMutationKind,
-    ComputerUseNavigateQuadrant,
+    clamp_point_crop_half_extent, ActionRecord, AppClickParams, AppInfo, AppSelector,
+    AppStateSnapshot, AppWaitPredicate, ClickTarget, ComputerScreenshot, ComputerUseDisplayInfo,
+    ComputerUseHost, ComputerUseImageContentRect, ComputerUseImageGlobalBounds,
+    ComputerUseImplicitScreenshotCenter, ComputerUseInteractionScreenshotKind,
+    ComputerUseInteractionState, ComputerUseLastMutationKind, ComputerUseNavigateQuadrant,
     ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
-    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, LoopDetectionResult,
-    OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery, UiElementLocateResult,
-    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
+    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, InteractiveActionResult,
+    InteractiveClickParams, InteractiveScrollParams, InteractiveTypeTextParams, InteractiveView,
+    InteractiveViewOpts, LoopDetectionResult, OcrRegionNative, ScreenshotCropCenter,
+    UiElementLocateQuery, UiElementLocateResult, VisualActionResult, VisualClickParams, VisualMark,
+    VisualMarkView, VisualMarkViewOpts, COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
+    COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use bitfun_core::agentic::tools::computer_use_host::{
@@ -20,11 +24,12 @@ use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, Rgb, RgbImage};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
 use screenshots::display_info::DisplayInfo;
 use screenshots::Screen;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -57,6 +62,7 @@ struct PointerPixmapCache {
 }
 
 static POINTER_PIXMAP_CACHE: OnceLock<Option<PointerPixmapCache>> = OnceLock::new();
+static SCREENSHOT_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 fn pointer_pixmap_cache() -> Option<&'static PointerPixmapCache> {
     POINTER_PIXMAP_CACHE
@@ -126,6 +132,75 @@ fn blend_pointer_pixmap(img: &mut RgbImage, cx: i32, cy: i32, p: &PointerPixmapC
     }
 }
 
+#[cfg(test)]
+mod visual_grid_tests {
+    use super::*;
+
+    #[test]
+    fn detects_regular_grid_rect_from_synthetic_screenshot() {
+        let mut img = RgbImage::from_pixel(420, 360, Rgb([245, 245, 245]));
+        let left = 60u32;
+        let top = 40u32;
+        let size = 280u32;
+        for i in 0..15u32 {
+            let pos = i * (size - 1) / 14;
+            for d in 0..2 {
+                let x = left + pos + d;
+                if x < left + size {
+                    for y in top..top + size {
+                        img.put_pixel(x, y, Rgb([25, 25, 25]));
+                    }
+                }
+                let y = top + pos + d;
+                if y < top + size {
+                    for x in left..left + size {
+                        img.put_pixel(x, y, Rgb([25, 25, 25]));
+                    }
+                }
+            }
+        }
+
+        let mut bytes = Vec::new();
+        JpegEncoder::new_with_quality(&mut bytes, 92)
+            .encode_image(&DynamicImage::ImageRgb8(img))
+            .expect("encode synthetic grid");
+        let shot = ComputerScreenshot {
+            screenshot_id: Some("test-shot".to_string()),
+            bytes,
+            mime_type: "image/jpeg".to_string(),
+            image_width: 420,
+            image_height: 360,
+            native_width: 420,
+            native_height: 360,
+            display_origin_x: 0,
+            display_origin_y: 0,
+            vision_scale: 1.0,
+            pointer_image_x: None,
+            pointer_image_y: None,
+            screenshot_crop_center: None,
+            point_crop_half_extent_native: None,
+            navigation_native_rect: None,
+            quadrant_navigation_click_ready: false,
+            image_content_rect: Some(ComputerUseImageContentRect {
+                left: 0,
+                top: 0,
+                width: 420,
+                height: 360,
+            }),
+            image_global_bounds: None,
+            ui_tree_text: None,
+            implicit_confirmation_crop_applied: false,
+        };
+
+        let (x0, y0, width, height) =
+            detect_regular_grid_rect_from_screenshot(&shot, 15, 15).expect("detect grid");
+        assert!((x0 - left as i32).abs() <= 6, "x0={x0}");
+        assert!((y0 - top as i32).abs() <= 6, "y0={y0}");
+        assert!((width as i32 - size as i32).abs() <= 12, "width={width}");
+        assert!((height as i32 - size as i32).abs() <= 12, "height={height}");
+    }
+}
+
 fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
     const ARM: i32 = 2;
     const OUTLINE: Rgb<u8> = Rgb([255, 255, 255]);
@@ -148,7 +223,6 @@ fn draw_pointer_fallback_cross(img: &mut RgbImage, cx: i32, cy: i32) {
         plot(cx, cy + t, CORE);
     }
 }
-
 
 /// Returns the capture bitmap unchanged (no grid, rulers, or margins). Pointer overlays are applied later.
 fn compose_computer_use_frame(
@@ -552,6 +626,25 @@ impl PointerMap {
         let gy = self.origin_y as f64 + ty * (nh - 1.0).max(0.0) + 0.5;
         Ok((gx, gy))
     }
+
+    fn image_global_bounds(&self) -> Option<ComputerUseImageGlobalBounds> {
+        if self.image_w == 0 || self.image_h == 0 {
+            return None;
+        }
+        let (x0, y0) = self.map_image_to_global_f64(0, 0).ok()?;
+        let (x1, y1) = self
+            .map_image_to_global_f64(
+                self.image_w.saturating_sub(1) as i32,
+                self.image_h.saturating_sub(1) as i32,
+            )
+            .ok()?;
+        Some(ComputerUseImageGlobalBounds {
+            left: x0.min(x1),
+            top: y0.min(y1),
+            width: (x1 - x0).abs(),
+            height: (y1 - y0).abs(),
+        })
+    }
 }
 
 /// What the last tool `screenshot` implied for **plain** follow-up captures (no crop / no `navigate_quadrant`).
@@ -600,6 +693,34 @@ struct ComputerUseSessionMutableState {
     /// display instead of "screen under the mouse pointer". The model
     /// uses this to disambiguate multi-monitor targets explicitly.
     preferred_display_id: Option<u32>,
+    /// Most-recent Set-of-Mark interactive view per pid. Used to resolve
+    /// `interactive_*` numeric `i` indices back to AX node indices and to
+    /// detect stale-view usage via `before_view_digest`.
+    interactive_view_cache: std::collections::HashMap<i32, CachedInteractiveView>,
+    visual_mark_cache: std::collections::HashMap<i32, CachedVisualMarkView>,
+    /// Most-recent focused-window screenshot coordinate map per application
+    /// pid. `app_click(target: image_xy | image_grid)` must use the same
+    /// image basis the model saw from `get_app_state`, not whichever global
+    /// computer-use screenshot happened to run last.
+    app_pointer_maps: std::collections::HashMap<i32, PointerMap>,
+    /// Exact screenshot-id keyed coordinate maps. This is the strongest
+    /// addressing basis for arbitrary visual targets because it survives
+    /// interleaved app_state / screenshot / interactive_view calls.
+    screenshot_pointer_maps: std::collections::HashMap<String, PointerMap>,
+}
+
+#[derive(Debug, Clone)]
+struct CachedInteractiveView {
+    digest: String,
+    /// `i` → `node_idx` map (dense, indexed by `i`).
+    elements: Vec<bitfun_core::agentic::tools::computer_use_host::InteractiveElement>,
+}
+
+#[derive(Debug, Clone)]
+struct CachedVisualMarkView {
+    digest: String,
+    marks: Vec<VisualMark>,
+    screenshot_id: Option<String>,
 }
 
 impl ComputerUseSessionMutableState {
@@ -616,6 +737,10 @@ impl ComputerUseSessionMutableState {
             optimizer: ComputerUseOptimizer::new(),
             last_mutation_kind: None,
             preferred_display_id: None,
+            interactive_view_cache: std::collections::HashMap::new(),
+            visual_mark_cache: std::collections::HashMap::new(),
+            app_pointer_maps: std::collections::HashMap::new(),
+            screenshot_pointer_maps: std::collections::HashMap::new(),
         }
     }
 
@@ -682,8 +807,68 @@ impl Default for DesktopComputerUseHost {
 
 impl DesktopComputerUseHost {
     pub fn new() -> Self {
-        Self {
+        let host = Self {
             state: Mutex::new(ComputerUseSessionMutableState::new()),
+        };
+        host.run_background_input_self_check();
+        host
+    }
+
+    fn next_screenshot_id() -> String {
+        let seq = SCREENSHOT_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        format!("shot_{}_{}", ms, seq)
+    }
+
+    /// Codex-style startup probe: log whether AX/background-input capabilities
+    /// are available so operators can diagnose missing permissions early.
+    ///
+    /// Behaviour parity with Codex: if the process is NOT yet
+    /// Accessibility-trusted, immediately call
+    /// `AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: true})`
+    /// once. macOS responds by surfacing the system-modal "允许 X 通过辅助功能
+    /// 控制您的电脑" dialog (deep-linked to System Settings → Privacy & Security
+    /// → Accessibility). Without this call, the OS NEVER prompts and AX tree
+    /// reads against other apps return only the top-level window structure
+    /// (root window + a few descendants) — which is exactly the "shallow tree
+    /// / agent goes blind" symptom we observed against the BitFun WebView.
+    fn run_background_input_self_check(&self) {
+        #[cfg(target_os = "macos")]
+        {
+            let bg_ok = crate::computer_use::macos_bg_input::supports_background_input();
+            if bg_ok {
+                log::info!(
+                    "AX-first computer use ready: AXIsProcessTrustedWithOptions=true; CGEventPostToPid background input enabled"
+                );
+            } else {
+                log::warn!(
+                    "AX-first computer use disabled: process is NOT marked Accessibility-trusted. Triggering one-shot system prompt via AXIsProcessTrustedWithOptions(prompt:true) so macOS surfaces the Accessibility permission dialog (deep-link: System Settings → Privacy & Security → Accessibility)."
+                );
+                // Fire-and-forget. The dialog is async and modal at the macOS
+                // level; we do not block startup waiting for the user to
+                // approve. The next CU invocation will simply succeed once
+                // permission lands. Subsequent BitFun launches skip the
+                // prompt because `ax_trusted()` will already be true.
+                macos::request_ax_prompt();
+            }
+            // Same idea for Screen Recording. Without it, focused-window
+            // screenshots fall back to a desktop-wallpaper placeholder, which
+            // is the second half of the "blind agent" failure mode.
+            if !macos::screen_capture_preflight() {
+                log::warn!(
+                    "Screen Recording permission missing; window screenshots will be incomplete. Triggering CGRequestScreenCaptureAccess() to surface the system prompt."
+                );
+                let _ = macos::request_screen_capture();
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            log::info!(
+                "AX-first background input is macOS-only in this build; legacy screen-coordinate desktop actions remain available"
+            );
         }
     }
 
@@ -1064,6 +1249,7 @@ end tell"#])
         let iw = rgb.width();
         let ih = rgb.height();
         Ok(ComputerScreenshot {
+            screenshot_id: Some(Self::next_screenshot_id()),
             bytes: jpeg_bytes,
             mime_type: "image/jpeg".to_string(),
             image_width: iw,
@@ -1084,6 +1270,12 @@ end tell"#])
                 top: 0,
                 width: iw,
                 height: ih,
+            }),
+            image_global_bounds: Some(ComputerUseImageGlobalBounds {
+                left: display_origin_x as f64,
+                top: display_origin_y as f64,
+                width: native_w as f64,
+                height: native_h as f64,
             }),
             implicit_confirmation_crop_applied: false,
             ui_tree_text: None,
@@ -1572,27 +1764,6 @@ end tell"#])
             .crop_center
             .map(|_| clamp_point_crop_half_extent(params.point_crop_half_extent_native));
 
-        let shot = ComputerScreenshot {
-            bytes: jpeg_bytes,
-            mime_type: "image/jpeg".to_string(),
-            image_width: image_w,
-            image_height: image_h,
-            native_width: map_native_w,
-            native_height: map_native_h,
-            display_origin_x: map_origin_x,
-            display_origin_y: map_origin_y,
-            vision_scale,
-            pointer_image_x,
-            pointer_image_y,
-            screenshot_crop_center,
-            point_crop_half_extent_native,
-            navigation_native_rect: shot_navigation_rect,
-            quadrant_navigation_click_ready,
-            image_content_rect: Some(image_content_rect),
-            implicit_confirmation_crop_applied,
-            ui_tree_text,
-        };
-
         #[cfg(target_os = "macos")]
         let map = PointerMap {
             image_w,
@@ -1619,6 +1790,31 @@ end tell"#])
             native_h: map_native_h,
             origin_x: map_origin_x,
             origin_y: map_origin_y,
+        };
+        let image_global_bounds = map.image_global_bounds();
+
+        let screenshot_id = Self::next_screenshot_id();
+        let shot = ComputerScreenshot {
+            screenshot_id: Some(screenshot_id),
+            bytes: jpeg_bytes,
+            mime_type: "image/jpeg".to_string(),
+            image_width: image_w,
+            image_height: image_h,
+            native_width: map_native_w,
+            native_height: map_native_h,
+            display_origin_x: map_origin_x,
+            display_origin_y: map_origin_y,
+            vision_scale,
+            pointer_image_x,
+            pointer_image_y,
+            screenshot_crop_center,
+            point_crop_half_extent_native,
+            navigation_native_rect: shot_navigation_rect,
+            quadrant_navigation_click_ready,
+            image_content_rect: Some(image_content_rect),
+            image_global_bounds,
+            implicit_confirmation_crop_applied,
+            ui_tree_text,
         };
 
         Ok((shot, map, persist_nav_focus))
@@ -1652,7 +1848,6 @@ end tell"#])
             }
         }
 
-
         #[cfg(target_os = "macos")]
         {
             let platform_note = if cfg!(debug_assertions) && !macos::ax_trusted() {
@@ -1676,8 +1871,7 @@ end tell"#])
             // exercises the same DXGI/GDI path used for actual capture, so a
             // failure here is a strong signal that capture won't work either
             // (e.g. running under Session 0 / blocked by group policy).
-            let screen_capture_granted =
-                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+            let screen_capture_granted = DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
 
             // Accessibility / input injection: there is no opt-in permission
             // on Windows, but UIPI silently blocks input into elevated windows
@@ -1691,9 +1885,8 @@ end tell"#])
                 );
             }
             if !elevated {
-                notes.push(
-                    "Not running elevated: UIPI may block input into Administrator windows.",
-                );
+                notes
+                    .push("Not running elevated: UIPI may block input into Administrator windows.");
             }
             ComputerUsePermissionSnapshot {
                 accessibility_granted: true,
@@ -1713,8 +1906,7 @@ end tell"#])
                 || session_type.eq_ignore_ascii_case("wayland");
             let x11_display = std::env::var("DISPLAY").is_ok();
 
-            let screen_capture_granted =
-                DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
+            let screen_capture_granted = DisplayInfo::all().map(|d| !d.is_empty()).unwrap_or(false);
 
             // Global keyboard / mouse injection on Linux requires either an
             // X11 session with XTEST (`enigo` / `rdev` work) *or* uinput on
@@ -1730,7 +1922,9 @@ end tell"#])
                 );
             }
             if !x11_display && !wayland {
-                notes.push("DISPLAY not set: no X server reachable for input injection.".to_string());
+                notes.push(
+                    "DISPLAY not set: no X server reachable for input injection.".to_string(),
+                );
             }
             if !screen_capture_granted {
                 notes.push(
@@ -1826,11 +2020,8 @@ end tell"#])
     ) -> BitFunResult<(image::RgbaImage, Screen)> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
-        let target_display_id = preferred_display_id.or_else(|| {
-            Screen::from_point(mx, my)
-                .ok()
-                .map(|s| s.display_info.id)
-        });
+        let target_display_id = preferred_display_id
+            .or_else(|| Screen::from_point(mx, my).ok().map(|s| s.display_info.id));
 
         if let Some(cache) = cached {
             let screen_id_match = Some(cache.screen.display_info.id) == target_display_id;
@@ -1883,9 +2074,7 @@ end tell"#])
     ) -> Vec<ComputerUseDisplayInfo> {
         let mx = mouse_x.round() as i32;
         let my = mouse_y.round() as i32;
-        let pointer_display_id = Screen::from_point(mx, my)
-            .ok()
-            .map(|s| s.display_info.id);
+        let pointer_display_id = Screen::from_point(mx, my).ok().map(|s| s.display_info.id);
         let active_id = preferred_display_id.or(pointer_display_id);
 
         let screens = match Screen::all() {
@@ -1954,7 +2143,7 @@ mod macos {
         F: FnOnce() -> BitFunResult<T> + Send,
         T: Send,
     {
-        let work = move || catch_objc_in_main_queue(f);
+        let work = move || catch_only(f);
         unsafe {
             if pthread_main_np() != 0 {
                 work()
@@ -1964,33 +2153,61 @@ mod macos {
         }
     }
 
-    /// Run a closure under an Objective-C `@try/@catch` and convert any
-    /// `NSException` into a `BitFunError`. Used to wrap calls into AppKit /
-    /// HIToolbox / Accessibility APIs that may throw native exceptions which
-    /// would otherwise propagate as `__rust_foreign_exception` and abort the
-    /// process. Public so non-enigo paths (e.g. AX window-bounds lookup) can
-    /// share the same defense.
+    /// Run a closure on the main dispatch queue under an Objective-C
+    /// `@try/@catch`. This is the correct wrapper for calls that may reach
+    /// AppKit / HIToolbox / Accessibility code paths from a background
+    /// (`tokio::spawn_blocking`) worker thread.
+    ///
+    /// Two failure modes are defended against simultaneously:
+    ///
+    ///   1. `NSException` thrown by the framework (caught and converted into
+    ///      `BitFunError`).
+    ///   2. AppKit's `__assert_rtn` "Must only be used from the main thread"
+    ///      `SIGTRAP` which fires when AX cross-process callbacks (e.g.
+    ///      `AXUIElementCopyActionNames` → `_NSThemeWidgetCell.accessibility…`
+    ///      → `_WMWindow performUpdatesUsingBlock:`) are evaluated off the
+    ///      main thread. `objc2::exception::catch` cannot intercept this
+    ///      trap; the only fix is to actually run the closure on the main
+    ///      thread, which is what this helper does.
+    ///
+    /// If we're already on the main thread we run inline (avoids
+    /// `dispatch_sync(main)` deadlock).
     pub fn catch_objc<F, T>(f: F) -> BitFunResult<T>
+    where
+        F: FnOnce() -> BitFunResult<T> + Send,
+        T: Send,
+    {
+        unsafe {
+            let on_main = pthread_main_np() != 0;
+            if on_main {
+                catch_only(f)
+            } else {
+                Queue::main().exec_sync(move || catch_only(f))
+            }
+        }
+    }
+
+    /// Run a closure under an Objective-C `@try/@catch` **on the current
+    /// thread** (no main-queue dispatch). Use this for closures that borrow
+    /// non-`Send` data and that are guaranteed not to reach AppKit's
+    /// main-thread-only AX callbacks (e.g. Vision OCR on an in-memory
+    /// screenshot buffer).
+    pub fn catch_objc_local<F, T>(f: F) -> BitFunResult<T>
     where
         F: FnOnce() -> BitFunResult<T>,
     {
-        catch_objc_in_main_queue(f)
+        catch_only(f)
     }
 
-    fn catch_objc_in_main_queue<F, T>(f: F) -> BitFunResult<T>
+    fn catch_only<F, T>(f: F) -> BitFunResult<T>
     where
         F: FnOnce() -> BitFunResult<T>,
     {
         use std::panic::AssertUnwindSafe;
         match objc2::exception::catch(AssertUnwindSafe(f)) {
             Ok(inner) => inner,
-            Err(Some(exc)) => Err(BitFunError::tool(format!(
-                "Objective-C exception: {}",
-                exc
-            ))),
-            Err(None) => Err(BitFunError::tool(
-                "Objective-C exception (nil)".to_string(),
-            )),
+            Err(Some(exc)) => Err(BitFunError::tool(format!("Objective-C exception: {}", exc))),
+            Err(None) => Err(BitFunError::tool("Objective-C exception (nil)".to_string())),
         }
     }
 
@@ -2073,6 +2290,77 @@ impl DesktopComputerUseHost {
         ComputerUseHost::computer_use_after_click(self);
         Ok(())
     }
+
+    fn map_app_image_coords_to_pointer_f64(
+        &self,
+        pid: i32,
+        x: i32,
+        y: i32,
+        screenshot_id: Option<&str>,
+    ) -> BitFunResult<(f64, f64)> {
+        let map = {
+            let s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            screenshot_id
+                .and_then(|id| s.screenshot_pointer_maps.get(id).copied())
+                .or_else(|| s.app_pointer_maps.get(&pid).copied())
+                .or(s.pointer_map)
+        };
+        let Some(map) = map else {
+            return Err(BitFunError::tool(
+                "No screenshot coordinate map is available for this app. Call desktop.get_app_state for the target app first, then use app_click image_xy/image_grid against that returned screenshot_id.".to_string(),
+            ));
+        };
+        map.map_image_to_global_f64(x, y)
+    }
+
+    fn image_grid_target_to_xy(target: &ClickTarget) -> BitFunResult<Option<(i32, i32)>> {
+        let ClickTarget::ImageGrid {
+            x0,
+            y0,
+            width,
+            height,
+            rows,
+            cols,
+            row,
+            col,
+            intersections,
+            ..
+        } = target
+        else {
+            return Ok(None);
+        };
+
+        if *width == 0 || *height == 0 || *rows == 0 || *cols == 0 {
+            return Err(BitFunError::tool(
+                "image_grid requires positive width, height, rows, and cols.".to_string(),
+            ));
+        }
+        if row >= rows || col >= cols {
+            return Err(BitFunError::tool(format!(
+                "image_grid row/col out of range: row={} col={} for rows={} cols={}",
+                row, col, rows, cols
+            )));
+        }
+
+        let (fx, fy) = if *intersections {
+            let denom_x = cols.saturating_sub(1).max(1) as f64;
+            let denom_y = rows.saturating_sub(1).max(1) as f64;
+            (
+                *x0 as f64 + (*col as f64 * width.saturating_sub(1) as f64 / denom_x),
+                *y0 as f64 + (*row as f64 * height.saturating_sub(1) as f64 / denom_y),
+            )
+        } else {
+            (
+                *x0 as f64 + ((*col as f64 + 0.5) * *width as f64 / *cols as f64),
+                *y0 as f64 + ((*row as f64 + 0.5) * *height as f64 / *rows as f64),
+            )
+        };
+
+        Ok(Some((fx.round() as i32, fy.round() as i32)))
+    }
 }
 
 /// Draw a transient red highlight circle at `(gx, gy)` in CoreGraphics global coordinates (macOS).
@@ -2114,6 +2402,203 @@ fn flash_click_highlight_cg(gx: f64, gy: f64) {
         debug!("computer_use: click highlight at ({:.0}, {:.0})", gx, gy);
         std::thread::sleep(Duration::from_millis(DURATION_MS));
     });
+}
+
+impl DesktopComputerUseHost {
+    #[cfg(target_os = "macos")]
+    async fn screenshot_for_app_pid(&self, pid: i32) -> BitFunResult<ComputerScreenshot> {
+        let window_target_rect = macos::catch_objc(|| {
+            crate::computer_use::macos_ax_ui::window_bounds_global_for_pid(pid)
+        })
+        .ok()
+        .map(|(x, y, w, h)| (x as f64, y as f64, w as f64, h as f64));
+
+        let (cached, preferred_display_id) = {
+            let s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            (s.screenshot_cache.clone(), s.preferred_display_id)
+        };
+        let (mouse_x, mouse_y) = Self::current_mouse_position();
+        let effective_pref_display_id = if let Some((wx, wy, ww, wh)) = window_target_rect {
+            let cx_g = wx + ww / 2.0;
+            let cy_g = wy + wh / 2.0;
+            Screen::from_point(cx_g.round() as i32, cy_g.round() as i32)
+                .ok()
+                .map(|s| s.display_info.id)
+                .or(preferred_display_id)
+        } else {
+            preferred_display_id
+        };
+
+        let (rgba, screen) =
+            Self::resolve_screenshot_capture(cached, mouse_x, mouse_y, effective_pref_display_id)?;
+        let (native_w, native_h) = rgba.dimensions();
+        let params = if let Some((wx, wy, ww, wh)) = window_target_rect {
+            let cx_g = wx + ww / 2.0;
+            let cy_g = wy + wh / 2.0;
+            let (cx, cy) = global_to_native_full_pixel_center(
+                cx_g,
+                cy_g,
+                native_w,
+                native_h,
+                &screen.display_info,
+            );
+            let disp_w = screen.display_info.width as f64;
+            let disp_h = screen.display_info.height as f64;
+            let scale_x = if disp_w > 0.0 {
+                native_w as f64 / disp_w
+            } else {
+                1.0
+            };
+            let scale_y = if disp_h > 0.0 {
+                native_h as f64 / disp_h
+            } else {
+                1.0
+            };
+            let half_native = ((ww * scale_x).max(wh * scale_y) / 2.0).ceil() as u32 + 16;
+            let max_half = (native_w.max(native_h) / 2).max(64);
+            ComputerUseScreenshotParams {
+                crop_center: Some(ScreenshotCropCenter { x: cx, y: cy }),
+                navigate_quadrant: None,
+                reset_navigation: false,
+                point_crop_half_extent_native: Some(half_native.clamp(64, max_half)),
+                implicit_confirmation_center: None,
+                crop_to_focused_window: false,
+            }
+        } else {
+            ComputerUseScreenshotParams::default()
+        };
+
+        {
+            let mut s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            s.screenshot_cache = Some(ScreenshotCacheEntry {
+                rgba: rgba.clone(),
+                screen,
+                capture_time: Instant::now(),
+            });
+        }
+
+        let (shot, map, nav_out) = tokio::task::spawn_blocking(move || {
+            Self::screenshot_sync_tool_with_capture(params, None, rgba, screen, None, false)
+        })
+        .await
+        .map_err(|e| BitFunError::tool(e.to_string()))??;
+        let refinement = Self::refinement_from_shot(&shot);
+        {
+            let mut s = self
+                .state
+                .lock()
+                .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+            s.transition_after_screenshot(map, refinement, nav_out);
+            s.app_pointer_maps.insert(pid, map);
+            if let Some(id) = shot.screenshot_id.clone() {
+                s.screenshot_pointer_maps.insert(id, map);
+            }
+        }
+        Ok(shot)
+    }
+
+    /// Internal `get_app_state` that lets callers opt out of the focused-window
+    /// screenshot. The public trait method always passes `capture_screenshot=true`
+    /// (Codex parity). Internal re-snapshots from `app_click` / `app_type_text` /
+    /// `app_scroll` / `app_key_chord` pass `false` to avoid a redundant capture
+    /// — the **outer** call (e.g. the one returned to the model) gets the image.
+    pub(crate) async fn get_app_state_inner(
+        &self,
+        app: AppSelector,
+        max_depth: u32,
+        focus_window_only: bool,
+        capture_screenshot: bool,
+    ) -> BitFunResult<AppStateSnapshot> {
+        #[cfg(target_os = "macos")]
+        {
+            // Pre-flight: without Accessibility trust macOS silently truncates
+            // the AX subtree to the top-level window/container (~7 nodes for
+            // a Tauri WebView app), with no exception. The agent then has no
+            // actionable widgets to act on. Fail fast with a structured
+            // `[PERMISSION_DENIED]` error so the model can surface the issue
+            // (and the host's startup prompt is what produces the dialog).
+            if !macos::ax_trusted() {
+                // Re-trigger the system prompt in case the user dismissed it
+                // earlier — without this they have no way back to the dialog
+                // short of digging through System Settings manually.
+                macos::request_ax_prompt();
+                return Err(BitFunError::tool(
+                    "[PERMISSION_DENIED] macOS Accessibility permission not granted to BitFun. \
+                     The system has been asked to surface the permission dialog (System Settings → \
+                     Privacy & Security → Accessibility → enable BitFun). After granting, retry \
+                     `desktop.get_app_state` and the AX tree will include all WebView subtree nodes."
+                        .to_string(),
+                ));
+            }
+            let pid = resolve_pid_macos(self, &app).await?;
+            let mut snap = tokio::task::spawn_blocking(move || {
+                // Wrap in @try/@catch — AX APIs can throw NSException for
+                // sandboxed / partially-loaded / dying processes, and an
+                // unwound foreign exception aborts the whole bitfun process
+                // (`Rust cannot catch foreign exceptions, aborting`).
+                macos::catch_objc(|| {
+                    crate::computer_use::macos_ax_dump::dump_app_ax(
+                        pid,
+                        crate::computer_use::macos_ax_dump::DumpOpts {
+                            max_depth,
+                            focus_window_only,
+                            ..Default::default()
+                        },
+                    )
+                })
+            })
+            .await
+            .map_err(|e| BitFunError::tool(e.to_string()))??;
+
+            // Auto-attach focused-window screenshot. Failures are non-fatal —
+            // worst case the model still has the AX tree.
+            if capture_screenshot {
+                let started = std::time::Instant::now();
+                match self.screenshot_for_app_pid(pid).await {
+                    Ok(shot) => {
+                        debug!(
+                            "computer_use.app_state: attached screenshot ({}x{} jpeg, {} bytes, {}ms)",
+                            shot.image_width,
+                            shot.image_height,
+                            shot.bytes.len(),
+                            started.elapsed().as_millis()
+                        );
+                        snap.screenshot = Some(shot);
+                    }
+                    Err(e) => {
+                        debug!(
+                            "computer_use.app_state: screenshot capture failed (non-fatal): {}",
+                            e
+                        );
+                    }
+                }
+            }
+            Ok(snap)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, max_depth, focus_window_only, capture_screenshot);
+            Err(BitFunError::tool(
+                "get_app_state is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn require_macos_background_input() -> BitFunResult<()> {
+    if crate::computer_use::macos_bg_input::supports_background_input() {
+        return Ok(());
+    }
+    Err(BitFunError::tool(
+        "[BACKGROUND_INPUT_UNAVAILABLE] macOS Accessibility permission is required for background app input. Grant BitFun in System Settings -> Privacy & Security -> Accessibility, then retry desktop.meta/capabilities or desktop.get_app_state.".to_string(),
+    ))
 }
 
 #[async_trait]
@@ -2384,6 +2869,9 @@ impl ComputerUseHost for DesktopComputerUseHost {
                 .lock()
                 .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
             s.transition_after_screenshot(map, refinement, nav_out);
+            if let Some(id) = shot.screenshot_id.clone() {
+                s.screenshot_pointer_maps.insert(id, map);
+            }
         }
 
         Ok(shot)
@@ -2415,8 +2903,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             // pinned a display via `desktop.focus_display` consistently sees
             // peek frames from that display, even if the cached screenshot
             // is from a different one.
-            let pinned_screen =
-                preferred_display_id.and_then(Self::find_screen_by_id);
+            let pinned_screen = preferred_display_id.and_then(Self::find_screen_by_id);
             let screen = pinned_screen
                 .or(cached_screen)
                 .or_else(|| Screen::from_point(mx, my).ok())
@@ -2462,7 +2949,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
             // an empty match list instead of aborting the runtime.
             #[cfg(target_os = "macos")]
             {
-                macos::catch_objc(|| super::screen_ocr::find_text_matches(&shot, &query))
+                macos::catch_objc_local(|| super::screen_ocr::find_text_matches(&shot, &query))
             }
             #[cfg(not(target_os = "macos"))]
             {
@@ -3127,11 +3614,7 @@ tell application "System Events" to get unix id of first process whose frontmost
     }
 
     async fn list_displays(&self) -> BitFunResult<Vec<ComputerUseDisplayInfo>> {
-        let preferred = self
-            .state
-            .lock()
-            .ok()
-            .and_then(|s| s.preferred_display_id);
+        let preferred = self.state.lock().ok().and_then(|s| s.preferred_display_id);
         let (mx, my) = Self::current_mouse_position();
         Ok(Self::enumerate_displays(preferred, mx, my))
     }
@@ -3165,9 +3648,1713 @@ tell application "System Events" to get unix id of first process whose frontmost
     }
 
     fn focused_display_id(&self) -> Option<u32> {
-        self.state
+        self.state.lock().ok().and_then(|s| s.preferred_display_id)
+    }
+
+    // ── Codex-style AX-first desktop automation ─────────────────────────
+    //
+    // These override the trait defaults (which return "not available")
+    // with real macOS implementations on macOS, and keep the defaults on
+    // other platforms via cfg-gating.
+
+    fn supports_background_input(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            crate::computer_use::macos_bg_input::supports_background_input()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+
+    fn supports_ax_tree(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            true
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+
+    async fn list_apps(&self, include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+        #[cfg(target_os = "macos")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::computer_use::macos_list_apps::list_running_apps(include_hidden)
+            })
+            .await
+            .map_err(|e| BitFunError::tool(e.to_string()))?
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = include_hidden;
+            Ok(Vec::new())
+        }
+    }
+
+    async fn get_app_state(
+        &self,
+        app: AppSelector,
+        max_depth: u32,
+        focus_window_only: bool,
+    ) -> BitFunResult<AppStateSnapshot> {
+        // Public path: always auto-attach a focused-window screenshot so the
+        // model is never blind on Canvas / WebView / WebGL surfaces that the
+        // AX tree can't describe (Codex parity — its `get_app_state` is the
+        // single "eyes" of the desktop loop).
+        self.get_app_state_inner(app, max_depth, focus_window_only, true)
+            .await
+    }
+
+    async fn app_click(&self, params: AppClickParams) -> BitFunResult<AppStateSnapshot> {
+        #[cfg(target_os = "macos")]
+        {
+            let pid = resolve_pid_macos(self, &params.app).await?;
+            let self_pid = std::process::id() as i32;
+            info!(
+                target: "computer_use::app_click",
+                "app_click.enter pid={} self_pid={} same_process={} target={:?} button={} click_count={} modifier_keys={:?}",
+                pid,
+                self_pid,
+                pid == self_pid,
+                params.target,
+                params.mouse_button,
+                params.click_count,
+                params.modifier_keys
+            );
+            // Try AX press path when the target is a node idx and the cache
+            // still holds a live ref; otherwise inject background events at
+            // the resolved global coordinate.
+            let ax_ok = match &params.target {
+                ClickTarget::NodeIdx { idx } => {
+                    let idx = *idx;
+                    // Run AX lookup + AXPress under @try/@catch on a blocking
+                    // thread; either a missing ref or a thrown NSException
+                    // simply degrades to the bg_click fallback below.
+                    tokio::task::spawn_blocking(move || {
+                        macos::catch_objc(|| {
+                            Ok(
+                                if let Some(r) =
+                                    crate::computer_use::macos_ax_dump::cached_ref_loose(pid, idx)
+                                {
+                                    matches!(
+                                        crate::computer_use::macos_ax_write::try_ax_press(r),
+                                        crate::computer_use::macos_ax_write::AxWriteOutcome::Ok
+                                    )
+                                } else {
+                                    false
+                                },
+                            )
+                        })
+                        .unwrap_or(false)
+                    })
+                    .await
+                    .unwrap_or(false)
+                }
+                ClickTarget::ScreenXy { .. }
+                | ClickTarget::ImageXy { .. }
+                | ClickTarget::ImageGrid { .. }
+                | ClickTarget::VisualGrid { .. }
+                | ClickTarget::OcrText { .. } => false,
+            };
+            if !ax_ok {
+                require_macos_background_input()?;
+                let (x, y): (f64, f64) = match &params.target {
+                    ClickTarget::ScreenXy { x, y } => (*x, *y),
+                    ClickTarget::ImageXy {
+                        x,
+                        y,
+                        screenshot_id,
+                    } => self.map_app_image_coords_to_pointer_f64(
+                        pid,
+                        *x,
+                        *y,
+                        screenshot_id.as_deref(),
+                    )?,
+                    ClickTarget::ImageGrid { screenshot_id, .. } => {
+                        let (ix, iy) =
+                            Self::image_grid_target_to_xy(&params.target)?.ok_or_else(|| {
+                                BitFunError::tool("invalid image_grid target".to_string())
+                            })?;
+                        self.map_app_image_coords_to_pointer_f64(
+                            pid,
+                            ix,
+                            iy,
+                            screenshot_id.as_deref(),
+                        )?
+                    }
+                    ClickTarget::VisualGrid {
+                        rows,
+                        cols,
+                        row,
+                        col,
+                        intersections,
+                        wait_ms_after_detection,
+                    } => {
+                        let shot = self.screenshot_for_app_pid(pid).await?;
+                        let (x0, y0, width, height) =
+                            detect_regular_grid_rect_from_screenshot(&shot, *rows, *cols)?;
+                        let target = ClickTarget::ImageGrid {
+                            x0,
+                            y0,
+                            width,
+                            height,
+                            rows: *rows,
+                            cols: *cols,
+                            row: *row,
+                            col: *col,
+                            intersections: *intersections,
+                            screenshot_id: shot.screenshot_id.clone(),
+                        };
+                        let (ix, iy) =
+                            Self::image_grid_target_to_xy(&target)?.ok_or_else(|| {
+                                BitFunError::tool("invalid detected visual_grid target".to_string())
+                            })?;
+                        if let Some(wait) = wait_ms_after_detection {
+                            if *wait > 0 {
+                                tokio::time::sleep(Duration::from_millis(*wait as u64)).await;
+                            }
+                        }
+                        self.map_app_image_coords_to_pointer_f64(
+                            pid,
+                            ix,
+                            iy,
+                            shot.screenshot_id.as_deref(),
+                        )?
+                    }
+                    ClickTarget::NodeIdx { idx } => {
+                        // Best-effort: re-snapshot to read the node's frame.
+                        // Skip the screenshot — this snapshot is internal-only;
+                        // the post-click re-snapshot below is the one returned
+                        // to the model and carries the visual evidence.
+                        let snap = self
+                            .get_app_state_inner(params.app.clone(), 32, false, false)
+                            .await?;
+                        let node = snap.nodes.iter().find(|n| n.idx == *idx).ok_or_else(|| {
+                            BitFunError::tool(format!(
+                                "AX_NODE_STALE: idx={} no longer present in app state",
+                                idx
+                            ))
+                        })?;
+                        // Refuse to fall back to (0,0) on the desktop —
+                        // that would silently click the menu bar / Finder
+                        // icon. The caller must re-snapshot to acquire a
+                        // node with a real on-screen frame.
+                        let (fx, fy, fw, fh) = node.frame_global.ok_or_else(|| {
+                            BitFunError::tool(format!(
+                                "AX_NODE_STALE: idx={} has no AXFrame (likely off-screen or window minimised)",
+                                idx
+                            ))
+                        })?;
+                        if fw <= 0.0 || fh <= 0.0 {
+                            return Err(BitFunError::tool(format!(
+                                "AX_NODE_STALE: idx={} has zero-size frame ({}x{})",
+                                idx, fw, fh
+                            )));
+                        }
+                        (fx + fw / 2.0, fy + fh / 2.0)
+                    }
+                    ClickTarget::OcrText { needle } => {
+                        // Codex parity: when the AX tree doesn't expose the
+                        // target widget (Canvas, WebGL, custom-drawn cell),
+                        // fall back to OCR-on-screenshot. We screenshot the
+                        // whole screen rather than just the target window
+                        // because window-relative regions need extra plumbing
+                        // and the matcher already filters by confidence.
+                        let matches = self.ocr_find_text_matches(needle, None).await?;
+                        let best = matches.into_iter().max_by(|a, b| {
+                            a.confidence
+                                .partial_cmp(&b.confidence)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        let m = best.ok_or_else(|| {
+                            BitFunError::tool(format!(
+                                "NOT_FOUND: no OCR match for needle {:?}",
+                                needle
+                            ))
+                        })?;
+                        (m.center_x, m.center_y)
+                    }
+                };
+                let mods: Vec<crate::computer_use::macos_bg_input::BgModifier> = params
+                    .modifier_keys
+                    .iter()
+                    .filter_map(|m| crate::computer_use::macos_bg_input::BgModifier::from_str(m))
+                    .collect();
+                let btn = match params.mouse_button.as_str() {
+                    "right" => crate::computer_use::macos_bg_input::BgMouseButton::Right,
+                    "middle" => crate::computer_use::macos_bg_input::BgMouseButton::Middle,
+                    _ => crate::computer_use::macos_bg_input::BgMouseButton::Left,
+                };
+                let cnt = params.click_count.max(1) as u32;
+                info!(
+                    target: "computer_use::app_click",
+                    "app_click.bg_dispatch pid={} self_pid={} same_process={} resolved_x={:.2} resolved_y={:.2} click_count={}",
+                    pid, self_pid, pid == self_pid, x, y, cnt
+                );
+
+                // Capture pre-click digest so we can detect "click delivered
+                // but UI did not change" and apply a foreground fallback when
+                // the target lives in our own process (the most common cause
+                // of `bg_click → WKWebView no-op` in single-process Tauri).
+                let pre_digest_opt = match self
+                    .get_app_state_inner(params.app.clone(), 0, false, false)
+                    .await
+                {
+                    Ok(s) => Some(s.digest),
+                    Err(e) => {
+                        debug!(
+                            target: "computer_use::app_click",
+                            "pre_digest_unavailable error={}",
+                            e
+                        );
+                        None
+                    }
+                };
+
+                // Best-effort foreground activation — required for WKWebView
+                // and many Cocoa hit-testers to actually deliver our
+                // synthetic events. No-op (returns false) when the pid is
+                // already frontmost.
+                let activate_pid = pid;
+                let _ = tokio::task::spawn_blocking(move || {
+                    macos::catch_objc(|| {
+                        crate::computer_use::macos_bg_input::activate_pid_macos(activate_pid)
+                    })
+                })
+                .await;
+
+                let mods_for_bg = mods.clone();
+                tokio::task::spawn_blocking(move || {
+                    macos::catch_objc(|| {
+                        crate::computer_use::macos_bg_input::bg_click(
+                            pid,
+                            (x, y),
+                            btn,
+                            cnt,
+                            &mods_for_bg,
+                        )
+                    })
+                })
+                .await
+                .map_err(|e| BitFunError::tool(e.to_string()))??;
+
+                // Same-process fallback: if `bg_click` left the digest
+                // unchanged AND the target is our own process (bitfun-desktop
+                // hosting an embedded mini-app WebView), retry with the
+                // foreground click path. This trades a momentary cursor
+                // movement for actually landing the click in the WebView.
+                if pid == self_pid {
+                    let settle = params.wait_ms_after.unwrap_or(120).min(5_000);
+                    tokio::time::sleep(Duration::from_millis(settle.max(80) as u64)).await;
+                    let post_digest_opt = self
+                        .get_app_state_inner(params.app.clone(), 0, false, false)
+                        .await
+                        .ok()
+                        .map(|s| s.digest);
+                    let unchanged =
+                        matches!((&pre_digest_opt, &post_digest_opt), (Some(a), Some(b)) if a == b);
+                    if unchanged {
+                        warn!(
+                            target: "computer_use::app_click",
+                            "bg_click_no_effect_self_pid_falling_back_to_foreground pid={} x={:.2} y={:.2} digest={:?}",
+                            pid, x, y, post_digest_opt
+                        );
+                        // Foreground fallback uses the user's real cursor +
+                        // synthetic enigo click so the WKWebView's hit-test
+                        // path is identical to a human click.
+                        let btn_str = match btn {
+                            crate::computer_use::macos_bg_input::BgMouseButton::Right => "right",
+                            crate::computer_use::macos_bg_input::BgMouseButton::Middle => "middle",
+                            _ => "left",
+                        };
+                        self.mouse_move_global_f64(x, y).await?;
+                        for _ in 0..cnt {
+                            self.mouse_click_authoritative(btn_str).await?;
+                        }
+                    }
+                }
+            }
+            let settle_ms = params.wait_ms_after.unwrap_or(120).min(5_000);
+            if settle_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(settle_ms as u64)).await;
+            }
+            // Re-snapshot so the caller can see the new state + new digest.
+            self.get_app_state(params.app, 32, false).await
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = params;
+            Err(BitFunError::tool(
+                "app_click is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn app_type_text(
+        &self,
+        app: AppSelector,
+        text: &str,
+        focus: Option<ClickTarget>,
+    ) -> BitFunResult<AppStateSnapshot> {
+        #[cfg(target_os = "macos")]
+        {
+            let pid = resolve_pid_macos(self, &app).await?;
+            // If a focus target is provided, click it first to give focus.
+            if let Some(target) = focus {
+                let click = AppClickParams {
+                    app: app.clone(),
+                    target,
+                    click_count: 1,
+                    mouse_button: "left".to_string(),
+                    modifier_keys: vec![],
+                    wait_ms_after: None,
+                };
+                let _ = self.app_click(click).await?;
+            }
+            require_macos_background_input()?;
+            info!(
+                target: "computer_use::app_type_text",
+                "app_type_text.bg_dispatch pid={} char_count={}",
+                pid,
+                text.chars().count()
+            );
+            let activate_pid = pid;
+            let _ = tokio::task::spawn_blocking(move || {
+                macos::catch_objc(|| {
+                    crate::computer_use::macos_bg_input::activate_pid_macos(activate_pid)
+                })
+            })
+            .await;
+            let txt = text.to_string();
+            tokio::task::spawn_blocking(move || {
+                macos::catch_objc(|| crate::computer_use::macos_bg_input::bg_type_text(pid, &txt))
+            })
+            .await
+            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            self.get_app_state(app, 32, false).await
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, text, focus);
+            Err(BitFunError::tool(
+                "app_type_text is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn app_scroll(
+        &self,
+        app: AppSelector,
+        focus: Option<ClickTarget>,
+        dx: i32,
+        dy: i32,
+    ) -> BitFunResult<AppStateSnapshot> {
+        #[cfg(target_os = "macos")]
+        {
+            let pid = resolve_pid_macos(self, &app).await?;
+            if let Some(target) = focus {
+                let click = AppClickParams {
+                    app: app.clone(),
+                    target,
+                    click_count: 1,
+                    mouse_button: "left".to_string(),
+                    modifier_keys: vec![],
+                    wait_ms_after: None,
+                };
+                let _ = self.app_click(click).await?;
+            }
+            require_macos_background_input()?;
+            tokio::task::spawn_blocking(move || {
+                macos::catch_objc(|| crate::computer_use::macos_bg_input::bg_scroll(pid, dx, dy))
+            })
+            .await
+            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            self.get_app_state(app, 32, false).await
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, focus, dx, dy);
+            Err(BitFunError::tool(
+                "app_scroll is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn app_key_chord(
+        &self,
+        app: AppSelector,
+        keys: Vec<String>,
+        focus_idx: Option<u32>,
+    ) -> BitFunResult<AppStateSnapshot> {
+        #[cfg(target_os = "macos")]
+        {
+            let pid = resolve_pid_macos(self, &app).await?;
+            if let Some(idx) = focus_idx {
+                let click = AppClickParams {
+                    app: app.clone(),
+                    target: ClickTarget::NodeIdx { idx },
+                    click_count: 1,
+                    mouse_button: "left".to_string(),
+                    modifier_keys: vec![],
+                    wait_ms_after: None,
+                };
+                let _ = self.app_click(click).await?;
+            }
+            require_macos_background_input()?;
+            tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+                macos::catch_objc(|| {
+                    let (mods, kc) =
+                        crate::computer_use::macos_bg_input::parse_key_sequence(&keys)?;
+                    crate::computer_use::macos_bg_input::bg_key_chord(pid, &mods, kc)?;
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(|e| BitFunError::tool(e.to_string()))??;
+            self.get_app_state(app, 32, false).await
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, keys, focus_idx);
+            Err(BitFunError::tool(
+                "app_key_chord is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn app_wait_for(
+        &self,
+        app: AppSelector,
+        pred: AppWaitPredicate,
+        timeout_ms: u32,
+        poll_ms: u32,
+    ) -> BitFunResult<AppStateSnapshot> {
+        #[cfg(target_os = "macos")]
+        {
+            let deadline = Instant::now() + Duration::from_millis(timeout_ms as u64);
+            let poll = Duration::from_millis(poll_ms.max(50) as u64);
+            // Polling loop — skip the screenshot per iteration to keep
+            // poll latency tight; the snapshot we ultimately return gets
+            // an auto-attached screenshot below.
+            let baseline = self
+                .get_app_state_inner(app.clone(), 32, false, false)
+                .await?;
+            loop {
+                let snap = self
+                    .get_app_state_inner(app.clone(), 32, false, false)
+                    .await?;
+                let ok = match &pred {
+                    AppWaitPredicate::DigestChanged { prev_digest } => {
+                        snap.digest != *prev_digest && snap.digest != baseline.digest
+                    }
+                    AppWaitPredicate::TitleContains { needle } => snap
+                        .window_title
+                        .as_deref()
+                        .map(|t| t.contains(needle.as_str()))
+                        .unwrap_or(false),
+                    AppWaitPredicate::RoleEnabled { role } => snap
+                        .nodes
+                        .iter()
+                        .any(|n| n.role.as_str() == role && n.enabled),
+                    AppWaitPredicate::NodeEnabled { idx } => snap
+                        .nodes
+                        .iter()
+                        .find(|n| n.idx == *idx)
+                        .map(|n| n.enabled)
+                        .unwrap_or(false),
+                };
+                if ok || Instant::now() >= deadline {
+                    // Final returned snap — auto-attach screenshot for parity
+                    // with the rest of the `app_*` family.
+                    let mut snap = snap;
+                    if let Ok(pid) = resolve_pid_macos(self, &app).await {
+                        if let Ok(shot) = self.screenshot_for_app_pid(pid).await {
+                            snap.screenshot = Some(shot);
+                        }
+                    }
+                    if snap.screenshot.is_none() {
+                        if let Ok(shot) = self.screenshot_peek_full_display().await {
+                            snap.screenshot = Some(shot);
+                        }
+                    }
+                    return Ok(snap);
+                }
+                tokio::time::sleep(poll).await;
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, pred, timeout_ms, poll_ms);
+            Err(BitFunError::tool(
+                "app_wait_for is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    fn supports_interactive_view(&self) -> bool {
+        cfg!(target_os = "macos")
+    }
+
+    fn supports_visual_mark_view(&self) -> bool {
+        cfg!(target_os = "macos")
+    }
+
+    async fn build_interactive_view(
+        &self,
+        app: AppSelector,
+        opts: InteractiveViewOpts,
+    ) -> BitFunResult<InteractiveView> {
+        #[cfg(target_os = "macos")]
+        {
+            let pid = resolve_pid_macos(self, &app).await?;
+            let snap = self
+                .get_app_state_inner(app.clone(), 64, opts.focus_window_only, true)
+                .await?;
+            let max_elements = opts
+                .max_elements
+                .map(|n| n as usize)
+                .unwrap_or(80)
+                .clamp(1, 200);
+            let filter_opts = crate::computer_use::interactive_filter::FilterOpts {
+                max_elements,
+                clip_to_image_bounds: opts.focus_window_only,
+            };
+            let elements = crate::computer_use::interactive_filter::build_interactive_elements(
+                &snap.nodes,
+                snap.screenshot.as_ref(),
+                &filter_opts,
+            );
+            let tree_text = if opts.include_tree_text {
+                crate::computer_use::interactive_filter::render_element_tree_text(&elements)
+            } else {
+                String::new()
+            };
+            let digest = compute_interactive_view_digest(&elements);
+
+            let mut screenshot_out: Option<ComputerScreenshot> = None;
+            if opts.annotate_screenshot {
+                if let Some(shot) = snap.screenshot.as_ref() {
+                    match crate::computer_use::som_overlay::render_overlay(
+                        &shot.bytes,
+                        &elements,
+                        Some(80),
+                    ) {
+                        Ok(jpeg) => {
+                            let mut out = shot.clone();
+                            out.bytes = jpeg;
+                            out.mime_type = "image/jpeg".to_string();
+                            screenshot_out = Some(out);
+                        }
+                        Err(e) => {
+                            warn!(
+                                target: "computer_use::interactive_view",
+                                "som_overlay render failed (non-fatal): {}",
+                                e
+                            );
+                            screenshot_out = Some(shot.clone());
+                        }
+                    }
+                }
+            } else {
+                screenshot_out = snap.screenshot.clone();
+            }
+
+            let captured_at_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or_default();
+
+            let view = InteractiveView {
+                app: snap.app.clone(),
+                window_title: snap.window_title.clone(),
+                elements: elements.clone(),
+                tree_text,
+                digest: digest.clone(),
+                captured_at_ms,
+                screenshot: screenshot_out,
+                loop_warning: snap.loop_warning.clone(),
+            };
+
+            // Cache for subsequent `interactive_*` calls.
+            {
+                let mut s = self
+                    .state
+                    .lock()
+                    .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                s.interactive_view_cache.insert(
+                    pid,
+                    CachedInteractiveView {
+                        digest: digest.clone(),
+                        elements,
+                    },
+                );
+            }
+            Ok(view)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, opts);
+            Err(BitFunError::tool(
+                "build_interactive_view is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn interactive_click(
+        &self,
+        app: AppSelector,
+        params: InteractiveClickParams,
+    ) -> BitFunResult<InteractiveActionResult> {
+        #[cfg(target_os = "macos")]
+        {
+            // Resolve `i → node_idx` against the cached interactive view.
+            // On `STALE_INTERACTIVE_VIEW` we transparently rebuild the
+            // view ONCE and retry — this turns the most common UI-changed
+            // failure into an internal recovery instead of a hard error
+            // the model has to handle. Idempotency is preserved by
+            // capping at one rebuild + one retry.
+            let mut auto_rebuilt = false;
+            let node_idx = match self
+                .resolve_interactive_index(&app, params.i, params.before_view_digest.as_deref())
+                .await
+            {
+                Ok(idx) => idx,
+                Err(err) if is_stale_interactive_view_error(&err) => {
+                    warn!(
+                        target: "computer_use::interactive_view",
+                        "interactive_click: STALE view detected, rebuilding once and retrying (i={}): {}",
+                        params.i, err
+                    );
+                    let rebuilt = self
+                        .build_interactive_view(app.clone(), InteractiveViewOpts::default())
+                        .await?;
+                    if rebuilt.elements.iter().any(|e| e.i == params.i) {
+                        auto_rebuilt = true;
+                        // Use the rebuilt view's digest, not the stale one
+                        // the caller passed in.
+                        self.resolve_interactive_index(&app, params.i, Some(&rebuilt.digest))
+                            .await?
+                    } else {
+                        return Err(BitFunError::tool(format!(
+                            "INTERACTIVE_INDEX_OUT_OF_RANGE: i={} not in rebuilt view (len={}); the UI has changed under you, re-call `build_interactive_view` and pick a fresh `i`",
+                            params.i,
+                            rebuilt.elements.len()
+                        )));
+                    }
+                }
+                Err(other) => return Err(other),
+            };
+
+            // Look up the cached element's image-pixel center as a
+            // pointer fallback. Always available when `frame_image` was
+            // populated at view-build time; covers Electron / Canvas /
+            // custom-drawn widgets that AXPress can't dispatch into.
+            let pointer_fallback_image_xy: Option<(i32, i32)> =
+                self.cached_interactive_image_center(&app, params.i).await;
+
+            // Primary path: AX-targeted click via `app_click`. On
+            // failure, fall back to a pointer click at the element's
+            // image-pixel center if we have one.
+            let click_res = self
+                .app_click(AppClickParams {
+                    app: app.clone(),
+                    target: ClickTarget::NodeIdx { idx: node_idx },
+                    click_count: params.click_count.max(1),
+                    mouse_button: params.mouse_button.clone(),
+                    modifier_keys: params.modifier_keys.clone(),
+                    wait_ms_after: params.wait_ms_after,
+                })
+                .await;
+
+            let (snapshot, fallback_used) = match click_res {
+                Ok(s) => (s, false),
+                Err(e) if pointer_fallback_image_xy.is_some() => {
+                    let (ix, iy) = pointer_fallback_image_xy.unwrap();
+                    warn!(
+                        target: "computer_use::interactive_view",
+                        "interactive_click: AX path failed, falling back to image_xy=({},{}): {}",
+                        ix, iy, e
+                    );
+                    let s = self
+                        .app_click(AppClickParams {
+                            app: app.clone(),
+                            target: ClickTarget::ImageXy {
+                                x: ix,
+                                y: iy,
+                                screenshot_id: None,
+                            },
+                            click_count: params.click_count.max(1),
+                            mouse_button: params.mouse_button.clone(),
+                            modifier_keys: params.modifier_keys.clone(),
+                            wait_ms_after: params.wait_ms_after,
+                        })
+                        .await?;
+                    (s, true)
+                }
+                Err(e) => return Err(e),
+            };
+
+            let view = if params.return_view {
+                Some(
+                    self.build_interactive_view(app, InteractiveViewOpts::default())
+                        .await?,
+                )
+            } else {
+                None
+            };
+            let mut note = format!("index_resolved_via_node_idx({})", node_idx);
+            if auto_rebuilt {
+                note.push_str(",auto_rebuilt_view_after_stale");
+            }
+            if fallback_used {
+                note.push_str(",fallback_image_xy");
+            }
+            Ok(InteractiveActionResult {
+                snapshot,
+                view,
+                execution_note: Some(note),
+            })
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, params);
+            Err(BitFunError::tool(
+                "interactive_click is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn build_visual_mark_view(
+        &self,
+        app: AppSelector,
+        opts: VisualMarkViewOpts,
+    ) -> BitFunResult<VisualMarkView> {
+        #[cfg(target_os = "macos")]
+        {
+            let pid = resolve_pid_macos(self, &app).await?;
+            let mut snap = self
+                .get_app_state_inner(app.clone(), 16, true, true)
+                .await?;
+            if snap.screenshot.is_none() {
+                if let Ok(shot) = self.screenshot_for_app_pid(pid).await {
+                    snap.screenshot = Some(shot);
+                }
+            }
+            let shot = snap.screenshot.as_ref().ok_or_else(|| {
+                BitFunError::tool(
+                    "build_visual_mark_view: app screenshot unavailable; grant Screen Recording permission and retry".to_string(),
+                )
+            })?;
+
+            let marks = build_regular_visual_marks(shot, &opts)?;
+            let digest = compute_visual_mark_view_digest(&marks, shot.screenshot_id.as_deref());
+
+            let mut screenshot_out: Option<ComputerScreenshot> = Some(shot.clone());
+            if opts.include_grid && !marks.is_empty() {
+                let overlay_elements = visual_marks_to_overlay_elements(&marks);
+                match crate::computer_use::som_overlay::render_overlay(
+                    &shot.bytes,
+                    &overlay_elements,
+                    Some(82),
+                ) {
+                    Ok(jpeg) => {
+                        let mut out = shot.clone();
+                        out.bytes = jpeg;
+                        out.mime_type = "image/jpeg".to_string();
+                        screenshot_out = Some(out);
+                    }
+                    Err(e) => {
+                        warn!(
+                            target: "computer_use::visual_mark_view",
+                            "visual mark overlay render failed (non-fatal): {}",
+                            e
+                        );
+                    }
+                }
+            }
+
+            let captured_at_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or_default();
+            let view = VisualMarkView {
+                app: snap.app.clone(),
+                window_title: snap.window_title.clone(),
+                marks: marks.clone(),
+                digest: digest.clone(),
+                captured_at_ms,
+                screenshot: screenshot_out,
+            };
+            {
+                let mut s = self
+                    .state
+                    .lock()
+                    .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                s.visual_mark_cache.insert(
+                    pid,
+                    CachedVisualMarkView {
+                        digest,
+                        marks,
+                        screenshot_id: shot.screenshot_id.clone(),
+                    },
+                );
+            }
+            Ok(view)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, opts);
+            Err(BitFunError::tool(
+                "build_visual_mark_view is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn visual_click(
+        &self,
+        app: AppSelector,
+        params: VisualClickParams,
+    ) -> BitFunResult<VisualActionResult> {
+        #[cfg(target_os = "macos")]
+        {
+            let mut auto_rebuilt = false;
+            let mark = match self
+                .resolve_visual_mark(&app, params.i, params.before_view_digest.as_deref())
+                .await
+            {
+                Ok(mark) => mark,
+                Err(err) if is_stale_visual_mark_view_error(&err) => {
+                    warn!(
+                        target: "computer_use::visual_mark_view",
+                        "visual_click: STALE visual mark view detected, rebuilding once and retrying (i={}): {}",
+                        params.i, err
+                    );
+                    let rebuilt = self
+                        .build_visual_mark_view(app.clone(), VisualMarkViewOpts::default())
+                        .await?;
+                    let Some(mark) = rebuilt.marks.iter().find(|m| m.i == params.i).cloned() else {
+                        return Err(BitFunError::tool(format!(
+                            "VISUAL_INDEX_OUT_OF_RANGE: i={} not in rebuilt view (len={}); re-call `build_visual_mark_view` and pick a fresh `i`",
+                            params.i,
+                            rebuilt.marks.len()
+                        )));
+                    };
+                    auto_rebuilt = true;
+                    mark
+                }
+                Err(other) => return Err(other),
+            };
+
+            let screenshot_id = {
+                let pid = resolve_pid_macos(self, &app).await?;
+                let s = self
+                    .state
+                    .lock()
+                    .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+                s.visual_mark_cache
+                    .get(&pid)
+                    .and_then(|cached| cached.screenshot_id.clone())
+            };
+
+            let snapshot = self
+                .app_click(AppClickParams {
+                    app: app.clone(),
+                    target: ClickTarget::ImageXy {
+                        x: mark.x,
+                        y: mark.y,
+                        screenshot_id,
+                    },
+                    click_count: params.click_count.max(1),
+                    mouse_button: params.mouse_button.clone(),
+                    modifier_keys: params.modifier_keys.clone(),
+                    wait_ms_after: params.wait_ms_after,
+                })
+                .await?;
+
+            let view = if params.return_view {
+                Some(
+                    self.build_visual_mark_view(app, VisualMarkViewOpts::default())
+                        .await?,
+                )
+            } else {
+                None
+            };
+            let mut note = format!("visual_mark_image_xy({},{})", mark.x, mark.y);
+            if auto_rebuilt {
+                note.push_str(",auto_rebuilt_view_after_stale");
+            }
+            Ok(VisualActionResult {
+                snapshot,
+                view,
+                execution_note: Some(note),
+            })
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, params);
+            Err(BitFunError::tool(
+                "visual_click is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn interactive_type_text(
+        &self,
+        app: AppSelector,
+        params: InteractiveTypeTextParams,
+    ) -> BitFunResult<InteractiveActionResult> {
+        #[cfg(target_os = "macos")]
+        {
+            let focus = if let Some(i) = params.i {
+                let node_idx = self
+                    .resolve_interactive_index(&app, i, params.before_view_digest.as_deref())
+                    .await?;
+                Some(ClickTarget::NodeIdx { idx: node_idx })
+            } else {
+                None
+            };
+
+            if params.clear_first {
+                if let Some(target) = focus.clone() {
+                    let _ = self
+                        .app_click(AppClickParams {
+                            app: app.clone(),
+                            target,
+                            click_count: 1,
+                            mouse_button: "left".to_string(),
+                            modifier_keys: vec![],
+                            wait_ms_after: Some(60),
+                        })
+                        .await?;
+                }
+                let pid = resolve_pid_macos(self, &app).await?;
+                tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+                    macos::catch_objc(|| {
+                        let (m1, k1) = crate::computer_use::macos_bg_input::parse_key_sequence(&[
+                            "cmd".to_string(),
+                            "a".to_string(),
+                        ])?;
+                        crate::computer_use::macos_bg_input::bg_key_chord(pid, &m1, k1)?;
+                        let (m2, k2) = crate::computer_use::macos_bg_input::parse_key_sequence(&[
+                            "delete".to_string(),
+                        ])?;
+                        crate::computer_use::macos_bg_input::bg_key_chord(pid, &m2, k2)?;
+                        Ok(())
+                    })
+                })
+                .await
+                .map_err(|e| BitFunError::tool(e.to_string()))??;
+            }
+
+            let snapshot = self.app_type_text(app.clone(), &params.text, focus).await?;
+
+            if params.press_enter_after {
+                let pid = resolve_pid_macos(self, &app).await?;
+                tokio::task::spawn_blocking(move || -> BitFunResult<()> {
+                    macos::catch_objc(|| {
+                        let (m, k) = crate::computer_use::macos_bg_input::parse_key_sequence(&[
+                            "return".to_string(),
+                        ])?;
+                        crate::computer_use::macos_bg_input::bg_key_chord(pid, &m, k)?;
+                        Ok(())
+                    })
+                })
+                .await
+                .map_err(|e| BitFunError::tool(e.to_string()))??;
+            }
+
+            if let Some(wait) = params.wait_ms_after {
+                tokio::time::sleep(Duration::from_millis(wait.min(5_000) as u64)).await;
+            }
+
+            let view = if params.return_view {
+                Some(
+                    self.build_interactive_view(app, InteractiveViewOpts::default())
+                        .await?,
+                )
+            } else {
+                None
+            };
+            Ok(InteractiveActionResult {
+                snapshot,
+                view,
+                execution_note: Some("ax_focus_then_bg_type_text".to_string()),
+            })
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, params);
+            Err(BitFunError::tool(
+                "interactive_type_text is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+
+    async fn interactive_scroll(
+        &self,
+        app: AppSelector,
+        params: InteractiveScrollParams,
+    ) -> BitFunResult<InteractiveActionResult> {
+        #[cfg(target_os = "macos")]
+        {
+            let focus = if let Some(i) = params.i {
+                let node_idx = self
+                    .resolve_interactive_index(&app, i, params.before_view_digest.as_deref())
+                    .await?;
+                Some(ClickTarget::NodeIdx { idx: node_idx })
+            } else {
+                None
+            };
+            let snapshot = self
+                .app_scroll(app.clone(), focus, params.dx, params.dy)
+                .await?;
+            if let Some(wait) = params.wait_ms_after {
+                tokio::time::sleep(Duration::from_millis(wait.min(5_000) as u64)).await;
+            }
+            let view = if params.return_view {
+                Some(
+                    self.build_interactive_view(app, InteractiveViewOpts::default())
+                        .await?,
+                )
+            } else {
+                None
+            };
+            Ok(InteractiveActionResult {
+                snapshot,
+                view,
+                execution_note: Some("app_scroll".to_string()),
+            })
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, params);
+            Err(BitFunError::tool(
+                "interactive_scroll is only available on macOS in this build".to_string(),
+            ))
+        }
+    }
+}
+
+/// Resolve an `AppSelector` to a concrete `pid` on macOS. Resolution
+/// precedence (Codex parity): `pid > bundle_id > name`.
+#[cfg(target_os = "macos")]
+async fn resolve_pid_macos(host: &DesktopComputerUseHost, app: &AppSelector) -> BitFunResult<i32> {
+    if let Some(pid) = app.pid {
+        return Ok(pid);
+    }
+    let apps = host.list_apps(true).await?;
+    if let Some(bid) = app.bundle_id.as_deref() {
+        let needle = bid.to_lowercase();
+        if let Some(p) = apps
+            .iter()
+            .find(|a| {
+                a.bundle_id
+                    .as_deref()
+                    .map(|s| s.to_lowercase() == needle)
+                    .unwrap_or(false)
+            })
+            .and_then(|a| a.pid)
+        {
+            return Ok(p);
+        }
+    }
+    if let Some(name) = app.name.as_deref() {
+        let needle = name.to_lowercase();
+        // 1) Exact match against the localized application name (what the
+        //    Dock / Spotlight shows, e.g. "BitFun").
+        if let Some(p) = apps
+            .iter()
+            .find(|a| a.name.to_lowercase() == needle)
+            .and_then(|a| a.pid)
+        {
+            return Ok(p);
+        }
+        // 2) Exact match against the bundle id's last segment (e.g. user
+        //    asks for "BitFun" but `list_apps` returned name="bitfun-desktop"
+        //    with bundle_id="ai.bitfun.desktop"). This keeps us aligned with
+        //    Codex, which is robust to "Cursor" vs "com.todesktop....Cursor".
+        if let Some(p) = apps
+            .iter()
+            .find(|a| {
+                a.bundle_id
+                    .as_deref()
+                    .and_then(|b| b.rsplit('.').next())
+                    .map(|seg| seg.to_lowercase() == needle)
+                    .unwrap_or(false)
+            })
+            .and_then(|a| a.pid)
+        {
+            return Ok(p);
+        }
+        // 3) Substring match on either `name` or `bundle_id` (case-
+        //    insensitive). Pick the shortest matching name to avoid
+        //    accidentally targeting "Visual Studio Code Helper (GPU)".
+        let mut candidates: Vec<&AppInfo> = apps
+            .iter()
+            .filter(|a| {
+                a.name.to_lowercase().contains(&needle)
+                    || a.bundle_id
+                        .as_deref()
+                        .map(|b| b.to_lowercase().contains(&needle))
+                        .unwrap_or(false)
+            })
+            .collect();
+        candidates.sort_by_key(|a| a.name.len());
+        if let Some(p) = candidates.first().and_then(|a| a.pid) {
+            return Ok(p);
+        }
+    }
+    Err(BitFunError::tool(format!("APP_NOT_FOUND: {:?}", app)))
+}
+
+/// Stable lowercase-hex SHA1 over a *layout-only* canonical payload:
+/// `i|node_idx|role|subrole|x_bucket,y_bucket,w_bucket,h_bucket`.
+///
+/// Deliberately omits `label` (textfield value, focused selection, live
+/// counters etc. would otherwise turn every keystroke into a STALE error)
+/// and snaps coordinates to an 8-pt grid so a 1-pixel re-layout from a
+/// scrollbar appearing / IME bar resizing doesn't invalidate the cached
+/// view either. The digest is meant to detect *structural* changes
+/// (elements appeared, disappeared, or moved noticeably), not cosmetic
+/// noise.
+fn compute_interactive_view_digest(
+    elements: &[bitfun_core::agentic::tools::computer_use_host::InteractiveElement],
+) -> String {
+    use sha1::{Digest, Sha1};
+    const BUCKET: f64 = 8.0;
+    let mut hasher = Sha1::new();
+    for e in elements {
+        let subrole = e.subrole.as_deref().unwrap_or("");
+        let (x, y, w, h) = e.frame_global.unwrap_or((0.0, 0.0, 0.0, 0.0));
+        let xb = (x / BUCKET).floor() as i64;
+        let yb = (y / BUCKET).floor() as i64;
+        let wb = (w / BUCKET).round().max(1.0) as i64;
+        let hb = (h / BUCKET).round().max(1.0) as i64;
+        let line = format!(
+            "{}|{}|{}|{}|{},{},{},{}\n",
+            e.i, e.node_idx, e.role, subrole, xb, yb, wb, hb,
+        );
+        hasher.update(line.as_bytes());
+    }
+    let bytes = hasher.finalize();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes.iter() {
+        out.push_str(&format!("{:02x}", b));
+    }
+    out
+}
+
+fn compute_visual_mark_view_digest(marks: &[VisualMark], screenshot_id: Option<&str>) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(screenshot_id.unwrap_or("").as_bytes());
+    hasher.update(b"\n");
+    for mark in marks {
+        let frame = mark.frame_image.unwrap_or((0, 0, 0, 0));
+        let line = format!(
+            "{}|{}|{}|{},{},{},{}\n",
+            mark.i, mark.x, mark.y, frame.0, frame.1, frame.2, frame.3
+        );
+        hasher.update(line.as_bytes());
+    }
+    let bytes = hasher.finalize();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes.iter() {
+        out.push_str(&format!("{:02x}", b));
+    }
+    out
+}
+
+fn build_regular_visual_marks(
+    shot: &ComputerScreenshot,
+    opts: &VisualMarkViewOpts,
+) -> BitFunResult<Vec<VisualMark>> {
+    if !opts.include_grid {
+        return Ok(Vec::new());
+    }
+
+    let image_w = shot.image_width.max(1);
+    let image_h = shot.image_height.max(1);
+    let (mut x0, mut y0, mut width, mut height) = if let Some(region) = opts.region.as_ref() {
+        (region.x0, region.y0, region.width, region.height)
+    } else if let Some(rect) = shot.image_content_rect.as_ref() {
+        (rect.left, rect.top, rect.width, rect.height)
+    } else {
+        (0, 0, image_w, image_h)
+    };
+
+    x0 = x0.min(image_w.saturating_sub(1));
+    y0 = y0.min(image_h.saturating_sub(1));
+    width = width.min(image_w.saturating_sub(x0)).max(1);
+    height = height.min(image_h.saturating_sub(y0)).max(1);
+
+    let max_points = opts.max_points.unwrap_or(64).clamp(4, 196);
+    let aspect = (width as f64 / height.max(1) as f64).clamp(0.25, 4.0);
+    let mut cols = ((max_points as f64 * aspect).sqrt().ceil() as u32).clamp(2, max_points);
+    let mut rows = ((max_points as f64) / cols as f64).ceil() as u32;
+    rows = rows.max(2);
+    while rows.saturating_mul(cols) > max_points && rows > 2 {
+        rows -= 1;
+    }
+    while rows.saturating_mul(cols) > max_points && cols > 2 {
+        cols -= 1;
+    }
+
+    let mut marks = Vec::with_capacity(rows.saturating_mul(cols) as usize);
+    for row in 0..rows {
+        for col in 0..cols {
+            if marks.len() >= max_points as usize {
+                break;
+            }
+            let x = x0 as f64 + ((col as f64 + 0.5) * width as f64 / cols as f64);
+            let y = y0 as f64 + ((row as f64 + 0.5) * height as f64 / rows as f64);
+            let x = x.round().clamp(0.0, image_w.saturating_sub(1) as f64) as i32;
+            let y = y.round().clamp(0.0, image_h.saturating_sub(1) as f64) as i32;
+            let box_size_i32 = if width.min(height) < 180 { 18 } else { 24 };
+            let half = box_size_i32 / 2;
+            let fx = (x - half).max(0) as u32;
+            let fy = (y - half).max(0) as u32;
+            let box_size = box_size_i32 as u32;
+            let fw = box_size.min(image_w.saturating_sub(fx)).max(1);
+            let fh = box_size.min(image_h.saturating_sub(fy)).max(1);
+            marks.push(VisualMark {
+                i: marks.len() as u32,
+                x,
+                y,
+                frame_image: Some((fx, fy, fw, fh)),
+                label: None,
+            });
+        }
+    }
+
+    if marks.is_empty() {
+        return Err(BitFunError::tool(
+            "build_visual_mark_view: no visual marks generated for the requested region"
+                .to_string(),
+        ));
+    }
+    Ok(marks)
+}
+
+fn visual_marks_to_overlay_elements(
+    marks: &[VisualMark],
+) -> Vec<bitfun_core::agentic::tools::computer_use_host::InteractiveElement> {
+    marks
+        .iter()
+        .map(
+            |mark| bitfun_core::agentic::tools::computer_use_host::InteractiveElement {
+                i: mark.i,
+                node_idx: mark.i,
+                role: "VisualMark".to_string(),
+                subrole: None,
+                label: mark.label.clone(),
+                frame_image: mark.frame_image,
+                frame_global: None,
+                enabled: true,
+                focused: false,
+                ax_actionable: false,
+            },
+        )
+        .collect()
+}
+
+fn detect_regular_grid_rect_from_screenshot(
+    shot: &ComputerScreenshot,
+    rows: u32,
+    cols: u32,
+) -> BitFunResult<(i32, i32, u32, u32)> {
+    if rows < 2 || cols < 2 {
+        return Err(BitFunError::tool(
+            "visual_grid requires rows and cols >= 2".to_string(),
+        ));
+    }
+
+    let img = image::load_from_memory(&shot.bytes)
+        .map_err(|e| BitFunError::tool(format!("visual_grid: decode screenshot failed: {e}")))?
+        .to_rgb8();
+    let (image_w, image_h) = img.dimensions();
+    let (left, top, width, height) = shot
+        .image_content_rect
+        .as_ref()
+        .map(|r| (r.left, r.top, r.width, r.height))
+        .unwrap_or((0, 0, image_w, image_h));
+    let right = left.saturating_add(width).min(image_w);
+    let bottom = top.saturating_add(height).min(image_h);
+    if right <= left + 8 || bottom <= top + 8 {
+        return Err(BitFunError::tool(
+            "visual_grid: screenshot content rect is too small".to_string(),
+        ));
+    }
+
+    let vertical = projection_darkness(&img, left, top, right, bottom, true);
+    let horizontal = projection_darkness(&img, left, top, right, bottom, false);
+    let x_seq = detect_regular_line_sequence(&vertical, cols, left)?;
+    let y_seq = detect_regular_line_sequence(&horizontal, rows, top)?;
+    let x0 = *x_seq.first().unwrap_or(&left);
+    let x1 = *x_seq.last().unwrap_or(&right.saturating_sub(1));
+    let y0 = *y_seq.first().unwrap_or(&top);
+    let y1 = *y_seq.last().unwrap_or(&bottom.saturating_sub(1));
+    let w = x1.saturating_sub(x0).saturating_add(1).max(2);
+    let h = y1.saturating_sub(y0).saturating_add(1).max(2);
+
+    let aspect = w as f64 / h.max(1) as f64;
+    if !(0.5..=2.0).contains(&aspect) {
+        return Err(BitFunError::tool(format!(
+            "visual_grid: detected grid is implausibly non-square (x0={}, y0={}, width={}, height={}, aspect={:.2}); pass image_grid with an explicit rectangle",
+            x0, y0, w, h, aspect
+        )));
+    }
+
+    Ok((x0 as i32, y0 as i32, w, h))
+}
+
+fn projection_darkness(
+    img: &image::RgbImage,
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+    vertical: bool,
+) -> Vec<f64> {
+    let len = (if vertical { right - left } else { bottom - top }) as usize;
+    let mut out = vec![0.0; len];
+    if vertical {
+        for x in left..right {
+            let mut sum = 0.0;
+            for y in top..bottom {
+                let p = img.get_pixel(x, y).0;
+                let gray = 0.299 * p[0] as f64 + 0.587 * p[1] as f64 + 0.114 * p[2] as f64;
+                sum += (255.0 - gray).max(0.0);
+            }
+            out[(x - left) as usize] = sum / (bottom - top).max(1) as f64;
+        }
+    } else {
+        for y in top..bottom {
+            let mut sum = 0.0;
+            for x in left..right {
+                let p = img.get_pixel(x, y).0;
+                let gray = 0.299 * p[0] as f64 + 0.587 * p[1] as f64 + 0.114 * p[2] as f64;
+                sum += (255.0 - gray).max(0.0);
+            }
+            out[(y - top) as usize] = sum / (right - left).max(1) as f64;
+        }
+    }
+    smooth_projection(&out, 2)
+}
+
+fn smooth_projection(values: &[f64], radius: usize) -> Vec<f64> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(values.len());
+    for i in 0..values.len() {
+        let start = i.saturating_sub(radius);
+        let end = (i + radius + 1).min(values.len());
+        let sum: f64 = values[start..end].iter().sum();
+        out.push(sum / (end - start).max(1) as f64);
+    }
+    out
+}
+
+fn detect_regular_line_sequence(
+    projection: &[f64],
+    count: u32,
+    offset: u32,
+) -> BitFunResult<Vec<u32>> {
+    if projection.len() < count as usize {
+        return Err(BitFunError::tool(
+            "visual_grid: projection is smaller than requested grid count".to_string(),
+        ));
+    }
+    let mut sorted = projection.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let baseline = sorted[sorted.len() / 2];
+    let adjusted: Vec<f64> = projection
+        .iter()
+        .map(|v| (*v - baseline).max(0.0))
+        .collect();
+    let mut adjusted_sorted = adjusted.clone();
+    adjusted_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let threshold = adjusted_sorted
+        [(adjusted_sorted.len() * 95 / 100).min(adjusted_sorted.len().saturating_sub(1))]
+    .max(1.0);
+    let mut peaks: Vec<usize> = Vec::new();
+    let min_gap = ((projection.len() as f64 / count.max(1) as f64) * 0.35).round() as usize;
+    let mut i = 0usize;
+    while i < projection.len() {
+        if adjusted[i] < threshold {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        let mut best = i;
+        let mut best_score = adjusted[i];
+        while i < adjusted.len() && adjusted[i] >= threshold {
+            if adjusted[i] > best_score {
+                best = i;
+                best_score = adjusted[i];
+            }
+            i += 1;
+        }
+        let end = i.saturating_sub(1);
+        let center = if best_score <= threshold {
+            (start + end) / 2
+        } else {
+            best
+        };
+        if let Some(last) = peaks.last_mut() {
+            if center.saturating_sub(*last) < min_gap.max(2) {
+                if adjusted[center] > adjusted[*last] {
+                    *last = center;
+                }
+                continue;
+            }
+        }
+        peaks.push(center);
+    }
+    if peaks.len() < 2 {
+        if let Some(fallback) = top_regular_positions(&adjusted, count, offset, min_gap.max(2)) {
+            return Ok(fallback);
+        }
+        return Err(BitFunError::tool(
+            "visual_grid: could not find enough line peaks".to_string(),
+        ));
+    }
+
+    let mut best: Option<(f64, Vec<u32>)> = None;
+    let desired = count as usize;
+    for a_idx in 0..peaks.len() {
+        for b_idx in (a_idx + 1)..peaks.len() {
+            let first = peaks[a_idx] as f64;
+            let last = peaks[b_idx] as f64;
+            let span = last - first;
+            if span < desired.saturating_sub(1).max(1) as f64 * 4.0 {
+                continue;
+            }
+            let step = span / desired.saturating_sub(1).max(1) as f64;
+            let tolerance = (step * 0.18).max(3.0);
+            let mut positions = Vec::with_capacity(desired);
+            let mut score = 0.0;
+            let mut matched = 0usize;
+            for k in 0..desired {
+                let expected = first + k as f64 * step;
+                let nearest = peaks
+                    .iter()
+                    .min_by(|a, b| {
+                        ((**a as f64 - expected).abs())
+                            .partial_cmp(&((**b as f64 - expected).abs()))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .copied();
+                let pos = if let Some(p) = nearest {
+                    if (p as f64 - expected).abs() <= tolerance {
+                        matched += 1;
+                        p as f64
+                    } else {
+                        expected
+                    }
+                } else {
+                    expected
+                };
+                let idx = pos
+                    .round()
+                    .clamp(0.0, projection.len().saturating_sub(1) as f64)
+                    as usize;
+                score += adjusted[idx];
+                positions.push(offset + idx as u32);
+            }
+            if matched < (desired * 2 / 3).max(2) {
+                continue;
+            }
+            score += matched as f64 * threshold;
+            score += span * 0.02;
+            if best.as_ref().map(|(s, _)| score > *s).unwrap_or(true) {
+                best = Some((score, positions));
+            }
+        }
+    }
+
+    best.map(|(_, positions)| positions)
+        .or_else(|| top_regular_positions(&adjusted, count, offset, min_gap.max(2)))
+        .ok_or_else(|| {
+            BitFunError::tool(
+                "visual_grid: no regular grid sequence detected; pass image_grid with an explicit rectangle or build_visual_mark_view to choose a point"
+                    .to_string(),
+            )
+        })
+}
+
+fn top_regular_positions(
+    scores: &[f64],
+    count: u32,
+    offset: u32,
+    min_gap: usize,
+) -> Option<Vec<u32>> {
+    let desired = count as usize;
+    let mut ranked: Vec<usize> = (0..scores.len()).collect();
+    ranked.sort_by(|a, b| {
+        scores[*b]
+            .partial_cmp(&scores[*a])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut selected: Vec<usize> = Vec::with_capacity(desired);
+    for idx in ranked {
+        if scores[idx] <= 0.0 {
+            break;
+        }
+        if selected.iter().any(|s| idx.abs_diff(*s) < min_gap.max(2)) {
+            continue;
+        }
+        selected.push(idx);
+        if selected.len() == desired {
+            break;
+        }
+    }
+    if selected.len() < desired {
+        return None;
+    }
+    selected.sort_unstable();
+    Some(
+        selected
+            .into_iter()
+            .map(|idx| offset + idx as u32)
+            .collect(),
+    )
+}
+
+/// Returns `true` if the error reported by `resolve_interactive_index`
+/// is the recoverable `STALE_INTERACTIVE_VIEW` variant. We match on the
+/// error text rather than introducing a typed error enum because every
+/// `BitFunError::tool` is already string-based throughout the host
+/// surface; adding a new variant would ripple through ~40 callers.
+fn is_stale_interactive_view_error(err: &BitFunError) -> bool {
+    err.to_string().contains("STALE_INTERACTIVE_VIEW")
+}
+
+fn is_stale_visual_mark_view_error(err: &BitFunError) -> bool {
+    err.to_string().contains("STALE_VISUAL_MARK_VIEW")
+}
+
+impl DesktopComputerUseHost {
+    /// Return the image-pixel center `(x, y)` of the cached interactive
+    /// element with the given `i`, when its `frame_image` is known. Used
+    /// as a pointer-click fallback in `interactive_click` when AXPress
+    /// fails (Electron / Canvas / custom-drawn surfaces).
+    #[cfg(target_os = "macos")]
+    async fn cached_interactive_image_center(
+        &self,
+        app: &AppSelector,
+        i: u32,
+    ) -> Option<(i32, i32)> {
+        let pid = resolve_pid_macos(self, app).await.ok()?;
+        let s = self.state.lock().ok()?;
+        let cached = s.interactive_view_cache.get(&pid)?;
+        let el = cached.elements.iter().find(|e| e.i == i)?;
+        let (ix, iy, iw, ih) = el.frame_image?;
+        Some((
+            (ix as i64 + (iw as i64) / 2) as i32,
+            (iy as i64 + (ih as i64) / 2) as i32,
+        ))
+    }
+
+    /// Resolve an `interactive_*` `i` index into the underlying AX `node_idx`
+    /// using the per-pid cache populated by `build_interactive_view`. Returns
+    /// a `STALE_INTERACTIVE_VIEW` tool error when the digest no longer matches
+    /// (i.e. the UI changed between view + action) so the caller can re-build
+    /// the interactive view before retrying.
+    #[cfg(target_os = "macos")]
+    async fn resolve_interactive_index(
+        &self,
+        app: &AppSelector,
+        i: u32,
+        before_digest: Option<&str>,
+    ) -> BitFunResult<u32> {
+        let pid = resolve_pid_macos(self, app).await?;
+        let s = self
+            .state
             .lock()
-            .ok()
-            .and_then(|s| s.preferred_display_id)
+            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+        let cached = s.interactive_view_cache.get(&pid).ok_or_else(|| {
+            BitFunError::tool(
+                "INTERACTIVE_VIEW_MISSING: call `build_interactive_view` before `interactive_*` actions"
+                    .to_string(),
+            )
+        })?;
+        if let Some(want) = before_digest {
+            let want = want.trim();
+            if !want.is_empty() {
+                let matches = if want.len() >= 8 && want.len() <= cached.digest.len() {
+                    cached.digest.starts_with(want)
+                } else {
+                    want == cached.digest
+                };
+                if !matches {
+                    return Err(BitFunError::tool(format!(
+                        "STALE_INTERACTIVE_VIEW: before_view_digest={} but current cached digest={}; re-call `build_interactive_view` and reuse the new digest (full or >=8-char prefix)",
+                        want, cached.digest
+                    )));
+                }
+            }
+        }
+        let el = cached.elements.iter().find(|e| e.i == i).ok_or_else(|| {
+            BitFunError::tool(format!(
+                "INTERACTIVE_INDEX_OUT_OF_RANGE: i={} not in cached view (len={})",
+                i,
+                cached.elements.len()
+            ))
+        })?;
+        Ok(el.node_idx)
+    }
+
+    #[cfg(target_os = "macos")]
+    async fn resolve_visual_mark(
+        &self,
+        app: &AppSelector,
+        i: u32,
+        before_digest: Option<&str>,
+    ) -> BitFunResult<VisualMark> {
+        let pid = resolve_pid_macos(self, app).await?;
+        let s = self
+            .state
+            .lock()
+            .map_err(|e| BitFunError::tool(format!("lock: {}", e)))?;
+        let cached = s.visual_mark_cache.get(&pid).ok_or_else(|| {
+            BitFunError::tool(
+                "VISUAL_MARK_VIEW_MISSING: call `build_visual_mark_view` before `visual_click`"
+                    .to_string(),
+            )
+        })?;
+        if let Some(want) = before_digest {
+            let want = want.trim();
+            if !want.is_empty() {
+                let matches = if want.len() >= 8 && want.len() <= cached.digest.len() {
+                    cached.digest.starts_with(want)
+                } else {
+                    want == cached.digest
+                };
+                if !matches {
+                    return Err(BitFunError::tool(format!(
+                        "STALE_VISUAL_MARK_VIEW: before_view_digest={} but current cached digest={}; re-call `build_visual_mark_view` and reuse the new digest (full or >=8-char prefix)",
+                        want, cached.digest
+                    )));
+                }
+            }
+        }
+        cached
+            .marks
+            .iter()
+            .find(|mark| mark.i == i)
+            .cloned()
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "VISUAL_INDEX_OUT_OF_RANGE: i={} not in cached visual mark view (len={})",
+                    i,
+                    cached.marks.len()
+                ))
+            })
     }
 }

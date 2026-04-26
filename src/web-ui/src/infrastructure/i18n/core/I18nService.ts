@@ -1,6 +1,6 @@
  
 
-import i18next, { i18n as I18nInstance, TFunction } from 'i18next';
+import i18next, { i18n as I18nInstance, Resource, TFunction } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import type {
@@ -17,165 +17,47 @@ import {
   DEFAULT_LOCALE,
   DEFAULT_FALLBACK_LOCALE,
   DEFAULT_NAMESPACE,
+  ALL_NAMESPACES,
   isLocaleSupported,
 } from '../presets';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nAPI } from '@/infrastructure/api/service-api/I18nAPI';
 
-
-import zhCNCommon from '../../../locales/zh-CN/common.json';
-import zhCNFlowChat from '../../../locales/zh-CN/flow-chat.json';
-import zhCNTools from '../../../locales/zh-CN/tools.json';
-import zhCNSettings from '../../../locales/zh-CN/settings.json';
-import zhCNErrors from '../../../locales/zh-CN/errors.json';
-import zhCNNotifications from '../../../locales/zh-CN/notifications.json';
-import zhCNComponents from '../../../locales/zh-CN/components.json';
-
-import zhCNScenesCapabilities from '../../../locales/zh-CN/scenes/capabilities.json';
-import zhCNScenesAgents from '../../../locales/zh-CN/scenes/agents.json';
-import zhCNScenesProfile from '../../../locales/zh-CN/scenes/profile.json';
-import zhCNScenesSkills from '../../../locales/zh-CN/scenes/skills.json';
-import zhCNScenesMiniapp from '../../../locales/zh-CN/scenes/miniapp.json';
-import zhCNPanelsFiles from '../../../locales/zh-CN/panels/files.json';
-import zhCNPanelsGit from '../../../locales/zh-CN/panels/git.json';
-import zhCNPanelsTerminal from '../../../locales/zh-CN/panels/terminal.json';
-
-import zhCNSettingsAiModel from '../../../locales/zh-CN/settings/ai-model.json';
-import zhCNSettingsAgenticTools from '../../../locales/zh-CN/settings/agentic-tools.json';
-import zhCNSettingsMcp from '../../../locales/zh-CN/settings/mcp.json';
-import zhCNSettingsMcpTools from '../../../locales/zh-CN/settings/mcp-tools.json';
-import zhCNSettingsBasics from '../../../locales/zh-CN/settings/basics.json';
-import zhCNSettingsAiFeatures from '../../../locales/zh-CN/settings/ai-features.json';
-import zhCNSettingsSessionConfig from '../../../locales/zh-CN/settings/session-config.json';
-import zhCNSettingsLsp from '../../../locales/zh-CN/settings/lsp.json';
-import zhCNSettingsDebug from '../../../locales/zh-CN/settings/debug.json';
-import zhCNSettingsEditor from '../../../locales/zh-CN/settings/editor.json';
-import zhCNSettingsSkills from '../../../locales/zh-CN/settings/skills.json';
-import zhCNSettingsAiRules from '../../../locales/zh-CN/settings/ai-rules.json';
-import zhCNSettingsAiMemory from '../../../locales/zh-CN/settings/ai-memory.json';
-import zhCNSettingsAiContext from '../../../locales/zh-CN/settings/ai-context.json';
-import zhCNSettingsAgents from '../../../locales/zh-CN/settings/agents.json';
-import zhCNSettingsDefaultModel from '../../../locales/zh-CN/settings/default-model.json';
-
-import zhCNMermaidEditor from '../../../locales/zh-CN/mermaid-editor.json';
-
-import enUSCommon from '../../../locales/en-US/common.json';
-import enUSFlowChat from '../../../locales/en-US/flow-chat.json';
-import enUSTools from '../../../locales/en-US/tools.json';
-import enUSSettings from '../../../locales/en-US/settings.json';
-import enUSErrors from '../../../locales/en-US/errors.json';
-import enUSNotifications from '../../../locales/en-US/notifications.json';
-import enUSComponents from '../../../locales/en-US/components.json';
-
-import enUSScenesCapabilities from '../../../locales/en-US/scenes/capabilities.json';
-import enUSScenesAgents from '../../../locales/en-US/scenes/agents.json';
-import enUSScenesProfile from '../../../locales/en-US/scenes/profile.json';
-import enUSScenesSkills from '../../../locales/en-US/scenes/skills.json';
-import enUSScenesMiniapp from '../../../locales/en-US/scenes/miniapp.json';
-import enUSPanelsFiles from '../../../locales/en-US/panels/files.json';
-import enUSPanelsGit from '../../../locales/en-US/panels/git.json';
-import enUSPanelsTerminal from '../../../locales/en-US/panels/terminal.json';
-
-import enUSSettingsAiModel from '../../../locales/en-US/settings/ai-model.json';
-import enUSSettingsAgenticTools from '../../../locales/en-US/settings/agentic-tools.json';
-import enUSSettingsMcp from '../../../locales/en-US/settings/mcp.json';
-import enUSSettingsMcpTools from '../../../locales/en-US/settings/mcp-tools.json';
-import enUSSettingsBasics from '../../../locales/en-US/settings/basics.json';
-import enUSSettingsAiFeatures from '../../../locales/en-US/settings/ai-features.json';
-import enUSSettingsSessionConfig from '../../../locales/en-US/settings/session-config.json';
-import enUSSettingsLsp from '../../../locales/en-US/settings/lsp.json';
-import enUSSettingsDebug from '../../../locales/en-US/settings/debug.json';
-import enUSSettingsEditor from '../../../locales/en-US/settings/editor.json';
-import enUSSettingsSkills from '../../../locales/en-US/settings/skills.json';
-import enUSSettingsAiRules from '../../../locales/en-US/settings/ai-rules.json';
-import enUSSettingsAiMemory from '../../../locales/en-US/settings/ai-memory.json';
-import enUSSettingsAiContext from '../../../locales/en-US/settings/ai-context.json';
-import enUSSettingsAgents from '../../../locales/en-US/settings/agents.json';
-import enUSSettingsDefaultModel from '../../../locales/en-US/settings/default-model.json';
-
-import enUSMermaidEditor from '../../../locales/en-US/mermaid-editor.json';
-
 import { createLogger } from '@/shared/utils/logger';
+import { logDuration, measureSync, nowMs, elapsedMs } from '@/shared/utils/timing';
 
 const log = createLogger('I18nService');
 
- 
-const resources = {
-  'zh-CN': {
-    common: zhCNCommon,
-    'flow-chat': zhCNFlowChat,
-    tools: zhCNTools,
-    settings: zhCNSettings,
-    errors: zhCNErrors,
-    notifications: zhCNNotifications,
-    components: zhCNComponents,
-    
-    'scenes/capabilities': zhCNScenesCapabilities,
-    'scenes/agents': zhCNScenesAgents,
-    'scenes/profile': zhCNScenesProfile,
-    'scenes/skills': zhCNScenesSkills,
-    'scenes/miniapp': zhCNScenesMiniapp,
-    'panels/files': zhCNPanelsFiles,
-    'panels/git': zhCNPanelsGit,
-    'panels/terminal': zhCNPanelsTerminal,
-    
-    'settings/ai-model': zhCNSettingsAiModel,
-    'settings/agentic-tools': zhCNSettingsAgenticTools,
-    'settings/mcp': zhCNSettingsMcp,
-    'settings/mcp-tools': zhCNSettingsMcpTools,
-    'settings/basics': zhCNSettingsBasics,
-    'settings/ai-features': zhCNSettingsAiFeatures,
-    'settings/session-config': zhCNSettingsSessionConfig,
-    'settings/lsp': zhCNSettingsLsp,
-    'settings/debug': zhCNSettingsDebug,
-    'settings/editor': zhCNSettingsEditor,
-    'settings/skills': zhCNSettingsSkills,
-    'settings/ai-rules': zhCNSettingsAiRules,
-    'settings/ai-memory': zhCNSettingsAiMemory,
-    'settings/ai-context': zhCNSettingsAiContext,
-    'settings/agents': zhCNSettingsAgents,
-    'settings/default-model': zhCNSettingsDefaultModel,
-    
-    'mermaid-editor': zhCNMermaidEditor,
+// Eager glob preserves the previous startup behavior while removing the
+// per-locale manual import list. Adding locales now only needs registry and
+// JSON files; the build discovers matching resources automatically.
+const localeModules = import.meta.glob('../../../locales/**/*.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, Record<string, unknown>>;
+
+function buildResources(): Resource {
+  return Object.entries(localeModules).reduce<Resource>((acc, [modulePath, messages]) => {
+    const match = modulePath.match(/locales\/([^/]+)\/(.+)\.json$/);
+    if (!match) return acc;
+
+    const [, locale, namespace] = match;
+    acc[locale] = {
+      ...(acc[locale] ?? {}),
+      [namespace]: messages,
+    };
+    return acc;
+  }, {});
+}
+
+const resourcesResult = measureSync(() => buildResources());
+const resources = resourcesResult.value;
+logDuration(log, 'I18n resources prepared', resourcesResult.durationMs, {
+  data: {
+  localeCount: Object.keys(resources).length,
+  moduleCount: Object.keys(localeModules).length,
   },
-  'en-US': {
-    common: enUSCommon,
-    'flow-chat': enUSFlowChat,
-    tools: enUSTools,
-    settings: enUSSettings,
-    errors: enUSErrors,
-    notifications: enUSNotifications,
-    components: enUSComponents,
-    
-    'scenes/capabilities': enUSScenesCapabilities,
-    'scenes/agents': enUSScenesAgents,
-    'scenes/profile': enUSScenesProfile,
-    'scenes/skills': enUSScenesSkills,
-    'scenes/miniapp': enUSScenesMiniapp,
-    'panels/files': enUSPanelsFiles,
-    'panels/git': enUSPanelsGit,
-    'panels/terminal': enUSPanelsTerminal,
-    
-    'settings/ai-model': enUSSettingsAiModel,
-    'settings/agentic-tools': enUSSettingsAgenticTools,
-    'settings/mcp': enUSSettingsMcp,
-    'settings/mcp-tools': enUSSettingsMcpTools,
-    'settings/basics': enUSSettingsBasics,
-    'settings/ai-features': enUSSettingsAiFeatures,
-    'settings/session-config': enUSSettingsSessionConfig,
-    'settings/lsp': enUSSettingsLsp,
-    'settings/debug': enUSSettingsDebug,
-    'settings/editor': enUSSettingsEditor,
-    'settings/skills': enUSSettingsSkills,
-    'settings/ai-rules': enUSSettingsAiRules,
-    'settings/ai-memory': enUSSettingsAiMemory,
-    'settings/ai-context': enUSSettingsAiContext,
-    'settings/agents': enUSSettingsAgents,
-    'settings/default-model': enUSSettingsDefaultModel,
-    
-    'mermaid-editor': enUSMermaidEditor,
-  },
-};
+});
 
  
 export class I18nService {
@@ -198,42 +80,7 @@ export class I18nService {
         lng: DEFAULT_LOCALE,
         fallbackLng: DEFAULT_FALLBACK_LOCALE,
         defaultNS: DEFAULT_NAMESPACE,
-        ns: [
-          'common', 
-          'flow-chat', 
-          'tools', 
-          'settings', 
-          'errors', 
-          'notifications', 
-          'components',
-          
-          'scenes/capabilities',
-          'scenes/agents',
-          'scenes/profile',
-          'scenes/skills',
-          'scenes/miniapp',
-          'panels/files',
-          'panels/git',
-          'panels/terminal',
-          
-          'settings/ai-model',
-          'settings/agentic-tools',
-          'settings/mcp',
-          'settings/mcp-tools',
-          'settings/basics',
-          'settings/ai-features',
-          'settings/lsp',
-          'settings/debug',
-          'settings/editor',
-          'settings/skills',
-          'settings/ai-rules',
-          'settings/ai-memory',
-          'settings/ai-context',
-          'settings/agents',
-          'settings/default-model',
-          
-          'mermaid-editor',
-        ],
+        ns: [...ALL_NAMESPACES],
         interpolation: {
           escapeValue: false,
         },
@@ -252,6 +99,7 @@ export class I18nService {
       return;
     }
 
+    const startedAt = nowMs();
     try {
       let localeToUse: LocaleId = DEFAULT_LOCALE;
       const preInjectedLocale = document.documentElement.getAttribute('lang');
@@ -275,12 +123,21 @@ export class I18nService {
 
       this.initialized = true;
       log.info('Initialization completed', { locale: this.currentLocaleId });
+      logDuration(log, 'I18n initialization timing', elapsedMs(startedAt), {
+        level: 'debug',
+        data: {
+        locale: this.currentLocaleId,
+        },
+      });
 
       const seqAtInitEnd = this.localeChangeSeq;
       const localeAtInitEnd = this.currentLocaleId;
       this.loadAndApplyBackendLocale(seqAtInitEnd, localeAtInitEnd);
     } catch (error) {
-      log.error('Initialization failed', error);
+      log.error('Initialization failed', {
+        error,
+        durationMs: elapsedMs(startedAt),
+      });
       
       this.initialized = true;
       const store = useI18nStore.getState();
@@ -289,6 +146,7 @@ export class I18nService {
   }
 
   private async loadAndApplyBackendLocale(seqAtInitEnd: number, localeAtInitEnd: LocaleId): Promise<void> {
+    const startedAt = nowMs();
     try {
       const savedLocale = await this.loadCurrentLocale();
       if (!savedLocale || savedLocale === this.currentLocaleId) {
@@ -301,6 +159,11 @@ export class I18nService {
       }
 
       await this.changeLanguage(savedLocale);
+      logDuration(log, 'Backend locale applied after initialization', elapsedMs(startedAt), {
+        data: {
+        locale: savedLocale,
+        },
+      });
     } catch (error) {
       log.debug('Failed to load backend locale (ignored)', error);
     }
@@ -308,6 +171,7 @@ export class I18nService {
 
    
   private async loadCurrentLocale(): Promise<LocaleId | null> {
+    const startedAt = nowMs();
     try {
       
       const timeoutPromise = new Promise<null>((resolve) => {
@@ -319,12 +183,18 @@ export class I18nService {
         timeoutPromise,
       ]);
 
-      if (locale && isLocaleSupported(locale)) {
-        return locale;
-      }
-      return null;
+      const resolvedLocale = locale && isLocaleSupported(locale) ? locale : null;
+      logDuration(log, 'Backend locale load completed', elapsedMs(startedAt), {
+        data: {
+        locale: resolvedLocale ?? locale ?? 'timeout',
+        },
+      });
+      return resolvedLocale;
     } catch (error) {
-      log.debug('Failed to load locale config (ignored)', error);
+      log.debug('Failed to load locale config (ignored)', {
+        error,
+        durationMs: elapsedMs(startedAt),
+      });
       return null;
     }
   }

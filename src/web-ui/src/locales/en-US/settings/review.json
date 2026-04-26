@@ -1,0 +1,92 @@
+{
+  "title": "Review",
+  "subtitle": "Configure how Deep Review and /DeepReview assemble reviewers, apply strategy depth, and finish with a quality gate.",
+  "loading": "Loading review settings...",
+  "overview": {
+    "title": "Review workflow",
+    "description": "Deep Review runs a read-only reviewer lineup in parallel, then asks the quality inspector to merge and validate the final report.",
+    "badge": "Deep Review",
+    "command": {
+      "title": "/DeepReview entry",
+      "description": "The command uses these settings whenever a chat session launches the full code review team."
+    },
+    "reviewers": {
+      "title": "Reviewer lineup",
+      "description": "Locked core reviewers cover business logic, performance, security, and final quality inspection; eligible read-only Sub-Agents can join as specialists."
+    },
+    "qualityGate": {
+      "title": "Quality gate",
+      "description": "Timeouts, file splitting, strategy depth, and model choices shape how much work each reviewer can do before the result is summarized."
+    }
+  },
+  "strategy": {
+    "title": "Review strategy",
+    "description": "Choose the default depth for the whole code review team.",
+    "quick": {
+      "label": "Quick",
+      "summary": "Fast screening for high-confidence issues."
+    },
+    "normal": {
+      "label": "Normal",
+      "summary": "Balanced review depth for day-to-day code review."
+    },
+    "deep": {
+      "label": "Deep",
+      "summary": "Thorough multi-pass review for risky changes."
+    },
+    "inherit": "Inherit team ({{level}})"
+  },
+  "execution": {
+    "title": "Execution policy",
+    "description": "Control reviewer timeouts and how large scopes split across parallel reviewer instances.",
+    "reviewerTimeout": "Reviewer timeout",
+    "reviewerTimeoutDesc": "Per-reviewer timeout in seconds. Set 0 to disable the cap.",
+    "judgeTimeout": "Judge timeout",
+    "judgeTimeoutDesc": "Quality-gate timeout in seconds. Set 0 to disable the cap.",
+    "fileSplitThreshold": "File split threshold",
+    "fileSplitThresholdDesc": "Split each reviewer role when the target file count exceeds this value.",
+    "maxSameRoleInstances": "Max same-role instances",
+    "maxSameRoleInstancesDesc": "Maximum parallel instances for one reviewer role."
+  },
+  "members": {
+    "title": "Reviewers",
+    "description": "Adjust reviewer strategy and model assignment. Core roles stay locked.",
+    "count": "{{count}} members",
+    "locked": "Locked",
+    "extra": "Extra",
+    "remove": "Remove",
+    "businessLogic": {
+      "name": "Business Logic Reviewer",
+      "role": "Business Logic Reviewer"
+    },
+    "performance": {
+      "name": "Performance Reviewer",
+      "role": "Performance Reviewer"
+    },
+    "security": {
+      "name": "Security Reviewer",
+      "role": "Security Reviewer"
+    },
+    "judge": {
+      "name": "Review Quality Inspector",
+      "role": "Review Quality Inspector"
+    }
+  },
+  "extra": {
+    "title": "Extra Review Sub-Agents",
+    "description": "Only Sub-Agents marked Review and kept read-only can join the review team.",
+    "role": "Additional Specialist Reviewer",
+    "candidate": "Candidate",
+    "hint": "Create or edit a Sub-Agent, enable Review, and keep it read-only to make it available here.",
+    "placeholder": "Select a Review Sub-Agent",
+    "add": "Add to team",
+    "empty": "No eligible Review Sub-Agents are available."
+  },
+  "messages": {
+    "loadFailed": "Failed to load review settings.",
+    "saveFailed": "Failed to save review settings.",
+    "saved": "Review settings saved.",
+    "memberAdded": "Added the extra reviewer.",
+    "memberRemoved": "Removed the extra reviewer."
+  }
+}

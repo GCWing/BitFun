@@ -1,0 +1,135 @@
+.tool-timeout-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.duration-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tool-card-text-secondary, var(--color-text-secondary, #9ca3af));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.95;
+  }
+}
+
+.duration-text--live {
+  color: var(--color-text-muted, #9ca3af);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.duration-text--warning {
+  color: var(--color-warning, #f59e0b);
+}
+
+.duration-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+.duration-separator {
+  color: var(--color-text-muted, #9ca3af);
+  opacity: 0.5;
+  font-weight: 400;
+  margin: 0 1px;
+}
+
+.duration-timeout {
+  color: var(--color-text-muted, #9ca3af);
+  opacity: 0.7;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.duration-timeout--disabled {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.duration-timeout--warning {
+  color: var(--color-warning, #f59e0b);
+  opacity: 1;
+}
+
+.timeout-control-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.timeout-ignore-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:hover {
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+  }
+
+  &.is-active {
+    color: var(--color-accent-500);
+    background: var(--element-bg-subtle);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.timeout-extend-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 160px;
+  padding: 4px 0;
+  border-radius: 6px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-base);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.timeout-extend-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-align: left;
+
+  &:hover {
+    background: var(--element-bg-soft);
+  }
+
+  &--danger {
+    color: var(--color-warning, #f59e0b);
+  }
+}

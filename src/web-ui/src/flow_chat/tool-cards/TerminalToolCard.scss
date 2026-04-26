@@ -9,25 +9,24 @@
 /* ========== Terminal card specific styles ========== */
 
 .terminal-tool-card {
-  .tool-identifier-icon {
-    &.terminal-icon {
-      color: var(--color-text-secondary);
-    }
+  .terminal-card-icon {
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
   }
 }
 
-/* Entire header row shows pointer (card toggles expand); children must not force default cursor. */
-.base-tool-card-wrapper.terminal-tool-card .base-tool-card-header {
+/* Entire base card shows pointer (card toggles expand); children must not force default cursor. */
+.base-tool-card-wrapper.terminal-tool-card .base-tool-card {
   cursor: pointer;
 }
 
-/* Footer bar: full width + background to bottom inner edge of card (matches .base-tool-card-expanded padding). */
+/* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
 .base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {
-  margin-left: -10px;
-  margin-right: -10px;
-  margin-bottom: -10px;
-  padding: 6px 10px;
-  border-radius: 0 0 7px 7px;
+  margin-left: -12px;
+  margin-right: -12px;
+  margin-bottom: -12px;
+  padding: 6px 12px;
+  border-radius: 0 0 6px 6px;
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */
@@ -38,11 +37,11 @@
     &::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
     }
-    
+
     &::-webkit-scrollbar-thumb:hover {
       background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.22));
     }
-    
+
     /* Firefox */
     scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12)) transparent;
   }
@@ -67,6 +66,7 @@
   outline: none !important;
   box-shadow: none !important;
   padding: 0;
+  animation: none !important;
 
   &:not(.editable) {
     &:hover,
@@ -463,23 +463,23 @@
     .tool-card-action {
       display: none;
     }
-    
+
     .base-tool-card-header {
-      padding: 6px 8px;
+      padding: 2px 4px;
       gap: 2px;
     }
-    
+
     .terminal-action-btn {
       width: 16px;
       height: 16px;
     }
-    
+
     .terminal-confirm-actions {
       gap: 1px;
       width: auto !important;
       justify-content: flex-start !important;
     }
-    
+
     .terminal-command,
     .terminal-command-input {
       font-size: 11px;

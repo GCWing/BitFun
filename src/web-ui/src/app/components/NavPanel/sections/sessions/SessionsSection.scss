@@ -135,6 +135,17 @@
     }
   }
 
+  &__inline-item-icon-slot {
+    position: relative;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+  }
+
   &__inline-item-icon {
     flex-shrink: 0;
     opacity: 0.78;
@@ -199,6 +210,26 @@
     opacity: 0.78;
   }
 
+  &__inline-item-review-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 14px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 28%, var(--border-subtle));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 10%, transparent);
+    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 72%, var(--color-text-primary));
+    font-size: var(--font-size-xxs);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+
+    svg {
+      animation: bitfun-nav-session-spin 1s linear infinite;
+    }
+  }
+
   &__inline-item-tooltip {
     display: flex;
     flex-direction: column;
@@ -219,6 +250,27 @@
     color: var(--color-text-secondary);
     line-height: 1.4;
     word-break: break-word;
+  }
+
+  &__inline-item-unread-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 1px solid var(--color-bg-primary, #111114);
+    background: var(--color-success, #22c55e);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-success, #22c55e) 35%, transparent),
+      0 0 6px color-mix(in srgb, var(--color-success, #22c55e) 42%, transparent);
+
+    &.is-error {
+      background: var(--color-error, #ef4444);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-error, #ef4444) 35%, transparent),
+        0 0 6px color-mix(in srgb, var(--color-error, #ef4444) 42%, transparent);
+    }
   }
 
   &__inline-item-actions {
@@ -486,6 +538,10 @@
   .bitfun-nav-panel__inline-item-icon.is-running {
     animation: none;
     opacity: 0.8;
+  }
+
+  .bitfun-nav-panel__inline-item-review-badge svg {
+    animation: none;
   }
 
   .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item:hover .bitfun-nav-panel__inline-item-icon:not(.is-running) {

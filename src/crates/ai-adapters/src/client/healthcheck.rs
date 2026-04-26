@@ -1,3 +1,4 @@
+use crate::client::utils::elapsed_ms_u64;
 use crate::client::AIClient;
 use crate::types::{ConnectionTestMessageCode, ConnectionTestResult, Message, ToolDefinition};
 use anyhow::Result;
@@ -78,7 +79,7 @@ pub(crate) async fn test_connection(client: &AIClient) -> Result<ConnectionTestR
 
     match client.send_message(test_messages, tools).await {
         Ok(response) => {
-            let response_time_ms = start_time.elapsed().as_millis() as u64;
+            let response_time_ms = elapsed_ms_u64(start_time);
             if response.tool_calls.is_some() {
                 Ok(ConnectionTestResult {
                     success: true,
@@ -98,7 +99,7 @@ pub(crate) async fn test_connection(client: &AIClient) -> Result<ConnectionTestR
             }
         }
         Err(e) => {
-            let response_time_ms = start_time.elapsed().as_millis() as u64;
+            let response_time_ms = elapsed_ms_u64(start_time);
             let error_msg = format!("{}", e);
             debug!("test connection failed: {}", error_msg);
             Ok(ConnectionTestResult {
@@ -164,7 +165,7 @@ pub(crate) async fn test_image_input_connection(client: &AIClient) -> Result<Con
             if image_test_response_matches_expected(&response.text) {
                 Ok(ConnectionTestResult {
                     success: true,
-                    response_time_ms: start_time.elapsed().as_millis() as u64,
+                    response_time_ms: elapsed_ms_u64(start_time),
                     model_response: Some(response.text),
                     message_code: None,
                     error_details: None,
@@ -178,7 +179,7 @@ pub(crate) async fn test_image_input_connection(client: &AIClient) -> Result<Con
                 debug!("test image input connection failed: {}", detail);
                 Ok(ConnectionTestResult {
                     success: false,
-                    response_time_ms: start_time.elapsed().as_millis() as u64,
+                    response_time_ms: elapsed_ms_u64(start_time),
                     model_response: Some(response.text),
                     message_code: Some(ConnectionTestMessageCode::ImageInputCheckFailed),
                     error_details: Some(detail),
@@ -190,7 +191,7 @@ pub(crate) async fn test_image_input_connection(client: &AIClient) -> Result<Con
             debug!("test image input connection failed: {}", error_msg);
             Ok(ConnectionTestResult {
                 success: false,
-                response_time_ms: start_time.elapsed().as_millis() as u64,
+                response_time_ms: elapsed_ms_u64(start_time),
                 model_response: None,
                 message_code: None,
                 error_details: Some(error_msg),

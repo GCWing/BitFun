@@ -1,0 +1,178 @@
+{
+  "general": {
+    "unknown": "發生未知錯誤",
+    "network": "網絡錯誤",
+    "timeout": "請求超時",
+    "serverError": "服務器錯誤",
+    "notFound": "未找到資源",
+    "unauthorized": "未授權",
+    "forbidden": "禁止訪問",
+    "badRequest": "請求無效",
+    "conflict": "資源衝突",
+    "tooManyRequests": "請求過於頻繁",
+    "copyFailed": "Copy failed. Please try again."
+  },
+  "file": {
+    "notFound": "文件未找到：{{path}}",
+    "readError": "讀取文件失敗：{{path}}",
+    "writeError": "寫入文件失敗：{{path}}",
+    "deleteError": "刪除文件失敗：{{path}}",
+    "permissionDenied": "權限不足：{{path}}",
+    "alreadyExists": "文件已存在：{{path}}",
+    "invalidPath": "無效的文件路徑：{{path}}",
+    "tooLarge": "文件過大：{{path}}",
+    "encodingError": "文件編碼錯誤：{{path}}",
+    "createFileFailed": "Failed to create file",
+    "createFolderFailed": "Failed to create folder",
+    "renameFailed": "Rename failed",
+    "revealFailed": "Failed to open file manager"
+  },
+  "workspace": {
+    "notFound": "工作區未找到",
+    "openError": "打開工作區失敗",
+    "invalidPath": "無效的工作區路徑",
+    "alreadyOpen": "工作區已打開"
+  },
+  "git": {
+    "notRepository": "當前目錄不是 Git 倉庫",
+    "cloneError": "克隆倉庫失敗",
+    "commitError": "提交失敗",
+    "pushError": "推送失敗",
+    "pullError": "拉取失敗",
+    "mergeConflict": "存在合併衝突",
+    "branchError": "分支操作失敗",
+    "stashError": "貯藏操作失敗",
+    "authError": "認證失敗",
+    "remoteError": "遠程倉庫錯誤"
+  },
+  "ai": {
+    "connectionError": "連接 AI 服務失敗",
+    "apiKeyInvalid": "API 密鑰無效",
+    "modelNotFound": "模型未找到",
+    "contextTooLong": "上下文超出限制",
+    "rateLimited": "請求頻率超出限制",
+    "generationError": "生成內容失敗",
+    "streamError": "流式響應錯誤",
+    "timeout": "AI 響應超時",
+    "initializeFailedTitle": "AI client initialization failed",
+    "configRequired": "Model configuration is required",
+    "executionFailed": "對話執行失敗",
+    "genericSuggestion": "請稍後重試，或檢查網絡連接與模型服務狀態",
+    "networkError": "AI 響應中斷",
+    "networkErrorSuggestion": "網絡連接不穩定或模型服務端提前關閉了連接，請檢查網絡後重試",
+    "loopDetected": "檢測到重複操作",
+    "loopDetectedSuggestion": "AI 連續執行了相同的操作，已自動停止。請嘗試調整指令或手動完成剩餘步驟",
+    "rateLimit": "模型請求頻率超限",
+    "rateLimitSuggestion": "請稍後重試，或在模型設置中切換到其他模型",
+    "authError": "API 認證失敗",
+    "authErrorSuggestion": "API 密鑰無效或已過期，請檢查模型配置中的密鑰設置",
+    "contextOverflow": "對話內容超出限制",
+    "contextOverflowSuggestion": "當前對話長度超出模型上下文限制，可開啟新對話或壓縮歷史消息",
+    "timeoutError": "AI 響應超時",
+    "timeoutSuggestion": "模型響應時間過長，請檢查網絡連接或嘗試切換模型",
+    "providerQuota": {
+      "title": "模型額度不可用",
+      "message": "模型服務商因帳號餘額、額度或資源包不可用而拒絕了本次請求。請更新模型設定、切換模型，或在資源恢復後繼續。"
+    },
+    "providerBilling": {
+      "title": "需要處理模型計費",
+      "message": "模型服務商要求先處理計費、訂閱或套餐問題，本次請求才能繼續。"
+    },
+    "providerUnavailable": {
+      "title": "模型服務暫時不可用",
+      "message": "模型服務商目前過載或暫時不可用。請稍後重試，或切換到其他模型。"
+    },
+    "permission": {
+      "title": "模型權限不足",
+      "message": "目前 API Key 無權使用該模型或接口。請檢查模型設定，或切換到其他模型。"
+    },
+    "invalidRequest": {
+      "title": "模型請求無效",
+      "message": "模型服務商拒絕了請求格式、參數、模型名稱或負載大小。請調整請求或選擇其他模型。"
+    },
+    "contentPolicy": {
+      "title": "模型安全策略已攔截",
+      "message": "模型服務商因策略原因攔截了輸入或輸出。請調整提示詞或審查範圍後再試。"
+    },
+    "actions": {
+      "retry": "重試",
+      "continue": "繼續",
+      "openModelSettings": "開啟模型設定",
+      "switchModel": "切換模型",
+      "waitAndRetry": "稍後重試",
+      "compressContext": "壓縮上下文",
+      "startNewChat": "開啟新對話",
+      "copyDiagnostics": "複製診斷資訊"
+    }
+  },
+  "aiRules": {
+    "loadFailed": "Failed to load AI rules",
+    "createFailed": "Failed to create rule",
+    "updateFailed": "Failed to update rule",
+    "deleteFailed": "Failed to delete rule",
+    "toggleFailed": "Failed to toggle rule status"
+  },
+  "terminal": {
+    "createError": "創建終端失敗",
+    "executeError": "執行命令失敗",
+    "killError": "終止進程失敗",
+    "shellNotFound": "Shell 未找到"
+  },
+  "window": {
+    "maximizeFailed": "最大化窗口失敗：{{error}}",
+    "closeFailed": "關閉窗口失敗：{{error}}"
+  },
+  "editor": {
+    "openError": "打開編輯器失敗",
+    "saveError": "保存文件失敗",
+    "formatError": "格式化失敗",
+    "parseError": "解析文件失敗",
+    "lspError": "語言服務器錯誤"
+  },
+  "config": {
+    "loadError": "加載配置失敗",
+    "saveError": "保存配置失敗",
+    "invalidFormat": "配置格式無效",
+    "validationError": "Configuration validation failed"
+  },
+  "snapshot": {
+    "createError": "創建快照失敗",
+    "restoreError": "恢復快照失敗",
+    "notFound": "快照未找到",
+    "corrupted": "快照已損壞",
+    "loadStatsFailed": "加載快照統計失敗",
+    "loadSessionsFailed": "加載快照會話失敗",
+    "loadOperationsFailed": "加載會話操作失敗",
+    "getDiffFailed": "獲取文件差異失敗",
+    "acceptOperationFailed": "接受操作失敗",
+    "rejectOperationFailed": "拒絕操作失敗",
+    "rollbackSessionFailed": "回滾會話失敗",
+    "cleanupFailed": "清理過期數據失敗"
+  },
+  "contextMenu": {
+    "noSelection": "No text selected",
+    "notEditable": "Content is not editable",
+    "readOnlyEditor": "Editor is read-only",
+    "clipboardUnavailable": "Clipboard access is unavailable",
+    "clipboardEmpty": "Clipboard is empty",
+    "copyFailed": "Copy failed",
+    "cutFailed": "Cut failed",
+    "pasteFailed": "Paste failed",
+    "selectAllFailed": "Select all failed",
+    "refreshFailed": "Refresh failed",
+    "deleteFailed": "Delete failed",
+    "deleteCancelled": "Delete canceled",
+    "editorModelUnavailable": "Editor model is unavailable",
+    "copyPathFailed": "Copy path failed",
+    "copyRelativePathFailed": "Copy relative path failed"
+  },
+  "core": {
+    "initializationFailed": "Core system initialization failed"
+  },
+  "boundary": {
+    "title": "Application Error",
+    "reload": "Reload",
+    "technicalDetails": "Technical Details",
+    "unknown": "Unknown error"
+  }
+}

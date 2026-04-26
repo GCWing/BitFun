@@ -1,8 +1,9 @@
+use super::git_types::*;
+use super::git_utils::*;
 /**
  * Git service implementation
  */
-use super::git_types::*;
-use super::git_utils::*;
+use crate::util::elapsed_ms_u64;
 use git2::{BranchType, Commit, Repository};
 use std::path::Path;
 use std::time::Duration;
@@ -449,7 +450,7 @@ impl GitService {
         }
 
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -497,7 +498,7 @@ impl GitService {
 
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let output = execute_git_command(&repo_path, &args_refs).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -547,7 +548,7 @@ impl GitService {
         .await
         .map_err(|_| GitError::NetworkError("Push operation timed out".to_string()))??;
 
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -592,7 +593,7 @@ impl GitService {
         .await
         .map_err(|_| GitError::NetworkError("Pull operation timed out".to_string()))??;
 
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -617,7 +618,7 @@ impl GitService {
 
         let args = vec!["checkout", branch_name];
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -646,7 +647,7 @@ impl GitService {
         }
 
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -672,7 +673,7 @@ impl GitService {
         let flag = if force { "-D" } else { "-d" };
         let args = vec!["branch", flag, branch_name];
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -714,7 +715,7 @@ impl GitService {
 
         let args = vec!["reset", mode_flag, commit_hash];
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -906,7 +907,7 @@ impl GitService {
         args.push(commit_hash);
 
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -935,7 +936,7 @@ impl GitService {
 
         let args = vec!["cherry-pick", "--abort"];
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -961,7 +962,7 @@ impl GitService {
 
         let args = vec!["cherry-pick", "--continue"];
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,
@@ -1110,7 +1111,7 @@ impl GitService {
         args.push(worktree_path);
 
         let output = execute_git_command(&repo_path, &args).await?;
-        let duration = start_time.elapsed().as_millis() as u64;
+        let duration = elapsed_ms_u64(start_time);
 
         Ok(GitOperationResult {
             success: true,

@@ -4,7 +4,17 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { FileEdit, FilePlus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ClipboardCheck,
+  FileEdit,
+  FilePlus,
+  Loader2,
+  SearchCheck,
+  Sparkles,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapshotState';
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
@@ -15,6 +25,22 @@ import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from '../../services/BtwThreadService';
 import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
+import {
+  buildDeepReviewPromptFromSessionFiles,
+  launchDeepReviewSession,
+} from '../../services/DeepReviewService';
+import { insertReviewSessionSummaryMarker } from '../../services/ReviewSessionMarkerService';
+import { useDeepReviewConsent } from '../DeepReviewConsentDialog';
+import {
+  REVIEW_READY_GLINT_DURATION_MS,
+  shouldTriggerReviewReadyGlint,
+} from './reviewReadyGlint';
+import { flowChatStore } from '../../store/FlowChatStore';
+import type { DialogTurn } from '../../types/flow-chat';
+import { useSessionReviewActivity } from '../../hooks/useSessionReviewActivity';
+import { useSessionStateMachine } from '../../hooks/useSessionStateMachine';
+import { SessionExecutionState } from '../../state-machine/types';
+import { isReviewActivityBlocking } from '../../utils/sessionReviewActivity';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -92,6 +118,34 @@ interface StatsCache {
   };
 }
 
+type LatestTurnSnapshot = {
+  turnId: string | null;
+  status: DialogTurn['status'] | null;
+};
+
+function getLatestTurnSnapshot(sessionId?: string): LatestTurnSnapshot {
+  if (!sessionId) {
+    return { turnId: null, status: null };
+  }
+
+  const session = flowChatStore.getState().sessions.get(sessionId);
+  const latestTurn = session?.dialogTurns[session.dialogTurns.length - 1];
+  return {
+    turnId: latestTurn?.id ?? null,
+    status: latestTurn?.status ?? null,
+  };
+}
+
+function isTurnActivelyRunning(status: DialogTurn['status'] | null): boolean {
+  return (
+    status === 'pending' ||
+    status === 'image_analyzing' ||
+    status === 'processing' ||
+    status === 'finishing' ||
+    status === 'cancelling'
+  );
+}
+
 /**
  * Session file change badge.
  */
@@ -103,16 +157,44 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
   const { files } = useSnapshotState(sessionId);
   const { currentWorkspace } = useWorkspaceContext();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isReviewMenuOpen, setIsReviewMenuOpen] = useState(false);
+  const [showReviewReadyGlint, setShowReviewReadyGlint] = useState(false);
+  const [launchingReviewMode, setLaunchingReviewMode] = useState<'review' | 'deep_review' | null>(null);
   const [fileStats, setFileStats] = useState<Map<string, FileStats>>(new Map());
   const [loadingStats, setLoadingStats] = useState(false);
+  const reviewActivity = useSessionReviewActivity(sessionId);
+  const sessionMachine = useSessionStateMachine(sessionId ?? null);
+  const isSessionProcessing =
+    sessionMachine?.currentState === SessionExecutionState.PROCESSING ||
+    sessionMachine?.currentState === SessionExecutionState.FINISHING;
+  const isReviewActionLocked =
+    loadingStats ||
+    launchingReviewMode !== null ||
+    isReviewActivityBlocking(reviewActivity);
+  const [latestTurnSnapshot, setLatestTurnSnapshot] = useState<LatestTurnSnapshot>(() =>
+    getLatestTurnSnapshot(sessionId),
+  );
 
   const statsCacheRef = useRef<StatsCache>({});
   const loadingFilesRef = useRef<Set<string>>(new Set());
   const previousSessionIdRef = useRef<string | undefined>(undefined);
+  const observedProcessingTurnIdRef = useRef<string | null>(null);
+  const promptedReviewReadyTurnIdRef = useRef<string | null>(null);
+  const reviewReadyGlintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CACHE_TTL = 10000;
 
   const badgeRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const reviewMenuRef = useRef<HTMLDivElement>(null);
+  const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
+
+  const clearReviewReadyGlint = useCallback(() => {
+    setShowReviewReadyGlint(false);
+    if (reviewReadyGlintTimeoutRef.current) {
+      clearTimeout(reviewReadyGlintTimeoutRef.current);
+      reviewReadyGlintTimeoutRef.current = null;
+    }
+  }, []);
 
   // Reset cached state when the session changes.
   useEffect(() => {
@@ -122,22 +204,65 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       loadingFilesRef.current.clear();
       setFileStats(new Map());
       setIsExpanded(false);
+      setIsReviewMenuOpen(false);
+      clearReviewReadyGlint();
+      setLaunchingReviewMode(null);
+      observedProcessingTurnIdRef.current = null;
+      promptedReviewReadyTurnIdRef.current = null;
+      setLatestTurnSnapshot(getLatestTurnSnapshot(sessionId));
     }
-  }, [sessionId, t]);
+  }, [clearReviewReadyGlint, sessionId, t]);
 
-  // Close the popover when clicking outside.
+  useEffect(() => () => {
+    if (reviewReadyGlintTimeoutRef.current) {
+      clearTimeout(reviewReadyGlintTimeoutRef.current);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!isExpanded) return;
+    const syncLatestTurn = () => {
+      const nextSnapshot = getLatestTurnSnapshot(sessionId);
+      setLatestTurnSnapshot(prev => (
+        prev.turnId === nextSnapshot.turnId && prev.status === nextSnapshot.status
+          ? prev
+          : nextSnapshot
+      ));
+    };
+
+    syncLatestTurn();
+    const unsubscribe = flowChatStore.subscribe(syncLatestTurn);
+    return unsubscribe;
+  }, [sessionId]);
+
+  useEffect(() => {
+    const { turnId, status } = latestTurnSnapshot;
+    if (!turnId) {
+      observedProcessingTurnIdRef.current = null;
+      promptedReviewReadyTurnIdRef.current = null;
+      clearReviewReadyGlint();
+      return;
+    }
+
+    if (isTurnActivelyRunning(status)) {
+      observedProcessingTurnIdRef.current = turnId;
+      promptedReviewReadyTurnIdRef.current = null;
+      clearReviewReadyGlint();
+      setIsReviewMenuOpen(false);
+    }
+  }, [clearReviewReadyGlint, latestTurnSnapshot]);
+
+  // Close the popovers when clicking outside.
+  useEffect(() => {
+    if (!isExpanded && !isReviewMenuOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (
-        badgeRef.current &&
-        popoverRef.current &&
-        !badgeRef.current.contains(target) &&
-        !popoverRef.current.contains(target)
-      ) {
+      const clickedBadge = !!badgeRef.current?.contains(target);
+      const clickedFilesPopover = !!popoverRef.current?.contains(target);
+      const clickedReviewMenu = !!reviewMenuRef.current?.contains(target);
+      if (!clickedBadge && !clickedFilesPopover && !clickedReviewMenu) {
         setIsExpanded(false);
+        setIsReviewMenuOpen(false);
       }
     };
 
@@ -150,7 +275,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isExpanded]);
+  }, [isExpanded, isReviewMenuOpen]);
 
   /**
    * Fetch per-file diff stats with caching.
@@ -285,6 +410,44 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     return { totalAdditions, totalDeletions };
   }, [fileStats]);
 
+  const reviewableFileCount = useMemo(() => {
+    return Array.from(fileStats.keys()).filter(shouldReviewFile).length;
+  }, [fileStats]);
+  const reviewActionAvailable =
+    !disabled &&
+    reviewableFileCount > 0 &&
+    !isReviewActionLocked &&
+    !isSessionProcessing;
+
+  useEffect(() => {
+    if (shouldTriggerReviewReadyGlint({
+      currentTurnId: latestTurnSnapshot.turnId,
+      currentTurnStatus: latestTurnSnapshot.status,
+      observedProcessingTurnId: observedProcessingTurnIdRef.current,
+      promptedTurnId: promptedReviewReadyTurnIdRef.current,
+      nextReviewableCount: reviewableFileCount,
+      loadingStats,
+      reviewActionAvailable,
+      sessionProcessing: isSessionProcessing,
+    })) {
+      setShowReviewReadyGlint(true);
+      promptedReviewReadyTurnIdRef.current = latestTurnSnapshot.turnId;
+      if (reviewReadyGlintTimeoutRef.current) {
+        clearTimeout(reviewReadyGlintTimeoutRef.current);
+      }
+      reviewReadyGlintTimeoutRef.current = setTimeout(() => {
+        setShowReviewReadyGlint(false);
+        reviewReadyGlintTimeoutRef.current = null;
+      }, REVIEW_READY_GLINT_DURATION_MS);
+    }
+  }, [isSessionProcessing, latestTurnSnapshot, loadingStats, reviewActionAvailable, reviewableFileCount]);
+
+  useEffect(() => {
+    if (showReviewReadyGlint && !reviewActionAvailable) {
+      clearReviewReadyGlint();
+    }
+  }, [clearReviewReadyGlint, reviewActionAvailable, showReviewReadyGlint]);
+
   // Open diff for the selected file.
   const handleFileClick = useCallback(async (filePath: string) => {
     if (!sessionId) return;
@@ -328,7 +491,8 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
   // Trigger CodeReview agent for the current session's changes.
   const handleReviewClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!sessionId || fileStats.size === 0) return;
+    if (!sessionId || fileStats.size === 0 || isReviewActionLocked) return;
+    setIsReviewMenuOpen(false);
 
     const filePaths = Array.from(fileStats.keys());
     const reviewableFilePaths = filePaths.filter(shouldReviewFile);
@@ -374,21 +538,33 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         })
       : t('sessionFilesBadge.review.prompt', { files: fileList });
 
+    setLaunchingReviewMode('review');
     try {
       const { FlowChatManager } = await import('../../services/FlowChatManager');
       const flowChatManager = FlowChatManager.getInstance();
-      const { childSessionId } = await createBtwChildSession({
+      const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle', {
+        defaultValue: 'Code review',
+      });
+      const created = await createBtwChildSession({
         parentSessionId: sessionId,
         workspacePath: currentWorkspace?.rootPath,
-        childSessionName: t('sessionFilesBadge.review.threadTitle', {
-          defaultValue: 'Code review',
-        }),
+        childSessionName: reviewThreadTitle,
+        sessionKind: 'review',
         agentType: 'CodeReview',
         enableTools: true,
         safeMode: true,
         autoCompact: true,
         enableContextCompression: true,
         addMarker: false,
+      });
+      const { childSessionId } = created;
+      insertReviewSessionSummaryMarker({
+        parentSessionId: sessionId,
+        childSessionId,
+        kind: 'review',
+        title: reviewThreadTitle,
+        requestedFiles: reviewableFilePaths,
+        parentDialogTurnId: created.parentDialogTurnId,
       });
 
       openBtwSessionInAuxPane({
@@ -412,8 +588,91 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         skippedCount,
         error,
       });
+    } finally {
+      setLaunchingReviewMode(null);
     }
-  }, [fileStats, sessionId, t, currentWorkspace?.rootPath]);
+  }, [fileStats, isReviewActionLocked, sessionId, t, currentWorkspace?.rootPath]);
+
+  const handleDeepReviewClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!sessionId || fileStats.size === 0 || isReviewActionLocked) return;
+    setIsReviewMenuOpen(false);
+
+    const filePaths = Array.from(fileStats.keys());
+    const reviewableFilePaths = filePaths.filter(shouldReviewFile);
+    const skippedCount = filePaths.length - reviewableFilePaths.length;
+
+    if (reviewableFilePaths.length === 0) {
+      notificationService.warning(
+        t('sessionFilesBadge.review.noEligibleFiles', {
+          defaultValue: 'No reviewable files remain after excluded files were filtered out.',
+        }),
+        { duration: 3500 }
+      );
+      return;
+    }
+
+    const confirmed = await confirmDeepReviewLaunch();
+    if (!confirmed) {
+      return;
+    }
+    setLaunchingReviewMode('deep_review');
+
+    if (skippedCount > 0) {
+      notificationService.info(
+        t('sessionFilesBadge.review.filteredNotice', {
+          included: reviewableFilePaths.length,
+          skipped: skippedCount,
+          defaultValue:
+            'Review will analyze {{included}} files and skip {{skipped}} excluded files such as lock, generated, or binary assets.',
+        }),
+        { duration: 3500 }
+      );
+    }
+
+    const fileList = reviewableFilePaths.map(p => `- ${p}`).join('\n');
+    const displayMessage = skippedCount > 0
+      ? t('sessionFilesBadge.deepReview.displayMessageFiltered', {
+          files: fileList,
+          skipped: skippedCount,
+          defaultValue:
+            'Deep review filtered files:\n{{files}}\n\nSkipped {{skipped}} excluded files.',
+        })
+      : t('sessionFilesBadge.deepReview.displayMessage', {
+          files: fileList,
+          defaultValue: 'Deep review modified files:\n{{files}}',
+        });
+
+    try {
+      const prompt = await buildDeepReviewPromptFromSessionFiles(
+        reviewableFilePaths,
+        undefined,
+        currentWorkspace?.rootPath,
+      );
+
+      await launchDeepReviewSession({
+        parentSessionId: sessionId,
+        workspacePath: currentWorkspace?.rootPath,
+        prompt,
+        displayMessage,
+        childSessionName: t('sessionFilesBadge.deepReview.threadTitle', {
+          defaultValue: 'Deep review',
+        }),
+        requestedFiles: reviewableFilePaths,
+      });
+
+      setIsExpanded(false);
+    } catch (error) {
+      log.error('Failed to send deep review request', {
+        sessionId,
+        fileCount: reviewableFilePaths.length,
+        skippedCount,
+        error,
+      });
+    } finally {
+      setLaunchingReviewMode(null);
+    }
+  }, [confirmDeepReviewLaunch, fileStats, isReviewActionLocked, sessionId, t, currentWorkspace?.rootPath]);
 
   const getOperationIcon = (operationType: 'write' | 'edit' | 'delete') => {
     switch (operationType) {
@@ -426,16 +685,32 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     }
   };
 
+  const activeReviewMode = launchingReviewMode ?? (reviewActivity?.isBlocking ? reviewActivity.kind : null) ?? null;
+  const activeReviewLabel = activeReviewMode === 'deep_review'
+    ? t('sessionFilesBadge.reviewRunningDeep', {
+        defaultValue: 'Deep review in progress',
+      })
+    : t('sessionFilesBadge.reviewRunningStandard', {
+        defaultValue: 'Review in progress',
+      });
+  const reviewButtonLabel = activeReviewMode ? activeReviewLabel : t('sessionFilesBadge.reviewMenuLabel');
+  const reviewButtonTitle = activeReviewMode
+    ? t('sessionFilesBadge.reviewRunningHint', {
+        defaultValue: 'Wait for the current review to finish or stop it from the review page.',
+      })
+    : t('sessionFilesBadge.reviewMenuHint');
+
   // Hide when there is no session, no changes, or disabled.
   if (!sessionId || fileStats.size === 0 || disabled) {
     return null;
   }
 
   return (
-    <div
-      ref={badgeRef}
-      className={`session-files-badge ${isExpanded ? 'session-files-badge--expanded' : ''}`}
-    >
+    <>
+      <div
+        ref={badgeRef}
+        className={`session-files-badge ${isExpanded ? 'session-files-badge--expanded' : ''}`}
+      >
       <button
         className="session-files-badge__button"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -462,15 +737,64 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         )}
       </button>
 
-      <button
-        className="session-files-badge__review-btn"
-        onClick={handleReviewClick}
-        disabled={loadingStats}
-        title={t('sessionFilesBadge.reviewAll')}
-        type="button"
+      <div
+        ref={reviewMenuRef}
+        className="session-files-badge__review-menu"
       >
-        <span className="session-files-badge__review-text">{t('sessionFilesBadge.reviewLabel')}</span>
-      </button>
+        <button
+          className={[
+            'session-files-badge__review-btn',
+            showReviewReadyGlint && 'session-files-badge__review-btn--glint',
+            activeReviewMode && 'session-files-badge__review-btn--running',
+          ].filter(Boolean).join(' ')}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (isReviewActionLocked) {
+              return;
+            }
+            setIsReviewMenuOpen(open => !open);
+          }}
+          disabled={isReviewActionLocked}
+          title={reviewButtonTitle}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={isReviewMenuOpen && !isReviewActionLocked}
+          aria-busy={Boolean(activeReviewMode)}
+        >
+          {activeReviewMode ? (
+            <Loader2 size={12} className="session-files-badge__review-running-icon" />
+          ) : (
+            <ClipboardCheck size={12} className="session-files-badge__review-main-icon" />
+          )}
+          <span className="session-files-badge__review-text">{reviewButtonLabel}</span>
+          {!activeReviewMode ? (
+            <ChevronDown size={12} className="session-files-badge__review-menu-chevron" />
+          ) : null}
+        </button>
+
+        {isReviewMenuOpen && !isReviewActionLocked && (
+          <div className="session-files-badge__review-menu-popover" role="menu">
+            <button
+              className="session-files-badge__review-menu-item"
+              onClick={handleReviewClick}
+              type="button"
+              role="menuitem"
+            >
+              <SearchCheck size={12} className="session-files-badge__review-icon session-files-badge__review-icon--standard" />
+              <span>{t('sessionFilesBadge.reviewModeStandard')}</span>
+            </button>
+            <button
+              className="session-files-badge__review-menu-item session-files-badge__review-menu-item--deep"
+              onClick={handleDeepReviewClick}
+              type="button"
+              role="menuitem"
+            >
+              <Sparkles size={12} className="session-files-badge__review-icon" />
+              <span>{t('sessionFilesBadge.reviewModeDeep')}</span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {isExpanded && (
         <div
@@ -514,7 +838,9 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           </div>
         </div>
       )}
-    </div>
+      </div>
+      {deepReviewConsentDialog}
+    </>
   );
 };
 

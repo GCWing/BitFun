@@ -239,15 +239,10 @@
   .todo-item {
     display: flex;
     align-items: center;
-    padding: 5px 10px;
+    padding: 6px 10px;
     font-size: 11px;
     transition: background 0.12s ease;
-    border-bottom: 1px solid var(--border-subtle);
     position: relative;
-
-    &:last-child {
-      border-bottom: none;
-    }
 
     &:hover {
       background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
@@ -294,9 +289,19 @@
     height: 11px;
 
     &--completed  { color: var(--color-success); }
-    &--in-progress { color: var(--color-info); }
     &--pending    { color: var(--tool-card-text-muted); opacity: 0.5; }
     &--cancelled  { color: var(--color-error); opacity: 0.6; }
+
+    &--in-progress {
+      color: var(--color-info);
+      width: auto;
+      height: auto;
+    }
+  }
+
+  /* Compact mode loading icon alignment */
+  .todo-compact-loading-icon {
+    color: var(--color-info);
   }
 
   .todo-content {

@@ -11,30 +11,29 @@ use serde::{Deserialize, Serialize};
 pub enum BotLanguage {
     #[serde(rename = "zh-CN")]
     ZhCN,
+    #[serde(rename = "zh-TW")]
+    ZhTW,
     #[serde(rename = "en-US")]
     EnUS,
 }
 
 impl BotLanguage {
     pub fn is_chinese(self) -> bool {
-        matches!(self, Self::ZhCN)
+        matches!(self, Self::ZhCN | Self::ZhTW)
     }
 }
 
 pub async fn current_bot_language() -> BotLanguage {
-    if let Some(service) = crate::service::get_global_i18n_service().await {
-        match service.get_current_locale().await {
-            crate::service::LocaleId::ZhCN => BotLanguage::ZhCN,
-            crate::service::LocaleId::EnUS => BotLanguage::EnUS,
-        }
-    } else {
-        BotLanguage::ZhCN
+    match crate::service::config::get_app_language().await {
+        crate::service::LocaleId::ZhCN => BotLanguage::ZhCN,
+        crate::service::LocaleId::ZhTW => BotLanguage::ZhTW,
+        crate::service::LocaleId::EnUS => BotLanguage::EnUS,
     }
 }
 
 /// Centralised string table consumed by command router, menu builder, and
 /// platform adapters.  Add new strings here, then translate in both
-/// [`STRINGS_ZH`] and [`STRINGS_EN`].
+/// [`STRINGS_ZH`], [`STRINGS_ZH_TW`], and [`STRINGS_EN`].
 pub struct BotStrings {
     // ── Onboarding ───────────────────────────────────────────────
     pub welcome: &'static str,
@@ -308,6 +307,145 @@ const STRINGS_ZH: BotStrings = BotStrings {
     auto_push_failed_fmt: "发送「{name}」失败：{err}",
 };
 
+const STRINGS_ZH_TW: BotStrings = BotStrings {
+    welcome: "\
+歡迎使用 BitFun。
+
+請在 BitFun 桌面端打開 Remote Connect 面板，複製 6 位配對碼併發送到這裡完成連接。",
+    paired_success: "配對成功，BitFun 已連接。",
+    need_pairing: "尚未連接 BitFun 桌面端。請先發送 6 位配對碼。",
+    invalid_pairing_code: "配對碼無效或已過期，請到桌面端重新生成後再發送。",
+    bootstrap_workspace_unavailable: "工作區服務暫時不可用，請稍後再試。",
+    bootstrap_session_failed_prefix: "已進入助理模式，但創建會話失敗：",
+    bootstrap_ready: "已為你新建助理會話，直接發送消息即可開始。",
+
+    mode_assistant: "助理模式",
+    mode_expert: "專業模式",
+    current_session_label: "當前會話",
+    current_workspace_label: "當前工作區",
+    current_assistant_label: "當前助理",
+    no_session: "尚未選擇會話",
+    no_workspace: "尚未選擇工作區",
+    no_assistant: "尚未選擇助理",
+
+    main_title_assistant: "BitFun · 助理模式",
+    main_title_expert: "BitFun · 專業模式",
+    settings_title: "設置",
+    welcome_title: "BitFun",
+    need_session_title: "請先選擇或新建會話",
+
+    item_new_session: "新建會話",
+    item_new_code_session: "新建編碼會話",
+    item_new_cowork_session: "新建協作會話",
+    item_resume_session: "恢復會話",
+    item_switch_assistant: "切換助理",
+    item_switch_workspace: "切換工作區",
+    item_settings: "設置",
+    item_back: "返回",
+    item_help: "幫助",
+    item_switch_to_expert: "切換到專業模式",
+    item_switch_to_assistant: "切換到助理模式",
+    item_verbose_on: "開啟執行細節",
+    item_verbose_off: "關閉執行細節",
+    item_cancel_task: "取消任務",
+    item_confirm_switch: "切換並繼續",
+    item_next_page: "下一頁",
+    item_other: "其他",
+
+    question_title: "問題",
+    verbose_label: "執行細節",
+    workspace_session_count_fmt: "{n} 個會話",
+
+    footer_reply_or_menu: "回覆編號，或發送 /menu 返回主菜單",
+    footer_reply_workspace: "回覆工作區編號，或發送 0 返回",
+    footer_reply_assistant: "回覆助理編號，或發送 0 返回",
+    footer_reply_session_or_next: "回覆會話編號；發送 0 查看下一頁或返回",
+    footer_reply_session: "回覆會話編號，或發送 0 返回",
+    footer_question_single: "回覆單個選項編號；發送 /menu 退出",
+    footer_question_multi: "回覆一個或多個選項編號（如 1,3）；發送 /menu 退出",
+    footer_question_custom: "請輸入你的自定義答案；發送 /menu 退出",
+    footer_processing_cancel_hint: "如需中止，回覆 /cancel 或點擊「取消任務」",
+
+    welcome_body: "當前未配對。",
+    paired_body_intro: "可以直接發送消息開始對話。",
+    help_body: "\
+常用命令：
+/menu  返回主菜單
+/new   新建會話
+/resume  恢復歷史會話
+/switch  切換助理或工作區
+/cancel  取消當前任務
+/expert  /assistant  切換模式
+/verbose /concise  開關執行細節
+/help  顯示本幫助",
+
+    switch_pick_workspace: "請選擇要切換的工作區：",
+    switch_pick_assistant: "請選擇要切換的助理：",
+    switch_no_workspaces: "尚未發現工作區，請先在 BitFun 桌面端打開一個項目。",
+    switch_no_assistants: "尚未發現助理，請先在 BitFun 桌面端創建一個助理。",
+    current_marker: " · 當前",
+
+    resume_no_sessions: "當前還沒有會話，可以發送 /new 直接新建。",
+    resume_page_label: "會話歷史",
+    resume_msg_count_zero: "無消息",
+    resume_msg_count_one: "1 條消息",
+    resume_msg_count_many_fmt: "{n} 條消息",
+    resume_resumed_prefix: "已恢復會話：",
+    resume_last_dialog_header: "— 最近一次對話 —",
+    resume_you_label: "你",
+    resume_continue_hint: "可以繼續對話。",
+    resume_first_message_hint: "發送一條消息即可開始。",
+
+    processing: "正在處理你的消息……",
+    queued: "消息已加入隊列，等當前步驟結束會自動接續。",
+    no_response: "（無回覆）",
+    task_cancelled: "任務已取消。",
+    task_cancel_requested: "已請求取消當前任務。",
+    task_cancel_failed_prefix: "取消任務失敗：",
+    task_no_active: "當前沒有正在運行的任務。",
+    timeout_one_hour: "等待響應超時（1 小時）。",
+    error_prefix: "錯誤：",
+    send_failed_prefix: "發送失敗：",
+
+    mode_switched_to_expert: "已切換到專業模式，可創建編碼 / 協作會話。",
+    mode_switched_to_assistant: "已切換到助理模式，適合日常持續對話。",
+    mode_already_expert: "當前已在專業模式。",
+    mode_already_assistant: "當前已在助理模式。",
+    mode_confirm_switch_prefix: "該操作需要切換到另一種模式，確認繼續嗎？",
+
+    verbose_enabled: "已開啟「執行細節」，下一次任務會顯示思考與工具過程。",
+    verbose_disabled: "已關閉「執行細節」，僅顯示最終結果。",
+    verbose_status_on: "開",
+    verbose_status_off: "關",
+
+    session_created_prefix: "已創建新會話：",
+    session_workspace_label: "工作區：",
+    session_start_hint: "可以發送消息開始對話。",
+    session_create_failed_prefix: "創建會話失敗：",
+    session_system_unavailable: "BitFun 會話系統尚未就緒，請稍後再試。",
+    workspace_service_unavailable: "工作區服務暫時不可用。",
+    workspace_open_failed_prefix: "打開工作區失敗：",
+    assistant_create_failed_prefix: "創建助理工作區失敗：",
+
+    pending_expired: "上一步已超時，已為你返回主菜單。",
+    pending_invalid_input: "輸入無效，請按提示回覆或發送 /menu 返回主菜單。",
+    pending_invalid_after_retries: "多次輸入無效，已為你返回主菜單。",
+    pending_back_hint: "發送 0 或 /menu 返回主菜單。",
+
+    answers_submitted: "答案已提交，等待助手繼續……",
+    answers_submit_failed_prefix: "提交答案失敗：",
+    question_invalid_state: "問題狀態無效，請重新發起對話。",
+    question_custom_required: "自定義答案不能為空，請重新輸入。",
+    question_custom_for_other_prefix: "請為「其他」輸入你的自定義答案：",
+
+    thinking_label: "思考中",
+
+    auto_push_intro_one: "正在為你發送 1 個文件……",
+    auto_push_intro_many_fmt: "正在為你發送 {n} 個文件……",
+    auto_push_skip_too_large_fmt: "已跳過「{name}」：{size} 超過 {limit} 上限，請改用桌面端獲取。",
+    auto_push_failed_fmt: "發送「{name}」失敗：{err}",
+};
+
 const STRINGS_EN: BotStrings = BotStrings {
     welcome: "\
 Welcome to BitFun.
@@ -450,6 +588,7 @@ Common commands:
 pub fn strings_for(language: BotLanguage) -> &'static BotStrings {
     match language {
         BotLanguage::ZhCN => &STRINGS_ZH,
+        BotLanguage::ZhTW => &STRINGS_ZH_TW,
         BotLanguage::EnUS => &STRINGS_EN,
     }
 }

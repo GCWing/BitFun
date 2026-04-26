@@ -5,7 +5,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Split,
-  Timer,
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
@@ -17,6 +16,7 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard } from './BaseToolCard';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import './TaskToolDisplay.scss';
 import './ModelThinkingDisplay.scss';
 
@@ -219,12 +219,6 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     [onOpenInPanel, sessionId, taskInput, toolItem, taskHeaderLine],
   );
 
-  const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
-    const seconds = (ms / 1000).toFixed(1);
-    return `${seconds}s`;
-  };
-
   const renderToolIcon = () => {
     return <Split size={16} />;
   };
@@ -262,12 +256,22 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
             <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
               <span className="task-action">{taskHeaderLine}</span>
               <div className="task-header-meta">
-                {status === 'completed' && toolResult?.result?.duration && (
-                  <span className="duration-text">
-                    <Timer size={13} strokeWidth={2} />
-                    {formatDuration(toolResult.result.duration)}
-                  </span>
-                )}
+                <ToolTimeoutIndicator
+                  startTime={toolItem.startTime}
+                  isRunning={isRunning}
+                  timeoutMs={
+                    typeof toolCall?.input?.timeout_seconds === 'number' && toolCall.input.timeout_seconds > 0
+                      ? toolCall.input.timeout_seconds * 1000
+                      : undefined
+                  }
+                  showControls={true}
+                  subagentSessionId={toolItem.subagentSessionId}
+                  completedDurationMs={
+                    status === 'completed' && toolResult?.result?.duration
+                      ? toolResult.result.duration
+                      : undefined
+                  }
+                />
                 {isFailed && (
                   <span className="task-failed-badge">{t('toolCards.taskTool.failed')}</span>
                 )}

@@ -2149,7 +2149,6 @@ impl PersistenceManager {
         }
         Ok(())
     }
-
 }
 
 #[cfg(test)]

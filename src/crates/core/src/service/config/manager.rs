@@ -446,9 +446,9 @@ impl ConfigManager {
         let mut current = &config_value;
 
         for key in keys {
-            current = current
-                .get(key)
-                .ok_or_else(|| BitFunError::config(format!("Config path '{}' not found", path)))?;
+            current = current.get(key).ok_or_else(|| {
+                BitFunError::NotFound(format!("Config path '{}' not found", path))
+            })?;
         }
 
         Ok(current.clone())
@@ -479,9 +479,9 @@ impl ConfigManager {
 
         let mut current = &mut config_value;
         for key in parent_keys {
-            current = current
-                .get_mut(key)
-                .ok_or_else(|| BitFunError::config(format!("Config path '{}' not found", path)))?;
+            current = current.get_mut(key).ok_or_else(|| {
+                BitFunError::NotFound(format!("Config path '{}' not found", path))
+            })?;
         }
 
         if let Some(obj) = current.as_object_mut() {

@@ -1,0 +1,609 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+.review-team-page {
+  .bitfun-config-page-content__inner {
+    max-width: 1120px;
+  }
+
+  &__summary-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  &__summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 118px;
+    padding: 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--color-surface);
+  }
+
+  &__header-actions,
+  &__policy-strip {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  &__policy-panel {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.25fr) auto;
+    align-items: center;
+    gap: $size-gap-4;
+    width: 100%;
+    padding: 16px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
+
+    &:hover,
+    &:focus-visible {
+      background: color-mix(in srgb, var(--element-bg-medium) 68%, transparent);
+      box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-accent-500) 74%, transparent);
+      outline: none;
+    }
+  }
+
+  &__policy-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  &__policy-eyebrow {
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__policy-description {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+  }
+
+  &__policy-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__policy-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    min-height: 58px;
+    padding: 9px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--element-bg-soft) 74%, transparent);
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      color: var(--color-text-muted);
+    }
+
+    strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-semibold;
+      color: var(--color-text-primary);
+    }
+  }
+
+  /* Sections that render their own cards should not show the default body frame. */
+  &__section--no-body-frame .bitfun-config-page-section__body {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  &__policy-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: max-content;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+    color: var(--color-accent-500);
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+  }
+
+  &__error-detail {
+    max-height: 220px;
+    overflow: auto;
+    margin: 0;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--element-bg-subtle);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+  }
+
+  &__summary-kicker {
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__summary-value {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.7;
+    color: var(--color-text-primary);
+  }
+
+  &__section-badges {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  &__row-control {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  &__execution-grid {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+    overflow: hidden;
+    border-radius: 8px;
+  }
+
+  &__execution-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 0;
+    background: color-mix(in srgb, var(--color-bg-primary) 34%, transparent);
+  }
+
+  &__execution-copy {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+  }
+
+  &__strategy-panel {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+    padding: 16px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    background: transparent;
+  }
+
+  &__strategy-panel-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    p {
+      margin: 0;
+      max-width: 760px;
+      font-size: var(--font-size-sm);
+      line-height: 1.6;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__strategy-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+
+    &--compact {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      max-width: 920px;
+    }
+  }
+
+  &__strategy-option {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-height: 106px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: color-mix(in srgb, var(--element-bg-soft) 72%, transparent);
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      transform $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--color-accent-500) 36%, var(--border-medium));
+      box-shadow: 0 10px 22px color-mix(in srgb, var(--shadow-color, #0f172a) 10%, transparent);
+    }
+
+    &.is-selected {
+      border-color: color-mix(in srgb, var(--color-accent-500) 58%, var(--color-bg-primary));
+      background: color-mix(in srgb, var(--color-accent-200) 34%, var(--element-bg-soft));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 20%, transparent);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.66;
+    }
+  }
+
+  &__strategy-option-title {
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+  }
+
+  &__strategy-option-summary,
+  &__strategy-option-impact {
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+
+  &__strategy-option-impact {
+    color: var(--color-text-muted);
+  }
+
+  &__member-grid {
+    display: grid;
+    gap: $size-gap-3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  &__member-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: color-mix(in srgb, var(--element-bg-soft) 78%, transparent);
+    text-align: left;
+    transition:
+      transform $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
+
+    &:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--member-accent, #64748b) 34%, var(--border-medium));
+      box-shadow: 0 10px 22px color-mix(in srgb, var(--shadow-color, #0f172a) 10%, transparent);
+    }
+
+    &.is-selected {
+      border-color: color-mix(in srgb, var(--member-accent, #64748b) 54%, var(--color-bg-primary));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--member-accent, #64748b) 30%, transparent),
+        0 12px 24px color-mix(in srgb, var(--shadow-color, #0f172a) 10%, transparent);
+    }
+
+    &.is-expanded {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__member-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-3;
+    width: 100%;
+    min-height: 148px;
+    padding: 14px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--member-accent, #64748b) 50%, transparent);
+    }
+  }
+
+  &__member-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--member-accent, #64748b) 18%, transparent);
+    color: color-mix(in srgb, var(--member-accent, #64748b) 78%, var(--color-text-primary));
+    border: 1px solid color-mix(in srgb, var(--member-accent, #64748b) 22%, transparent);
+    flex-shrink: 0;
+  }
+
+  &__member-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__member-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-2;
+  }
+
+  &__member-card-name {
+    font-size: var(--font-size-base);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    line-height: 1.35;
+  }
+
+  &__member-card-badges {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  &__member-card-role {
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    color: color-mix(in srgb, var(--member-accent, #64748b) 72%, var(--color-text-primary));
+  }
+
+  &__member-card-description {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+  }
+
+  &__member-card-model {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 6px;
+    min-height: 24px;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+  }
+
+  &__member-card-model-note {
+    color: color-mix(in srgb, #f59e0b 82%, var(--color-text-muted));
+  }
+
+  &__member-card-chevron {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  &__member-card-detail {
+    overflow: hidden;
+    animation: review-team-card-expand $motion-base $easing-standard forwards;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  &__member-card-detail-inner {
+    padding: 16px;
+  }
+
+  &__detail-hero {
+    display: flex;
+    align-items: flex-start;
+    gap: $size-gap-4;
+    padding: 0 0 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  &__detail-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--member-accent, #64748b) 20%, transparent);
+    color: color-mix(in srgb, var(--member-accent, #64748b) 76%, var(--color-text-primary));
+    border: 1px solid color-mix(in srgb, var(--member-accent, #64748b) 24%, transparent);
+    flex-shrink: 0;
+  }
+
+  &__detail-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__detail-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $size-gap-3;
+  }
+
+  &__detail-name {
+    margin: 0;
+    font-size: var(--font-size-xl);
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+  }
+
+  &__detail-role {
+    margin: 4px 0 0;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-medium;
+    color: var(--color-text-muted);
+  }
+
+  &__detail-badges {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  &__detail-description {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.7;
+    color: var(--color-text-secondary);
+  }
+
+  &__responsibilities {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 0 0;
+  }
+
+  &__block-label {
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__responsibility-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-left: 18px;
+    color: var(--color-text-primary);
+    line-height: 1.6;
+  }
+
+  &__responsibility-item {
+    font-size: var(--font-size-sm);
+  }
+
+  &__model-picker {
+    max-width: 680px;
+  }
+
+  &__model-fallback-note {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: color-mix(in srgb, #f59e0b 12%, transparent);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.55;
+  }
+
+  &__add-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: $size-gap-2;
+    max-width: 720px;
+  }
+
+  &__empty-candidate {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+}
+
+@keyframes review-team-card-expand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 800px;
+  }
+}
+
+@media (max-width: 960px) {
+  .review-team-page {
+    &__summary-grid,
+    &__member-grid,
+    &__execution-grid,
+    &__strategy-options,
+    &__strategy-options--compact {
+      grid-template-columns: 1fr;
+    }
+
+    &__policy-panel {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+    }
+
+    &__policy-metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    &__detail-hero,
+    &__detail-title-row {
+      flex-direction: column;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .review-team-page {
+    &__member-card-top {
+      flex-direction: column;
+    }
+
+    &__add-controls {
+      grid-template-columns: 1fr;
+    }
+
+    &__policy-metrics {
+      grid-template-columns: 1fr;
+    }
+  }
+}

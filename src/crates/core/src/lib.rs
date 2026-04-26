@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+#![recursion_limit = "256"]
 // BitFun Core Library - Platform-agnostic business logic
 // Four-layer architecture: Util -> Infrastructure -> Service -> Agentic
 

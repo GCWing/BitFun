@@ -13,6 +13,8 @@ import { snapshotAPI } from '../../../infrastructure/api';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { diffService } from '../../../tools/editor/services';
 import { createLogger } from '@/shared/utils/logger';
+import { flowChatStore } from '../../store/FlowChatStore';
+import type { FlowChatState } from '../../types/flow-chat';
 import './SessionFileModificationsBar.scss';
 
 const log = createLogger('SessionFileModificationsBar');
@@ -30,12 +32,20 @@ export interface SessionFileModificationsBarProps {
 
 interface FileStats {
   filePath: string;
+  sourceSessionId: string;
+  sourceKind: 'parent' | 'review' | 'deep_review';
   fileName: string;
   additions: number;
   deletions: number;
   operationType: 'write' | 'edit' | 'delete';
   loading?: boolean;
   error?: string;
+}
+
+interface SourceFile {
+  filePath: string;
+  sourceSessionId: string;
+  sourceKind: FileStats['sourceKind'];
 }
 
 interface StatsCache {
@@ -57,6 +67,8 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
   const { t } = useTranslation('flow-chat');
   const { files } = useSnapshotState(sessionId);
   const { workspace: currentWorkspace } = useCurrentWorkspace();
+  const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
+  const [reviewFiles, setReviewFiles] = useState<SourceFile[]>([]);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [fileStats, setFileStats] = useState<Map<string, FileStats>>(new Map());
@@ -69,6 +81,94 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
   const CACHE_TTL = 10000;
 
   const initializedRef = useRef(false);
+
+  useEffect(() => flowChatStore.subscribe(setFlowChatState), []);
+
+  const reviewChildSessions = useMemo(() => {
+    if (!sessionId) {
+      return [];
+    }
+
+    return Array.from(flowChatState.sessions.values())
+      .filter((session) =>
+        session.parentSessionId === sessionId &&
+        (session.sessionKind === 'review' || session.sessionKind === 'deep_review'),
+      )
+      .map((session) => ({
+        sessionId: session.sessionId,
+        sourceKind: session.sessionKind as 'review' | 'deep_review',
+        freshness: `${session.lastActiveAt}:${session.lastFinishedAt ?? 0}:${session.updatedAt ?? 0}`,
+      }));
+  }, [flowChatState.sessions, sessionId]);
+
+  const reviewChildSessionsKey = useMemo(
+    () => reviewChildSessions
+      .map((session) => `${session.sessionId}:${session.sourceKind}:${session.freshness}`)
+      .join('|'),
+    [reviewChildSessions],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!sessionId || reviewChildSessions.length === 0) {
+      setReviewFiles([]);
+      return;
+    }
+
+    Promise.all(
+      reviewChildSessions.map(async (child) => {
+        try {
+          const childFiles = await snapshotAPI.getSessionFiles(child.sessionId);
+          return childFiles.map((filePath): SourceFile => ({
+            filePath,
+            sourceSessionId: child.sessionId,
+            sourceKind: child.sourceKind,
+          }));
+        } catch (error) {
+          log.warn('Failed to load review child snapshot files', {
+            parentSessionId: sessionId,
+            childSessionId: child.sessionId,
+            error,
+          });
+          return [];
+        }
+      }),
+    ).then((groups) => {
+      if (!cancelled) {
+        setReviewFiles(groups.flat());
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reviewChildSessions, reviewChildSessionsKey, sessionId]);
+
+  const sourceFiles = useMemo<SourceFile[]>(() => {
+    const parentFiles = files.map((file): SourceFile => ({
+      filePath: file.filePath,
+      sourceSessionId: sessionId ?? '',
+      sourceKind: 'parent',
+    }));
+    return [...parentFiles, ...reviewFiles];
+  }, [files, reviewFiles, sessionId]);
+
+  useEffect(() => {
+    const activeKeys = new Set(sourceFiles.map(file => `${file.sourceSessionId}:${file.filePath}`));
+    setFileStats(prev => {
+      let changed = false;
+      const next = new Map<string, FileStats>();
+      prev.forEach((stat, key) => {
+        if (activeKeys.has(key)) {
+          next.set(key, stat);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [sourceFiles]);
 
 
   useEffect(() => {
@@ -89,7 +189,7 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
   /**
    * Load diff stats for files with caching.
    */
-  const loadFileStats = useCallback(async (filesToLoad: typeof files) => {
+  const loadFileStats = useCallback(async (filesToLoad: SourceFile[]) => {
     if (!sessionId || filesToLoad.length === 0) {
       return;
     }
@@ -109,10 +209,11 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
     const now = Date.now();
 
     const newFilesToLoad = filesToLoad.filter(file => {
-      if (loadingFilesRef.current.has(file.filePath)) {
+      const sourceKey = `${file.sourceSessionId}:${file.filePath}`;
+      if (loadingFilesRef.current.has(sourceKey)) {
         return false;
       }
-      const cached = statsCacheRef.current[file.filePath];
+      const cached = statsCacheRef.current[sourceKey];
       if (cached && now - cached.timestamp < CACHE_TTL) {
         if (!sessionChanged) {
           return false;
@@ -131,15 +232,16 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
 
     try {
       newFilesToLoad.forEach(file => {
-        loadingFilesRef.current.add(file.filePath);
+        loadingFilesRef.current.add(`${file.sourceSessionId}:${file.filePath}`);
       });
 
       await Promise.all(
         newFilesToLoad.map(async (file) => {
+          const sourceKey = `${file.sourceSessionId}:${file.filePath}`;
           let stats: FileStats | null = null;
 
           try {
-            const diffData = await snapshotAPI.getOperationDiff(sessionId, file.filePath);
+            const diffData = await snapshotAPI.getOperationDiff(file.sourceSessionId, file.filePath);
             const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
 
             let additions = 0;
@@ -166,13 +268,15 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
 
             stats = {
               filePath: file.filePath,
+              sourceSessionId: file.sourceSessionId,
+              sourceKind: file.sourceKind,
               fileName,
               additions,
               deletions,
               operationType,
             };
 
-            statsCacheRef.current[file.filePath] = {
+            statsCacheRef.current[sourceKey] = {
               stats,
               timestamp: now,
             };
@@ -182,6 +286,8 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
             const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
             stats = {
               filePath: file.filePath,
+              sourceSessionId: file.sourceSessionId,
+              sourceKind: file.sourceKind,
               fileName,
               additions: 0,
               deletions: 0,
@@ -189,14 +295,14 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
               error: t('sessionFilesBadge.loadFailed'),
             };
           } finally {
-            loadingFilesRef.current.delete(file.filePath);
+            loadingFilesRef.current.delete(sourceKey);
           }
 
           // Keep only files with changes or errors (filter +0 -0).
           if (stats && (stats.additions > 0 || stats.deletions > 0 || stats.error)) {
             setFileStats(prev => {
               const newMap = new Map(prev);
-              newMap.set(file.filePath, stats!);
+              newMap.set(sourceKey, stats!);
               return newMap;
             });
           }
@@ -211,8 +317,8 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (files.length > 0) {
-        loadFileStats(files);
+      if (sourceFiles.length > 0) {
+        loadFileStats(sourceFiles);
       } else {
         setFileStats(new Map());
         statsCacheRef.current = {};
@@ -220,7 +326,7 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [files, loadFileStats]);
+  }, [sourceFiles, loadFileStats]);
 
   const totalStats = useMemo(() => {
     let totalAdditions = 0;
@@ -234,22 +340,22 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
     return { totalAdditions, totalDeletions };
   }, [fileStats]);
 
-  const handleFileClick = useCallback(async (filePath: string) => {
+  const handleFileClick = useCallback(async (stat: FileStats) => {
     if (!sessionId) return;
 
     try {
-      const diffData = await snapshotAPI.getOperationDiff(sessionId, filePath);
+      const diffData = await snapshotAPI.getOperationDiff(stat.sourceSessionId, stat.filePath);
       if ((diffData.originalContent || '') === (diffData.modifiedContent || '')) {
-        log.debug('Skipping empty session diff', { filePath, sessionId });
+        log.debug('Skipping empty session diff', { filePath: stat.filePath, sessionId: stat.sourceSessionId });
         return;
       }
-      const fileName = filePath.split(/[/\\]/).pop() || filePath;
+      const fileName = stat.filePath.split(/[/\\]/).pop() || stat.filePath;
 
       window.dispatchEvent(new CustomEvent('expand-right-panel'));
 
       setTimeout(() => {
         createDiffEditorTab(
-          filePath,
+          stat.filePath,
           fileName,
           diffData.originalContent || '',
           diffData.modifiedContent || '',
@@ -320,16 +426,23 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
       {isExpanded && (
         <div className="session-file-modifications-bar__list">
           {Array.from(fileStats.values()).map((stat) => (
-            <Tooltip key={stat.filePath} content={stat.filePath} placement="left">
+            <Tooltip key={`${stat.sourceSessionId}:${stat.filePath}`} content={stat.filePath} placement="left">
               <div
                 className={`file-row file-row--${stat.operationType} ${stat.error ? 'file-row--error' : ''}`}
-                onClick={() => !stat.error && handleFileClick(stat.filePath)}
+                onClick={() => !stat.error && handleFileClick(stat)}
               >
                 <span className="file-row__icon">
                   {getOperationIcon(stat.operationType)}
                 </span>
 
                 <span className="file-row__name">{stat.fileName}</span>
+                {stat.sourceKind !== 'parent' ? (
+                  <span className="file-row__source">
+                    {stat.sourceKind === 'deep_review'
+                      ? t('sessionFileModificationsBar.deepReviewSource', { defaultValue: 'Deep review' })
+                      : t('sessionFileModificationsBar.reviewSource', { defaultValue: 'Review' })}
+                  </span>
+                ) : null}
 
                 {stat.error ? (
                   <span className="file-row__error">{stat.error}</span>

@@ -28,8 +28,9 @@ export function registerNotificationContextMenu(): void {
 
       const title = notificationElement.getAttribute('data-notification-title') || '';
       const message = notificationElement.getAttribute('data-notification-message') || '';
+      const diagnostics = notificationElement.getAttribute('data-notification-diagnostics') || '';
 
-      return [
+      const items: MenuItem[] = [
         {
           id: 'copy-title',
           label: i18nService.t('common:contextMenu.notificationMenu.items.copyTitle'),
@@ -46,6 +47,20 @@ export function registerNotificationContextMenu(): void {
             navigator.clipboard.writeText(message);
           }
         },
+      ];
+
+      if (diagnostics) {
+        items.push({
+          id: 'copy-diagnostics',
+          label: i18nService.t('errors:ai.actions.copyDiagnostics'),
+          icon: 'Copy',
+          onClick: () => {
+            navigator.clipboard.writeText(diagnostics);
+          }
+        });
+      }
+
+      items.push(
         {
           id: 'divider-1',
           label: '',
@@ -56,11 +71,13 @@ export function registerNotificationContextMenu(): void {
           label: i18nService.t('common:contextMenu.notificationMenu.items.copyAll'),
           icon: 'Copy',
           onClick: () => {
-            const text = `${title}\n${message}`;
+            const text = [title, message, diagnostics].filter(Boolean).join('\n');
             navigator.clipboard.writeText(text);
           }
         }
-      ];
+      );
+
+      return items;
     }
   });
 

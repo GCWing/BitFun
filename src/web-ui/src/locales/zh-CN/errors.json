@@ -55,7 +55,55 @@
     "streamError": "流式响应错误",
     "timeout": "AI 响应超时",
     "initializeFailedTitle": "AI client initialization failed",
-    "configRequired": "Model configuration is required"
+    "configRequired": "Model configuration is required",
+    "executionFailed": "对话执行失败",
+    "genericSuggestion": "请稍后重试，或检查网络连接与模型服务状态",
+    "networkError": "AI 响应中断",
+    "networkErrorSuggestion": "网络连接不稳定或模型服务端提前关闭了连接，请检查网络后重试",
+    "loopDetected": "检测到重复操作",
+    "loopDetectedSuggestion": "AI 连续执行了相同的操作，已自动停止。请尝试调整指令或手动完成剩余步骤",
+    "rateLimit": "模型请求频率超限",
+    "rateLimitSuggestion": "请稍后重试，或在模型设置中切换到其他模型",
+    "authError": "API 认证失败",
+    "authErrorSuggestion": "API 密钥无效或已过期，请检查模型配置中的密钥设置",
+    "contextOverflow": "对话内容超出限制",
+    "contextOverflowSuggestion": "当前对话长度超出模型上下文限制，可开启新对话或压缩历史消息",
+    "timeoutError": "AI 响应超时",
+    "timeoutSuggestion": "模型响应时间过长，请检查网络连接或尝试切换模型",
+    "providerQuota": {
+      "title": "模型额度不可用",
+      "message": "模型服务商因账号余额、额度或资源包不可用而拒绝了本次请求。请更新模型配置、切换模型，或在资源恢复后继续。"
+    },
+    "providerBilling": {
+      "title": "需要处理模型计费",
+      "message": "模型服务商要求先处理计费、订阅或套餐问题，本次请求才能继续。"
+    },
+    "providerUnavailable": {
+      "title": "模型服务暂时不可用",
+      "message": "模型服务商当前过载或暂时不可用。请稍后重试，或切换到其他模型。"
+    },
+    "permission": {
+      "title": "模型权限不足",
+      "message": "当前 API Key 无权使用该模型或接口。请检查模型配置，或切换到其他模型。"
+    },
+    "invalidRequest": {
+      "title": "模型请求无效",
+      "message": "模型服务商拒绝了请求格式、参数、模型名称或负载大小。请调整请求或选择其他模型。"
+    },
+    "contentPolicy": {
+      "title": "模型安全策略已拦截",
+      "message": "模型服务商因策略原因拦截了输入或输出。请调整提示词或审查范围后再试。"
+    },
+    "actions": {
+      "retry": "重试",
+      "continue": "继续",
+      "openModelSettings": "打开模型设置",
+      "switchModel": "切换模型",
+      "waitAndRetry": "稍后重试",
+      "compressContext": "压缩上下文",
+      "startNewChat": "开启新会话",
+      "copyDiagnostics": "复制诊断信息"
+    }
   },
   "aiRules": {
     "loadFailed": "Failed to load AI rules",

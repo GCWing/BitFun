@@ -100,7 +100,10 @@ pub struct ContentBlockStart {
 #[serde(tag = "type")]
 pub enum ContentBlock {
     #[serde(rename = "thinking")]
-    Thinking,
+    Thinking {
+        thinking: Option<String>,
+        signature: Option<String>,
+    },
     #[serde(rename = "text")]
     Text,
     #[serde(rename = "tool_use")]
@@ -112,15 +115,25 @@ pub enum ContentBlock {
 impl From<ContentBlockStart> for UnifiedResponse {
     fn from(value: ContentBlockStart) -> Self {
         let mut result = UnifiedResponse::default();
-        if let ContentBlock::ToolUse { id, name } = value.content_block {
-            let tool_call = UnifiedToolCall {
-                tool_call_index: None,
-                id: Some(id),
-                name: Some(name),
-                arguments: None,
-                arguments_is_snapshot: false,
-            };
-            result.tool_call = Some(tool_call);
+        match value.content_block {
+            ContentBlock::ToolUse { id, name } => {
+                let tool_call = UnifiedToolCall {
+                    tool_call_index: None,
+                    id: Some(id),
+                    name: Some(name),
+                    arguments: None,
+                    arguments_is_snapshot: false,
+                };
+                result.tool_call = Some(tool_call);
+            }
+            ContentBlock::Thinking {
+                thinking,
+                signature,
+            } => {
+                result.reasoning_content = thinking;
+                result.thinking_signature = signature;
+            }
+            _ => {}
         }
         result
     }

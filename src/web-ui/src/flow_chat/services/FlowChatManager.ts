@@ -193,6 +193,17 @@ export class FlowChatManager {
     return deleteChatSessionModule(this.context, sessionId);
   }
 
+  public discardLocalSession(sessionId: string): string[] {
+    const removedSessionIds = this.context.flowChatStore.removeSession(sessionId);
+    removedSessionIds.forEach(id => {
+      stateMachineManager.delete(id);
+      this.context.processingManager.clearSessionStatus(id);
+      cleanupSaveState(this.context, id);
+      cleanupSessionBuffers(this.context, id);
+    });
+    return removedSessionIds;
+  }
+
   async renameChatSessionTitle(sessionId: string, title: string): Promise<string> {
     return renameChatSessionTitleModule(this.context, sessionId, title);
   }

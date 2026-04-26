@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -133,6 +134,7 @@ function normalizeUrl(raw: string): string {
 }
 
 const BrowserScene: React.FC = () => {
+  const { t } = useTranslation('common');
   const activeTabId = useSceneStore((state) => state.activeTabId);
   const isActive = activeTabId === 'browser';
   const isTauri = useMemo(() => isTauriEnvironment(), []);
@@ -465,7 +467,7 @@ const BrowserScene: React.FC = () => {
           variant="ghost"
           size="small"
           onClick={handleGoBack}
-          aria-label="后退"
+          aria-label={t('nav.back')}
         >
           <ChevronLeft size={14} />
         </IconButton>
@@ -474,7 +476,7 @@ const BrowserScene: React.FC = () => {
           variant="ghost"
           size="small"
           onClick={handleGoForward}
-          aria-label="前进"
+          aria-label={t('nav.forward')}
         >
           <ChevronRight size={14} />
         </IconButton>
@@ -484,7 +486,7 @@ const BrowserScene: React.FC = () => {
           size="small"
           onClick={handleRefresh}
           disabled={isLoading}
-          aria-label="刷新"
+          aria-label={t('actions.refresh')}
         >
           <RefreshCw size={14} className={isLoading ? 'browser-scene__spinning' : undefined} />
         </IconButton>
@@ -494,7 +496,7 @@ const BrowserScene: React.FC = () => {
             type="text"
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
-            placeholder="输入网址，例如 https://example.com"
+            placeholder={t('browserView.addressPlaceholder', { exampleUrl: 'https://example.com' })}
             spellCheck={false}
           />
         </div>

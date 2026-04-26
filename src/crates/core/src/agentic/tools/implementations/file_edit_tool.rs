@@ -1,4 +1,5 @@
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -79,6 +80,67 @@ Usage:
         false
     }
 
+    async fn validate_input(
+        &self,
+        input: &Value,
+        context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
+        let file_path = match input.get("file_path").and_then(|v| v.as_str()) {
+            Some(path) if !path.is_empty() => path,
+            _ => {
+                return ValidationResult {
+                    result: false,
+                    message: Some("file_path is required and cannot be empty".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+        };
+
+        if input.get("old_string").is_none() {
+            return ValidationResult {
+                result: false,
+                message: Some("old_string is required".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        if input.get("new_string").is_none() {
+            return ValidationResult {
+                result: false,
+                message: Some("new_string is required".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        if let Some(ctx) = context {
+            let resolved = match ctx.resolve_tool_path(file_path) {
+                Ok(resolved) => resolved,
+                Err(err) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(err.to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            };
+
+            if let Err(err) = ctx.enforce_path_operation(ToolPathOperation::Edit, &resolved) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(err.to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+        }
+
+        ValidationResult::default()
+    }
+
     async fn call_impl(
         &self,
         input: &Value,
@@ -105,6 +167,7 @@ Usage:
             .unwrap_or(false);
 
         let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Edit, &resolved)?;
 
         // For remote workspace paths, use the abstract FS to read → edit in memory → write back.
         if resolved.uses_remote_workspace_backend() {

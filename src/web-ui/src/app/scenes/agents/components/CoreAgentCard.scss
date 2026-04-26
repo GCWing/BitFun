@@ -1,49 +1,11 @@
 @use '../../../../component-library/styles/tokens' as *;
+@use './AgentSurfaceCard' as surface;
 
 .core-agent-card {
-  width: 360px;
-  height: 200px;
-  border-radius: 15px;
-  background: var(--element-bg-soft);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  animation: core-card-in 0.28s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 60ms);
-  transition:
-    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.35s ease;
-
-  // Top gradient overlay - shows on hover, covers entire card except footer
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 40px;
-    background: var(--core-card-gradient);
-    opacity: 0;
-    transition: opacity 0.35s ease;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  &:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
-
-    &::before {
-      opacity: 0.4;
-    }
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--core-accent, var(--color-accent-500));
-    outline-offset: 2px;
-  }
+  @include surface.agent-surface-card(
+    var(--core-card-gradient),
+    var(--core-accent, var(--color-accent-500))
+  );
 
   &--disabled {
     .core-agent-card__name,
@@ -138,24 +100,7 @@
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-radius: 0 0 15px 15px;
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
-
-    // Bottom gradient blur background matching card color
-    &::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: var(--core-card-gradient);
-      opacity: 0.5;
-      transition: opacity 0.35s ease;
-      pointer-events: none;
-    }
+    @include surface.agent-surface-footer(var(--core-card-gradient));
   }
 
   &:hover &__footer::after {
@@ -205,18 +150,6 @@
 }
 
 // ── Animation ─────────────────────────────────────────────────────
-
-@keyframes core-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .core-agent-card {

@@ -4,6 +4,9 @@
 pub mod agentic_system;
 pub mod core_adapter;
 
+// Re-export AgenticSystem for use in other modules
+pub use agentic_system::AgenticSystem;
+
 use anyhow::Result;
 use tokio::sync::mpsc;
 

@@ -41,5 +41,6 @@ export * from './TextStrokeEffect';
 export * from './CubeLogo';
 export * from './CubeLoading';
 export * from './DotMatrixLoader';
+export * from './TaskRunningIndicator';
 
 export * from './FlowChatCards';

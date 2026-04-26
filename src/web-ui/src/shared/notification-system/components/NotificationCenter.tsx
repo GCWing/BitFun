@@ -13,7 +13,7 @@ export const NotificationCenter: React.FC = () => {
   const history = useNotificationHistory();
   const allProgressNotifications = useAllProgressNotifications();
   const allLoadingNotifications = useAllLoadingNotifications();
-  const { t, formatDate } = useI18n(['components', 'common']);
+  const { t, formatDate } = useI18n(['components', 'common', 'errors']);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -156,6 +156,19 @@ export const NotificationCenter: React.FC = () => {
     }
   };
 
+  const getTechnicalDetails = (notification: NotificationRecord | Notification): string | null => {
+    const metadata = notification.metadata;
+    const aiError = metadata?.aiError;
+    const diagnostics = normalizeMetadataString(aiError?.diagnostics ?? metadata?.diagnostics);
+    const rawError = normalizeMetadataString(aiError?.rawError ?? metadata?.rawError);
+
+    if (diagnostics && rawError && !diagnostics.includes(rawError)) {
+      return `${diagnostics}\nraw_error=${rawError}`;
+    }
+
+    return diagnostics || (rawError ? `raw_error=${rawError}` : null);
+  };
+
   
   const renderActiveTaskItem = (notification: Notification) => {
     const isProgress = notification.variant === 'progress';
@@ -246,6 +259,7 @@ export const NotificationCenter: React.FC = () => {
       : formatTime(notification.timestamp);
 
     const isExpanded = expandedIds.has(notification.id);
+    const technicalDetails = getTechnicalDetails(notification);
 
     return (
       <div
@@ -255,6 +269,7 @@ export const NotificationCenter: React.FC = () => {
         data-notification-id={notification.id}
         data-notification-title={notification.title}
         data-notification-message={notification.message}
+        data-notification-diagnostics={technicalDetails ?? undefined}
         data-context-type="notification"
       >
         <div className={`notification-center__item-icon ${iconClass}`}>
@@ -297,6 +312,19 @@ export const NotificationCenter: React.FC = () => {
             );
           })()}
           <div className="notification-center__item-time">{timeDisplay}</div>
+          {isExpanded && technicalDetails && (
+            <div
+              className="notification-center__item-technical-details"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="notification-center__item-technical-title">
+                {t('errors:boundary.technicalDetails')}
+              </div>
+              <pre className="notification-center__item-technical-body">
+                {technicalDetails}
+              </pre>
+            </div>
+          )}
         </div>
         {!notification.read && <div className="notification-center__item-badge" />}
         <div className="notification-center__item-actions">
@@ -450,3 +478,7 @@ export const NotificationCenter: React.FC = () => {
     </Modal>
   );
 };
+
+function normalizeMetadataString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}

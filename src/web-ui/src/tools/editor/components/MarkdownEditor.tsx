@@ -12,6 +12,7 @@ import { analyzeMarkdownEditability, type MarkdownEditabilityAnalysis } from '..
 import { AlertCircle } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { CubeLoading, Button } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -283,7 +284,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }
 
     isCheckingDiskRef.current = true;
-    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const startedAt = nowMs();
     let outcome = 'started';
     let probeError: string | null = null;
     try {
@@ -370,10 +371,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       }
       log.error('Markdown disk sync check failed', e);
     } finally {
-      const durationMs =
-        Math.round(
-          ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt) * 10
-        ) / 10;
+      const durationMs = elapsedMs(startedAt);
       if (probeError || outcome !== 'no-change' || durationMs >= 80) {
         sendDebugProbe(
           'MarkdownEditor.tsx:checkMarkdownDisk',

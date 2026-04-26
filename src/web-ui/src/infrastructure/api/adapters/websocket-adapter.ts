@@ -31,22 +31,34 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
     return new Promise((resolve, reject) => {
       try {
         log.info('Connecting', { url: this.url });
-        this.ws = new WebSocket(this.url);
-        
-        this.ws.onopen = () => {
+        const ws = new WebSocket(this.url);
+        this.ws = ws;
+        let settled = false;
+
+        ws.onopen = () => {
           log.info('Connected successfully');
           this.reconnectAttempts = 0;
           this.setupMessageHandler();
-          resolve();
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
         };
         
-        this.ws.onerror = (error) => {
+        ws.onerror = (error) => {
           log.error('Connection error', error);
-          reject(new Error('WebSocket connection failed'));
+          if (!settled) {
+            settled = true;
+            reject(new Error('WebSocket connection failed'));
+          }
         };
         
-        this.ws.onclose = () => {
+        ws.onclose = () => {
           log.info('Connection closed');
+          if (!settled) {
+            settled = true;
+            reject(new Error('WebSocket connection closed before open'));
+          }
           this.handleDisconnect();
         };
       } catch (error) {
@@ -57,6 +69,20 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
   }
   
    
+  private connectPromise: Promise<void> | null = null;
+
+  private async ensureConnected(): Promise<void> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+
+    if (!this.connectPromise) {
+      this.connectPromise = this.connect().finally(() => {
+        this.connectPromise = null;
+      });
+    }
+
+    return this.connectPromise;
+  }
+
   private handleDisconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
@@ -94,7 +120,10 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
           clearTimeout(pending.timeout);
           
           if (message.error) {
-            pending.reject(new Error(message.error));
+            const errorMsg = typeof message.error === 'object' && message.error.message
+              ? message.error.message
+              : String(message.error);
+            pending.reject(new Error(errorMsg));
           } else {
             pending.resolve(message.result);
           }
@@ -125,9 +154,9 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
    
   async request<T>(action: string, params?: any): Promise<T> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error('WebSocket not connected');
+      await this.ensureConnected();
     }
-    
+
     const messageId = `msg_${Date.now()}_${++this.messageIdCounter}`;
     
     return new Promise((resolve, reject) => {
@@ -140,8 +169,9 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
       
       try {
         this.ws!.send(JSON.stringify({
+          type: 'request',
           id: messageId,
-          action,
+          method: action,
           params: params || {}
         }));
       } catch (error) {
@@ -187,12 +217,14 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
     
     
     if (this.ws) {
+      this.ws.onclose = null;
       this.ws.close();
       this.ws = null;
     }
     
     
-    this.reconnectAttempts = 0;
+    this.reconnectAttempts = this.maxReconnectAttempts;
+    this.connectPromise = null;
   }
   
    

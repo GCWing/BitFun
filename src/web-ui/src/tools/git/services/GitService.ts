@@ -4,6 +4,7 @@
 
 import { gitAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { measureAsync } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('GitService');
@@ -187,23 +188,20 @@ export class GitService {
         return null;
       }
 
-      const startTime = Date.now();
-      
       const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Get repository timeout')), 8000)
       );
       
-      const result = await Promise.race([
+      const result = await measureAsync(() => Promise.race([
         gitAPI.getRepository(path),
         timeoutPromise
-      ]);
+      ]));
       
-      const duration = Date.now() - startTime;
-      log.debug('Repository info retrieved', { path, duration: `${duration}ms` });
+      log.debug('Repository info retrieved', { path, durationMs: result.durationMs });
       
       this.removeFromNonGitCache(path);
       
-      return this.adaptRepository(result);
+      return this.adaptRepository(result.value);
     } catch (error) {
       log.error('Failed to get repository info', error);
       this.addToNonGitCache(path);

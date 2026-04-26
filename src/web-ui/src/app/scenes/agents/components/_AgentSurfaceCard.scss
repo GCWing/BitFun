@@ -1,0 +1,73 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+@mixin agent-surface-card($gradient, $accent) {
+  width: 360px;
+  height: 200px;
+  border-radius: 15px;
+  background: var(--element-bg-soft);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  animation: agent-surface-card-in 0.28s $easing-decelerate both;
+  animation-delay: calc(var(--card-index, 0) * 60ms);
+  transition:
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.35s ease;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 40px;
+    background: $gradient;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  &:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 16px 40px color-mix(in srgb, var(--shadow-color, #0f172a) 20%, transparent);
+
+    &::before {
+      opacity: 0.42;
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: 2px;
+  }
+}
+
+@mixin agent-surface-footer($gradient) {
+  min-height: 40px;
+  border-radius: 0 0 15px 15px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: $gradient;
+    opacity: 0.5;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+}
+
+@keyframes agent-surface-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

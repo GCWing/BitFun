@@ -75,6 +75,11 @@ impl AIClient {
         }
     }
 
+    /// Returns the configured idle timeout between streamed chunks, if any.
+    pub fn stream_idle_timeout(&self) -> Option<Duration> {
+        self.stream_options.idle_timeout
+    }
+
     pub async fn send_message_stream(
         &self,
         messages: Vec<Message>,

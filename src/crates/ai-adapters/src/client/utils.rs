@@ -1,4 +1,5 @@
 use crate::types::{AIConfig, RemoteModelInfo};
+use std::time::Instant;
 
 pub(crate) fn merge_json_value(target: &mut serde_json::Value, overlay: serde_json::Value) {
     match (target, overlay) {
@@ -79,4 +80,8 @@ pub(crate) fn normalize_base_url_for_discovery(base_url: &str) -> String {
         .trim_end_matches('#')
         .trim_end_matches('/')
         .to_string()
+}
+
+pub(crate) fn elapsed_ms_u64(started_at: Instant) -> u64 {
+    started_at.elapsed().as_millis() as u64
 }

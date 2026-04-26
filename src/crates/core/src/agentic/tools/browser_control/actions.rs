@@ -184,10 +184,7 @@ impl<'a> BrowserActions<'a> {
     /// `with_backend_node_ids` is `true`, every snapshot element gets a
     /// `backend_node_id` field; pages where `DOM.getDocument` errors out
     /// (very rare — e.g. about:blank) silently fall back to no ids.
-    pub async fn snapshot_with_options(
-        &self,
-        with_backend_node_ids: bool,
-    ) -> BitFunResult<Value> {
+    pub async fn snapshot_with_options(&self, with_backend_node_ids: bool) -> BitFunResult<Value> {
         let script = r#"
         (function() {
             const SEL = 'a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="combobox"], [role="option"], [tabindex="0"], [contenteditable="true"]';
@@ -343,10 +340,7 @@ impl<'a> BrowserActions<'a> {
 
         if let Some(elements) = parsed.get_mut("elements").and_then(|v| v.as_array_mut()) {
             for el in elements.iter_mut() {
-                let r = el
-                    .get("ref")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string);
+                let r = el.get("ref").and_then(|v| v.as_str()).map(str::to_string);
                 if let Some(r) = r {
                     if let Some(b) = by_ref.get(&r) {
                         if let Value::Object(m) = el {
@@ -386,7 +380,11 @@ impl<'a> BrowserActions<'a> {
             .and_then(|v| v.as_str())
             .unwrap_or("{}");
         let parsed: Value = serde_json::from_str(raw).unwrap_or(json!({}));
-        if parsed.get("found").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if parsed
+            .get("found")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
             Ok(Some(
                 parsed
                     .get("text")

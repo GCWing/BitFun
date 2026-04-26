@@ -196,6 +196,36 @@
   font-size: 0.85em;
 }
 
+.rich-text-tag-pill--widget-ref {
+  background: rgba(16, 185, 129, 0.14);
+  color: rgba(110, 231, 183, 0.96);
+
+  &:hover {
+    background: rgba(16, 185, 129, 0.22);
+  }
+}
+
+.rich-text-tag-pill__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rich-text-tag-pill__text--widget-ref {
+  font-family: $font-family-sans;
+  max-width: 260px;
+}
+
 .rich-text-tag-pill__remove {
   display: flex;
   align-items: center;
@@ -223,4 +253,3 @@
     transform: scale(0.85);
   }
 }
-

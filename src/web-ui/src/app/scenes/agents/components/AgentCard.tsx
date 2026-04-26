@@ -10,7 +10,7 @@ import { Badge, Switch } from '@/component-library';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from '../agentsIcons';
 import { getCardGradient } from '@/shared/utils/cardGradients';
-import { getAgentBadge } from '../utils';
+import { getAgentBadge, getCapabilityLabel } from '../utils';
 import './AgentCard.scss';
 
 interface AgentCardProps {
@@ -70,7 +70,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
                 {badge.label}
               </Badge>
               {!agent.enabled ? (
-                <Badge variant="neutral">{t('agentCard.badges.disabled', '已禁用')}</Badge>
+                <Badge variant="neutral">{t('agentCard.badges.disabled')}</Badge>
               ) : null}
               {agent.model ? (
                 <Badge variant="neutral">{agent.model}</Badge>
@@ -95,18 +95,18 @@ const AgentCard: React.FC<AgentCardProps> = ({
                   borderColor: `${CAPABILITY_ACCENT[cap.category]}44`,
                 }}
               >
-                {cap.category}
+                {getCapabilityLabel(t, cap.category)}
               </span>
             ))}
           </div>
           <span className="agent-card__meta-item">
             <Wrench size={12} />
-            {t('agentCard.meta.tools', '{{count}} 个工具', { count: totalTools })}
+            {t('agentCard.meta.tools', { count: totalTools })}
           </span>
           {agent.agentKind === 'mode' && skillCount > 0 ? (
             <span className="agent-card__meta-item">
               <Puzzle size={12} />
-              {t('agentCard.meta.skills', '{{count}} 个 Skills', { count: skillCount })}
+              {t('agentCard.meta.skills', { count: skillCount })}
             </span>
           ) : null}
         </div>

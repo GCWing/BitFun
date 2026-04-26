@@ -16,6 +16,8 @@ import type { SessionMetadata } from '@/shared/types/session-history';
 import type { WorkspaceInfo } from '@/shared/types';
 import { sessionAPI } from '@/infrastructure/api';
 import { WorkspaceKind } from '@/shared/types';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolvePersistedSessionTitle, resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
 import './NavSearchDialog.scss';
 
 interface NavSearchDialogProps {
@@ -36,7 +38,7 @@ interface SearchResultItem {
 const MAX_PER_GROUP = 20;
 
 const getTitle = (session: Session): string =>
-  session.title?.trim() || `Session ${session.sessionId.slice(0, 6)}`;
+  resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
 
 const sessionRecencyTime = (session: Session): number =>
   session.updatedAt ?? session.lastActiveAt ?? session.createdAt ?? 0;
@@ -176,7 +178,9 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     const diskMatches = persistedOpenWorkspaceSessions.filter(({ meta, workspace }) => {
       if (!openedWorkspaceIdSet.has(workspace.id)) return false;
       if (meta.customMetadata?.parentSessionId) return false;
-      const label = meta.sessionName?.trim() || `Session ${meta.sessionId.slice(0, 6)}`;
+      const label = resolvePersistedSessionTitle(meta, (key, options) =>
+        i18nService.t(key, options)
+      );
       if (!matchesQuery(q, label, meta.sessionId)) return false;
       return !storeIds.has(meta.sessionId);
     });
@@ -212,7 +216,9 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
         items.push({
           kind: 'session',
           id: meta.sessionId,
-          label: meta.sessionName?.trim() || `Session ${meta.sessionId.slice(0, 6)}`,
+          label: resolvePersistedSessionTitle(meta, (key, options) =>
+            i18nService.t(key, options)
+          ),
           sublabel: t('nav.search.sessionWorkspaceHint', { workspace: workspace.name }),
           workspaceId: workspace.id,
         });

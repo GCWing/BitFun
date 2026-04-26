@@ -284,9 +284,32 @@ impl SessionManager {
                 .collect::<Vec<_>>()
                 .join("\n\n");
 
-            if !assistant_text.trim().is_empty() {
-                messages
-                    .push(Message::assistant(assistant_text).with_turn_id(turn.turn_id.clone()));
+            let assistant_thinking = turn
+                .model_rounds
+                .iter()
+                .flat_map(|round| round.thinking_items.iter())
+                .map(|item| item.content.clone())
+                .filter(|value| !value.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+
+            let has_text = !assistant_text.trim().is_empty();
+            let has_thinking = !assistant_thinking.trim().is_empty();
+
+            if has_text || has_thinking {
+                let reasoning_content = if has_thinking {
+                    Some(assistant_thinking)
+                } else {
+                    None
+                };
+                messages.push(
+                    Message::assistant_with_reasoning(
+                        reasoning_content,
+                        assistant_text,
+                        Vec::new(),
+                    )
+                    .with_turn_id(turn.turn_id.clone()),
+                );
             }
         }
 
@@ -463,9 +486,7 @@ impl SessionManager {
                 session_id, previous_model_id, reason
             );
 
-            if let Some(coordinator) =
-                crate::agentic::coordination::get_global_coordinator()
-            {
+            if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
                 coordinator
                     .emit_session_model_auto_migrated(
                         &session_id,
@@ -1006,9 +1027,7 @@ impl SessionManager {
                 let previous_model_id = trimmed.to_string();
                 session.config.model_id = Some("auto".to_string());
 
-                if let Some(coordinator) =
-                    crate::agentic::coordination::get_global_coordinator()
-                {
+                if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
                     coordinator
                         .emit_session_model_auto_migrated(
                             session_id,

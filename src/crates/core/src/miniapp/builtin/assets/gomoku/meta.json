@@ -4,15 +4,34 @@
   "description": "经典 15×15 棋盘，支持双人对战与人机对弈，内置悔棋、重开与战绩统计。",
   "icon": "Grid3x3",
   "category": "game",
-  "tags": ["游戏", "策略", "内置"],
+  "tags": [
+    "游戏",
+    "策略",
+    "内置"
+  ],
   "version": 1,
   "created_at": 0,
   "updated_at": 0,
   "permissions": {
-    "fs": { "read": ["{appdata}"], "write": ["{appdata}"] },
-    "shell": { "allow": [] },
-    "net": { "allow": [] },
-    "node": { "enabled": true, "max_memory_mb": 128, "timeout_ms": 5000 }
+    "fs": {
+      "read": [
+        "{appdata}"
+      ],
+      "write": [
+        "{appdata}"
+      ]
+    },
+    "shell": {
+      "allow": []
+    },
+    "net": {
+      "allow": []
+    },
+    "node": {
+      "enabled": true,
+      "max_memory_mb": 128,
+      "timeout_ms": 5000
+    }
   },
   "ai_context": null,
   "i18n": {
@@ -20,12 +39,29 @@
       "zh-CN": {
         "name": "五子棋",
         "description": "经典 15×15 棋盘，支持双人对战与人机对弈，内置悔棋、重开与战绩统计。",
-        "tags": ["游戏", "策略", "内置"]
+        "tags": [
+          "游戏",
+          "策略",
+          "内置"
+        ]
       },
       "en-US": {
         "name": "Gomoku",
         "description": "Classic 15×15 board with PvP and PvE modes, undo, restart and win/loss tracking.",
-        "tags": ["game", "strategy", "built-in"]
+        "tags": [
+          "game",
+          "strategy",
+          "built-in"
+        ]
+      },
+      "zh-TW": {
+        "name": "五子棋",
+        "description": "經典 15×15 棋盤，支持雙人對戰與人機對弈，內置悔棋、重開與戰績統計。",
+        "tags": [
+          "遊戲",
+          "策略",
+          "內置"
+        ]
       }
     }
   }

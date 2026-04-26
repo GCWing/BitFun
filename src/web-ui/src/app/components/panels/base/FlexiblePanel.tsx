@@ -8,6 +8,35 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 
 const log = createLogger('FlexiblePanel');
 
+function updateGenerativeWidgetResultCode(result: unknown, widgetCode: string): unknown {
+  if (!result) {
+    return result;
+  }
+
+  if (typeof result === 'string') {
+    try {
+      const parsed = JSON.parse(result);
+      if (parsed && typeof parsed === 'object') {
+        return JSON.stringify({
+          ...(parsed as Record<string, unknown>),
+          widget_code: widgetCode,
+        });
+      }
+    } catch {
+      return result;
+    }
+  }
+
+  if (typeof result === 'object') {
+    return {
+      ...(result as Record<string, unknown>),
+      widget_code: widgetCode,
+    };
+  }
+
+  return result;
+}
+
 // Stable lazy components at module level to avoid re-creation on each render
 const MermaidPanel = React.lazy(() => 
   import('@/tools/mermaid-editor/components').then(module => ({ default: module.MermaidPanel }))
@@ -472,6 +501,68 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         const fileName = editorData.fileName || content.title;
         const editorLanguage = editorData.language;
         const editorWorkspacePath = editorData.workspacePath || workspacePath;
+        const syncGenerativeWidgetToolResult = async (nextWidgetCode: string, persistToSession: boolean) => {
+          const source = editorData._source;
+          if (
+            source?.type !== 'tool-call' ||
+            source.toolName !== 'GenerativeUI' ||
+            (!source.toolCallId && !source.toolItemId)
+          ) {
+            return;
+          }
+
+          const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+          const state = flowChatStore.getState();
+          const activeSessionId = source.sessionId || state.activeSessionId;
+          if (!activeSessionId) {
+            return;
+          }
+
+          const session = state.sessions.get(activeSessionId);
+          if (!session) {
+            return;
+          }
+
+          for (const turn of session.dialogTurns) {
+            for (const round of turn.modelRounds) {
+              const item = round.items.find(
+                (it: any) =>
+                  it.type === 'tool' &&
+                  (
+                    (source.toolCallId && it.toolCall?.id === source.toolCallId) ||
+                    (source.toolItemId && it.id === source.toolItemId)
+                  )
+              );
+
+              if (!item) {
+                continue;
+              }
+
+              const toolItem = item as any;
+              flowChatStore.updateModelRoundItem(activeSessionId, turn.id, toolItem.id, {
+                toolCall: {
+                  ...toolItem.toolCall,
+                  input: {
+                    ...toolItem.toolCall?.input,
+                    widget_code: nextWidgetCode,
+                  },
+                },
+                toolResult: toolItem.toolResult
+                  ? {
+                      ...toolItem.toolResult,
+                      result: updateGenerativeWidgetResultCode(toolItem.toolResult.result, nextWidgetCode),
+                    }
+                  : toolItem.toolResult,
+              } as any);
+
+              if (persistToSession) {
+                const { flowChatManager } = await import('@/flow_chat/services/FlowChatManager');
+                await flowChatManager.saveDialogTurn(activeSessionId, turn.id);
+              }
+              return;
+            }
+          }
+        };
 
         return (
           <CodeEditor
@@ -480,6 +571,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             fileName={fileName}
             language={editorLanguage}
             readOnly={editorData.readOnly || false}
+            autoSave={editorData.autoSave === true}
+            autoSaveDelayMs={typeof editorData.autoSaveDelayMs === 'number' ? editorData.autoSaveDelayMs : undefined}
             showLineNumbers={editorData.showLineNumbers !== false}
             showMinimap={editorData.showMinimap !== false}
             theme={editorData.theme || 'vs-dark'}
@@ -504,6 +597,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 if (onDirtyStateChange) {
                   onDirtyStateChange(hasChanges);
                 }
+
+                void syncGenerativeWidgetToolResult(newContent, false);
               }}
               onSave={(content) => {
                 if (onInteraction) {
@@ -513,6 +608,8 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 if (onDirtyStateChange) {
                   onDirtyStateChange(false);
                 }
+
+                void syncGenerativeWidgetToolResult(content, true);
               }}
           />
         );
@@ -788,6 +885,76 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               title={content.title}
               widgetId={content.data?.widgetId}
               widgetCode={content.data?.widgetCode}
+              onWidgetCodePersist={async (nextWidgetCode) => {
+                if (onContentChange) {
+                  onContentChange({
+                    ...content,
+                    data: {
+                      ...content.data,
+                      widgetCode: nextWidgetCode,
+                    },
+                  });
+                }
+
+                const source = content.data?._source;
+                if (
+                  source?.type !== 'tool-call' ||
+                  source.toolName !== 'GenerativeUI' ||
+                  (!source.toolCallId && !source.toolItemId)
+                ) {
+                  return;
+                }
+
+                const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+                const { flowChatManager } = await import('@/flow_chat/services/FlowChatManager');
+                const state = flowChatStore.getState();
+                const sessionId = source.sessionId || state.activeSessionId;
+                if (!sessionId) {
+                  return;
+                }
+
+                const session = state.sessions.get(sessionId);
+                if (!session) {
+                  return;
+                }
+
+                for (const turn of session.dialogTurns) {
+                  for (const round of turn.modelRounds) {
+                    const item = round.items.find(
+                      (it: any) =>
+                        it.type === 'tool' &&
+                        (
+                          (source.toolCallId && it.toolCall?.id === source.toolCallId) ||
+                          (source.toolItemId && it.id === source.toolItemId)
+                        )
+                    );
+
+                    if (!item) {
+                      continue;
+                    }
+
+                    const toolItem = item as any;
+                    flowChatStore.updateModelRoundItem(sessionId, turn.id, toolItem.id, {
+                      toolCall: {
+                        ...toolItem.toolCall,
+                        input: {
+                          ...toolItem.toolCall?.input,
+                          widget_code: nextWidgetCode,
+                        },
+                      },
+                      toolResult: toolItem.toolResult
+                        ? {
+                            ...toolItem.toolResult,
+                            result: updateGenerativeWidgetResultCode(toolItem.toolResult.result, nextWidgetCode),
+                          }
+                        : toolItem.toolResult,
+                    } as any);
+
+                    await flowChatManager.saveDialogTurn(sessionId, turn.id);
+                    return;
+                  }
+                }
+              }}
             />
           </React.Suspense>
         );

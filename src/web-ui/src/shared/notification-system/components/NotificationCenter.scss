@@ -316,6 +316,36 @@
     font-family: $font-family-mono;
   }
 
+  &__item-technical-details {
+    margin-top: $size-gap-2;
+    padding: $size-gap-2;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-sm;
+    background: var(--element-bg-subtle);
+    cursor: text;
+  }
+
+  &__item-technical-title {
+    margin-bottom: 4px;
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &__item-technical-body {
+    margin: 0;
+    max-height: 160px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: $font-family-mono;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+
   
   &__item-progress-bar {
     width: 100%;

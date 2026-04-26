@@ -67,7 +67,8 @@
     "toBottom": "回到底部",
     "toBottomWithCount": "回到底部 ({{count}} 条新消息)",
     "toLatest": "跳转到最新消息",
-    "clickToLatest": "点击跳转到最新"
+    "clickToLatest": "点击跳转到最新",
+    "toCurrentTurn": "跳转到当前轮次"
   },
   "message": {
     "user": "用户",
@@ -106,6 +107,15 @@
     "copyDialog": "复制整个对话",
     "copyToolInput": "复制工具输入",
     "copyToolOutput": "复制工具输出"
+  },
+  "widgetContextMenu": {
+    "addToInput": "把选中元素加入输入框",
+    "addedToInput": "已将选中元素加入输入框",
+    "unknownElement": "元素",
+    "displayText": "UI：{{summary}}",
+    "promptSelected": "选中的生成式 UI 元素：{{summary}}。",
+    "promptSection": "所属区域：{{section}}。",
+    "promptFile": "关联文件：{{file}}{{line}}。"
   },
   "input": {
     "placeholder": "有什么可以帮您...",
@@ -162,8 +172,12 @@
     "streaming": "流式输出",
     "autoMigrated": {
       "title": "模型已自动切换",
-      "description": "会话原模型\"{{previous}}\"不可用，已切换为\"{{next}}\"。",
-      "reason": "原因：{{reason}}"
+      "description": "当前会话之前使用的模型配置已不可用，系统已切换为自动选择模型。",
+      "reasons": {
+        "modelUnavailableOnRestore": "这是恢复历史会话时的自动处理，你可以继续使用，或稍后重新指定模型。",
+        "modelReconciled": "模型配置刚发生过调整，系统已为当前会话自动切换到可用模型。",
+        "fallback": "系统已为当前会话自动选择可用模型。"
+      }
     }
   },
   "toolbar": {
@@ -221,6 +235,14 @@
     "initUsage": "请直接使用 /init，不要附加额外参数。",
     "initFailed": "初始化 AGENTS.md 失败",
     "initPrompt": "请根据当前项目内容生成或更新 AGENTS.md",
+    "deepreviewAction": "深度审查",
+    "deepreviewNoSession": "当前没有可用于深度审查的会话",
+    "deepreviewUsage": "请使用 /DeepReview，可附加聚焦说明，例如 /DeepReview 审查提交 abc123 的安全风险。",
+    "deepreviewFailed": "深度审查失败",
+    "deepreviewInfo": "深度审查会拉起并行代码审核团队，可能会比普通审查耗时更长且 Token 消耗更高。",
+    "deepreviewBusy": "当前会话已有审查正在进行，请停止或等待完成后再开始新的深度审查。",
+    "deepreviewNestedDisabled": "深度审查只能从主会话启动。",
+    "deepreviewThreadTitle": "深度审查",
     "currentMode": "当前模式: {{mode}}",
     "noMatchingMode": "没有匹配的模式",
     "noMatchingCommand": "没有匹配的命令",
@@ -241,6 +263,7 @@
       "Plan": "先规划后执行，先明确需求并制定实施计划，再进行编码",
       "debug": "证据驱动的系统化调试：提出假设、收集运行时证据、精准定位并修复问题",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
+      "ComputerUse": "独立电脑操作智能体：感知本机环境，操作应用、浏览器与系统界面",
       "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告",
       "Team": "虚拟工程团队：CEO、工程经理、设计师、QA 负责人、安全官、发布工程师 — 按完整冲刺流程协同工作"
     },
@@ -250,6 +273,7 @@
       "Plan": "Plan",
       "debug": "Debug",
       "Cowork": "Cowork",
+      "ComputerUse": "Computer Use",
       "DeepResearch": "Deep Research",
       "Team": "Team"
     },
@@ -323,6 +347,86 @@
     "close": "关闭",
     "noSession": "当前没有可用于 /btw 的会话"
   },
+  "childSession": {
+    "stopReview": "中止审查",
+    "stoppingReview": "正在中止审查...",
+    "stopReviewFailed": "中止审查会话失败。",
+    "kinds": {
+      "btw": {
+        "short": "侧问",
+        "title": "侧问",
+        "origin": "来自"
+      },
+      "review": {
+        "short": "审查",
+        "title": "代码审查",
+        "origin": "审查来源"
+      },
+      "deep_review": {
+        "short": "深审",
+        "title": "深度审查",
+        "origin": "审查来源"
+      }
+    }
+  },
+  "deepReviewActionBar": {
+    "reviewCompleted": "深度审查已完成",
+    "fixRunning": "正在修复...",
+    "fixCompleted": "修复完成",
+    "fixFailed": "修复失败",
+    "fixTimeout": "修复超时",
+    "reviewError": "审查出错",
+    "dismiss": "关闭",
+    "close": "关闭",
+    "showCustomInput": "补充说明",
+    "hideCustomInput": "收起说明",
+    "customInstructionsPlaceholder": "描述修复的额外要求或上下文信息...",
+    "fillBackInput": "填入输入框",
+    "fillBackInputHint": "将选中的修复计划填入输入框，供手动编辑",
+    "reviewInterrupted": "深度审查已中断",
+    "resumeBlocked": "继续前需要处理问题",
+    "resumeRunning": "正在继续审查...",
+    "resumeFailed": "继续失败",
+    "resumeBlockedHint": "请先处理模型配置或额度问题，再继续审查。",
+    "resumeBlockedConfirmTitle": "继续审查？",
+    "resumeBlockedConfirmMessage": "导致审查中断的错误尚未解决，继续审查可能会再次失败。是否仍要继续？",
+    "resumeBlockedConfirmAction": "仍然继续",
+    "resumeReview": "继续审查",
+    "resumeRequestDisplay": "继续中断的深度审查",
+    "resumeFailedMessage": "无法继续深度审查。请检查模型设置，或稍后重试。",
+    "openModelSettings": "打开模型设置",
+    "copyDiagnostics": "复制诊断信息",
+    "diagnosticsCopied": "诊断信息已复制",
+    "diagnosticsTitle": "=== 深度审查中断诊断信息 ===",
+    "diagnosticsErrorType": "错误类型",
+    "diagnosticsDescription": "错误描述",
+    "diagnosticsSuggestedActions": "建议操作",
+    "diagnosticsTechnicalDetails": "技术详情"
+  },
+  "reviewActionBar": {
+    "reviewCompletedStandard": "审查已完成",
+    "reviewCompletedDeep": "深度审查已完成",
+    "fixRequestDisplayStandard": "开始修复代码审查问题",
+    "fixAndReviewRequestDisplayStandard": "修复代码审查问题并重新审查",
+    "fixRequestDisplayDeep": "开始修复深度审查问题",
+    "fixAndReviewRequestDisplayDeep": "修复深度审查问题并重新审查",
+    "needsDecisionTag": "需决策"
+  },
+  "deepReviewConsent": {
+    "windowTitle": "深度审查",
+    "eyebrow": "代码审核团队",
+    "title": "开始深度审查？",
+    "body": "深度审查会启动并行代码审核团队，通常比普通审查耗时更久，也会消耗更多 Token。",
+    "readonlyLabel": "首次只读",
+    "readonly": "首次审查默认只读：它会先输出问题和修复计划，不会直接修改代码。",
+    "costLabel": "Token 消耗更高",
+    "cost": "预期消耗：多个审查角色加质量门禁，运行时间和 Token 可能达到普通审查的数倍。",
+    "timeLabel": "耗时更久",
+    "time": "运行期间可以继续工作；只有整个深度审查在后台完成时才会通知你。",
+    "dontShowAgain": "下次不再提示",
+    "cancel": "取消",
+    "confirm": "开始深度审查"
+  },
   "flowChatHeader": {
     "turnList": "轮次列表",
     "untitledTurn": "未命名轮次",
@@ -338,12 +442,25 @@
     "searchPrevious": "上一个匹配结果",
     "searchNext": "下一个匹配结果",
     "searchClose": "关闭搜索",
-    "searchOpen": "搜索消息"
+    "searchOpen": "搜索消息",
+    "jumpToCurrentTurn": "跳转到第 {{turn}} 轮"
+  },
+  "stickyTaskIndicator": {
+    "tooltip": "跳转到当前任务"
   },
   "sessionFilesBadge": {
     "files": "文件",
     "reviewLabel": "审查",
     "reviewAll": "全部审查",
+    "reviewMenuLabel": "审查",
+    "reviewMenuHint": "选择审查深度",
+    "reviewModeStandard": "普通审查",
+    "reviewModeDeep": "深度审查",
+    "reviewRunningStandard": "审查中",
+    "reviewRunningDeep": "审查中",
+    "reviewRunningHint": "请等待当前审查完成，或在审查页面中止它。",
+    "deepReviewLabel": "深审",
+    "deepReviewAll": "深度审查",
     "loadFailed": "加载失败",
     "clickToViewDiff": "点击查看 Diff",
     "review": {
@@ -354,12 +471,20 @@
       "prompt": "请审查本次会话中修改的以下文件：\n\n{{files}}",
       "promptFiltered": "请审查本次会话中修改的以下文件：\n\n{{files}}\n\n请不要审查另外 {{skipped}} 个已跳过的文件，因为它们命中了锁文件、生成物或二进制文件的排除规则。",
       "threadTitle": "代码审查"
+    },
+    "deepReview": {
+      "info": "深度审查会启动并行代码审核团队，可能更耗时并消耗更多 Token。",
+      "displayMessage": "深度审查修改的文件：\n{{files}}",
+      "displayMessageFiltered": "深度审查过滤后的文件：\n{{files}}\n\n已跳过 {{skipped}} 个命中排除规则的文件。",
+      "threadTitle": "深度审查"
     }
   },
   "sessionFileModificationsBar": {
     "filesCount": "{{count}} 个文件",
     "expandList": "展开列表",
-    "collapseList": "收起列表"
+    "collapseList": "收起列表",
+    "reviewSource": "审查",
+    "deepReviewSource": "深度审查"
   },
   "snapshotSystem": {
     "errors": {
@@ -398,12 +523,32 @@
     "toolCallLabel": "🔧 工具调用: {{name}}"
   },
   "exploreRegion": {
+    "readFiles_one": "读取了 {{count}} 个文件",
+    "readFiles_other": "读取了 {{count}} 个文件",
     "readFiles": "读取了 {{count}} 个文件",
+    "searchCount_one": "进行了 {{count}} 次搜索",
+    "searchCount_other": "进行了 {{count}} 次搜索",
     "searchCount": "进行了 {{count}} 次搜索",
+    "thinkingCount_one": "思考了 {{count}} 次",
+    "thinkingCount_other": "思考了 {{count}} 次",
     "thinkingCount": "思考了 {{count}} 次",
+    "exploreCount_one": "执行了 {{count}} 次探索",
+    "exploreCount_other": "执行了 {{count}} 次探索",
     "exploreCount": "执行了 {{count}} 次探索",
     "separator": "，",
     "collapse": "收起探索过程"
+  },
+  "terminalRegion": {
+    "executedCommands_one": "执行了 {{count}} 个命令",
+    "executedCommands_other": "执行了 {{count}} 个命令",
+    "executedCommands": "执行了 {{count}} 个命令",
+    "allSuccess": "全部成功",
+    "partialSuccess": "{{success}} 个成功，{{failed}} 个失败",
+    "withRunning": "{{success}} 个成功，{{running}} 个运行中",
+    "withCancelled": "{{success}} 个成功，{{cancelled}} 个已取消",
+    "mixedStatus": "{{success}} 个成功，{{failed}} 个失败，{{running}} 个运行中",
+    "separator": "，",
+    "collapse": "收起命令列表"
   },
   "toolCards": {
     "file": {
@@ -426,6 +571,27 @@
       "gettingDiff": "获取差异",
       "preparing": "准备获取差异",
       "failed": "获取差异失败"
+    },
+    "generativeUI": {
+      "action": "生成式 UI",
+      "streamingPreview": "预览流式生成中",
+      "openSource": "打开源码",
+      "renderFailed": "组件渲染失败。",
+      "waitingForContent": "等待组件内容中...",
+      "saving": "保存中",
+      "unsaved": "有未保存改动",
+      "saveFailed": "保存失败",
+      "savedToSession": "已保存到会话",
+      "saveError": "保存组件源码失败",
+      "saveNow": "立即保存",
+      "reset": "重置",
+      "source": "源码",
+      "empty": "暂无组件内容。",
+      "workspaceUnavailable": "当前会话没有可用工作区，无法保存生成式 UI 源码",
+      "openSourceFailed": "打开生成式 UI 源码编辑器失败"
+    },
+    "generativeWidget": {
+      "exportFileNamePrefix": "BitFun组件"
     },
     "git": {
       "title": "Git",
@@ -500,6 +666,7 @@
       "cancelled": "已取消",
       "completed": "已完成",
       "failed": "执行失败",
+      "receivingParams": "接收参数中...",
       "executingCommand": "正在执行命令...",
       "workingDirectory": "工作目录:",
       "exitCode": "退出码: {{code}}",
@@ -615,12 +782,18 @@
       "noData": "无法加载任务数据",
       "executionContent": "执行内容",
       "duration": "耗时",
+      "waitingForModelResponse": "等待模型响应...",
       "status": {
         "pending": "等待中",
         "running": "执行中",
         "completed": "已完成",
         "failed": "执行失败"
       }
+    },
+    "timeout": {
+      "disableTooltip": "关闭超时限制",
+      "enableTooltip": "恢复超时限制",
+      "restoreShort": "恢复（剩余 {{seconds}} 秒）"
     },
     "diagram": {
       "interactive": "交互图表:",
@@ -702,6 +875,10 @@
       "preparingCreate": "准备创建会话 {{session}}",
       "creatingSession": "正在创建会话 {{session}}",
       "createdSession": "已创建会话 {{session}}",
+      "preparingCancel": "准备取消会话 {{session}}",
+      "cancellingSession": "正在取消会话 {{session}}",
+      "cancelledSession": "已请求取消 {{session}}",
+      "noActiveTurn": "{{session}} 当前没有可取消的活跃轮次",
       "preparingDelete": "准备删除会话 {{session}}",
       "deletingSession": "正在删除会话 {{session}}",
       "deletedSession": "已删除会话 {{session}}",
@@ -713,6 +890,13 @@
       "sessionId": "会话ID",
       "sessionName": "会话名称",
       "agentType": "Agent 类型",
+      "cancelStatus": "取消状态",
+      "cancelRequestedStatus": "已请求取消",
+      "noActiveTurnStatus": "无活跃轮次",
+      "cancelledTurnId": "已取消轮次ID",
+      "hadActiveTurn": "取消前是否有活跃轮次",
+      "booleanYes": "是",
+      "booleanNo": "否",
       "sessionCount": "会话数量",
       "noSessions": "未找到会话"
     },
@@ -858,6 +1042,19 @@
       "rollback": "回滚",
       "rollbackTooltip": "回滚到此轮"
     },
+    "reviewSessionSummary": {
+      "standardTitle": "审查",
+      "deepTitle": "深度审查",
+      "running": "进行中",
+      "failed": "失败",
+      "issueCount": "{{count}} 个问题",
+      "noIssues": "无阻塞问题",
+      "filesChanged": "{{count}} 个文件",
+      "waitingSummary": "审查仍在运行，代码审核团队完成后会在这里显示结果。",
+      "emptySummary": "暂时没有结构化审查总结。",
+      "changedFilesTitle": "本次审查涉及的文件",
+      "openReview": "打开审查页面"
+    },
     "codeReview": {
       "reviewResult": "审查结果",
       "reviewingCode": "正在审查代码...",
@@ -869,10 +1066,88 @@
       "overallAssessment": "总体评估",
       "riskLevel": "风险等级",
       "recommendedAction": "建议操作",
+      "deepReviewResult": "深度审查结果",
+      "reviewMode": "审查模式",
+      "reviewScope": "范围",
       "contextLimitations": "上下文限制",
       "issuesCount": "问题 ({{count}})",
       "suggestion": "建议",
       "codeStrengths": "代码优点",
+      "reviewerTeam": "代码审核团队",
+      "reviewerIssues": "{{count}} 个问题",
+      "reviewerIssuesUnknown": "问题数量不可用",
+      "reviewerTeamSummary": "{{total}} 位审核者 · {{completed}} 已完成 · {{degraded}} 需关注",
+      "sectionItemCount": "{{count}} 项",
+      "remediationPlan": "修复计划",
+      "sections": {
+        "summary": "结论摘要",
+        "issues": "问题列表",
+        "remediation": "修复计划",
+        "strengths": "代码优点",
+        "team": "代码审核团队",
+        "coverage": "覆盖与置信度"
+      },
+      "groups": {
+        "must_fix": "必须修复",
+        "should_improve": "建议优化",
+        "needs_decision": "需要决策",
+        "verification": "验证动作",
+        "architecture": "架构边界",
+        "maintainability": "可维护性",
+        "tests": "测试覆盖",
+        "security": "安全性",
+        "performance": "性能",
+        "user_experience": "用户体验",
+        "other": "其他"
+      },
+      "report": {
+        "titleStandard": "代码审查报告",
+        "titleDeep": "深度审查报告",
+        "reviewDecision": "审查结论",
+        "noIssues": "没有已验证问题。",
+        "status": "状态",
+        "findings": "问题数",
+        "validation": "验证说明",
+        "source": "来源",
+        "noItems": "无。"
+      },
+      "export": {
+        "copyMarkdown": "复制 Markdown",
+        "openMarkdown": "以 Markdown 打开",
+        "saveMarkdown": "保存 Markdown",
+        "copySuccess": "已复制 Markdown 审查报告。",
+        "copyFailed": "复制审查报告失败。",
+        "openFailed": "在编辑器中打开审查报告失败。",
+        "saveSuccess": "审查报告已导出。",
+        "saveFailed": "导出审查报告失败。",
+        "saveDialogTitle": "导出审查报告",
+        "fileNamePrefix": "BitFun-代码审查",
+        "editorTitle": "审查报告"
+      },
+      "reviewModes": {
+        "standard": "普通",
+        "deep": "深度"
+      },
+      "remediationActions": {
+        "title": "下一步",
+        "hint": "深度审查默认只读。请选择要修复的计划项。",
+        "selectAll": "全选",
+        "selectionCount": "已选择 {{selected}}/{{total}} 项",
+        "expandPlan": "详情",
+        "collapsePlan": "收起",
+        "relatedIssue": "关联问题",
+        "noRelatedIssue": "该修复项没有直接关联的问题，请以计划文本本身作为实现范围。",
+        "severity": "严重程度",
+        "certainty": "确定性",
+        "location": "位置",
+        "noSelectionHint": "至少选择一项修复计划后才能开始修复。",
+        "startFix": "开始修复",
+        "fixAndReview": "修复后重新审查",
+        "cancel": "取消",
+        "fixUnavailable": "无法开始修复：审查会话不可用。",
+        "fixRequestDisplay": "开始修复深度审查问题",
+        "fixAndReviewRequestDisplay": "修复深度审查问题并重新审查"
+      },
       "riskLevels": {
         "low": "低风险",
         "medium": "中风险",

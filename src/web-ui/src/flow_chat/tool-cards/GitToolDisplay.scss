@@ -1,23 +1,35 @@
 /**
- * Git tool display styles based on BaseToolCard.
+ * Git tool display styles based on CompactToolCard.
  * Expanded layout aligns with TerminalToolCard (bash): scrollable output + full-width footer bar.
  */
 
-@use './_tool-card-common.scss';
+@use './CompactToolCard.scss';
 
-.base-tool-card-wrapper.git-tool-display .base-tool-card-header {
+/* ========== Git card specific styles ========== */
+
+.git-tool-display {
+  .git-card-icon {
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+}
+
+/* Entire compact card shows pointer (card toggles expand); children must not force default cursor. */
+.compact-tool-card.git-tool-display {
   cursor: pointer;
 }
 
-.base-tool-card-wrapper.git-tool-display .git-result-footer {
-  margin-left: -10px;
-  margin-right: -10px;
-  margin-bottom: -10px;
-  padding: 6px 10px;
-  border-radius: 0 0 7px 7px;
+/* Footer bar: full width + background to bottom inner edge of expanded content (matches .compact-tool-card-expanded padding). */
+.compact-tool-card.git-tool-display .git-result-footer {
+  margin-left: -8px;
+  margin-right: -8px;
+  margin-bottom: -8px;
+  padding: 6px 8px;
+  border-radius: 0 0 6px 6px;
 }
 
-.base-tool-card-wrapper.git-tool-display:hover {
+/* ========== Fix scrollbar visibility on card hover ========== */
+.compact-tool-card.git-tool-display:hover {
   .git-result-output {
     &::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
@@ -27,6 +39,7 @@
       background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.22));
     }
 
+    /* Firefox */
     scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12)) transparent;
   }
 }

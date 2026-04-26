@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { GitBranch, Check, X, AlertTriangle } from 'lucide-react';
 import { CubeLoading, IconButton } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
-import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './GitToolDisplay.scss';
@@ -175,10 +175,6 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
     }
   }, [hasOutput, isFailed, toggleExpanded]);
 
-  const renderToolIcon = () => {
-    return <GitBranch size={16} />;
-  };
-
   const renderStatusIcon = () => {
     if (isLoading) {
       return <CubeLoading size="small" />;
@@ -190,9 +186,8 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderHeader = () => (
-    <ToolCardHeader
-      icon={renderToolIcon()}
-      iconClassName="git-icon"
+    <CompactToolCardHeader
+      statusIcon={<GitBranch size={14} className="git-card-icon" />}
       action={isFailed ? t('toolCards.git.commandFailed') : `${t('toolCards.git.title')}:`}
       content={
         <span className="git-tool-info">
@@ -209,9 +204,9 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
               {outputSummary}
             </span>
           )}
-          
+
           {requiresConfirmation && !userConfirmed && status !== 'completed' && (
-            <div className="git-action-buttons">
+            <div className="git-action-buttons" onClick={(e) => e.stopPropagation()}>
               <IconButton
                 className="git-icon-button git-confirm-btn"
                 variant="success"
@@ -240,7 +235,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
               </IconButton>
             </div>
           )}
-          
+
           {isFailed && (
             <div className="error-indicator">
               <span className="error-text">{t('toolCards.git.failed')}</span>
@@ -248,7 +243,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
           )}
         </>
       }
-      statusIcon={renderStatusIcon()}
+      rightIcon={renderStatusIcon()}
     />
   );
 
@@ -339,17 +334,20 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
     return null;
   };
 
+  const expandedContent = isExpanded
+    ? renderDetailsWhenExpanded()
+    : null;
+
   return (
     <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
-      <BaseToolCard
+      <CompactToolCard
         status={status}
         isExpanded={isExpanded}
         onClick={handleCardClick}
         className="git-tool-display"
+        clickable
         header={renderHeader()}
-        expandedContent={isExpanded ? renderDetailsWhenExpanded() : null}
-        requiresConfirmation={requiresConfirmation && !userConfirmed}
-        headerExpandAffordance={Boolean(hasOutput || isFailed)}
+        expandedContent={expandedContent}
       />
     </div>
   );

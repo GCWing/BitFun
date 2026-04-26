@@ -1,3 +1,4 @@
+use crate::client::utils::elapsed_ms_u64;
 use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
 use anyhow::{anyhow, Result};
@@ -29,7 +30,7 @@ where
 
         let response = match response_result {
             Ok(resp) => {
-                let connect_time = request_start_time.elapsed().as_millis();
+                let connect_time = elapsed_ms_u64(request_start_time);
                 let status = resp.status();
 
                 if status.is_client_error() {

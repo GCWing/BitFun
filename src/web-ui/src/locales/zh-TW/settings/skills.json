@@ -1,0 +1,93 @@
+{
+  "title": "Skill 管理",
+  "subtitle": "管理用戶級和項目級 Skill",
+  "toolbar": {
+    "searchPlaceholder": "搜索Skill...",
+    "refreshTooltip": "刷新",
+    "addTooltip": "添加Skill"
+  },
+  "filters": {
+    "all": "所有",
+    "user": "用戶級",
+    "project": "項目級"
+  },
+  "market": {
+    "title": "技能市場",
+    "subtitle": "搜索並下載可複用 Skill（默認下載到當前項目）",
+    "searchPlaceholder": "搜索市場技能...",
+    "refreshTooltip": "刷新市場結果",
+    "loading": "正在加載市場技能...",
+    "errorPrefix": "市場加載失敗: ",
+    "empty": {
+      "noMatch": "沒有找到匹配的市場 Skill",
+      "noSkills": "暫時沒有可展示的市場 Skill"
+    },
+    "item": {
+      "sourceLabel": "來源: ",
+      "installs": "安裝量: {{count}}",
+      "noDescription": "暫無簡介",
+      "downloadProject": "下載到項目",
+      "installed": "已安裝",
+      "installedTooltip": "該 Skill 已安裝",
+      "downloading": "下載中..."
+    }
+  },
+  "form": {
+    "title": "添加Skill",
+    "closeTooltip": "關閉",
+    "level": {
+      "label": "級別",
+      "user": "用戶級（全局）",
+      "project": "項目級（當前工作空間）",
+      "projectDisabled": " - 需要先打開工作區",
+      "currentWorkspace": "當前工作區: {{path}}"
+    },
+    "path": {
+      "label": "Skill文件夾路徑",
+      "placeholder": "選擇或輸入Skill文件夾路徑",
+      "browseTooltip": "瀏覽",
+      "hint": "文件夾需包含有效的SKILL.md文件"
+    },
+    "validating": "校驗中...",
+    "actions": {
+      "cancel": "取消",
+      "add": "添加",
+      "adding": "添加中..."
+    }
+  },
+  "list": {
+    "loading": "加載中...",
+    "errorPrefix": "加載失敗: ",
+    "empty": {
+      "noMatch": "沒有找到匹配的Skill",
+      "noSkills": "還沒有配置任何Skill"
+    },
+    "item": {
+      "user": "用戶級",
+      "project": "項目級",
+      "deleteTooltip": "刪除",
+      "pathLabel": "路徑:"
+    }
+  },
+  "deleteModal": {
+    "title": "確認刪除",
+    "message": "確定要刪除 Skill \"{{name}}\" 嗎？",
+    "warning": "此操作將刪除 Skill 文件夾，無法恢復。",
+    "cancel": "取消",
+    "delete": "刪除"
+  },
+  "messages": {
+    "invalidPath": "請選擇有效的Skill文件夾",
+    "noWorkspace": "請先打開一個工作區才能添加項目級Skill",
+    "addSuccess": "Skill \"{{name}}\" 添加成功",
+    "addFailed": "添加失敗: {{error}}",
+    "deleteSuccess": "Skill \"{{name}}\" 已刪除",
+    "deleteFailed": "刪除失敗: {{error}}",
+    "toggleSuccess": "Skill \"{{name}}\" 已{{status}}",
+    "toggleFailed": "切換狀態失敗: {{error}}",
+    "marketDownloadSuccess": "Skill \"{{name}}\" 下載成功",
+    "marketDownloadFailed": "下載失敗: {{error}}",
+    "enabled": "啟用",
+    "disabled": "禁用"
+  }
+}

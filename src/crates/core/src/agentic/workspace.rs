@@ -103,9 +103,12 @@ mod tests {
 
     #[test]
     fn remote_workspace_binding_uses_session_identity_storage_path() {
-        let session_identity =
-            workspace_session_identity("/home/wsp/projects/test", Some("conn-1"), Some("127.0.0.1"))
-                .expect("remote identity should resolve");
+        let session_identity = workspace_session_identity(
+            "/home/wsp/projects/test",
+            Some("conn-1"),
+            Some("127.0.0.1"),
+        )
+        .expect("remote identity should resolve");
         let binding = WorkspaceBinding::new_remote(
             Some("workspace-1".to_string()),
             PathBuf::from("/home/wsp/projects/test"),

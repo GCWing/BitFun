@@ -5,6 +5,10 @@ import { configManager } from '@/infrastructure/config';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  buildDialogCompletionNotificationCopy,
+  shouldSendDialogCompletionNotification,
+} from './dialogCompletionNotifyPolicy';
 
 const log = createLogger('useDialogCompletionNotify');
 
@@ -34,17 +38,12 @@ export const useDialogCompletionNotify = () => {
     const unlisten = agentAPI.onDialogTurnCompleted(async (event) => {
       // Send notification if page is hidden OR window lost OS focus
       const isBackground = document.hidden || !windowFocusedRef.current;
-      if (!isBackground) {
-        return;
-      }
 
+      let enabled = true;
       try {
-        const enabled = await configManager.getConfig<boolean>(
+        enabled = await configManager.getConfig<boolean>(
           'app.notifications.dialog_completion_notify'
         );
-        if (enabled === false) {
-          return;
-        }
       } catch (error) {
         log.warn('Failed to read dialog_completion_notify config', error);
       }
@@ -54,13 +53,25 @@ export const useDialogCompletionNotify = () => {
       const session = sessionId
         ? flowChatStore.getState().sessions.get(sessionId)
         : undefined;
-      const sessionTitle =
-        session?.title?.trim() ||
-        (sessionId ? `Session ${sessionId.slice(0, 6)}` : 'BitFun');
+      if (
+        !shouldSendDialogCompletionNotification({
+          event,
+          session,
+          isBackground,
+          notificationsEnabled: enabled,
+        })
+      ) {
+        return;
+      }
+
+      const notificationCopy = buildDialogCompletionNotificationCopy({
+        sessionTitle: session?.title,
+        t,
+      });
 
       await systemAPI.sendSystemNotification(
-        sessionTitle,
-        t('notify.dialogCompleted'),
+        notificationCopy.title,
+        notificationCopy.body,
       );
     });
 

@@ -52,6 +52,15 @@ pub fn locate_ui_element_center(
     query: &UiElementLocateQuery,
 ) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(query)?;
+
+    if query.node_idx.is_some() {
+        return Err(BitFunError::tool(
+            "[AX_IDX_NOT_SUPPORTED] node_idx lookup is only implemented on macOS. \
+             Fall back to `text_contains` / `title_contains` + `role_substring` on this host."
+                .to_string(),
+        ));
+    }
+
     let max_depth = query.max_depth.unwrap_or(48).clamp(1, 200);
     let max_nodes = 12_000usize;
 
@@ -129,13 +138,28 @@ pub fn locate_ui_element_center(
                 .unwrap_or_default()
         };
         let role = localized_control_type_string(&cur.el);
+        let help = unsafe {
+            cur.el
+                .CurrentHelpText()
+                .ok()
+                .map(bstr_to_string)
+                .unwrap_or_default()
+        };
 
-        let matched = ui_locate_common::matches_filters(
-            query,
-            Some(role.as_str()),
-            Some(name.as_str()),
-            Some(ident.as_str()),
-        );
+        let attrs = ui_locate_common::NodeAttrs {
+            role: Some(role.as_str()),
+            subrole: None,
+            title: Some(name.as_str()),
+            value: None,
+            description: None,
+            identifier: Some(ident.as_str()),
+            help: if help.is_empty() {
+                None
+            } else {
+                Some(help.as_str())
+            },
+        };
+        let matched = ui_locate_common::matches_filters_attrs(query, &attrs);
         if matched {
             let rect = unsafe { cur.el.CurrentBoundingRectangle() };
             if let Ok(r) = rect {

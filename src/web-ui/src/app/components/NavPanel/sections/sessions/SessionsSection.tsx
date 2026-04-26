@@ -14,7 +14,6 @@ import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
 import { flowChatManager } from '../../../../../flow_chat/services/FlowChatManager';
 import type { FlowChatState, Session } from '../../../../../flow_chat/types/flow-chat';
 import { useSceneStore } from '../../../../stores/sceneStore';
-import type { SceneTabId } from '../../../SceneBar/types';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -30,15 +29,24 @@ import {
 } from '@/flow_chat/utils/sessionOrdering';
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import { SessionExecutionState } from '@/flow_chat/state-machine/types';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
+import { isSessionNavRowActive } from './sessionNavSelection';
+import {
+  deriveSessionReviewActivity,
+  isReviewActivityBlocking,
+} from '@/flow_chat/utils/sessionReviewActivity';
 import './SessionsSection.scss';
 
 /** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
 const SESSIONS_LEVEL_0 = 5;
 const SESSIONS_LEVEL_1 = 10;
 const log = createLogger('SessionsSection');
-const AGENT_SCENE: SceneTabId = 'session';
 
 type SessionMode = 'code' | 'cowork' | 'claw';
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const resolveSessionModeType = (session: Session): SessionMode => {
   const normalizedMode = session.mode?.toLowerCase();
@@ -48,7 +56,29 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 };
 
 const getTitle = (session: Session): string =>
-  session.title?.trim() || `Session ${session.sessionId.slice(0, 6)}`;
+  resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
+
+const getChildSessionBadge = (kind: Session['sessionKind']): string => {
+  const normalizedKind = kind === 'review' || kind === 'deep_review' ? kind : 'btw';
+  const fallback = normalizedKind === 'deep_review'
+    ? 'Deep'
+    : normalizedKind === 'review'
+      ? 'Review'
+      : 'btw';
+  return i18nService.t(`flow-chat:childSession.kinds.${normalizedKind}.short`, {
+    defaultValue: fallback,
+  });
+};
+
+const getReviewActivityBadge = (kind: 'review' | 'deep_review'): string =>
+  i18nService.t(
+    kind === 'deep_review'
+      ? 'common:nav.sessions.deepReviewRunning'
+      : 'common:nav.sessions.reviewRunning',
+    {
+      defaultValue: kind === 'deep_review' ? 'Deep reviewing' : 'Reviewing',
+    },
+  );
 
 interface SessionsSectionProps {
   workspaceId?: string;
@@ -144,6 +174,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [openMenuSessionId]);
+
+  // Clear unread completion mark after the switched session renders
+  useEffect(() => {
+    const handleSessionSwitched = (e: Event) => {
+      const { sessionId } = (e as CustomEvent).detail;
+      if (!sessionId) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          flowChatStore.clearSessionUnreadCompletion(sessionId);
+        });
+      });
+    };
+
+    window.addEventListener('bitfun:session-switched', handleSessionSwitched);
+    return () => window.removeEventListener('bitfun:session-switched', handleSessionSwitched);
+  }, []);
 
   const sessions = useMemo(
     () =>
@@ -264,7 +310,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const resolveSessionTitle = useCallback(
     (session: Session): string => {
       const rawTitle = getTitle(session);
-      const matched = rawTitle.match(/^(?:新建会话|New Session)\s*(\d+)$/i);
+      const newSessionPrefixes = Array.from(
+        new Set([
+          t('nav.sessions.newSession'),
+          i18nService.t('nav.sessions.newSession', { lng: 'en-US' }),
+          i18nService.t('nav.sessions.newSession', { lng: 'zh-CN' }),
+          i18nService.t('nav.sessions.newSession', { lng: 'zh-TW' }),
+        ].filter((value): value is string => Boolean(value)))
+      );
+      const matched = rawTitle.match(
+        new RegExp(`^(?:${newSessionPrefixes.map(escapeRegExp).join('|')})\\s*(\\d+)$`, 'i')
+      );
       if (!matched) return rawTitle;
 
       const mode = resolveSessionModeType(session);
@@ -363,7 +419,22 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       {visibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);
-          const isBtwChild = level === 1 && relationship.isBtw;
+          const isChildSession = level === 1 && relationship.displayAsChild;
+          const childSessionBadge = getChildSessionBadge(relationship.kind);
+          const parentReviewActivity = deriveSessionReviewActivity(
+            flowChatState,
+            session.sessionId,
+            id => stateMachineManager.getCurrentState(id),
+          );
+          const showParentReviewActivity = !isChildSession && isReviewActivityBlocking(parentReviewActivity);
+          const showChildReviewActivity =
+            isChildSession && relationship.isReview && runningSessionIds.has(session.sessionId);
+          const reviewActivityKind =
+            showParentReviewActivity
+              ? parentReviewActivity!.kind
+              : showChildReviewActivity && (relationship.kind === 'review' || relationship.kind === 'deep_review')
+                ? relationship.kind
+                : null;
           const sessionModeKey = resolveSessionModeType(session);
           const sessionTitle = resolveSessionTitle(session);
           const parentSessionId = relationship.parentSessionId;
@@ -372,7 +443,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
           const trimmedAssistant = assistantLabel?.trim() ?? '';
           const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isBtwChild;
+          const showRichTooltip = showAssistantInTooltip || isChildSession;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
@@ -381,9 +452,16 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   {t('nav.sessions.assistantOwner', { name: trimmedAssistant })}
                 </div>
               ) : null}
-              {isBtwChild ? (
+              {isChildSession ? (
                 <div className="bitfun-nav-panel__inline-item-tooltip-meta">
-                  {`来自 ${parentTitle || '父会话'}${parentTurnIndex ? ` · 第 ${parentTurnIndex} 轮` : ''}`}
+                  {parentTurnIndex
+                    ? t('nav.sessions.childSourceWithTurn', {
+                        parentTitle: parentTitle || t('nav.sessions.parentSession'),
+                        turnIndex: parentTurnIndex,
+                      })
+                    : t('nav.sessions.childSourceWithoutTurn', {
+                        parentTitle: parentTitle || t('nav.sessions.parentSession'),
+                      })}
                 </div>
               ) : null}
             </div>
@@ -399,15 +477,20 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   : Bot
                 : Code2;
           const isRunning = runningSessionIds.has(session.sessionId);
-          const isRowActive = activeBtwSessionData?.childSessionId
-            ? session.sessionId === activeBtwSessionData.childSessionId
-            : activeTabId === AGENT_SCENE && session.sessionId === activeSessionId;
+          const isUnreadCompleted = !isRunning && session.hasUnreadCompletion;
+          const isRowActive = isSessionNavRowActive({
+            rowSessionId: session.sessionId,
+            activeTabId,
+            activeSessionId,
+            activeChildSessionId: activeBtwSessionData?.childSessionId,
+            activeChildParentSessionId: activeBtwSessionData?.parentSessionId,
+          });
           const row = (
             <div
               className={[
                 'bitfun-nav-panel__inline-item',
                 level === 1 && 'is-child',
-                isBtwChild && 'is-btw-child',
+                isChildSession && 'is-btw-child',
                 isRowActive && 'is-active',
                 isEditing && 'is-editing',
               ]
@@ -415,28 +498,43 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 .join(' ')}
               onClick={() => handleSwitch(session.sessionId)}
             >
-              {showSessionModeIcon && !isBtwChild ? (
-                isRunning ? (
-                  <Loader2
-                    size={14}
-                    className={[
-                      'bitfun-nav-panel__inline-item-icon',
-                      'is-running',
-                    ].join(' ')}
-                  />
-                ) : (
-                  <SessionIcon
-                    size={14}
-                    className={[
-                      'bitfun-nav-panel__inline-item-icon',
-                      sessionModeKey === 'cowork'
-                        ? 'is-cowork'
-                        : sessionModeKey === 'claw'
-                          ? 'is-claw'
-                          : 'is-code',
-                    ].join(' ')}
-                  />
-                )
+              {showSessionModeIcon ? (
+                <span className="bitfun-nav-panel__inline-item-icon-slot">
+                  {isRunning ? (
+                    <Loader2
+                      size={14}
+                      className={[
+                        'bitfun-nav-panel__inline-item-icon',
+                        'is-running',
+                      ].join(' ')}
+                    />
+                  ) : (
+                    <SessionIcon
+                      size={14}
+                      className={[
+                        'bitfun-nav-panel__inline-item-icon',
+                        sessionModeKey === 'cowork'
+                          ? 'is-cowork'
+                          : sessionModeKey === 'claw'
+                            ? 'is-claw'
+                            : 'is-code',
+                      ].join(' ')}
+                    />
+                  )}
+                  {isUnreadCompleted ? (
+                    <span
+                      className={[
+                        'bitfun-nav-panel__inline-item-unread-dot',
+                        session.hasUnreadCompletion === 'error' && 'is-error',
+                      ].filter(Boolean).join(' ')}
+                      aria-label={
+                        session.hasUnreadCompletion === 'error'
+                          ? t('nav.sessions.unreadError')
+                          : t('nav.sessions.unreadCompleted')
+                      }
+                    />
+                  ) : null}
+                </span>
               ) : null}
 
               {isEditing ? (
@@ -476,8 +574,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 <>
                   <span className="bitfun-nav-panel__inline-item-main">
                     <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
-                    {isBtwChild ? (
-                      <span className="bitfun-nav-panel__inline-item-btw-badge">btw</span>
+                    {isChildSession ? (
+                      <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
+                    ) : null}
+                    {reviewActivityKind ? (
+                      <span className="bitfun-nav-panel__inline-item-review-badge">
+                        <Loader2 size={9} aria-hidden />
+                        {getReviewActivityBadge(reviewActivityKind)}
+                      </span>
                     ) : null}
                   </span>
                   <div className="bitfun-nav-panel__inline-item-actions">

@@ -1,11 +1,17 @@
 use super::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, CoworkMode, DebugMode, DeepResearchAgent,
-    ExploreAgent, FileFinderAgent, GenerateDocAgent, InitAgent, PlanMode, TeamMode,
+    Agent, AgenticMode, BusinessLogicReviewerAgent, ClawMode, CodeReviewAgent, ComputerUseMode,
+    CoworkMode, DebugMode, DeepResearchAgent, DeepReviewAgent, ExploreAgent, FileFinderAgent,
+    GenerateDocAgent, InitAgent, PerformanceReviewerAgent, PlanMode, ReviewFixerAgent,
+    ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
 use crate::agentic::agents::custom_subagents::{
     CustomSubagent, CustomSubagentKind, CustomSubagentLoader,
 };
-use crate::agentic::tools::get_all_registered_tool_names;
+use crate::agentic::deep_review_policy::{
+    REVIEWER_BUSINESS_LOGIC_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE,
+    REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+};
+use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
 use crate::service::config::types::{ModeConfig, SubAgentConfig};
@@ -64,6 +70,7 @@ pub struct AgentInfo {
     pub name: String,
     pub description: String,
     pub is_readonly: bool,
+    pub is_review: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
     /// whether enabled (agentic always true, other from configuration)
@@ -99,6 +106,7 @@ impl AgentInfo {
             name: agent.name().to_string(),
             description: agent.description().to_string(),
             is_readonly: agent.is_readonly(),
+            is_review: is_review_agent_entry(entry),
             tool_count: default_tools.len(),
             default_tools,
             enabled,
@@ -119,6 +127,7 @@ pub struct CustomSubagentDetail {
     pub prompt: String,
     pub tools: Vec<String>,
     pub readonly: bool,
+    pub review: bool,
     pub enabled: bool,
     pub model: String,
     pub path: String,
@@ -126,10 +135,33 @@ pub struct CustomSubagentDetail {
     pub level: String,
 }
 
+fn is_review_agent_entry(entry: &AgentEntry) -> bool {
+    let agent = entry.agent.as_ref();
+    if let Some(custom) = agent.as_any().downcast_ref::<CustomSubagent>() {
+        return custom.review;
+    }
+
+    matches!(
+        agent.id(),
+        REVIEWER_BUSINESS_LOGIC_AGENT_TYPE
+            | REVIEWER_PERFORMANCE_AGENT_TYPE
+            | REVIEWER_SECURITY_AGENT_TYPE
+            | REVIEW_JUDGE_AGENT_TYPE
+    )
+}
+
 fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" | "Cowork" | "Plan" | "debug" | "Claw" | "DeepResearch" | "Team" => "auto",
-        _ => "primary",
+        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
+        | "Team" => "auto",
+        "DeepReview"
+        | "ReviewBusinessLogic"
+        | "ReviewPerformance"
+        | "ReviewSecurity"
+        | "ReviewJudge"
+        | "ReviewFixer" => "fast",
+        "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" | "Init" => "primary",
+        _ => "fast",
     }
 }
 
@@ -303,8 +335,14 @@ impl AgentRegistry {
 
         // Register built-in sub-agents
         let builtin_subagents: Vec<Arc<dyn Agent>> = vec![
+            Arc::new(ComputerUseMode::new()),
             Arc::new(ExploreAgent::new()),
             Arc::new(FileFinderAgent::new()),
+            Arc::new(BusinessLogicReviewerAgent::new()),
+            Arc::new(PerformanceReviewerAgent::new()),
+            Arc::new(SecurityReviewerAgent::new()),
+            Arc::new(ReviewJudgeAgent::new()),
+            Arc::new(ReviewFixerAgent::new()),
         ];
         for subagent in builtin_subagents {
             register(
@@ -318,6 +356,7 @@ impl AgentRegistry {
         // Register hidden agents
         let hidden_subagents: Vec<Arc<dyn Agent>> = vec![
             Arc::new(CodeReviewAgent::new()),
+            Arc::new(DeepReviewAgent::new()),
             Arc::new(GenerateDocAgent::new()),
             Arc::new(InitAgent::new()),
         ];
@@ -488,6 +527,24 @@ impl AgentRegistry {
         None
     }
 
+    pub fn get_subagent_is_review(&self, id: &str) -> Option<bool> {
+        if let Some(entry) = self.read_agents().get(id) {
+            if entry.category == AgentCategory::SubAgent {
+                return Some(is_review_agent_entry(entry));
+            }
+        }
+
+        for entries in self.read_project_subagents().values() {
+            if let Some(entry) = entries.get(id) {
+                if entry.category == AgentCategory::SubAgent {
+                    return Some(is_review_agent_entry(entry));
+                }
+            }
+        }
+
+        None
+    }
+
     /// get all subagent information (including source and enabled status, used for TaskTool, frontend subagent list etc.)
     /// - built-in subagent: read enabled status from global configuration ai.subagent_configs
     /// - custom subagent: read enabled and model configuration from custom_config cache
@@ -533,6 +590,7 @@ impl AgentRegistry {
     pub async fn load_custom_subagents(&self, workspace_root: &Path) {
         // get valid tools and models list for verification
         let valid_tools = get_all_registered_tool_names().await;
+        let readonly_tools = get_readonly_registered_tool_names().await;
         let valid_models = Self::get_valid_model_ids().await;
 
         let custom = CustomSubagentLoader::load_custom_subagents(workspace_root);
@@ -546,7 +604,7 @@ impl AgentRegistry {
             let id = sub.id().to_string();
             let source = SubAgentSource::from_custom_kind(sub.kind);
             // validate and correct tools and model
-            Self::validate_custom_subagent(&mut sub, &valid_tools, &valid_models);
+            Self::validate_custom_subagent(&mut sub, &valid_tools, &readonly_tools, &valid_models);
             // create CustomSubagentConfig cache configuration information
             let custom_config = CustomSubagentConfig {
                 enabled: sub.enabled,
@@ -609,10 +667,11 @@ impl AgentRegistry {
 
     /// validate and correct CustomSubagent's tools and model
     /// - tools: filter out invalid tools, record warning log
-    /// - model: if invalid, set to "primary", record warning log
+    /// - model: if invalid, set to "fast", record warning log
     fn validate_custom_subagent(
         subagent: &mut CustomSubagent,
         valid_tools: &[String],
+        readonly_tools: &[String],
         valid_models: &[String],
     ) {
         let agent_id = subagent.name.clone();
@@ -630,16 +689,56 @@ impl AgentRegistry {
                 agent_id, invalid
             );
         }
-        subagent.tools = valid;
+        if subagent.review {
+            subagent.readonly = true;
+            let readonly_tools_set: std::collections::HashSet<&str> =
+                readonly_tools.iter().map(|s| s.as_str()).collect();
+            let (review_tools, writable_tools): (Vec<_>, Vec<_>) = valid
+                .into_iter()
+                .partition(|t| readonly_tools_set.contains(t.as_str()));
+            if !writable_tools.is_empty() {
+                warn!(
+                    "[Subagent {}] Writable tools filtered out from review subagent: {:?}",
+                    agent_id, writable_tools
+                );
+            }
+            subagent.tools = review_tools;
+        } else {
+            subagent.tools = valid;
+        }
 
-        // validate model: if invalid, set to "primary"
+        // validate model: if invalid, set to "fast"
         if !valid_models.contains(&subagent.model) {
             warn!(
-                "[Subagent {}] Invalid model '{}', reset to 'primary'",
+                "[Subagent {}] Invalid model '{}', reset to 'fast'",
                 agent_id, subagent.model
             );
-            subagent.model = "primary".to_string();
+            subagent.model = "fast".to_string();
         }
+    }
+
+    fn ensure_review_tools_are_readonly(
+        agent_id: &str,
+        tools: &[String],
+        readonly_tools: &[String],
+    ) -> BitFunResult<()> {
+        let readonly_tools_set: std::collections::HashSet<&str> =
+            readonly_tools.iter().map(|s| s.as_str()).collect();
+        let writable_tools: Vec<&str> = tools
+            .iter()
+            .map(String::as_str)
+            .filter(|tool| !readonly_tools_set.contains(tool))
+            .collect();
+
+        if writable_tools.is_empty() {
+            return Ok(());
+        }
+
+        Err(BitFunError::agent(format!(
+            "Review Sub-Agent '{}' can only use read-only tools; remove writable tools: {}",
+            agent_id,
+            writable_tools.join(", ")
+        )))
     }
 
     /// clear all custom subagents (project/user source), only keep built-in subagents. called when closing workspace.
@@ -651,22 +750,35 @@ impl AgentRegistry {
 
     /// get custom subagent configuration (used for updating configuration)
     /// only custom subagent is valid, return clone of CustomSubagentConfig
-    pub fn get_custom_subagent_config(&self, agent_id: &str) -> Option<CustomSubagentConfig> {
+    pub fn get_custom_subagent_config(
+        &self,
+        agent_id: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<CustomSubagentConfig> {
         if let Some(entry) = self.read_agents().get(agent_id) {
             if entry.category == AgentCategory::SubAgent {
                 return entry.custom_config.clone();
             }
         }
 
-        for entries in self.read_project_subagents().values() {
-            if let Some(entry) = entries.get(agent_id) {
-                if entry.category == AgentCategory::SubAgent {
-                    return entry.custom_config.clone();
-                }
-            }
-        }
+        workspace_root
+            .and_then(|root| self.read_project_subagents().get(root).cloned())
+            .and_then(|entries| entries.get(agent_id).cloned())
+            .and_then(|entry| {
+                (entry.category == AgentCategory::SubAgent)
+                    .then(|| entry.custom_config)
+                    .flatten()
+            })
+    }
 
-        None
+    pub fn has_project_custom_subagent(&self, agent_id: &str) -> bool {
+        self.read_project_subagents().values().any(|entries| {
+            entries.get(agent_id).is_some_and(|entry| {
+                entry.category == AgentCategory::SubAgent
+                    && entry.subagent_source == Some(SubAgentSource::Project)
+                    && entry.custom_config.is_some()
+            })
+        })
     }
 
     /// update custom subagent configuration and save to file
@@ -676,18 +788,40 @@ impl AgentRegistry {
         agent_id: &str,
         enabled: Option<bool>,
         model: Option<String>,
+        workspace_root: Option<&Path>,
     ) -> BitFunResult<()> {
         let mut map = self.write_agents();
-        let mut project_maps = self.write_project_subagents();
-        let entry = if let Some(entry) = map.get_mut(agent_id) {
-            entry
-        } else {
-            project_maps
-                .values_mut()
-                .find_map(|entries| entries.get_mut(agent_id))
-                .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?
-        };
+        if let Some(entry) = map.get_mut(agent_id) {
+            return Self::update_custom_entry_config(agent_id, entry, enabled, model);
+        }
+        drop(map);
 
+        let workspace_root = workspace_root.ok_or_else(|| {
+            BitFunError::agent(format!(
+                "workspace_path is required to update project subagent '{}'",
+                agent_id
+            ))
+        })?;
+        let mut project_maps = self.write_project_subagents();
+        let entries = project_maps.get_mut(workspace_root).ok_or_else(|| {
+            BitFunError::agent(format!(
+                "Project subagents are not loaded for workspace: {}",
+                workspace_root.display()
+            ))
+        })?;
+        let entry = entries
+            .get_mut(agent_id)
+            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
+
+        Self::update_custom_entry_config(agent_id, entry, enabled, model)
+    }
+
+    fn update_custom_entry_config(
+        agent_id: &str,
+        entry: &mut AgentEntry,
+        enabled: Option<bool>,
+        model: Option<String>,
+    ) -> BitFunResult<()> {
         if entry.category != AgentCategory::SubAgent {
             return Err(BitFunError::agent(format!(
                 "Agent '{}' is not a subagent",
@@ -781,6 +915,7 @@ impl AgentRegistry {
             prompt: custom.prompt.clone(),
             tools: custom.tools.clone(),
             readonly: custom.readonly,
+            review: custom.review,
             enabled,
             model,
             path: custom.path.clone(),
@@ -797,6 +932,7 @@ impl AgentRegistry {
         prompt: String,
         tools: Option<Vec<String>>,
         readonly: Option<bool>,
+        review: Option<bool>,
     ) -> BitFunResult<()> {
         if let Some(root) = workspace_root {
             self.load_custom_subagents(root).await;
@@ -833,21 +969,32 @@ impl AgentRegistry {
                 "Grep".to_string(),
             ]
         });
+        let review = review.unwrap_or(old.review);
+        let valid_tools = get_all_registered_tool_names().await;
+        let readonly_tools = get_readonly_registered_tool_names().await;
+        if review {
+            Self::ensure_review_tools_are_readonly(agent_id, &tools, &readonly_tools)?;
+        }
         let mut new_subagent = CustomSubagent::new(
             old.name.clone(),
             description,
             tools,
             prompt,
-            readonly.unwrap_or(old.readonly),
+            if review { true } else { readonly.unwrap_or(old.readonly) },
             old.path.clone(),
             old.kind,
         );
+        new_subagent.review = review;
         new_subagent.enabled = old.enabled;
         new_subagent.model = old.model.clone();
 
-        let valid_tools = get_all_registered_tool_names().await;
         let valid_models = Self::get_valid_model_ids().await;
-        Self::validate_custom_subagent(&mut new_subagent, &valid_tools, &valid_models);
+        Self::validate_custom_subagent(
+            &mut new_subagent,
+            &valid_tools,
+            &readonly_tools,
+            &valid_models,
+        );
 
         new_subagent.save_to_file(None, None)?;
 
@@ -1014,10 +1161,10 @@ impl AgentRegistry {
                 }
                 // empty model, use default value
                 debug!(
-                    "[AgentRegistry] Custom subagent '{}' using default model: primary",
+                    "[AgentRegistry] Custom subagent '{}' using default model: fast",
                     agent_type
                 );
-                return Ok("primary".to_string());
+                return Ok("fast".to_string());
             }
         }
 
@@ -1068,7 +1215,71 @@ pub fn get_agent_registry() -> Arc<AgentRegistry> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_model_id_for_builtin_agent, merge_dynamic_mcp_tools};
+    use super::{
+        default_model_id_for_builtin_agent, merge_dynamic_mcp_tools, AgentCategory, AgentEntry,
+        AgentRegistry, CustomSubagentConfig, SubAgentSource,
+    };
+    use crate::agentic::agents::Agent;
+    use async_trait::async_trait;
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+
+    struct TestAgent {
+        id: String,
+    }
+
+    #[async_trait]
+    impl Agent for TestAgent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn id(&self) -> &str {
+            &self.id
+        }
+
+        fn name(&self) -> &str {
+            &self.id
+        }
+
+        fn description(&self) -> &str {
+            "Test subagent"
+        }
+
+        fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
+            "test_agent"
+        }
+
+        fn default_tools(&self) -> Vec<String> {
+            vec!["Read".to_string()]
+        }
+    }
+
+    fn test_project_entry(id: &str, enabled: bool) -> AgentEntry {
+        AgentEntry {
+            category: AgentCategory::SubAgent,
+            subagent_source: Some(SubAgentSource::Project),
+            agent: Arc::new(TestAgent { id: id.to_string() }),
+            custom_config: Some(CustomSubagentConfig {
+                enabled,
+                model: "fast".to_string(),
+            }),
+        }
+    }
+
+    fn insert_project_subagent(
+        registry: &AgentRegistry,
+        workspace: &Path,
+        id: &str,
+        enabled: bool,
+    ) {
+        let mut entries = HashMap::new();
+        entries.insert(id.to_string(), test_project_entry(id, enabled));
+        registry
+            .write_project_subagents()
+            .insert(workspace.to_path_buf(), entries);
+    }
 
     #[test]
     fn top_level_modes_default_to_auto() {
@@ -1085,10 +1296,55 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn computer_use_is_builtin_subagent_not_mode() {
+        let registry = AgentRegistry::new();
+        let modes = registry.get_modes_info().await;
+        assert!(
+            !modes.iter().any(|agent| agent.id == "ComputerUse"),
+            "ComputerUse should be delegated through Task as a built-in sub-agent, not exposed as a top-level mode"
+        );
+
+        let subagents = registry.get_subagents_info(None).await;
+        let computer_use = subagents
+            .iter()
+            .find(|agent| agent.id == "ComputerUse")
+            .expect("ComputerUse should be registered as a built-in sub-agent");
+        assert!(computer_use
+            .default_tools
+            .contains(&"ControlHub".to_string()));
+        assert!(computer_use
+            .default_tools
+            .contains(&"ComputerUse".to_string()));
+    }
+
     #[test]
-    fn non_mode_agents_default_to_primary() {
-        assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
-        assert_eq!(default_model_id_for_builtin_agent("CodeReview"), "primary");
+    fn non_deep_review_builtin_subagents_default_to_primary() {
+        for agent_type in ["Explore", "FileFinder", "CodeReview", "GenerateDoc", "Init"] {
+            assert_eq!(
+                default_model_id_for_builtin_agent(agent_type),
+                "primary",
+                "{agent_type} should default to the primary model slot"
+            );
+        }
+    }
+
+    #[test]
+    fn deep_review_family_defaults_to_fast() {
+        for agent_type in [
+            "DeepReview",
+            "ReviewBusinessLogic",
+            "ReviewPerformance",
+            "ReviewSecurity",
+            "ReviewJudge",
+            "ReviewFixer",
+        ] {
+            assert_eq!(
+                default_model_id_for_builtin_agent(agent_type),
+                "fast",
+                "{agent_type} should stay on the fast model slot"
+            );
+        }
     }
 
     #[test]
@@ -1112,5 +1368,36 @@ mod tests {
                 "mcp__github__list_issues".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn project_subagent_config_lookup_is_workspace_scoped() {
+        let registry = AgentRegistry::new();
+        let workspace_a = PathBuf::from("D:/workspace/project-a");
+        let workspace_b = PathBuf::from("D:/workspace/project-b");
+        insert_project_subagent(&registry, &workspace_a, "SharedReviewer", false);
+        insert_project_subagent(&registry, &workspace_b, "SharedReviewer", true);
+
+        assert_eq!(
+            registry
+                .get_custom_subagent_config("SharedReviewer", Some(&workspace_a))
+                .expect("workspace A config")
+                .enabled,
+            false
+        );
+        assert_eq!(
+            registry
+                .get_custom_subagent_config("SharedReviewer", Some(&workspace_b))
+                .expect("workspace B config")
+                .enabled,
+            true
+        );
+        assert!(
+            registry
+                .get_custom_subagent_config("SharedReviewer", None)
+                .is_none(),
+            "unscoped lookup must not pick an arbitrary project subagent"
+        );
+        assert!(registry.has_project_custom_subagent("SharedReviewer"));
     }
 }

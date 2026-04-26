@@ -20,6 +20,7 @@ import {
   type LucideProps,
 } from 'lucide-react';
 import type React from 'react';
+import type { CapabilityCategory } from './agentsStore';
 
 export type AgentIconKey =
   | 'code2' | 'eye' | 'flask' | 'bug' | 'filetext'
@@ -43,11 +44,11 @@ export const AGENT_ICON_MAP: Record<AgentIconKey, React.FC<LucideProps>> = {
   cpu: Cpu,
 };
 
-export const CAPABILITY_ACCENT: Record<string, string> = {
-  编码: '#60a5fa',
-  文档: '#6eb88c',
-  分析: '#8b5cf6',
-  测试: '#c9944d',
-  创意: '#e879a0',
-  运维: '#5ea3a3',
+export const CAPABILITY_ACCENT: Record<CapabilityCategory, string> = {
+  coding: '#60a5fa',
+  docs: '#6eb88c',
+  analysis: '#8b5cf6',
+  testing: '#c9944d',
+  creative: '#e879a0',
+  ops: '#5ea3a3',
 };

@@ -6,6 +6,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { createLogger } from '@/shared/utils/logger';
+import { measureAsync } from '@/shared/utils/timing';
 
 const log = createLogger('LspExtensionRegistry');
 
@@ -55,10 +56,11 @@ class LspExtensionRegistry {
   }
 
   private async _doInitialize(): Promise<void> {
-    const startTime = performance.now();
-
     try {
-      const response = await invoke<SupportedExtensionsResponse>('lsp_get_supported_extensions');
+      const result = await measureAsync(() =>
+        invoke<SupportedExtensionsResponse>('lsp_get_supported_extensions')
+      );
+      const response = result.value;
       
       this.extensionToLanguage.clear();
       this.supportedLanguages.clear();
@@ -73,10 +75,8 @@ class LspExtensionRegistry {
       }
 
       this.initialized = true;
-      const duration = (performance.now() - startTime).toFixed(2);
-      
       log.debug('Initialized successfully', { 
-        duration: `${duration}ms`,
+        durationMs: result.durationMs,
         extensionCount: this.extensionToLanguage.size,
         languageCount: this.supportedLanguages.size
       });

@@ -1,6 +1,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -188,6 +189,17 @@ Important notes:
             }
         };
 
+        if let Some(ctx) = context {
+            if let Err(err) = ctx.enforce_path_operation(ToolPathOperation::Delete, &resolved) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(err.to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+        }
+
         if !resolved.uses_remote_workspace_backend() {
             let local_path = Path::new(&resolved.resolved_path);
             if !local_path.exists() {
@@ -281,6 +293,7 @@ Important notes:
             .unwrap_or(false);
 
         let resolved = context.resolve_tool_path(path_str)?;
+        context.enforce_path_operation(ToolPathOperation::Delete, &resolved)?;
 
         // Remote workspace path: delete via shell command
         if resolved.uses_remote_workspace_backend() {

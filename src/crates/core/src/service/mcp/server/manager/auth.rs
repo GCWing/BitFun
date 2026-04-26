@@ -13,6 +13,7 @@ use tokio::sync::{oneshot, Mutex};
 use tokio::time::{timeout, Duration};
 
 use crate::service::config::app_language::get_app_language_code;
+use crate::service::i18n::LocaleId;
 use crate::service::mcp::auth::{
     clear_stored_oauth_credentials, map_auth_error, prepare_remote_oauth_authorization,
     MCPRemoteOAuthSessionSnapshot, MCPRemoteOAuthStatus,
@@ -35,6 +36,7 @@ struct OAuthCallbackPayload {
 #[derive(Clone, Copy)]
 enum OAuthCallbackLocale {
     ZhCN,
+    ZhTW,
     EnUS,
 }
 
@@ -60,10 +62,10 @@ struct OAuthCallbackPageCopy {
 
 impl OAuthCallbackLocale {
     fn from_language_code(value: &str) -> Option<Self> {
-        match value {
-            "zh-CN" | "zh" => Some(Self::ZhCN),
-            "en-US" | "en" => Some(Self::EnUS),
-            _ => None,
+        match LocaleId::from_str(value)? {
+            LocaleId::ZhCN => Some(Self::ZhCN),
+            LocaleId::ZhTW => Some(Self::ZhTW),
+            LocaleId::EnUS => Some(Self::EnUS),
         }
     }
 
@@ -98,6 +100,28 @@ impl OAuthCallbackLocale {
                     "请返回 BitFun，并根据下面的提供方返回信息检查问题后重新发起 OAuth。",
                 error_detail_title: "提供方返回",
                 close_hint: "处理完成后，这个页面可以直接关闭。",
+            },
+            Self::ZhTW => OAuthCallbackPageCopy {
+                html_lang: "zh-TW",
+                page_title: "BitFun OAuth 回調",
+                brand_label: "BitFun Desktop",
+                badge_success: "已收到授權",
+                badge_warning: "回調參數不完整",
+                badge_error: "授權失敗",
+                success_title: "BitFun 已收到 OAuth 回調",
+                success_message: "可以返回 BitFun。應用正在交換授權碼並重新連接 MCP 服務器。",
+                success_detail_title: "接下來會發生什麼",
+                success_detail_body:
+                    "這個頁面可以直接關閉。如果 BitFun 沒有自動完成重連，請回到 MCP 設置頁後重試 OAuth。",
+                warning_title: "BitFun 收到的 OAuth 回調缺少必要參數",
+                warning_message:
+                    "OAuth 提供方已跳轉回來，但缺少必須的參數。請返回 BitFun 重新發起登錄流程。",
+                warning_detail_title: "缺少的參數",
+                error_title: "BitFun 未能完成 OAuth 授權",
+                error_message:
+                    "請返回 BitFun，並根據下面的提供方返回信息檢查問題後重新發起 OAuth。",
+                error_detail_title: "提供方返回",
+                close_hint: "處理完成後，這個頁面可以直接關閉。",
             },
             Self::EnUS => OAuthCallbackPageCopy {
                 html_lang: "en-US",
@@ -157,6 +181,7 @@ fn render_oauth_callback_page(
                 .as_deref()
                 .unwrap_or(match locale {
                     OAuthCallbackLocale::ZhCN => "OAuth 提供方拒绝了这次授权请求。",
+                    OAuthCallbackLocale::ZhTW => "OAuth 提供方拒絕了這次授權請求。",
                     OAuthCallbackLocale::EnUS => "The provider rejected the authorization request.",
                 });
             (
@@ -178,6 +203,7 @@ fn render_oauth_callback_page(
                 copy.success_detail_body.to_string(),
                 match locale {
                     OAuthCallbackLocale::ZhCN => "完成",
+                    OAuthCallbackLocale::ZhTW => "完成",
                     OAuthCallbackLocale::EnUS => "Done",
                 },
             )

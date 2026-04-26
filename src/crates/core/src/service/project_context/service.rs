@@ -284,6 +284,8 @@ impl ProjectContextService {
                 Some(workspace.to_string_lossy().into_owned()),
                 None,
                 Some(&cancel_token),
+                None,
+                None,
             )
             .await;
 

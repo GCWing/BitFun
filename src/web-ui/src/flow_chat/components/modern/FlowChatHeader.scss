@@ -261,6 +261,19 @@
     justify-content: center;
     gap: $size-gap-2;
     overflow: hidden;
+    cursor: pointer;
+    border-radius: $size-radius-base;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+    }
+
+    &:focus-visible {
+      outline: none;
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+      box-shadow: 0 0 0 1.5px var(--border-strong);
+    }
   }
 
   &__turn-badge {
@@ -306,12 +319,12 @@
     flex-shrink: 0;
     min-width: 0;
     max-width: 140px;
-    height: 22px;
+    height: 24px;
     padding: 0 6px;
     border-radius: $size-radius-sm;
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
-    line-height: 1;
+    line-height: 1.4;
     white-space: nowrap;
 
     svg {

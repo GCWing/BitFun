@@ -67,6 +67,8 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: $size-gap-2;
   }
 }
 
@@ -91,13 +93,13 @@
   display: flex;
   align-items: center;
   gap: $size-gap-2;
-  margin-left: auto;
   flex-shrink: 0;
 }
 
 .th-create-panel__level-group {
   display: inline-flex;
   gap: $size-gap-2;
+  margin-right: auto;
 }
 
 .th-create-panel__level-btn {

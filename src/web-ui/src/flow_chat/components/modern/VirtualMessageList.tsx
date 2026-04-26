@@ -16,6 +16,10 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useActiveSessionState } from '../../hooks/useActiveSessionState';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
 import { ScrollToLatestBar } from '../ScrollToLatestBar';
+import { ScrollToTurnHeaderButton } from '../ScrollToTurnHeaderButton';
+import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
+import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';
+import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { ProcessingIndicator } from './ProcessingIndicator';
 import { ScrollAnchor } from './ScrollAnchor';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
@@ -1671,6 +1675,15 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         turnId: latestTurnId,
         sawPositiveFloor: false,
       };
+
+      const hasUnread = activeSession?.hasUnreadCompletion;
+      const isFinished = !isStreamingOutput;
+      if (hasUnread && isFinished && virtuosoRef.current) {
+        requestAnimationFrame(() => {
+          virtuosoRef.current?.scrollTo({ top: 999999999, behavior: 'auto' });
+        });
+      }
+
       return;
     }
 
@@ -1693,8 +1706,10 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     armFollowOutputForNewTurn();
   }, [
     activeSession?.sessionId,
+    activeSession?.hasUnreadCompletion,
     armFollowOutputForNewTurn,
     cancelPendingAutoFollowArm,
+    isStreamingOutput,
     latestTurnId,
   ]);
 
@@ -1804,6 +1819,27 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     return requestTurnPinToTop(turnId, options);
   }, [clearPinReservationForUserNavigation, exitFollowOutput, latestTurnId, requestTurnPinToTop]);
+
+  const visibleTurnInfo = useModernFlowChatStore(state => state.visibleTurnInfo);
+
+  const handleJumpToCurrentTurn = useCallback(() => {
+    const currentTurnId = visibleTurnInfo?.turnId;
+    if (!currentTurnId) return;
+    pinTurnToTop(currentTurnId, { behavior: 'smooth', pinMode: 'transient' });
+  }, [visibleTurnInfo?.turnId, pinTurnToTop]);
+
+  const { shouldShowButton: shouldShowTurnHeaderButton, handleClick: handleTurnHeaderClick } = useScrollToTurnHeader({
+    scrollerRef: scrollerElementRef,
+    currentTurnId: visibleTurnInfo?.turnId ?? null,
+    currentTurnIndex: visibleTurnInfo?.turnIndex ?? 0,
+    visibleTurnInfo,
+    onJumpToCurrentTurn: handleJumpToCurrentTurn,
+  });
+
+  const { visibleTaskInfo, scrollToTask } = useVisibleTaskInfo({
+    scrollerRef: scrollerElementRef,
+    virtualItems,
+  });
 
   const scrollToPhysicalBottomAndClearPin = useCallback(() => {
     if (virtuosoRef.current && virtualItems.length > 0) {
@@ -1983,6 +2019,18 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
           pinTurnToTop(turnId, { behavior: 'smooth' });
         }}
         scrollerRef={scrollerElementRef}
+      />
+
+      <ScrollToTurnHeaderButton
+        visible={shouldShowTurnHeaderButton}
+        onClick={handleTurnHeaderClick}
+        turnLabel={visibleTurnInfo ? `Turn ${visibleTurnInfo.turnIndex}` : undefined}
+      />
+
+      <StickyTaskIndicator
+        visible={!!visibleTaskInfo}
+        taskInfo={visibleTaskInfo}
+        onClick={scrollToTask}
       />
 
       <ScrollToLatestBar

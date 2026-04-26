@@ -34,9 +34,11 @@ export {
   DEFAULT_NAMESPACE,
   ALL_NAMESPACES,
   builtinLocales,
+  getLocaleFallbackChain,
   getLocaleMetadata,
   isLocaleSupported,
   getSupportedLocaleIds,
+  resolveLocaleId,
 } from './presets';
 
 // Types

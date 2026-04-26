@@ -101,12 +101,161 @@
     }
 
     &:disabled {
-      opacity: 0.5;
+      opacity: 0.68;
       cursor: not-allowed;
+    }
+
+    &--glint {
+      position: relative;
+      overflow: hidden;
+      color: var(--color-text-primary);
+      background:
+        linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--color-accent-500, #60a5fa) 18%, transparent),
+          color-mix(in srgb, var(--color-accent-300, #a78bfa) 10%, transparent)
+        );
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--color-accent-500, #60a5fa) 38%, transparent),
+        0 0 18px color-mix(in srgb, var(--color-accent-500, #60a5fa) 24%, transparent);
+      animation: session-files-review-ready-pulse 5.2s ease-in-out 1;
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: -55% auto -55% -75%;
+        width: 70%;
+        transform: skewX(-22deg);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          color-mix(in srgb, var(--color-accent-100, #ede9fe) 74%, transparent),
+          color-mix(in srgb, var(--color-accent-300, #a78bfa) 56%, transparent),
+          transparent
+        );
+        animation: session-files-review-glint 1.35s cubic-bezier(0.16, 1, 0.3, 1) 3;
+        pointer-events: none;
+      }
+    }
+
+    &--deep {
+      color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 90%, var(--color-text-primary));
+
+      &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 12%, transparent);
+        color: var(--color-text-primary);
+      }
+    }
+
+    &--running {
+      position: relative;
+      overflow: hidden;
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-medium) 72%, transparent);
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          color-mix(in srgb, var(--color-accent-500, #60a5fa) 18%, transparent),
+          transparent
+        );
+        transform: translateX(-100%);
+        animation: session-files-review-running-sheen 1.8s ease-in-out infinite;
+        pointer-events: none;
+      }
     }
   }
 
+  &__review-menu {
+    position: relative;
+    display: inline-flex;
+  }
+
+  &__review-menu-chevron {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__review-menu-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 110;
+    min-width: 150px;
+    padding: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(20px) saturate(1.3);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3);
+    animation: session-files-badge-popover-in 0.2s $easing-standard;
+  }
+
+  &__review-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+    border: none;
+    border-radius: calc($size-radius-base - 2px);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-primary);
+    }
+
+    &--deep {
+      color: var(--color-text-primary);
+      font-weight: var(--font-weight-normal, 400);
+
+      &:hover {
+        background: var(--element-bg-soft);
+      }
+
+      .session-files-badge__review-icon {
+        color: var(--color-purple-500, #8b5cf6);
+      }
+    }
+  }
+
+  &__review-icon {
+    flex-shrink: 0;
+
+    &--standard {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__review-main-icon,
+  &__review-running-icon {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  &__review-running-icon {
+    animation: session-files-review-spin 1s linear infinite;
+    color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 72%, var(--color-text-primary));
+  }
+
   &__review-text {
+    position: relative;
+    z-index: 1;
     font-size: var(--flowchat-font-size-xs);
     font-weight: $font-weight-normal;
     line-height: 1;
@@ -282,5 +431,75 @@
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-error);
     font-style: italic;
+  }
+}
+
+@keyframes session-files-review-glint {
+  from {
+    left: -75%;
+  }
+  to {
+    left: 135%;
+  }
+}
+
+@keyframes session-files-review-ready-pulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent-500, #60a5fa) 30%, transparent),
+      0 0 0 color-mix(in srgb, var(--color-accent-500, #60a5fa) 0%, transparent);
+  }
+  12%,
+  52% {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent-500, #60a5fa) 52%, transparent),
+      0 0 20px color-mix(in srgb, var(--color-accent-500, #60a5fa) 34%, transparent);
+  }
+  28%,
+  76% {
+    transform: translateY(0);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-accent-300, #a78bfa) 46%, transparent),
+      0 0 14px color-mix(in srgb, var(--color-accent-500, #60a5fa) 22%, transparent);
+  }
+}
+
+@keyframes session-files-review-running-sheen {
+  0% {
+    transform: translateX(-105%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  65%,
+  100% {
+    transform: translateX(105%);
+    opacity: 0;
+  }
+}
+
+@keyframes session-files-review-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-files-badge__review-btn--glint {
+    animation: none;
+  }
+
+  .session-files-badge__review-btn--glint::after {
+    animation: none;
+    display: none;
+  }
+
+  .session-files-badge__review-btn--running::before,
+  .session-files-badge__review-running-icon {
+    animation: none;
   }
 }

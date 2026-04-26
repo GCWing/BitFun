@@ -1,7 +1,7 @@
 //! I18n API
 
 use crate::api::app_state::AppState;
-use bitfun_core::service::i18n::{get_global_i18n_service, LocaleId};
+use bitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -37,7 +37,10 @@ pub async fn i18n_get_current_language(state: State<'_, AppState>) -> Result<Str
         .get_config::<String>(Some("app.language"))
         .await
     {
-        Ok(language) => Ok(language),
+        Ok(language) => Ok(LocaleId::from_str(&language)
+            .unwrap_or_default()
+            .as_str()
+            .to_string()),
         Err(_) => Ok("zh-CN".to_string()),
     }
 }
@@ -48,30 +51,32 @@ pub async fn i18n_set_language(
     _app: tauri::AppHandle,
     request: SetLanguageRequest,
 ) -> Result<String, String> {
-    let supported = ["zh-CN", "en-US"];
-    if !supported.contains(&request.language.as_str()) {
+    let Some(locale_id) = LocaleId::from_str(&request.language) else {
         return Err(format!("Unsupported language: {}", request.language));
-    }
+    };
+    let language = locale_id.as_str();
 
     let config_service = &state.config_service;
 
-    match config_service
-        .set_config("app.language", &request.language)
-        .await
-    {
+    match config_service.set_config("app.language", language).await {
         Ok(_) => {
-            info!("Language set to: {}", request.language);
+            info!("Language set to: {}", language);
 
             // Sync the in-memory I18nService so bot/remote-connect responses
             // use the newly selected language without requiring an app restart.
-            if let Some(locale_id) = LocaleId::from_str(&request.language) {
-                if let Some(i18n_service) = get_global_i18n_service().await {
-                    if let Err(e) = i18n_service.set_locale(locale_id).await {
-                        warn!(
-                            "Failed to sync I18nService locale after language change: language={}, error={}",
-                            request.language, e
-                        );
-                    }
+            match sync_global_i18n_service_locale(locale_id).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    warn!(
+                        "Global I18nService not initialized after language change: language={}",
+                        language
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to sync I18nService locale after language change: language={}, error={}",
+                        language, e
+                    );
                 }
             }
 
@@ -85,19 +90,13 @@ pub async fn i18n_set_language(
                 };
                 let edit_mode = *state.macos_edit_menu_mode.read().await;
                 let _ = crate::macos_menubar::set_macos_menubar_with_mode(
-                    &_app,
-                    &request.language,
-                    mode,
-                    edit_mode,
+                    &_app, language, mode, edit_mode,
                 );
             }
-            Ok(format!("Language switched to: {}", request.language))
+            Ok(format!("Language switched to: {}", language))
         }
         Err(e) => {
-            error!(
-                "Failed to set language: language={}, error={}",
-                request.language, e
-            );
+            error!("Failed to set language: language={}, error={}", language, e);
             Err(format!("Failed to set language: {}", e))
         }
     }
@@ -105,24 +104,16 @@ pub async fn i18n_set_language(
 
 #[tauri::command]
 pub async fn i18n_get_supported_languages() -> Result<Vec<LocaleMetadataResponse>, String> {
-    let locales = vec![
-        LocaleMetadataResponse {
-            id: "zh-CN".to_string(),
-            name: "简体中文".to_string(),
-            english_name: "Simplified Chinese".to_string(),
-            native_name: "简体中文".to_string(),
-            rtl: false,
-        },
-        LocaleMetadataResponse {
-            id: "en-US".to_string(),
-            name: "English".to_string(),
-            english_name: "English (US)".to_string(),
-            native_name: "English".to_string(),
-            rtl: false,
-        },
-    ];
-
-    Ok(locales)
+    Ok(LocaleMetadata::all()
+        .into_iter()
+        .map(|locale| LocaleMetadataResponse {
+            id: locale.id.as_str().to_string(),
+            name: locale.name,
+            english_name: locale.english_name,
+            native_name: locale.native_name,
+            rtl: locale.rtl,
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -133,7 +124,10 @@ pub async fn i18n_get_config(state: State<'_, AppState>) -> Result<Value, String
         .get_config::<String>(Some("app.language"))
         .await
     {
-        Ok(language) => language,
+        Ok(language) => LocaleId::from_str(&language)
+            .unwrap_or_default()
+            .as_str()
+            .to_string(),
         Err(_) => "zh-CN".to_string(),
     };
 
@@ -149,8 +143,33 @@ pub async fn i18n_set_config(state: State<'_, AppState>, config: Value) -> Resul
     let config_service = &state.config_service;
 
     if let Some(language) = config.get("currentLanguage").and_then(|v| v.as_str()) {
-        match config_service.set_config("app.language", language).await {
-            Ok(_) => Ok("i18n config saved".to_string()),
+        let Some(locale_id) = LocaleId::from_str(language) else {
+            return Err(format!("Unsupported language: {}", language));
+        };
+
+        match config_service
+            .set_config("app.language", locale_id.as_str())
+            .await
+        {
+            Ok(_) => {
+                match sync_global_i18n_service_locale(locale_id).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        warn!(
+                            "Global I18nService not initialized after i18n config save: language={}",
+                            locale_id.as_str()
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to sync I18nService locale after i18n config save: language={}, error={}",
+                            locale_id.as_str(),
+                            e
+                        );
+                    }
+                }
+                Ok("i18n config saved".to_string())
+            }
             Err(e) => {
                 error!(
                     "Failed to save i18n config: language={}, error={}",

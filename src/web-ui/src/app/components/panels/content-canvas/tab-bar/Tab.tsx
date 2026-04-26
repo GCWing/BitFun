@@ -200,7 +200,7 @@ export const Tab: React.FC<TabProps> = ({
 
         {/* Pop out button */}
         {showCloseButton && onPopOut && (
-          <Tooltip content={t('tabs.popOut', 'Pop out as scene')}>
+          <Tooltip content={t('tabs.popOut')}>
             <button
               className="canvas-tab__popout-btn"
               onClick={handlePopOutClick}

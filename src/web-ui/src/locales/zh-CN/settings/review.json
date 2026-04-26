@@ -1,0 +1,92 @@
+{
+  "title": "审核",
+  "subtitle": "配置深度审查及 /DeepReview 命令如何组织审核员、应用审核深度，并通过质量检查汇总结果。",
+  "loading": "正在加载审核设置...",
+  "overview": {
+    "title": "审核工作流",
+    "description": "深度审查会并行启动只读审核团队，再由质量检查员合并并校验最终报告。",
+    "badge": "深度审查",
+    "command": {
+      "title": "/DeepReview 入口",
+      "description": "聊天会话启动完整代码审核团队时，会使用这里的策略、模型与执行设置。"
+    },
+    "reviewers": {
+      "title": "审核员阵容",
+      "description": "固定核心角色覆盖业务逻辑、性能、安全和最终质量检查；符合条件的只读 Sub-Agent 可以作为专家加入。"
+    },
+    "qualityGate": {
+      "title": "质量检查",
+      "description": "超时、文件拆分、审核深度和模型选择会共同决定每个审核员在汇总前能完成的工作量。"
+    }
+  },
+  "strategy": {
+    "title": "审核策略",
+    "description": "选择整个代码审核团队的默认审核深度。",
+    "quick": {
+      "label": "快速",
+      "summary": "快速筛查高置信问题。"
+    },
+    "normal": {
+      "label": "标准",
+      "summary": "适合日常代码审核的均衡深度。"
+    },
+    "deep": {
+      "label": "深度",
+      "summary": "适合高风险变更的多轮深入审核。"
+    },
+    "inherit": "继承团队（{{level}}）"
+  },
+  "execution": {
+    "title": "执行策略",
+    "description": "控制审核员超时，以及大范围审核如何拆分为并行审核实例。",
+    "reviewerTimeout": "审核员超时",
+    "reviewerTimeoutDesc": "每个审核员的超时时间，单位秒。设为 0 表示不限制。",
+    "judgeTimeout": "质量检查超时",
+    "judgeTimeoutDesc": "质量检查员的超时时间，单位秒。设为 0 表示不限制。",
+    "fileSplitThreshold": "文件拆分阈值",
+    "fileSplitThresholdDesc": "目标文件数超过该值时，同一审核角色会拆分为多个实例。",
+    "maxSameRoleInstances": "同角色最大实例数",
+    "maxSameRoleInstancesDesc": "单个审核角色允许并行启动的最大实例数。"
+  },
+  "members": {
+    "title": "审核员",
+    "description": "调整每个审核员的策略和模型。核心角色会保持锁定。",
+    "count": "{{count}} 个成员",
+    "locked": "锁定",
+    "extra": "额外",
+    "remove": "移除",
+    "businessLogic": {
+      "name": "业务逻辑审核员",
+      "role": "业务逻辑审核员"
+    },
+    "performance": {
+      "name": "性能审核员",
+      "role": "性能审核员"
+    },
+    "security": {
+      "name": "安全审核员",
+      "role": "安全审核员"
+    },
+    "judge": {
+      "name": "审核质量检查员",
+      "role": "审核质量检查员"
+    }
+  },
+  "extra": {
+    "title": "额外审核 Sub-Agent",
+    "description": "只有启用审核能力且保持只读的 Sub-Agent 可以加入审核团队。",
+    "role": "额外专业审核员",
+    "candidate": "候选项",
+    "hint": "创建或编辑 Sub-Agent，启用审核能力并保持只读后会出现在这里。",
+    "placeholder": "选择审核 Sub-Agent",
+    "add": "加入团队",
+    "empty": "当前没有可加入的审核 Sub-Agent。"
+  },
+  "messages": {
+    "loadFailed": "加载审核设置失败。",
+    "saveFailed": "保存审核设置失败。",
+    "saved": "审核设置已保存。",
+    "memberAdded": "已添加额外审核员。",
+    "memberRemoved": "已移除额外审核员。"
+  }
+}

@@ -1,12 +1,12 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, TimedStreamItem};
+use super::{TimedStreamItem, next_stream_item};
 use crate::stream::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
     MessageStart, Usage,
 };
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -72,6 +72,14 @@ pub async fn handle_anthropic_stream(
             let _ = tx.send(format!("[{}] {}", event_type, data));
         }
 
+        if let Some(error_msg) = format_provider_error_from_sse_message(&event_type, &data) {
+            stats.increment("error:provider_message");
+            stats.log_summary("provider_error_message_received");
+            error!("{}", error_msg);
+            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            return;
+        }
+
         match event_type.as_str() {
             "message_start" => {
                 let message_start: MessageStart = match serde_json::from_str(&data) {
@@ -97,9 +105,14 @@ pub async fn handle_anthropic_stream(
                         continue;
                     }
                 };
+                // Emit for Thinking and ToolUse content_block_start events.
+                // Note: For Thinking blocks, the Anthropic protocol sends signature=null
+                // in content_block_start and the actual signature in a subsequent
+                // signature_delta event. Both emit a UnifiedResponse; the downstream
+                // processor correctly overwrites the initial null signature.
                 if matches!(
                     content_block_start.content_block,
-                    ContentBlock::ToolUse { .. }
+                    ContentBlock::Thinking { .. } | ContentBlock::ToolUse { .. }
                 ) {
                     emit_normalized_response(
                         &mut inline_think_parser,
@@ -192,6 +205,38 @@ pub async fn handle_anthropic_stream(
     }
 }
 
+fn format_provider_error_from_sse_message(event_type: &str, data: &str) -> Option<String> {
+    if event_type != "message" {
+        return None;
+    }
+
+    let value: serde_json::Value = serde_json::from_str(data).ok()?;
+    let error = value.get("error")?.as_object()?;
+    let code = error
+        .get("code")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .or_else(|| error.get("code").map(|value| value.to_string()))?;
+    let message = error
+        .get("message")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Provider returned an error");
+    let request_id = value
+        .get("request_id")
+        .or_else(|| value.get("requestId"))
+        .and_then(|value| value.as_str());
+
+    let mut formatted = format!(
+        "Provider error: provider=anthropic_compatible, code={}, message={}",
+        code, message
+    );
+    if let Some(request_id) = request_id {
+        formatted.push_str(&format!(", request_id={}", request_id));
+    }
+
+    Some(formatted)
+}
+
 fn emit_normalized_response(
     inline_think_parser: &mut InlineThinkParser,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
@@ -206,5 +251,29 @@ fn emit_normalized_response(
         );
         stats.record_unified_response(&normalized_response);
         let _ = tx_event.send(Ok(normalized_response));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_provider_error_from_sse_message;
+
+    #[test]
+    fn extracts_glm_business_error_from_message_event() {
+        let raw = r#"{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"},"request_id":"20260425142416"}"#;
+
+        let formatted = format_provider_error_from_sse_message("message", raw).unwrap();
+
+        assert!(formatted.contains("Provider error"));
+        assert!(formatted.contains("code=1113"));
+        assert!(formatted.contains("余额不足或无可用资源包"));
+        assert!(formatted.contains("request_id=20260425142416"));
+    }
+
+    #[test]
+    fn ignores_regular_anthropic_delta_events() {
+        let raw = r#"{"type":"message_delta","delta":{"stop_reason":null}}"#;
+
+        assert!(format_provider_error_from_sse_message("message_delta", raw).is_none());
     }
 }

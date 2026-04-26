@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
+import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { Modal, Badge, Input } from '@/component-library';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import {
@@ -65,7 +66,16 @@ const RELAY_SERVER_README_URL = 'https://github.com/GCWing/BitFun/blob/main/src/
 const FEISHU_SETUP_GUIDE_URLS = {
   'zh-CN': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.zh-CN.md',
   'en-US': 'https://github.com/GCWing/BitFun/blob/main/docs/remote-connect/feishu-bot-setup.md',
-} as const;
+} as const satisfies Partial<Record<LocaleId, string>>;
+
+function pickLocalizedUrl(urls: Partial<Record<LocaleId, string>>, locale: LocaleId): string {
+  for (const localeId of getLocaleFallbackChain(locale, true)) {
+    const url = urls[localeId];
+    if (url) return url;
+  }
+
+  return urls['en-US'] ?? Object.values(urls)[0] ?? '';
+}
 
 const methodToNetworkTab = (method: string | null | undefined): NetworkTab | null => {
   if (!method) return null;
@@ -487,7 +497,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   }, []);
 
   const handleOpenFeishuGuide = useCallback(() => {
-    void systemAPI.openExternal(FEISHU_SETUP_GUIDE_URLS[currentLanguage]);
+    void systemAPI.openExternal(pickLocalizedUrl(FEISHU_SETUP_GUIDE_URLS, currentLanguage));
   }, [currentLanguage]);
 
   const renderInfoCard = (children: React.ReactNode) => (

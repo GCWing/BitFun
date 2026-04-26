@@ -112,13 +112,19 @@ fn canonicalize_best_effort(p: &Path) -> PathBuf {
 /// `/tmp` scope after both sides resolve symlinks.
 fn path_allowed(policy: &Value, target: &Path, mode: &str) -> bool {
     let key = if mode == "write" { "write" } else { "read" };
-    let scopes = match policy.get("fs").and_then(|v| v.get(key)).and_then(|v| v.as_array()) {
+    let scopes = match policy
+        .get("fs")
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_array())
+    {
         Some(a) => a,
         None => return false,
     };
     let resolved = canonicalize_best_effort(target);
     for s in scopes {
-        let Some(scope_str) = s.as_str() else { continue };
+        let Some(scope_str) = s.as_str() else {
+            continue;
+        };
         let scope_path = PathBuf::from(scope_str);
         let scope_canon = canonicalize_best_effort(&scope_path);
         if resolved.starts_with(&scope_canon) {
@@ -389,9 +395,7 @@ async fn dispatch_shell(
 
     let output = tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output())
         .await
-        .map_err(|_| {
-            BitFunError::service(format!("shell.exec timed out after {}ms", timeout_ms))
-        })?
+        .map_err(|_| BitFunError::service(format!("shell.exec timed out after {}ms", timeout_ms)))?
         .map_err(|e| BitFunError::service(format!("shell.exec spawn failed: {}", e)))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -452,8 +456,8 @@ async fn dispatch_net(policy: &Value, name: &str, params: &Value) -> BitFunResul
     if url.is_empty() {
         return Err(BitFunError::parse("missing url"));
     }
-    let parsed = reqwest::Url::parse(url)
-        .map_err(|e| BitFunError::parse(format!("invalid url: {}", e)))?;
+    let parsed =
+        reqwest::Url::parse(url).map_err(|e| BitFunError::parse(format!("invalid url: {}", e)))?;
     let host = parsed.host_str().unwrap_or("").to_string();
 
     let allow: Vec<String> = policy
@@ -480,8 +484,7 @@ async fn dispatch_net(policy: &Value, name: &str, params: &Value) -> BitFunResul
         .and_then(|v| v.as_str())
         .unwrap_or("GET");
     let client = reqwest::Client::new();
-    let req_method =
-        reqwest::Method::from_bytes(method.as_bytes()).unwrap_or(reqwest::Method::GET);
+    let req_method = reqwest::Method::from_bytes(method.as_bytes()).unwrap_or(reqwest::Method::GET);
     let mut req = client.request(req_method, url);
     if let Some(headers) = params.get("headers").and_then(|v| v.as_object()) {
         for (k, v) in headers {

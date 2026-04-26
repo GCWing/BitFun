@@ -67,10 +67,13 @@ export class ConfigAPI {
         shouldSkipRetry ? { retries: 0 } : undefined
       );
     } catch (error) {
-      
-      
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('not found') || errorMessage.includes('Config path')) {
+      const normalized = errorMessage.toLowerCase();
+      if (
+        normalized.includes('not found:') &&
+        normalized.includes('config path') &&
+        normalized.includes(`'${path}'`)
+      ) {
         return undefined;
       }
       throw createTauriCommandError('get_config', error, { path });

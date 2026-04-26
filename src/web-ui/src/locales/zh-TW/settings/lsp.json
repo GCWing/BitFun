@@ -1,0 +1,96 @@
+{
+  "title": "LSP 插件管理",
+  "subtitle": "管理語言服務器協議插件",
+  "section": {
+    "settings": {
+      "title": "基礎設置",
+      "description": "語言服務的運行參數配置。"
+    },
+    "plugins": {
+      "title": "語言插件",
+      "description": "管理已安裝的語言服務插件。"
+    }
+  },
+  "tabs": {
+    "plugins": "插件管理",
+    "settings": "設置",
+    "help": "幫助"
+  },
+  "settings": {
+    "autoStart": "工作區打開時自動啟動 LSP",
+    "autoStartDesc": "自動檢測項目類型並啟動對應的語言服務器，關閉後將在首次打開該類型文件時啟動",
+    "saveTooltip": "保存設置",
+    "cancelTooltip": "取消"
+  },
+  "help": {
+    "aboutLsp": {
+      "title": "關於 LSP",
+      "content": "Language Server Protocol（LSP）提供智能代碼補全、跳轉定義、查找引用等功能。安裝對應語言的 LSP 插件後，編輯器將自動提供智能支持。"
+    },
+    "pluginFormat": {
+      "title": "插件格式",
+      "content": "插件包格式為 .vcpkg 文件（ZIP 格式），包含 LSP 服務器二進制文件和配置信息，支持 Windows、macOS 和 Linux 平臺。"
+    },
+    "pluginPath": {
+      "title": "插件存儲路徑"
+    },
+    "morePlugins": {
+      "title": "需要更多插件？",
+      "content": "查看",
+      "link": "插件開發文檔",
+      "suffix": "瞭解如何開發和貢獻 LSP 插件。"
+    }
+  },
+  "pluginList": {
+    "loading": "正在加載插件...",
+    "retry": "重試",
+    "empty": {
+      "title": "還沒有安裝任何LSP插件",
+      "hint": "請點擊下方按鈕安裝插件以獲得語言支持"
+    },
+    "header": "已安裝的插件 ({{count}})",
+    "initTooltip": "初始化 LSP",
+    "installTooltip": "安裝插件",
+    "installButton": "安裝插件",
+    "installing": "正在安裝...",
+    "refreshTooltip": "刷新列表",
+    "confirmUninstall": "確定要卸載插件 {{pluginId}} 嗎？",
+    "uninstallSuccess": "插件卸載成功",
+    "uninstallFailed": "插件卸載失敗",
+    "uninstall": "卸載插件",
+    "details": {
+      "author": "作者",
+      "languages": "支持語言",
+      "capabilities": "功能",
+      "completion": "補全",
+      "hover": "懸停",
+      "definition": "跳轉",
+      "references": "引用",
+      "formatting": "格式化"
+    }
+  },
+  "fileDialog": {
+    "pluginPackage": "BitFun 插件包"
+  },
+  "editor": {
+    "goToDefinition": "轉到定義",
+    "findAllReferences": "查找所有引用",
+    "goToFile": "轉到 {{fileName}}"
+  },
+  "server": {
+    "starting": "啟動 {{language}} 語言服務器",
+    "startingMessage": "正在啟動服務器進程...",
+    "startFailed": "{{language}} 語言服務器啟動失敗",
+    "checkConfig": "請檢查配置",
+    "error": "{{language}} 語言服務器錯誤",
+    "languageService": "{{language}} 語言服務"
+  },
+  "messages": {
+    "settingsSaved": "設置已保存",
+    "saveSettingsFailed": "保存設置失敗",
+    "initSuccess": "LSP 系統初始化成功",
+    "initFailed": "初始化失敗",
+    "installSuccess": "插件 {{pluginId}} 安裝成功！",
+    "installFailed": "安裝失敗"
+  }
+}

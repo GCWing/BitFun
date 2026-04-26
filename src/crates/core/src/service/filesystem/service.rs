@@ -3,11 +3,15 @@ use crate::infrastructure::{
     FileOperationService, FileReadResult, FileSearchOutcome, FileSearchProgressSink,
     FileSearchResult, FileTreeNode, FileTreeService, FileWriteResult,
 };
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::*;
+use log::debug;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use super::types::{DirectoryScanResult, DirectoryStats, FileSearchOptions, FileSystemConfig};
+
+const SLOW_FILESYSTEM_OPERATION_LOG_MS: u64 = 500;
 
 /// Unified file system service
 pub struct FileSystemService {
@@ -44,10 +48,25 @@ impl FileSystemService {
         root_path: &str,
         preferred_remote_connection_id: Option<&str>,
     ) -> BitFunResult<Vec<FileTreeNode>> {
-        self.file_tree_service
+        let started_at = std::time::Instant::now();
+        let tree = self
+            .file_tree_service
             .build_tree_with_remote_hint(root_path, preferred_remote_connection_id)
             .await
-            .map_err(BitFunError::service)
+            .map_err(BitFunError::service)?;
+        let duration_ms = elapsed_ms_u64(started_at);
+
+        if duration_ms >= SLOW_FILESYSTEM_OPERATION_LOG_MS {
+            debug!(
+                "File tree built: root_path={}, preferred_remote_connection_id={}, duration_ms={}, root_entries={}",
+                root_path,
+                preferred_remote_connection_id.unwrap_or("local"),
+                duration_ms,
+                tree.len()
+            );
+        }
+
+        Ok(tree)
     }
 
     /// Scans a directory and returns a detailed result.
@@ -59,7 +78,18 @@ impl FileSystemService {
             .build_tree_with_stats(root_path)
             .await?;
 
-        let scan_time_ms = start_time.elapsed().as_millis() as u64;
+        let scan_time_ms = elapsed_ms_u64(start_time);
+
+        if scan_time_ms >= SLOW_FILESYSTEM_OPERATION_LOG_MS {
+            debug!(
+                "Directory scan completed: root_path={}, duration_ms={}, total_files={}, total_directories={}, total_size_bytes={}",
+                root_path,
+                scan_time_ms,
+                statistics.total_files,
+                statistics.total_directories,
+                statistics.total_size_bytes
+            );
+        }
 
         Ok(DirectoryScanResult {
             files,

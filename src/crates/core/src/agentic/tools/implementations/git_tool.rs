@@ -9,10 +9,30 @@ use crate::service::git::{
     execute_git_command, GitAddParams, GitCommitParams, GitDiffParams, GitLogParams, GitPullParams,
     GitPushParams, GitService,
 };
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
 use serde_json::{json, Value};
+
+// ---------------------------------------------------------------------------
+// Constants for git diff argument parsing
+// ---------------------------------------------------------------------------
+
+/// Separator between refs and file paths in git diff commands.
+const GIT_DIFF_FILE_SEPARATOR: &str = " -- ";
+
+/// Two-dot range separator (symmetric difference).
+const RANGE_TWO_DOT: &str = "..";
+
+/// Three-dot range separator (merge base).
+const RANGE_THREE_DOT: &str = "...";
+
+/// Known diff flags that should be excluded when extracting commit refs.
+const DIFF_FLAGS: &[&str] = &["--staged", "--cached", "--stat"];
+
+/// Prefix for short flags (e.g. `-p`, `-U5`).
+const SHORT_FLAG_PREFIX: &str = "-";
 
 /// Allowed Git operation types
 const ALLOWED_OPERATIONS: &[&str] = &[
@@ -47,6 +67,28 @@ const ALLOWED_OPERATIONS: &[&str] = &[
 
 /// Dangerous Git operations (require special warning)
 const DANGEROUS_OPERATIONS: &[&str] = &["push --force", "reset --hard", "clean -fd", "rebase"];
+
+/// Parsed result of a `git diff` args string.
+#[derive(Debug, PartialEq)]
+struct ParsedDiffArgs {
+    staged: bool,
+    stat: bool,
+    source: Option<String>,
+    target: Option<String>,
+    files: Option<Vec<String>>,
+}
+
+impl Default for ParsedDiffArgs {
+    fn default() -> Self {
+        Self {
+            staged: false,
+            stat: false,
+            source: None,
+            target: None,
+            files: None,
+        }
+    }
+}
 
 /// Git tool
 pub struct GitTool;
@@ -186,18 +228,96 @@ impl GitTool {
         }))
     }
 
+    /// Parse a `git diff` args string into structured [`ParsedDiffArgs`].
+    ///
+    /// Supported patterns:
+    /// - `HEAD~7..HEAD --stat` → source=HEAD~7, target=HEAD, stat=true
+    /// - `HEAD --stat -- src/foo.rs` → source=HEAD, stat=true, files=[src/foo.rs]
+    /// - `--staged` → staged=true
+    /// - `origin/main...HEAD` → source=origin/main, target=HEAD (three-dot)
+    fn parse_diff_args(args_str: &str) -> ParsedDiffArgs {
+        let mut result = ParsedDiffArgs::default();
+
+        result.staged = args_str.contains("--staged") || args_str.contains("--cached");
+        result.stat = args_str.contains("--stat");
+
+        // Split on " -- " to separate options/refs from file paths
+        let (refs_part, files_part) = if let Some(sep_pos) = args_str.find(GIT_DIFF_FILE_SEPARATOR)
+        {
+            let refs = args_str[..sep_pos].trim();
+            let files = args_str[sep_pos + GIT_DIFF_FILE_SEPARATOR.len()..].trim();
+            (refs, Some(files))
+        } else {
+            (args_str.trim(), None)
+        };
+
+        // Extract non-flag tokens from refs_part as commit references
+        let ref_tokens: Vec<&str> = refs_part
+            .split_whitespace()
+            .filter(|token| {
+                !DIFF_FLAGS.iter().any(|flag| token == flag)
+                    && !token.starts_with(SHORT_FLAG_PREFIX)
+            })
+            .collect();
+
+        let refs_text = if ref_tokens.len() == 1 {
+            ref_tokens[0]
+        } else if ref_tokens.len() >= 2 {
+            // Re-join multi-token refs so spaces inside refs are preserved
+            &ref_tokens.join(" ")
+        } else {
+            ""
+        };
+
+        if !refs_text.is_empty() {
+            let (src, tgt) = Self::split_range(refs_text);
+            result.source = src;
+            result.target = tgt;
+        }
+
+        result.files = files_part.map(|fp| {
+            fp.split_whitespace()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>()
+        });
+
+        result
+    }
+
+    /// Split a ref expression on the first `..` or `...` range separator.
+    ///
+    /// Returns `(Some(source), Some(target))` when both sides are non-empty,
+    /// otherwise falls back to treating the whole text as a single source.
+    fn split_range(text: &str) -> (Option<String>, Option<String>) {
+        let (sep_len, pos) = if let Some(p) = text.find(RANGE_THREE_DOT) {
+            (RANGE_THREE_DOT.len(), p)
+        } else if let Some(p) = text.find(RANGE_TWO_DOT) {
+            (RANGE_TWO_DOT.len(), p)
+        } else {
+            return (Some(text.to_string()), None);
+        };
+
+        let src = text[..pos].trim();
+        let tgt = text[pos + sep_len..].trim();
+
+        match (src.is_empty(), tgt.is_empty()) {
+            (false, false) => (Some(src.to_string()), Some(tgt.to_string())),
+            (false, true) => (Some(src.to_string()), None),
+            (true, false) => (None, Some(tgt.to_string())),
+            (true, true) => (None, None),
+        }
+    }
+
     /// Execute diff operation using GitService
     async fn execute_diff(repo_path: &str, args: Option<&str>) -> BitFunResult<Value> {
-        let args_str = args.unwrap_or("");
-        let staged = args_str.contains("--staged") || args_str.contains("--cached");
-        let stat = args_str.contains("--stat");
+        let parsed = Self::parse_diff_args(args.unwrap_or(""));
 
         let params = GitDiffParams {
-            staged: Some(staged),
-            stat: Some(stat),
-            source: None,
-            target: None,
-            files: None,
+            staged: Some(parsed.staged),
+            stat: Some(parsed.stat),
+            source: parsed.source,
+            target: parsed.target,
+            files: parsed.files,
         };
 
         let diff_output = GitService::get_diff(repo_path, &params)
@@ -545,7 +665,7 @@ impl GitTool {
 
         match execute_git_command(repo_path, &cmd_args).await {
             Ok(output) => {
-                let duration = start_time.elapsed().as_millis() as u64;
+                let duration = elapsed_ms_u64(start_time);
                 Ok(json!({
                     "success": true,
                     "exit_code": 0,
@@ -555,7 +675,7 @@ impl GitTool {
                 }))
             }
             Err(e) => {
-                let duration = start_time.elapsed().as_millis() as u64;
+                let duration = elapsed_ms_u64(start_time);
                 // Git command failed but still return result
                 Ok(json!({
                     "success": false,
@@ -957,5 +1077,175 @@ When creating commits, use this format for the commit message:
 impl Default for GitTool {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GitTool, ParsedDiffArgs};
+
+    #[test]
+    fn parse_diff_args_empty() {
+        let r = GitTool::parse_diff_args("");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: None,
+                target: None,
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_staged_only() {
+        let r = GitTool::parse_diff_args("--staged");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: true,
+                stat: false,
+                source: None,
+                target: None,
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_cached_and_stat() {
+        let r = GitTool::parse_diff_args("--cached --stat");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: true,
+                stat: true,
+                source: None,
+                target: None,
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_single_ref() {
+        let r = GitTool::parse_diff_args("HEAD");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: Some("HEAD".to_string()),
+                target: None,
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_single_ref_with_stat() {
+        let r = GitTool::parse_diff_args("HEAD --stat");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: true,
+                source: Some("HEAD".to_string()),
+                target: None,
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_range_two_dot() {
+        let r = GitTool::parse_diff_args("HEAD~7..HEAD --stat");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: true,
+                source: Some("HEAD~7".to_string()),
+                target: Some("HEAD".to_string()),
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_range_three_dot() {
+        let r = GitTool::parse_diff_args("origin/main...HEAD");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: Some("origin/main".to_string()),
+                target: Some("HEAD".to_string()),
+                files: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_range_with_files() {
+        let r = GitTool::parse_diff_args("HEAD~7..HEAD --stat -- src/foo.rs src/bar.rs");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: true,
+                source: Some("HEAD~7".to_string()),
+                target: Some("HEAD".to_string()),
+                files: Some(vec!["src/foo.rs".to_string(), "src/bar.rs".to_string()]),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_single_ref_with_files() {
+        let r = GitTool::parse_diff_args("HEAD -- src/foo.rs");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: Some("HEAD".to_string()),
+                target: None,
+                files: Some(vec!["src/foo.rs".to_string()]),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_files_only() {
+        let r = GitTool::parse_diff_args("-- -- src/foo.rs");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: None,
+                target: None,
+                files: Some(vec!["src/foo.rs".to_string()]),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_diff_args_multi_token_range() {
+        let r = GitTool::parse_diff_args("feature/foo..main");
+        assert_eq!(
+            r,
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: Some("feature/foo".to_string()),
+                target: Some("main".to_string()),
+                files: None,
+            }
+        );
     }
 }

@@ -13,6 +13,7 @@ use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::config::get_global_config_service;
 use crate::service::config::AppConfig;
+use crate::service::i18n::LocaleId;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message;
 use log::{debug, info, warn};
@@ -59,8 +60,6 @@ impl InsightsService {
             json_rule.to_string()
         } else {
             let lang_name = match lang {
-                "zh-CN" => "Simplified Chinese (简体中文)",
-                "zh-TW" => "Traditional Chinese (繁體中文)",
                 "ja" | "ja-JP" => "Japanese (日本語)",
                 "ko" | "ko-KR" => "Korean (한국어)",
                 "fr" | "fr-FR" => "French (Français)",
@@ -68,7 +67,9 @@ impl InsightsService {
                 "es" | "es-ES" => "Spanish (Español)",
                 "pt" | "pt-BR" => "Portuguese (Português)",
                 "ru" | "ru-RU" => "Russian (Русский)",
-                _ => lang,
+                _ => LocaleId::from_str(lang)
+                    .map(|locale| locale.model_language_name())
+                    .unwrap_or(lang),
             };
             format!(
                 "\n\nIMPORTANT: All descriptive text, summaries, suggestions, and narrative content in your response MUST be written in {}. Keep JSON keys and enum values in English.{}",

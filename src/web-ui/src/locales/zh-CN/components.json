@@ -272,6 +272,14 @@
     },
     "previewApp": {
       "title": "BitFun 组件库",
+      "themeLabel": "主题",
+      "themeTypeLight": "浅色",
+      "themeTypeDark": "深色",
+      "themeDescriptionLight": "浅色主题",
+      "themeDescriptionDark": "深色主题",
+      "sidebarTitle": "组件导航",
+      "expandSidebar": "展开导航",
+      "collapseSidebar": "收起导航",
       "emptyState": "请从左侧选择一个分类查看组件"
     },
     "layouts": {

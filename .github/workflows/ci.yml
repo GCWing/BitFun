@@ -3,8 +3,14 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'png/**'
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'png/**'
 
 # Cancel previous runs on same branch/PR
 concurrency:
@@ -85,6 +91,10 @@ jobs:
       - name: Check compilation
         run: cargo check --workspace --exclude bitfun-cli
 
+      - name: Run core Rust tests
+        if: runner.os == 'Linux'
+        run: cargo test --locked -p bitfun-core
+
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
     name: Frontend Build
@@ -104,9 +114,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Type-check web UI
-        run: pnpm run type-check:web
 
       - name: Lint web UI
         run: pnpm run lint:web

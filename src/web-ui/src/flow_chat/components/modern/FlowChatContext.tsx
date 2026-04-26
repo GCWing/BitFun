@@ -52,6 +52,28 @@ export interface FlowChatContextValue {
    */
   onCollapseGroup?: (groupId: string) => void;
 
+  // ========== Terminal group collapse state ==========
+  /**
+   * Expanded/collapsed state for terminal groups.
+   * key: groupId, value: true means expanded.
+   */
+  terminalGroupStates?: Map<string, boolean>;
+
+  /**
+   * Toggle terminal group expanded/collapsed state.
+   */
+  onTerminalGroupToggle?: (groupId: string) => void;
+
+  /**
+   * Expand the specified terminal group.
+   */
+  onExpandTerminalGroup?: (groupId: string) => void;
+
+  /**
+   * Collapse the specified terminal group.
+   */
+  onCollapseTerminalGroup?: (groupId: string) => void;
+
   // Message search state
   searchQuery?: string;
   searchMatchIndices?: ReadonlySet<number>;

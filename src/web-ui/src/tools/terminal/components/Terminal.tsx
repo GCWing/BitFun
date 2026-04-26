@@ -19,6 +19,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { themeService } from '@/infrastructure/theme/core/ThemeService';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
+import { nowMs } from '@/shared/utils/timing';
 import '@xterm/xterm/css/xterm.css';
 import './Terminal.scss';
 
@@ -565,7 +566,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       isVisibleRef.current = isVisible;
 
       if (isVisible && !wasVisibleRef.current) {
-        const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const startedAt = nowMs();
         requestAnimationFrame(() => {
           resizeDebouncerRef.current?.flush();
           
@@ -588,15 +589,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
                 terminalId: terminalIdRef.current,
                 sessionId: sessionIdRef.current,
                 autoFocus: autoFocusRef.current,
-                durationMs:
-                  Math.round(
-                    ((typeof performance !== 'undefined' ? performance.now() : Date.now()) -
-                      startedAt) *
-                      10
-                  ) / 10,
                 cols: term?.cols ?? null,
                 rows: term?.rows ?? null,
-              }
+              },
+              { startedAt }
             );
           });
         });

@@ -2,6 +2,7 @@
 
 use crate::agentic::core::{ToolCall, ToolExecutionState};
 use crate::agentic::events::SubagentParentInfo as EventSubagentParentInfo;
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use std::collections::HashMap;
@@ -61,6 +62,7 @@ pub struct ToolExecutionContext {
     /// If empty, allow all registered tools
     /// If not empty, only allow tools in the list to be executed
     pub allowed_tools: Vec<String>,
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     pub workspace_services: Option<WorkspaceServices>,
 }
 

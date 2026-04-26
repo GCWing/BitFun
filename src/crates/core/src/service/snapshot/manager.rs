@@ -551,7 +551,7 @@ impl WrappedTool {
 
         let start_time = std::time::Instant::now();
         let results = self.original_tool.call(input, context).await?;
-        let duration_ms = start_time.elapsed().as_millis() as u64;
+        let duration_ms = crate::util::elapsed_ms_u64(start_time);
 
         snapshot_service
             .complete_file_modification(&session_id, &operation_id, duration_ms)
@@ -559,8 +559,11 @@ impl WrappedTool {
             .map_err(|e| crate::util::errors::BitFunError::Tool(e.to_string()))?;
 
         debug!(
-            "File modification tool completed: tool_name={}",
-            self.name()
+            "File modification tool completed: tool_name={}, operation_id={}, duration_ms={}, file_path={}",
+            self.name(),
+            operation_id,
+            duration_ms,
+            file_path.display()
         );
         Ok(results)
     }

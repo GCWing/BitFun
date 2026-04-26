@@ -395,12 +395,7 @@ impl RemoteConnectService {
             _ => self.config.web_app_url.clone(),
         };
 
-        let client_language = if let Some(service) = crate::service::get_global_i18n_service().await
-        {
-            service.get_current_locale().await.as_str().to_string()
-        } else {
-            crate::service::LocaleId::ZhCN.as_str().to_string()
-        };
+        let client_language = crate::service::config::get_app_language_code().await;
         let qr_url = QrGenerator::build_url(&qr_payload, &web_app_url, &client_language);
         let qr_svg = QrGenerator::generate_svg_from_url(&qr_url)?;
         let qr_data = QrGenerator::generate_png_base64_from_url(&qr_url)?;

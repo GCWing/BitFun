@@ -21,7 +21,7 @@
 
 桌面端包含 SSH 远程功能，会链接 OpenSSL。Windows 上**不使用 OpenSSL 源码编译（vendored）**，需使用**预编译**库。
 
-- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。额外参数：`pnpm run desktop:build -- <tauri build 参数>`。
+- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；`pnpm run desktop:preview:debug` 在需要为预览执行快速本地 `cargo build -p bitfun-desktop` 时，也会做同样的 OpenSSL 引导。所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。额外参数：`pnpm run desktop:build -- <tauri build 参数>`。
 - **手动 / CI**：下载 [FireDaemon ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后将 `OPENSSL_DIR` 指向 `x64`，并设 `OPENSSL_STATIC=1`，或运行 `scripts/ci/setup-openssl-windows.ps1`。
 - **关闭自动下载**：设置 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_DIR`。
 - **`desktop:dev:raw`** 不经过 `dev.cjs`（无 OpenSSL 引导）；请自行设置 `OPENSSL_DIR`、运行 `scripts/ci/setup-openssl-windows.ps1`，或执行 `node scripts/ensure-openssl-windows.mjs`（会预热 `.bitfun/cache/` 并打印可在 PowerShell 中粘贴的 `OPENSSL_*` 命令）。
@@ -37,11 +37,25 @@ pnpm install
 ```bash
 # Desktop
 pnpm run desktop:dev
+pnpm run desktop:preview:debug
 pnpm run desktop:build
 
 # E2E
 pnpm run e2e:test
 ```
+
+本地迭代时建议这样选：
+
+- `desktop:preview:debug` 不经过 `tauri dev`；当已有 debug 桌面二进制仍然可复用时会直接预览，而在 Rust / Tauri 输入更新或二进制缺失时，会先用较轻的 dev 调试信息配置快速重编 `bitfun-desktop` 再预览。
+- 只有在你明确想忽略时间戳复用判断、强制先重编时，才额外使用 `pnpm run desktop:preview:debug -- --force-rebuild`。
+- `desktop:dev` 保留给完整的 Tauri watcher / 启动链路；正式收尾时，仍要按真实改动范围执行对应验证命令。
+
+涉及打包与 release 时建议这样处理：
+
+- 如果请求里只说“打包”或“release”，但没有明确产物类型，先确认目标输出形式。
+- 对于 Windows 最终用户安装交付，优先使用 `pnpm run desktop:build:nsis`。
+- 对于独立 Windows 可执行文件，只有在用户明确提出时才使用 `pnpm run desktop:build:exe`。
+- 不要把本地快速/debug 产物与正式 release 交付物混淆。
 
 > 说明：仓库提供更细粒度的脚本（例如 `dev:web`、`cli:dev`、`website:dev`），详情见 `package.json`。
 
@@ -122,7 +136,7 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 如为 AI 辅助产出，请在 PR 中注明并说明测试程度（未测/轻测/已测），便于评审风险。
 
 ### 分支管理
-**master分支用于稳定特性，不接受特性合入**，本仓库欢迎各大产品经理、开发者使用AI生成代码以做快速穿刺或提交想法，因此**所有PR请提交合入dev分支**，我们会定期从dev分支审视和完善后回合至master
+**`main` 分支为默认协作分支，并接受特性 PR。** 本仓库欢迎产品经理、开发者使用 AI 生成代码进行快速验证或提交想法，因此 **所有 PR 请直接提交到 `main` 分支**。
 
 ### 变更范围
 

@@ -1,0 +1,99 @@
+/**
+ * Scroll-to-current-turn-header button.
+ * Fixed at the top of the flowchat message list with a gradient fade.
+ */
+
+.scroll-to-turn-header-trigger {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 57px; // Keep in sync with `.message-list-header` height.
+  z-index: 10;
+  pointer-events: none;
+
+  // Trigger area height: 48px hover zone + 24px gradient.
+  height: 72px;
+
+  opacity: 0;
+  transition: opacity 0.25s ease;
+
+  // ========== Visible state ==========
+  &--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  // ========== Gradient background layer ==========
+  &__gradient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+
+    background: linear-gradient(
+      to bottom,
+      var(--color-bg-flowchat, var(--color-bg-scene, #1c1c1f)) 0%,
+      color-mix(in srgb, var(--color-bg-flowchat, var(--color-bg-scene, #1c1c1f)) 80%, transparent) 40%,
+      color-mix(in srgb, var(--color-bg-flowchat, var(--color-bg-scene, #1c1c1f)) 40%, transparent) 70%,
+      transparent 100%
+    );
+  }
+
+  // ========== Content layer ==========
+  &__content {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transition: transform 0.15s ease;
+  }
+
+  // ========== Circle arrow button ==========
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-base);
+    background: var(--color-bg-scene);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0;
+
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+
+    &:hover {
+      border-color: var(--border-medium);
+      color: var(--color-text-primary);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(-2px);
+    }
+
+    &:focus-visible {
+      outline: none;
+      border-color: var(--border-strong);
+      color: var(--color-text-primary);
+    }
+  }
+}
+
+// ========== Responsive tweaks ==========
+@media (max-width: 768px) {
+  .scroll-to-turn-header-trigger {
+    top: 57px;
+    height: 64px;
+
+    &__btn {
+      width: 26px;
+      height: 26px;
+    }
+  }
+}

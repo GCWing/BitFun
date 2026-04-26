@@ -10,6 +10,7 @@ use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
 use crate::agentic::tools::registry::ToolRegistry;
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -510,6 +511,27 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
+        if let Err(err) = task
+            .context
+            .runtime_tool_restrictions
+            .ensure_tool_allowed(&tool_name)
+        {
+            let error_msg = err.to_string();
+            warn!("Tool rejected by runtime restrictions: {}", error_msg);
+
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg,
+                        is_retryable: false,
+                    },
+                )
+                .await;
+
+            return Err(err);
+        }
+
         // Create cancellation token
         let cancellation_token = CancellationToken::new();
         self.cancellation_tokens
@@ -679,7 +701,7 @@ impl ToolPipeline {
 
         match result {
             Ok(tool_result) => {
-                let duration_ms = start_time.elapsed().as_millis() as u64;
+                let duration_ms = elapsed_ms_u64(start_time);
 
                 self.state_manager
                     .update_state(
@@ -843,6 +865,7 @@ impl ToolPipeline {
             },
             computer_use_host: self.computer_use_host.clone(),
             cancellation_token: Some(cancellation_token),
+            runtime_tool_restrictions: task.context.runtime_tool_restrictions.clone(),
             workspace_services: task.context.workspace_services.clone(),
         };
 
@@ -923,7 +946,10 @@ impl ToolPipeline {
     /// Cancel tool execution
     pub async fn cancel_tool(&self, tool_id: &str, reason: String) -> BitFunResult<()> {
         let Some(task) = self.state_manager.get_task(tool_id) else {
-            debug!("Ignoring cancel request for unknown tool: tool_id={}", tool_id);
+            debug!(
+                "Ignoring cancel request for unknown tool: tool_id={}",
+                tool_id
+            );
             return Ok(());
         };
 

@@ -237,23 +237,17 @@ impl BrowserLauncher {
     fn windows_browser_executable(kind: &BrowserKind) -> String {
         let (rel_paths, app_paths_key, fallback_cmd) = match kind {
             BrowserKind::Chrome => (
-                vec![
-                    r"Google\Chrome\Application\chrome.exe",
-                ],
+                vec![r"Google\Chrome\Application\chrome.exe"],
                 Some("chrome.exe"),
                 "chrome.exe",
             ),
             BrowserKind::Edge => (
-                vec![
-                    r"Microsoft\Edge\Application\msedge.exe",
-                ],
+                vec![r"Microsoft\Edge\Application\msedge.exe"],
                 Some("msedge.exe"),
                 "msedge.exe",
             ),
             BrowserKind::Brave => (
-                vec![
-                    r"BraveSoftware\Brave-Browser\Application\brave.exe",
-                ],
+                vec![r"BraveSoftware\Brave-Browser\Application\brave.exe"],
                 Some("brave.exe"),
                 "brave.exe",
             ),
@@ -262,11 +256,7 @@ impl BrowserLauncher {
                 None,
                 "chromium.exe",
             ),
-            BrowserKind::Arc => (
-                vec![r"Arc\Arc.exe"],
-                None,
-                "arc.exe",
-            ),
+            BrowserKind::Arc => (vec![r"Arc\Arc.exe"], None, "arc.exe"),
             BrowserKind::Unknown(name) => return name.clone(),
         };
 
@@ -310,13 +300,8 @@ impl BrowserLauncher {
                             if let Some(idx) = lower.find("reg_sz") {
                                 let value = line[idx + "REG_SZ".len()..].trim();
                                 let unquoted = value.trim_matches('"').trim();
-                                if !unquoted.is_empty()
-                                    && std::path::Path::new(unquoted).exists()
-                                {
-                                    debug!(
-                                        "Resolved {} via App Paths: {}",
-                                        exe_name, unquoted
-                                    );
+                                if !unquoted.is_empty() && std::path::Path::new(unquoted).exists() {
+                                    debug!("Resolved {} via App Paths: {}", exe_name, unquoted);
                                     return unquoted.to_string();
                                 }
                             }
@@ -428,7 +413,10 @@ impl BrowserLauncher {
                 BrowserKind::Chromium => "Chromium",
                 BrowserKind::Unknown(name) => name.as_str(),
             };
-            let script = format!("tell application \"{}\" to quit", app_name.replace('"', "\\\""));
+            let script = format!(
+                "tell application \"{}\" to quit",
+                app_name.replace('"', "\\\"")
+            );
             let output = silent_command("osascript")
                 .args(["-e", &script])
                 .output()
@@ -437,7 +425,11 @@ impl BrowserLauncher {
                 return Ok(());
             }
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BitFunError::tool(format!("Failed to quit {}: {}", kind, stderr.trim())));
+            return Err(BitFunError::tool(format!(
+                "Failed to quit {}: {}",
+                kind,
+                stderr.trim()
+            )));
         }
 
         #[cfg(target_os = "windows")]
@@ -458,7 +450,9 @@ impl BrowserLauncher {
                 let output = silent_command("taskkill")
                     .args(["/IM", process_name, "/F"])
                     .output()
-                    .map_err(|e| BitFunError::tool(format!("Failed to terminate {}: {}", process_name, e)))?;
+                    .map_err(|e| {
+                        BitFunError::tool(format!("Failed to terminate {}: {}", process_name, e))
+                    })?;
                 let stdout = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
                 let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
                 if output.status.success()
@@ -562,7 +556,10 @@ impl BrowserLauncher {
                     let text = String::from_utf8_lossy(&out.stdout);
                     // tasklist prints "INFO: No tasks ..." when nothing matches;
                     // otherwise the first CSV column contains the image name.
-                    if text.to_ascii_lowercase().contains(&image.to_ascii_lowercase()) {
+                    if text
+                        .to_ascii_lowercase()
+                        .contains(&image.to_ascii_lowercase())
+                    {
                         return true;
                     }
                 }

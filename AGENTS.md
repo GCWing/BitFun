@@ -21,7 +21,7 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 ## 3-step onboarding
 
 1. Read `README.md`, `CONTRIBUTING.md`, and this file before architecture-sensitive changes.
-2. Use `pnpm run desktop:dev` for normal local development, or `pnpm run dev:web` for frontend-only work.
+2. Prefer `pnpm run desktop:preview:debug` for fast local desktop checks. It reuses the existing debug binary after shared frontend changes and automatically does a fast local rebuild before preview when Rust / Tauri inputs are newer or the binary is missing. Keep `pnpm run desktop:dev` for the full Tauri dev flow, first-time setup, or startup/build-pipeline debugging, and use `pnpm run dev:web` for browser-only frontend work.
 3. After changes, run the smallest matching verification set below.
 
 ## Core commands
@@ -33,6 +33,7 @@ pnpm run e2e:install
 
 # Main dev flows
 pnpm run desktop:dev
+pnpm run desktop:preview:debug
 pnpm run dev:web
 pnpm run cli:dev
 pnpm run installer:dev
@@ -53,6 +54,25 @@ cargo build -p bitfun-desktop
 pnpm run e2e:test:l0
 pnpm --dir tests/e2e exec wdio run ./config/wdio.conf.ts --spec "./specs/<file>.spec.ts"
 ```
+
+## Fast Local Desktop Loops
+
+- `pnpm run desktop:preview:debug` starts or reuses the web dev server and launches `target/debug/bitfun-desktop(.exe)` without `tauri dev`. It reuses the existing binary when possible and automatically fast-rebuilds `bitfun-desktop` with `CARGO_PROFILE_DEV_DEBUG=0` and high codegen parallelism when Rust / Tauri inputs are newer or the binary is missing.
+- `pnpm run desktop:preview:debug -- --force-rebuild` is the escape hatch when you explicitly want to rebuild before preview even if the timestamp check says the binary is current.
+- This preview flow is for local iteration speed only. It does not replace the minimum verification set below before you finish the task.
+- If the user intent is to "quickly check the effect", "run locally for a quick look", or similar manual inspection, prefer the preview commands above even when the request also mentions "build" or "debug version".
+- Reserve `pnpm run desktop:build:fast` for cases where the user explicitly wants a debug build artifact and does not need the app launched for preview.
+- Intent examples:
+  - "build a local debug version and quickly inspect it" -> `pnpm run desktop:preview:debug`
+  - "build me a debug artifact only, no need to launch it" -> `pnpm run desktop:build:fast`
+
+## Packaging Requests
+
+- When the user asks to package, release, or build a distributable desktop artifact without naming the exact output form, confirm the intended package type before running the build.
+- Distinguish local temporary artifacts from real release deliverables. Do not treat `desktop:preview:*`, debug builds, or `--no-bundle` fast outputs as the final user-facing release unless the user explicitly asks for that form.
+- If the user clearly wants a Windows installer for end users, prefer `pnpm run desktop:build:nsis`.
+- If the user clearly wants a standalone Windows executable instead of an installer, prefer `pnpm run desktop:build:exe`.
+- If the user already names the exact target format, do not ask again; just use the requested packaging flow.
 
 ## Architecture
 
@@ -138,6 +158,7 @@ await api.invoke('your_command', { request: { ... } });
 ## Where to look first
 
 - Agent modes: `src/crates/core/src/agentic/agents/`, `src/crates/core/src/agentic/agents/prompts/`, `src/web-ui/src/locales/*/scenes/agents.json`
+- Deep Review / Code Review Team: `src/crates/core/src/agentic/deep_review_policy.rs`, `src/crates/core/src/agentic/agents/deep_review_agent.rs`, `src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`, `src/web-ui/src/shared/services/reviewTeamService.ts`, `src/web-ui/src/flow_chat/services/DeepReviewService.ts`, `src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx`
 - Tools: `src/crates/core/src/agentic/tools/implementations/`, `src/crates/core/src/agentic/tools/registry.rs`
 - MCP / LSP / remote: `src/crates/core/src/service/mcp/`, `src/crates/core/src/service/lsp/`, `src/crates/core/src/service/remote_connect/`, `src/crates/core/src/service/remote_ssh/`
 - Desktop APIs: `src/apps/desktop/src/api/`, `src/crates/api-layer/src/`, `src/crates/transport/src/adapters/tauri.rs`
@@ -148,6 +169,7 @@ await api.invoke('your_command', { request: { ... } });
 | Change type | Minimum verification |
 | --- | --- |
 | Frontend UI, state, adapters, or locales | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
+| Deep Review / Code Review Team behavior | Web UI verification above, plus `cargo test -p bitfun-core deep_review -- --nocapture`; also run the Rust / desktop rows below when backend or Tauri APIs are touched |
 | Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace && cargo test --workspace` |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
 | Behavior covered by desktop smoke/functional flows | `cargo build -p bitfun-desktop` then the nearest E2E spec or `pnpm run e2e:test:l0` |

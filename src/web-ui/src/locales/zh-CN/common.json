@@ -176,6 +176,13 @@
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",
       "assistantOwner": "所属助理：{{name}}",
+      "parentSession": "父会话",
+      "childSourceWithoutTurn": "来自 {{parentTitle}}",
+      "childSourceWithTurn": "来自 {{parentTitle}} · 第 {{turnIndex}} 轮",
+      "reviewRunning": "审查中",
+      "deepReviewRunning": "审查中",
+      "unreadCompleted": "已完成 — 未读",
+      "unreadError": "执行失败 — 未读",
       "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。"
     },
     "scheduledJobs": {
@@ -351,6 +358,11 @@
     "maximize": "最大化",
     "restore": "还原",
     "close": "关闭"
+  },
+  "browserView": {
+    "addressPlaceholder": "输入网址，例如 {{exampleUrl}}",
+    "startElementSelection": "选取元素",
+    "stopElementSelection": "退出元素选取"
   },
   "newProject": {
     "title": "新建工作区",
@@ -982,6 +994,9 @@
     }
   },
   "notify": {
-    "dialogCompleted": "AI 助手已完成任务。"
+    "dialogCompleted": "AI 助手已完成任务。",
+    "dialogCompletedTitle": "BitFun 任务已完成",
+    "dialogCompletedWithSession": "“{{sessionTitle}}” 已完成，可以回到 BitFun 查看结果。",
+    "dialogCompletedFallback": "有一个 BitFun 会话已完成，可以回到应用查看结果。"
   }
 }

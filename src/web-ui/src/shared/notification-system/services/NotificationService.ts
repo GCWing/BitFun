@@ -17,7 +17,7 @@ import {
   LoadingController,
   ProgressMode
 } from '../types';
-import { i18nService } from '@/infrastructure/i18n';
+import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 
 class NotificationService {
   private idCounter = 0;

@@ -7,6 +7,7 @@ use crate::infrastructure::events::event_system::BackendEvent::{
     ToolExecutionProgress, ToolTerminalReady,
 };
 use crate::service::config::global::get_global_config_service;
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::{ToolExecutionProgressInfo, ToolTerminalReadyInfo};
 use async_trait::async_trait;
@@ -620,7 +621,7 @@ Usage notes:
 
                 let output = exec_result.combined_output();
 
-                let execution_time_ms = start_time.elapsed().as_millis() as u64;
+                let execution_time_ms = elapsed_ms_u64(start_time);
                 let working_directory = context
                     .workspace_root()
                     .map(|p| p.to_string_lossy().to_string())
@@ -902,7 +903,7 @@ Usage notes:
         }
 
         // 6. Build result
-        let execution_time_ms = start_time.elapsed().as_millis() as u64;
+        let execution_time_ms = elapsed_ms_u64(start_time);
 
         let result_data = json!({
             "success": final_exit_code.unwrap_or(-1) == 0,
@@ -1091,7 +1092,7 @@ impl BashTool {
             });
         }
 
-        let execution_time_ms = start_time.elapsed().as_millis() as u64;
+        let execution_time_ms = elapsed_ms_u64(start_time);
 
         let output_file_str = output_file_path.as_deref().map(|p| p.display().to_string());
         let output_file_reference = context

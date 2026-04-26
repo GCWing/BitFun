@@ -33,6 +33,7 @@ import {
 } from './types';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('GitStateManager');
@@ -333,7 +334,7 @@ export class GitStateManager {
       return;
     }
 
-    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const startedAt = nowMs();
     const shouldProbeReason =
       reason === 'window-focus' || reason === 'visibility' || reason === 'mount';
     let probeError: string | null = null;
@@ -420,11 +421,7 @@ export class GitStateManager {
 
         throw error;
       } finally {
-        const durationMs =
-          Math.round(
-            ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt) *
-              10
-          ) / 10;
+        const durationMs = elapsedMs(startedAt);
         if (probeError || shouldProbeReason || durationMs >= 80) {
           sendDebugProbe('GitStateManager.ts:doRefresh', 'Git refresh completed', {
             repositoryPath,

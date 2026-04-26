@@ -103,7 +103,8 @@ impl CdpClient {
         // a subscriber lagging behind without affecting the protocol.
         let (events_tx, _) = broadcast::channel::<CdpEvent>(256);
         let events_for_reader = events_tx.clone();
-        let reader_handle = tokio::spawn(Self::reader_loop(stream, pending_clone, events_for_reader));
+        let reader_handle =
+            tokio::spawn(Self::reader_loop(stream, pending_clone, events_for_reader));
 
         Ok(Self {
             sink,
@@ -196,8 +197,10 @@ impl CdpClient {
                             if let Some(tx) = sender {
                                 let _ = tx.send(val);
                             }
-                        } else if let Some(method) =
-                            val.get("method").and_then(|v| v.as_str()).map(str::to_string)
+                        } else if let Some(method) = val
+                            .get("method")
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string)
                         {
                             // Unsolicited CDP event — broadcast to subscribers
                             // (no-op if nobody is listening). Used by

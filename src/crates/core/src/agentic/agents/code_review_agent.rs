@@ -24,6 +24,11 @@ impl CodeReviewAgent {
                 "submit_code_review".to_string(),
                 // User interaction tool
                 "AskUserQuestion".to_string(),
+                // Remediation tools, only after explicit user approval
+                "Edit".to_string(),
+                "Write".to_string(),
+                "Bash".to_string(),
+                "TodoWrite".to_string(),
                 // Git operations tool
                 "Git".to_string(),
             ],
@@ -64,6 +69,28 @@ impl Agent for CodeReviewAgent {
     }
 
     fn is_readonly(&self) -> bool {
-        false // Code review agent can use Git tools for staging and committing after review
+        false // Code review agent can remediate only after explicit user approval
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Agent, CodeReviewAgent};
+
+    #[test]
+    fn code_review_agent_has_review_and_user_approved_remediation_tools() {
+        let agent = CodeReviewAgent::new();
+        let tools = agent.default_tools();
+
+        assert!(tools.contains(&"Read".to_string()));
+        assert!(tools.contains(&"Grep".to_string()));
+        assert!(tools.contains(&"GetFileDiff".to_string()));
+        assert!(tools.contains(&"submit_code_review".to_string()));
+        assert!(tools.contains(&"AskUserQuestion".to_string()));
+        assert!(tools.contains(&"Edit".to_string()));
+        assert!(tools.contains(&"Write".to_string()));
+        assert!(tools.contains(&"Bash".to_string()));
+        assert!(tools.contains(&"TodoWrite".to_string()));
+        assert!(!agent.is_readonly());
     }
 }

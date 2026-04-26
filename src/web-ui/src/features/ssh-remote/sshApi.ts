@@ -228,6 +228,13 @@ export const sshApi = {
   },
 
   /**
+   * Remove one persisted remote workspace restore entry without requiring it to be active.
+   */
+  async removeWorkspace(connectionId: string, remotePath: string): Promise<void> {
+    return api.invoke('remote_remove_workspace', { connectionId, remotePath });
+  },
+
+  /**
    * Get current remote workspace info
    */
   async getWorkspaceInfo(): Promise<RemoteWorkspace | null> {

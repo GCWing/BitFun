@@ -83,10 +83,7 @@ pub fn should_retry_action(error: &BitFunError, action_type: &str) -> bool {
     }
 
     // Retry click/locate actions by default
-    matches!(
-        action_type,
-        "click" | "click_element" | "locate"
-    )
+    matches!(action_type, "click" | "click_element" | "locate")
 }
 
 /// Generate retry suggestion based on failure context

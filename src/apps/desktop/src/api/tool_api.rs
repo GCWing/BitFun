@@ -10,6 +10,7 @@ use bitfun_core::agentic::{
     tools::{get_all_tools, get_readonly_tools},
     WorkspaceBinding,
 };
+use bitfun_core::util::elapsed_ms_u64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +97,7 @@ fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         custom_data: HashMap::new(),
         computer_use_host: None,
         cancellation_token: None,
+        runtime_tool_restrictions: Default::default(),
         workspace_services: None,
     }
 }
@@ -268,7 +270,7 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
                     result: None,
                     error: None,
                     validation_error: validation_result.message,
-                    duration_ms: start_time.elapsed().as_millis() as u64,
+                    duration_ms: elapsed_ms_u64(start_time),
                 });
             }
 
@@ -307,7 +309,7 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
                         result: combined_result,
                         error: None,
                         validation_error: None,
-                        duration_ms: start_time.elapsed().as_millis() as u64,
+                        duration_ms: elapsed_ms_u64(start_time),
                     });
                 }
                 Err(e) => {
@@ -317,7 +319,7 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
                         result: None,
                         error: Some(format!("Tool execution failed: {}", e)),
                         validation_error: None,
-                        duration_ms: start_time.elapsed().as_millis() as u64,
+                        duration_ms: elapsed_ms_u64(start_time),
                     });
                 }
             }

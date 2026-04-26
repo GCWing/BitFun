@@ -1,12 +1,13 @@
-import { i18nService } from '@/infrastructure/i18n';
+import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type {
   SessionCustomMetadata,
   SessionKind,
   SessionMetadata,
 } from '@/shared/types/session-history';
 import type { Session } from '../types/flow-chat';
+import { resolveSessionTitle } from './sessionTitle';
 
-const BTW_TAG = 'btw';
+const CHILD_SESSION_KIND_TAGS = new Set<SessionKind>(['btw', 'review', 'deep_review']);
 const RELATIONSHIP_METADATA_KEYS = new Set([
   'kind',
   'parentSessionId',
@@ -14,12 +15,19 @@ const RELATIONSHIP_METADATA_KEYS = new Set([
   'parentDialogTurnId',
   'parentTurnIndex',
 ]);
+const TITLE_METADATA_KEYS = new Set([
+  'titleSource',
+  'titleKey',
+  'titleParams',
+]);
 
 type SessionRelationshipInput = Pick<Session, 'sessionKind' | 'parentSessionId' | 'btwOrigin'>;
 
 export interface ResolvedSessionRelationship {
   kind: SessionKind;
   isBtw: boolean;
+  isReview: boolean;
+  isDeepReview: boolean;
   parentSessionId?: string;
   displayAsChild: boolean;
   canOpenInAuxPane: boolean;
@@ -44,7 +52,11 @@ function normalizeTurnIndex(value: unknown): number | undefined {
 }
 
 export function normalizeSessionKind(value: unknown): SessionKind {
-  return value === 'btw' ? 'btw' : 'normal';
+  if (value === 'btw' || value === 'review' || value === 'deep_review') {
+    return value;
+  }
+
+  return 'normal';
 }
 
 export function normalizeSessionRelationship(
@@ -55,7 +67,7 @@ export function normalizeSessionRelationship(
     input?.btwOrigin?.parentSessionId ?? input?.parentSessionId
   );
 
-  if (sessionKind !== 'btw') {
+  if (sessionKind === 'normal') {
     return {
       sessionKind,
       parentSessionId: undefined,
@@ -82,13 +94,20 @@ export function resolveSessionRelationship(
 ): ResolvedSessionRelationship {
   const normalized = normalizeSessionRelationship(input);
   const isBtw = normalized.sessionKind === 'btw';
+  const isReview =
+    normalized.sessionKind === 'review' ||
+    normalized.sessionKind === 'deep_review';
 
   return {
     kind: normalized.sessionKind,
     isBtw,
+    isReview,
+    isDeepReview: normalized.sessionKind === 'deep_review',
     parentSessionId: normalized.parentSessionId,
     displayAsChild: Boolean(normalized.parentSessionId),
-    canOpenInAuxPane: Boolean(isBtw && normalized.parentSessionId),
+    canOpenInAuxPane: Boolean(
+      normalized.sessionKind !== 'normal' && normalized.parentSessionId
+    ),
     origin: normalized.btwOrigin,
   };
 }
@@ -103,7 +122,7 @@ export function deriveSessionRelationshipFromMetadata(
     sessionKind,
     parentSessionId: customMetadata?.parentSessionId ?? undefined,
     btwOrigin:
-      sessionKind === 'btw'
+      sessionKind !== 'normal'
         ? {
             requestId: normalizeString(customMetadata?.parentRequestId),
             parentSessionId: normalizeString(customMetadata?.parentSessionId),
@@ -144,21 +163,30 @@ export function calculateSessionStats(
 }
 
 function buildSessionCustomMetadata(
-  session: Pick<Session, 'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'lastFinishedAt'>,
+  session: Pick<
+    Session,
+    | 'sessionKind'
+    | 'parentSessionId'
+    | 'btwOrigin'
+    | 'lastFinishedAt'
+    | 'titleSource'
+    | 'titleI18nKey'
+    | 'titleI18nParams'
+  >,
   existingCustomMetadata?: SessionCustomMetadata
 ): SessionCustomMetadata {
   const normalized = normalizeSessionRelationship(session);
   const nextCustomMetadata: SessionCustomMetadata = {};
 
   for (const [key, value] of Object.entries(existingCustomMetadata || {})) {
-    if (!RELATIONSHIP_METADATA_KEYS.has(key)) {
+    if (!RELATIONSHIP_METADATA_KEYS.has(key) && !TITLE_METADATA_KEYS.has(key)) {
       nextCustomMetadata[key] = value;
     }
   }
 
   nextCustomMetadata.kind = normalized.sessionKind;
 
-  if (normalized.sessionKind === 'btw') {
+  if (normalized.sessionKind !== 'normal') {
     nextCustomMetadata.parentSessionId = normalized.parentSessionId ?? null;
     nextCustomMetadata.parentRequestId = normalized.btwOrigin?.requestId ?? null;
     nextCustomMetadata.parentDialogTurnId =
@@ -169,6 +197,14 @@ function buildSessionCustomMetadata(
 
   nextCustomMetadata.lastFinishedAt = session.lastFinishedAt ?? null;
 
+  // Default untitled sessions persist their title template so locale changes can
+  // re-render them until the first real title is generated or the user renames it.
+  if (session.titleSource === 'i18n' && normalizeString(session.titleI18nKey)) {
+    nextCustomMetadata.titleSource = 'i18n';
+    nextCustomMetadata.titleKey = session.titleI18nKey;
+    nextCustomMetadata.titleParams = session.titleI18nParams ?? null;
+  }
+
   return nextCustomMetadata;
 }
 
@@ -176,10 +212,15 @@ function buildSessionTags(
   sessionKind: SessionKind,
   existingTags?: string[]
 ): string[] {
-  const baseTags = Array.isArray(existingTags) ? [...existingTags] : [];
+  const baseTags = Array.isArray(existingTags)
+    ? existingTags.filter(
+        (tag) =>
+          !CHILD_SESSION_KIND_TAGS.has(tag as SessionKind) || tag === sessionKind
+      )
+    : [];
 
-  if (sessionKind === 'btw' && !baseTags.includes(BTW_TAG)) {
-    baseTags.push(BTW_TAG);
+  if (sessionKind !== 'normal' && !baseTags.includes(sessionKind)) {
+    baseTags.push(sessionKind);
   }
 
   return baseTags;
@@ -202,6 +243,9 @@ export function buildSessionMetadata(
     | 'parentSessionId'
     | 'btwOrigin'
     | 'lastFinishedAt'
+    | 'titleSource'
+    | 'titleI18nKey'
+    | 'titleI18nParams'
   >,
   existingMetadata?: SessionMetadata | null
 ): SessionMetadata {
@@ -211,10 +255,9 @@ export function buildSessionMetadata(
   return {
     ...existingMetadata,
     sessionId: session.sessionId,
-    sessionName:
-      session.title ||
-      existingMetadata?.sessionName ||
-      i18nService.t('flow-chat:session.new'),
+    sessionName: resolveSessionTitle(session, (key, options) =>
+      i18nService.t(key, options)
+    ),
     agentType:
       session.mode ||
       session.config.agentType ||
@@ -242,6 +285,9 @@ export function buildSessionMetadata(
         parentSessionId: session.parentSessionId,
         btwOrigin: session.btwOrigin,
         lastFinishedAt: session.lastFinishedAt,
+        titleSource: session.titleSource,
+        titleI18nKey: session.titleI18nKey,
+        titleI18nParams: session.titleI18nParams,
       },
       existingMetadata?.customMetadata
     ),

@@ -1,5 +1,11 @@
+//! SessionControl manages persisted workspace-scoped sessions.
+//!
+//! The `cancel` action only cancels the target session's current running dialog turn.
+//! It does not permanently stop the session itself, and it does not clear queued
+//! messages that may still run later through the scheduler.
+
 use super::util::normalize_path;
-use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
 use crate::agentic::core::SessionConfig;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -9,10 +15,12 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-/// SessionControl tool - create, delete, or list persisted sessions
+/// SessionControl tool - create, cancel, delete, or list persisted sessions
 pub struct SessionControlTool;
+
+const CANCEL_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
 
 impl Default for SessionControlTool {
     fn default() -> Self {
@@ -118,6 +126,86 @@ impl SessionControlTool {
         Ok(format!("session-{}", creator_session_id))
     }
 
+    fn validate_mutating_action_target(
+        &self,
+        action: SessionControlAction,
+        parsed: &SessionControlInput,
+        context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
+        if parsed.agent_type.is_some() {
+            return ValidationResult {
+                result: false,
+                message: Some("agent_type is only allowed for create".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+        if parsed.session_name.is_some() {
+            return ValidationResult {
+                result: false,
+                message: Some("session_name is only allowed for create".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        let Some(session_id) = parsed.session_id.as_deref() else {
+            return ValidationResult {
+                result: false,
+                message: Some(format!("session_id is required for {}", action.as_str())),
+                error_code: Some(400),
+                meta: None,
+            };
+        };
+        if let Err(message) = Self::validate_session_id(session_id) {
+            return ValidationResult {
+                result: false,
+                message: Some(message),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        if let Some(tool_context) = context {
+            if let Ok(workspace) = self.resolve_workspace(&parsed.workspace) {
+                if self.current_workspace_session(tool_context, &workspace) == Some(session_id) {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(format!(
+                            "cannot {} the current session from SessionControl",
+                            action.as_str()
+                        )),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            }
+        }
+
+        ValidationResult::default()
+    }
+
+    async fn ensure_session_exists(
+        &self,
+        coordinator: &crate::agentic::coordination::ConversationCoordinator,
+        workspace_path: &Path,
+        workspace: &str,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let existing_sessions = coordinator.list_sessions(workspace_path).await?;
+        if existing_sessions
+            .iter()
+            .any(|session| session.session_id == session_id)
+        {
+            Ok(())
+        } else {
+            Err(BitFunError::NotFound(format!(
+                "Session '{}' not found in workspace '{}'",
+                session_id, workspace
+            )))
+        }
+    }
+
     fn build_list_result_for_assistant(
         &self,
         workspace: &str,
@@ -160,8 +248,20 @@ impl SessionControlTool {
 #[serde(rename_all = "lowercase")]
 enum SessionControlAction {
     Create,
+    Cancel,
     Delete,
     List,
+}
+
+impl SessionControlAction {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Create => "create",
+            Self::Cancel => "cancel",
+            Self::Delete => "delete",
+            Self::List => "list",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -205,6 +305,7 @@ impl Tool for SessionControlTool {
 
 Actions:
 - "create": Create a new session. You may optionally provide session_name and agent_type.
+- "cancel": Cancel the target session's currently running dialog turn. This does not delete the session or clear any queued messages that may still run later.
 - "delete": Delete an existing session by session_id.
 - "list": List all sessions.
 
@@ -216,7 +317,8 @@ Optional inputs:
 - "agent_type": Only used by create. Defaults to "agentic".
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
   - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
-  - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc."#
+  - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
+- "session_id": Required for cancel and delete."#
                 .to_string(),
         )
     }
@@ -227,7 +329,7 @@ Optional inputs:
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["create", "delete", "list"],
+                    "enum": ["create", "cancel", "delete", "list"],
                     "description": "The session action to perform."
                 },
                 "workspace": {
@@ -236,7 +338,7 @@ Optional inputs:
                 },
                 "session_id": {
                     "type": "string",
-                    "description": "Required for delete."
+                    "description": "Required for cancel and delete."
                 },
                 "session_name": {
                     "type": "string",
@@ -320,54 +422,41 @@ Optional inputs:
                     };
                 }
             }
+            SessionControlAction::Cancel => {
+                return self.validate_mutating_action_target(
+                    SessionControlAction::Cancel,
+                    &parsed,
+                    context,
+                );
+            }
             SessionControlAction::Delete => {
-                if parsed.agent_type.is_some() {
-                    return ValidationResult {
-                        result: false,
-                        message: Some("agent_type is only allowed for create".to_string()),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
-                let Some(session_id) = parsed.session_id.as_deref() else {
-                    return ValidationResult {
-                        result: false,
-                        message: Some("session_id is required for delete".to_string()),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                };
-                if let Err(message) = Self::validate_session_id(session_id) {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(message),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
-                if let Some(tool_context) = context {
-                    if let Ok(workspace) = self.resolve_workspace(&parsed.workspace) {
-                        if self.current_workspace_session(tool_context, &workspace)
-                            == Some(session_id)
-                        {
-                            return ValidationResult {
-                                result: false,
-                                message: Some(
-                                    "cannot delete the current session from SessionControl"
-                                        .to_string(),
-                                ),
-                                error_code: Some(400),
-                                meta: None,
-                            };
-                        }
-                    }
-                }
+                return self.validate_mutating_action_target(
+                    SessionControlAction::Delete,
+                    &parsed,
+                    context,
+                );
             }
             SessionControlAction::List => {
                 if parsed.agent_type.is_some() {
                     return ValidationResult {
                         result: false,
                         message: Some("agent_type is only allowed for create".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+                if parsed.session_name.is_some() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("session_name is only allowed for create".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+                if parsed.session_id.is_some() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("session_id is not allowed for list".to_string()),
                         error_code: Some(400),
                         meta: None,
                     };
@@ -394,6 +483,10 @@ Optional inputs:
 
         match action {
             "create" => format!("Create session in {}", workspace),
+            "cancel" => format!(
+                "Cancel active turn for session {} in {}",
+                session_id, workspace
+            ),
             "delete" => format!("Delete session {} in {}", session_id, workspace),
             "list" => format!("List sessions in {}", workspace),
             _ => format!("Manage sessions in {}", workspace),
@@ -462,6 +555,79 @@ Optional inputs:
                     image_attachments: None,
                 }])
             }
+            SessionControlAction::Cancel => {
+                let session_id = params.session_id.as_deref().ok_or_else(|| {
+                    BitFunError::tool("session_id is required for cancel".to_string())
+                })?;
+                Self::validate_session_id(session_id).map_err(BitFunError::tool)?;
+                if self.current_workspace_session(context, &workspace) == Some(session_id) {
+                    return Err(BitFunError::tool(
+                        "cannot cancel the current session from SessionControl".to_string(),
+                    ));
+                }
+
+                self.ensure_session_exists(&coordinator, workspace_path, &workspace, session_id)
+                    .await?;
+
+                let cancelled_turn_id =
+                    match (context.session_id.as_deref(), get_global_scheduler()) {
+                        (Some(requester_session_id), Some(scheduler)) => {
+                            scheduler
+                                .cancel_active_turn_for_session_from_requester(
+                                    session_id,
+                                    requester_session_id,
+                                    CANCEL_WAIT_TIMEOUT,
+                                )
+                                .await?
+                        }
+                        (Some(_), None) => {
+                            // Normally this should not happen: the runtime usually initializes
+                            // the global scheduler before tools are allowed to run.
+                            coordinator
+                                .cancel_active_turn_for_session(session_id, CANCEL_WAIT_TIMEOUT)
+                                .await?
+                        }
+                        (None, _) => {
+                            // Normally this should not happen: SessionControl is expected to run
+                            // inside a session-aware tool context. Fallback to plain cancellation
+                            // so the core cancel behavior still works for nonstandard callers.
+                            coordinator
+                                .cancel_active_turn_for_session(session_id, CANCEL_WAIT_TIMEOUT)
+                                .await?
+                        }
+                    };
+                let had_active_turn = cancelled_turn_id.is_some();
+                let status = if had_active_turn {
+                    "cancel_requested"
+                } else {
+                    "no_active_turn"
+                };
+                let result_for_assistant = if let Some(turn_id) = cancelled_turn_id.as_deref() {
+                    format!(
+                        "Cancellation requested for the active turn '{}' in session '{}' within workspace '{}'. The session remains available for future work, and queued messages are not cleared.",
+                        turn_id, session_id, workspace
+                    )
+                } else {
+                    format!(
+                        "Session '{}' in workspace '{}' has no active turn to cancel. The session remains available for future work.",
+                        session_id, workspace
+                    )
+                };
+
+                Ok(vec![ToolResult::Result {
+                    data: json!({
+                        "success": true,
+                        "action": "cancel",
+                        "workspace": workspace.clone(),
+                        "session_id": session_id,
+                        "had_active_turn": had_active_turn,
+                        "cancelled_turn_id": cancelled_turn_id,
+                        "status": status,
+                    }),
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }])
+            }
             SessionControlAction::Delete => {
                 let session_id = params.session_id.as_deref().ok_or_else(|| {
                     BitFunError::tool("session_id is required for delete".to_string())
@@ -473,16 +639,8 @@ Optional inputs:
                     ));
                 }
 
-                let existing_sessions = coordinator.list_sessions(workspace_path).await?;
-                if !existing_sessions
-                    .iter()
-                    .any(|session| session.session_id == session_id)
-                {
-                    return Err(BitFunError::NotFound(format!(
-                        "Session not found in workspace: {}",
-                        session_id
-                    )));
-                }
+                self.ensure_session_exists(&coordinator, workspace_path, &workspace, session_id)
+                    .await?;
 
                 coordinator
                     .delete_session(workspace_path, session_id)
@@ -522,5 +680,123 @@ Optional inputs:
                 }])
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::framework::ToolUseContext;
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::fs;
+    use uuid::Uuid;
+
+    fn empty_context() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: None,
+        }
+    }
+
+    fn temp_workspace_path() -> String {
+        let path = std::env::temp_dir().join(format!(
+            "bitfun-session-control-tool-test-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir_all(&path).expect("temp workspace should be created");
+        path.to_string_lossy().to_string()
+    }
+
+    #[tokio::test]
+    async fn validate_cancel_requires_session_id() {
+        let tool = SessionControlTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "cancel",
+                    "workspace": workspace,
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("session_id is required for cancel")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_cancel_rejects_session_name() {
+        let tool = SessionControlTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "cancel",
+                    "workspace": workspace,
+                    "session_id": "worker_1",
+                    "session_name": "should-not-be-here",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("session_name is only allowed for create")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_list_rejects_session_id() {
+        let tool = SessionControlTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "list",
+                    "workspace": workspace,
+                    "session_id": "worker_1",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("session_id is not allowed for list")
+        );
+    }
+
+    #[test]
+    fn render_message_for_cancel_is_specific() {
+        let tool = SessionControlTool::new();
+        let message = tool.render_tool_use_message(
+            &json!({
+                "action": "cancel",
+                "workspace": "/repo",
+                "session_id": "worker_1",
+            }),
+            &ToolRenderOptions { verbose: false },
+        );
+
+        assert_eq!(message, "Cancel active turn for session worker_1 in /repo");
     }
 }

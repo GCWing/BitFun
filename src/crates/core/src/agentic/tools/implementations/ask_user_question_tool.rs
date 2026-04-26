@@ -171,11 +171,29 @@ impl Tool for AskUserQuestionTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Use this tool when you need to ask the user question during execution. This allows you to:
+        Ok(r#"Use this tool when you need to ask the user questions during execution. This allows you to:
 1. Gather user preferences or requirements
 2. Clarify ambiguous instructions
 3. Get decisions on implementation choices as you work
-4. Offer choices to the user about what direction to take.
+4. Offer choices to the user about what direction to take
+
+WHEN TO USE:
+- The request is ambiguous or could be interpreted in multiple ways
+- Multiple valid approaches exist with different trade-offs
+- The change affects critical files or has significant impact
+- You are unsure about the user's intent or preferences
+- The decision has security, performance, or architectural implications
+
+WHEN NOT TO USE:
+- The request is clear and specific
+- You are following an already-approved plan exactly
+- The change is trivial and clearly correct
+
+RECOMMENDATION GUIDELINES:
+- Always state your recommendation and reasoning
+- Make your recommended option the first option in the list
+- Add "(Recommended)" at the end of the recommended option's label
+- Provide 2-4 clear options with descriptions of trade-offs
 
 Usage notes:
 - This tool ends the current dialog turn and waits for the user's reply before the assistant continues

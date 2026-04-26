@@ -22,6 +22,12 @@ import {
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
+import type { SessionTitleDescriptor } from '../utils/sessionTitle';
+import {
+  deriveSessionTitleState,
+  deriveSessionTitleStateFromMetadata,
+  freezeSessionTitleState,
+} from '../utils/sessionTitle';
 import {
   isTransientToolStatus,
   normalizeRecoveredRoundStatus,
@@ -199,7 +205,8 @@ export class FlowChatStore {
     mode?: string,
     workspacePath?: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    titleDescriptor?: SessionTitleDescriptor,
   ): void {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
@@ -207,9 +214,16 @@ export class FlowChatStore {
     
     this.setState(prev => {
       const relationship = normalizeSessionRelationship({ sessionKind: 'normal' });
+      const titleState = deriveSessionTitleState(titleDescriptor);
       const session: Session = {
         sessionId,
-        title: title || i18nService.t('flow-chat:session.new'),
+        title:
+          titleState.title ||
+          title ||
+          i18nService.t('flow-chat:session.new'),
+        titleSource: titleState.titleSource,
+        titleI18nKey: titleState.titleI18nKey,
+        titleI18nParams: titleState.titleI18nParams,
         titleStatus: undefined,
         dialogTurns: [],
         status: 'idle',
@@ -267,6 +281,9 @@ export class FlowChatStore {
       const session: Session = {
         sessionId,
         title: title || i18nService.t('flow-chat:session.new'),
+        titleSource: 'text',
+        titleI18nKey: undefined,
+        titleI18nParams: undefined,
         titleStatus: 'generated',
         dialogTurns: [],
         status: 'idle',
@@ -414,13 +431,17 @@ export class FlowChatStore {
     });
   }
 
-  public updateSessionBtwOrigin(sessionId: string, origin: Session['btwOrigin']): void {
+  public updateSessionBtwOrigin(
+    sessionId: string,
+    origin: Session['btwOrigin'],
+    sessionKind: SessionKind = 'btw'
+  ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
       const relationship = normalizeSessionRelationship({
-        sessionKind: 'btw',
+        sessionKind,
         parentSessionId: origin?.parentSessionId ?? session.parentSessionId,
         btwOrigin: { ...(session.btwOrigin || {}), ...(origin || {}) },
       });
@@ -1252,18 +1273,58 @@ export class FlowChatStore {
     });
   }
 
+  public markSessionUnreadCompletion(
+    sessionId: string,
+    completionKind: 'completed' | 'error'
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const updatedSession: Session = {
+        ...session,
+        hasUnreadCompletion: completionKind,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  public clearSessionUnreadCompletion(sessionId: string): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || !session.hasUnreadCompletion) return prev;
+
+      const updatedSession: Session = {
+        ...session,
+        hasUnreadCompletion: undefined,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
   public async updateSessionTitle(
-    sessionId: string, 
-    title: string, 
+    sessionId: string,
+    title: string,
     status: 'generating' | 'generated' | 'failed'
   ): Promise<void> {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
+      // As soon as the user meaningfully interacts with the session we freeze the
+      // title to text, so later locale changes do not rewrite real conversation names.
+      const nextTitleState = freezeSessionTitleState(title);
       const updatedSession = {
         ...session,
-        title,
+        ...nextTitleState,
         titleStatus: status,
         lastActiveAt: Date.now()
       };
@@ -1496,6 +1557,8 @@ export class FlowChatStore {
         
         const relationship = deriveSessionRelationshipFromMetadata(metadata);
         const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
+        const titleState = deriveSessionTitleStateFromMetadata(metadata);
+        const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
 
         this.setState(prev => {
           if (prev.sessions.has(metadata.sessionId)) {
@@ -1512,8 +1575,11 @@ export class FlowChatStore {
           
           const session: Session = {
             sessionId: metadata.sessionId,
-            title: metadata.sessionName,
-            titleStatus: 'generated',
+            title: titleState.title,
+            titleSource: titleState.titleSource,
+            titleI18nKey: titleState.titleI18nKey,
+            titleI18nParams: titleState.titleI18nParams,
+            titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
             dialogTurns: [],
             status: 'idle',
             config: {

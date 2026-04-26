@@ -12,12 +12,14 @@ use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
 use bitfun_core::service::workspace::get_global_workspace_service;
+use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use std::time::Instant;
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
@@ -75,6 +77,8 @@ async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Resul
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    let startup_started = Instant::now();
+    let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
     let log_targets = logging::build_log_targets(&log_config);
@@ -82,15 +86,18 @@ pub async fn run() {
 
     eprintln!("=== BitFun Desktop Starting ===");
 
+    let step_started = Instant::now();
     if let Err(e) = bitfun_core::service::config::initialize_global_config().await {
         log::error!("Failed to initialize global config service: {}", e);
         return;
     }
+    startup_timings.record_elapsed("initialize_global_config", step_started);
 
     // Initialize global I18nService so bot/remote-connect language is always in sync.
     {
         use bitfun_core::service::config::get_global_config_service;
         use bitfun_core::service::i18n::initialize_global_i18n_service;
+        let step_started = Instant::now();
         match get_global_config_service().await {
             Ok(config_service) => {
                 if let Err(e) = initialize_global_i18n_service(Some(config_service)).await {
@@ -101,15 +108,19 @@ pub async fn run() {
                 log::error!("Failed to get config service for I18nService init: {}", e);
             }
         }
+        startup_timings.record_elapsed("initialize_global_i18n_service", step_started);
     }
 
     let startup_log_level = resolve_runtime_log_level(log_config.level).await;
 
+    let step_started = Instant::now();
     if let Err(e) = AIClientFactory::initialize_global().await {
         log::error!("Failed to initialize global AIClientFactory: {}", e);
         return;
     }
+    startup_timings.record_elapsed("initialize_global_ai_client_factory", step_started);
 
+    let step_started = Instant::now();
     let (coordinator, scheduler, event_queue, event_router, ai_client_factory, token_usage_service) =
         match init_agentic_system().await {
             Ok(state) => state,
@@ -118,12 +129,16 @@ pub async fn run() {
                 return;
             }
         };
+    startup_timings.record_elapsed("init_agentic_system", step_started);
 
+    let step_started = Instant::now();
     if let Err(e) = init_function_agents(ai_client_factory.clone()).await {
         log::error!("Failed to initialize function agents: {}", e);
         return;
     }
+    startup_timings.record_elapsed("init_function_agents", step_started);
 
+    let step_started = Instant::now();
     let app_state = match AppState::new_async(token_usage_service).await {
         Ok(state) => state,
         Err(e) => {
@@ -131,6 +146,7 @@ pub async fn run() {
             return;
         }
     };
+    startup_timings.record_elapsed("initialize_app_state", step_started);
 
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
@@ -165,6 +181,7 @@ pub async fn run() {
         .manage(scheduler)
         .manage(terminal_state)
         .setup(move |app| {
+            let setup_started = Instant::now();
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
@@ -178,6 +195,13 @@ pub async fn run() {
             }
 
             logging::register_runtime_log_state(startup_log_level, session_log_dir.clone());
+            for step in startup_timings.steps() {
+                log::debug!(
+                    "Desktop startup step completed: step={}, duration_ms={}",
+                    step.name,
+                    step.duration_ms
+                );
+            }
 
             // Register bundled mobile-web resource path for remote connect.
             // tauri.conf.json maps "../../mobile-web/dist" -> "mobile-web/dist",
@@ -222,8 +246,18 @@ pub async fn run() {
             }
 
             let app_handle = app.handle().clone();
+            let window_started = Instant::now();
             theme::create_main_window(&app_handle);
+            log::debug!(
+                "Desktop startup step completed: step=create_main_window, duration_ms={}",
+                elapsed_ms(window_started)
+            );
             bitfun_webdriver::maybe_start(app_handle.clone());
+            log::debug!(
+                "Desktop startup timing: phase=tauri_setup, duration_ms={}, since_process_start_ms={}",
+                elapsed_ms(setup_started),
+                elapsed_ms(startup_started)
+            );
 
             #[cfg(target_os = "macos")]
             {
@@ -318,6 +352,8 @@ pub async fn run() {
             api::agentic_api::compact_session,
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::cancel_dialog_turn,
+            api::agentic_api::cancel_session,
+            api::agentic_api::set_subagent_timeout,
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
             webdriver_bridge_result,
@@ -725,6 +761,7 @@ pub async fn run() {
             api::ssh_api::remote_execute,
             api::ssh_api::remote_open_workspace,
             api::ssh_api::remote_close_workspace,
+            api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
             // Announcement / feature-demo / tips API
             api::announcement_api::get_pending_announcements,

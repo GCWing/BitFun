@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Session } from '../types/flow-chat';
 import type { SessionMetadata } from '@/shared/types/session-history';
 
-vi.mock('@/infrastructure/i18n', () => ({
+vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: {
     t: (key: string) => key,
   },
@@ -207,6 +207,27 @@ describe('sessionMetadata', () => {
     expect(deriveLastFinishedAtFromMetadata(metadata)).toBe(4321);
   });
 
+  it('persists locale-aware default title metadata before the first message', () => {
+    const session = createSession({
+      title: 'flow-chat:session.newCodeWithIndex',
+      titleSource: 'i18n',
+      titleI18nKey: 'flow-chat:session.newCodeWithIndex',
+      titleI18nParams: { count: 2 },
+      titleStatus: undefined,
+    });
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.sessionName).toBe('flow-chat:session.newCodeWithIndex');
+    expect(metadata.customMetadata).toEqual({
+      kind: 'normal',
+      lastFinishedAt: null,
+      titleSource: 'i18n',
+      titleKey: 'flow-chat:session.newCodeWithIndex',
+      titleParams: { count: 2 },
+    });
+  });
+
   it('round-trips btw identity through persistence and UI selectors', () => {
     const metadata: SessionMetadata = {
       sessionId: 'child-1',
@@ -247,6 +268,8 @@ describe('sessionMetadata', () => {
     expect(resolved).toEqual({
       kind: 'btw',
       isBtw: true,
+      isReview: false,
+      isDeepReview: false,
       parentSessionId: 'parent-1',
       displayAsChild: true,
       canOpenInAuxPane: true,
@@ -256,6 +279,91 @@ describe('sessionMetadata', () => {
         parentDialogTurnId: 'turn-2',
         parentTurnIndex: 2,
       },
+    });
+  });
+
+  it('round-trips review child identity without treating it as a side question', () => {
+    const session = createSession({
+      sessionId: 'review-child-1',
+      title: 'Code review',
+      sessionKind: 'review',
+      parentSessionId: 'parent-1',
+      btwOrigin: {
+        requestId: 'review-req-1',
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-3',
+        parentTurnIndex: 3,
+      },
+    });
+
+    const metadata = buildSessionMetadata(session, {
+      sessionId: 'review-child-1',
+      sessionName: 'Code review',
+      agentType: 'CodeReview',
+      modelName: 'gpt-test',
+      createdAt: 1000,
+      lastActiveAt: 1001,
+      turnCount: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      status: 'active',
+      tags: [],
+      customMetadata: {},
+      todos: [],
+      workspacePath: '/workspace',
+    });
+
+    expect(metadata.tags).toEqual(['review']);
+    expect(metadata.customMetadata).toMatchObject({
+      kind: 'review',
+      parentSessionId: 'parent-1',
+      parentRequestId: 'review-req-1',
+      parentDialogTurnId: 'turn-3',
+      parentTurnIndex: 3,
+    });
+
+    const relationship = deriveSessionRelationshipFromMetadata(metadata);
+    const resolved = resolveSessionRelationship(relationship);
+
+    expect(resolved).toMatchObject({
+      kind: 'review',
+      isBtw: false,
+      isReview: true,
+      isDeepReview: false,
+      parentSessionId: 'parent-1',
+      displayAsChild: true,
+      canOpenInAuxPane: true,
+    });
+  });
+
+  it('round-trips deep review child identity as a review session', () => {
+    const relationship = normalizeSessionRelationship({
+      sessionKind: 'deep_review',
+      parentSessionId: 'parent-1',
+      btwOrigin: {
+        requestId: 'deep-review-req-1',
+        parentSessionId: 'parent-1',
+      },
+    });
+
+    expect(relationship).toEqual({
+      sessionKind: 'deep_review',
+      parentSessionId: 'parent-1',
+      btwOrigin: {
+        requestId: 'deep-review-req-1',
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: undefined,
+        parentTurnIndex: undefined,
+      },
+    });
+
+    expect(resolveSessionRelationship(relationship)).toMatchObject({
+      kind: 'deep_review',
+      isBtw: false,
+      isReview: true,
+      isDeepReview: true,
+      displayAsChild: true,
+      canOpenInAuxPane: true,
     });
   });
 });

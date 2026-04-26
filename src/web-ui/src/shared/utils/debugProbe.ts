@@ -1,8 +1,13 @@
 import { createLogger } from './logger';
+import { logElapsed, logWithLevel, type LogLevelName } from './timing';
 
 type DebugProbeData = Record<string, unknown>;
+type DebugProbeOptions = {
+  level?: LogLevelName;
+  startedAt?: number;
+};
 
-const log = createLogger('RestoreProbe');
+const log = createLogger('DebugProbe');
 
 function serializeProbeValue(value: unknown): unknown {
   if (value instanceof Error) {
@@ -26,7 +31,8 @@ function serializeProbeValue(value: unknown): unknown {
 export function sendDebugProbe(
   location: string,
   message: string,
-  data?: DebugProbeData
+  data?: DebugProbeData,
+  options: DebugProbeOptions = {}
 ): void {
   const serializedData = data
     ? Object.fromEntries(
@@ -34,8 +40,21 @@ export function sendDebugProbe(
       )
     : undefined;
 
-  log.info(message, {
+  const payload: Record<string, unknown> = {
     location,
-    ...serializedData,
-  });
+    ...(serializedData ?? {}),
+  };
+
+  if (
+    options.startedAt !== undefined &&
+    typeof payload.durationMs !== 'number'
+  ) {
+    logElapsed(log, message, options.startedAt, {
+      level: options.level ?? 'debug',
+      data: payload,
+    });
+    return;
+  }
+
+  logWithLevel(log, options.level ?? 'debug', message, payload);
 }

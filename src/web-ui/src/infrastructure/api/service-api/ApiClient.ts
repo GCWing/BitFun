@@ -14,6 +14,7 @@ import {
   ApiConfig
 } from './types';
 import { createLogger } from '@/shared/utils/logger';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 
 const log = createLogger('ApiClient');
 const SENSITIVE_KEY_PATTERNS = [
@@ -190,7 +191,7 @@ export class ApiClient implements IApiClient {
   }
 
   private async executeRequest<T>(request: ApiRequest): Promise<T> {
-    const startTime = Date.now();
+    const startedAt = nowMs();
     
     this.updateStats({ totalRequests: this.stats.totalRequests + 1 });
 
@@ -218,15 +219,15 @@ export class ApiClient implements IApiClient {
         this.activeRequests.delete(request.id);
 
         
-        const responseTime = Date.now() - startTime;
-        this.recordResponseTime(responseTime);
+        const durationMs = elapsedMs(startedAt);
+        this.recordResponseTime(durationMs);
         this.updateStats({ successfulRequests: this.stats.successfulRequests + 1 });
 
 
         if (this.config.enableLogging) {
           log.debug('Request completed', {
             type: request.type,
-            responseTime,
+            durationMs,
             config: sanitizeForLog(request.config)
           });
         }
@@ -469,20 +470,20 @@ export const api = {
 export function createLoggingMiddleware(): ApiMiddleware {
   const middlewareLog = createLogger('ApiMiddleware');
   return async (request: ApiRequest, next: (request: ApiRequest) => Promise<ApiResponse>) => {
-    const startTime = Date.now();
+    const startedAt = nowMs();
     
     try {
       const response = await next(request);
-      const duration = Date.now() - startTime;
+      const durationMs = elapsedMs(startedAt);
       middlewareLog.debug('Request completed', {
         type: request.type,
-        duration,
+        durationMs,
         config: sanitizeForLog(request.config)
       });
       return response;
     } catch (error) {
-      const duration = Date.now() - startTime;
-      middlewareLog.error('Request failed', { type: request.type, duration, error });
+      const durationMs = elapsedMs(startedAt);
+      middlewareLog.error('Request failed', { type: request.type, durationMs, error });
       throw error;
     }
   };

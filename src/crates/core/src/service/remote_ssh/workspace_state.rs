@@ -848,8 +848,12 @@ mod tests {
 
     #[test]
     fn remote_workspace_session_identity_uses_mirror_dir_for_storage() {
-        let identity = workspace_session_identity("/home/wsp/projects/test", Some("conn-1"), Some("127.0.0.1"))
-            .expect("remote identity should resolve");
+        let identity = workspace_session_identity(
+            "/home/wsp/projects/test",
+            Some("conn-1"),
+            Some("127.0.0.1"),
+        )
+        .expect("remote identity should resolve");
 
         assert_eq!(identity.hostname, "127.0.0.1");
         assert_eq!(identity.logical_workspace_path(), "/home/wsp/projects/test");
@@ -867,12 +871,8 @@ mod tests {
         ));
         std::fs::create_dir_all(&workspace_root).expect("workspace should exist");
 
-        let identity = workspace_session_identity(
-            &workspace_root.to_string_lossy(),
-            None,
-            None,
-        )
-        .expect("local identity should resolve");
+        let identity = workspace_session_identity(&workspace_root.to_string_lossy(), None, None)
+            .expect("local identity should resolve");
 
         assert_eq!(identity.hostname, LOCAL_WORKSPACE_SSH_HOST);
         assert_eq!(

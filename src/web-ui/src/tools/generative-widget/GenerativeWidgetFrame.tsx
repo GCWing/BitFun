@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
 import { themeService } from '@/infrastructure/theme';
+import { readWidgetThemePayload, type WidgetThemePayload } from './themePayload';
 import './GenerativeWidgetFrame.scss';
 
-type WidgetMessage =
+export type WidgetMessage =
   | {
       source: 'bitfun-widget';
       type: 'bitfun-widget:event';
@@ -36,7 +37,35 @@ type WidgetMessage =
       type: 'bitfun-widget:resize';
       widgetId?: string;
       height?: number;
+    }
+  | {
+      source: 'bitfun-widget';
+      type: 'bitfun-widget:clear-selection';
+      widgetId?: string;
+    }
+  | {
+      source: 'bitfun-widget';
+      type: 'bitfun-widget:selection-cleared';
+      widgetId?: string;
+    }
+  | {
+      source: 'bitfun-widget';
+      type: 'bitfun-widget:context-menu';
+      widgetId?: string;
+      clientX?: number;
+      clientY?: number;
+      viewportX?: number;
+      viewportY?: number;
+      elementSummary?: string;
+      sectionSummary?: string;
+      filePath?: string;
+      line?: number;
     };
+
+export type WidgetContextMenuMessage = Extract<
+  WidgetMessage,
+  { type: 'bitfun-widget:context-menu' }
+>;
 
 export interface GenerativeWidgetFrameProps {
   widgetId: string;
@@ -47,98 +76,10 @@ export interface GenerativeWidgetFrameProps {
   className?: string;
   onWidgetEvent?: (event: WidgetMessage) => void;
   onHeightChange?: (height: number) => void;
+  selectionRevision?: number;
 }
 
-type WidgetThemePayload = {
-  id: string;
-  type: string;
-  vars: Record<string, string>;
-};
-
-const THEME_VAR_NAMES = [
-  '--color-bg-primary',
-  '--color-bg-secondary',
-  '--color-bg-tertiary',
-  '--color-bg-elevated',
-  '--color-bg-workbench',
-  '--color-bg-scene',
-  '--color-bg-tooltip',
-  '--color-text-primary',
-  '--color-text-secondary',
-  '--color-text-muted',
-  '--color-text-disabled',
-  '--color-accent-50',
-  '--color-accent-100',
-  '--color-accent-200',
-  '--color-accent-300',
-  '--color-accent-400',
-  '--color-accent-500',
-  '--color-accent-600',
-  '--color-primary',
-  '--color-primary-hover',
-  '--color-success',
-  '--color-success-bg',
-  '--color-warning',
-  '--color-warning-bg',
-  '--color-error',
-  '--color-error-bg',
-  '--color-info',
-  '--color-info-bg',
-  '--border-subtle',
-  '--border-base',
-  '--border-medium',
-  '--border-strong',
-  '--border-prominent',
-  '--element-bg-subtle',
-  '--element-bg-soft',
-  '--element-bg-base',
-  '--element-bg-medium',
-  '--element-bg-strong',
-  '--element-bg-elevated',
-  '--shadow-xs',
-  '--shadow-sm',
-  '--shadow-base',
-  '--shadow-lg',
-  '--shadow-xl',
-  '--radius-sm',
-  '--radius-base',
-  '--radius-lg',
-  '--radius-xl',
-  '--spacing-2',
-  '--spacing-3',
-  '--spacing-4',
-  '--spacing-6',
-  '--motion-fast',
-  '--motion-base',
-  '--easing-standard',
-  '--font-sans',
-  '--font-mono',
-] as const;
-
-function readWidgetThemePayload(): WidgetThemePayload | null {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return null;
-  }
-
-  const root = document.documentElement;
-  const styles = window.getComputedStyle(root);
-  const vars: Record<string, string> = {};
-
-  for (const name of THEME_VAR_NAMES) {
-    const value = styles.getPropertyValue(name).trim();
-    if (value) {
-      vars[name] = value;
-    }
-  }
-
-  return {
-    id: root.getAttribute('data-theme') || 'unknown',
-    type: root.getAttribute('data-theme-type') || 'dark',
-    vars,
-  };
-}
-
-const SHELL_HTML = `<!DOCTYPE html>
+export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -298,6 +239,18 @@ const SHELL_HTML = `<!DOCTYPE html>
     }
     .bf-panel {
       background: color-mix(in srgb, var(--color-bg-secondary, #1c1c1f) 74%, var(--element-bg-subtle, rgba(255, 255, 255, 0.05)));
+    }
+    [data-bitfun-prompt-selected="true"],
+    [data-bitfun-context-selected="true"] {
+      position: relative;
+      outline: 2px solid var(--color-accent-500, #60a5fa);
+      outline-offset: 2px;
+      box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--color-accent-500, #60a5fa) 18%, transparent),
+        0 10px 24px color-mix(in srgb, var(--color-accent-500, #60a5fa) 14%, transparent);
+      border-radius: min(var(--radius-base, 8px), 12px);
+      transition: outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+      transform: translateY(-1px);
     }
     .bf-card-accent {
       background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, var(--color-bg-secondary, #1c1c1f));
@@ -550,6 +503,7 @@ const SHELL_HTML = `<!DOCTYPE html>
       var lastExecutedHtml = '';
       var resizeFrame = null;
       var resizeObserver = null;
+      var selectedPromptTarget = null;
 
       function send(type, payload) {
         parent.postMessage({
@@ -562,6 +516,122 @@ const SHELL_HTML = `<!DOCTYPE html>
 
       function sendMessage(message) {
         parent.postMessage(message, '*');
+      }
+
+      function normalizeSpace(value) {
+        return String(value || '').replace(/\\s+/g, ' ').trim();
+      }
+
+      function truncateText(value, maxLength) {
+        var text = normalizeSpace(value);
+        if (!text) return '';
+        if (text.length <= maxLength) return text;
+        return text.slice(0, Math.max(0, maxLength - 1)).trimEnd() + '…';
+      }
+
+      function clearPromptTargetSelection() {
+        if (!selectedPromptTarget) return;
+        selectedPromptTarget.removeAttribute('data-bitfun-prompt-selected');
+        selectedPromptTarget = null;
+      }
+
+      function setPromptTargetSelection(element) {
+        if (!element || !element.setAttribute) {
+          clearPromptTargetSelection();
+          return;
+        }
+        if (selectedPromptTarget === element) return;
+        clearPromptTargetSelection();
+        selectedPromptTarget = element;
+        selectedPromptTarget.setAttribute('data-bitfun-prompt-selected', 'true');
+      }
+
+      function findPromptTarget(target) {
+        var node = target && target.nodeType === 1 ? target : target && target.parentElement;
+        while (node && node !== document.body) {
+          if (
+            node.hasAttribute('data-file-path') ||
+            node.hasAttribute('data-bitfun-open-file') ||
+            node.hasAttribute('data-prompt-target') ||
+            node.hasAttribute('data-section-title')
+          ) {
+            return node;
+          }
+          if (/^(button|a|summary)$/i.test(node.tagName)) {
+            return node;
+          }
+          node = node.parentElement;
+        }
+        return target && target.nodeType === 1 ? target : null;
+      }
+
+      function summarizeElement(element) {
+        if (!element || !element.getAttribute) return '';
+
+        var label = normalizeSpace(
+          element.getAttribute('data-prompt-target') ||
+          element.getAttribute('data-label') ||
+          element.getAttribute('aria-label') ||
+          element.getAttribute('title')
+        );
+        if (label) {
+          return truncateText(label, 96);
+        }
+
+        var text = truncateText(element.textContent || '', 96);
+        if (text) {
+          return text;
+        }
+
+        var tag = (element.tagName || '').toLowerCase();
+        if (!tag) return '';
+
+        var parts = [tag];
+        var id = normalizeSpace(element.getAttribute('id'));
+        if (id) {
+          parts.push('#' + id);
+        }
+        var className = normalizeSpace(element.getAttribute('class'));
+        if (className) {
+          parts.push('.' + className.split(/\\s+/).slice(0, 2).join('.'));
+        }
+        return truncateText(parts.join(' '), 96);
+      }
+
+      function summarizeSection(element) {
+        var node = element;
+        while (node && node !== document.body) {
+          var explicit = normalizeSpace(node.getAttribute && node.getAttribute('data-section-title'));
+          if (explicit) {
+            return truncateText(explicit, 96);
+          }
+
+          var tag = (node.tagName || '').toLowerCase();
+          var role = normalizeSpace(node.getAttribute('role'));
+          if (
+            tag === 'section' ||
+            tag === 'article' ||
+            role === 'region' ||
+            role === 'group' ||
+            node.classList.contains('bf-card') ||
+            node.classList.contains('bf-panel')
+          ) {
+            var heading = node.querySelector('h1, h2, h3, h4, h5, h6, [data-section-title]');
+            var headingText = truncateText(
+              heading && heading.getAttribute
+                ? heading.getAttribute('data-section-title') || heading.textContent
+                : '',
+              96
+            );
+            if (headingText) {
+              return headingText;
+            }
+          }
+
+          node = node.parentElement;
+        }
+
+        return '';
       }
 
       function measureHeight() {
@@ -712,9 +782,63 @@ const SHELL_HTML = `<!DOCTYPE html>
         anchor.setAttribute('rel', 'noreferrer noopener');
       }, true);
 
+      document.addEventListener('pointerdown', function (event) {
+        var target = event.target;
+        if (!selectedPromptTarget) return;
+        if (target === selectedPromptTarget) return;
+        if (selectedPromptTarget.contains && selectedPromptTarget.contains(target)) return;
+        clearPromptTargetSelection();
+        sendMessage({
+          source: 'bitfun-widget',
+          type: 'bitfun-widget:selection-cleared',
+          widgetId: currentWidgetId
+        });
+      }, true);
+
+      document.addEventListener('contextmenu', function (event) {
+        var target = event.target;
+        var promptTarget = findPromptTarget(target);
+        var elementSummary = summarizeElement(promptTarget);
+        if (!elementSummary) {
+          clearPromptTargetSelection();
+          return;
+        }
+        setPromptTargetSelection(promptTarget);
+
+        var filePath = normalizeSpace(
+          promptTarget && promptTarget.getAttribute
+            ? promptTarget.getAttribute('data-file-path') || promptTarget.getAttribute('data-bitfun-open-file')
+            : ''
+        );
+        var lineValue = Number(
+          promptTarget && promptTarget.getAttribute ? promptTarget.getAttribute('data-line') || '' : ''
+        );
+
+        event.preventDefault();
+        event.stopPropagation();
+        sendMessage({
+          source: 'bitfun-widget',
+          type: 'bitfun-widget:context-menu',
+          widgetId: currentWidgetId,
+          clientX: Number(event.clientX) || 0,
+          clientY: Number(event.clientY) || 0,
+          elementSummary: elementSummary,
+          sectionSummary: summarizeSection(promptTarget),
+          filePath: filePath || undefined,
+          line: Number.isFinite(lineValue) && lineValue > 0 ? lineValue : undefined
+        });
+      }, true);
+
       window.addEventListener('message', function (event) {
         var data = event.data;
-        if (!data || data.type !== 'bitfun-widget:update') return;
+        if (!data) return;
+        if (data.type === 'bitfun-widget:clear-selection') {
+          if (!data.widgetId || data.widgetId === currentWidgetId) {
+            clearPromptTargetSelection();
+          }
+          return;
+        }
+        if (data.type !== 'bitfun-widget:update') return;
         currentWidgetId = data.widgetId || currentWidgetId || '';
         applyTheme(data.theme);
         setContent(String(data.html || ''), Boolean(data.runScripts));
@@ -749,6 +873,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
   className = '',
   onWidgetEvent,
   onHeightChange,
+  selectionRevision = 0,
 }) => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -773,6 +898,16 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
           if (Math.abs(prev - nextHeight) <= 1) return prev;
           onHeightChange?.(nextHeight);
           return nextHeight;
+        });
+        return;
+      }
+
+      if (data.type === 'bitfun-widget:context-menu') {
+        const iframeRect = iframeRef.current?.getBoundingClientRect();
+        onWidgetEvent?.({
+          ...data,
+          viewportX: iframeRect ? iframeRect.left + (Number(data.clientX) || 0) : data.viewportX,
+          viewportY: iframeRect ? iframeRect.top + (Number(data.clientY) || 0) : data.viewportY,
         });
         return;
       }
@@ -821,6 +956,20 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
     }
   }, [executeScripts, isLoaded, normalizedCode, themePayload, title, widgetId]);
 
+  useEffect(() => {
+    if (!isLoaded || !iframeRef.current?.contentWindow) {
+      return;
+    }
+
+    iframeRef.current.contentWindow.postMessage(
+      {
+        type: 'bitfun-widget:clear-selection',
+        widgetId,
+      },
+      '*',
+    );
+  }, [isLoaded, selectionRevision, widgetId]);
+
   return (
     <div
       className={`bitfun-generative-widget-frame ${className}`.trim()}
@@ -832,7 +981,7 @@ export const GenerativeWidgetFrame: React.FC<GenerativeWidgetFrameProps> = ({
         className="bitfun-generative-widget-frame__iframe"
         style={{ width: '100%', minWidth: '100%' }}
         sandbox="allow-scripts allow-forms allow-modals allow-popups"
-        srcDoc={SHELL_HTML}
+        srcDoc={GENERATIVE_WIDGET_SHELL_HTML}
         onLoad={() => setIsLoaded(true)}
       />
     </div>

@@ -13,6 +13,7 @@ import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
 import { useCurrentSettingsTabTitle } from '../../hooks/useCurrentSettingsTabTitle';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { createLogger } from '@/shared/utils/logger';
+import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './SceneBar.scss';
 
 const log = createLogger('SceneBar');
@@ -42,6 +43,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
   const sceneBarClassName = `bitfun-scene-bar ${!hasWindowControls ? 'bitfun-scene-bar--no-controls' : ''} ${className}`.trim();
   const isSingleTab = openTabs.length <= 1;
+  const canDragWindow = supportsNativeWindowDragging();
   const tabCount = Math.max(openTabs.length, 1);
   const tabsStyle = {
     ['--scene-tab-count' as string]: tabCount,
@@ -49,6 +51,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const lastMouseDownTimeRef = useRef<number>(0);
 
   const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!canDragWindow) return;
     if (!isSingleTab) return;
 
     const now = Date.now();
@@ -69,7 +72,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
         log.debug('startDragging failed', error);
       }
     })();
-  }, [isSingleTab]);
+  }, [canDragWindow, isSingleTab]);
 
   const handleBarDoubleClick = useCallback((e: React.MouseEvent) => {
     if (!isSingleTab) return;

@@ -229,7 +229,7 @@ interface ExploreItemRendererProps {
   isLastItem?: boolean;
 }
 
-const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, isLastItem }) => {
+const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId, isLastItem }) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -286,9 +286,10 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, isLast
           onOpenInEditor={handleOpenInEditor}
           onOpenInPanel={handleOpenInPanel}
           sessionId={sessionId}
+          turnId={turnId}
         />
       );
-    
+
     default:
       return null;
   }

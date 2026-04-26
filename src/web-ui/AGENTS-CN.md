@@ -27,11 +27,13 @@
 - 不要在 UI 组件里直接调用 Tauri API；应通过 adapter / infrastructure 层访问
 - 新增前端基础设施前，先复用已有的 theme、i18n、component-library 和 Zustand stores
 - 遵循 `src/web-ui/LOGGING.md`：仅英文、无 emoji、结构化日志
+- 共享前端改动后的桌面人工验证，优先使用 `pnpm run desktop:preview:debug` 而不是 `pnpm run desktop:dev`；只有在要验证的就是 Tauri 启动 / dev 流程本身时，才切回完整桌面链路
 
 ## 命令
 
 ```bash
 pnpm --dir src/web-ui dev
+pnpm run desktop:preview:debug
 pnpm --dir src/web-ui run lint
 pnpm --dir src/web-ui run type-check
 pnpm --dir src/web-ui run test:run

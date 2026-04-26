@@ -28,6 +28,7 @@ toml = { workspace = true }
 # Session management
 uuid = { workspace = true }
 chrono = { workspace = true }
+dashmap = { workspace = true }
 
 # Async trait
 async-trait = { workspace = true }

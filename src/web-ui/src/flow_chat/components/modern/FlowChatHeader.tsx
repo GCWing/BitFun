@@ -42,6 +42,8 @@ export interface FlowChatHeaderProps {
   turns?: FlowChatHeaderTurnSummary[];
   /** Jump to a specific turn. */
   onJumpToTurn?: (turnId: string) => void;
+  /** Jump to the currently displayed turn. */
+  onJumpToCurrentTurn?: () => void;
   /** Jump to the previous turn. */
   onJumpToPreviousTurn?: () => void;
   /** Jump to the next turn. */
@@ -74,6 +76,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   btwParentTitle = '',
   turns = [],
   onJumpToTurn,
+  onJumpToCurrentTurn,
   onJumpToPreviousTurn,
   onJumpToNextTurn,
   searchQuery = '',
@@ -264,7 +267,22 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       </div>
 
       <Tooltip content={currentUserMessage} placement="bottom">
-        <div className="flowchat-header__message">
+        <div
+          className="flowchat-header__message"
+          role="button"
+          tabIndex={0}
+          onClick={onJumpToCurrentTurn}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onJumpToCurrentTurn?.();
+            }
+          }}
+          aria-label={t('flowChatHeader.jumpToCurrentTurn', {
+            turn: currentTurn,
+            defaultValue: `Jump to Turn ${currentTurn}`,
+          })}
+        >
           <span className="flowchat-header__turn-badge" aria-label={turnBadgeLabel}>
             <span>{turnBadgeLabel}</span>
           </span>

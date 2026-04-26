@@ -4,7 +4,7 @@
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::infrastructure::events::event_system::{get_global_event_system, BackendEvent};
-use crate::util::errors::BitFunResult;
+use crate::util::{errors::BitFunResult, truncate_at_char_boundary};
 use async_trait::async_trait;
 use chrono::Utc;
 use log::debug;
@@ -59,7 +59,7 @@ impl MermaidInteractiveTool {
             return (false, Some(format!(
                 "Mermaid code must start with a valid diagram type. Supported diagram types: graph, flowchart, sequenceDiagram, classDiagram, stateDiagram, erDiagram, gantt, pie, journey, timeline, mindmap, etc.\nCurrent code start: {}",
                 if trimmed.len() > 50 {
-                    format!("{}...", &trimmed[..50]) 
+                    format!("{}...", truncate_at_char_boundary(trimmed, 50))
                 } else {
                     trimmed.to_string()
                 }

@@ -540,7 +540,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     });
 
     const parts = [];
-    if (hasUiApp) parts.push(t('toolCards.mcp.interactiveApp', 'interactive app'));
+    if (hasUiApp) parts.push(t('toolCards.mcp.interactiveApp'));
     if (counts.text > 0) parts.push(`${counts.text} text`);
     if (counts.image > 0) parts.push(`${counts.image} images`);
     if (counts.resource > 0 && !hasUiApp) parts.push(`${counts.resource} resources`);
@@ -562,7 +562,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     if (toolResult && 'error' in toolResult) {
       return toolResult.error;
     }
-    return t('toolCards.mcp.executionFailed', 'MCP execution failed');
+    return t('toolCards.mcp.executionFailed');
   };
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
@@ -595,7 +595,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     <ToolCardHeader
       icon={renderToolIcon()}
       iconClassName="mcp-icon"
-      action={isFailed ? t('toolCards.mcp.failedLabel', 'MCP failed') : t('toolCards.mcp.actionLabel', 'MCP:')}
+      action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
         <span className="mcp-tool-info">
           <span className="tool-name">{toolName}</span>
@@ -681,12 +681,12 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
             {mcpAppState.loading && (
               <div className="mcp-app-loading">
                 <CubeLoading size="small" />
-                <span>{t('toolCards.mcp.loadingApp', 'Loading interactive app...')}</span>
+                <span>{t('toolCards.mcp.loadingApp')}</span>
               </div>
             )}
             {mcpAppState.error && (
               <div className="mcp-app-error">
-                <span>{t('toolCards.mcp.appLoadError', 'Failed to load app')}: {mcpAppState.error}</span>
+                <span>{t('toolCards.mcp.appLoadError')}: {mcpAppState.error}</span>
               </div>
             )}
             {mcpAppState.html && !mcpAppState.loading && (

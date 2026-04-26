@@ -15,7 +15,13 @@
   },
   "nav": {
     "coreAgents": "Core Agents",
-    "agents": "Agent"
+    "agents": "Agent",
+    "teams": "Teams"
+  },
+  "teamsZone": {
+    "title": "Agent Teams",
+    "subtitle": "Organize multi-agent lineups for deeper tasks. A professional code review team is now available.",
+    "empty": "No agent teams are available right now"
   },
   "filters": {
     "source": "Source",
@@ -28,12 +34,19 @@
   },
   "coreAgentsZone": {
     "title": "Core Agents",
-    "subtitle": "Built-in core agent modes covering mainstream AI workflows, ready to use out of the box.",
+    "subtitle": "Built-in core agents covering mainstream AI workflows, ready to use out of the box.",
     "empty": "No core agents detected",
     "roleLabel": "Primary Use · ",
     "modes": {
-      "agentic": { "role": "Coding specialist agent" },
-      "cowork": { "role": "Office & collaboration agent" }
+      "agentic": {
+        "role": "Coding specialist agent"
+      },
+      "cowork": {
+        "role": "Office & collaboration agent"
+      },
+      "computerUse": {
+        "role": "Desktop automation agent"
+      }
     }
   },
   "agentsZone": {
@@ -60,6 +73,14 @@
       "skills": "{{count}} skills"
     }
   },
+  "capabilityCategories": {
+    "coding": "Coding",
+    "docs": "Docs",
+    "analysis": "Analysis",
+    "testing": "Testing",
+    "creative": "Creative",
+    "ops": "Ops"
+  },
   "agentsOverview": {
     "filterUser": "User",
     "filterProject": "Project",
@@ -70,6 +91,7 @@
     "toolsSave": "Save",
     "toolsEdit": "Manage tools",
     "toolsResetSuccess": "Reset to default tools",
+    "toolsResetFailed": "Failed to reset tools",
     "toolToggleFailed": "Failed to toggle tool",
     "skills": "Skills",
     "skillsCancel": "Cancel editing",
@@ -117,11 +139,166 @@
       "readonly": "Readonly mode",
       "tools": "Tools",
       "toolsOptional": "optional",
+      "toolsHint": "({{optionalLabel}}, uses default when none selected)",
       "noWorkspace": "Open a workspace first",
       "cancel": "Cancel",
       "submit": "Create",
       "createSuccess": "Created agent \"{{name}}\"",
       "createFailed": "Create failed: "
+    }
+  },
+  "reviewTeams": {
+    "default": {
+      "name": "Code Review Team",
+      "summary": "A deep-review code team with locked logic, performance, security, and quality-gate roles.",
+      "members": "{{count}} members"
+    },
+    "detail": {
+      "open": "Open team",
+      "back": "Back to Agents",
+      "openSettings": "Review settings",
+      "title": "Code Review Team",
+      "subtitle": "Configure the code review team used by Deep Review and /DeepReview. Every reviewer starts on the Fast model unless you change it.",
+      "summaryTitle": "Team Overview",
+      "summaryDescription": "Parallel reviewers cover the requested scope, then the quality gate consolidates the final result.",
+      "membersTitle": "Team Members",
+      "membersDescription": "Select a member to review its role, responsibilities, model, and strategy override. Locked roles always stay in the team.",
+      "membersCount": "{{count}} members",
+      "lockedCount": "{{count}} locked roles",
+      "extraCount": "{{count}} extra Sub-Agents",
+      "localOnly": "Code review",
+      "localOnlyDescription": "Runs inside BitFun as read-only Sub-Agents and reports back into this review thread.",
+      "parallelLabel": "Parallel reviewers",
+      "parallelDescription": "Logic, performance, security, and extra reviewers work side by side before the judge validates findings.",
+      "warningLabel": "Heavier review",
+      "warning": "Use for higher-risk changes; it can take longer and use more tokens than a standard review.",
+      "qualityGate": "Quality gate",
+      "executionPolicyTitle": "Execution Policy",
+      "executionPolicyDescription": "Control review depth, timeouts, and how broad scopes split across parallel read-only reviewers.",
+      "policySummaryTitle": "Current Policy",
+      "policySummaryIntro": "This live snapshot comes from Review settings and updates when the team policy changes.",
+      "policySummaryEyebrow": "Configured behavior",
+      "policySummaryDescription": "{{strategy}} review uses {{reviewerTimeout}} per reviewer, gives the judge {{judgeTimeout}}, splits each role after {{splitThreshold}}, and caps same-role parallelism at {{maxSameRoleInstances}}.",
+      "policySummaryAction": "Open Review settings to edit the current policy",
+      "policyMetricsLabel": "Current policy values",
+      "policyStrategyLabel": "Strategy",
+      "reviewerTimeout": "Reviewer timeout",
+      "reviewerTimeoutDescription": "Per-reviewer timeout in seconds. Set 0 to let reviewers run without a hard deadline.",
+      "judgeTimeout": "Judge timeout",
+      "judgeTimeoutDescription": "Quality-gate timeout in seconds. Set 0 to wait as long as needed for the judge.",
+      "fileSplitThreshold": "File split threshold",
+      "fileSplitThresholdDescription": "When target files exceed this value, each reviewer role can split into multiple instances. Set 0 to disable splitting.",
+      "maxSameRoleInstances": "Max same-role instances",
+      "maxSameRoleInstancesDescription": "Maximum parallel instances per reviewer role when file splitting is active.",
+      "seconds": "s",
+      "secondsValue": "{{seconds}}s",
+      "noTimeout": "No cap",
+      "fileCountValue": "{{count}} files",
+      "splitDisabled": "No split",
+      "instancesValue": "{{count}} max",
+      "memberDetailTitle": "Member Detail",
+      "memberDetailDescription": "Each reviewer keeps its own context while the team run is active.",
+      "responsibilities": "Responsibilities",
+      "model": "Assigned model",
+      "modelDescription": "Change the model for this reviewer only. Deep review uses Fast by default, and your update applies immediately.",
+      "remove": "Remove member",
+      "removeDescription": "Remove this extra Sub-Agent from the code review team. Core roles cannot be removed.",
+      "addTitle": "Add Extra Sub-Agent",
+      "addDescription": "Bring another read-only Sub-Agent into the deep code review team. The four core roles always remain locked in place.",
+      "addLabel": "Candidate",
+      "addHint": "Only read-only Sub-Agents can join the initial review pass; the quality inspector checks every extra reviewer before final reporting.",
+      "addPlaceholder": "Select a Sub-Agent",
+      "addButton": "Add to team",
+      "emptyCandidates": "No additional read-only Sub-Agents are available to add right now.",
+      "memberTypes": {
+        "locked": "Locked",
+        "core": "Core role",
+        "extra": "Extra Sub-Agent",
+        "builtin": "Built-in",
+        "user": "User",
+        "project": "Project"
+      },
+      "messages": {
+        "modelUpdated": "Updated {{name}} model.",
+        "memberAdded": "Added the extra reviewer to the team.",
+        "memberRemoved": "Removed the extra reviewer from the team.",
+        "saveFailed": "Failed to save the code review team configuration."
+      }
+    },
+    "strategy": {
+      "teamTitle": "Review strategy",
+      "teamDescription": "Choose the default depth for the whole code review team. Individual reviewers can override it in their member details.",
+      "memberTitle": "Reviewer strategy",
+      "memberDescription": "Override this reviewer only when a role needs a different depth from the team default.",
+      "impact": "About {{token}} token usage and {{runtime}} runtime.",
+      "inheritLabel": "Inherit team ({{level}})",
+      "inheritSummary": "Use the team-wide review strategy for this reviewer.",
+      "modelFallbackShort": "fallback",
+      "modelFallbackDescription": "The configured model {{configuredModel}} is no longer available, so this reviewer will use {{model}}.",
+      "quick": {
+        "label": "Quick",
+        "summary": "Fast screening for high-confidence issues in the requested diff or scope."
+      },
+      "normal": {
+        "label": "Normal",
+        "summary": "Balanced review depth for day-to-day code review with practical evidence."
+      },
+      "deep": {
+        "label": "Deep",
+        "summary": "Thorough multi-pass review for risky, broad, or release-sensitive changes."
+      }
+    },
+    "members": {
+      "businessLogic": {
+        "funName": "Logic Reviewer",
+        "role": "Business Logic Reviewer",
+        "description": "A workflow sleuth that inspects business rules, state transitions, recovery paths, and real-user correctness.",
+        "responsibilities": [
+          "Verify workflows, state transitions, and domain rules still behave correctly.",
+          "Check boundary cases, rollback paths, and data integrity assumptions.",
+          "Focus on issues that can break user outcomes or product intent."
+        ]
+      },
+      "performance": {
+        "funName": "Performance Reviewer",
+        "role": "Performance Reviewer",
+        "description": "A speed-focused profiler that hunts hot paths, unnecessary work, blocking calls, and scale-sensitive regressions.",
+        "responsibilities": [
+          "Inspect hot paths, large loops, and unnecessary allocations or recomputation.",
+          "Flag blocking work, N+1 patterns, and wasteful data movement.",
+          "Keep performance advice practical and aligned with the existing architecture."
+        ]
+      },
+      "security": {
+        "funName": "Security Reviewer",
+        "role": "Security Reviewer",
+        "description": "A boundary guardian that scans for injection risks, trust leaks, privilege mistakes, and unsafe file or command handling.",
+        "responsibilities": [
+          "Review trust boundaries, auth assumptions, and sensitive data handling.",
+          "Look for injection, unsafe command execution, and exposure risks.",
+          "Highlight concrete fixes that reduce risk without broad rewrites."
+        ]
+      },
+      "judge": {
+        "funName": "Review Arbiter",
+        "role": "Review Quality Inspector",
+        "description": "An independent third-party arbiter that validates reviewer reports for logical consistency and evidence quality. It spot-checks specific code locations only when a claim needs verification, rather than re-reviewing the codebase from scratch.",
+        "responsibilities": [
+          "Validate, merge, downgrade, or reject reviewer findings based on logical consistency and evidence quality.",
+          "Filter out false positives and directionally-wrong optimization advice by examining reviewer reasoning.",
+          "Spot-check specific code locations only when a reviewer's claim needs verification.",
+          "Ensure every surviving issue has an actionable fix or follow-up plan."
+        ]
+      }
+    },
+    "extraReviewer": {
+      "role": "Additional Specialist Reviewer",
+      "description": "User-added Sub-Agent that joins the deep review lineup with its own instructions, tools, and perspective.",
+      "responsibilities": [
+        "Bring an extra independent review perspective into the same target scope.",
+        "Stay tightly focused on the requested diff, commit, or workspace changes.",
+        "Return concrete findings with clear fix suggestions or follow-up steps."
+      ]
     }
   }
 }

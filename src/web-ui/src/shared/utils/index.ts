@@ -6,6 +6,8 @@ export * from './validation';
 
 
 export * from './logger';
+export * from './timing';
+export * from './debugProbe';
 
 
 export * from './configConverter';

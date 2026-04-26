@@ -1,0 +1,72 @@
+// TaskRunningIndicator - lightweight animated bars for "in-progress" states.
+// Uses currentColor for theme adaptability and em units for font-size scaling.
+
+.task-running-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2em;
+  flex-shrink: 0;
+  vertical-align: middle;
+  color: inherit;
+
+  &__bar {
+    display: inline-block;
+    width: 0.22em;
+    border-radius: 999px;
+    background-color: currentColor;
+    animation: task-running-pulse 1.2s ease-in-out infinite;
+
+    &:nth-child(1) {
+      height: 0.55em;
+      animation-delay: 0s;
+    }
+
+    &:nth-child(2) {
+      height: 0.85em;
+      animation-delay: 0.15s;
+    }
+
+    &:nth-child(3) {
+      height: 0.55em;
+      animation-delay: 0.3s;
+    }
+  }
+
+  // Size variants (scale relative to parent font-size)
+  &--xs {
+    font-size: 0.75em;
+  }
+
+  &--sm {
+    font-size: 1em;
+  }
+
+  &--md {
+    font-size: 1.25em;
+  }
+
+  &--lg {
+    font-size: 1.5em;
+  }
+}
+
+@keyframes task-running-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scaleY(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+// Reduced motion: show static bars at full opacity without animation
+@media (prefers-reduced-motion: reduce) {
+  .task-running-indicator__bar {
+    animation: none;
+    opacity: 0.75;
+    transform: scaleY(1);
+  }
+}

@@ -170,7 +170,7 @@ const AIFeaturesConfig: React.FC = () => {
           const hasModel = !!feature.agentName;
           const isEnabled = hasSwitch ? settings[feature.settingKey!] : true;
           const configuredModelId = hasModel ? (funcAgentModels[feature.agentName!] || 'fast') : 'fast';
-          const warning = t(`features.${feature.id}.warning`, '');
+          const warning = t(`features.${feature.id}.warning`, { defaultValue: '' });
 
           return (
             <ConfigPageSection

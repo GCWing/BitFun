@@ -55,7 +55,55 @@
     "streamError": "Stream response error",
     "timeout": "AI response timeout",
     "initializeFailedTitle": "AI client initialization failed",
-    "configRequired": "Model configuration is required"
+    "configRequired": "Model configuration is required",
+    "executionFailed": "Dialog execution failed",
+    "genericSuggestion": "Please retry later, or check your network connection and model service status",
+    "networkError": "AI response interrupted",
+    "networkErrorSuggestion": "The connection was unstable or the model server closed it prematurely. Check your network and retry",
+    "loopDetected": "Repetitive operation detected",
+    "loopDetectedSuggestion": "AI repeated the same operation and was stopped automatically. Try adjusting your instructions or completing remaining steps manually",
+    "rateLimit": "Model rate limit exceeded",
+    "rateLimitSuggestion": "Please retry later, or switch to a different model in settings",
+    "authError": "API authentication failed",
+    "authErrorSuggestion": "The API key is invalid or expired. Check the key in your model configuration",
+    "contextOverflow": "Conversation exceeds context limit",
+    "contextOverflowSuggestion": "The conversation is too long for the model context. Start a new conversation or enable context compression",
+    "timeoutError": "AI response timed out",
+    "timeoutSuggestion": "The model took too long to respond. Check your network or try switching models",
+    "providerQuota": {
+      "title": "Model quota unavailable",
+      "message": "The model provider rejected this request because the account balance, quota, or resource package is unavailable. Update the model configuration, switch models, or continue after the provider resource is restored."
+    },
+    "providerBilling": {
+      "title": "Model billing action required",
+      "message": "The model provider requires a billing, subscription, or package update before this request can continue."
+    },
+    "providerUnavailable": {
+      "title": "Model provider temporarily unavailable",
+      "message": "The provider is overloaded or temporarily unavailable. Wait briefly and retry, or switch to another model."
+    },
+    "permission": {
+      "title": "Model permission denied",
+      "message": "The API key does not have permission to use this model or endpoint. Check the model configuration or switch models."
+    },
+    "invalidRequest": {
+      "title": "Model request invalid",
+      "message": "The provider rejected the request format, parameters, model name, or payload size. Adjust the request or choose another model."
+    },
+    "contentPolicy": {
+      "title": "Model safety policy blocked the request",
+      "message": "The provider blocked the input or output for policy reasons. Adjust the prompt or review scope before trying again."
+    },
+    "actions": {
+      "retry": "Retry",
+      "continue": "Continue",
+      "openModelSettings": "Open model settings",
+      "switchModel": "Switch model",
+      "waitAndRetry": "Wait and retry",
+      "compressContext": "Compress context",
+      "startNewChat": "Start new chat",
+      "copyDiagnostics": "Copy diagnostics"
+    }
   },
   "aiRules": {
     "loadFailed": "Failed to load AI rules",

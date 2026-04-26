@@ -272,6 +272,14 @@
     },
     "previewApp": {
       "title": "BitFun Component Library",
+      "themeLabel": "Theme",
+      "themeTypeLight": "Light",
+      "themeTypeDark": "Dark",
+      "themeDescriptionLight": "Light theme",
+      "themeDescriptionDark": "Dark theme",
+      "sidebarTitle": "Component Navigation",
+      "expandSidebar": "Expand navigation",
+      "collapseSidebar": "Collapse navigation",
       "emptyState": "Select a category on the left to view components"
     },
     "layouts": {

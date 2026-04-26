@@ -510,6 +510,42 @@ impl SSHConnectionManager {
         self.remote_workspaces.read().await.clone()
     }
 
+    /// Drop persisted remote workspace restore entries whose saved SSH profile is gone.
+    pub async fn prune_remote_workspaces_without_saved_connections(
+        &self,
+    ) -> anyhow::Result<Vec<crate::service::remote_ssh::types::RemoteWorkspace>> {
+        let saved_ids: Vec<String> = self
+            .saved_connections
+            .read()
+            .await
+            .iter()
+            .map(|c| c.id.clone())
+            .collect();
+
+        let removed = {
+            let mut guard = self.remote_workspaces.write().await;
+            let mut removed = Vec::new();
+            guard.retain(|w| {
+                let keep = saved_ids.iter().any(|id| id == &w.connection_id);
+                if !keep {
+                    removed.push(w.clone());
+                }
+                keep
+            });
+            removed
+        };
+
+        if !removed.is_empty() {
+            log::warn!(
+                "Removed {} persisted remote workspace(s) without saved SSH connection",
+                removed.len()
+            );
+            self.save_remote_workspaces().await?;
+        }
+
+        Ok(removed)
+    }
+
     /// Get first persisted remote workspace (legacy compat)
     pub async fn get_remote_workspace(
         &self,
@@ -734,7 +770,17 @@ impl SSHConnectionManager {
 
         let mut guard = self.saved_connections.write().await;
         *guard = saved;
+        drop(guard);
 
+        let removed = self.prune_saved_connections_without_credentials().await?;
+        if !removed.is_empty() {
+            log::warn!(
+                "Removed {} saved SSH connection(s) with unavailable local credentials during load",
+                removed.len()
+            );
+        }
+
+        let guard = self.saved_connections.read().await;
         log::info!("load_saved_connections: loaded {} connections", guard.len());
         Ok(())
     }
@@ -762,7 +808,63 @@ impl SSHConnectionManager {
 
     /// Get list of saved connections
     pub async fn get_saved_connections(&self) -> Vec<SavedConnection> {
+        if let Err(e) = self.prune_saved_connections_without_credentials().await {
+            log::warn!("Failed to prune unavailable saved SSH connections: {}", e);
+        }
         self.saved_connections.read().await.clone()
+    }
+
+    /// Remove saved profiles that cannot reconnect without user input, plus their
+    /// persisted remote-workspace restore records. Passwords from older clients
+    /// may not have a vault entry after an upgrade; keeping those profiles causes
+    /// startup restore loops and hides matching SSH config hosts in the dialog.
+    pub async fn prune_saved_connections_without_credentials(&self) -> anyhow::Result<Vec<String>> {
+        let saved_snapshot = self.saved_connections.read().await.clone();
+        let mut removed_ids = Vec::new();
+        for conn in saved_snapshot {
+            if !matches!(
+                conn.auth_type,
+                crate::service::remote_ssh::types::SavedAuthType::Password
+            ) {
+                continue;
+            }
+            match self.password_vault.load(&conn.id).await {
+                Ok(Some(_)) => {}
+                Ok(None) => removed_ids.push(conn.id),
+                Err(e) => {
+                    log::warn!(
+                        "Treating saved SSH password profile as unavailable: id={}, error={}",
+                        conn.id,
+                        e
+                    );
+                    removed_ids.push(conn.id);
+                }
+            }
+        }
+
+        if removed_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let removed_ids = {
+            let mut guard = self.saved_connections.write().await;
+            guard.retain(|conn| !removed_ids.iter().any(|id| id == &conn.id));
+            removed_ids
+        };
+
+        for id in &removed_ids {
+            if let Err(e) = self.password_vault.remove(id).await {
+                log::warn!(
+                    "Failed to remove SSH password vault entry for {}: {}",
+                    id,
+                    e
+                );
+            }
+        }
+        self.remove_remote_workspaces_for_connections(&removed_ids)
+            .await?;
+        self.save_connections().await?;
+        Ok(removed_ids)
     }
 
     /// SSH `host` field from the saved profile with this `connection_id` (works when not connected).
@@ -782,6 +884,25 @@ impl SSHConnectionManager {
 
     /// Save a connection configuration
     pub async fn save_connection(&self, config: &SSHConnectionConfig) -> anyhow::Result<()> {
+        match &config.auth {
+            SSHAuthMethod::Password { password } => {
+                if password.is_empty() && self.password_vault.load(&config.id).await?.is_none() {
+                    anyhow::bail!(
+                        "Cannot save password SSH connection without a password or stored vault entry"
+                    );
+                }
+                if !password.is_empty() {
+                    self.password_vault
+                        .store(&config.id, password)
+                        .await
+                        .with_context(|| format!("store ssh password vault for {}", config.id))?;
+                }
+            }
+            SSHAuthMethod::PrivateKey { .. } => {
+                self.password_vault.remove(&config.id).await?;
+            }
+        }
+
         let mut guard = self.saved_connections.write().await;
 
         // Remove existing entry with same id OR same host+port+username (dedup)
@@ -815,20 +936,6 @@ impl SSHConnectionManager {
 
         drop(guard);
 
-        match &config.auth {
-            SSHAuthMethod::Password { password } => {
-                if !password.is_empty() {
-                    self.password_vault
-                        .store(&config.id, password)
-                        .await
-                        .with_context(|| format!("store ssh password vault for {}", config.id))?;
-                }
-            }
-            SSHAuthMethod::PrivateKey { .. } => {
-                self.password_vault.remove(&config.id).await?;
-            }
-        }
-
         self.save_connections().await
     }
 
@@ -857,7 +964,32 @@ impl SSHConnectionManager {
         guard.retain(|c| c.id != connection_id);
         drop(guard);
         self.password_vault.remove(connection_id).await?;
+        self.remove_remote_workspaces_for_connections(&[connection_id.to_string()])
+            .await?;
         self.save_connections().await
+    }
+
+    async fn remove_remote_workspaces_for_connections(
+        &self,
+        connection_ids: &[String],
+    ) -> anyhow::Result<()> {
+        if connection_ids.is_empty() {
+            return Ok(());
+        }
+        let removed = {
+            let mut guard = self.remote_workspaces.write().await;
+            let before = guard.len();
+            guard.retain(|w| !connection_ids.iter().any(|id| id == &w.connection_id));
+            before - guard.len()
+        };
+        if removed > 0 {
+            log::warn!(
+                "Removed {} persisted remote workspace(s) for unavailable SSH connection(s)",
+                removed
+            );
+            self.save_remote_workspaces().await?;
+        }
+        Ok(())
     }
 
     /// Connect to a remote SSH server
@@ -2113,5 +2245,109 @@ impl PortForwardManager {
 impl Default for PortForwardManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::remote_ssh::types::{RemoteWorkspace, SavedAuthType, SavedConnection};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_data_dir(name: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "bitfun-remote-ssh-manager-{}-{}-{}",
+            name,
+            std::process::id(),
+            nanos
+        ))
+    }
+
+    #[tokio::test]
+    async fn prunes_password_connection_without_vault_entry() {
+        let dir = test_data_dir("missing-vault");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        let saved = vec![SavedConnection {
+            id: "ssh-root@example.com:22".to_string(),
+            name: "root@example.com".to_string(),
+            host: "example.com".to_string(),
+            port: 22,
+            username: "root".to_string(),
+            auth_type: SavedAuthType::Password,
+            default_workspace: None,
+            last_connected: Some(1),
+        }];
+        tokio::fs::write(
+            dir.join("ssh_connections.json"),
+            serde_json::to_string_pretty(&saved).unwrap(),
+        )
+        .await
+        .unwrap();
+
+        manager.load_saved_connections().await.unwrap();
+
+        assert!(manager.get_saved_connections().await.is_empty());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn rejects_saving_password_connection_without_password() {
+        let dir = test_data_dir("empty-password-save");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        let result = manager
+            .save_connection(&SSHConnectionConfig {
+                id: "ssh-root@example.com:22".to_string(),
+                name: "root@example.com".to_string(),
+                host: "example.com".to_string(),
+                port: 22,
+                username: "root".to_string(),
+                auth: SSHAuthMethod::Password {
+                    password: String::new(),
+                },
+                default_workspace: None,
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert!(manager.get_saved_connections().await.is_empty());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn prunes_remote_workspaces_without_saved_connection() {
+        let dir = test_data_dir("missing-saved");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let manager = SSHConnectionManager::new(dir.clone());
+
+        let workspaces = vec![RemoteWorkspace {
+            connection_id: "ssh-root@example.com:22".to_string(),
+            remote_path: "/root/project".to_string(),
+            connection_name: "root@example.com".to_string(),
+            ssh_host: "example.com".to_string(),
+        }];
+        tokio::fs::write(
+            dir.join("remote_workspace.json"),
+            serde_json::to_string_pretty(&workspaces).unwrap(),
+        )
+        .await
+        .unwrap();
+
+        manager.load_remote_workspace().await.unwrap();
+        let removed = manager
+            .prune_remote_workspaces_without_saved_connections()
+            .await
+            .unwrap();
+
+        assert_eq!(removed.len(), 1);
+        assert!(manager.get_remote_workspaces().await.is_empty());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 }

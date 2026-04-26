@@ -21,6 +21,7 @@ interface FlowToolCardProps {
   onOpenInPanel?: (panelType: string, data: any) => void;
   onExpand?: (toolId: string) => void;
   sessionId?: string;
+  turnId?: string;
   className?: string;
 }
 

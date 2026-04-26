@@ -125,6 +125,7 @@ pub async fn run_stream_fixture_with_options(
     let result = processor
         .process_stream(
             unified_stream,
+            None,
             Some(rx_raw_sse),
             "session_fixture".to_string(),
             "turn_fixture".to_string(),

@@ -32,6 +32,7 @@ import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
 import { BtwMarkerCard } from './BtwMarkerCard';
+import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
 
@@ -221,6 +222,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#7aa6ff'
   },
 
+  'ReviewSessionSummary': {
+    toolName: 'ReviewSessionSummary',
+    displayName: 'Review summary',
+    icon: 'REV',
+    requiresConfirmation: false,
+    resultDisplayType: 'hidden',
+    description: 'Review session summary marker',
+    displayMode: 'detailed',
+    primaryColor: '#0ea5e9'
+  },
+
   // Git version control tool
   'Git': {
     toolName: 'Git',
@@ -362,6 +374,7 @@ export const TOOL_CARD_COMPONENTS = {
 
   // /btw marker
   'BtwMarker': BtwMarkerCard,
+  'ReviewSessionSummary': ReviewSessionSummaryCard,
 
   // Git version control
   'Git': GitToolDisplay,
@@ -489,6 +502,11 @@ export const COLLAPSIBLE_TOOL_NAMES = new Set([
   'Read', 'LS', 'Grep', 'Glob', 'WebSearch'
 ]);
 
+/** Terminal tools that can be grouped together. */
+export const TERMINAL_COLLAPSIBLE_TOOL_NAMES = new Set([
+  'Bash'
+]);
+
 /** Read tools (counted in readCount). */
 export const READ_TOOL_NAMES = new Set(['Read', 'LS']);
 
@@ -498,6 +516,11 @@ export const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
 /** Check whether a tool is collapsible. */
 export function isCollapsibleTool(toolName: string): boolean {
   return COLLAPSIBLE_TOOL_NAMES.has(toolName);
+}
+
+/** Check whether a tool is a terminal collapsible tool. */
+export function isTerminalCollapsibleTool(toolName: string): boolean {
+  return TERMINAL_COLLAPSIBLE_TOOL_NAMES.has(toolName);
 }
 
 /**

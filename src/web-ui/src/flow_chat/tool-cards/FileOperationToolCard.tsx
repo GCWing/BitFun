@@ -44,14 +44,12 @@ import { createLogger } from '@/shared/utils/logger';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
+import { notificationService } from '@/shared/notification-system';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
-const FILE_OPERATION_PREVIEW_ROWS = 4;
-const FILE_OPERATION_PREVIEW_ROW_HEIGHT = 22;
-// Keep streaming and completed previews at the same height to avoid layout jumps.
-const FILE_OPERATION_PREVIEW_MAX_HEIGHT =
-  FILE_OPERATION_PREVIEW_ROWS * FILE_OPERATION_PREVIEW_ROW_HEIGHT;
+const FILE_OPERATION_STREAMING_MAX_HEIGHT = 4 * 22; // 88px – compact while streaming
+const FILE_OPERATION_DIFF_MAX_HEIGHT = 15 * 22;     // 330px – comfortable diff reading when expanded
 
 interface FileOperationToolCardProps extends ToolCardProps {
   sessionId?: string;
@@ -444,7 +442,12 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       return;
     }
     
-    if (currentFilePath && sessionId && status === 'completed') {
+    if (status !== 'completed') {
+      applyContentExpandedState(!isContentExpanded, 'manual');
+      return;
+    }
+
+    if (currentFilePath && sessionId) {
       handleOpenInCodeEditor();
       return;
     }
@@ -453,9 +456,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       onOpenInEditor(currentFilePath);
     }
   }, [
+    applyContentExpandedState,
     applyErrorExpandedState,
     currentFilePath,
     handleOpenInCodeEditor,
+    isContentExpanded,
     isErrorExpanded,
     isFailed,
     onOpenInEditor,
@@ -487,8 +492,20 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         currentWorkspace.rootPath
       );
 
-      if ((diffData.originalContent || '') === (diffData.modifiedContent || '')) {
-        log.debug('Skipping empty baseline diff', { filePath: diffFilePath });
+      const originalContent = diffData.originalContent || '';
+      const modifiedContent = diffData.modifiedContent || '';
+
+      if (originalContent === modifiedContent) {
+        log.info('Baseline diff has no changes, skipping diff editor', {
+          filePath: diffFilePath,
+          originalLength: originalContent.length,
+          modifiedLength: modifiedContent.length,
+          operationId: toolCall?.id,
+          anchorLine: diffData.anchorLine,
+        });
+        notificationService.info(
+          `No changes to display for ${fileName}: baseline and current content are identical.`
+        );
         return;
       }
 
@@ -558,6 +575,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const renderExpandedContent = () => {
     if (isFailed) return null;
 
+    const previewMaxHeight = status === 'completed'
+      ? FILE_OPERATION_DIFF_MAX_HEIGHT
+      : FILE_OPERATION_STREAMING_MAX_HEIGHT;
+
     if (toolItem.toolName === 'Edit') {
       if (status !== 'completed' && newStringContent) {
         return (
@@ -568,7 +589,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 filePath={currentFilePath}
                 isStreaming={isParamsStreaming}
                 showLineNumbers={false}
-                maxHeight={FILE_OPERATION_PREVIEW_MAX_HEIGHT}
+                maxHeight={previewMaxHeight}
                 autoScrollToBottom={isParamsStreaming}
                 onLineClick={handleCodeLineClick}
               />
@@ -585,7 +606,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 originalContent={oldStringContent}
                 modifiedContent={newStringContent}
                 filePath={currentFilePath}
-                maxHeight={FILE_OPERATION_PREVIEW_MAX_HEIGHT}
+                maxHeight={previewMaxHeight}
                 showLineNumbers={false}
                 lineNumberMode="dual"
                 showPrefix={false}
@@ -607,7 +628,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 filePath={currentFilePath}
                 isStreaming={isParamsStreaming}
                 showLineNumbers={false}
-                maxHeight={FILE_OPERATION_PREVIEW_MAX_HEIGHT}
+                maxHeight={previewMaxHeight}
                 autoScrollToBottom={isParamsStreaming}
                 onLineClick={handleCodeLineClick}
               />
@@ -624,7 +645,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 originalContent=""
                 modifiedContent={contentPreview}
                 filePath={currentFilePath}
-                maxHeight={FILE_OPERATION_PREVIEW_MAX_HEIGHT}
+                maxHeight={previewMaxHeight}
                 showLineNumbers={false}
                 lineNumberMode="single"
                 showPrefix={true}
@@ -677,7 +698,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const expandedContent = renderExpandedContent();
   const hasExpandableContent =
-    status === 'completed' &&
     !isFailed &&
     !isDeleteTool &&
     Boolean(expandedContent);
@@ -685,7 +705,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const isCardContentExpanded =
     !isDeleteTool &&
     !isFailed &&
-    (status === 'completed' ? isContentExpanded : true);
+    isContentExpanded;
 
   const opensPanelOnClick =
     !isFailed &&

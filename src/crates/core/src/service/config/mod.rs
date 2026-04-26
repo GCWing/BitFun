@@ -11,7 +11,9 @@ pub mod providers;
 pub mod service;
 pub mod types;
 
-pub use app_language::{get_app_language_code, short_model_user_language_instruction};
+pub use app_language::{
+    get_app_language, get_app_language_code, short_model_user_language_instruction,
+};
 pub use factory::ConfigFactory;
 pub use global::{
     get_global_config_service, initialize_global_config, reload_global_config,

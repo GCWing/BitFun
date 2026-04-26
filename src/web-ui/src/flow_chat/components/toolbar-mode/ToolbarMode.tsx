@@ -28,6 +28,8 @@ import { syncSessionToModernStore } from '../../services/storeSync';
 import { FlowChatState } from '../../types/flow-chat';
 import { compareSessionsForDisplay } from '../../utils/sessionOrdering';
 import { createLogger } from '@/shared/utils/logger';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolveSessionTitle } from '../../utils/sessionTitle';
 
 const log = createLogger('ToolbarMode');
 import { ModernFlowChatContainer } from '../modern/ModernFlowChatContainer';
@@ -67,8 +69,8 @@ export const ToolbarMode: React.FC = () => {
     const activeSession = flowChatState.activeSessionId 
       ? flowChatState.sessions.get(flowChatState.activeSessionId)
       : undefined;
-    return activeSession?.title || t('session.new');
-  }, [flowChatState, t]);
+    return resolveSessionTitle(activeSession, (key, options) => i18nService.t(key, options));
+  }, [flowChatState]);
   
   const sessions = useMemo(() => {
     return Array.from(flowChatState.sessions.values())
@@ -354,7 +356,7 @@ export const ToolbarMode: React.FC = () => {
               }`}
               onMouseDown={(e) => handleSwitchSession(e, session.sessionId)}
             >
-              {session.title || t('session.new')}
+              {resolveSessionTitle(session, (key, options) => i18nService.t(key, options))}
             </button>
           ))}
         </div>

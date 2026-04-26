@@ -387,6 +387,54 @@ pub struct DefaultModelsConfig {
     pub speech_recognition: Option<String>,
 }
 
+/// Default review-team execution policy and membership configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct ReviewTeamConfig {
+    /// Additional reviewer subagent IDs configured by the user.
+    pub extra_subagent_ids: Vec<String>,
+    /// Default review depth used by the whole review team.
+    pub strategy_level: String,
+    /// Per-reviewer review depth overrides keyed by subagent ID.
+    pub member_strategy_overrides: HashMap<String, String>,
+    /// Hard timeout applied to reviewer Task calls. 0 disables the cap.
+    pub reviewer_timeout_seconds: u64,
+    /// Hard timeout applied to ReviewJudge Task calls. 0 disables the cap.
+    pub judge_timeout_seconds: u64,
+    /// Whether ReviewFixer may be launched by DeepReview.
+    pub auto_fix_enabled: bool,
+    /// Maximum number of ReviewFixer rounds in a parent DeepReview turn.
+    pub auto_fix_max_rounds: usize,
+    /// Prompt-level stalled-round guard used by DeepReview orchestration.
+    pub auto_fix_max_stalled_rounds: usize,
+    /// Minimum number of target files that triggers same-role reviewer splitting.
+    /// 0 disables file splitting.
+    pub reviewer_file_split_threshold: usize,
+    /// Maximum number of same-role reviewer instances per role when file splitting is active.
+    pub max_same_role_instances: usize,
+}
+
+impl Default for ReviewTeamConfig {
+    fn default() -> Self {
+        Self {
+            extra_subagent_ids: Vec::new(),
+            strategy_level: "normal".to_string(),
+            member_strategy_overrides: HashMap::new(),
+            reviewer_timeout_seconds: 300,
+            judge_timeout_seconds: 240,
+            auto_fix_enabled: false,
+            auto_fix_max_rounds: 2,
+            auto_fix_max_stalled_rounds: 1,
+            reviewer_file_split_threshold: 20,
+            max_same_role_instances: 3,
+        }
+    }
+}
+
+fn default_review_team_configs() -> HashMap<String, ReviewTeamConfig> {
+    HashMap::from([("default".to_string(), ReviewTeamConfig::default())])
+}
+
 /// AI configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -416,6 +464,15 @@ pub struct AIConfig {
     /// subagent_id -> SubAgentConfig
     #[serde(default)]
     pub subagent_configs: HashMap<String, SubAgentConfig>,
+
+    /// Review team configuration.
+    /// team_id -> ReviewTeamConfig
+    #[serde(default = "default_review_team_configs")]
+    pub review_teams: HashMap<String, ReviewTeamConfig>,
+
+    /// Maximum number of subagents that may execute concurrently.
+    #[serde(default = "default_subagent_max_concurrency")]
+    pub subagent_max_concurrency: usize,
 
     /// Global proxy configuration.
     pub proxy: ProxyConfig,
@@ -457,8 +514,7 @@ impl AIConfig {
         self.models
             .iter()
             .find(|m| {
-                m.enabled
-                    && (m.id == model_ref || m.name == model_ref || m.model_name == model_ref)
+                m.enabled && (m.id == model_ref || m.name == model_ref || m.model_name == model_ref)
             })
             .map(|m| m.id.clone())
     }
@@ -481,10 +537,7 @@ impl AIConfig {
     /// Returns the id of the first enabled model, if any. Used as a final
     /// fallback when a configured default points to a disabled / missing model.
     pub fn first_enabled_model_id(&self) -> Option<String> {
-        self.models
-            .iter()
-            .find(|m| m.enabled)
-            .map(|m| m.id.clone())
+        self.models.iter().find(|m| m.enabled).map(|m| m.id.clone())
     }
 
     /// Resolves a model selector value.
@@ -584,6 +637,10 @@ fn default_tool_confirmation_timeout() -> Option<u64> {
 
 fn default_skip_tool_confirmation() -> bool {
     true
+}
+
+fn default_subagent_max_concurrency() -> usize {
+    5
 }
 
 impl Default for ModeConfig {
@@ -1378,6 +1435,8 @@ impl Default for AIConfig {
             default_models: DefaultModelsConfig::default(),
             mode_configs: std::collections::HashMap::new(),
             subagent_configs: std::collections::HashMap::new(),
+            review_teams: default_review_team_configs(),
+            subagent_max_concurrency: default_subagent_max_concurrency(),
             proxy: ProxyConfig::default(),
             stream_idle_timeout_secs: default_stream_idle_timeout(),
             tool_execution_timeout_secs: default_tool_execution_timeout(),
@@ -1677,6 +1736,18 @@ mod tests {
         let config = AIConfig::default();
 
         assert_eq!(config.stream_idle_timeout_secs, None);
+        assert_eq!(config.subagent_max_concurrency, 5);
+        let review_team = config
+            .review_teams
+            .get("default")
+            .expect("default review team config should exist");
+        assert_eq!(review_team.reviewer_timeout_seconds, 300);
+        assert_eq!(review_team.judge_timeout_seconds, 240);
+        assert!(!review_team.auto_fix_enabled);
+        assert_eq!(review_team.auto_fix_max_rounds, 2);
+        assert_eq!(review_team.auto_fix_max_stalled_rounds, 1);
+        assert_eq!(review_team.strategy_level, "normal");
+        assert!(review_team.member_strategy_overrides.is_empty());
     }
 
     #[test]
@@ -1696,5 +1767,87 @@ mod tests {
         .expect("config without stream_idle_timeout_secs should deserialize");
 
         assert_eq!(config.stream_idle_timeout_secs, None);
+        assert_eq!(config.subagent_max_concurrency, 5);
+        assert!(config.review_teams.contains_key("default"));
+    }
+
+    #[test]
+    fn deserializes_explicit_subagent_max_concurrency() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "func_agent_models": {},
+            "default_models": {},
+            "mode_configs": {},
+            "subagent_configs": {},
+            "subagent_max_concurrency": 9,
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with subagent_max_concurrency should deserialize");
+
+        assert_eq!(config.subagent_max_concurrency, 9);
+    }
+
+    #[test]
+    fn deserializes_explicit_default_review_team_config() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "func_agent_models": {},
+            "default_models": {},
+            "mode_configs": {},
+            "subagent_configs": {},
+            "review_teams": {
+                "default": {
+                    "extra_subagent_ids": ["ExtraReviewer"],
+                    "reviewer_timeout_seconds": 120,
+                    "judge_timeout_seconds": 90,
+                    "strategy_level": "deep",
+                    "member_strategy_overrides": {
+                        "ReviewSecurity": "quick",
+                        "ExtraReviewer": "normal"
+                    },
+                    "auto_fix_enabled": false,
+                    "auto_fix_max_rounds": 1,
+                    "auto_fix_max_stalled_rounds": 1
+                }
+            },
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with review_teams should deserialize");
+
+        let review_team = config
+            .review_teams
+            .get("default")
+            .expect("default review team config should be retained");
+        assert_eq!(review_team.extra_subagent_ids, vec!["ExtraReviewer"]);
+        assert_eq!(review_team.reviewer_timeout_seconds, 120);
+        assert_eq!(review_team.judge_timeout_seconds, 90);
+        assert_eq!(review_team.strategy_level, "deep");
+        assert_eq!(
+            review_team.member_strategy_overrides.get("ReviewSecurity"),
+            Some(&"quick".to_string())
+        );
+        assert_eq!(
+            review_team.member_strategy_overrides.get("ExtraReviewer"),
+            Some(&"normal".to_string())
+        );
+        assert!(!review_team.auto_fix_enabled);
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["review_teams"]["default"]["strategy_level"],
+            "deep"
+        );
+        assert_eq!(
+            serialized["review_teams"]["default"]["member_strategy_overrides"]["ReviewSecurity"],
+            "quick"
+        );
     }
 }

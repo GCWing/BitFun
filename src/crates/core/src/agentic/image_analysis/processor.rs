@@ -9,6 +9,7 @@ use super::image_processing::{
 use super::types::{AnalyzeImagesRequest, ImageAnalysisResult, ImageContextData};
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::types::AIModelConfig;
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::*;
 use log::{debug, error, info, warn};
 use std::path::PathBuf;
@@ -137,7 +138,7 @@ impl ImageAnalyzer {
         debug!("AI response content: {}", ai_response.text);
 
         let mut analysis_result = Self::parse_analysis_response(&ai_response.text, &image_ctx.id);
-        analysis_result.analysis_time_ms = start.elapsed().as_millis() as u64;
+        analysis_result.analysis_time_ms = elapsed_ms_u64(start);
 
         info!(
             "Image analysis completed: image_id={}, duration={}ms",

@@ -4,6 +4,8 @@ import { Plus } from 'lucide-react';
 import { flowChatStore } from '../store/FlowChatStore';
 import { FlowChatState, Session } from '../types/flow-chat';
 import { Tooltip } from '@/component-library';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolveSessionTitle } from '../utils/sessionTitle';
 import './CurrentSessionTitle.scss';
 
 interface CurrentSessionTitleProps {
@@ -35,7 +37,7 @@ const CurrentSessionTitle: React.FC<CurrentSessionTitleProps> = ({ onCreateSessi
     if (!session) {
       return t('session.noSession');
     }
-    return session.title || t('session.new');
+    return resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
   };
 
   const title = getSessionTitle(activeSession);

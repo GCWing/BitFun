@@ -8,6 +8,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Globe, RefreshCw, MousePointer2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
@@ -110,6 +111,7 @@ export interface BrowserPanelProps {
 }
 
 const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => {
+  const { t } = useTranslation('common');
   const activeTabId = useSceneStore((s) => s.activeTabId);
   // Show webview only when this tab is active AND the session scene is visible
   const isSceneActive = activeTabId === 'session';
@@ -508,7 +510,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           variant="ghost"
           size="small"
           onClick={handleGoBack}
-          aria-label="后退"
+          aria-label={t('nav.back')}
         >
           <ChevronLeft size={14} />
         </IconButton>
@@ -517,7 +519,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           variant="ghost"
           size="small"
           onClick={handleGoForward}
-          aria-label="前进"
+          aria-label={t('nav.forward')}
         >
           <ChevronRight size={14} />
         </IconButton>
@@ -527,7 +529,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           size="small"
           onClick={handleRefresh}
           disabled={isLoading}
-          aria-label="刷新"
+          aria-label={t('actions.refresh')}
         >
           <RefreshCw size={14} className={isLoading ? 'browser-panel__spinning' : undefined} />
         </IconButton>
@@ -537,7 +539,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="输入网址，例如 https://example.com"
+            placeholder={t('browserView.addressPlaceholder', { exampleUrl: 'https://example.com' })}
             spellCheck={false}
           />
         </div>
@@ -547,7 +549,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
             variant="ghost"
             size="small"
             onClick={() => void handleInspector()}
-            aria-label={isInspectorActive ? '退出元素选取' : '选取元素'}
+            aria-label={isInspectorActive ? t('browserView.stopElementSelection') : t('browserView.startElementSelection')}
             className={isInspectorActive ? 'browser-panel__inspector-btn--active' : undefined}
           >
             <MousePointer2 size={14} />

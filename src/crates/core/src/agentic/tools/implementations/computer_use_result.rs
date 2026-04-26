@@ -89,6 +89,7 @@ mod tests {
     #[test]
     fn screenshot_body_keeps_existing_fields_and_adds_interaction_state() {
         let shot = ComputerScreenshot {
+            screenshot_id: Some("test-shot".to_string()),
             bytes: vec![1, 2, 3],
             mime_type: "image/jpeg".to_string(),
             image_width: 100,
@@ -110,6 +111,7 @@ mod tests {
                 width: 98,
                 height: 76,
             }),
+            image_global_bounds: None,
             implicit_confirmation_crop_applied: false,
             ui_tree_text: None,
         };

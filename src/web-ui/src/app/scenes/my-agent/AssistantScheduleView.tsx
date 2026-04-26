@@ -30,6 +30,8 @@ import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import { compareSessionsForDisplay } from '@/flow_chat/utils/sessionOrdering';
 import { notificationService } from '@/shared/notification-system/services/NotificationService';
 import { createLogger } from '@/shared/utils/logger';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
 import './AssistantScheduleView.scss';
 
 const log = createLogger('AssistantScheduleView');
@@ -173,7 +175,7 @@ function formatTimestamp(
 }
 
 function resolveSessionLabel(session: Session): string {
-  return session.title?.trim() || session.sessionId.slice(0, 8);
+  return resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
 }
 
 const AssistantScheduleView: React.FC<AssistantScheduleViewProps> = ({

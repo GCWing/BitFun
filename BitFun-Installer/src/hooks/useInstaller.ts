@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import i18n from '../i18n';
+import { detectInstallerUiLanguage, mapUiLanguageToAppLanguage } from '../i18n/languages';
 import type {
   InstallStep,
   InstallOptions,
@@ -48,19 +49,6 @@ export interface UseInstallerReturn {
 const STEPS: InstallStep[] = ['lang', 'options', 'progress', 'model', 'theme'];
 const MOCK_INSTALL_FOR_DEBUG = import.meta.env.DEV && import.meta.env.VITE_MOCK_INSTALL === 'true';
 
-function resolveUiLanguage(appLanguage?: string | null): 'zh' | 'en' {
-  if (appLanguage === 'zh-CN') return 'zh';
-  if (appLanguage === 'en-US') return 'en';
-  if (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh')) {
-    return 'zh';
-  }
-  return 'en';
-}
-
-function mapUiLanguageToAppLanguage(uiLanguage: 'zh' | 'en'): 'zh-CN' | 'en-US' {
-  return uiLanguage === 'zh' ? 'zh-CN' : 'en-US';
-}
-
 export function useInstaller(): UseInstallerReturn {
   const [step, setStep] = useState<InstallStep>('lang');
   const [options, setOptions] = useState<InstallOptions>(DEFAULT_OPTIONS);
@@ -86,7 +74,7 @@ export function useInstaller(): UseInstallerReturn {
       try {
         const context = await invoke<LaunchContext>('get_launch_context');
         if (!mounted) return;
-        const uiLanguage = resolveUiLanguage(context.appLanguage ?? null);
+        const uiLanguage = detectInstallerUiLanguage(context.appLanguage ?? null);
         await i18n.changeLanguage(uiLanguage);
         if (!mounted) return;
         setOptions((prev) => ({

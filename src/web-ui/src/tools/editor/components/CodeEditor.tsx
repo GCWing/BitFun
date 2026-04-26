@@ -25,6 +25,7 @@ import { CubeLoading } from '@/component-library';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { isSamePath } from '@/shared/utils/pathUtils';
 import {
   diskContentMatchesEditorForExternalSync,
@@ -89,6 +90,10 @@ export interface CodeEditorProps {
   isActiveTab?: boolean;
   /** File path is not an existing file on disk (drives tab "deleted" label). */
   onFileMissingFromDiskChange?: (missing: boolean) => void;
+  /** Persist changes automatically after a short debounce. */
+  autoSave?: boolean;
+  /** Debounce used when autoSave is enabled. */
+  autoSaveDelayMs?: number;
 }
 
 const LARGE_FILE_SIZE_THRESHOLD_BYTES = 1 * 1024 * 1024; // 1MB
@@ -151,6 +156,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   navigationToken,
   isActiveTab = true,
   onFileMissingFromDiskChange,
+  autoSave = false,
+  autoSaveDelayMs = 800,
 }) => {
   // Decode URL-encoded paths (e.g. d%3A/path -> d:/path)
   const filePath = useMemo(() => {
@@ -172,7 +179,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [language]);
 
   const [content, setContent] = useState('');
-  const [, setHasChanges] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
   const loadingOverlayDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1519,6 +1526,20 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     saveFileContentRef.current = saveFileContent;
   }, [saveFileContent]);
 
+  useEffect(() => {
+    if (!autoSave || !filePath || !hasChanges || loading || saving) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      saveFileContentRef.current?.();
+    }, autoSaveDelayMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [autoSave, autoSaveDelayMs, filePath, hasChanges, loading, saving, content]);
+
   // Container-level keyboard event handler, solves global conflict issues with multiple editor instances
   const handleContainerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const hasFocus = editorRef.current?.hasTextFocus() ?? false;
@@ -1565,7 +1586,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
 
     isCheckingFileRef.current = true;
-    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const startedAt = nowMs();
     let outcome = 'started';
     let usedHashFallback = false;
     let probeError: string | null = null;
@@ -1684,10 +1705,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       log.error('Failed to check file modification', err);
     } finally {
-      const durationMs =
-        Math.round(
-          ((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt) * 10
-        ) / 10;
+      const durationMs = elapsedMs(startedAt);
       if (probeError || outcome !== 'no-change' || durationMs >= 80) {
         sendDebugProbe(
           'CodeEditor.tsx:checkFileModification',

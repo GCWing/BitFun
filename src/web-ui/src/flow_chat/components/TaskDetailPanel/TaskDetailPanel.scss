@@ -179,6 +179,23 @@
     }
   }
 
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--tool-card-border, rgba(255, 255, 255, 0.15));
+    background: rgba(255, 255, 255, 0.03);
+    flex-shrink: 0;
+  }
+
+  &__actions-hint {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
   &__loading {
     display: flex;
     flex-direction: column;

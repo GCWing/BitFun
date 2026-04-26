@@ -4,15 +4,35 @@
   "description": "实时高亮匹配、捕获组明细、替换预览，内置常用模式速取库（邮箱 / URL / IP / UUID 等）。",
   "icon": "Regex",
   "category": "developer",
-  "tags": ["正则", "工具", "开发", "内置"],
+  "tags": [
+    "正则",
+    "工具",
+    "开发",
+    "内置"
+  ],
   "version": 1,
   "created_at": 0,
   "updated_at": 0,
   "permissions": {
-    "fs": { "read": ["{appdata}"], "write": ["{appdata}"] },
-    "shell": { "allow": [] },
-    "net": { "allow": [] },
-    "node": { "enabled": true, "max_memory_mb": 128, "timeout_ms": 5000 }
+    "fs": {
+      "read": [
+        "{appdata}"
+      ],
+      "write": [
+        "{appdata}"
+      ]
+    },
+    "shell": {
+      "allow": []
+    },
+    "net": {
+      "allow": []
+    },
+    "node": {
+      "enabled": true,
+      "max_memory_mb": 128,
+      "timeout_ms": 5000
+    }
   },
   "ai_context": null,
   "i18n": {
@@ -20,12 +40,32 @@
       "zh-CN": {
         "name": "正则游乐场",
         "description": "实时高亮匹配、捕获组明细、替换预览，内置常用模式速取库（邮箱 / URL / IP / UUID 等）。",
-        "tags": ["正则", "工具", "开发", "内置"]
+        "tags": [
+          "正则",
+          "工具",
+          "开发",
+          "内置"
+        ]
       },
       "en-US": {
         "name": "Regex Playground",
         "description": "Live match highlighting, capture-group details, replacement preview, and a built-in library of common patterns (email / URL / IP / UUID, …).",
-        "tags": ["regex", "tool", "developer", "built-in"]
+        "tags": [
+          "regex",
+          "tool",
+          "developer",
+          "built-in"
+        ]
+      },
+      "zh-TW": {
+        "name": "正則遊樂場",
+        "description": "實時高亮匹配、捕獲組明細、替換預覽，內置常用模式速取庫（郵箱 / URL / IP / UUID 等）。",
+        "tags": [
+          "正則",
+          "工具",
+          "開發",
+          "內置"
+        ]
       }
     }
   }

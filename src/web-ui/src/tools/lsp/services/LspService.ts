@@ -4,6 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { createLogger } from '@/shared/utils/logger';
+import { measureAsync } from '@/shared/utils/timing';
 import type { LspPlugin, CompletionItem, TextEdit } from '../types';
 
 const log = createLogger('LspService');
@@ -26,14 +27,11 @@ export class LspService {
     if (this.initialized) {
       return;
     }
-
-    const startTime = performance.now();
     
     try {
-      await invoke('lsp_initialize');
+      const result = await measureAsync(() => invoke('lsp_initialize'));
       this.initialized = true;
-      const duration = performance.now() - startTime;
-      log.info('LSP system initialized', { duration: `${duration.toFixed(2)}ms` });
+      log.info('LSP system initialized', { durationMs: result.durationMs });
     } catch (error) {
       log.error('Failed to initialize LSP system', error);
       throw error;
@@ -55,14 +53,11 @@ export class LspService {
 
   /** Start a language server for a given file path. */
   async startServerForFile(filePath: string): Promise<void> {
-    const startTime = performance.now();
-    
     try {
-      await invoke('lsp_start_server_for_file', {
+      const result = await measureAsync(() => invoke('lsp_start_server_for_file', {
         request: { filePath }
-      });
-      const duration = performance.now() - startTime;
-      log.debug('LSP server started for file', { filePath, duration: `${duration.toFixed(2)}ms` });
+      }));
+      log.debug('LSP server started for file', { filePath, durationMs: result.durationMs });
     } catch (error) {
       log.error('Failed to start LSP server for file', error);
       throw error;
@@ -137,18 +132,15 @@ export class LspService {
     line: number,
     character: number
   ): Promise<CompletionItem[]> {
-    const startTime = performance.now();
-    
     try {
-      const result = await invoke('lsp_get_completions', {
+      const result = await measureAsync<CompletionItem[]>(() => invoke('lsp_get_completions', {
         request: { language, uri, line, character }
-      }) as CompletionItem[];
-      const duration = performance.now() - startTime;
+      }) as Promise<CompletionItem[]>);
       log.debug('Got completions', { 
-        count: Array.isArray(result) ? result.length : 0, 
-        duration: `${duration.toFixed(2)}ms` 
+        count: Array.isArray(result.value) ? result.value.length : 0, 
+        durationMs: result.durationMs,
       });
-      return result;
+      return result.value;
     } catch (error) {
       log.error('Failed to get completions', error);
       throw error;
@@ -180,15 +172,12 @@ export class LspService {
     line: number,
     character: number
   ): Promise<any> {
-    const startTime = performance.now();
-    
     try {
-      const result = await invoke('lsp_goto_definition', {
+      const result = await measureAsync(() => invoke('lsp_goto_definition', {
         request: { language, uri, line, character }
-      });
-      const duration = performance.now() - startTime;
-      log.debug('Found definition', { duration: `${duration.toFixed(2)}ms` });
-      return result;
+      }));
+      log.debug('Found definition', { durationMs: result.durationMs });
+      return result.value;
     } catch (error) {
       log.error('Failed to go to definition', error);
       throw error;
@@ -202,16 +191,13 @@ export class LspService {
     line: number,
     character: number
   ): Promise<any> {
-    const startTime = performance.now();
-    
     try {
-      const result = await invoke('lsp_find_references', {
+      const result = await measureAsync(() => invoke('lsp_find_references', {
         request: { language, uri, line, character }
-      });
-      const duration = performance.now() - startTime;
-      const count = Array.isArray(result) ? result.length : 0;
-      log.debug('Found references', { count, duration: `${duration.toFixed(2)}ms` });
-      return result;
+      }));
+      const count = Array.isArray(result.value) ? result.value.length : 0;
+      log.debug('Found references', { count, durationMs: result.durationMs });
+      return result.value;
     } catch (error) {
       log.error('Failed to find references', error);
       throw error;
@@ -225,16 +211,13 @@ export class LspService {
     tabSize?: number,
     insertSpaces?: boolean
   ): Promise<TextEdit[]> {
-    const startTime = performance.now();
-    
     try {
-      const result = await invoke('lsp_format_document', {
+      const result = await measureAsync<TextEdit[]>(() => invoke('lsp_format_document', {
         request: { language, uri, tabSize, insertSpaces }
-      }) as TextEdit[];
-      const duration = performance.now() - startTime;
-      const count = Array.isArray(result) ? result.length : 0;
-      log.debug('Document formatted', { editCount: count, duration: `${duration.toFixed(2)}ms` });
-      return result;
+      }) as Promise<TextEdit[]>);
+      const count = Array.isArray(result.value) ? result.value.length : 0;
+      log.debug('Document formatted', { editCount: count, durationMs: result.durationMs });
+      return result.value;
     } catch (error) {
       log.error('Failed to format document', error);
       throw error;
@@ -243,15 +226,12 @@ export class LspService {
 
   /** Install an LSP plugin package. */
   async installPlugin(packagePath: string): Promise<string> {
-    const startTime = performance.now();
-    
     try {
-      const pluginId = await invoke('lsp_install_plugin', {
+      const result = await measureAsync<string>(() => invoke('lsp_install_plugin', {
         request: { packagePath }
-      }) as string;
-      const duration = performance.now() - startTime;
-      log.info('Plugin installed', { pluginId, duration: `${duration.toFixed(2)}ms` });
-      return pluginId;
+      }) as Promise<string>);
+      log.info('Plugin installed', { pluginId: result.value, durationMs: result.durationMs });
+      return result.value;
     } catch (error) {
       log.error('Failed to install plugin', error);
       throw error;

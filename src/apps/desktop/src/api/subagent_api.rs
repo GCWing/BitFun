@@ -8,7 +8,7 @@ use bitfun_core::agentic::agents::{
 use bitfun_core::service::config::types::SubAgentConfig;
 use log::warn;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -141,6 +141,7 @@ pub struct UpdateSubagentRequest {
     pub prompt: String,
     pub tools: Option<Vec<String>>,
     pub readonly: Option<bool>,
+    pub review: Option<bool>,
     pub workspace_path: Option<String>,
 }
 
@@ -165,6 +166,7 @@ pub async fn update_subagent(
             request.prompt.trim().to_string(),
             request.tools,
             request.readonly,
+            request.review,
         )
         .await
         .map_err(|e| e.to_string())
@@ -186,7 +188,40 @@ pub struct CreateSubagentRequest {
     pub prompt: String,
     pub tools: Option<Vec<String>>,
     pub readonly: Option<bool>,
+    pub review: Option<bool>,
     pub workspace_path: Option<String>,
+}
+
+fn readonly_tool_names(state: &AppState) -> HashSet<String> {
+    state
+        .tool_registry
+        .iter()
+        .filter(|tool| tool.is_readonly())
+        .map(|tool| tool.name().to_string())
+        .collect()
+}
+
+fn ensure_review_tools_are_readonly(
+    state: &AppState,
+    agent_name: &str,
+    tools: &[String],
+) -> Result<(), String> {
+    let readonly_tools = readonly_tool_names(state);
+    let writable_tools: Vec<&str> = tools
+        .iter()
+        .map(String::as_str)
+        .filter(|tool| !readonly_tools.contains(*tool))
+        .collect();
+
+    if writable_tools.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Review Sub-Agent '{}' can only use read-only tools; remove writable tools: {}",
+        agent_name,
+        writable_tools.join(", ")
+    ))
 }
 
 fn validate_agent_name(name: &str) -> Result<(), String> {
@@ -265,8 +300,17 @@ pub async fn create_subagent(
         return Err(format!("File '{}' already exists", path_str));
     }
 
-    let readonly = request.readonly.unwrap_or(true);
-    let subagent = CustomSubagent::new(
+    let review = request.review.unwrap_or(false);
+    if review {
+        ensure_review_tools_are_readonly(&state, name, &tools)?;
+    }
+
+    let readonly = if review {
+        true
+    } else {
+        request.readonly.unwrap_or(true)
+    };
+    let mut subagent = CustomSubagent::new(
         name.to_string(),
         request.description.trim().to_string(),
         tools,
@@ -275,6 +319,7 @@ pub async fn create_subagent(
         path_str.clone(),
         kind,
     );
+    subagent.review = review;
     subagent
         .save_to_file(None, None)
         .map_err(|e| e.to_string())?;
@@ -330,6 +375,7 @@ pub struct UpdateSubagentConfigRequest {
     pub subagent_id: String,
     pub enabled: Option<bool>,
     pub model: Option<String>,
+    pub workspace_path: Option<String>,
 }
 
 #[tauri::command]
@@ -338,18 +384,45 @@ pub async fn update_subagent_config(
     request: UpdateSubagentConfigRequest,
 ) -> Result<(), String> {
     let subagent_id = &request.subagent_id;
+    let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    if let Some(workspace) = workspace.as_deref() {
+        state.agent_registry.load_custom_subagents(workspace).await;
+    }
 
     if state
         .agent_registry
-        .get_custom_subagent_config(subagent_id)
+        .get_custom_subagent_config(subagent_id, workspace.as_deref())
         .is_some()
     {
         state
             .agent_registry
-            .update_and_save_custom_subagent_config(subagent_id, request.enabled, request.model)
+            .update_and_save_custom_subagent_config(
+                subagent_id,
+                request.enabled,
+                request.model,
+                workspace.as_deref(),
+            )
             .map_err(|e| format!("Failed to update configuration: {}", e))?;
         Ok(())
     } else {
+        if state
+            .agent_registry
+            .has_project_custom_subagent(subagent_id)
+        {
+            if let Some(workspace) = workspace.as_deref() {
+                return Err(format!(
+                    "Project Sub-Agent '{}' was not found in workspace '{}'",
+                    subagent_id,
+                    workspace.display()
+                ));
+            }
+
+            return Err(format!(
+                "workspacePath is required to update project Sub-Agent '{}'",
+                subagent_id
+            ));
+        }
+
         let config_service = &state.config_service;
 
         if let Some(enabled) = request.enabled {

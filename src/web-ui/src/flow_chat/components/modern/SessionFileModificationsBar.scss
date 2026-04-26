@@ -195,6 +195,22 @@
       font-weight: $font-weight-medium;
     }
 
+    &__source {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--color-accent-400, #0ea5e9) 18%, var(--border-subtle));
+      background: color-mix(in srgb, var(--color-accent-400, #0ea5e9) 9%, transparent);
+      color: color-mix(in srgb, var(--color-accent-400, #0ea5e9) 72%, var(--color-text-secondary));
+      font-size: 10px;
+      font-weight: $font-weight-semibold;
+      line-height: 1;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
     &__stats {
       display: flex;
       align-items: center;

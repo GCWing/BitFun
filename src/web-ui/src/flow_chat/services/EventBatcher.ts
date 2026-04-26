@@ -10,6 +10,7 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 
 const log = createLogger('EventBatcher');
 
@@ -82,7 +83,7 @@ export class EventBatcher {
     if (this.scheduled) return;
     this.scheduled = true;
 
-    const now = performance.now();
+    const now = nowMs();
     const timeSinceLastUpdate = now - this.lastUpdateTime;
 
     if (timeSinceLastUpdate >= this.UPDATE_INTERVAL) {
@@ -90,7 +91,7 @@ export class EventBatcher {
         this.flush();
         this.scheduled = false;
         this.frameId = null;
-        this.lastUpdateTime = performance.now();
+        this.lastUpdateTime = nowMs();
       });
     } else {
       const delay = this.UPDATE_INTERVAL - timeSinceLastUpdate;
@@ -99,7 +100,7 @@ export class EventBatcher {
           this.flush();
           this.scheduled = false;
           this.frameId = null;
-          this.lastUpdateTime = performance.now();
+          this.lastUpdateTime = nowMs();
         });
         this.timeoutId = null;
       }, delay);
@@ -109,7 +110,7 @@ export class EventBatcher {
   private flush(): void {
     if (this.buffer.size === 0) return;
 
-    const startTime = performance.now();
+    const startTime = nowMs();
     const bufferedEvents = Array.from(this.buffer.values());
     const mergedEventCount = bufferedEvents.length;
     const rawEventCount = bufferedEvents.reduce((count, event) => count + event.sourceCount, 0);
@@ -134,12 +135,12 @@ export class EventBatcher {
     this.buffer = new Map();
     this.onFlush(events);
 
-    const duration = performance.now() - startTime;
-    if (duration > 10) {
+    const durationMs = elapsedMs(startTime);
+    if (durationMs > 10) {
       log.warn('Event batch processing took longer than expected', {
         rawEventCount,
         mergedEventCount,
-        duration: duration.toFixed(2) 
+        durationMs,
       });
     }
   }

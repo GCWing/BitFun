@@ -3,6 +3,7 @@
 pub mod ask_user_question_tool;
 pub mod bash_tool;
 pub mod code_review_tool;
+pub mod computer_use_actions;
 pub mod computer_use_input;
 pub mod computer_use_locate;
 pub mod computer_use_mouse_click_tool;

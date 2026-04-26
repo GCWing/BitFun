@@ -16,6 +16,7 @@ import { initContextMenuSystem } from "./shared/context-menu-system";
 import { loader } from '@monaco-editor/react';
 import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from './tools/editor/utils/monacoPathHelper';
 import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger';
+import { elapsedMs, logElapsed, measureAsyncAndLog, nowMs } from './shared/utils/timing';
 import {
   buildReactCrashLogPayload,
   isMinifiedReactErrorMessage,
@@ -63,18 +64,25 @@ function registerGlobalErrorHandlers() {
   w[flag] = true;
 
   const scheduleCrashLog = (payload: { location: string; message: string; data?: Record<string, unknown> }) => {
-    // Only persist when it looks like a real "white screen"/startup crash.
+    // Always persist uncaught errors so they appear in webview.log for diagnostics.
+    // Mark white-screen crashes separately to allow callers to deduplicate.
     queueMicrotask(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (isRootEmpty() && !hasLoggedWhiteScreenCrash()) {
-            markWhiteScreenCrashLogged();
-            log.error('[CRASH] Application crashed', {
-              location: payload.location,
-              message: payload.message,
-              ...payload.data,
-            });
+          const isWhiteScreen = isRootEmpty();
+          const crashType = isWhiteScreen ? 'white-screen' : 'page-error';
+          // Deduplicate only white-screen crashes to avoid duplicate startup logs.
+          if (isWhiteScreen && hasLoggedWhiteScreenCrash()) {
+            return;
           }
+          if (isWhiteScreen) {
+            markWhiteScreenCrashLogged();
+          }
+          log.error(`[CRASH:${crashType}] Uncaught error`, {
+            location: payload.location,
+            message: payload.message,
+            ...payload.data,
+          });
         });
       });
     });
@@ -215,27 +223,50 @@ const DEFAULT_WORKER = 'base/worker/workerMain.js';
 
 /** Logger, theme, and minimal deps — must finish before first React paint (F5 / webview reload does not re-run Tauri init script). */
 async function initializeBeforeRender(): Promise<void> {
-  await initLogger();
+  const phaseStartedAt = nowMs();
+  await measureAsyncAndLog(log, 'Startup step completed', () => initLogger(), {
+    data: { step: 'initLogger' },
+  });
 
-  const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
-  await initializeFrontendLogLevelSync();
+  await measureAsyncAndLog(log, 'Startup step completed', async () => {
+    const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+    await initializeFrontendLogLevelSync();
+  }, {
+    data: { step: 'initializeFrontendLogLevelSync' },
+  });
 
   log.debug('Monaco loader configured', { vs: monacoPath, isDev });
   log.info('Initializing BitFun');
 
-  const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
-  registerDefaultContextTypes();
+  await measureAsyncAndLog(log, 'Startup step completed', async () => {
+    const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
+    registerDefaultContextTypes();
+  }, {
+    data: { step: 'registerDefaultContextTypes' },
+  });
 
-  const { initRecommendationProviders } = await import('./flow_chat/components/smart-recommendations');
-  initRecommendationProviders();
+  await measureAsyncAndLog(log, 'Startup step completed', async () => {
+    const { initRecommendationProviders } = await import('./flow_chat/components/smart-recommendations');
+    initRecommendationProviders();
+  }, {
+    data: { step: 'initRecommendationProviders' },
+  });
 
-  const { themeService } = await import('./infrastructure/theme');
-  await themeService.initialize();
+  await measureAsyncAndLog(log, 'Startup step completed', async () => {
+    const { themeService } = await import('./infrastructure/theme');
+    await themeService.initialize();
+  }, {
+    data: { step: 'themeService.initialize' },
+  });
   log.info('Theme system initialized');
+  logElapsed(log, 'Startup phase completed', phaseStartedAt, {
+    data: { phase: 'initializeBeforeRender' },
+  });
 }
 
 /** Rest of startup runs after the shell is visible so refresh latency stays reasonable. */
 async function initializeAfterRender(): Promise<void> {
+  const phaseStartedAt = nowMs();
   const { fontPreferenceService } = await import('./infrastructure/font-preference');
   await fontPreferenceService.initialize();
   log.info('Font preference initialized at startup');
@@ -274,9 +305,13 @@ async function initializeAfterRender(): Promise<void> {
   });
 
   log.info('BitFun core systems initialized successfully');
+  logElapsed(log, 'Startup phase completed', phaseStartedAt, {
+    data: { phase: 'initializeAfterRender' },
+  });
 }
 
 async function startApplication(): Promise<void> {
+  const appStartedAt = nowMs();
   try {
     await initializeBeforeRender();
   } catch (error) {
@@ -284,8 +319,15 @@ async function startApplication(): Promise<void> {
   }
 
   // I18n Provider.
-  const { I18nProvider } = await import('./infrastructure/i18n');
+  const i18nProviderImportResult = await measureAsyncAndLog(
+    log,
+    'Startup step completed',
+    () => import('./infrastructure/i18n'),
+    { data: { step: 'loadI18nProvider' } }
+  );
+  const { I18nProvider } = i18nProviderImportResult.value;
 
+  const renderStartedAt = nowMs();
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <AppErrorBoundary>
       <I18nProvider>
@@ -295,12 +337,22 @@ async function startApplication(): Promise<void> {
       </I18nProvider>
     </AppErrorBoundary>
   );
+  logElapsed(log, 'Startup step completed', renderStartedAt, {
+    data: {
+      step: 'scheduleInitialRender',
+      sinceStartupMs: elapsedMs(appStartedAt),
+    },
+  });
 
   try {
     await initializeAfterRender();
   } catch (error) {
     log.error('Failed to complete post-render initialization', error);
   }
+
+  logElapsed(log, 'Startup phase completed', appStartedAt, {
+    data: { phase: 'startApplication' },
+  });
 }
 
 void startApplication();

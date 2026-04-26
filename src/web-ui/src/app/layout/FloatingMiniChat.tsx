@@ -26,6 +26,8 @@ import { compareSessionsForDisplay } from '../../flow_chat/utils/sessionOrdering
 import { ModernFlowChatContainer } from '../../flow_chat/components/modern/ModernFlowChatContainer';
 import { Tooltip, Input } from '@/component-library';
 import { useImeEnterGuard } from '../../flow_chat/hooks/useImeEnterGuard';
+import { i18nService } from '@/infrastructure/i18n';
+import { resolveSessionTitle } from '../../flow_chat/utils/sessionTitle';
 import './FloatingMiniChat.scss';
 
 export const FloatingMiniChat: React.FC = () => {
@@ -53,8 +55,8 @@ export const FloatingMiniChat: React.FC = () => {
     const activeSession = flowChatState.activeSessionId
       ? flowChatState.sessions.get(flowChatState.activeSessionId)
       : undefined;
-    return activeSession?.title || t('session.new');
-  }, [flowChatState, t]);
+    return resolveSessionTitle(activeSession, (key, options) => i18nService.t(key, options));
+  }, [flowChatState]);
 
   const sessions = useMemo(() => {
     return Array.from(flowChatState.sessions.values())
@@ -250,7 +252,7 @@ export const FloatingMiniChat: React.FC = () => {
                     }`}
                     onMouseDown={(e) => handleSwitchSession(e, session.sessionId)}
                   >
-                    {session.title || t('session.new')}
+                    {resolveSessionTitle(session, (key, options) => i18nService.t(key, options))}
                   </button>
                 ))}
               </div>

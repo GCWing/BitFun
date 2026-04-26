@@ -6,6 +6,10 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import type { ContextItem } from '../../shared/types/context';
 import { getRichTextExternalSyncAction } from './richTextInputSync';
+import {
+  getWidgetPromptReferenceMatches,
+  parseWidgetPromptReferenceToken,
+} from '@/tools/generative-widget/widgetPromptReference';
 import './RichTextInput.scss';
 
 /** @ mention state */
@@ -122,6 +126,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const isComposingRef = useRef(false);
   const lastContextIdsRef = useRef<Set<string>>(new Set());
   const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
+  const triggerSyncRef = useRef<(() => void) | null>(null);
 
   // Create tag element with pill style
   const createTagElement = useCallback((context: ContextItem): HTMLSpanElement => {
@@ -154,6 +159,87 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     
     return tag;
   }, [onRemoveContext]);
+
+  const removeInlineTokenElement = useCallback((element: HTMLElement) => {
+    const nextSibling = element.nextSibling;
+    if (nextSibling && nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent === ' ') {
+      nextSibling.remove();
+    }
+    element.remove();
+  }, []);
+
+  const createWidgetReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
+    const payload = parseWidgetPromptReferenceToken(token);
+    if (!payload) {
+      return null;
+    }
+
+    const tag = document.createElement('span');
+    tag.className = 'rich-text-tag-pill rich-text-tag-pill--widget-ref';
+    tag.contentEditable = 'false';
+    tag.dataset.tagFormat = token;
+    tag.dataset.inlineTokenType = 'widget-ref';
+    tag.title = payload.promptText;
+
+    const badge = document.createElement('span');
+    badge.className = 'rich-text-tag-pill__badge';
+    badge.textContent = 'UI';
+
+    const text = document.createElement('span');
+    text.className = 'rich-text-tag-pill__text rich-text-tag-pill__text--widget-ref';
+    text.textContent = payload.displayText;
+
+    const remove = document.createElement('button');
+    remove.className = 'rich-text-tag-pill__remove';
+    remove.textContent = '×';
+    remove.title = 'Remove';
+    remove.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removeInlineTokenElement(tag);
+      requestAnimationFrame(() => {
+        internalRef.current?.focus();
+        triggerSyncRef.current?.();
+      });
+    };
+
+    tag.appendChild(badge);
+    tag.appendChild(text);
+    tag.appendChild(remove);
+
+    return tag;
+  }, [internalRef, removeInlineTokenElement]);
+
+  const renderValueWithInlineTokens = useCallback((editor: HTMLElement, text: string) => {
+    const fragment = document.createDocumentFragment();
+    const matches = getWidgetPromptReferenceMatches(text);
+
+    if (matches.length === 0) {
+      editor.textContent = text;
+      return;
+    }
+
+    let cursor = 0;
+    for (const match of matches) {
+      if (match.start > cursor) {
+        fragment.appendChild(document.createTextNode(text.slice(cursor, match.start)));
+      }
+
+      const tokenElement = createWidgetReferenceElement(match.token);
+      if (tokenElement) {
+        fragment.appendChild(tokenElement);
+      } else {
+        fragment.appendChild(document.createTextNode(match.token));
+      }
+      cursor = match.end;
+    }
+
+    if (cursor < text.length) {
+      fragment.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+
+    editor.replaceChildren(fragment);
+  }, [createWidgetReferenceElement]);
 
   /** Map textContent offsets to a DOM Range to replace only the @ span. */
   const getRangeByTextOffsets = useCallback((root: Node, start: number, end: number): Range | null => {
@@ -218,7 +304,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         }
         
         // For tag elements, use the stored full format with # prefix
-        if (element.classList.contains('rich-text-tag-pill')) {
+        if (element.hasAttribute('data-tag-format')) {
           const tagFormat = element.getAttribute('data-tag-format');
           if (tagFormat) {
             text += tagFormat;
@@ -411,6 +497,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     });
   }, [contexts, detectMention, extractTextContent, getCursorOffset, internalRef, onChange, setCursorOffset]);
 
+  triggerSyncRef.current = handleInput;
+
   const handleBeforeInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
     const inputEvent = e.nativeEvent as InputEvent;
     const inputType = inputEvent.inputType;
@@ -474,11 +562,17 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         
         if (range.collapsed && range.startOffset === 0) {
           const previousSibling = range.startContainer.previousSibling;
-          if (previousSibling && (previousSibling as HTMLElement).classList?.contains('rich-text-tag-pill')) {
+          const tokenElement = previousSibling instanceof HTMLElement && previousSibling.hasAttribute('data-tag-format')
+            ? previousSibling
+            : null;
+          if (tokenElement) {
             e.preventDefault();
-            const contextId = (previousSibling as HTMLElement).dataset.contextId;
+            const contextId = tokenElement.dataset.contextId;
             if (contextId) {
               onRemoveContext(contextId);
+            } else {
+              removeInlineTokenElement(tokenElement);
+              handleInput();
             }
             return;
           }
@@ -491,7 +585,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
 
     onKeyDown?.(e);
-  }, [internalRef, onKeyDown, onRemoveContext]);
+  }, [handleInput, internalRef, onKeyDown, onRemoveContext, removeInlineTokenElement]);
 
   // Insert tag at cursor
   const insertTagAtCursor = useCallback((context: ContextItem) => {
@@ -634,7 +728,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     if (syncAction === 'replace') {
-      editor.textContent = value;
+      renderValueWithInlineTokens(editor, value);
       
       // Restore cursor to the end
       requestAnimationFrame(() => {
@@ -649,7 +743,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         editor.focus();
       });
     }
-  }, [extractTextContent, internalRef, value]);
+  }, [extractTextContent, internalRef, renderValueWithInlineTokens, value]);
 
   // Remove tags for deleted contexts
   useEffect(() => {

@@ -38,6 +38,15 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
     config::initialize_global_config().await?;
     let config_service = config::get_global_config_service().await?;
 
+    // Initialize the global I18nService so server-mode bot/remote-connect
+    // consumers observe the same runtime locale lifecycle as Desktop.
+    if let Err(e) =
+        bitfun_core::service::i18n::initialize_global_i18n_service(Some(config_service.clone()))
+            .await
+    {
+        log::warn!("Failed to initialize global I18nService in server mode: {}", e);
+    }
+
     // 2. AI client factory
     AIClientFactory::initialize_global().await?;
     let ai_client_factory = AIClientFactory::get_global().await?;

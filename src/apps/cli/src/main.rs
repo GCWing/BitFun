@@ -1,3 +1,4 @@
+mod acp;
 mod agent;
 /// BitFun CLI
 ///
@@ -5,6 +6,7 @@ mod agent;
 /// - Interactive TUI
 /// - Single command execution
 /// - Batch task processing
+/// - Agent Client Protocol (ACP) server
 mod config;
 mod modes;
 mod session;
@@ -102,6 +104,19 @@ enum Commands {
 
     /// Health check
     Health,
+
+    /// Start Agent Client Protocol (ACP) server
+    ///
+    /// Runs a JSON-RPC 2.0 server over stdio for integration with
+    /// ACP-compatible editors and IDEs.
+    ///
+    /// Usage: bitfun acp
+    /// The server reads JSON-RPC requests from stdin and writes responses to stdout.
+    Acp {
+        /// Working directory for the ACP session
+        #[arg(short, long)]
+        workspace: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -373,6 +388,34 @@ async fn main() -> Result<()> {
             println!("BitFun CLI is running normally");
             println!("Version: {}", env!("CARGO_PKG_VERSION"));
             println!("Config directory: {:?}", CliConfig::config_dir()?);
+        }
+
+        Some(Commands::Acp { workspace }) => {
+            let workspace_path = resolve_workspace_path(workspace.as_deref())
+                .or_else(|| std::env::current_dir().ok());
+            tracing::info!("ACP server workspace: {:?}", workspace_path);
+
+            // Initialize core services
+            bitfun_core::service::config::initialize_global_config()
+                .await
+                .context("Failed to initialize global config service")?;
+            tracing::info!("Global config service initialized");
+
+            use bitfun_core::infrastructure::ai::AIClientFactory;
+            AIClientFactory::initialize_global()
+                .await
+                .context("Failed to initialize global AIClientFactory")?;
+            tracing::info!("Global AI client factory initialized");
+
+            let agentic_system = agent::agentic_system::init_agentic_system()
+                .await
+                .context("Failed to initialize agentic system")?;
+            tracing::info!("Agentic system initialized");
+
+            // Start ACP server
+            tracing::info!("Starting ACP server...");
+            let acp_server = acp::AcpServer::new(agentic_system);
+            acp_server.run().await?;
         }
 
         None => {

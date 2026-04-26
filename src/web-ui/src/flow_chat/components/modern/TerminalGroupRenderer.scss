@@ -1,0 +1,239 @@
+/* Terminal region styling for consecutive Bash command calls. */
+
+.terminal-region {
+  position: relative;
+  padding: 0 3rem;
+
+  @media (max-width: 768px) {
+    padding: 0 1.5rem;
+  }
+}
+
+// ==================== Non-collapsible (streaming / no auto-collapse yet) ====================
+
+.terminal-region--expanded:not(.terminal-region--collapsible) {
+  margin: 4px 0;
+
+  .terminal-region__content {
+    position: relative;
+    padding: 0;
+
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-base, rgba(107, 114, 128, 0.3));
+      border-radius: 2px;
+
+      &:hover {
+        background: var(--border-hover, rgba(107, 114, 128, 0.5));
+      }
+    }
+  }
+}
+
+// ==================== Collapsible (header + animated content) ====================
+
+.terminal-region--collapsible {
+  margin: 4px 0;
+
+  .terminal-region__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    color: var(--text-tertiary, #6b7280);
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+
+    &:hover {
+      background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+      color: var(--text-secondary, #9ca3af);
+    }
+  }
+
+  .terminal-region__icon {
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(0deg);
+  }
+
+  .terminal-region__tool-icon {
+    flex-shrink: 0;
+    opacity: 0.6;
+    color: var(--color-text-secondary);
+  }
+
+  .terminal-region__summary {
+    opacity: 0.8;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .terminal-region__status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+
+    &--success {
+      background: var(--color-success, #22c55e);
+    }
+
+    &--failed {
+      background: var(--color-error, #ef4444);
+    }
+
+    &--running {
+      background: var(--color-accent-500, #3b82f6);
+      animation: terminal-status-pulse 1.5s ease-in-out infinite;
+    }
+  }
+
+  .terminal-region__content-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .terminal-region__content-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .terminal-region__content {
+    position: relative;
+    padding: 4px 0;
+
+    /* Tighter spacing for cards inside a terminal group */
+    .flowchat-tool-wrapper {
+      margin-bottom: 0.25rem;
+    }
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-base, rgba(107, 114, 128, 0.3));
+      border-radius: 2px;
+
+      &:hover {
+        background: var(--border-hover, rgba(107, 114, 128, 0.5));
+      }
+    }
+  }
+}
+
+// Expanded state: rotate icon + reveal content.
+.terminal-region--collapsible.terminal-region--expanded {
+  .terminal-region__icon {
+    transform: rotate(90deg);
+  }
+
+  .terminal-region__content-wrapper {
+    grid-template-rows: 1fr;
+  }
+}
+
+// ==================== Streaming adjustments ====================
+
+.terminal-region--expanded.terminal-region--streaming {
+  &::before {
+    content: none;
+  }
+
+  &::after {
+    content: none;
+  }
+}
+
+.terminal-region--expanded.terminal-region--streaming.terminal-region--has-scroll:not(.terminal-region--at-top) {
+  &::before {
+    content: '';
+    position: absolute;
+    top: 28px;
+    left: 0;
+    right: 0;
+    height: 16px;
+    pointer-events: none;
+    z-index: 3;
+    background: linear-gradient(
+      to bottom,
+      var(--color-bg-flowchat, #121214) 0%,
+      color-mix(in srgb, var(--color-bg-flowchat, #121214) 60%, transparent) 50%,
+      transparent 100%
+    );
+  }
+
+  &:not(.terminal-region--collapsible)::before {
+    top: 0;
+  }
+}
+
+.terminal-region--expanded.terminal-region--streaming.terminal-region--has-scroll:not(.terminal-region--at-bottom) {
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 16px;
+    pointer-events: none;
+    z-index: 3;
+    background: linear-gradient(
+      to top,
+      var(--color-bg-flowchat, #121214) 0%,
+      color-mix(in srgb, var(--color-bg-flowchat, #121214) 60%, transparent) 50%,
+      transparent 100%
+    );
+  }
+}
+
+.terminal-region--expanded.terminal-region--streaming {
+  .terminal-region__content {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+}
+
+// ==================== Adjacent collapsed regions ====================
+
+.terminal-region--collapsed + .terminal-region--collapsed {
+  margin-top: -2px;
+}
+
+// ==================== Status pulse animation ====================
+
+@keyframes terminal-status-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

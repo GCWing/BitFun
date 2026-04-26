@@ -641,10 +641,29 @@ pub async fn get_operation_diff(
         .await
         .map_err(|e| format!("Failed to get file diff: {}", e))?;
 
+    let original = diff
+        .get("original_content")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let modified = diff
+        .get("modified_content")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    log::debug!(
+        "get_operation_diff: session_id={} file_path={} operation_id={:?} original_len={} modified_len={} identical={}",
+        request.sessionId,
+        request.filePath,
+        request.operationId,
+        original.len(),
+        modified.len(),
+        original == modified
+    );
+
     Ok(serde_json::json!({
         "filePath": diff.get("file_path").and_then(|v| v.as_str()).unwrap_or(&request.filePath),
-        "originalContent": diff.get("original_content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        "modifiedContent": diff.get("modified_content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        "originalContent": original.to_string(),
+        "modifiedContent": modified.to_string(),
         "anchorLine": diff.get("anchor_line").and_then(|v| v.as_u64()),
     }))
 }

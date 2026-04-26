@@ -1,0 +1,140 @@
+import { describe, expect, it } from 'vitest';
+import type { AgenticEvent } from '@/infrastructure/api/service-api/AgentAPI';
+import type { Session } from '@/flow_chat/types/flow-chat';
+import {
+  buildDialogCompletionNotificationCopy,
+  shouldSendDialogCompletionNotification,
+} from './dialogCompletionNotifyPolicy';
+
+const event = (overrides: Partial<AgenticEvent> = {}): AgenticEvent => ({
+  sessionId: 'session-1',
+  turnId: 'turn-1',
+  ...overrides,
+});
+
+const session = (overrides: Partial<Session> = {}): Session => ({
+  sessionId: 'session-1',
+  title: 'Session',
+  titleStatus: 'generated',
+  dialogTurns: [],
+  status: 'idle',
+  config: {
+    modelName: 'gpt-test',
+    agentType: 'agentic',
+  },
+  createdAt: 1000,
+  lastActiveAt: 1000,
+  error: null,
+  todos: [],
+  maxContextTokens: 128128,
+  mode: 'agentic',
+  workspacePath: '/workspace',
+  parentSessionId: undefined,
+  sessionKind: 'normal',
+  btwThreads: [],
+  btwOrigin: undefined,
+  ...overrides,
+});
+
+describe('shouldSendDialogCompletionNotification', () => {
+  it('suppresses notifications for individual subagent completions', () => {
+    expect(
+      shouldSendDialogCompletionNotification({
+        event: event({
+          subagentParentInfo: {
+            toolCallId: 'task-1',
+            sessionId: 'parent-session',
+            dialogTurnId: 'parent-turn',
+          },
+        }),
+        session: session(),
+        isBackground: true,
+        notificationsEnabled: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('suppresses standard review child session notifications', () => {
+    expect(
+      shouldSendDialogCompletionNotification({
+        event: event(),
+        session: session({
+          sessionKind: 'review',
+          parentSessionId: 'parent-1',
+        }),
+        isBackground: true,
+        notificationsEnabled: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('suppresses notifications when the session is not available locally', () => {
+    expect(
+      shouldSendDialogCompletionNotification({
+        event: event(),
+        session: undefined,
+        isBackground: true,
+        notificationsEnabled: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('allows final deep review completion notifications only in the background', () => {
+    const deepReviewSession = session({
+      sessionKind: 'deep_review',
+      parentSessionId: 'parent-1',
+    });
+
+    expect(
+      shouldSendDialogCompletionNotification({
+        event: event(),
+        session: deepReviewSession,
+        isBackground: false,
+        notificationsEnabled: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldSendDialogCompletionNotification({
+        event: event(),
+        session: deepReviewSession,
+        isBackground: true,
+        notificationsEnabled: true,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('buildDialogCompletionNotificationCopy', () => {
+  const t = (key: string, options?: Record<string, unknown>) => {
+    if (key === 'notify.dialogCompletedTitle') return 'BitFun finished a task';
+    if (key === 'notify.dialogCompletedWithSession') {
+      return `${options?.sessionTitle} is ready.`;
+    }
+    return 'A BitFun session is ready.';
+  };
+
+  it('uses a product title and a session-aware body', () => {
+    expect(
+      buildDialogCompletionNotificationCopy({
+        sessionTitle: 'Deep Review',
+        t,
+      }),
+    ).toEqual({
+      title: 'BitFun finished a task',
+      body: 'Deep Review is ready.',
+    });
+  });
+
+  it('does not expose fallback session ids in the system notification title', () => {
+    expect(
+      buildDialogCompletionNotificationCopy({
+        sessionTitle: '',
+        t,
+      }),
+    ).toEqual({
+      title: 'BitFun finished a task',
+      body: 'A BitFun session is ready.',
+    });
+  });
+});

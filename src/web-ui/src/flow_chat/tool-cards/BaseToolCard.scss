@@ -3,11 +3,18 @@
  * Provides unified card appearance and interaction effects
  */
 
+/* ========== Shared header variables ========== */
+:root {
+  --tool-card-header-pad-y: 7px;
+  --tool-card-header-pad-x: 10px;
+  --tool-card-header-icon-rail: 24px;
+}
+
 /* ========== Card wrapper ========== */
 .base-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  margin: 6px 0;
+  margin: 4px 0;
   border-radius: 8px;
   border: 1px solid var(--border-base);
   background: var(--color-bg-flowchat);
@@ -88,11 +95,6 @@
 
 /* ========== Header row styles ========== */
 .base-tool-card-header {
-  /* Used by icon-rail divider to meet card inner top/bottom for this row */
-  --tool-card-header-pad-y: 10px;
-  --tool-card-header-pad-x: 10px;
-  --tool-card-header-icon-rail: 28px;
-
   display: flex;
   align-items: center;
   gap: 4px;

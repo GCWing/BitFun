@@ -11,6 +11,7 @@ use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
+use crate::service::i18n::LocaleId;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
@@ -346,16 +347,13 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
 
     /// Format language instruction based on language code
     fn format_language_instruction(lang_code: &str) -> BitFunResult<String> {
-        let language = match lang_code {
-            "zh-CN" => "**Simplified Chinese**",
-            "en-US" => "**English**",
-            _ => {
-                return Err(BitFunError::config(format!(
-                    "Unknown language code: {}",
-                    lang_code
-                )));
-            }
+        let Some(locale) = LocaleId::from_str(lang_code) else {
+            return Err(BitFunError::config(format!(
+                "Unknown language code: {}",
+                lang_code
+            )));
         };
+        let language = format!("**{}**", locale.model_language_name());
         Ok(format!("# Language Preference\nYou MUST respond in {} regardless of the user's input language. This is the system language setting and should be followed unless the user explicitly specifies a different language. This is crucial for smooth communication and user experience\n", language))
     }
 
@@ -456,9 +454,9 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if self.context.supports_image_understanding == Some(false) {
             result.push_str(
                 "\n\n# Computer use (text-only primary model)\n\n\
-The configured **primary model does not accept image inputs**. When using **`ControlHub`** with **`domain: \"desktop\"`** (or **`domain: \"browser\"`**):\n\
+The configured **primary model does not accept image inputs**. When using **`ComputerUse`** (or **`ControlHub`** with **`domain: \"browser\"`**):\n\
 - **Do not** use **`screenshot`** (desktop) and **avoid** `domain:\"browser\" action:\"screenshot\"` — the JPEG bytes will be unreadable.\n\
-- **ACTION PRIORITY:** 1) Terminal/CLI/system commands (`Bash` tool, or `ControlHub domain:\"system\" action:\"run_script\"`) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**. For browser work prefer `snapshot` → click by `@e*` ref over screenshots.\n\
+- **ACTION PRIORITY:** 1) Terminal/CLI/system commands (`Bash` tool, or `ComputerUse` `run_script`) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**. For browser work prefer `snapshot` → click by `@e*` ref over screenshots.\n\
 - **Never guess coordinates** — always use precise methods (AX, OCR, system coordinates from tool results, or browser snapshot refs).\n",
             );
         }

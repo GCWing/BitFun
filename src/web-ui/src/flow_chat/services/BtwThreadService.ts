@@ -6,6 +6,7 @@ import { flowChatStore } from '../store/FlowChatStore';
 import { stateMachineManager } from '../state-machine';
 import { flowChatManager } from './FlowChatManager';
 import type { DialogTurn, ModelRound, FlowTextItem } from '../types/flow-chat';
+import type { SessionKind } from '@/shared/types/session-history';
 import { buildSessionMetadata } from '../utils/sessionMetadata';
 
 const log = createLogger('BtwThreadService');
@@ -83,6 +84,7 @@ export async function createBtwChildSession(params: {
   enableContextCompression?: boolean;
   requestId?: string;
   addMarker?: boolean;
+  sessionKind?: Extract<SessionKind, 'btw' | 'review' | 'deep_review'>;
 }): Promise<{
   requestId: string;
   childSessionId: string;
@@ -91,6 +93,7 @@ export async function createBtwChildSession(params: {
 }> {
   const { parentSessionId } = params;
   const requestId = params.requestId || safeUuid('btw');
+  const childSessionKind = params.sessionKind ?? 'btw';
   const createdAt = Date.now();
   const { parentDialogTurnId, parentTurnIndex } = getParentInterruptionContext(parentSessionId);
 
@@ -131,7 +134,7 @@ export async function createBtwChildSession(params: {
     workspacePath,
     {
       parentSessionId,
-      sessionKind: 'btw',
+      sessionKind: childSessionKind,
       btwOrigin: {
         requestId,
         parentSessionId,
@@ -142,13 +145,16 @@ export async function createBtwChildSession(params: {
     remoteConnectionId,
     remoteSshHost
   );
-  flowChatStore.updateSessionRelationship(childSessionId, { parentSessionId, sessionKind: 'btw' });
+  flowChatStore.updateSessionRelationship(childSessionId, {
+    parentSessionId,
+    sessionKind: childSessionKind,
+  });
   flowChatStore.updateSessionBtwOrigin(childSessionId, {
     requestId,
     parentSessionId,
     parentDialogTurnId,
     parentTurnIndex,
-  });
+  }, childSessionKind);
 
   if (params.addMarker ?? false) {
     flowChatStore.addBtwThreadMarker(parentSessionId, {
