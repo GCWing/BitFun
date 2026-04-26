@@ -116,7 +116,7 @@ describe('buildSelectedReviewRemediationPrompt', () => {
     });
 
     expect(prompt).toContain('follow-up deep review');
-    expect(prompt).toContain('dispatching the review team');
+    expect(prompt).toContain('dispatching all enabled review team reviewers');
   });
 
   it('builds prompt with standard review mode', () => {

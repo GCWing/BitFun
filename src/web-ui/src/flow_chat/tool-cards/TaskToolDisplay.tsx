@@ -215,15 +215,22 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     const desc =
       (taskInput?.description || '').trim() || t('toolCards.taskDetailPanel.untitled');
     const raw = taskInput?.agentType;
-    const agentTypeLabel =
-      raw && raw !== 'Not provided'
-        ? raw
-        : t('toolCards.taskTool.defaultAgentKind');
+    let agentTypeLabel: string;
+    if (raw && raw !== 'Not provided') {
+      const rc = taskInput?.reviewerContext;
+      agentTypeLabel = rc
+        ? tAgents(`reviewTeams.members.${rc.definitionKey}.funName`, {
+            defaultValue: rc.roleName,
+          })
+        : raw;
+    } else {
+      agentTypeLabel = t('toolCards.taskTool.defaultAgentKind');
+    }
     return t('toolCards.taskTool.headerLine', {
       agentType: agentTypeLabel,
       description: desc,
     });
-  }, [taskInput, t]);
+  }, [taskInput, t, tAgents]);
 
   const openTaskDetailPanel = useCallback(
     (e: React.MouseEvent) => {

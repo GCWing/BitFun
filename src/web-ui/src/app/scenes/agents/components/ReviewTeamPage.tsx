@@ -2,9 +2,11 @@ import React, { Component, useCallback, useEffect, useMemo, useState } from 'rea
 import {
   ArrowLeft,
   BadgeCheck,
+  Blocks,
   Bot,
   Gauge,
   GitBranch,
+  Layout,
   Lock,
   Settings,
   Shield,
@@ -50,6 +52,10 @@ function getMemberIcon(member: ReviewTeamMember) {
       return Gauge;
     case 'security':
       return Shield;
+    case 'architecture':
+      return Blocks;
+    case 'frontend':
+      return Layout;
     case 'judge':
       return BadgeCheck;
     default:

@@ -150,7 +150,7 @@
   "reviewTeams": {
     "default": {
       "name": "代码审核团队",
-      "summary": "专业深度代码审核团队，内置业务逻辑、性能、安全和质检四个固定角色。",
+      "summary": "专业深度代码审核团队，内置业务逻辑、性能、安全、架构和质检固定角色。",
       "members": "{{count}} 名成员"
     },
     "detail": {
@@ -169,7 +169,7 @@
       "localOnly": "代码审核",
       "localOnlyDescription": "在 BitFun 内以只读 Sub-Agent 运行，并把结果回传到当前审核线程。",
       "parallelLabel": "并行审核",
-      "parallelDescription": "逻辑、性能、安全和额外审核员会并行工作，再由质检员验证结果。",
+      "parallelDescription": "逻辑、性能、安全、架构和额外审核员会并行工作，再由质检员验证结果。",
       "warningLabel": "审核更重",
       "warning": "建议用于风险更高的改动；它可能比普通审核耗时更久并消耗更多 token。",
       "qualityGate": "质检复核",
@@ -204,7 +204,7 @@
       "remove": "移除成员",
       "removeDescription": "将这个额外 Sub-Agent 从代码审核团队中移除。固定角色不可删除。",
       "addTitle": "添加额外 Sub-Agent",
-      "addDescription": "把其他只读 Sub-Agent 加入深度代码审核团队，四个固定角色会始终保留。",
+      "addDescription": "把其他只读 Sub-Agent 加入深度代码审核团队，固定角色会始终保留。",
       "addLabel": "候选成员",
       "addHint": "只有只读 Sub-Agent 可以加入初始审核流程；每个额外审核员的结果仍会由质检员统一复核。",
       "addPlaceholder": "选择一个 Sub-Agent",
@@ -288,6 +288,26 @@
           "通过审核审核员的推理过程，过滤误报以及方向错误的优化建议。",
           "仅在审核员的声明需要验证时，对特定代码位置进行抽查。",
           "确保每条保留的问题都带有明确修复方案或后续计划。"
+        ]
+      },
+      "architecture": {
+        "funName": "架构审核员",
+        "role": "架构审核员",
+        "description": "负责检查模块边界、依赖方向、API 契约设计和抽象完整性的结构守护者。",
+        "responsibilities": [
+          "检测层级边界违规和方向错误的导入。",
+          "验证 API 契约、工具模式和传输消息的一致性。",
+          "确保平台无关代码不会泄露平台特定细节。"
+        ]
+      },
+      "frontend": {
+        "funName": "前端审核员",
+        "role": "前端审核员",
+        "description": "检查国际化同步、React 性能模式、无障碍访问和前后端契约一致性的 UI 专家。",
+        "responsibilities": [
+          "验证所有语言区域的国际化键完整性。",
+          "检查 React 性能模式（记忆化、虚拟化、effect 依赖）。",
+          "标记无障碍访问违规和前后端 API 契约偏差。"
         ]
       }
     },

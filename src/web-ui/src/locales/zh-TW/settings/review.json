@@ -70,6 +70,14 @@
     "judge": {
       "name": "審核品質檢查員",
       "role": "審核品質檢查員"
+    },
+    "architecture": {
+      "name": "架構審核員",
+      "role": "架構審核員"
+    },
+    "frontend": {
+      "name": "前端審核員",
+      "role": "前端審核員"
     }
   },
   "extra": {

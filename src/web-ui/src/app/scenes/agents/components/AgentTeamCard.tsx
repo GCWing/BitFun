@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Users } from 'lucide-react';
+import { BadgeCheck, GitBranch, ShieldCheck, Users } from 'lucide-react';
 import { Badge } from '@/component-library';
 import './AgentTeamCard.scss';
 
@@ -57,19 +57,19 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
       </div>
 
       <div className="agent-team-card__body">
-        <div className="agent-team-card__meta">
-          <span className="agent-team-card__meta-item">
-            <Users size={12} />
-            {membersLabel}
+        <div className="agent-team-card__metrics" aria-label={memberNames.join(', ')}>
+          <span className="agent-team-card__metric agent-team-card__metric--primary">
+            <Users size={13} />
+            <strong>{membersLabel}</strong>
           </span>
-        </div>
-
-        <div className="agent-team-card__chips">
-          {memberNames.map((memberName) => (
-            <span key={memberName} className="agent-team-card__chip">
-              {memberName}
-            </span>
-          ))}
+          <span className="agent-team-card__metric">
+            <GitBranch size={13} />
+            <span>{localOnlyLabel}</span>
+          </span>
+          <span className="agent-team-card__metric">
+            <BadgeCheck size={13} />
+            <span>{qualityGateLabel}</span>
+          </span>
         </div>
       </div>
 
