@@ -505,11 +505,11 @@ const ReviewTeamPage: React.FC = () => {
                         ) : null}
                       </div>
                     </div>
-                    <p className="review-team-page__detail-description">
-                      {getLocalizedMemberDescription(selectedMember)}
-                    </p>
                   </div>
                 </div>
+                <p className="review-team-page__detail-description">
+                  {getLocalizedMemberDescription(selectedMember)}
+                </p>
 
                 <div className="review-team-page__responsibilities">
                   <span className="review-team-page__block-label">

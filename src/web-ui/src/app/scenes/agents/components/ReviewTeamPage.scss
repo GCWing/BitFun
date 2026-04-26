@@ -1,8 +1,11 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .review-team-page {
+  --config-page-content-max-width: 1480px;
+  --config-page-content-inline-padding: clamp(40px, 6vw, 80px);
+
   .bitfun-config-page-content__inner {
-    max-width: 1600px;
+    max-width: 1480px;
   }
 
   &__summary-grid {
@@ -435,6 +438,7 @@
 
   &__detail-description {
     margin: 0;
+    padding: 0 0 16px;
     font-size: var(--font-size-sm);
     line-height: 1.7;
     color: var(--color-text-secondary);
