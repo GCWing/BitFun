@@ -71,17 +71,48 @@
   }
 
   /*
-   * Git rail lives under ToolCardHeader in .tool-card-extra; by default extra shrinks to its children so the
-   * rail is only icon-tall and the vertical line / hover baseline cannot span the header padding. Stretch
-   * to the header row height, then use negative inset to fill edge-to-edge.
+   * Header extras: stretch vertically so editor rail hit/hover fills full header row (match Task rail).
+   * Parent header uses align-items:center; tool-card-extra must stretch, then inner row stretch children.
    */
-  .base-tool-card-header .tool-card-extra:has(.file-op-git-rail) {
+  .base-tool-card-header .tool-card-extra:has(.file-op-header-extras) {
     align-self: stretch;
     display: flex;
     flex-direction: row;
-    align-items: center;
-    gap: 2px;
+    align-items: stretch;
     min-height: 0;
+  }
+}
+
+.file-op-header-extras {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  flex-shrink: 0;
+
+  .params-streaming-indicator,
+  .error-expand-indicator {
+    align-self: center;
+  }
+}
+
+.diff-preview-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-family: var(--tool-card-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: 1;
+
+  .additions {
+    color: var(--color-success);
+  }
+
+  .deletions {
+    color: var(--color-error);
   }
 }
 
@@ -123,28 +154,53 @@
   color: var(--color-text-muted);
 }
 
-.diff-preview-group {
-  display: flex;
+/* After file name: git icon (if repo) + +/- stats in one pill; hover opens diff. */
+.file-op-diff-capsule {
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 6px;
   flex-shrink: 0;
-  font-family: var(--tool-card-font-mono);
-  font-size: 10px;
-  font-weight: 600;
+  margin: 0;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-bg-secondary, rgba(255, 255, 255, 0.04));
   color: var(--color-text-muted);
   line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
-  .additions {
-    color: var(--color-success);
+  .diff-preview-group {
+    color: inherit;
   }
 
-  .deletions {
-    color: var(--color-error);
+  &:hover:not(:disabled):not(.file-op-diff-capsule--disabled) {
+    background: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
+    color: var(--color-text-primary);
+  }
+
+  &--disabled,
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500, #60a5fa);
+    outline-offset: 2px;
   }
 }
 
-/* Right rail for “View Git diff” — aligned with Task tool header rail (TaskToolDisplay). */
-.file-op-git-rail {
+.file-op-diff-capsule__git-icon {
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+/* Open in editor — right rail aligned with TaskToolDisplay .task-header-rail */
+.file-op-editor-rail {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -152,9 +208,9 @@
   justify-content: center;
   align-self: stretch;
   flex-shrink: 0;
-  min-width: 32px;
+  min-width: 40px;
   padding: 0 0 0 8px;
-  margin-left: 4px;
+  margin-left: 2px;
 
   &::before {
     content: '';
@@ -170,11 +226,11 @@
     z-index: 0;
   }
 
-  &:hover:not(.file-op-git-rail--disabled)::before {
+  &:hover::before {
     background-color: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
   }
 
-  &:hover:not(.file-op-git-rail--disabled) .file-op-git-rail__visual {
+  &:hover .file-op-editor-rail__visual {
     color: var(--color-text-primary);
   }
 
@@ -189,17 +245,9 @@
     pointer-events: none;
     z-index: 1;
   }
-
-  &--disabled {
-    opacity: 0.45;
-
-    .file-op-git-rail__visual {
-      color: var(--color-text-muted);
-    }
-  }
 }
 
-.file-op-git-rail__hit {
+.file-op-editor-rail__hit {
   position: absolute;
   left: 0;
   top: calc(-1 * var(--tool-card-header-pad-y, 10px));
@@ -220,7 +268,7 @@
   }
 }
 
-.file-op-git-rail__visual {
+.file-op-editor-rail__visual {
   position: relative;
   z-index: 1;
   display: flex;
@@ -230,8 +278,6 @@
   pointer-events: none;
 
   svg {
-    width: 16px;
-    height: 16px;
     flex-shrink: 0;
     stroke: currentColor;
   }

@@ -474,7 +474,8 @@
       "expandPreview": "Expand preview",
       "collapsePreview": "Collapse preview",
       "viewGitDiff": "View Diff",
-      "viewBaselineDiff": "View Baseline Diff"
+      "viewBaselineDiff": "View Baseline Diff",
+      "openInEditor": "Open in editor"
     },
     "getFileDiff": {
       "diffFile": "Diff",

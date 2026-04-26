@@ -464,7 +464,8 @@
       "expandPreview": "展开预览",
       "collapsePreview": "收起预览",
       "viewGitDiff": "查看 Diff",
-      "viewBaselineDiff": "查看基线 Diff"
+      "viewBaselineDiff": "查看基线 Diff",
+      "openInEditor": "在编辑器中打开"
     },
     "getFileDiff": {
       "diffFile": "文件差异",

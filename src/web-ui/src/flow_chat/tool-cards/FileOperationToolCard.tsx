@@ -20,6 +20,7 @@ import {
   GitBranch,
   FileText,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   FileEdit,
   FilePlus,
@@ -43,11 +44,12 @@ import { diffLines } from 'diff';
 import { createLogger } from '@/shared/utils/logger';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
+import { hasNonFileUriScheme, joinPath } from '@/shared/utils/pathUtils';
+import { WorkspaceKind } from '@/shared/types/global-state';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
-const FILE_OPERATION_PREVIEW_ROWS = 4;
+const FILE_OPERATION_PREVIEW_ROWS = 8;
 const FILE_OPERATION_PREVIEW_ROW_HEIGHT = 22;
 // Keep streaming and completed previews at the same height to avoid layout jumps.
 const FILE_OPERATION_PREVIEW_MAX_HEIGHT =
@@ -61,7 +63,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   toolItem,
   config,
   sessionId,
-  onOpenInEditor
 }) => {
   const { t } = useTranslation('flow-chat');
   const { toolCall, toolResult, status, isParamsStreaming, partialParams } = toolItem;
@@ -90,6 +91,37 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   } = useSnapshotState(sessionId);
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useCurrentWorkspace();
+  const [workspaceIsGitRepo, setWorkspaceIsGitRepo] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ws = currentWorkspace;
+    const root = ws?.rootPath?.trim();
+    if (!ws || !root || ws.workspaceKind === WorkspaceKind.Assistant) {
+      setWorkspaceIsGitRepo(false);
+      return;
+    }
+
+    setWorkspaceIsGitRepo(null);
+    (async () => {
+      try {
+        const { systemAPI } = await import('../../infrastructure/api');
+        const marker = joinPath(root, '.git');
+        const exists = await systemAPI.checkPathExists(marker);
+        if (!cancelled) {
+          setWorkspaceIsGitRepo(exists);
+        }
+      } catch {
+        if (!cancelled) {
+          setWorkspaceIsGitRepo(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspace?.id, currentWorkspace?.rootPath, currentWorkspace?.workspaceKind]);
 
   const getFilePath = useCallback((): string => {
     const params = partialParams || toolCall?.input;
@@ -423,47 +455,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
   }, [sessionId, currentFilePath, toolCall?.id, fileName, toolItem.toolName]);
 
-  const handleCardClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (
-      (e.target as HTMLElement).closest(
-        '.file-op-git-rail:not(.file-op-git-rail--disabled)',
-      )
-    ) {
-      return;
-    }
-    
-    if (isFailed) {
-      applyErrorExpandedState(!isErrorExpanded, 'manual');
-      return;
-    }
-
-    if (toolItem.toolName === 'Delete') {
-      return;
-    }
-    
-    if (currentFilePath && sessionId && status === 'completed') {
-      handleOpenInCodeEditor();
-      return;
-    }
-
-    if (currentFilePath && onOpenInEditor) {
-      onOpenInEditor(currentFilePath);
-    }
-  }, [
-    applyErrorExpandedState,
-    currentFilePath,
-    handleOpenInCodeEditor,
-    isErrorExpanded,
-    isFailed,
-    onOpenInEditor,
-    sessionId,
-    status,
-    toolItem.toolName,
-  ]);
-
   const handleOpenBaselineDiff = useCallback(async () => {
     if (!currentFilePath || !currentWorkspace || !sessionId) {
       log.warn('Cannot open diff: missing required info', {
@@ -677,7 +668,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const expandedContent = renderExpandedContent();
   const hasExpandableContent =
-    status === 'completed' &&
     !isFailed &&
     !isDeleteTool &&
     Boolean(expandedContent);
@@ -685,22 +675,82 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const isCardContentExpanded =
     !isDeleteTool &&
     !isFailed &&
-    (status === 'completed' ? isContentExpanded : true);
+    (hasExpandableContent ? isContentExpanded : false);
 
-  const opensPanelOnClick =
-    !isFailed &&
+  const hasDiffStats =
+    currentFileDiffStats.additions > 0 || currentFileDiffStats.deletions > 0;
+  const diffCapsuleBaseReady =
     !isDeleteTool &&
-    (Boolean(currentFilePath && sessionId && status === 'completed') ||
-      Boolean(currentFilePath && onOpenInEditor));
+    !isFailed &&
+    !isLoading &&
+    !isParamsStreaming &&
+    status === 'completed' &&
+    Boolean(currentFilePath) &&
+    Boolean(currentWorkspace) &&
+    Boolean(sessionId);
+  const showInlineDiffCapsule =
+    diffCapsuleBaseReady &&
+    (hasDiffStats || workspaceIsGitRepo === true);
+  const showGitIconInDiffCapsule = workspaceIsGitRepo === true;
+  const diffCapsuleDisabled = !currentFilePath || !currentWorkspace || !sessionId;
+  const showEditorRail =
+    diffCapsuleBaseReady && Boolean(currentFilePath);
+
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const target = e.target as HTMLElement;
+    if (target.closest('.file-op-diff-capsule')) {
+      return;
+    }
+    if (target.closest('.file-op-editor-rail')) {
+      return;
+    }
+
+    if (isFailed) {
+      applyErrorExpandedState(!isErrorExpanded, 'manual');
+      return;
+    }
+
+    if (toolItem.toolName === 'Delete') {
+      return;
+    }
+
+    if (hasExpandableContent) {
+      applyContentExpandedState(!isContentExpanded, 'manual');
+    }
+  }, [
+    applyContentExpandedState,
+    applyErrorExpandedState,
+    hasExpandableContent,
+    isContentExpanded,
+    isErrorExpanded,
+    isFailed,
+    toolItem.toolName,
+  ]);
 
   const renderHeader = () => {
     const { className: iconClassName } = getToolIconInfo();
-    const gitRailDisabled =
-      !currentFilePath || !currentWorkspace || !sessionId;
 
     const actionText = isDeleteTool
       ? ''
       : (isFailed ? `${toolDisplayInfo.name}${t('toolCards.file.failed')}` : `${toolDisplayInfo.name}:`);
+
+    const gitDiffTooltip = t('toolCards.file.viewGitDiff');
+    const baselineDiffTooltip = t('toolCards.file.viewBaselineDiff');
+    const diffCapsuleTooltip = showGitIconInDiffCapsule ? gitDiffTooltip : baselineDiffTooltip;
+
+    const diffStatsInner = (
+      <span className="diff-preview-group">
+        {currentFileDiffStats.additions > 0 && (
+          <span className="additions">+{currentFileDiffStats.additions}</span>
+        )}
+        {currentFileDiffStats.deletions > 0 && (
+          <span className="deletions">-{currentFileDiffStats.deletions}</span>
+        )}
+      </span>
+    );
 
     return (
       <ToolCardHeader
@@ -716,7 +766,9 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         onAffordanceClick={
           hasExpandableContent
             ? () => applyContentExpandedState(!isContentExpanded, 'manual')
-            : undefined
+            : isFailed
+              ? () => applyErrorExpandedState(!isErrorExpanded, 'manual')
+              : undefined
         }
         action={actionText}
       content={
@@ -726,61 +778,61 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
               {fileName}
             </span>
           </Tooltip>
-          {!isDeleteTool && !isParamsStreaming && !isFailed && !isLoading && (
-            (currentFileDiffStats.additions > 0 || currentFileDiffStats.deletions > 0)
-          ) && (
-            <span className="diff-preview-group">
-              {currentFileDiffStats.additions > 0 && (
-                <span className="additions">+{currentFileDiffStats.additions}</span>
-              )}
-              {currentFileDiffStats.deletions > 0 && (
-                <span className="deletions">-{currentFileDiffStats.deletions}</span>
-              )}
-            </span>
+          {showInlineDiffCapsule && (
+            <Tooltip content={diffCapsuleTooltip} placement="top">
+              <button
+                type="button"
+                className={`file-op-diff-capsule${diffCapsuleDisabled ? ' file-op-diff-capsule--disabled' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!diffCapsuleDisabled) {
+                    void handleOpenBaselineDiff();
+                  }
+                }}
+                disabled={diffCapsuleDisabled}
+                aria-label={diffCapsuleTooltip}
+              >
+                {showGitIconInDiffCapsule ? (
+                  <GitBranch size={14} strokeWidth={2} className="file-op-diff-capsule__git-icon" aria-hidden />
+                ) : null}
+                {hasDiffStats ? diffStatsInner : null}
+              </button>
+            </Tooltip>
           )}
         </>
       }
       extra={
-        <>
+        <div className="file-op-header-extras">
           {isParamsStreaming && (status === 'preparing' || status === 'streaming') && (
             <span className="params-streaming-indicator">
               {currentFilePath ? t('toolCards.file.receivingParams') : t('toolCards.file.analyzing')}
             </span>
           )}
-          {!isDeleteTool &&
-            !isFailed &&
-            !isLoading &&
-            status === 'completed' &&
-            currentFilePath && (
-              <Tooltip content={t('toolCards.file.viewGitDiff')} placement="top">
-                <div
-                  className={`file-op-git-rail${gitRailDisabled ? ' file-op-git-rail--disabled' : ''}`}
-                >
-                  {!gitRailDisabled && (
-                    <button
-                      type="button"
-                      className="file-op-git-rail__hit"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenBaselineDiff();
-                      }}
-                      aria-label={t('toolCards.file.viewGitDiff')}
-                      title={t('toolCards.file.viewGitDiff')}
-                    />
-                  )}
-                  <div className="file-op-git-rail__visual" aria-hidden>
-                    <GitBranch size={16} strokeWidth={2} />
-                  </div>
+          {showEditorRail && (
+            <Tooltip content={t('toolCards.file.openInEditor')} placement="top">
+              <div className="file-op-editor-rail">
+                <button
+                  type="button"
+                  className="file-op-editor-rail__hit"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleOpenInCodeEditor();
+                  }}
+                  aria-label={t('toolCards.file.openInEditor')}
+                  title={t('toolCards.file.openInEditor')}
+                />
+                <div className="file-op-editor-rail__visual" aria-hidden>
+                  <ChevronRight size={18} strokeWidth={2} absoluteStrokeWidth />
                 </div>
-              </Tooltip>
-            )}
-
+              </div>
+            </Tooltip>
+          )}
           {isFailed && (
             <div className="error-expand-indicator">
               {isErrorExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </div>
           )}
-        </>
+        </div>
       }
       statusIcon={isDeleteTool ? null : renderStatusIcon()}
     />
@@ -815,14 +867,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         expandedContent={expandedContent}
         errorContent={isFailed && isErrorExpanded ? renderErrorContent() : null}
         isFailed={isFailed}
-        headerExpandAffordance={hasExpandableContent || opensPanelOnClick || isFailed}
-        headerAffordanceKind={
-          hasExpandableContent
-            ? 'expand'
-            : opensPanelOnClick
-              ? 'open-panel-right'
-              : 'expand'
-        }
+        headerExpandAffordance={hasExpandableContent || isFailed}
+        headerAffordanceKind="expand"
       />
     </div>
   );

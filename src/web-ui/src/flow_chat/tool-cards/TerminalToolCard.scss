@@ -30,8 +30,11 @@
   border-radius: 0 0 7px 7px;
 }
 
-/* Collapsed terminal cards should sit with compact read/search tool rows instead of looking like a callout. */
-.base-tool-card-wrapper.terminal-tool-card:not(:has(> .base-tool-card-expanded)):not(:has(> .base-tool-card-error)) {
+/*
+ * Inline row (class set from TerminalToolCard.tsx): same visual rhythm as .compact-tool-card-wrapper + ReadFileDisplay.
+ * Class-based so we do not rely on :has() and `inherit` through `<code>` / UA quirks.
+ */
+.base-tool-card-wrapper.terminal-tool-card.terminal-tool-card--collapsed-row {
   margin: 0;
   border-color: transparent;
   border-radius: 0;
@@ -39,6 +42,8 @@
   box-shadow: none;
   backdrop-filter: none;
   overflow: visible;
+  font-size: var(--flowchat-font-size-base);
+  line-height: 1.65;
 
   &:hover,
   &:active {
@@ -65,11 +70,41 @@
     gap: 8px;
     padding: 0 8px 0 0;
     line-height: 1.65;
+    font-size: inherit;
     overflow: visible;
 
     &::before,
     &::after {
       display: none;
+    }
+
+    /* Nest under header so specificity beats loose `.tool-card-action { font-size: 12px }` regardless of bundle order. */
+    .tool-card-action,
+    .tool-card-content {
+      font-size: var(--flowchat-font-size-base);
+      line-height: 1.65;
+      color: var(--color-text-muted);
+      letter-spacing: normal;
+    }
+
+    .tool-card-content {
+      font-weight: 400;
+    }
+
+    .terminal-command,
+    .terminal-command-input {
+      font-family: inherit;
+      font-size: var(--flowchat-font-size-base);
+      font-weight: 400;
+      line-height: 1.65;
+      color: inherit;
+    }
+  }
+
+  &:hover .base-tool-card-header {
+    .tool-card-action,
+    .tool-card-content {
+      color: var(--color-text-primary);
     }
   }
 
@@ -91,24 +126,6 @@
   .tool-card-icon.tool-identifier-icon.tool-card-icon-main svg {
     width: 12px;
     height: 12px;
-  }
-
-  .tool-card-action,
-  .tool-card-content {
-    font-size: var(--flowchat-font-size-base);
-    line-height: 1.65;
-    color: var(--color-text-muted);
-  }
-
-  &:hover {
-    .tool-card-action,
-    .tool-card-content {
-      color: var(--color-text-primary);
-    }
-
-    .terminal-command {
-      color: var(--color-text-primary);
-    }
   }
 }
 
@@ -561,10 +578,13 @@
       width: auto !important;
       justify-content: flex-start !important;
     }
-    
-    .terminal-command,
-    .terminal-command-input {
-      font-size: 11px;
+
+    /* Keep collapsed row at flowchat base size (matches compact read cards); shrink only when the output panel is open. */
+    .base-tool-card-wrapper.terminal-tool-card:has(> .base-tool-card-expanded) {
+      .terminal-command,
+      .terminal-command-input {
+        font-size: 11px;
+      }
     }
   }
 }

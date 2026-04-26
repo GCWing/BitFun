@@ -8,6 +8,7 @@ import {
   Timer,
   ChevronRight,
   ChevronDown,
+  AlertTriangle,
 } from 'lucide-react';
 
 import { useTranslation } from 'react-i18next';
@@ -25,7 +26,8 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   onConfirm,
   onReject,
   onOpenInPanel,
-  sessionId
+  sessionId,
+  interruptionNote,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
@@ -164,6 +166,14 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       'success' in toolResult &&
       toolResult.success === false);
 
+  // Surface inline interruption copy once; avoids deps on isExpanded (would re-open after manual collapse).
+  useEffect(() => {
+    if (interruptionNote && !isFailed) {
+      updateCardExpandedState(true, 'auto');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when note / id / failure state changes
+  }, [interruptionNote, isFailed, toolItem.id]);
+
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (
@@ -184,7 +194,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   }, [isFailed, isExpanded, updateCardExpandedState]);
 
   const showHeaderExpandHint =
-    !isFailed && (hasRealPrompt || needsConfirmation);
+    !isFailed && (hasRealPrompt || needsConfirmation || Boolean(interruptionNote));
 
   const taskHeaderLine = useMemo(() => {
     const desc =
@@ -300,12 +310,27 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       return null;
     }
 
-    if (!hasRealPrompt && !needsConfirmation) {
+    if (!hasRealPrompt && !needsConfirmation && !interruptionNote) {
       return null;
     }
 
+    const hasBodyBelowInterruption = Boolean(hasRealPrompt || needsConfirmation);
+
     return (
       <div className="task-expanded-content">
+        {interruptionNote && (
+          <div
+            className={
+              'task-tool-card-interruption' +
+              (hasBodyBelowInterruption ? ' task-tool-card-interruption--has-below' : '')
+            }
+          >
+            <div className="flow-tool-card-note" role="note">
+              <AlertTriangle size={13} strokeWidth={2} aria-hidden />
+              {interruptionNote}
+            </div>
+          </div>
+        )}
         {hasRealPrompt && (
           <div
             className={`thinking-content-wrapper${promptScrollState.hasScroll ? ' has-scroll' : ''}${

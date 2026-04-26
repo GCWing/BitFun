@@ -361,6 +361,8 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     status,
   ]);
   const waitingMessage = viewState.waitingMessageKey ? t(viewState.waitingMessageKey) : null;
+  /** Matches compact tool rows (e.g. Read): no separate BaseToolCard action text in collapsed mode. */
+  const compactInlineRow = !isExpanded && !viewState.isFailed;
 
   const handleExecute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -444,11 +446,12 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   };
 
   const renderCommandContent = () => {
+    const commandContent = command
+      || <span className="command-empty">{t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand')}</span>;
     const commandNode = (
-      <code ref={commandRef} className="terminal-command">
-        {command
-          || <span className="command-empty">{t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand')}</span>}
-      </code>
+      compactInlineRow
+        ? <span ref={commandRef} className="terminal-command">{commandContent}</span>
+        : <code ref={commandRef} className="terminal-command">{commandContent}</code>
     );
 
     if (command && isCommandTruncated) {
@@ -483,8 +486,12 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     <ToolCardHeader
       icon={<Terminal size={16} />}
       iconClassName="terminal-icon"
-      action={t('toolCards.terminal.executeCommand')}
-      content={renderCommandContent()}
+      action={compactInlineRow ? undefined : t('toolCards.terminal.executeCommand')}
+      content={compactInlineRow ? (
+        <>
+          {t('toolCards.terminal.executeCommand')} {renderCommandContent()}
+        </>
+      ) : renderCommandContent()}
       extra={viewState.hasHeaderExtra ? (
         <>
           {renderStatusText()}
@@ -546,7 +553,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
         status={status}
         isExpanded={isExpanded}
         onClick={handleCardClick}
-        className="terminal-tool-card"
+        className={['terminal-tool-card', compactInlineRow ? 'terminal-tool-card--collapsed-row' : ''].filter(Boolean).join(' ')}
         header={renderHeader()}
         expandedContent={expandedContent}
         errorContent={errorContent}

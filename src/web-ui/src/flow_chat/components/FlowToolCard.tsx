@@ -73,9 +73,10 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           onOpenInPanel={onOpenInPanel}
           onExpand={handleExpand}
           sessionId={sessionId}
+          interruptionNote={interruptionNote}
         />
       </FlowToolCardErrorBoundary>
-      {interruptionNote && (
+      {interruptionNote && !config.inlineInterruptionNote && (
         <div className="flow-tool-card-note" role="note">
           {interruptionNote}
         </div>

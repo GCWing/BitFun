@@ -299,6 +299,10 @@
     margin-left: 0;
     padding-left: 0;
     border-left: none;
+
+    &:empty {
+      display: none;
+    }
   }
 
   /* Prompt uses ModelThinkingDisplay shell + .thinking-markdown (see ModelThinkingDisplay.scss). */
@@ -353,7 +357,40 @@
   .task-expanded-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+  }
+
+  /* Interruption note: full width to card inner edges (counters .base-tool-card-expanded padding). */
+  .task-tool-card-interruption {
+    flex-shrink: 0;
+    align-self: stretch;
+    width: auto;
+    margin: 0 -10px;
+    box-sizing: border-box;
+    padding: 0 10px 10px;
+
+    .flow-tool-card-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--color-text-secondary);
+      font-size: 0.82em;
+      line-height: 1.45;
+      opacity: 0.9;
+
+      svg {
+        flex-shrink: 0;
+        color: var(--color-warning, #f59e0b);
+      }
+    }
+
+    &--has-below {
+      border-bottom: 1px solid var(--border-base);
+    }
   }
 
 
@@ -444,41 +481,64 @@
 
 /**
  * Unified task + subagent card wrapper.
- * Wraps the task tool header card and the subagent items container so they
- * behave as a single card with a shared hover/shadow effect.
+ * Wraps the task tool header card and the subagent items container.
+ * Do not add an outer box-shadow or radius here when expanded: the inner
+ * .base-tool-card-wrapper + .subagent-items-container already draw one card;
+ * an extra layer caused a double rounded-rectangle (overlap with
+ * .flow-tool-card-wrapper’s subtree).
  */
 .task-with-subagent-wrapper {
   position: relative;
-  border-radius: 8px;
   margin-bottom: 10px;
-  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-
-  // Expanded state: subtle default elevation.
-  &:has(.subagent-items-wrapper--expanded) {
-    box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.15),
-      0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-
-  // Hover over expanded card: stronger elevation.
-  &:has(.subagent-items-wrapper--expanded):hover {
-    box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.25),
-      0 2px 8px rgba(0, 0, 0, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
 
   // Square the bottom corners of the task header card when expanded.
   &:has(.subagent-items-wrapper--expanded) {
+    // The paired task is rendered by ModelRoundItem's local FlowItemRenderer,
+    // which uses .flowchat-flow-item. Keep .flowchat-tool-wrapper for older call sites.
+    > .flowchat-flow-item,
+    > .flowchat-tool-wrapper {
+      margin: 0;
+    }
+
+    // Plain flex host only — avoid a second implied frame behind the real card.
+    > .flowchat-flow-item .flow-tool-card-wrapper,
+    > .flowchat-tool-wrapper .flow-tool-card-wrapper {
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      gap: 0;
+    }
+
     .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
       border-radius: 8px 8px 0 0;
-      // Remove bottom margin so the subagent container connects flush.
-      margin-bottom: 0;
-      // Suppress the base card's own hover shadow; the wrapper handles it.
-      &:hover {
-        box-shadow: none;
-      }
+      // BaseToolCard uses margin: 6px 0; in the paired task/subagent card it
+      // must be flush so the lower subagent border can physically connect.
+      margin: 0;
     }
+
+    // Remove expanded-body bottom padding so the seam meets the subagent flush.
+    .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display > .base-tool-card-expanded {
+      padding-bottom: 0;
+    }
+
+    // Keep the subagent block directly after the task card. The task card's
+    // bottom border is the divider between prompt and subagent content.
+    > .subagent-items-wrapper {
+      margin-top: 0;
+    }
+
+    > .subagent-items-wrapper .subagent-items-container {
+      margin-top: 0;
+      padding-top: 10px;
+      border: 1px solid var(--border-base);
+      border-top: none;
+      box-shadow: none;
+    }
+  }
+
+  // Whole-group hover: sync subagent panel border with BaseToolCard hover.
+  &:has(.subagent-items-wrapper--expanded):hover .subagent-items-container {
+    border-color: var(--border-medium);
   }
 }
 

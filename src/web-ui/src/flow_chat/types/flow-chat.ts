@@ -305,6 +305,11 @@ export interface ToolCardConfig {
   description?: string;
   displayMode?: 'compact' | 'standard' | 'detailed' | 'terminal';
   primaryColor?: string;
+  /**
+   * When set, the shell renders the interruption note inside the tool card
+   * (e.g. task expanded body) instead of after the card wrapper.
+   */
+  inlineInterruptionNote?: boolean;
 }
 
 export interface ToolCardProps {
@@ -318,6 +323,8 @@ export interface ToolCardProps {
   sessionId?: string;
   /** Callback for MCP App ui/message requests. Returns whether the message was handled successfully. */
   onMcpAppMessage?: (params: import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageParams) => Promise<import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageResult>;
+  /** Interruption / cancellation note; placement depends on tool card config. */
+  interruptionNote?: string | null;
 }
 
 // Flow Chat callbacks for layered events.

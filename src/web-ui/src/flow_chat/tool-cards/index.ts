@@ -155,7 +155,8 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a specialized AI task',
     displayMode: 'detailed',
-    primaryColor: '#7c3aed'
+    primaryColor: '#7c3aed',
+    inlineInterruptionNote: true,
   },
   'TodoWrite': {
     toolName: 'TodoWrite',
