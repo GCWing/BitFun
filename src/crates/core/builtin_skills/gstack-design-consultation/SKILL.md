@@ -16,6 +16,15 @@ You are a senior product designer with strong opinions about typography, color, 
 
 **Your posture:** Design consultant, not form wizard. You propose a complete coherent system, explain why it works, and invite the user to adjust. At any point the user can just talk to you about any of this — it's a conversation, not a rigid flow.
 
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, this skill supplies the design-system methodology. Use existing Task sub-agents for independent discovery, then keep design-system authorship in the main Team session.
+
+- Do not assume a Design Partner sub-agent exists. Choose only from the Task tool's available agents.
+- Prefer matching custom design/research/frontend sub-agents if available; otherwise use `Explore` for product/UI surface mapping and `FileFinder` for design docs, themes, screenshots, and component libraries.
+- Use Task for research, inventory, and convention extraction; do not ask sub-agents to create or overwrite DESIGN.md.
+- The main Team orchestrator synthesizes the system, explains tradeoffs, and makes file edits after user-approved direction.
+
 ---
 
 ## Phase 0: Pre-checks
@@ -41,8 +50,8 @@ Look for office-hours output:
 
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
-ls ~/.gstack/projects/$SLUG/*office-hours* 2>/dev/null | head -5
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
+ls $HOME/.bitfun/team/projects/$SLUG/*office-hours* 2>/dev/null | head -5
 ls .context/*office-hours* .context/attachments/*office-hours* 2>/dev/null | head -5
 ```
 
@@ -50,134 +59,30 @@ If office-hours output exists, read it — the product context is pre-filled.
 
 If the codebase is empty and purpose is unclear, say: *"I don't have a clear picture of what you're building yet. Want to explore first with `/office-hours`? Once we know the product direction, we can set up the design system."*
 
-**Find the browse binary (optional — enables visual competitive research):**
-
-## SETUP (run this check BEFORE any browse command)
-
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && B=~/.claude/skills/gstack/browse/dist/browse
-if [ -x "$B" ]; then
-  echo "READY: $B"
-else
-  echo "NEEDS_SETUP"
-fi
-```
-
-If `NEEDS_SETUP`:
-1. Tell the user: "gstack browse needs a one-time build (~10 seconds). OK to proceed?" Then STOP and wait.
-2. Run: `cd <SKILL_DIR> && ./setup`
-3. If `bun` is not installed:
-   ```bash
-   if ! command -v bun >/dev/null 2>&1; then
-     BUN_VERSION="1.3.10"
-     BUN_INSTALL_SHA="bab8acfb046aac8c72407bdcce903957665d655d7acaa3e11c7c4616beae68dd"
-     tmpfile=$(mktemp)
-     curl -fsSL "https://bun.sh/install" -o "$tmpfile"
-     actual_sha=$(shasum -a 256 "$tmpfile" | awk '{print $1}')
-     if [ "$actual_sha" != "$BUN_INSTALL_SHA" ]; then
-       echo "ERROR: bun install script checksum mismatch" >&2
-       echo "  expected: $BUN_INSTALL_SHA" >&2
-       echo "  got:      $actual_sha" >&2
-       rm "$tmpfile"; exit 1
-     fi
-     BUN_VERSION="$BUN_VERSION" bash "$tmpfile"
-     rm "$tmpfile"
-   fi
-   ```
+**Visual research tooling:** Use BitFun built-in browser/computer-use capability for screenshots and live-page inspection. Do not install, build, or call any external browse binary. If browser tooling is unavailable, continue with code inspection, WebSearch when allowed, and static visual analysis.
 
 If browse is not available, that's fine — visual research is optional. The skill works without it using WebSearch and your built-in design knowledge.
 
-**Find the gstack designer (optional — enables AI mockup generation):**
+**Find the BitFun image/design capability (optional — enables AI mockup generation):**
 
-## DESIGN SETUP (run this check BEFORE any design mockup command)
+## DESIGN SETUP
 
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-D=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/design/dist/design" ] && D="$_ROOT/.claude/skills/gstack/design/dist/design"
-[ -z "$D" ] && D=~/.claude/skills/gstack/design/dist/design
-if [ -x "$D" ]; then
-  echo "DESIGN_READY: $D"
-else
-  echo "DESIGN_NOT_AVAILABLE"
-fi
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && B=~/.claude/skills/gstack/browse/dist/browse
-if [ -x "$B" ]; then
-  echo "BROWSE_READY: $B"
-else
-  echo "BROWSE_NOT_AVAILABLE (will use 'open' to view comparison boards)"
-fi
-```
-
-If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation and fall back to the
-existing HTML wireframe approach (`DESIGN_SKETCH`). Design mockups are a
-progressive enhancement, not a hard requirement.
-
-If `BROWSE_NOT_AVAILABLE`: use `open file://...` instead of `$B goto` to open
-comparison boards. The user just needs to see the HTML file in any browser.
-
-If `DESIGN_READY`: the design binary is available for visual mockup generation.
-Commands:
-- `$D generate --brief "..." --output /path.png` — generate a single mockup
-- `$D variants --brief "..." --count 3 --output-dir /path/` — generate N style variants
-- `$D compare --images "a.png,b.png,c.png" --output /path/board.html --serve` — comparison board + HTTP server
-- `$D serve --html /path/board.html` — serve comparison board and collect feedback via HTTP
-- `$D check --image /path.png --brief "..."` — vision quality gate
-- `$D iterate --session /path/session.json --feedback "..." --output /path.png` — iterate
+Use BitFun built-in image/design and browser/computer-use capabilities. Do not install, build, or call external `design` or `browse` binaries. Generate mockups, comparison boards, screenshots, and visual QA artifacts through BitFun tools; if a visual generation capability is not available in the current session, fall back to HTML wireframes and code-level design review.
 
 **CRITICAL PATH RULE:** All design artifacts (mockups, comparison boards, approved.json)
-MUST be saved to `~/.gstack/projects/$SLUG/designs/`, NEVER to `.context/`,
+MUST be saved to `$HOME/.bitfun/team/projects/$SLUG/designs/`, NEVER to `.context/`,
 `docs/designs/`, `/tmp/`, or any project-local directory. Design artifacts are USER
 data, not project files. They persist across branches, conversations, and workspaces.
 
-If `DESIGN_READY`: Phase 5 will generate AI mockups of your proposed design system applied to real screens, instead of just an HTML preview page. Much more powerful — the user sees what their product could actually look like.
+If `BitFun image/design capability is available`: Phase 5 will generate AI mockups of your proposed design system applied to real screens, instead of just an HTML preview page. Much more powerful — the user sees what their product could actually look like.
 
-If `DESIGN_NOT_AVAILABLE`: Phase 5 falls back to the HTML preview page (still good).
+If `BitFun image/design capability is unavailable`: Phase 5 falls back to the HTML preview page (still good).
 
 ---
 
 ## Prior Learnings
 
-Search for relevant learnings from previous sessions:
-
-```bash
-_CROSS_PROJ=$(~/.claude/skills/gstack/bin/gstack-config get cross_project_learnings 2>/dev/null || echo "unset")
-echo "CROSS_PROJECT: $_CROSS_PROJ"
-if [ "$_CROSS_PROJ" = "true" ]; then
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 --cross-project 2>/dev/null || true
-else
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 2>/dev/null || true
-fi
-```
-
-If `CROSS_PROJECT` is `unset` (first time): Use AskUserQuestion:
-
-> gstack can search learnings from your other projects on this machine to find
-> patterns that might apply here. This stays local (no data leaves your machine).
-> Recommended for solo developers. Skip if you work on multiple client codebases
-> where cross-contamination would be a concern.
-
-Options:
-- A) Enable cross-project learnings (recommended)
-- B) Keep learnings project-scoped only
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings true`
-If B: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings false`
-
-Then re-run the search with the appropriate flag.
-
-If learnings are found, incorporate them into your analysis. When a review finding
-matches a past learning, display:
-
-**"Prior learning applied: [key] (confidence N/10, from [date])"**
-
-This makes the compounding visible. The user should see that gstack is getting
-smarter on their codebase over time.
+Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
 
 ## Phase 1: Product Context
 
@@ -206,12 +111,12 @@ Use WebSearch to find 5-10 products in their space. Search for:
 
 **Step 2: Visual research via browse (if available)**
 
-If the browse binary is available (`$B` is set), visit the top 3-5 sites in the space and capture visual evidence:
+If the BitFun browser/computer-use tooling is available (`BitFun browser/computer-use` is set), visit the top 3-5 sites in the space and capture visual evidence:
 
 ```bash
-$B goto "https://example-site.com"
-$B screenshot "/tmp/design-research-site-name.png"
-$B snapshot
+BitFun browser/computer-use goto "https://example-site.com"
+BitFun browser/computer-use screenshot "/tmp/design-research-site-name.png"
+BitFun browser/computer-use snapshot
 ```
 
 For each site, analyze: fonts actually used, color palette, layout approach, spacing density, aesthetic direction. The screenshot gives you the feel; the snapshot gives you structural data.
@@ -244,25 +149,25 @@ If the user said no research, skip entirely and proceed to Phase 3 using your bu
 ## Design Outside Voices (parallel)
 
 Use AskUserQuestion:
-> "Want outside design voices? Codex evaluates against OpenAI's design hard rules + litmus checks; Claude subagent does an independent design direction proposal."
+> "Want outside design voices? outside-voice sub-agent evaluates against OpenAI's design hard rules + litmus checks; independent subagent does an independent design direction proposal."
 >
 > A) Yes — run outside design voices
 > B) No — proceed without
 
 If user chooses B, skip this step and continue.
 
-**Check Codex availability:**
+**Check outside-voice sub-agent availability:**
 ```bash
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-**If Codex is available**, launch both voices simultaneously:
+**If a suitable BitFun outside-voice or review sub-agent is available**, launch both voices simultaneously:
 
-1. **Codex design voice** (via Bash):
+1. **outside-voice sub-agent design voice** (via Bash):
 ```bash
 TMPERR_DESIGN=$(mktemp /tmp/codex-design-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-codex exec "Given this product context, propose a complete design direction:
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 - Visual thesis: one sentence describing mood, material, and energy
 - Typography: specific font names (not defaults — no Inter/Roboto/Arial/system) + hex colors
 - Color system: CSS variables for background, surface, primary text, muted text, accent
@@ -277,7 +182,7 @@ Use a 5-minute timeout (`timeout: 300000`). After the command completes, read st
 cat "$TMPERR_DESIGN" && rm -f "$TMPERR_DESIGN"
 ```
 
-2. **Claude design subagent** (via Agent tool):
+2. **Independent design subagent** (via BitFun Task tool):
 Dispatch a subagent with this prompt:
 "Given this product context, propose a design direction that would SURPRISE. What would the cool indie studio do that the enterprise UI team wouldn't?
 - Propose an aesthetic direction, typography stack (specific font names), color palette (hex values)
@@ -287,23 +192,23 @@ Dispatch a subagent with this prompt:
 Be bold. Be specific. No hedging."
 
 **Error handling (all non-blocking):**
-- **Auth failure:** If stderr contains "auth", "login", "unauthorized", or "API key": "Codex authentication failed. Run `codex login` to authenticate."
-- **Timeout:** "Codex timed out after 5 minutes."
-- **Empty response:** "Codex returned no response."
-- On any Codex error: proceed with Claude subagent output only, tagged `[single-model]`.
-- If Claude subagent also fails: "Outside voices unavailable — continuing with primary review."
 
-Present Codex output under a `CODEX SAYS (design direction):` header.
-Present subagent output under a `CLAUDE SUBAGENT (design direction):` header.
+- **Timeout:** "outside-voice sub-agent timed out after 5 minutes."
+- **Empty response:** "outside-voice sub-agent returned no response."
+- On any outside-voice sub-agent error: proceed with independent subagent output only, tagged `[single-model]`.
+- If independent subagent also fails: "Outside voices unavailable — continuing with primary review."
 
-**Synthesis:** Claude main references both Codex and subagent proposals in the Phase 3 proposal. Present:
-- Areas of agreement between all three voices (Claude main + Codex + subagent)
+Present outside-voice sub-agent output under a `CODEX SAYS (design direction):` header.
+Present subagent output under a `INDEPENDENT SUBAGENT (design direction):` header.
+
+**Synthesis:** BitFun main references both outside-voice sub-agent and subagent proposals in the Phase 3 proposal. Present:
+- Areas of agreement between all three voices (BitFun main + outside-voice sub-agent + subagent)
 - Genuine divergences as creative alternatives for the user to choose from
-- "Codex and I agree on X. Codex suggested Y where I'm proposing Z — here's why..."
+- "outside-voice sub-agent and I agree on X. outside-voice sub-agent suggested Y where I'm proposing Z — here's why..."
 
 **Log the result:**
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"design-outside-voices","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","commit":"'"$(git rev-parse --short HEAD)"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 Replace STATUS with "clean" or "issues_found", SOURCE with "codex+subagent", "codex-only", "subagent-only", or "unavailable".
 
@@ -411,15 +316,15 @@ Each drill-down is one focused AskUserQuestion. After the user decides, re-check
 
 ## Phase 5: Design System Preview (default ON)
 
-This phase generates visual previews of the proposed design system. Two paths depending on whether the gstack designer is available.
+This phase generates visual previews of the proposed design system. Two paths depending on whether the BitFun image/design capability is available.
 
-### Path A: AI Mockups (if DESIGN_READY)
+### Path A: AI Mockups (if BitFun image/design capability is available)
 
 Generate AI-rendered mockups showing the proposed design system applied to realistic screens for this product. This is far more powerful than an HTML preview — the user sees what their product could actually look like.
 
 ```bash
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
-_DESIGN_DIR=~/.gstack/projects/$SLUG/designs/design-system-$(date +%Y%m%d)
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
+_DESIGN_DIR=$HOME/.bitfun/team/projects/$SLUG/designs/design-system-$(date +%Y%m%d)
 mkdir -p "$_DESIGN_DIR"
 echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
@@ -427,13 +332,13 @@ echo "DESIGN_DIR: $_DESIGN_DIR"
 Construct a design brief from the Phase 3 proposal (aesthetic, colors, typography, spacing, layout) and the product context from Phase 1:
 
 ```bash
-$D variants --brief "<product name: [name]. Product type: [type]. Aesthetic: [direction]. Colors: primary [hex], secondary [hex], neutrals [range]. Typography: display [font], body [font]. Layout: [approach]. Show a realistic [page type] screen with [specific content for this product].>" --count 3 --output-dir "$_DESIGN_DIR/"
+BitFun image/design capability variants --brief "<product name: [name]. Product type: [type]. Aesthetic: [direction]. Colors: primary [hex], secondary [hex], neutrals [range]. Typography: display [font], body [font]. Layout: [approach]. Show a realistic [page type] screen with [specific content for this product].>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 Run quality check on each variant:
 
 ```bash
-$D check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
+BitFun image/design capability check --image "$_DESIGN_DIR/variant-A.png" --brief "<the original brief>"
 ```
 
 Show each variant inline (Read tool on each PNG) for instant preview.
@@ -445,7 +350,7 @@ Tell the user: "I've generated 3 visual directions applying your design system t
 Create the comparison board and serve it over HTTP:
 
 ```bash
-$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
+BitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
 This command generates the board HTML, starts an HTTP server on a random port,
@@ -507,8 +412,8 @@ the approved variant.
 1. Read `regenerateAction` from the JSON (`"different"`, `"match"`, `"more_like_B"`,
    `"remix"`, or custom text)
 2. If `regenerateAction` is `"remix"`, read `remixSpec` (e.g. `{"layout":"A","colors":"B"}`)
-3. Generate new variants with `$D iterate` or `$D variants` using updated brief
-4. Create new board: `$D compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
+3. Generate new variants with `BitFun image/design capability iterate` or `BitFun image/design capability variants` using updated brief
+4. Create new board: `BitFun image/design capability compare --images "..." --output "$_DESIGN_DIR/design-board.html"`
 5. Reload the board in the user's browser (same tab):
    `curl -s -X POST http://127.0.0.1:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
 6. The board auto-refreshes. **AskUserQuestion again** with the same board URL to
@@ -518,7 +423,7 @@ the approved variant.
 AskUserQuestion response instead of using the board. Use their text response
 as the feedback.
 
-**POLLING FALLBACK:** Only use polling if `$D serve` fails (no port available).
+**POLLING FALLBACK:** Only use polling if `BitFun image/design capability serve` fails (no port available).
 In that case, show each variant inline using the Read tool (so the user can see them),
 then use AskUserQuestion:
 "The comparison board server failed to start. I've shown the variants above.
@@ -544,14 +449,14 @@ echo '{"approved_variant":"<V>","feedback":"<FB>","date":"'$(date -u +%Y-%m-%dT%
 
 After the user picks a direction:
 
-- Use `$D extract --image "$_DESIGN_DIR/variant-<CHOSEN>.png"` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
-- If the user wants to iterate further: `$D iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
+- Use `BitFun image/design capability extract --image "$_DESIGN_DIR/variant-<CHOSEN>.png"` to analyze the approved mockup and extract design tokens (colors, typography, spacing) that will populate DESIGN.md in Phase 6. This grounds the design system in what was actually approved visually, not just what was described in text.
+- If the user wants to iterate further: `BitFun image/design capability iterate --feedback "<user's feedback>" --output "$_DESIGN_DIR/refined.png"`
 
 **Plan mode vs. implementation mode:**
 - **If in plan mode:** Add the approved mockup path (the full `$_DESIGN_DIR` path) and extracted tokens to the plan file under an "## Approved Design Direction" section. The design system gets written to DESIGN.md when the plan is implemented.
 - **If NOT in plan mode:** Proceed directly to Phase 6 and write DESIGN.md with the extracted tokens.
 
-### Path B: HTML Preview Page (fallback if DESIGN_NOT_AVAILABLE)
+### Path B: HTML Preview Page (fallback if BitFun image/design capability is unavailable)
 
 Generate a polished HTML preview page and open it in the user's browser. This page is the first visual artifact the skill produces — it should look beautiful.
 
@@ -600,7 +505,7 @@ If the user says skip the preview, go directly to Phase 6.
 
 ## Phase 6: Write DESIGN.md & Confirm
 
-If `$D extract` was used in Phase 5 (Path A), use the extracted tokens as the primary source for DESIGN.md values — colors, typography, and spacing grounded in the approved mockup rather than text descriptions alone. Merge extracted tokens with the Phase 3 proposal (the proposal provides rationale and context; the extraction provides exact values).
+If `BitFun image/design capability extract` was used in Phase 5 (Path A), use the extracted tokens as the primary source for DESIGN.md values — colors, typography, and spacing grounded in the approved mockup rather than text descriptions alone. Merge extracted tokens with the Phase 3 proposal (the proposal provides rationale and context; the extraction provides exact values).
 
 **If in plan mode:** Write the DESIGN.md content into the plan file as a "## Proposed DESIGN.md" section. Do NOT write the actual file — that happens at implementation time.
 
@@ -660,7 +565,7 @@ If `$D extract` was used in Phase 5 (Path A), use the extracted tokens as the pr
 | [today] | Initial design system created | Created by /design-consultation based on [product context / research] |
 ```
 
-**Update CLAUDE.md** (or create it if it doesn't exist) — append this section:
+**Update AGENTS.md** (or create it if it doesn't exist) — append this section:
 
 ```markdown
 ## Design System
@@ -673,7 +578,7 @@ In QA mode, flag any code that doesn't match DESIGN.md.
 **AskUserQuestion Q-final — show summary and confirm:**
 
 List all decisions. Flag any that used agent defaults without explicit user confirmation (the user should know what they're shipping). Options:
-- A) Ship it — write DESIGN.md and CLAUDE.md
+- A) Ship it — write DESIGN.md and AGENTS.md
 - B) I want to change something (specify what)
 - C) Start over
 
@@ -689,7 +594,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"design-consultation","type":"TYPE","key":"SHORT_KEY","insight":"DESCRIPTION","confidence":N,"source":"SOURCE","files":["path/to/relevant/file"]}'
+true # BitFun Team Mode has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -697,7 +602,7 @@ this session, log it for future sessions:
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both Claude and Codex agree).
+`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

@@ -52,10 +52,10 @@ Examples: run codex (always yes), run evals (always yes), reduce scope on a comp
 **Taste** — reasonable people could disagree. Auto-decide with recommendation, but surface at the final gate. Three natural sources:
 1. **Close approaches** — top two are both viable with different tradeoffs.
 2. **Borderline scope** — in blast radius but 3-5 files, or ambiguous radius.
-3. **Codex disagreements** — codex recommends differently and has a valid point.
+3. **outside-voice sub-agent disagreements** — codex recommends differently and has a valid point.
 
 **User Challenge** — both models agree the user's stated direction should change.
-This is qualitatively different from taste decisions. When Claude and Codex both
+This is qualitatively different from taste decisions. When BitFun and outside-voice sub-agent both
 recommend merging, splitting, adding, or removing features/skills/workflows that
 the user specified, this is a User Challenge. It is NEVER auto-decided.
 
@@ -123,14 +123,14 @@ State what you examined and why nothing was flagged (1-2 sentences minimum).
 
 ---
 
-## Filesystem Boundary — Codex Prompts
+## Filesystem Boundary — outside-voice sub-agent Prompts
 
-All prompts sent to Codex (via `codex exec` or `codex review`) MUST be prefixed with
+All prompts sent to outside-voice sub-agent (via `BitFun Task outside-voice dispatch` or `BitFun Task outside-voice review`) MUST be prefixed with
 this boundary instruction:
 
 > IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Stay focused on the repository code only.
 
-This prevents Codex from discovering gstack skill files on disk and following their
+This prevents outside-voice sub-agent from discovering gstack skill files on disk and following their
 instructions instead of reviewing the plan.
 
 ---
@@ -142,10 +142,10 @@ instructions instead of reviewing the plan.
 Before doing anything, save the plan file's current state to an external file:
 
 ```bash
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')
 DATETIME=$(date +%Y%m%d-%H%M%S)
-echo "RESTORE_PATH=$HOME/.gstack/projects/$SLUG/${BRANCH}-autoplan-restore-${DATETIME}.md"
+echo "RESTORE_PATH=$HOME/.bitfun/team/projects/$SLUG/${BRANCH}-autoplan-restore-${DATETIME}.md"
 ```
 
 Write the plan file's full contents to the restore path with this header:
@@ -166,27 +166,27 @@ Then prepend a one-line HTML comment to the plan file:
 
 ### Step 2: Read context
 
-- Read CLAUDE.md, TODOS.md, git log -30, git diff against the base branch --stat
-- Discover design docs: `ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null | head -1`
+- Read AGENTS.md, TODOS.md, git log -30, git diff against the base branch --stat
+- Discover design docs: `ls -t $HOME/.bitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null | head -1`
 - Detect UI scope: grep the plan for view/rendering terms (component, screen, form,
   button, modal, layout, dashboard, sidebar, nav, dialog). Require 2+ matches. Exclude
   false positives ("page" alone, "UI" in acronyms).
 - Detect DX scope: grep the plan for developer-facing terms (API, endpoint, REST,
   GraphQL, gRPC, webhook, CLI, command, flag, argument, terminal, shell, SDK, library,
-  package, npm, pip, import, require, SKILL.md, skill template, Claude Code, MCP, agent,
+  package, npm, pip, import, require, SKILL.md, skill template, BitFun, MCP, agent,
   OpenClaw, action, developer docs, getting started, onboarding, integration, debug,
   implement, error message). Require 2+ matches. Also trigger DX scope if the product IS
   a developer tool (the plan describes something developers install, integrate, or build
-  on top of) or if an AI agent is the primary user (OpenClaw actions, Claude Code skills,
+  on top of) or if an AI agent is the primary user (OpenClaw actions, BitFun skills,
   MCP servers).
 
 ### Step 3: Load skill files from disk
 
 Read each file using the Read tool:
-- `~/.claude/skills/gstack/plan-ceo-review/SKILL.md`
-- `~/.claude/skills/gstack/plan-design-review/SKILL.md` (only if UI scope detected)
-- `~/.claude/skills/gstack/plan-eng-review/SKILL.md`
-- `~/.claude/skills/gstack/plan-devex-review/SKILL.md` (only if DX scope detected)
+- `the bundled plan-ceo-review skill via the Skill tool`
+- `the bundled plan-design-review skill via the Skill tool` (only if UI scope detected)
+- `the bundled plan-eng-review skill via the Skill tool`
+- `the relevant built-in developer-experience review methodology, if present` (only if DX scope detected)
 
 **Section skip list — when following a loaded skill file, SKIP these sections
 (they are already handled by /autoplan):**
@@ -225,15 +225,15 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 - Scope expansion: in blast radius + <1d CC → approve (P2). Outside → defer to TODOS.md (P3).
   Duplicates → reject (P4). Borderline (3-5 files) → mark TASTE DECISION.
 - All 10 review sections: run fully, auto-decide each issue, log every decision.
-- Dual voices: always run BOTH Claude subagent AND Codex if available (P6).
-  Run them sequentially in foreground. First the Claude subagent (Agent tool,
-  foreground — do NOT use run_in_background), then Codex (Bash). Both must
+- Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
+  Run them sequentially in foreground. First the independent subagent (Task tool,
+  foreground — do NOT use run_in_background), then outside-voice sub-agent (Bash). Both must
   complete before building the consensus table.
 
-  **Codex CEO voice** (via Bash):
+  **outside-voice sub-agent CEO voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   You are a CEO/founder advisor reviewing a development plan.
   Challenge the strategic foundations: Are the premises valid or assumed? Is this the
@@ -245,7 +245,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   ```
   Timeout: 10 minutes
 
-  **Claude CEO subagent** (via Agent tool):
+  **Independent CEO subagent** (via Task tool):
   "Read the plan file at <plan_path>. You are an independent CEO/strategist
   reviewing this plan. You have NOT seen any prior review. Evaluate:
   1. Is this the right problem to solve? Could a reframing yield 10x impact?
@@ -255,11 +255,11 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   5. What's the competitive risk — could someone else solve this first/better?
   For each finding: what's wrong, severity (critical/high/medium), and the fix."
 
-  **Error handling:** Both calls block in foreground. Codex auth/timeout/empty → proceed with
-  Claude subagent only, tagged `[single-model]`. If Claude subagent also fails →
+  **Error handling:** Both calls block in foreground. outside-voice sub-agent auth/timeout/empty → proceed with
+  independent subagent only, tagged `[single-model]`. If independent subagent also fails →
   "Outside voices unavailable — continuing with primary review."
 
-  **Degradation matrix:** Both fail → "single-reviewer mode". Codex only →
+  **Degradation matrix:** Both fail → "single-reviewer mode". outside-voice sub-agent only →
   tag `[codex-only]`. Subagent only → tag `[subagent-only]`.
 
 - Strategy choices: if codex disagrees with a premise or scope decision with valid
@@ -277,15 +277,15 @@ Step 0 (0A-0F) — run each sub-step and produce:
 - 0E: Temporal interrogation (HOUR 1 → HOUR 6+)
 - 0F: Mode selection confirmation
 
-Step 0.5 (Dual Voices): Run Claude subagent (foreground Agent tool) first, then
-Codex (Bash). Present Codex output under CODEX SAYS (CEO — strategy challenge)
-header. Present subagent output under CLAUDE SUBAGENT (CEO — strategic independence)
+Step 0.5 (Dual Voices): Run independent subagent (foreground Task tool) first, then
+outside-voice sub-agent (Bash). Present outside-voice sub-agent output under CODEX SAYS (CEO — strategy challenge)
+header. Present subagent output under INDEPENDENT SUBAGENT (CEO — strategic independence)
 header. Produce CEO consensus table:
 
 ```
 CEO DUAL VOICES — CONSENSUS TABLE:
 ═══════════════════════════════════════════════════════════════
-  Dimension                           Claude  Codex  Consensus
+  Dimension                           Task    outside-voice sub-agent  Consensus
   ──────────────────────────────────── ─────── ─────── ─────────
   1. Premises valid?                   —       —      —
   2. Right problem to solve?           —       —      —
@@ -313,7 +313,7 @@ Sections 1-10 — for EACH section, run the evaluation criteria from the loaded 
 - Completion Summary (the full summary table from the CEO skill)
 
 **PHASE 1 COMPLETE.** Emit phase-transition summary:
-> **Phase 1 complete.** Codex: [N concerns]. Claude subagent: [N issues].
+> **Phase 1 complete.** outside-voice sub-agent: [N concerns]. independent subagent: [N issues].
 > Consensus: [X/6 confirmed, Y disagreements → surfaced at gate].
 > Passing to Phase 2.
 
@@ -324,7 +324,7 @@ and the premise gate has been passed.
 
 **Pre-Phase 2 checklist (verify before starting):**
 - [ ] CEO completion summary written to plan file
-- [ ] CEO dual voices ran (Codex + Claude subagent, or noted unavailable)
+- [ ] CEO dual voices ran (outside-voice sub-agent + independent subagent, or noted unavailable)
 - [ ] CEO consensus table produced
 - [ ] Premise gate passed (user confirmed)
 - [ ] Phase-transition summary emitted
@@ -339,12 +339,12 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 - Structural issues (missing states, broken hierarchy): auto-fix (P5)
 - Aesthetic/taste issues: mark TASTE DECISION
 - Design system alignment: auto-fix if DESIGN.md exists and fix is obvious
-- Dual voices: always run BOTH Claude subagent AND Codex if available (P6).
+- Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
 
-  **Codex design voice** (via Bash):
+  **outside-voice sub-agent design voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   Read the plan file at <plan_path>. Evaluate this plan's
   UI/UX design decisions.
@@ -362,7 +362,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   ```
   Timeout: 10 minutes
 
-  **Claude design subagent** (via Agent tool):
+  **Independent design subagent** (via Task tool):
   "Read the plan file at <plan_path>. You are an independent senior product designer
   reviewing this plan. You have NOT seen any prior review. Evaluate:
   1. Information hierarchy: what does the user see first, second, third? Is it right?
@@ -382,17 +382,17 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 1. Step 0 (Design Scope): Rate completeness 0-10. Check DESIGN.md. Map existing patterns.
 
-2. Step 0.5 (Dual Voices): Run Claude subagent (foreground) first, then Codex. Present under
-   CODEX SAYS (design — UX challenge) and CLAUDE SUBAGENT (design — independent review)
+2. Step 0.5 (Dual Voices): Run independent subagent (foreground) first, then outside-voice sub-agent. Present under
+   CODEX SAYS (design — UX challenge) and INDEPENDENT SUBAGENT (design — independent review)
    headers. Produce design litmus scorecard (consensus table). Use the litmus scorecard
-   format from plan-design-review. Include CEO phase findings in Codex prompt ONLY
-   (not Claude subagent — stays independent).
+   format from plan-design-review. Include CEO phase findings in outside-voice sub-agent prompt ONLY
+   (not independent subagent — stays independent).
 
 3. Passes 1-7: Run each from loaded skill. Rate 0-10. Auto-decide each issue.
    DISAGREE items from scorecard → raised in the relevant pass with both perspectives.
 
 **PHASE 2 COMPLETE.** Emit phase-transition summary:
-> **Phase 2 complete.** Codex: [N concerns]. Claude subagent: [N issues].
+> **Phase 2 complete.** outside-voice sub-agent: [N concerns]. independent subagent: [N issues].
 > Consensus: [X/Y confirmed, Z disagreements → surfaced at gate].
 > Passing to Phase 3.
 
@@ -414,12 +414,12 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 **Override rules:**
 - Scope challenge: never reduce (P2)
-- Dual voices: always run BOTH Claude subagent AND Codex if available (P6).
+- Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
 
-  **Codex eng voice** (via Bash):
+  **outside-voice sub-agent eng voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   Review this plan for architectural issues, missing edge cases,
   and hidden complexity. Be adversarial.
@@ -432,7 +432,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
   ```
   Timeout: 10 minutes
 
-  **Claude eng subagent** (via Agent tool):
+  **Independent eng subagent** (via Task tool):
   "Read the plan file at <plan_path>. You are an independent senior engineer
   reviewing this plan. You have NOT seen any prior review. Evaluate:
   1. Architecture: Is the component structure sound? Coupling concerns?
@@ -447,7 +447,7 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 
 - Architecture choices: explicit over clever (P5). If codex disagrees with valid reason → TASTE DECISION. Scope changes both models agree on → USER CHALLENGE.
 - Evals: always include all relevant suites (P1)
-- Test plan: generate artifact at `~/.gstack/projects/$SLUG/{user}-{branch}-test-plan-{datetime}.md`
+- Test plan: generate artifact at `$HOME/.bitfun/team/projects/$SLUG/{user}-{branch}-test-plan-{datetime}.md`
 - TODOS.md: collect all deferred scope expansions from Phase 1, auto-write
 
 **Required execution checklist (Eng):**
@@ -455,15 +455,15 @@ Override: every AskUserQuestion → auto-decide using the 6 principles.
 1. Step 0 (Scope Challenge): Read actual code referenced by the plan. Map each
    sub-problem to existing code. Run the complexity check. Produce concrete findings.
 
-2. Step 0.5 (Dual Voices): Run Claude subagent (foreground) first, then Codex. Present
-   Codex output under CODEX SAYS (eng — architecture challenge) header. Present subagent
-   output under CLAUDE SUBAGENT (eng — independent review) header. Produce eng consensus
+2. Step 0.5 (Dual Voices): Run independent subagent (foreground) first, then outside-voice sub-agent. Present
+   outside-voice sub-agent output under CODEX SAYS (eng — architecture challenge) header. Present subagent
+   output under INDEPENDENT SUBAGENT (eng — independent review) header. Produce eng consensus
    table:
 
 ```
 ENG DUAL VOICES — CONSENSUS TABLE:
 ═══════════════════════════════════════════════════════════════
-  Dimension                           Claude  Codex  Consensus
+  Dimension                           Task    outside-voice sub-agent  Consensus
   ──────────────────────────────────── ─────── ─────── ─────────
   1. Architecture sound?               —       —      —
   2. Test coverage sufficient?         —       —      —
@@ -506,7 +506,7 @@ Missing voice = N/A (not CONFIRMED). Single critical finding from one voice = fl
 - TODOS.md updates (collected from all phases)
 
 **PHASE 3 COMPLETE.** Emit phase-transition summary:
-> **Phase 3 complete.** Codex: [N concerns]. Claude subagent: [N issues].
+> **Phase 3 complete.** outside-voice sub-agent: [N concerns]. independent subagent: [N issues].
 > Consensus: [X/6 confirmed, Y disagreements → surfaced at gate].
 > Passing to Phase 3.5 (DX Review) or Phase 4 (Final Gate).
 
@@ -529,12 +529,12 @@ Log: "Phase 3.5 skipped — no developer-facing scope detected."
 - Error message quality: always require problem + cause + fix (P1, completeness)
 - API/CLI naming: consistency wins over cleverness (P5)
 - DX taste decisions (e.g., opinionated defaults vs flexibility): mark TASTE DECISION
-- Dual voices: always run BOTH Claude subagent AND Codex if available (P6).
+- Dual voices: always run BOTH independent subagent AND outside-voice sub-agent if available (P6).
 
-  **Codex DX voice** (via Bash):
+  **outside-voice sub-agent DX voice** (via Bash):
   ```bash
   _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-  codex exec "IMPORTANT: Do NOT read or execute any SKILL.md files or files in skill definition directories (paths containing skills/gstack). These are AI assistant skill definitions meant for a different system. Stay focused on repository code only.
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 
   Read the plan file at <plan_path>. Evaluate this plan's developer experience.
 
@@ -552,7 +552,7 @@ Log: "Phase 3.5 skipped — no developer-facing scope detected."
   ```
   Timeout: 10 minutes
 
-  **Claude DX subagent** (via Agent tool):
+  **Independent DX subagent** (via Task tool):
   "Read the plan file at <plan_path>. You are an independent DX engineer
   reviewing this plan. You have NOT seen any prior review. Evaluate:
   1. Getting started: how many steps from zero to hello world? What's the TTHW?
@@ -573,14 +573,14 @@ Log: "Phase 3.5 skipped — no developer-facing scope detected."
 1. Step 0 (DX Scope Assessment): Auto-detect product type. Map the developer journey.
    Rate initial DX completeness 0-10. Assess TTHW.
 
-2. Step 0.5 (Dual Voices): Run Claude subagent (foreground) first, then Codex. Present
-   under CODEX SAYS (DX — developer experience challenge) and CLAUDE SUBAGENT
+2. Step 0.5 (Dual Voices): Run independent subagent (foreground) first, then outside-voice sub-agent. Present
+   under CODEX SAYS (DX — developer experience challenge) and INDEPENDENT SUBAGENT
    (DX — independent review) headers. Produce DX consensus table:
 
 ```
 DX DUAL VOICES — CONSENSUS TABLE:
 ═══════════════════════════════════════════════════════════════
-  Dimension                           Claude  Codex  Consensus
+  Dimension                           Task    outside-voice sub-agent  Consensus
   ──────────────────────────────────── ─────── ─────── ─────────
   1. Getting started < 5 min?          —       —      —
   2. API/CLI naming guessable?         —       —      —
@@ -607,7 +607,7 @@ Missing voice = N/A (not CONFIRMED). Single critical finding from one voice = fl
 
 **PHASE 3.5 COMPLETE.** Emit phase-transition summary:
 > **Phase 3.5 complete.** DX overall: [N]/10. TTHW: [N] min → [target] min.
-> Codex: [N concerns]. Claude subagent: [N issues].
+> outside-voice sub-agent: [N concerns]. independent subagent: [N issues].
 > Consensus: [X/6 confirmed, Y disagreements → surfaced at gate].
 > Passing to Phase 4 (Final Gate).
 
@@ -644,7 +644,7 @@ produced. Check the plan file and conversation for each item.
 - [ ] "What already exists" section written
 - [ ] Dream state delta written
 - [ ] Completion Summary produced
-- [ ] Dual voices ran (Codex + Claude subagent, or noted unavailable)
+- [ ] Dual voices ran (outside-voice sub-agent + independent subagent, or noted unavailable)
 - [ ] CEO consensus table produced
 
 **Phase 2 (Design) outputs — only if UI scope detected:**
@@ -657,12 +657,12 @@ produced. Check the plan file and conversation for each item.
 - [ ] Scope challenge with actual code analysis (not just "scope is fine")
 - [ ] Architecture ASCII diagram produced
 - [ ] Test diagram mapping codepaths to test coverage
-- [ ] Test plan artifact written to disk at ~/.gstack/projects/$SLUG/
+- [ ] Test plan artifact written to disk at $HOME/.bitfun/team/projects/$SLUG/
 - [ ] "NOT in scope" section written
 - [ ] "What already exists" section written
 - [ ] Failure modes registry with critical gap assessment
 - [ ] Completion Summary produced
-- [ ] Dual voices ran (Codex + Claude subagent, or noted unavailable)
+- [ ] Dual voices ran (outside-voice sub-agent + independent subagent, or noted unavailable)
 - [ ] Eng consensus table produced
 
 **Phase 3.5 (DX) outputs — only if DX scope detected:**
@@ -723,13 +723,13 @@ I recommend [X] — [principle]. But [Y] is also viable:
 
 ### Review Scores
 - CEO: [summary]
-- CEO Voices: Codex [summary], Claude subagent [summary], Consensus [X/6 confirmed]
+- CEO Voices: outside-voice sub-agent [summary], independent subagent [summary], Consensus [X/6 confirmed]
 - Design: [summary or "skipped, no UI scope"]
-- Design Voices: Codex [summary], Claude subagent [summary], Consensus [X/7 confirmed] (or "skipped")
+- Design Voices: outside-voice sub-agent [summary], independent subagent [summary], Consensus [X/7 confirmed] (or "skipped")
 - Eng: [summary]
-- Eng Voices: Codex [summary], Claude subagent [summary], Consensus [X/6 confirmed]
+- Eng Voices: outside-voice sub-agent [summary], independent subagent [summary], Consensus [X/6 confirmed]
 - DX: [summary or "skipped, no developer-facing scope"]
-- DX Voices: Codex [summary], Claude subagent [summary], Consensus [X/6 confirmed] (or "skipped")
+- DX Voices: outside-voice sub-agent [summary], independent subagent [summary], Consensus [X/6 confirmed] (or "skipped")
 
 ### Cross-Phase Themes
 [For any concern that appeared in 2+ phases' dual voices independently:]
@@ -773,36 +773,36 @@ STATUS is "clean" if no unresolved issues, "issues_open" otherwise.
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null)
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-ceo-review","timestamp":"'"$TIMESTAMP"'","status":"STATUS","unresolved":N,"critical_gaps":N,"mode":"SELECTIVE_EXPANSION","via":"autoplan","commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-eng-review","timestamp":"'"$TIMESTAMP"'","status":"STATUS","unresolved":N,"critical_gaps":N,"issues_found":N,"mode":"FULL_REVIEW","via":"autoplan","commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 If Phase 2 ran (UI scope):
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-design-review","timestamp":"'"$TIMESTAMP"'","status":"STATUS","unresolved":N,"via":"autoplan","commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 If Phase 3.5 ran (DX scope):
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"plan-devex-review","timestamp":"'"$TIMESTAMP"'","status":"STATUS","initial_score":N,"overall_score":N,"product_type":"TYPE","tthw_current":"TTHW","tthw_target":"TARGET","unresolved":N,"via":"autoplan","commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 Dual voice logs (one per phase that ran):
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"autoplan-voices","timestamp":"'"$TIMESTAMP"'","status":"STATUS","source":"SOURCE","phase":"ceo","via":"autoplan","consensus_confirmed":N,"consensus_disagree":N,"commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"autoplan-voices","timestamp":"'"$TIMESTAMP"'","status":"STATUS","source":"SOURCE","phase":"eng","via":"autoplan","consensus_confirmed":N,"consensus_disagree":N,"commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 If Phase 2 ran (UI scope), also log:
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"autoplan-voices","timestamp":"'"$TIMESTAMP"'","status":"STATUS","source":"SOURCE","phase":"design","via":"autoplan","consensus_confirmed":N,"consensus_disagree":N,"commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 If Phase 3.5 ran (DX scope), also log:
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"autoplan-voices","timestamp":"'"$TIMESTAMP"'","status":"STATUS","source":"SOURCE","phase":"dx","via":"autoplan","consensus_confirmed":N,"consensus_disagree":N,"commit":"'"$COMMIT"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 SOURCE = "codex+subagent", "codex-only", "subagent-only", or "unavailable".

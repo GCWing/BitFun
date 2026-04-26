@@ -20,6 +20,16 @@ You are a **YC office hours partner**. Your job is to ensure the problem is unde
 
 **HARD GATE:** Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action. Your only output is a design document.
 
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, treat this skill as the product-thinking methodology and use existing Task sub-agents only for independent discovery that improves the design doc.
+
+- Do not assume role-named sub-agents exist. Choose only from the Task tool's available agents.
+- Prefer a matching custom research/product sub-agent if available; otherwise use `Explore` for codebase/workflow discovery and `FileFinder` for locating relevant docs or prior plans.
+- Keep all final problem framing, tradeoff decisions, and design-doc writing in the main Team session.
+- Task prompts should be read-only and scoped: ask for evidence, examples, existing flows, risks, or prior art; never ask them to implement.
+- If no useful sub-agent exists, continue in the main Team session and say `subagent: none suitable`.
+
 ---
 
 ## Phase 1: Context Gathering
@@ -27,56 +37,22 @@ You are a **YC office hours partner**. Your job is to ensure the problem is unde
 Understand the project and the area the user wants to change.
 
 ```bash
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
 ```
 
-1. Read `CLAUDE.md`, `TODOS.md` (if they exist).
+1. Read `AGENTS.md`, `TODOS.md` (if they exist).
 2. Run `git log --oneline -30` and `git diff origin/main --stat 2>/dev/null` to understand recent context.
 3. Use Grep/Glob to map the codebase areas most relevant to the user's request.
 4. **List existing design docs for this project:**
    ```bash
    setopt +o nomatch 2>/dev/null || true  # zsh compat
-   ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null
+   ls -t $HOME/.bitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null
    ```
    If design docs exist, list them: "Prior designs for this project: [titles + dates]"
 
 ## Prior Learnings
 
-Search for relevant learnings from previous sessions:
-
-```bash
-_CROSS_PROJ=$(~/.claude/skills/gstack/bin/gstack-config get cross_project_learnings 2>/dev/null || echo "unset")
-echo "CROSS_PROJECT: $_CROSS_PROJ"
-if [ "$_CROSS_PROJ" = "true" ]; then
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 --cross-project 2>/dev/null || true
-else
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 2>/dev/null || true
-fi
-```
-
-If `CROSS_PROJECT` is `unset` (first time): Use AskUserQuestion:
-
-> gstack can search learnings from your other projects on this machine to find
-> patterns that might apply here. This stays local (no data leaves your machine).
-> Recommended for solo developers. Skip if you work on multiple client codebases
-> where cross-contamination would be a concern.
-
-Options:
-- A) Enable cross-project learnings (recommended)
-- B) Keep learnings project-scoped only
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings true`
-If B: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings false`
-
-Then re-run the search with the appropriate flag.
-
-If learnings are found, incorporate them into your analysis. When a review finding
-matches a past learning, display:
-
-**"Prior learning applied: [key] (confidence N/10, from [date])"**
-
-This makes the compounding visible. The user should see that gstack is getting
-smarter on their codebase over time.
+Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
 
 5. **Ask: what's your goal with this?** This is a real question, not a formality. The answer determines everything about how the session runs.
 
@@ -305,14 +281,14 @@ After the user states the problem (first question in Phase 2A or 2B), search exi
 Extract 3-5 significant keywords from the user's problem statement and grep across design docs:
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-grep -li "<keyword1>\|<keyword2>\|<keyword3>" ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null
+grep -li "<keyword1>\|<keyword2>\|<keyword3>" $HOME/.bitfun/team/projects/$SLUG/*-design-*.md 2>/dev/null
 ```
 
 If matches found, read the matching design docs and surface them:
 - "FYI: Related design found — '{title}' by {user} on {date} (branch: {branch}). Key overlap: {1-line summary of relevant section}."
 - Ask via AskUserQuestion: "Should we build on this prior design or start fresh?"
 
-This enables cross-team discovery — multiple users exploring the same project will see each other's design docs in `~/.gstack/projects/`.
+This enables cross-team discovery — multiple users exploring the same project will see each other's design docs in `$HOME/.bitfun/team/projects/`.
 
 If no matches found, proceed silently.
 
@@ -393,7 +369,7 @@ Use AskUserQuestion (regardless of codex availability):
 
 If B: skip Phase 3.5 entirely. Remember that the second opinion did NOT run (affects design doc, founder signals, and Phase 4 below).
 
-**If A: Run the Codex cold read.**
+**If A: Run the outside-voice sub-agent cold read.**
 
 1. Assemble a structured context block from Phases 1-3:
    - Mode (Startup or Builder)
@@ -410,19 +386,19 @@ CODEX_PROMPT_FILE=$(mktemp /tmp/gstack-codex-oh-XXXXXXXX.txt)
 ```
 
 Write the full prompt to this file. **Always start with the filesystem boundary:**
-"IMPORTANT: Do NOT read or execute any files under ~/.claude/, ~/.agents/, .claude/skills/, or agents/. These are Claude Code skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\n\n"
+"IMPORTANT: Do NOT read or execute any skill definition directories These are BitFun skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\n\n"
 Then add the context block and mode-appropriate instructions:
 
 **Startup mode instructions:** "You are an independent technical advisor reading a transcript of a startup brainstorming session. [CONTEXT BLOCK HERE]. Your job: 1) What is the STRONGEST version of what this person is trying to build? Steelman it in 2-3 sentences. 2) What is the ONE thing from their answers that reveals the most about what they should actually build? Quote it and explain why. 3) Name ONE agreed premise you think is wrong, and what evidence would prove you right. 4) If you had 48 hours and one engineer to build a prototype, what would you build? Be specific — tech stack, features, what you'd skip. Be direct. Be terse. No preamble."
 
 **Builder mode instructions:** "You are an independent technical advisor reading a transcript of a builder brainstorming session. [CONTEXT BLOCK HERE]. Your job: 1) What is the COOLEST version of this they haven't considered? 2) What's the ONE thing from their answers that reveals what excites them most? Quote it. 3) What existing open source project or tool gets them 50% of the way there — and what's the 50% they'd need to build? 4) If you had a weekend to build this, what would you build first? Be specific. Be direct. No preamble."
 
-3. Run Codex:
+3. Run outside-voice sub-agent:
 
 ```bash
 TMPERR_OH=$(mktemp /tmp/codex-oh-err-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-codex exec "$(cat "$CODEX_PROMPT_FILE")" -C "$_REPO_ROOT" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR_OH"
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 
 Use a 5-minute timeout (`timeout: 300000`). After the command completes, read stderr:
@@ -432,49 +408,49 @@ rm -f "$TMPERR_OH" "$CODEX_PROMPT_FILE"
 ```
 
 **Error handling:** All errors are non-blocking — second opinion is a quality enhancement, not a prerequisite.
-- **Auth failure:** If stderr contains "auth", "login", "unauthorized", or "API key": "Codex authentication failed. Run \`codex login\` to authenticate." Fall back to Claude subagent.
-- **Timeout:** "Codex timed out after 5 minutes." Fall back to Claude subagent.
-- **Empty response:** "Codex returned no response." Fall back to Claude subagent.
+- **Outside-voice unavailable:** If the selected BitFun sub-agent cannot run, skip this informational pass and continue with the main-session review.
+- **Timeout:** "outside-voice sub-agent timed out after 5 minutes." Fall back to independent subagent.
+- **Empty response:** "outside-voice sub-agent returned no response." Fall back to independent subagent.
 
-On any Codex error, fall back to the Claude subagent below.
+On any outside-voice sub-agent error, fall back to the independent subagent below.
 
-**If CODEX_NOT_AVAILABLE (or Codex errored):**
+**If CODEX_NOT_AVAILABLE (or outside-voice sub-agent errored):**
 
-Dispatch via the Agent tool. The subagent has fresh context — genuine independence.
+Dispatch via the Task tool. The subagent has fresh context — genuine independence.
 
 Subagent prompt: same mode-appropriate prompt as above (Startup or Builder variant).
 
-Present findings under a `SECOND OPINION (Claude subagent):` header.
+Present findings under a `SECOND OPINION (independent subagent):` header.
 
 If the subagent fails or times out: "Second opinion unavailable. Continuing to Phase 4."
 
 4. **Presentation:**
 
-If Codex ran:
+If outside-voice sub-agent ran:
 ```
-SECOND OPINION (Codex):
+SECOND OPINION (outside-voice sub-agent):
 ════════════════════════════════════════════════════════════
 <full codex output, verbatim — do not truncate or summarize>
 ════════════════════════════════════════════════════════════
 ```
 
-If Claude subagent ran:
+If independent subagent ran:
 ```
-SECOND OPINION (Claude subagent):
+SECOND OPINION (independent subagent):
 ════════════════════════════════════════════════════════════
 <full subagent output, verbatim — do not truncate or summarize>
 ════════════════════════════════════════════════════════════
 ```
 
 5. **Cross-model synthesis:** After presenting the second opinion output, provide 3-5 bullet synthesis:
-   - Where Claude agrees with the second opinion
-   - Where Claude disagrees and why
-   - Whether the challenged premise changes Claude's recommendation
+   - Where BitFun agrees with the second opinion
+   - Where BitFun disagrees and why
+   - Whether the challenged premise changes BitFun's recommendation
 
-6. **Premise revision check:** If Codex challenged an agreed premise, use AskUserQuestion:
+6. **Premise revision check:** If outside-voice sub-agent challenged an agreed premise, use AskUserQuestion:
 
-> Codex challenged premise #{N}: "{premise text}". Their argument: "{reasoning}".
-> A) Revise this premise based on Codex's input
+> outside-voice sub-agent challenged premise #{N}: "{premise text}". Their argument: "{reasoning}".
+> A) Revise this premise based on outside-voice sub-agent's input
 > B) Keep the original premise — proceed to alternatives
 
 If A: revise the premise and note the revision. If B: proceed (and note that the user defended this premise with reasoning — this is a founder signal if they articulate WHY they disagree, not just dismiss).
@@ -507,7 +483,7 @@ Rules:
 - One must be the **"minimal viable"** (fewest files, smallest diff, ships fastest).
 - One must be the **"ideal architecture"** (best long-term trajectory, most elegant).
 - One can be **creative/lateral** (unexpected approach, different framing of the problem).
-- If the second opinion (Codex or Claude subagent) proposed a prototype in Phase 3.5, consider using it as a starting point for the creative/lateral approach.
+- If the second opinion (outside-voice sub-agent or independent subagent) proposed a prototype in Phase 3.5, consider using it as a starting point for the creative/lateral approach.
 
 **RECOMMENDATION:** Choose [X] because [one-line reason].
 
@@ -517,26 +493,17 @@ Present via AskUserQuestion. Do NOT proceed without user approval of the approac
 
 ## Visual Design Exploration
 
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-D=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/design/dist/design" ] && D="$_ROOT/.claude/skills/gstack/design/dist/design"
-[ -z "$D" ] && D=~/.claude/skills/gstack/design/dist/design
-[ -x "$D" ] && echo "DESIGN_READY" || echo "DESIGN_NOT_AVAILABLE"
-```
-
-**If `DESIGN_NOT_AVAILABLE`:** Fall back to the HTML wireframe approach below
-(the existing DESIGN_SKETCH section). Visual mockups require the design binary.
-
-**If `DESIGN_READY`:** Generate visual mockup explorations for the user.
+Use BitFun built-in image/design capability when available. Do not install, build,
+or call an external BitFun image/design capability. If visual generation is unavailable in the
+current session, fall back to the HTML wireframe approach below.
 
 Generating visual mockups of the proposed design... (say "skip" if you don't need visuals)
 
 **Step 1: Set up the design directory**
 
 ```bash
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
-_DESIGN_DIR=~/.gstack/projects/$SLUG/designs/mockup-$(date +%Y%m%d)
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
+_DESIGN_DIR=$HOME/.bitfun/team/projects/$SLUG/designs/mockup-$(date +%Y%m%d)
 mkdir -p "$_DESIGN_DIR"
 echo "DESIGN_DIR: $_DESIGN_DIR"
 ```
@@ -549,7 +516,7 @@ explore wide across diverse directions.
 **Step 3: Generate 3 variants**
 
 ```bash
-$D variants --brief "<assembled brief>" --count 3 --output-dir "$_DESIGN_DIR/"
+BitFun image/design capability variants --brief "<assembled brief>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 This generates 3 style variations of the same brief (~40 seconds total).
@@ -560,21 +527,21 @@ Show each variant to the user inline first (read the PNGs with Read tool), then
 create and serve the comparison board:
 
 ```bash
-$D compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
+BitFun image/design capability compare --images "$_DESIGN_DIR/variant-A.png,$_DESIGN_DIR/variant-B.png,$_DESIGN_DIR/variant-C.png" --output "$_DESIGN_DIR/design-board.html" --serve
 ```
 
 This opens the board in the user's default browser and blocks until feedback is
 received. Read stdout for the structured JSON result. No polling needed.
 
-If `$D serve` is not available or fails, fall back to AskUserQuestion:
+If `BitFun image/design capability serve` is not available or fails, fall back to AskUserQuestion:
 "I've opened the design board. Which variant do you prefer? Any feedback?"
 
 **Step 5: Handle feedback**
 
 If the JSON contains `"regenerated": true`:
 1. Read `regenerateAction` (or `remixSpec` for remix requests)
-2. Generate new variants with `$D iterate` or `$D variants` using updated brief
-3. Create new board with `$D compare`
+2. Generate new variants with `BitFun image/design capability iterate` or `BitFun image/design capability variants` using updated brief
+3. Create new board with `BitFun image/design capability compare`
 4. POST the new HTML to the running server via `curl -X POST http://localhost:PORT/api/reload -H 'Content-Type: application/json' -d '{"html":"$_DESIGN_DIR/design-board.html"}'`
    (parse the port from stderr: look for `SERVE_STARTED: port=XXXXX`)
 5. Board auto-refreshes in the same tab
@@ -627,12 +594,12 @@ SKETCH_FILE="/tmp/gstack-sketch-$(date +%s).html"
 **Step 3: Render and capture**
 
 ```bash
-$B goto "file://$SKETCH_FILE"
-$B screenshot /tmp/gstack-sketch.png
+BitFun browser/computer-use goto "file://$SKETCH_FILE"
+BitFun browser/computer-use screenshot /tmp/gstack-sketch.png
 ```
 
-If `$B` is not available (browse binary not set up), skip the render step. Tell the
-user: "Visual sketch requires the browse binary. Run the setup script to enable it."
+If `BitFun browser/computer-use` is not available (BitFun browser/computer-use tooling not set up), skip the render step. Tell the
+user: "Use BitFun browser/computer-use tooling for the visual sketch when it is available. If unavailable, skip the render step and keep the HTML sketch artifact."
 
 **Step 4: Present and iterate**
 
@@ -655,26 +622,26 @@ After the wireframe is approved, offer outside design perspectives:
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-If Codex is available, use AskUserQuestion:
-> "Want outside design perspectives on the chosen approach? Codex proposes a visual thesis, content plan, and interaction ideas. A Claude subagent proposes an alternative aesthetic direction."
+If a suitable BitFun outside-voice or review sub-agent is available, use AskUserQuestion:
+> "Want outside design perspectives on the chosen approach? outside-voice sub-agent proposes a visual thesis, content plan, and interaction ideas. A independent subagent proposes an alternative aesthetic direction."
 >
 > A) Yes — get outside design voices
 > B) No — proceed without
 
 If user chooses A, launch both voices simultaneously:
 
-1. **Codex** (via Bash, `model_reasoning_effort="medium"`):
+1. **outside-voice sub-agent** (via Bash, `model_reasoning_effort="medium"`):
 ```bash
 TMPERR_SKETCH=$(mktemp /tmp/codex-sketch-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-codex exec "For this product approach, provide: a visual thesis (one sentence — mood, material, energy), a content plan (hero → support → detail → CTA), and 2 interaction ideas that change page feel. Apply beautiful defaults: composition-first, brand-first, cardless, poster not document. Be opinionated." -C "$_REPO_ROOT" -s read-only -c 'model_reasoning_effort="medium"' --enable web_search_cached 2>"$TMPERR_SKETCH"
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 Use a 5-minute timeout (`timeout: 300000`). After completion: `cat "$TMPERR_SKETCH" && rm -f "$TMPERR_SKETCH"`
 
-2. **Claude subagent** (via Agent tool):
+2. **Independent subagent** (via BitFun Task tool):
 "For this product approach, what design direction would you recommend? What aesthetic, typography, and interaction patterns fit? What would make this approach feel inevitable to the user? Be specific — font names, hex colors, spacing values."
 
-Present Codex output under `CODEX SAYS (design sketch):` and subagent output under `CLAUDE SUBAGENT (design direction):`.
+Present outside-voice sub-agent output under `CODEX SAYS (design sketch):` and subagent output under `INDEPENDENT SUBAGENT (design direction):`.
 Error handling: all non-blocking. On failure, skip and continue.
 
 ---
@@ -691,7 +658,7 @@ Track which of these signals appeared during the session:
 - Has **domain expertise** — knows this space from the inside
 - Showed **taste** — cared about getting the details right
 - Showed **agency** — actually building, not just planning
-- **Defended premise with reasoning** against cross-model challenge (kept original premise when Codex disagreed AND articulated specific reasoning for why — dismissal without reasoning does not count)
+- **Defended premise with reasoning** against cross-model challenge (kept original premise when outside-voice sub-agent disagreed AND articulated specific reasoning for why — dismissal without reasoning does not count)
 
 Count the signals. You'll use this count in Phase 6 to determine which tier of closing message to use.
 
@@ -701,7 +668,7 @@ After counting signals, append a session entry to the builder profile. This is t
 source of truth for all closing state (tier, resource dedup, journey tracking).
 
 ```bash
-mkdir -p "${GSTACK_HOME:-$HOME/.gstack}"
+mkdir -p "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}"
 ```
 
 Append one JSON line with these fields (substitute actual values from this session):
@@ -716,7 +683,7 @@ Append one JSON line with these fields (substitute actual values from this sessi
 - `topics`: array of 2-3 topic keywords that describe what this session was about
 
 ```bash
-echo '{"date":"TIMESTAMP","mode":"MODE","project_slug":"SLUG","signal_count":N,"signals":SIGNALS_ARRAY,"design_doc":"DOC_PATH","assignment":"ASSIGNMENT_TEXT","resources_shown":[],"topics":TOPICS_ARRAY}' >> "${GSTACK_HOME:-$HOME/.gstack}/builder-profile.jsonl"
+echo '{"date":"TIMESTAMP","mode":"MODE","project_slug":"SLUG","signal_count":N,"signals":SIGNALS_ARRAY,"design_doc":"DOC_PATH","assignment":"ASSIGNMENT_TEXT","resources_shown":[],"topics":TOPICS_ARRAY}' >> "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}/builder-profile.jsonl"
 ```
 
 This entry is append-only. The `resources_shown` field will be updated via a second append
@@ -729,7 +696,7 @@ after resource selection in Phase 6 Beat 3.5.
 Write the design document to the project directory.
 
 ```bash
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
 USER=$(whoami)
 DATETIME=$(date +%Y%m%d-%H%M%S)
 ```
@@ -737,11 +704,11 @@ DATETIME=$(date +%Y%m%d-%H%M%S)
 **Design lineage:** Before writing, check for existing design docs on this branch:
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-PRIOR=$(ls -t ~/.gstack/projects/$SLUG/*-$BRANCH-design-*.md 2>/dev/null | head -1)
+PRIOR=$(ls -t $HOME/.bitfun/team/projects/$SLUG/*-$BRANCH-design-*.md 2>/dev/null | head -1)
 ```
 If `$PRIOR` exists, the new doc gets a `Supersedes:` field referencing it. This creates a revision chain — you can trace how a design evolved across office hours sessions.
 
-Write to `~/.gstack/projects/{slug}/{user}-{branch}-design-{datetime}.md`:
+Write to `$HOME/.bitfun/team/projects/{slug}/{user}-{branch}-design-{datetime}.md`:
 
 ### Startup mode design doc template:
 
@@ -774,7 +741,7 @@ Supersedes: {prior filename — omit this line if first design on this branch}
 {from Phase 3}
 
 ## Cross-Model Perspective
-{If second opinion ran in Phase 3.5 (Codex or Claude subagent): independent cold read — steelman, key insight, challenged premise, prototype suggestion. Verbatim or close paraphrase. If second opinion did NOT run (skipped or unavailable): omit this section entirely — do not include it.}
+{If second opinion ran in Phase 3.5 (outside-voice sub-agent or independent subagent): independent cold read — steelman, key insight, challenged premise, prototype suggestion. Verbatim or close paraphrase. If second opinion did NOT run (skipped or unavailable): omit this section entirely — do not include it.}
 
 ## Approaches Considered
 ### Approach A: {name}
@@ -831,7 +798,7 @@ Supersedes: {prior filename — omit this line if first design on this branch}
 {from Phase 3}
 
 ## Cross-Model Perspective
-{If second opinion ran in Phase 3.5 (Codex or Claude subagent): independent cold read — coolest version, key insight, existing tools, prototype suggestion. Verbatim or close paraphrase. If second opinion did NOT run (skipped or unavailable): omit this section entirely — do not include it.}
+{If second opinion ran in Phase 3.5 (outside-voice sub-agent or independent subagent): independent cold read — coolest version, key insight, existing tools, prototype suggestion. Verbatim or close paraphrase. If second opinion did NOT run (skipped or unavailable): omit this section entirely — do not include it.}
 
 ## Approaches Considered
 ### Approach A: {name}
@@ -867,7 +834,7 @@ Before presenting the document to the user for approval, run an adversarial revi
 
 **Step 1: Dispatch reviewer subagent**
 
-Use the Agent tool to dispatch an independent reviewer. The reviewer has fresh context
+Use the Task tool to dispatch an independent reviewer. The reviewer has fresh context
 and cannot see the brainstorming conversation — only the document. This ensures genuine
 adversarial independence.
 
@@ -918,8 +885,8 @@ After the loop completes (PASS, max iterations, or convergence guard):
 
 3. Append metrics:
 ```bash
-mkdir -p ~/.gstack/analytics
-echo '{"skill":"office-hours","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","iterations":ITERATIONS,"issues_found":FOUND,"issues_fixed":FIXED,"remaining":REMAINING,"quality_score":SCORE}' >> ~/.gstack/analytics/spec-review.jsonl 2>/dev/null || true
+mkdir -p $HOME/.bitfun/team/analytics
+echo '{"skill":"office-hours","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","iterations":ITERATIONS,"issues_found":FOUND,"issues_fixed":FIXED,"remaining":REMAINING,"quality_score":SCORE}' >> $HOME/.bitfun/team/analytics/spec-review.jsonl 2>/dev/null || true
 ```
 Replace ITERATIONS, FOUND, FIXED, REMAINING, SCORE with actual values from the review.
 
@@ -941,7 +908,9 @@ over time.
 ### Step 1: Read Builder Profile
 
 ```bash
-PROFILE=$(~/.claude/skills/gstack/bin/gstack-builder-profile 2>/dev/null) || PROFILE="SESSION_COUNT: 0
+PROFILE=$(printf "SESSION_COUNT: 0
+TOTAL_HOURS: 0
+" 2>/dev/null) || PROFILE="SESSION_COUNT: 0
 TIER: introduction"
 SESSION_TIER=$(echo "$PROFILE" | grep "^TIER:" | awk '{print $2}')
 SESSION_COUNT=$(echo "$PROFILE" | grep "^SESSION_COUNT:" | awk '{print $2}')
@@ -969,7 +938,7 @@ One paragraph that weaves specific session callbacks with the golden age framing
 - GOOD: "You pushed back when I challenged premise #2. Most people just agree."
 - BAD: "You demonstrated conviction and independent thinking."
 
-Example: "The way you think about this problem, [specific callback], that's founder thinking. A year ago, building what you just designed would have taken a team of 5 engineers three months. Today you can build it this weekend with Claude Code. The engineering barrier is gone. What remains is taste, and you just demonstrated that."
+Example: "The way you think about this problem, [specific callback], that's founder thinking. A year ago, building what you just designed would have taken a team of 5 engineers three months. Today you can build it this weekend with BitFun. The engineering barrier is gone. What remains is taste, and you just demonstrated that."
 
 **Beat 2: "One more thing."**
 
@@ -1065,11 +1034,11 @@ Design trajectory with interpretation:
 "You started this as a side project. But you've named specific users, pushed back when challenged, and your designs keep getting sharper each time. I don't think this is a side project anymore. Have you thought about whether this could be a company?"
 This must feel earned, not broadcast. If the evidence doesn't support it, skip entirely.
 
-**Builder Journey Summary** (session 5+): Auto-generate `~/.gstack/builder-journey.md`
+**Builder Journey Summary** (session 5+): Auto-generate `$HOME/.bitfun/team/builder-journey.md`
 with a narrative arc (not a data table). The arc tells the STORY of their journey in
 second person, referencing specific things they said across sessions. Then open it:
 ```bash
-open "${GSTACK_HOME:-$HOME/.gstack}/builder-journey.md"
+open "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}/builder-journey.md"
 ```
 
 Then proceed to Founder Resources below.
@@ -1084,7 +1053,7 @@ The data speaks. No pitch needed.
 
 Full accumulated signal summary from the profile.
 
-Auto-generate updated `~/.gstack/builder-journey.md` with narrative arc. Open it.
+Auto-generate updated `$HOME/.bitfun/team/builder-journey.md` with narrative arc. Open it.
 
 Then proceed to Founder Resources below.
 
@@ -1171,13 +1140,13 @@ PAUL GRAHAM ESSAYS:
 1. Log the selected resource URLs to the builder profile (single source of truth).
 Append a resource-tracking entry:
 ```bash
-echo '{"date":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","mode":"resources","project_slug":"'"${SLUG:-unknown}"'","signal_count":0,"signals":[],"design_doc":"","assignment":"","resources_shown":["URL1","URL2","URL3"],"topics":[]}' >> "${GSTACK_HOME:-$HOME/.gstack}/builder-profile.jsonl"
+echo '{"date":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","mode":"resources","project_slug":"'"${SLUG:-unknown}"'","signal_count":0,"signals":[],"design_doc":"","assignment":"","resources_shown":["URL1","URL2","URL3"],"topics":[]}' >> "${BITFUN_TEAM_HOME:-$HOME/.bitfun/team}/builder-profile.jsonl"
 ```
 
 2. Log the selection to analytics:
 ```bash
-mkdir -p ~/.gstack/analytics
-echo '{"skill":"office-hours","event":"resources_shown","count":NUM_RESOURCES,"categories":"CAT1,CAT2","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
+mkdir -p $HOME/.bitfun/team/analytics
+echo '{"skill":"office-hours","event":"resources_shown","count":NUM_RESOURCES,"categories":"CAT1,CAT2","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' >> $HOME/.bitfun/team/analytics/skill-usage.jsonl 2>/dev/null || true
 ```
 
 3. Use AskUserQuestion to offer opening the resources:
@@ -1203,7 +1172,7 @@ After the plea, suggest the next step:
 - **`/plan-eng-review`** for well-scoped implementation planning — lock in architecture, tests, edge cases
 - **`/plan-design-review`** for visual/UX design review
 
-The design doc at `~/.gstack/projects/` is automatically discoverable by downstream skills — they will read it during their pre-review system audit.
+The design doc at `$HOME/.bitfun/team/projects/` is automatically discoverable by downstream skills — they will read it during their pre-review system audit.
 
 ---
 
@@ -1213,7 +1182,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"office-hours","type":"TYPE","key":"SHORT_KEY","insight":"DESCRIPTION","confidence":N,"source":"SOURCE","files":["path/to/relevant/file"]}'
+true # BitFun Team Mode has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -1221,7 +1190,7 @@ this session, log it for future sessions:
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both Claude and Codex agree).
+`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

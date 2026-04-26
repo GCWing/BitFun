@@ -11,6 +11,16 @@ description: |
 
 You are running the `/review` workflow. Analyze the current branch's diff against the base branch for structural issues that tests don't catch.
 
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, this skill supplies the pre-landing review lens. Use existing Task sub-agents for independent diff review tracks, then consolidate findings in the main Team session.
+
+- Do not assume a Staff Engineer sub-agent exists. Choose only from the Task tool's available agents.
+- Prefer built-in review sub-agents when available: `ReviewBusinessLogic` for correctness, `ReviewPerformance` for hot paths, `ReviewSecurity` for security-sensitive diff, and `ReviewJudge` for evidence/quality inspection after reviewers return.
+- Prefer matching custom review sub-agents over generic ones. Use `Explore` only for broad read-only investigation when specialist reviewers are unavailable.
+- Keep Task work read-only. Ask for tight findings with file paths, line references if possible, severity, confidence, and why tests might miss it.
+- The main Team orchestrator owns final severity ordering, AUTO-FIX vs ASK classification, and any code changes.
+
 ---
 
 ## Step 1: Check branch
@@ -66,11 +76,11 @@ Before reviewing code quality, check: **did they build what was requested — no
 setopt +o nomatch 2>/dev/null || true  # zsh compat
 BRANCH=$(git branch --show-current 2>/dev/null | tr '/' '-')
 REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)")
-# Compute project slug for ~/.gstack/projects/ lookup
+# Compute project slug for $HOME/.bitfun/team/projects/ lookup
 _PLAN_SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-' | tr -cd 'a-zA-Z0-9._-') || true
 _PLAN_SLUG="${_PLAN_SLUG:-$(basename "$PWD" | tr -cd 'a-zA-Z0-9._-')}"
 # Search common plan file locations (project designs first, then personal/local)
-for PLAN_DIR in "$HOME/.gstack/projects/$_PLAN_SLUG" "$HOME/.claude/plans" "$HOME/.codex/plans" ".gstack/plans"; do
+for PLAN_DIR in "$HOME/.bitfun/team/projects/$_PLAN_SLUG" "$HOME/.bitfun/team/plans" "$HOME/.codex/plans" ".bitfun/team/plans"; do
   [ -d "$PLAN_DIR" ] || continue
   PLAN=$(ls -t "$PLAN_DIR"/*.md 2>/dev/null | xargs grep -l "$BRANCH" 2>/dev/null | head -1)
   [ -z "$PLAN" ] && PLAN=$(ls -t "$PLAN_DIR"/*.md 2>/dev/null | xargs grep -l "$REPO" 2>/dev/null | head -1)
@@ -189,7 +199,7 @@ IMPACT: {HIGH|MEDIUM|LOW} — {what breaks or degrades if this stays undelivered
 **Only for discrepancies sourced from plan files** (not commit messages or TODOS.md), log a learning so future sessions know this pattern occurred:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{
+true # BitFun Team Mode has no external telemetry helper
   "type": "pitfall",
   "key": "plan-delivery-gap-KEBAB_SUMMARY",
   "insight": "Planned X but delivered Y because Z",
@@ -231,7 +241,7 @@ Plan items: N DONE, M PARTIAL, K NOT DONE
 
 ## Step 2: Read the checklist
 
-Read `.claude/skills/review/checklist.md`.
+Read `the built-in review checklist`.
 
 **If the file cannot be read, STOP and report the error.** Do not proceed without the checklist.
 
@@ -239,7 +249,7 @@ Read `.claude/skills/review/checklist.md`.
 
 ## Step 2.5: Check for Greptile review comments
 
-Read `.claude/skills/review/greptile-triage.md` and follow the fetch, filter, classify, and **escalation detection** steps.
+Read `the built-in review-triage checklist` and follow the fetch, filter, classify, and **escalation detection** steps.
 
 **If no PR exists, `gh` fails, API returns an error, or there are zero Greptile comments:** Skip this step silently. Greptile integration is additive — the review works without it.
 
@@ -261,41 +271,7 @@ Run `git diff origin/<base>` to get the full diff. This includes both committed 
 
 ## Prior Learnings
 
-Search for relevant learnings from previous sessions:
-
-```bash
-_CROSS_PROJ=$(~/.claude/skills/gstack/bin/gstack-config get cross_project_learnings 2>/dev/null || echo "unset")
-echo "CROSS_PROJECT: $_CROSS_PROJ"
-if [ "$_CROSS_PROJ" = "true" ]; then
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 --cross-project 2>/dev/null || true
-else
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 2>/dev/null || true
-fi
-```
-
-If `CROSS_PROJECT` is `unset` (first time): Use AskUserQuestion:
-
-> gstack can search learnings from your other projects on this machine to find
-> patterns that might apply here. This stays local (no data leaves your machine).
-> Recommended for solo developers. Skip if you work on multiple client codebases
-> where cross-contamination would be a concern.
-
-Options:
-- A) Enable cross-project learnings (recommended)
-- B) Keep learnings project-scoped only
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings true`
-If B: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings false`
-
-Then re-run the search with the appropriate flag.
-
-If learnings are found, incorporate them into your analysis. When a review finding
-matches a past learning, display:
-
-**"Prior learning applied: [key] (confidence N/10, from [date])"**
-
-This makes the compounding visible. The user should see that gstack is getting
-smarter on their codebase over time.
+Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
 
 ## Step 4: Critical pass (core review)
 
@@ -347,7 +323,7 @@ higher confidence.
 ### Detect stack and scope
 
 ```bash
-source <(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null) || true
+source <(true # BitFun Team Mode infers diff scope with git/rg <base> 2>/dev/null) || true
 # Detect stack for specialist context
 STACK=""
 [ -f Gemfile ] && STACK="${STACK}ruby "
@@ -373,7 +349,7 @@ echo "TEST_FW: ${TEST_FW:-unknown}"
 ### Read specialist hit rates (adaptive gating)
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-specialist-stats 2>/dev/null || true
+true # BitFun Team Mode has no external specialist-stats helper 2>/dev/null || true
 ```
 
 ### Select specialists
@@ -381,23 +357,23 @@ echo "TEST_FW: ${TEST_FW:-unknown}"
 Based on the scope signals above, select which specialists to dispatch.
 
 **Always-on (dispatch on every review with 50+ changed lines):**
-1. **Testing** — read `~/.claude/skills/gstack/review/specialists/testing.md`
-2. **Maintainability** — read `~/.claude/skills/gstack/review/specialists/maintainability.md`
+1. **Testing** — read `the built-in testing review checklist`
+2. **Maintainability** — read `the built-in maintainability review checklist`
 
 **If DIFF_LINES < 50:** Skip all specialists. Print: "Small diff ($DIFF_LINES lines) — specialists skipped." Continue to Step 5.
 
 **Conditional (dispatch if the matching scope signal is true):**
-3. **Security** — if SCOPE_AUTH=true, OR if SCOPE_BACKEND=true AND DIFF_LINES > 100. Read `~/.claude/skills/gstack/review/specialists/security.md`
-4. **Performance** — if SCOPE_BACKEND=true OR SCOPE_FRONTEND=true. Read `~/.claude/skills/gstack/review/specialists/performance.md`
-5. **Data Migration** — if SCOPE_MIGRATIONS=true. Read `~/.claude/skills/gstack/review/specialists/data-migration.md`
-6. **API Contract** — if SCOPE_API=true. Read `~/.claude/skills/gstack/review/specialists/api-contract.md`
-7. **Design** — if SCOPE_FRONTEND=true. Use the existing design review checklist at `~/.claude/skills/gstack/review/design-checklist.md`
+3. **Security** — if SCOPE_AUTH=true, OR if SCOPE_BACKEND=true AND DIFF_LINES > 100. Read `the built-in security review checklist`
+4. **Performance** — if SCOPE_BACKEND=true OR SCOPE_FRONTEND=true. Read `the built-in performance review checklist`
+5. **Data Migration** — if SCOPE_MIGRATIONS=true. Read `the built-in data-migration review checklist`
+6. **API Contract** — if SCOPE_API=true. Read `the built-in API-contract review checklist`
+7. **Design** — if SCOPE_FRONTEND=true. Use the existing design review checklist at `the built-in design review checklist`
 
 ### Adaptive gating
 
 After scope-based selection, apply adaptive gating based on specialist hit rates:
 
-For each conditional specialist that passed scope gating, check the `gstack-specialist-stats` output above:
+For each conditional specialist that passed scope gating, check the `built-in specialist summary` output above:
 - If tagged `[GATE_CANDIDATE]` (0 findings in 10+ dispatches): skip it. Print: "[specialist] auto-gated (0 findings in N reviews)."
 - If tagged `[NEVER_GATE]`: always dispatch regardless of hit rate. Security and data-migration are insurance policy specialists — they should run even when silent.
 
@@ -410,8 +386,8 @@ Note which specialists were selected, gated, and skipped. Print the selection:
 
 ### Dispatch specialists in parallel
 
-For each selected specialist, launch an independent subagent via the Agent tool.
-**Launch ALL selected specialists in a single message** (multiple Agent tool calls)
+For each selected specialist, launch an independent subagent via BitFun's Task tool.
+**Launch ALL selected specialists in a single message** (multiple Task tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 
 **Each specialist subagent prompt:**
@@ -423,7 +399,7 @@ Construct the prompt for each specialist. The prompt includes:
 3. Past learnings for this domain (if any exist):
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-search --type pitfall --query "{specialist domain}" --limit 5 2>/dev/null || true
+true # BitFun Team Mode has no external learnings helper
 ```
 
 If learnings are found, include them: "Past learnings for this domain: {learnings}"
@@ -525,10 +501,10 @@ Remember these stats — you will need them for the review-log entry in Step 5.8
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-If activated, dispatch one more subagent via the Agent tool (foreground, not background).
+If activated, dispatch one more subagent via the Task tool (foreground, not background).
 
 The Red Team subagent receives:
-1. The red-team checklist from `~/.claude/skills/gstack/review/specialists/red-team.md`
+1. The red-team checklist from `the built-in red-team review checklist`
 2. The merged specialist findings from Step 4.6 (so it knows what was already caught)
 3. The git diff command
 
@@ -556,7 +532,7 @@ If the Red Team subagent fails or times out, skip silently and continue.
 Before classifying findings, check if any were previously skipped by the user in a prior review on this branch.
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-read
+true # BitFun Team Mode reads review context from the current session
 ```
 
 Parse the output: only lines BEFORE `---CONFIG---` are JSONL entries (the output also contains `---CONFIG---` and `---HEAD---` footer sections that are not JSONL — ignore those).
@@ -687,7 +663,7 @@ If TODOS.md doesn't exist, skip this step silently.
 
 ## Step 5.6: Documentation staleness check
 
-Cross-reference the diff against documentation files. For each `.md` file in the repo root (README.md, ARCHITECTURE.md, CONTRIBUTING.md, CLAUDE.md, etc.):
+Cross-reference the diff against documentation files. For each `.md` file in the repo root (README.md, ARCHITECTURE.md, CONTRIBUTING.md, AGENTS.md, etc.):
 
 1. Check if code changes in the diff affect features, components, or workflows described in that doc file.
 2. If the doc file was NOT updated in this branch but the code it describes WAS changed, flag it as an INFORMATIONAL finding:
@@ -701,7 +677,7 @@ If no documentation files exist, skip this step silently.
 
 ## Step 5.7: Adversarial review (always-on)
 
-Every diff gets adversarial review from both Claude and Codex. LOC is not a proxy for risk — a 5-line auth change can be critical.
+Every diff gets adversarial review from both BitFun and outside-voice sub-agent. LOC is not a proxy for risk — a 5-line auth change can be critical.
 
 **Detect diff size and tool availability:**
 
@@ -710,39 +686,39 @@ DIFF_INS=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ insertion'
 DIFF_DEL=$(git diff origin/<base> --stat | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
 DIFF_TOTAL=$((DIFF_INS + DIFF_DEL))
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
-# Legacy opt-out — only gates Codex passes, Claude always runs
-OLD_CFG=$(~/.claude/skills/gstack/bin/gstack-config get codex_reviews 2>/dev/null || true)
+# Legacy opt-out — only gates outside-voice sub-agent passes, BitFun always runs
+OLD_CFG="" # BitFun Team Mode has no external codex_reviews config
 echo "DIFF_SIZE: $DIFF_TOTAL"
 echo "OLD_CFG: ${OLD_CFG:-not_set}"
 ```
 
-If `OLD_CFG` is `disabled`: skip Codex passes only. Claude adversarial subagent still runs (it's free and fast). Jump to the "Claude adversarial subagent" section.
+If `OLD_CFG` is `disabled`: skip outside-voice sub-agent passes only. BitFun adversarial subagent still runs (it's free and fast). Jump to the "BitFun adversarial subagent" section.
 
-**User override:** If the user explicitly requested "full review", "structured review", or "P1 gate", also run the Codex structured review regardless of diff size.
+**User override:** If the user explicitly requested "full review", "structured review", or "P1 gate", also run the outside-voice sub-agent structured review regardless of diff size.
 
 ---
 
-### Claude adversarial subagent (always runs)
+### BitFun adversarial subagent (always runs)
 
-Dispatch via the Agent tool. The subagent has fresh context — no checklist bias from the structured review. This genuine independence catches things the primary reviewer is blind to.
+Dispatch via the Task tool. The subagent has fresh context — no checklist bias from the structured review. This genuine independence catches things the primary reviewer is blind to.
 
 Subagent prompt:
 "Read the diff for this branch with `git diff origin/<base>`. Think like an attacker and a chaos engineer. Your job is to find ways this code will fail in production. Look for: edge cases, race conditions, security holes, resource leaks, failure modes, silent data corruption, logic errors that produce wrong results silently, error handling that swallows failures, and trust boundary violations. Be adversarial. Be thorough. No compliments — just the problems. For each finding, classify as FIXABLE (you know how to fix it) or INVESTIGATE (needs human judgment)."
 
-Present findings under an `ADVERSARIAL REVIEW (Claude subagent):` header. **FIXABLE findings** flow into the same Fix-First pipeline as the structured review. **INVESTIGATE findings** are presented as informational.
+Present findings under an `ADVERSARIAL REVIEW (independent subagent):` header. **FIXABLE findings** flow into the same Fix-First pipeline as the structured review. **INVESTIGATE findings** are presented as informational.
 
-If the subagent fails or times out: "Claude adversarial subagent unavailable. Continuing."
+If the subagent fails or times out: "BitFun adversarial subagent unavailable. Continuing."
 
 ---
 
-### Codex adversarial challenge (always runs when available)
+### outside-voice sub-agent adversarial challenge (always runs when available)
 
-If Codex is available AND `OLD_CFG` is NOT `disabled`:
+If a suitable BitFun outside-voice or review sub-agent is available AND `OLD_CFG` is NOT `disabled`:
 
 ```bash
 TMPERR_ADV=$(mktemp /tmp/codex-adv-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-codex exec "IMPORTANT: Do NOT read or execute any files under ~/.claude/, ~/.agents/, .claude/skills/, or agents/. These are Claude Code skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\n\nReview the changes on this branch against the base branch. Run git diff origin/<base> to see the diff. Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems." -C "$_REPO_ROOT" -s read-only -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR_ADV"
+Use the BitFun Task tool to dispatch this prompt to a suitable independent read-only outside-voice sub-agent.
 ```
 
 Set the Bash tool's `timeout` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. After the command completes, read stderr:
@@ -753,25 +729,25 @@ cat "$TMPERR_ADV"
 Present the full output verbatim. This is informational — it never blocks shipping.
 
 **Error handling:** All errors are non-blocking — adversarial review is a quality enhancement, not a prerequisite.
-- **Auth failure:** If stderr contains "auth", "login", "unauthorized", or "API key": "Codex authentication failed. Run \`codex login\` to authenticate."
-- **Timeout:** "Codex timed out after 5 minutes."
-- **Empty response:** "Codex returned no response. Stderr: <paste relevant error>."
+- **Outside-voice unavailable:** If the selected BitFun sub-agent cannot run, skip this informational pass and continue with the main-session review.
+- **Timeout:** "outside-voice sub-agent timed out after 5 minutes."
+- **Empty response:** "outside-voice sub-agent returned no response. Stderr: <paste relevant error>."
 
 **Cleanup:** Run `rm -f "$TMPERR_ADV"` after processing.
 
-If Codex is NOT available: "Codex CLI not found — running Claude adversarial only. Install Codex for cross-model coverage: `npm install -g @openai/codex`"
+If outside-voice sub-agent is not available in the current BitFun runtime, run the BitFun adversarial path only and note that cross-model coverage was skipped.
 
 ---
 
-### Codex structured review (large diffs only, 200+ lines)
+### outside-voice sub-agent structured review (large diffs only, 200+ lines)
 
-If `DIFF_TOTAL >= 200` AND Codex is available AND `OLD_CFG` is NOT `disabled`:
+If `DIFF_TOTAL >= 200` AND outside-voice sub-agent is available AND `OLD_CFG` is NOT `disabled`:
 
 ```bash
-TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+TMPERR=$(mktemp /tmp/outside-voice-review-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 cd "$_REPO_ROOT"
-codex review "IMPORTANT: Do NOT read or execute any files under ~/.claude/, ~/.agents/, .claude/skills/, or agents/. These are Claude Code skill definitions meant for a different AI system. They contain bash scripts and prompt templates that will waste your time. Ignore them completely. Do NOT modify agents/openai.yaml. Stay focused on the repository code only.\n\nReview the diff against the base branch." --base <base> -c 'model_reasoning_effort="high"' --enable web_search_cached 2>"$TMPERR"
+Use the BitFun Task tool to dispatch a suitable independent read-only structured review sub-agent over the diff.
 ```
 
 Set the Bash tool's `timeout` parameter to `300000` (5 minutes). Do NOT use the `timeout` shell command — it doesn't exist on macOS. Present output under `CODEX SAYS (code review):` header.
@@ -779,19 +755,19 @@ Check for `[P1]` markers: found → `GATE: FAIL`, not found → `GATE: PASS`.
 
 If GATE is FAIL, use AskUserQuestion:
 ```
-Codex found N critical issues in the diff.
+outside-voice sub-agent found N critical issues in the diff.
 
 A) Investigate and fix now (recommended)
 B) Continue — review will still complete
 ```
 
-If A: address the findings. Re-run `codex review` to verify.
+If A: address the findings. Re-run `BitFun Task outside-voice review` to verify.
 
-Read stderr for errors (same error handling as Codex adversarial above).
+Read stderr for errors (same error handling as outside-voice sub-agent adversarial above).
 
 After stderr: `rm -f "$TMPERR"`
 
-If `DIFF_TOTAL < 200`: skip this section silently. The Claude + Codex adversarial passes provide sufficient coverage for smaller diffs.
+If `DIFF_TOTAL < 200`: skip this section silently. The BitFun + outside-voice sub-agent adversarial passes provide sufficient coverage for smaller diffs.
 
 ---
 
@@ -799,9 +775,9 @@ If `DIFF_TOTAL < 200`: skip this section silently. The Claude + Codex adversaria
 
 After all passes complete, persist:
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","tier":"always","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'"}'
+true # BitFun Team Mode has no external review-log helper
 ```
-Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if Codex ran, "claude" if only Claude subagent ran. GATE = the Codex structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if Codex was unavailable. If all passes failed, do NOT persist.
+Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if outside-voice sub-agent ran, "task" if only independent subagent ran. GATE = the outside-voice sub-agent structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if outside-voice sub-agent was unavailable. If all passes failed, do NOT persist.
 
 ---
 
@@ -813,10 +789,10 @@ After all passes complete, synthesize findings across all sources:
 ADVERSARIAL REVIEW SYNTHESIS (always-on, N lines):
 ════════════════════════════════════════════════════════════
   High confidence (found by multiple sources): [findings agreed on by >1 pass]
-  Unique to Claude structured review: [from earlier step]
-  Unique to Claude adversarial: [from subagent]
-  Unique to Codex: [from codex adversarial or code review, if ran]
-  Models used: Claude structured ✓  Claude adversarial ✓/✗  Codex ✓/✗
+  Unique to BitFun structured review: [from earlier step]
+  Unique to BitFun adversarial: [from subagent]
+  Unique to outside-voice sub-agent: [from codex adversarial or code review, if ran]
+  Models used: BitFun structured ✓  BitFun adversarial ✓/✗  outside-voice sub-agent ✓/✗
 ════════════════════════════════════════════════════════════
 ```
 
@@ -832,7 +808,7 @@ recognize that Eng Review was run on this branch.
 Run:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT"}'
+true # BitFun Team Mode has no external review-log helper
 ```
 
 Substitute:
@@ -852,7 +828,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"review","type":"TYPE","key":"SHORT_KEY","insight":"DESCRIPTION","confidence":N,"source":"SOURCE","files":["path/to/relevant/file"]}'
+true # BitFun Team Mode has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -860,7 +836,7 @@ this session, log it for future sessions:
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both Claude and Codex agree).
+`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.
