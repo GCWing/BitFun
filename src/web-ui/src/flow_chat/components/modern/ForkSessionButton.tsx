@@ -3,6 +3,8 @@ import { GitFork, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import { flowChatManager } from '../../services/FlowChatManager';
+import { flowChatStore } from '../../store/FlowChatStore';
+import { resolveSessionRelationship } from '../../utils/sessionMetadata';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 
@@ -19,6 +21,8 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const [isForking, setIsForking] = useState(false);
+  const session = sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined;
+  const isBtwSession = resolveSessionRelationship(session).isBtw;
 
   const handleFork = useCallback(async () => {
     if (!sessionId || isForking) {
@@ -39,7 +43,7 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
     }
   }, [isForking, sessionId, t, turnId]);
 
-  if (!sessionId) {
+  if (!sessionId || isBtwSession) {
     return null;
   }
 

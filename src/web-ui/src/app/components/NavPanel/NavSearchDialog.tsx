@@ -128,6 +128,9 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   const sessionsInOpenedWorkspaces = useMemo((): Array<{ session: Session; workspace: WorkspaceInfo }> => {
     const result: Array<{ session: Session; workspace: WorkspaceInfo }> = [];
     for (const session of flowChatState.sessions.values()) {
+      if (session.isTransient) {
+        continue;
+      }
       const workspace = findWorkspaceForSession(session, openedWorkspacesList);
       if (workspace && openedWorkspaceIdSet.has(workspace.id)) {
         result.push({ session, workspace });

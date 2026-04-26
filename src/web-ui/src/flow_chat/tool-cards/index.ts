@@ -31,7 +31,6 @@ import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
-import { BtwMarkerCard } from './BtwMarkerCard';
 import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
@@ -210,18 +209,6 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#8b5cf6'
   },
 
-  // /btw in-stream marker (frontend-inserted tool item)
-  'BtwMarker': {
-    toolName: 'BtwMarker',
-    displayName: 'Side thread',
-    icon: 'BTW',
-    requiresConfirmation: false,
-    resultDisplayType: 'hidden',
-    description: 'Side thread marker (child session link)',
-    displayMode: 'compact',
-    primaryColor: '#7aa6ff'
-  },
-
   'ReviewSessionSummary': {
     toolName: 'ReviewSessionSummary',
     displayName: 'Review summary',
@@ -372,8 +359,6 @@ export const TOOL_CARD_COMPONENTS = {
   // AskUserQuestion tool
   'AskUserQuestion': AskUserQuestionCard,
 
-  // /btw marker
-  'BtwMarker': BtwMarkerCard,
   'ReviewSessionSummary': ReviewSessionSummaryCard,
 
   // Git version control

@@ -20,6 +20,10 @@ import {
   FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
+import {
+  isTransientBtwSession,
+  sendMessageToTransientBtwSession,
+} from '../BtwThreadService';
 
 const log = createLogger('MessageModule');
 
@@ -118,6 +122,8 @@ export async function sendMessage(
     }));
   }
 
+  let createdLocalTurnId: string | null = null;
+
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
@@ -132,6 +138,26 @@ export async function sendMessage(
 
     if (context.pendingHistoryLoads.has(sessionId)) {
       throw new Error('Session history is still restoring, please retry once loading finishes');
+    }
+
+    if (isTransientBtwSession(refreshedSession)) {
+      if ((options?.imageContexts?.length ?? 0) > 0) {
+        throw new Error('Transient /btw sessions do not support image attachments yet');
+      }
+
+      const parentSessionId = refreshedSession.parentSessionId?.trim();
+      if (!parentSessionId) {
+        throw new Error(`Transient /btw session is missing parentSessionId: ${sessionId}`);
+      }
+
+      await sendMessageToTransientBtwSession({
+        parentSessionId,
+        childSessionId: sessionId,
+        question: message,
+        childSessionName: refreshedSession.title,
+        modelId: refreshedSession.config.modelName,
+      });
+      return;
     }
 
     await ensureBackendSession(context, sessionId);
@@ -163,6 +189,7 @@ export async function sendMessage(
     };
 
     context.flowChatStore.addDialogTurn(sessionId, dialogTurn);
+    createdLocalTurnId = dialogTurnId;
     const pinRequest: FlowChatPinTurnToTopRequest = {
       sessionId,
       turnId: dialogTurnId,
@@ -264,9 +291,8 @@ export async function sendMessage(
     
     const state = context.flowChatStore.getState();
     const currentSession = state.sessions.get(sessionId);
-    if (currentSession && currentSession.dialogTurns.length > 0) {
-      const lastDialogTurn = currentSession.dialogTurns[currentSession.dialogTurns.length - 1];
-      context.flowChatStore.deleteDialogTurn(sessionId, lastDialogTurn.id);
+    if (createdLocalTurnId && currentSession) {
+      context.flowChatStore.deleteDialogTurn(sessionId, createdLocalTurnId);
     }
     
     notificationService.error(errorMessage, {

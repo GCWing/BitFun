@@ -262,6 +262,12 @@ export interface Session {
    * Cleared when the user switches to the session or the pending action is resolved.
    */
   needsUserAttention?: 'ask_user' | 'tool_confirm';
+
+  /**
+   * Runtime-only session that should stay in memory but never be persisted or
+   * shown in the main session navigation.
+   */
+  isTransient?: boolean;
 }
 
 export interface SessionConfig {

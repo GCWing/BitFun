@@ -5,6 +5,7 @@ import {CornerUpLeft, Link2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {ProcessingIndicator} from '../modern/ProcessingIndicator';
+import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
 import type {FlowChatConfig, FlowChatState, Session} from '../../types/flow-chat';
@@ -13,9 +14,9 @@ import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../ev
 import {fileTabManager} from '@/shared/services/FileTabManager';
 import {createTab} from '@/shared/utils/tabUtils';
 import {IconButton, type LineRange} from '@/component-library';
-import {globalEventBus} from '@/infrastructure/event-bus';
 import {resolveSessionRelationship} from '../../utils/sessionMetadata';
 import {agentAPI} from '@/infrastructure/api';
+import {globalEventBus} from '@/infrastructure/event-bus';
 import {notificationService} from '@/shared/notification-system';
 import {createLogger} from '@/shared/utils/logger';
 import {settleStoppedReviewSessionState} from '../../utils/reviewSessionStop';
@@ -72,6 +73,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const [stoppingReview, setStoppingReview] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const [actionBarHeight, setActionBarHeight] = useState(0);
   const shouldAutoScrollRef = useRef(true);
 
   useEffect(() => {
@@ -94,6 +97,13 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     defaultValue: t('btw.origin'),
   });
   const virtualItems = useMemo(() => sessionToVirtualItems(childSession ?? null), [childSession]);
+  const {
+    exploreGroupStates,
+    onExploreGroupToggle,
+    onExpandGroup,
+    onExpandAllInTurn,
+    onCollapseGroup,
+  } = useExploreGroupState(virtualItems);
 
   // Load history for historical sessions that have not yet had their turns loaded.
   const isLoadingRef = useRef(false);
@@ -203,7 +213,22 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     sessionId: childSessionId,
     activeSessionOverride: childSession ?? null,
     config: PANEL_CONFIG,
-  }), [childSession, childSessionId, handleFileViewRequest, handleTabOpen]);
+    exploreGroupStates,
+    onExploreGroupToggle,
+    onExpandGroup,
+    onExpandAllInTurn,
+    onCollapseGroup,
+  }), [
+    childSession,
+    childSessionId,
+    handleFileViewRequest,
+    handleTabOpen,
+    exploreGroupStates,
+    onExploreGroupToggle,
+    onExpandGroup,
+    onExpandAllInTurn,
+    onCollapseGroup,
+  ]);
 
   const lastDialogTurn = childSession?.dialogTurns[childSession.dialogTurns.length - 1];
   const lastModelRound = lastDialogTurn?.modelRounds[lastDialogTurn.modelRounds.length - 1];
@@ -275,6 +300,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const actionBarRemediationItems = useReviewActionBarStore((s) => s.remediationItems);
   const isDeepReview = childKind === 'deep_review';
   const isReviewSession = childKind === 'review' || childKind === 'deep_review';
+  const canReturnToParentSession = isReviewSession && Boolean(parentSessionId);
+  const btwOrigin = childSession?.btwOrigin;
   const showReviewActionBar =
     isReviewSession &&
     actionBarChildSessionId === childSessionId &&
@@ -288,6 +315,17 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     actionBarPhase !== 'idle' &&
     !actionBarDismissed &&
     actionBarMinimized;
+  const parentLabel = resolveSessionTitle(parentSession, t('btw.parent'));
+  const backTooltip = btwOrigin?.parentTurnIndex
+    ? t('flowChatHeader.btwBackTooltipWithTurn', {
+        title: parentLabel,
+        turn: btwOrigin.parentTurnIndex,
+        defaultValue: `Go back to the source session: ${parentLabel} (Turn ${btwOrigin.parentTurnIndex})`,
+      })
+    : t('flowChatHeader.btwBackTooltipWithoutTurn', {
+        title: parentLabel,
+        defaultValue: `Go back to the source session: ${parentLabel}`,
+      });
 
   const remainingCount = actionBarRemediationItems.length - actionBarCompletedIds.size;
   const totalCount = actionBarRemediationItems.length;
@@ -447,38 +485,31 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     };
   }, [childSession, childSessionId, parentSessionId, isReviewSession, isDeepReview]);
 
-  const btwOrigin = childSession?.btwOrigin;
-  const parentLabel = resolveSessionTitle(parentSession, t('btw.parent'));
-  const backTooltip = btwOrigin?.parentTurnIndex
-    ? t('flowChatHeader.btwBackTooltipWithTurn', {
-        title: parentLabel,
-        turn: btwOrigin.parentTurnIndex,
-        defaultValue: `Go back to the source session: ${parentLabel} (Turn ${btwOrigin.parentTurnIndex})`,
-      })
-    : t('flowChatHeader.btwBackTooltipWithoutTurn', {
-        title: parentLabel,
-        defaultValue: `Go back to the source session: ${parentLabel}`,
-      });
+  // Observe action bar height to adjust body padding dynamically
+  useEffect(() => {
+    if (!showReviewActionBar) {
+      setActionBarHeight(0);
+      return;
+    }
 
-  const handleFocusOriginTurn = useCallback(() => {
-    const resolvedParentSessionId = btwOrigin?.parentSessionId || parentSessionId;
-    if (!resolvedParentSessionId) return;
+    const el = actionBarRef.current;
+    if (!el) return;
 
-    const requestId = btwOrigin?.requestId;
-    const itemId = requestId ? `btw_marker_${requestId}` : undefined;
-    const request: FlowChatFocusItemRequest = {
-      sessionId: resolvedParentSessionId,
-      turnIndex: btwOrigin?.parentTurnIndex,
-      itemId,
-      source: 'btw-back',
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
+        setActionBarHeight(h);
+      }
+    });
+
+    observer.observe(el);
+    // Initial measurement
+    setActionBarHeight(el.getBoundingClientRect().height);
+
+    return () => {
+      observer.disconnect();
     };
-
-    globalEventBus.emit(
-      FLOWCHAT_FOCUS_ITEM_EVENT,
-      request,
-      'BtwSessionPanel'
-    );
-  }, [btwOrigin, parentSessionId]);
+  }, [showReviewActionBar]);
 
   const handleStopReviewSession = useCallback(async () => {
     if (!childSessionId || stoppingReview || !isTurnProcessing) {
@@ -501,6 +532,27 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       setStoppingReview(false);
     }
   }, [childSessionId, stoppingReview, isTurnProcessing, t]);
+
+  const handleReturnToParentSession = useCallback(() => {
+    const resolvedParentSessionId = btwOrigin?.parentSessionId || parentSessionId;
+    if (!resolvedParentSessionId) {
+      return;
+    }
+
+    const requestId = btwOrigin?.requestId;
+    const request: FlowChatFocusItemRequest = {
+      sessionId: resolvedParentSessionId,
+      turnIndex: btwOrigin?.parentTurnIndex,
+      itemId: requestId ? `btw_marker_${requestId}` : undefined,
+      source: 'btw-back',
+    };
+
+    globalEventBus.emit(
+      FLOWCHAT_FOCUS_ITEM_EVENT,
+      request,
+      'BtwSessionPanel',
+    );
+  }, [btwOrigin, parentSessionId]);
 
   if (!childSessionId || !childSession) {
     return (
@@ -546,12 +598,12 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 <Square size={11} />
               </IconButton>
             )}
-            {!!(btwOrigin?.parentSessionId || parentSessionId) && (
+            {canReturnToParentSession && (
               <IconButton
                 className="btw-session-panel__origin-button"
                 variant="ghost"
                 size="xs"
-                onClick={handleFocusOriginTurn}
+                onClick={handleReturnToParentSession}
                 tooltip={backTooltip}
                 aria-label={t('btw.backToParent')}
                 data-testid="btw-session-panel-origin-button"
@@ -565,6 +617,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
         <div
           ref={scrollContainerRef}
           className="btw-session-panel__body"
+          style={actionBarHeight > 0 ? { paddingBottom: `${actionBarHeight + 20}px` } : undefined}
         >
           {virtualItems.length === 0 ? (
             <div className="btw-session-panel__empty-state">{t('session.empty')}</div>
@@ -613,7 +666,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
         )}
 
         {showReviewActionBar && (
-          <div className="btw-session-panel__action-bar-wrapper">
+          <div ref={actionBarRef} className="btw-session-panel__action-bar-wrapper">
             <ReviewActionBar />
           </div>
         )}

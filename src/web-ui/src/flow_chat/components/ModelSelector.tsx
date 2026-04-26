@@ -280,11 +280,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       setAgentModels(updatedAgentModels);
 
       if (sessionId) {
-        FlowChatStore.getInstance().updateSessionModelName(sessionId, modelId);
-        await agentAPI.updateSessionModel({
-          sessionId,
-          modelName: modelId,
-        });
+        const store = FlowChatStore.getInstance();
+        store.updateSessionModelName(sessionId, modelId);
+        const session = store.getState().sessions.get(sessionId);
+        if (!session?.isTransient) {
+          await agentAPI.updateSessionModel({
+            sessionId,
+            modelName: modelId,
+          });
+        }
       }
 
       log.info('Mode model updated', { mode: currentMode, modelId });

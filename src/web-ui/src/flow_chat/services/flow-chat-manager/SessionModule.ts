@@ -394,6 +394,10 @@ export async function renameChatSessionTitle(
   if (!trimmedTitle) {
     throw new Error('Session title must not be empty');
   }
+  if (session.isTransient) {
+    await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
+    return trimmedTitle;
+  }
 
   const updatedTitle = await agentAPI.updateSessionTitle({
     sessionId,
@@ -477,6 +481,9 @@ export async function ensureBackendSession(
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
+  if (session.isTransient) {
+    return;
+  }
 
   if (session.isHistorical) {
     await hydrateHistoricalSession(context, sessionId, false);
@@ -554,6 +561,9 @@ export async function retryCreateBackendSession(
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
+  }
+  if (session.isTransient) {
+    return;
   }
 
   const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);

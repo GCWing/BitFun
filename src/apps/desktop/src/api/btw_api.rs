@@ -1,40 +1,18 @@
 //! BTW (side question) API
 //!
-//! Desktop adapter for the core side-question service:
-//! - Reads current session context without mutating the parent session
-//! - Streams answer via `btw://...` events
-//! - Supports cancellation by request id
+//! Desktop adapter for the core `/btw` feature.
+//!
+//! `/btw` runs as a hidden transient child session that reuses the parent
+//! session's full context snapshot while still flowing through the normal
+//! agentic event pipeline.
 
-use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 use crate::api::app_state::AppState;
 
 use bitfun_core::agentic::coordination::ConversationCoordinator;
-use bitfun_core::agentic::side_question::{
-    SideQuestionPersistTarget, SideQuestionService, SideQuestionStreamEvent,
-    SideQuestionStreamRequest,
-};
-use std::path::PathBuf;
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BtwAskRequest {
-    pub session_id: String,
-    pub question: String,
-    /// Optional model id override. Supports "fast"/"primary" aliases.
-    pub model_id: Option<String>,
-    /// Limit how many context messages are included (from the end).
-    pub max_context_messages: Option<usize>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BtwAskResponse {
-    pub answer: String,
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,14 +20,10 @@ pub struct BtwAskStreamRequest {
     pub request_id: String,
     pub session_id: String,
     pub question: String,
+    pub child_session_id: String,
+    pub child_session_name: Option<String>,
     /// Optional model id override. Supports "fast"/"primary" aliases.
     pub model_id: Option<String>,
-    /// Limit how many context messages are included (from the end).
-    pub max_context_messages: Option<usize>,
-    pub child_session_id: Option<String>,
-    pub workspace_path: Option<String>,
-    pub parent_dialog_turn_id: Option<String>,
-    pub parent_turn_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -64,42 +38,6 @@ pub struct BtwCancelRequest {
     pub request_id: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BtwTextChunkEvent {
-    pub request_id: String,
-    pub session_id: String,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BtwCompletedEvent {
-    pub request_id: String,
-    pub session_id: String,
-    pub full_text: String,
-    pub finish_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BtwErrorEvent {
-    pub request_id: String,
-    pub session_id: String,
-    pub error: String,
-}
-
-fn side_question_service(
-    state: &AppState,
-    coordinator: Arc<ConversationCoordinator>,
-) -> SideQuestionService {
-    SideQuestionService::new(
-        coordinator,
-        state.ai_client_factory.clone(),
-        state.side_question_runtime.clone(),
-    )
-}
-
 #[tauri::command]
 pub async fn btw_cancel(
     state: State<'_, AppState>,
@@ -110,14 +48,23 @@ pub async fn btw_cancel(
         return Err("requestId is required".to_string());
     }
 
-    let svc = side_question_service(&state, coordinator.inner().clone());
-    svc.cancel(&request.request_id).await;
+    state.side_question_runtime.cancel(&request.request_id).await;
+    if let Some(active_turn) = state
+        .side_question_runtime
+        .get_btw_turn(&request.request_id)
+        .await
+    {
+        coordinator
+            .cancel_dialog_turn(&active_turn.session_id, &active_turn.turn_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        state.side_question_runtime.remove(&request.request_id).await;
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn btw_ask_stream(
-    app: AppHandle,
     state: State<'_, AppState>,
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: BtwAskStreamRequest,
@@ -131,116 +78,56 @@ pub async fn btw_ask_stream(
     if request.question.trim().is_empty() {
         return Err("question is required".to_string());
     }
+    let child_session_id = request.child_session_id.trim();
+    if child_session_id.is_empty() {
+        return Err("childSessionId is required".to_string());
+    }
 
-    let svc = side_question_service(&state, coordinator.inner().clone());
-
-    let rx = svc
-        .start_stream(SideQuestionStreamRequest {
-            request_id: request.request_id.clone(),
-            session_id: request.session_id.clone(),
-            question: request.question.clone(),
-            model_id: request.model_id.clone(),
-            max_context_messages: request.max_context_messages,
-            persist_target: match (&request.child_session_id, &request.workspace_path) {
-                (Some(child_session_id), Some(workspace_path))
-                    if !child_session_id.trim().is_empty() && !workspace_path.trim().is_empty() =>
-                {
-                    Some(SideQuestionPersistTarget {
-                        child_session_id: child_session_id.clone(),
-                        workspace_path: PathBuf::from(workspace_path),
-                        parent_session_id: request.session_id.clone(),
-                        parent_dialog_turn_id: request.parent_dialog_turn_id.clone(),
-                        parent_turn_index: request.parent_turn_index,
-                    })
-                }
-                _ => None,
-            },
-        })
+    let turn_id = coordinator
+        .start_hidden_btw_turn(
+            &request.request_id,
+            &request.session_id,
+            child_session_id,
+            request.child_session_name.as_deref(),
+            &request.question,
+            request.model_id.as_deref(),
+        )
         .await
         .map_err(|e| e.to_string())?;
 
-    let app_handle = app.clone();
+    state
+        .side_question_runtime
+        .register_btw_turn(
+            request.request_id.clone(),
+            child_session_id.to_string(),
+            turn_id.clone(),
+        )
+        .await;
+    let runtime = state.side_question_runtime.clone();
+    let request_id = request.request_id.clone();
+    let child_session_id = child_session_id.to_string();
+    let turn_id = turn_id;
+    let coordinator = coordinator.inner().clone();
     tokio::spawn(async move {
-        let mut rx = rx;
-        while let Some(evt) = rx.recv().await {
-            match evt {
-                SideQuestionStreamEvent::TextChunk {
-                    request_id,
-                    session_id,
-                    text,
-                } => {
-                    let payload = BtwTextChunkEvent {
-                        request_id,
-                        session_id,
-                        text,
-                    };
-                    if let Err(e) = app_handle.emit("btw://text-chunk", payload) {
-                        warn!("Failed to emit btw text chunk: {}", e);
-                    }
+        loop {
+            let Some(session) = coordinator.get_session_manager().get_session(&child_session_id) else {
+                runtime.remove(&request_id).await;
+                break;
+            };
+
+            match session.state {
+                bitfun_core::agentic::core::SessionState::Processing {
+                    current_turn_id, ..
+                } if current_turn_id == turn_id => {
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                 }
-                SideQuestionStreamEvent::Completed {
-                    request_id,
-                    session_id,
-                    full_text,
-                    finish_reason,
-                } => {
-                    let payload = BtwCompletedEvent {
-                        request_id,
-                        session_id,
-                        full_text,
-                        finish_reason,
-                    };
-                    if let Err(e) = app_handle.emit("btw://completed", payload) {
-                        warn!("Failed to emit btw completed: {}", e);
-                    }
-                }
-                SideQuestionStreamEvent::Error {
-                    request_id,
-                    session_id,
-                    error: err,
-                } => {
-                    let payload = BtwErrorEvent {
-                        request_id,
-                        session_id,
-                        error: err,
-                    };
-                    if let Err(e) = app_handle.emit("btw://error", payload) {
-                        warn!("Failed to emit btw error: {}", e);
-                    }
+                _ => {
+                    runtime.remove(&request_id).await;
+                    break;
                 }
             }
         }
     });
 
     Ok(BtwAskStreamResponse { ok: true })
-}
-
-#[tauri::command]
-pub async fn btw_ask(
-    state: State<'_, AppState>,
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
-    request: BtwAskRequest,
-) -> Result<BtwAskResponse, String> {
-    let svc = side_question_service(&state, coordinator.inner().clone());
-
-    let answer = svc
-        .ask(
-            &request.session_id,
-            &request.question,
-            request.model_id.as_deref(),
-            request.max_context_messages,
-        )
-        .await
-        .map_err(|e| {
-            error!("BTW ask failed: {}", e);
-            e.to_string()
-        })?;
-
-    info!(
-        "BTW ask completed: session_id={}, answer_len={}",
-        request.session_id,
-        answer.len()
-    );
-
-    Ok(BtwAskResponse { answer })
 }

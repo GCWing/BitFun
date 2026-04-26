@@ -196,6 +196,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     () =>
       Array.from(flowChatState.sessions.values())
         .filter((s: Session) => {
+          if (s.isTransient) {
+            return false;
+          }
           if (workspacePath) {
             return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
           }

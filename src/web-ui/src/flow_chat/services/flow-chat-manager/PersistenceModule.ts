@@ -10,6 +10,10 @@ import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
 
 const log = createLogger('PersistenceModule');
 
+function isTransientSession(session: { isTransient?: boolean } | undefined): boolean {
+  return session?.isTransient === true;
+}
+
 function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
   if (!workspacePath) {
     throw new Error(`Workspace path is required for session: ${sessionId}`);
@@ -223,6 +227,9 @@ async function performSaveDialogTurnToDisk(
       log.debug('Session not found, skipping save', { sessionId, turnId });
       return;
     }
+    if (isTransientSession(session)) {
+      return;
+    }
 
     const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
     
@@ -257,6 +264,9 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
   const savePromises: Promise<void>[] = [];
   
   for (const [sessionId, session] of state.sessions.entries()) {
+    if (isTransientSession(session)) {
+      continue;
+    }
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
     
     if (lastTurn) {
@@ -430,6 +440,7 @@ export async function updateSessionMetadata(
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
+    if (isTransientSession(session)) return;
 
     const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
 

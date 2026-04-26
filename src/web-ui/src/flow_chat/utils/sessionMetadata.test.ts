@@ -228,7 +228,7 @@ describe('sessionMetadata', () => {
     });
   });
 
-  it('round-trips btw identity through persistence and UI selectors', () => {
+  it('treats persisted btw identity as legacy and no longer restores it', () => {
     const metadata: SessionMetadata = {
       sessionId: 'child-1',
       sessionName: 'BTW Child',
@@ -256,29 +256,19 @@ describe('sessionMetadata', () => {
     const resolved = resolveSessionRelationship(relationship);
 
     expect(relationship).toEqual({
-      sessionKind: 'btw',
-      parentSessionId: 'parent-1',
-      btwOrigin: {
-        requestId: 'req-1',
-        parentSessionId: 'parent-1',
-        parentDialogTurnId: 'turn-2',
-        parentTurnIndex: 2,
-      },
+      sessionKind: 'normal',
+      parentSessionId: undefined,
+      btwOrigin: undefined,
     });
     expect(resolved).toEqual({
-      kind: 'btw',
-      isBtw: true,
+      kind: 'normal',
+      isBtw: false,
       isReview: false,
       isDeepReview: false,
-      parentSessionId: 'parent-1',
-      displayAsChild: true,
-      canOpenInAuxPane: true,
-      origin: {
-        requestId: 'req-1',
-        parentSessionId: 'parent-1',
-        parentDialogTurnId: 'turn-2',
-        parentTurnIndex: 2,
-      },
+      parentSessionId: undefined,
+      displayAsChild: false,
+      canOpenInAuxPane: false,
+      origin: undefined,
     });
   });
 

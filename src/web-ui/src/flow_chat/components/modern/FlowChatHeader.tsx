@@ -5,14 +5,11 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { ChevronDown, ChevronUp, CornerUpLeft, List, GitBranch, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, List, GitBranch, Search, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
-import { globalEventBus } from '@/infrastructure/event-bus';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
-import type { Session } from '../../types/flow-chat';
-import { FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest } from '../../events/flowchatNavigation';
 import './FlowChatHeader.scss';
 
 export interface FlowChatHeaderTurnSummary {
@@ -34,10 +31,6 @@ export interface FlowChatHeaderProps {
   sessionId?: string;
   /** Workspace root path, used to display the current git branch. */
   workspacePath?: string;
-  /** BTW child-session origin metadata. */
-  btwOrigin?: Session['btwOrigin'] | null;
-  /** BTW parent session title. */
-  btwParentTitle?: string;
   /** Ordered turn summaries used by header navigation. */
   turns?: FlowChatHeaderTurnSummary[];
   /** Jump to a specific turn. */
@@ -72,8 +65,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   visible,
   sessionId,
   workspacePath,
-  btwOrigin,
-  btwParentTitle = '',
   turns = [],
   onJumpToTurn,
   onJumpToCurrentTurn,
@@ -100,17 +91,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const truncatedMessage = currentUserMessage.length > 50
     ? currentUserMessage.slice(0, 50) + '...'
     : currentUserMessage;
-  const parentLabel = btwParentTitle || t('btw.parent', { defaultValue: 'parent session' });
-  const backTooltip = btwOrigin?.parentTurnIndex
-    ? t('flowChatHeader.btwBackTooltipWithTurn', {
-      title: parentLabel,
-      turn: btwOrigin.parentTurnIndex,
-      defaultValue: `Go back to the source session: ${parentLabel} (Turn ${btwOrigin.parentTurnIndex})`,
-    })
-    : t('flowChatHeader.btwBackTooltipWithoutTurn', {
-      title: parentLabel,
-      defaultValue: `Go back to the source session: ${parentLabel}`,
-    });
   const turnListTooltip = t('flowChatHeader.turnList', {
     defaultValue: 'Turn list',
   });
@@ -224,20 +204,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     },
     [handleCloseSearch, onSearchNext, onSearchPrev],
   );
-
-  const handleBackToParent = () => {
-    const parentId = btwOrigin?.parentSessionId;
-    if (!parentId) return;
-    const requestId = btwOrigin?.requestId;
-    const itemId = requestId ? `btw_marker_${requestId}` : undefined;
-    const request: FlowChatFocusItemRequest = {
-      sessionId: parentId,
-      turnIndex: btwOrigin?.parentTurnIndex,
-      itemId,
-      source: 'btw-back',
-    };
-    globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'FlowChatHeader');
-  };
 
   const handleToggleTurnList = () => {
     if (!hasTurnNavigation) return;
@@ -438,20 +404,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             </div>
           )}
         </div>
-        {!!btwOrigin?.parentSessionId && (
-          <IconButton
-            className="flowchat-header__btw-back"
-            variant="ghost"
-            size="xs"
-            onClick={handleBackToParent}
-            tooltip={backTooltip}
-            disabled={!btwOrigin.parentSessionId}
-            aria-label={t('btw.back', { defaultValue: 'Back' })}
-            data-testid="flowchat-header-btw-back"
-          >
-            <CornerUpLeft size={12} />
-          </IconButton>
-        )}
       </div>
     </div>
   );
