@@ -405,7 +405,9 @@ function handleCompleted(
   };
 
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, updates as any);
-  
+
+  store.clearSessionNeedsAttention(sessionId);
+
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
 
@@ -428,7 +430,9 @@ function handleFailed(
     status: 'error',
     endTime: Date.now()
   } as any);
-  
+
+  store.clearSessionNeedsAttention(sessionId);
+
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
 
@@ -445,7 +449,7 @@ function handleCancelled(
   const existingToolItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
   const currentStatus = existingToolItem?.status;
   const finalStatus = currentStatus === 'confirmed' ? 'confirmed' : 'cancelled';
-  
+
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
     toolResult: {
       result: null,
@@ -455,7 +459,9 @@ function handleCancelled(
     status: finalStatus,
     endTime: Date.now()
   } as any);
-  
+
+  store.clearSessionNeedsAttention(sessionId);
+
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
 
@@ -472,6 +478,13 @@ function handleConfirmationNeeded(
     requiresConfirmation: true,
     status: 'pending_confirmation'
   } as any);
+
+  const state = store.getState();
+  const activeSessionId = state.activeSessionId;
+  if (sessionId !== activeSessionId) {
+    const attentionKind = toolEvent.tool_name === 'AskUserQuestion' ? 'ask_user' : 'tool_confirm';
+    store.setSessionNeedsAttention(sessionId, attentionKind);
+  }
 }
 
 /**

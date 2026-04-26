@@ -253,6 +253,15 @@ export interface Session {
    * 'completed' → green dot, 'error' → red dot.
    */
   hasUnreadCompletion?: 'completed' | 'error';
+
+  /**
+   * Set when a session requires user attention while not the active session.
+   * This is a high-priority alert that takes precedence over hasUnreadCompletion.
+   * 'ask_user' → session has pending AskUserQuestion waiting for answer
+   * 'tool_confirm' → session has pending tool confirmations
+   * Cleared when the user switches to the session or the pending action is resolved.
+   */
+  needsUserAttention?: 'ask_user' | 'tool_confirm';
 }
 
 export interface SessionConfig {

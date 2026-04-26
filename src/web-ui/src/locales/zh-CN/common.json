@@ -179,10 +179,14 @@
       "parentSession": "父会话",
       "childSourceWithoutTurn": "来自 {{parentTitle}}",
       "childSourceWithTurn": "来自 {{parentTitle}} · 第 {{turnIndex}} 轮",
-      "reviewRunning": "审查中",
-      "deepReviewRunning": "审查中",
+      "reviewRunning": "审核中",
+      "deepReviewRunning": "审核中",
       "unreadCompleted": "已完成 — 未读",
       "unreadError": "执行失败 — 未读",
+      "needsUserInput": "等待你的输入",
+      "needsToolConfirm": "等待确认",
+      "badgeNeedsInput": "等待中",
+      "badgeNeedsConfirm": "待确认",
       "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。"
     },
     "scheduledJobs": {

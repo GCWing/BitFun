@@ -148,6 +148,11 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
             }
           >
             <InfinityIcon size={12} />
+            <span className="timeout-ignore-btn__label">
+              {isTimeoutDisabled
+                ? t('toolCards.timeout.enableLabel')
+                : t('toolCards.timeout.disableLabel')}
+            </span>
           </button>
 
           {isPopoverOpen && (

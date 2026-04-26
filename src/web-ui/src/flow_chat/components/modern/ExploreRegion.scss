@@ -3,6 +3,10 @@
 .explore-region {
   position: relative;
   padding: 0 3rem; // Match model-round-item horizontal padding.
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  background: var(--color-bg-flowchat);
+  overflow: hidden;
 
   @media (max-width: 768px) {
     padding: 0 1.5rem;
@@ -60,17 +64,21 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 0;
+    padding: 5px 10px;
+    margin: 0 -3rem;
     color: var(--text-tertiary, #6b7280);
     font-size: 12px;
     cursor: pointer;
     user-select: none;
-    border-radius: 6px;
     transition: color 0.15s ease;
 
     &:hover {
       background: var(--bg-hover, rgba(255, 255, 255, 0.05));
       color: var(--text-secondary, #9ca3af);
+    }
+
+    @media (max-width: 768px) {
+      margin: 0 -1.5rem;
     }
   }
 
@@ -103,7 +111,12 @@
 
   .explore-region__content {
     position: relative;
-    padding: 4px 0;
+    padding: 4px 10px;
+    margin: 0 -3rem;
+
+    @media (max-width: 768px) {
+      margin: 0 -1.5rem;
+    }
 
     &::-webkit-scrollbar {
       width: 4px;

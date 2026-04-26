@@ -68,29 +68,41 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: none;
-  border-radius: 3px;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle, rgba(100, 116, 139, 0.12));
+  border-radius: 4px;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0;
   flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  transition: all 0.15s ease;
 
   svg {
     width: 12px;
     height: 12px;
+    flex-shrink: 0;
+  }
+
+  .timeout-ignore-btn__label {
+    white-space: nowrap;
   }
 
   &:hover {
     background: var(--element-bg-soft);
     color: var(--color-text-secondary);
+    border-color: var(--border-base, rgba(100, 116, 139, 0.22));
   }
 
   &.is-active {
     color: var(--color-accent-500);
     background: var(--element-bg-subtle);
+    border-color: var(--color-accent-500, #64748b);
   }
 
   &:disabled {

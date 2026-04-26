@@ -35,6 +35,7 @@
     "desktop:build:release-fast": "node scripts/desktop-tauri-build.mjs --no-bundle -- --profile release-fast",
     "desktop:build:exe": "node scripts/desktop-tauri-build.mjs --no-bundle",
     "desktop:build:nsis": "node scripts/desktop-tauri-build.mjs --bundles nsis",
+    "desktop:build:nsis:fast": "node scripts/desktop-tauri-build.mjs --bundles nsis -- --profile release-fast",
     "desktop:build:arm64": "node scripts/desktop-tauri-build.mjs --target aarch64-apple-darwin --bundles dmg",
     "desktop:build:x86_64": "node scripts/desktop-tauri-build.mjs --target x86_64-apple-darwin --bundles dmg",
     "desktop:build:linux": "node scripts/desktop-tauri-build.mjs",

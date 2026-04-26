@@ -1678,9 +1678,20 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
       const hasUnread = activeSession?.hasUnreadCompletion;
       const isFinished = !isStreamingOutput;
-      if (hasUnread && isFinished && virtuosoRef.current) {
+      if (hasUnread && isFinished && virtuosoRef.current && virtualItems.length > 0) {
+        // Use scrollToIndex instead of scrollTo({ top: largeNumber }) because
+        // Virtuoso's scrollHeight may not be stable immediately after a session
+        // switch; scrolling by index lets Virtuoso resolve the correct position.
+        const scrollToBottom = () => {
+          virtuosoRef.current?.scrollToIndex({
+            index: virtualItems.length - 1,
+            align: 'end',
+            behavior: 'auto',
+          });
+        };
+        // Allow two frames for virtual items to settle before scrolling.
         requestAnimationFrame(() => {
-          virtuosoRef.current?.scrollTo({ top: 999999999, behavior: 'auto' });
+          requestAnimationFrame(scrollToBottom);
         });
       }
 
@@ -1711,6 +1722,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     cancelPendingAutoFollowArm,
     isStreamingOutput,
     latestTurnId,
+    virtualItems.length,
   ]);
 
   useEffect(() => {

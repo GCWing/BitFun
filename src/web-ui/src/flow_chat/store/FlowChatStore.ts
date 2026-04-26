@@ -47,8 +47,8 @@ export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
-  
   private silentMode = false;
+  private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | undefined) => void;
 
   private constructor() {
     this.clearOldStorage();
@@ -194,6 +194,16 @@ export class FlowChatStore {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  /**
+   * Register a callback to persist unread completion changes.
+   * Called by FlowChatManager during initialization.
+   */
+  public registerPersistUnreadCompletionCallback(
+    callback: (sessionId: string, value: 'completed' | 'error' | undefined) => void
+  ): void {
+    this.onPersistUnreadCompletion = callback;
   }
 
   public createSession(
@@ -1291,6 +1301,7 @@ export class FlowChatStore {
 
       return { ...prev, sessions: newSessions };
     });
+    this.onPersistUnreadCompletion?.(sessionId, completionKind);
   }
 
   public clearSessionUnreadCompletion(sessionId: string): void {
@@ -1308,6 +1319,46 @@ export class FlowChatStore {
 
       return { ...prev, sessions: newSessions };
     });
+    this.onPersistUnreadCompletion?.(sessionId, undefined);
+  }
+
+  public setSessionNeedsAttention(
+    sessionId: string,
+    attentionKind: 'ask_user' | 'tool_confirm'
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const updatedSession: Session = {
+        ...session,
+        needsUserAttention: attentionKind,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return { ...prev, sessions: newSessions };
+    });
+    this.onPersistUnreadCompletion?.(sessionId, undefined);
+  }
+
+  public clearSessionNeedsAttention(sessionId: string): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || !session.needsUserAttention) return prev;
+
+      const updatedSession: Session = {
+        ...session,
+        needsUserAttention: undefined,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return { ...prev, sessions: newSessions };
+    });
+    this.onPersistUnreadCompletion?.(sessionId, undefined);
   }
 
   public async updateSessionTitle(
@@ -1602,6 +1653,8 @@ export class FlowChatStore {
             sessionKind: relationship.sessionKind,
             btwThreads: [],
             btwOrigin: relationship.btwOrigin,
+            hasUnreadCompletion: metadata.unreadCompletion,
+            needsUserAttention: metadata.needsUserAttention,
           };
           
           const newSessions = new Map(prev.sessions);

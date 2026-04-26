@@ -183,6 +183,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           flowChatStore.clearSessionUnreadCompletion(sessionId);
+          flowChatStore.clearSessionNeedsAttention(sessionId);
         });
       });
     };
@@ -477,7 +478,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   : Bot
                 : Code2;
           const isRunning = runningSessionIds.has(session.sessionId);
-          const isUnreadCompleted = !isRunning && session.hasUnreadCompletion;
           const isRowActive = isSessionNavRowActive({
             rowSessionId: session.sessionId,
             activeTabId,
@@ -485,6 +485,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             activeChildSessionId: activeBtwSessionData?.childSessionId,
             activeChildParentSessionId: activeBtwSessionData?.parentSessionId,
           });
+          // Determine the notification state for this session row.
+          // Priority: needsUserAttention > hasUnreadCompletion.
+          const attentionKind = !isRunning && !isRowActive
+            ? (session.needsUserAttention || session.hasUnreadCompletion || undefined)
+            : undefined;
+          const isHighPriority = !!session.needsUserAttention;
           const row = (
             <div
               className={[
@@ -521,16 +527,23 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       ].join(' ')}
                     />
                   )}
-                  {isUnreadCompleted ? (
+                  {attentionKind ? (
                     <span
                       className={[
                         'bitfun-nav-panel__inline-item-unread-dot',
-                        session.hasUnreadCompletion === 'error' && 'is-error',
+                        attentionKind === 'error' && 'is-error',
+                        attentionKind === 'ask_user' && 'is-ask-user',
+                        attentionKind === 'tool_confirm' && 'is-tool-confirm',
+                        isHighPriority && 'is-high-priority',
                       ].filter(Boolean).join(' ')}
                       aria-label={
-                        session.hasUnreadCompletion === 'error'
+                        attentionKind === 'error'
                           ? t('nav.sessions.unreadError')
-                          : t('nav.sessions.unreadCompleted')
+                          : attentionKind === 'ask_user'
+                            ? t('nav.sessions.needsUserInput')
+                            : attentionKind === 'tool_confirm'
+                              ? t('nav.sessions.needsToolConfirm')
+                              : t('nav.sessions.unreadCompleted')
                       }
                     />
                   ) : null}
@@ -576,6 +589,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                     {isChildSession ? (
                       <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
+                    ) : null}
+                    {attentionKind === 'ask_user' || attentionKind === 'tool_confirm' ? (
+                      <span className="bitfun-nav-panel__inline-item-attention-badge">
+                        {attentionKind === 'ask_user'
+                          ? t('nav.sessions.badgeNeedsInput')
+                          : t('nav.sessions.badgeNeedsConfirm')}
+                      </span>
                     ) : null}
                     {reviewActivityKind ? (
                       <span className="bitfun-nav-panel__inline-item-review-badge">

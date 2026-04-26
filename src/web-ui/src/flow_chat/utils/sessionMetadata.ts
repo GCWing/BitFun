@@ -246,6 +246,8 @@ export function buildSessionMetadata(
     | 'titleSource'
     | 'titleI18nKey'
     | 'titleI18nParams'
+    | 'hasUnreadCompletion'
+    | 'needsUserAttention'
   >,
   existingMetadata?: SessionMetadata | null
 ): SessionMetadata {
@@ -296,5 +298,9 @@ export function buildSessionMetadata(
     remoteConnectionId:
       session.remoteConnectionId ?? existingMetadata?.remoteConnectionId,
     remoteSshHost: session.remoteSshHost ?? existingMetadata?.remoteSshHost,
+    unreadCompletion:
+      session.hasUnreadCompletion ?? existingMetadata?.unreadCompletion,
+    needsUserAttention:
+      session.needsUserAttention ?? existingMetadata?.needsUserAttention,
   };
 }

@@ -51,9 +51,10 @@
   }
 }
 
-// When expanded, remove max-height limit so content is fully visible.
+// When expanded, keep a reasonable max-height so the card does not grow
+// unbounded during streaming; users can scroll to see all content.
 .subagent-items-container--expanded {
-  max-height: none;
+  max-height: clamp(120px, 28vh, 320px);
 }
 
 .subagent-items-container--collapsed {

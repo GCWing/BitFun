@@ -183,6 +183,10 @@
       "deepReviewRunning": "Reviewing",
       "unreadCompleted": "Completed — unread",
       "unreadError": "Failed — unread",
+      "needsUserInput": "Needs your input",
+      "needsToolConfirm": "Needs confirmation",
+      "badgeNeedsInput": "Waiting",
+      "badgeNeedsConfirm": "Confirm",
       "needProjectWorkspaceForSession": "Open or add a project workspace first. Code and Cowork sessions cannot be created in the assistant area."
     },
     "scheduledJobs": {
