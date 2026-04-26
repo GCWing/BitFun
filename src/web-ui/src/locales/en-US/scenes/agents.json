@@ -150,7 +150,7 @@
   "reviewTeams": {
     "default": {
       "name": "Code Review Team",
-      "summary": "A deep-review code team with locked logic, performance, security, and quality-gate roles.",
+      "summary": "A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.",
       "members": "{{count}} members"
     },
     "detail": {
@@ -169,7 +169,7 @@
       "localOnly": "Code review",
       "localOnlyDescription": "Runs inside BitFun as read-only Sub-Agents and reports back into this review thread.",
       "parallelLabel": "Parallel reviewers",
-      "parallelDescription": "Logic, performance, security, and extra reviewers work side by side before the judge validates findings.",
+      "parallelDescription": "Logic, performance, security, architecture, and extra reviewers work side by side before the judge validates findings.",
       "warningLabel": "Heavier review",
       "warning": "Use for higher-risk changes; it can take longer and use more tokens than a standard review.",
       "qualityGate": "Quality gate",
@@ -204,7 +204,7 @@
       "remove": "Remove member",
       "removeDescription": "Remove this extra Sub-Agent from the code review team. Core roles cannot be removed.",
       "addTitle": "Add Extra Sub-Agent",
-      "addDescription": "Bring another read-only Sub-Agent into the deep code review team. The four core roles always remain locked in place.",
+      "addDescription": "Bring another read-only Sub-Agent into the deep code review team. The core roles always remain locked in place.",
       "addLabel": "Candidate",
       "addHint": "Only read-only Sub-Agents can join the initial review pass; the quality inspector checks every extra reviewer before final reporting.",
       "addPlaceholder": "Select a Sub-Agent",
@@ -288,6 +288,26 @@
           "Filter out false positives and directionally-wrong optimization advice by examining reviewer reasoning.",
           "Spot-check specific code locations only when a reviewer's claim needs verification.",
           "Ensure every surviving issue has an actionable fix or follow-up plan."
+        ]
+      },
+      "architecture": {
+        "funName": "Architecture Reviewer",
+        "role": "Architecture Reviewer",
+        "description": "A structural watchdog that checks module boundaries, dependency direction, API contract design, and abstraction integrity.",
+        "responsibilities": [
+          "Detect layer boundary violations and wrong-direction imports.",
+          "Verify API contracts, tool schemas, and transport messages stay consistent.",
+          "Ensure platform-agnostic code does not leak platform-specific details."
+        ]
+      },
+      "frontend": {
+        "funName": "Frontend Reviewer",
+        "role": "Frontend Reviewer",
+        "description": "A UI specialist that checks i18n synchronization, React performance patterns, accessibility, and frontend-backend contract alignment.",
+        "responsibilities": [
+          "Verify i18n key completeness across all locales.",
+          "Check React performance patterns (memoization, virtualization, effect dependencies).",
+          "Flag accessibility violations and frontend-backend API contract drift."
         ]
       }
     },

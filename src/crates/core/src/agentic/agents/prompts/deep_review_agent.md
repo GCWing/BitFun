@@ -17,9 +17,11 @@ Every deep review must involve these roles:
 1. **Business Logic Reviewer**
 2. **Performance Reviewer**
 3. **Security Reviewer**
-4. **Review Quality Inspector**
+4. **Architecture Reviewer**
+5. **[Conditional] Frontend Reviewer** — include only when the change contains frontend files (src/web-ui/, .tsx, .scss, .css, locales/)
+6. **Review Quality Inspector**
 
-The first three reviewers must run **in parallel** using separate Task tool calls in a **single assistant message**. Their contexts must stay isolated.
+The first four reviewers (plus Frontend if applicable) must run **in parallel** using separate Task tool calls in a **single assistant message**. Their contexts must stay isolated.
 
 The user request may also include a **configured team manifest** with additional reviewer agents. Those extra reviewers are optional, but when present you should run them **in the same parallel Task batch as the three mandatory reviewers** whenever their work is independent.
 
@@ -145,6 +147,12 @@ Role-specific strategy amplification (append to the reviewer Task prompt when th
 - **ReviewPerformance** + `deep`: "In addition to the normal pass, check for latent scaling risks — data structures that degrade at volume, or algorithms that are correct but unnecessarily expensive. Only report if you can estimate the impact."
 - **ReviewSecurity** + `quick`: "Scan the diff for direct security risks only: injection, secret exposure, unsafe commands, missing auth. Do not trace data flows beyond one hop."
 - **ReviewSecurity** + `deep`: "In addition to the normal pass, trace data flows across trust boundaries end-to-end. Check for privilege escalation chains and indirect injection vectors. Report only with a complete threat narrative."
+- **ReviewArchitecture** + `quick`: "Only check imports directly changed by the diff. Flag violations of documented layer boundaries."
+- **ReviewArchitecture** + `normal`: "Check the diff's imports plus one level of dependency direction. Verify API contract consistency."
+- **ReviewArchitecture** + `deep`: "Map the full dependency graph for changed modules. Check for structural anti-patterns, circular dependencies, and cross-cutting concerns."
+- **ReviewFrontend** + `quick`: "Only check i18n key completeness and direct platform boundary violations in changed frontend files."
+- **ReviewFrontend** + `normal`: "Check i18n, React performance patterns, and accessibility in changed components. Verify frontend-backend API contract alignment."
+- **ReviewFrontend** + `deep`: "Thorough React analysis: effect dependencies, memoization, virtualization. Full accessibility audit. State management pattern review. Cross-layer contract verification."
 
 ### Phase 3: Quality gate
 
@@ -157,7 +165,7 @@ After the reviewer batch finishes, launch `ReviewJudge` with:
 - the team strategy level, so the judge can adjust its validation depth accordingly:
   - `quick`: "This was a quick review. Focus on confirming or rejecting each finding efficiently. If a finding's evidence is thin, reject it rather than spending time verifying."
   - `normal`: "Validate each finding's logical consistency and evidence quality. Spot-check code only when a claim needs verification."
-  - `deep`: "This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances."
+  - `deep`: "This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances. When Architecture and Business Logic both flag the same code location, the Architecture finding is likely the root cause. When Frontend and Performance both flag the same component, merge into a single finding with both perspectives."ances."
 
 If the execution policy says `judge_timeout_seconds > 0`, pass `timeout_seconds` with that value to the judge Task call.
 

@@ -150,7 +150,7 @@
   "reviewTeams": {
     "default": {
       "name": "程式碼審核團隊",
-      "summary": "專業深度程式碼審核團隊，內置業務邏輯、性能、安全與質檢四個固定角色。",
+      "summary": "專業深度程式碼審核團隊，內置業務邏輯、性能、安全、架構與質檢固定角色。",
       "members": "{{count}} 名成員"
     },
     "detail": {
@@ -169,7 +169,7 @@
       "localOnly": "程式碼審核",
       "localOnlyDescription": "在 BitFun 內以唯讀 Sub-Agent 運行，並把結果回傳到當前審核線程。",
       "parallelLabel": "並行審核",
-      "parallelDescription": "邏輯、性能、安全和額外審核員會並行工作，再由質檢員驗證結果。",
+      "parallelDescription": "邏輯、性能、安全、架構和額外審核員會並行工作，再由質檢員驗證結果。",
       "warningLabel": "審核更重",
       "warning": "建議用於風險更高的改動；它可能比普通審核耗時更久並消耗更多 token。",
       "qualityGate": "質檢覆核",
@@ -204,7 +204,7 @@
       "remove": "移除成員",
       "removeDescription": "將這個額外 Sub-Agent 從程式碼審核團隊中移除。固定角色不可刪除。",
       "addTitle": "添加額外 Sub-Agent",
-      "addDescription": "把其他唯讀 Sub-Agent 加入深度程式碼審核團隊，四個固定角色會始終保留。",
+      "addDescription": "把其他唯讀 Sub-Agent 加入深度程式碼審核團隊，固定角色會始終保留。",
       "addLabel": "候選成員",
       "addHint": "只有唯讀 Sub-Agent 可以加入初始審核流程；每個額外審核員的結果仍會由質檢員統一覆核。",
       "addPlaceholder": "選擇一個 Sub-Agent",
@@ -288,6 +288,26 @@
           "透過審核審核員的推理過程，過濾誤報以及方向錯誤的優化建議。",
           "僅在審核員的聲明需要驗證時，對特定程式碼位置進行抽查。",
           "確保每條保留的問題都帶有明確修復方案或後續計劃。"
+        ]
+      },
+      "architecture": {
+        "funName": "架構審核員",
+        "role": "架構審核員",
+        "description": "負責檢查模組邊界、依賴方向、API 契約設計和抽象完整性的結構守護者。",
+        "responsibilities": [
+          "檢測層級邊界違規和方向錯誤的匯入。",
+          "驗證 API 契約、工具模式和傳輸訊息的一致性。",
+          "確保平台無關程式碼不會洩露平台特定細節。"
+        ]
+      },
+      "frontend": {
+        "funName": "前端審核員",
+        "role": "前端審核員",
+        "description": "檢查國際化同步、React 效能模式、無障礙訪問和前後端契約一致性的 UI 專家。",
+        "responsibilities": [
+          "驗證所有語言區域的國際化鍵完整性。",
+          "檢查 React 效能模式（記憶化、虛擬化、effect 依賴）。",
+          "標記無障礙訪問違規和前後端 API 契約偏差。"
         ]
       }
     },
