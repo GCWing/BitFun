@@ -7,6 +7,8 @@
 :root {
   --tool-card-header-pad-y: 7px;
   --tool-card-header-pad-x: 0px;
+  /* Inset for header trailing controls (e.g. open-in-panel). Left stays 0 for icon rail alignment. */
+  --tool-card-header-pad-right: 10px;
   --tool-card-header-icon-rail: 24px;
   --tool-card-header-icon-slot: calc(var(--tool-card-header-icon-rail) + 10px);
 }
@@ -101,7 +103,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
+  padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-right) var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
   position: relative;
   z-index: 11;
   flex-shrink: 0;

@@ -146,7 +146,7 @@
       content: '';
       position: absolute;
       left: 0;
-      right: calc(-1 * var(--tool-card-header-pad-x, 10px));
+      right: calc(-1 * var(--tool-card-header-pad-right, 10px));
       top: calc(-1 * var(--tool-card-header-pad-y, 10px));
       bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
       background-color: transparent;
@@ -181,7 +181,7 @@
     position: absolute;
     left: 0;
     top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-    right: calc(-1 * var(--tool-card-header-pad-x, 10px));
+    right: calc(-1 * var(--tool-card-header-pad-right, 10px));
     bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
     z-index: 2;
     margin: 0;
