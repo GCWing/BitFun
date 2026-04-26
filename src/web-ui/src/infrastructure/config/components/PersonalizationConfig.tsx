@@ -47,7 +47,7 @@ const PersonalizationConfig: React.FC = () => {
     handleSelectLogPath,
     setIsTemplatesModalOpen,
     tDebug,
-  } = useSessionSettingsConfig();
+  } = useSessionSettingsConfig({ loadDesktopStatus: false });
 
   if (isLoading || !settings) {
     return (
