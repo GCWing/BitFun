@@ -87,64 +87,13 @@
   &__body {
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     flex: 1;
     min-height: 0;
     padding: $size-gap-2 $size-gap-3;
     overflow: hidden;
     position: relative;
     z-index: 1;
-  }
-
-  &__metrics {
-    display: grid;
-    grid-template-columns: 1.35fr 1fr 1fr;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  &__metric {
-    min-width: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-height: 42px;
-    padding: 0 9px;
-    border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--team-card-accent) 16%, var(--border-subtle));
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--team-card-accent) 8%, transparent), transparent),
-      color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
-    color: var(--color-text-secondary);
-    font-size: 11px;
-    line-height: 1.2;
-    overflow: hidden;
-
-    svg {
-      flex-shrink: 0;
-      color: color-mix(in srgb, var(--team-card-accent) 74%, var(--color-text-secondary));
-    }
-
-    span,
-    strong {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    strong {
-      color: var(--color-text-primary);
-      font-weight: $font-weight-semibold;
-    }
-  }
-
-  &__metric--primary {
-    justify-content: flex-start;
-    background:
-      radial-gradient(circle at top left, color-mix(in srgb, var(--team-card-accent) 22%, transparent), transparent 62%),
-      color-mix(in srgb, var(--team-card-accent) 9%, var(--element-bg-soft));
   }
 
   &__footer {
@@ -166,6 +115,20 @@
     position: relative;
     z-index: 1;
   }
+}
+
+.agent-team-card__metrics {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-team-card__body > .agent-team-card__metrics {
+  margin-top: auto;
+  padding-top: $size-gap-2;
+  align-self: flex-start;
 }
 
 @media (max-width: 720px) {

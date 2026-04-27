@@ -3,9 +3,17 @@
 .review-team-page {
   --config-page-content-max-width: 1480px;
   --config-page-content-inline-padding: clamp(40px, 6vw, 80px);
+  /* Aligns overview + member rows with `AgentTeamCard` / gallery team cards */
+  --review-team-accent: var(--color-accent-400, #0ea5e9);
 
   .bitfun-config-page-content__inner {
     max-width: 1480px;
+  }
+
+  &__agent-team-metrics-wrap {
+    margin-bottom: $size-gap-3;
+    width: 100%;
+    min-width: 0;
   }
 
   &__summary-grid {
@@ -17,12 +25,45 @@
   &__summary-card {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     min-height: 118px;
-    padding: 16px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: var(--color-surface);
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--review-team-accent) 16%, var(--border-subtle));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--review-team-accent) 8%, transparent), transparent),
+      color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
+  }
+
+  &__summary-card--primary {
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, var(--review-team-accent) 22%, transparent), transparent 62%),
+      color-mix(in srgb, var(--review-team-accent) 9%, var(--element-bg-soft));
+  }
+
+  &__summary-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  &__summary-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    color: color-mix(in srgb, var(--review-team-accent) 78%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--review-team-accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--review-team-accent) 24%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+
+    svg {
+      flex-shrink: 0;
+    }
   }
 
   &__header-actions,
@@ -46,15 +87,16 @@
     color: var(--color-text-primary);
     text-align: left;
     cursor: pointer;
-    transition:
-      background $motion-fast $easing-standard,
-      box-shadow $motion-fast $easing-standard;
+    transition: background $motion-fast $easing-standard;
 
-    &:hover,
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-medium) 68%, transparent);
+    }
+
     &:focus-visible {
       background: color-mix(in srgb, var(--element-bg-medium) 68%, transparent);
-      box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-accent-500) 74%, transparent);
-      outline: none;
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 45%, var(--border-medium));
+      outline-offset: 2px;
     }
   }
 
@@ -94,9 +136,11 @@
     min-width: 0;
     min-height: 58px;
     padding: 9px 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--element-bg-soft) 74%, transparent);
+    border: 1px solid color-mix(in srgb, var(--review-team-accent) 16%, var(--border-subtle));
+    border-radius: 12px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--review-team-accent) 8%, transparent), transparent),
+      color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
 
     span {
       overflow: hidden;
@@ -136,6 +180,8 @@
   }
 
   &__summary-kicker {
+    flex: 1;
+    min-width: 0;
     font-size: 11px;
     font-weight: $font-weight-semibold;
     text-transform: uppercase;
@@ -152,8 +198,9 @@
 
   &__section-badges {
     display: inline-flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   &__row-control {
@@ -292,9 +339,11 @@
     gap: 10px;
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--element-bg-soft) 78%, transparent);
+    border: 1px solid color-mix(in srgb, var(--review-team-accent) 16%, var(--border-subtle));
+    border-radius: 12px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--member-accent, #64748b) 8%, transparent), transparent),
+      color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
     color: var(--color-text-primary);
     text-align: left;
     cursor: pointer;
@@ -305,20 +354,22 @@
 
     &:hover {
       border-color: color-mix(in srgb, var(--member-accent, #64748b) 34%, var(--border-medium));
-      background: color-mix(in srgb, var(--element-bg-soft) 100%, transparent);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--member-accent, #64748b) 10%, transparent), transparent),
+        color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
     }
 
     &.is-selected {
       border-color: color-mix(in srgb, var(--member-accent, #64748b) 54%, var(--color-bg-primary));
-      background: color-mix(in srgb, var(--member-accent, #64748b) 10%, var(--element-bg-soft));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--member-accent, #64748b) 24%, transparent),
-        inset 3px 0 0 color-mix(in srgb, var(--member-accent, #64748b) 60%, transparent);
+      background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--member-accent, #64748b) 22%, transparent), transparent 62%),
+        color-mix(in srgb, var(--member-accent, #64748b) 9%, var(--element-bg-soft));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--member-accent, #64748b) 24%, transparent);
     }
 
     &:focus-visible {
-      outline: none;
-      box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--member-accent, #64748b) 50%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--member-accent, #64748b) 50%, var(--border-medium));
+      outline-offset: 2px;
     }
   }
 
@@ -328,10 +379,11 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--member-accent, #64748b) 16%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--member-accent, #64748b) 14%, transparent);
     color: color-mix(in srgb, var(--member-accent, #64748b) 78%, var(--color-text-primary));
-    border: 1px solid color-mix(in srgb, var(--member-accent, #64748b) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--member-accent, #64748b) 24%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
     flex-shrink: 0;
   }
 
@@ -372,9 +424,11 @@
     flex-direction: column;
     gap: 16px;
     padding: 20px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--element-bg-soft) 78%, transparent);
+    border: 1px solid color-mix(in srgb, var(--review-team-accent) 16%, var(--border-subtle));
+    border-radius: 12px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--member-accent, #64748b) 8%, transparent), transparent),
+      color-mix(in srgb, var(--element-bg-soft) 86%, transparent);
     animation: review-team-card-expand $motion-base $easing-standard forwards;
   }
 
@@ -392,10 +446,11 @@
     justify-content: center;
     width: 44px;
     height: 44px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--member-accent, #64748b) 20%, transparent);
-    color: color-mix(in srgb, var(--member-accent, #64748b) 76%, var(--color-text-primary));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--member-accent, #64748b) 14%, transparent);
+    color: color-mix(in srgb, var(--member-accent, #64748b) 78%, var(--color-text-primary));
     border: 1px solid color-mix(in srgb, var(--member-accent, #64748b) 24%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
     flex-shrink: 0;
   }
 

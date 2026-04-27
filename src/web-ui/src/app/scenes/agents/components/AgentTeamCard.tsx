@@ -58,18 +58,18 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
 
       <div className="agent-team-card__body">
         <div className="agent-team-card__metrics" aria-label={memberNames.join(', ')}>
-          <span className="agent-team-card__metric agent-team-card__metric--primary">
-            <Users size={13} />
-            <strong>{membersLabel}</strong>
-          </span>
-          <span className="agent-team-card__metric">
-            <GitBranch size={13} />
-            <span>{localOnlyLabel}</span>
-          </span>
-          <span className="agent-team-card__metric">
-            <BadgeCheck size={13} />
-            <span>{qualityGateLabel}</span>
-          </span>
+          <Badge variant="neutral">
+            <Users size={10} />
+            {membersLabel}
+          </Badge>
+          <Badge variant="accent">
+            <GitBranch size={10} />
+            {localOnlyLabel}
+          </Badge>
+          <Badge variant="purple">
+            <BadgeCheck size={10} />
+            {qualityGateLabel}
+          </Badge>
         </div>
       </div>
 
