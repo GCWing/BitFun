@@ -7,10 +7,10 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } 
 import { Trans, useTranslation } from 'react-i18next';
 import { ArrowUp, Image, Maximize2, Minimize2, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
-import { useActiveSessionState } from '../hooks/useActiveSessionState';
+import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState } from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
-import { globalEventBus } from '../../infrastructure/event-bus';
+import { globalEventBus } from '@/infrastructure';
 import {
   useSessionDerivedState,
   useSessionStateMachine,
@@ -20,7 +20,7 @@ import { SessionExecutionEvent } from '../state-machine/types';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
 import type { FlowChatState } from '../types/flow-chat';
-import type { FileContext, DirectoryContext, ImageContext } from '../../shared/types/context';
+import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
@@ -33,10 +33,11 @@ import { useMessageSender } from '../hooks/useMessageSender';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
-import { FlowChatManager } from '../services/FlowChatManager';
+import { FlowChatManager } from '@/flow_chat';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
   buildDeepReviewPromptFromSlashCommand,
+  getDeepReviewLaunchErrorMessage,
   isDeepReviewSlashCommand,
   launchDeepReviewSession,
 } from '../services/DeepReviewService';
@@ -1137,8 +1138,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (text.startsWith('/')) {
       const afterSlash = text.slice(1);
       const hasWhitespace = /\s/.test(afterSlash);
-      const firstToken = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
-      const query = firstToken;
+      const query = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
       const matchedMcpPrompt = resolveTypedMcpPromptCommand(text);
 
       // While the main session is running, expose a single quick action (/btw) via the same picker UX.
@@ -1453,7 +1453,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
-        error instanceof Error ? error.message : t('error.unknown'),
+        getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
         {
           title: t('chatInput.deepreviewFailed', { defaultValue: 'Deep review failed' }),
           duration: 5000,
@@ -2255,7 +2255,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const isCollapsedProcessing = !inputState.isActive && !!derivedState?.isProcessing;
   const petReplacesStopChrome = agentCompanionEnabled && isCollapsedProcessing;
-  const petStopClickable = petReplacesStopChrome && !!derivedState?.canCancel;
+  const petStopClickable = petReplacesStopChrome && derivedState?.canCancel;
   const collapsedPetSplitSend =
     petReplacesStopChrome && derivedState?.sendButtonMode === 'split';
 

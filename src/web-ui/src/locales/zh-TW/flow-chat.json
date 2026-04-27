@@ -396,7 +396,41 @@
     "diagnosticsErrorType": "錯誤類型",
     "diagnosticsDescription": "錯誤描述",
     "diagnosticsSuggestedActions": "建議操作",
-    "diagnosticsTechnicalDetails": "技術詳情"
+    "diagnosticsTechnicalDetails": "技術詳情",
+    "reviewInterruptedWithReason": "深度審核已中斷：{{reason}}",
+    "resumeBlockedWithReason": "無法繼續：{{reason}}",
+    "resumeFailedWithReason": "繼續失敗：{{reason}}",
+    "reviewErrorWithReason": "審核出錯：{{reason}}",
+    "retryResume": "重試",
+    "retryWithDifferentModel": "嘗試其他模型",
+    "viewPartialResults": "查看部分結果",
+    "hidePartialResults": "隱藏部分結果",
+    "partialResultsDescription": "{{completed}}/{{total}} 個 reviewer 已完成",
+    "partialIssues": "發現 {{count}} 個問題",
+    "partialRemediationItems": "{{count}} 個修復項",
+    "contextOverflowTitle": "上下文超出限制，請選擇處理方式：",
+    "longRunningHint": "審核仍在進行中，可能需要更長時間...",
+    "elapsedTime": "已運行 {{time}}",
+    "showRecoveryPlan": "顯示恢復計劃",
+    "hideRecoveryPlan": "隱藏恢復計劃",
+    "recoveryPreserve": "{{count}} 個已完成的 reviewer 將保留",
+    "recoveryRerun": "{{count}} 個 reviewer 將重新運行",
+    "recoverySkip": "{{count}} 個 reviewer 將被跳過",
+    "degradation": {
+      "reduceReviewers": "僅運行核心 reviewer",
+      "reduceReviewersDesc": "跳過額外 reviewer，只保留核心 reviewer",
+      "reduceReviewersPending": "精簡 reviewer 模式將在後續版本中支持",
+      "compressContext": "壓縮上下文後重試",
+      "compressContextDesc": "壓縮已完成的 reviewer 結果以釋放上下文空間",
+      "compressContextPending": "上下文壓縮將在後續版本中支持",
+      "viewPartial": "查看部分結果",
+      "viewPartialDesc": "查看已完成的 reviewer 結果"
+    },
+    "launchError": {
+      "modelConfig": "無法創建審核會話，請檢查模型配置",
+      "network": "網絡連接中斷，審核未能啟動",
+      "unknown": "審核啟動失敗，請重試"
+    }
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "審核已完成",
@@ -420,7 +454,8 @@
     "time": "運行期間可以繼續工作；只有整個深度審核在後台完成時才會通知你。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
-    "confirm": "開始深度審核"
+    "confirm": "開始深度審核",
+    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens"
   },
   "flowChatHeader": {
     "turnList": "輪次列表",

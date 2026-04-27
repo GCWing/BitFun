@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckCircle,
@@ -13,6 +13,9 @@ import {
   Play,
   Copy,
   Info,
+  SkipForward,
+  RotateCcw,
+  Eye,
 } from 'lucide-react';
 import { Button, Checkbox, Tooltip } from '@/component-library';
 import { useReviewActionBarStore, type ReviewActionPhase } from '../../store/deepReviewActionBarStore';
@@ -26,6 +29,15 @@ import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { getAiErrorPresentation } from '@/shared/ai-errors/aiErrorPresenter';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import {
+  aggregateReviewerProgress,
+  buildErrorAttribution,
+  buildRecoveryPlan,
+  buildReviewerProgressSummary,
+  evaluateDegradationOptions,
+  extractPartialReviewData,
+} from '../../utils/deepReviewExperience';
+import { flowChatStore } from '../../store/FlowChatStore';
 import './DeepReviewActionBar.scss';
 
 const log = createLogger('DeepReviewActionBar');
@@ -84,6 +96,10 @@ export const ReviewActionBar: React.FC = () => {
 
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showRemediationList, setShowRemediationList] = useState(true);
+  const [showPartialResults, setShowPartialResults] = useState(false);
+  const [showRecoveryPlan, setShowRecoveryPlan] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [longRunningNotified, setLongRunningNotified] = useState(false);
 
   const selectedCount = selectedRemediationIds.size;
   const totalCount = remediationItems.length;
@@ -91,6 +107,70 @@ export const ReviewActionBar: React.FC = () => {
   const isFixDisabled = activeAction !== null || selectedCount === 0;
   const isDeepReview = reviewMode === 'deep';
   const hasInterruption = isDeepReview && Boolean(interruption);
+
+  // ---- progress tracking ----
+  const sessions = flowChatStore.getState().sessions;
+  const childSession = useMemo(() => {
+    if (!childSessionId) return null;
+    return Array.from(sessions.values()).find((s) => s.sessionId === childSessionId) ?? null;
+  }, [sessions, childSessionId]);
+
+  const reviewerProgress = useMemo(() => {
+    if (!childSession || childSession.sessionKind !== 'deep_review') return [];
+    return aggregateReviewerProgress(childSession);
+  }, [childSession]);
+
+  const progressSummary = useMemo(() => {
+    if (reviewerProgress.length === 0) return null;
+    return buildReviewerProgressSummary(reviewerProgress);
+  }, [reviewerProgress]);
+
+  const partialResults = useMemo(() => {
+    if (!childSession || childSession.sessionKind !== 'deep_review') return null;
+    return extractPartialReviewData(childSession);
+  }, [childSession]);
+
+  // ---- error attribution ----
+  const errorAttribution = useMemo(() => {
+    if (!interruption) return null;
+    return buildErrorAttribution(interruption);
+  }, [interruption]);
+
+  // ---- recovery plan ----
+  const recoveryPlan = useMemo(() => {
+    if (!interruption) return null;
+    return buildRecoveryPlan(interruption);
+  }, [interruption]);
+
+  // ---- degradation options ----
+  const degradationOptions = useMemo(() => {
+    if (!interruption) return [];
+    return evaluateDegradationOptions(interruption);
+  }, [interruption]);
+
+  // ---- long-running hint ----
+  useEffect(() => {
+    if (phase !== 'fix_running' && phase !== 'resume_running') {
+      setElapsedMs(0);
+      setLongRunningNotified(false);
+      return;
+    }
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setElapsedMs(elapsed);
+      if (elapsed > 3 * 60 * 1000 && !longRunningNotified) {
+        setLongRunningNotified(true);
+        notificationService.info(
+          t('deepReviewActionBar.longRunningHint', {
+            defaultValue: 'Review is still running. This may take a few more minutes.',
+          }),
+          { duration: 5000 },
+        );
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase, longRunningNotified, t]);
 
   const phaseConfig = PHASE_CONFIG[phase];
   const PhaseIcon = phaseConfig.icon;
@@ -287,6 +367,40 @@ export const ReviewActionBar: React.FC = () => {
     await handleStartFixing(false, remainingSet);
   }, [reviewData, childSessionId, remainingFixIds, store, handleStartFixing]);
 
+  const handleRetryResume = useCallback(async () => {
+    if (!interruption) return;
+    await handleContinueReview();
+  }, [interruption, handleContinueReview]);
+
+  const handleRetryWithDifferentModel = useCallback(async () => {
+    if (!interruption) return;
+    globalEventBus.emit('settings:open', { tab: 'models' });
+  }, [interruption]);
+
+  const handleViewPartialResults = useCallback(() => {
+    setShowPartialResults(true);
+  }, []);
+
+  const handleDegradationAction = useCallback((type: string) => {
+    if (type === 'view_partial') {
+      setShowPartialResults(true);
+    } else if (type === 'reduce_reviewers') {
+      notificationService.info(
+        t('deepReviewActionBar.degradation.reduceReviewersPending', {
+          defaultValue: 'Reduced reviewer mode will be supported in a future update.',
+        }),
+        { duration: 3000 },
+      );
+    } else if (type === 'compress_context') {
+      notificationService.info(
+        t('deepReviewActionBar.degradation.compressContextPending', {
+          defaultValue: 'Context compression will be supported in a future update.',
+        }),
+        { duration: 3000 },
+      );
+    }
+  }, [t]);
+
   const handleCopyDiagnostics = useCallback(async () => {
     const detail = interruption?.errorDetail;
     if (!detail) return;
@@ -351,6 +465,34 @@ export const ReviewActionBar: React.FC = () => {
   }, [interruption, t]);
 
   const phaseTitle = useMemo(() => {
+    if (hasInterruption && interruption?.errorDetail && errorAttribution) {
+      const categoryLabel = t(errorAttribution.title, { defaultValue: errorAttribution.category });
+      if (phase === 'review_interrupted') {
+        return t('deepReviewActionBar.reviewInterruptedWithReason', {
+          reason: categoryLabel,
+          defaultValue: `Deep review interrupted: ${categoryLabel}`,
+        });
+      }
+      if (phase === 'resume_blocked') {
+        return t('deepReviewActionBar.resumeBlockedWithReason', {
+          reason: categoryLabel,
+          defaultValue: `Cannot continue: ${categoryLabel}`,
+        });
+      }
+      if (phase === 'resume_failed') {
+        return t('deepReviewActionBar.resumeFailedWithReason', {
+          reason: categoryLabel,
+          defaultValue: `Continue failed: ${categoryLabel}`,
+        });
+      }
+      if (phase === 'review_error') {
+        return t('deepReviewActionBar.reviewErrorWithReason', {
+          reason: categoryLabel,
+          defaultValue: `Review error: ${categoryLabel}`,
+        });
+      }
+    }
+
     switch (phase) {
       case 'review_completed':
         return t(isDeepReview ? 'reviewActionBar.reviewCompletedDeep' : 'reviewActionBar.reviewCompletedStandard', {
@@ -395,7 +537,7 @@ export const ReviewActionBar: React.FC = () => {
       default:
         return '';
     }
-  }, [phase, isDeepReview, t]);
+  }, [phase, isDeepReview, t, hasInterruption, interruption, errorAttribution]);
 
   if (dismissed || phase === 'idle' || !childSessionId) {
     return null;
@@ -427,6 +569,189 @@ export const ReviewActionBar: React.FC = () => {
           <span className="deep-review-action-bar__error-message">{errorMessage}</span>
         )}
       </div>
+
+      {/* Running progress */}
+      {(phase === 'fix_running' || phase === 'resume_running') && progressSummary && (
+        <div className="deep-review-action-bar__progress">
+          <span className="deep-review-action-bar__progress-text">
+            {progressSummary.text}
+          </span>
+          {elapsedMs > 0 && (
+            <span className="deep-review-action-bar__elapsed">
+              {t('deepReviewActionBar.elapsedTime', {
+                time: formatElapsedTime(elapsedMs),
+                defaultValue: `Running for ${formatElapsedTime(elapsedMs)}`,
+              })}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Partial results summary on interruption */}
+      {hasInterruption && progressSummary && progressSummary.completed > 0 && (
+        <div className="deep-review-action-bar__partial-summary">
+          <span className="deep-review-action-bar__partial-count">
+            {t('deepReviewActionBar.partialResultsDescription', {
+              completed: progressSummary.completed,
+              total: progressSummary.total,
+              defaultValue: '{{completed}}/{{total}} reviewers completed',
+            })}
+          </span>
+          <button
+            type="button"
+            className="deep-review-action-bar__partial-link"
+            onClick={() => setShowPartialResults(!showPartialResults)}
+          >
+            <Eye size={12} />
+            {showPartialResults
+              ? t('deepReviewActionBar.hidePartialResults', { defaultValue: 'Hide partial results' })
+              : t('deepReviewActionBar.viewPartialResults', { defaultValue: 'View partial results' })}
+          </button>
+        </div>
+      )}
+
+      {/* Partial results detail */}
+      {showPartialResults && partialResults && (
+        <div className="deep-review-action-bar__partial-detail">
+          {partialResults.completedIssues.length > 0 && (
+            <div className="deep-review-action-bar__partial-section">
+              <span className="deep-review-action-bar__partial-section-title">
+                {t('deepReviewActionBar.partialIssues', {
+                  count: partialResults.completedIssues.length,
+                  defaultValue: '{{count}} issues found',
+                })}
+              </span>
+            </div>
+          )}
+          {partialResults.completedRemediationItems.length > 0 && (
+            <div className="deep-review-action-bar__partial-section">
+              <span className="deep-review-action-bar__partial-section-title">
+                {t('deepReviewActionBar.partialRemediationItems', {
+                  count: partialResults.completedRemediationItems.length,
+                  defaultValue: '{{count}} remediation items',
+                })}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error attribution card */}
+      {hasInterruption && errorAttribution && (
+        <div className={`deep-review-action-bar__attribution deep-review-action-bar__attribution--${errorAttribution.severity}`}>
+          <span className="deep-review-action-bar__attribution-message">
+            {t(errorAttribution.description, { defaultValue: '' })}
+          </span>
+          {errorAttribution.actions.length > 0 && (
+            <div className="deep-review-action-bar__attribution-actions">
+              {errorAttribution.actions.map((action) => (
+                <Button
+                  key={action.code}
+                  variant="secondary"
+                  size="small"
+                  onClick={() => {
+                    if (action.code === 'open_model_settings') {
+                      globalEventBus.emit('settings:open', { tab: 'models' });
+                    } else if (action.code === 'switch_model') {
+                      globalEventBus.emit('settings:open', { tab: 'models' });
+                    } else if (action.code === 'retry' || action.code === 'continue') {
+                      void handleContinueReview();
+                    } else if (action.code === 'wait_and_retry') {
+                      void handleContinueReview();
+                    } else if (action.code === 'copy_diagnostics') {
+                      void handleCopyDiagnostics();
+                    }
+                  }}
+                >
+                  {t(action.labelKey, { defaultValue: action.code })}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recovery plan preview */}
+      {hasInterruption && recoveryPlan && (
+        <div className="deep-review-action-bar__recovery-plan">
+          <button
+            type="button"
+            className="deep-review-action-bar__recovery-plan-toggle"
+            onClick={() => setShowRecoveryPlan(!showRecoveryPlan)}
+          >
+            <Info size={12} />
+            <span>
+              {showRecoveryPlan
+                ? t('deepReviewActionBar.hideRecoveryPlan', { defaultValue: 'Hide recovery plan' })
+                : t('deepReviewActionBar.showRecoveryPlan', { defaultValue: 'Show recovery plan' })}
+            </span>
+          </button>
+          {showRecoveryPlan && (
+            <div className="deep-review-action-bar__recovery-plan-detail">
+              {recoveryPlan.willPreserve.length > 0 && (
+                <div className="deep-review-action-bar__recovery-item">
+                  <CheckCircle size={12} className="deep-review-action-bar__recovery-icon--preserve" />
+                  <span>
+                    {t('deepReviewActionBar.recoveryPreserve', {
+                      count: recoveryPlan.willPreserve.length,
+                      defaultValue: '{{count}} completed reviewers will be preserved',
+                    })}
+                  </span>
+                </div>
+              )}
+              {recoveryPlan.willRerun.length > 0 && (
+                <div className="deep-review-action-bar__recovery-item">
+                  <RotateCcw size={12} className="deep-review-action-bar__recovery-icon--rerun" />
+                  <span>
+                    {t('deepReviewActionBar.recoveryRerun', {
+                      count: recoveryPlan.willRerun.length,
+                      defaultValue: '{{count}} reviewers will be rerun',
+                    })}
+                  </span>
+                </div>
+              )}
+              {recoveryPlan.willSkip.length > 0 && (
+                <div className="deep-review-action-bar__recovery-item">
+                  <SkipForward size={12} className="deep-review-action-bar__recovery-icon--skip" />
+                  <span>
+                    {t('deepReviewActionBar.recoverySkip', {
+                      count: recoveryPlan.willSkip.length,
+                      defaultValue: '{{count}} reviewers will be skipped',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Context overflow degradation options */}
+      {hasInterruption && interruption?.errorDetail?.category === 'context_overflow' && (
+        <div className="deep-review-action-bar__degradation">
+          <span className="deep-review-action-bar__degradation-title">
+            {t('deepReviewActionBar.contextOverflowTitle', {
+              defaultValue: 'Context limit reached. Choose how to proceed:',
+            })}
+          </span>
+          {degradationOptions.map((option) => (
+            <button
+              key={option.type}
+              type="button"
+              className="deep-review-action-bar__degradation-option"
+              disabled={!option.enabled}
+              onClick={() => handleDegradationAction(option.type)}
+            >
+              <span className="deep-review-action-bar__degradation-label">
+                {t(option.labelKey, { defaultValue: option.type })}
+              </span>
+              <span className="deep-review-action-bar__degradation-desc">
+                {t(option.descriptionKey, { defaultValue: '' })}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Remediation selection (only when review completed and has items) */}
       {phase === 'review_completed' && remediationItems.length > 0 && (
@@ -675,7 +1000,38 @@ export const ReviewActionBar: React.FC = () => {
           </>
         )}
 
-        {(phase === 'fix_completed' || phase === 'fix_failed' || phase === 'fix_timeout' || phase === 'review_error' || phase === 'resume_failed') && (
+        {phase === 'resume_failed' && (
+          <>
+            <Button
+              variant="primary"
+              size="small"
+              isLoading={activeAction === 'resume'}
+              onClick={() => void handleRetryResume()}
+            >
+              <RotateCcw size={14} />
+              {t('deepReviewActionBar.retryResume', { defaultValue: 'Retry' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => void handleRetryWithDifferentModel()}
+            >
+              {t('deepReviewActionBar.retryWithDifferentModel', { defaultValue: 'Try different model' })}
+            </Button>
+            {partialResults?.hasPartialResults && (
+              <Button
+                variant="ghost"
+                size="small"
+                onClick={handleViewPartialResults}
+              >
+                <Eye size={14} />
+                {t('deepReviewActionBar.viewPartialResults', { defaultValue: 'View partial results' })}
+              </Button>
+            )}
+          </>
+        )}
+
+        {(phase === 'fix_completed' || phase === 'fix_failed' || phase === 'fix_timeout' || phase === 'review_error') && (
           <Button
             variant="ghost"
             size="small"
@@ -688,5 +1044,15 @@ export const ReviewActionBar: React.FC = () => {
     </div>
   );
 };
+
+function formatElapsedTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${seconds}s`;
+}
 
 export const DeepReviewActionBar = ReviewActionBar;

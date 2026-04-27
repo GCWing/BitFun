@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
   buildDeepReviewPromptFromSlashCommand,
+  getDeepReviewLaunchErrorMessage,
   isDeepReviewSlashCommand,
   launchDeepReviewSession,
 } from './DeepReviewService';
@@ -128,14 +129,26 @@ describe('launchDeepReviewSession', () => {
   it('throws and does not cleanup when createBtwChildSession fails', async () => {
     mockCreateBtwChildSession.mockRejectedValue(new Error('Session creation failed'));
 
-    await expect(
-      launchDeepReviewSession({
+    let caughtError: unknown;
+    try {
+      await launchDeepReviewSession({
         parentSessionId: 'parent-123',
         workspacePath: 'D:\\workspace\\repo',
         prompt: 'Review these files',
         displayMessage: 'Deep review started',
-      }),
-    ).rejects.toThrow('Session creation failed');
+      });
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBeInstanceOf(Error);
+    expect((caughtError as Error).message).toBe('Deep review failed to start. Please try again.');
+    expect((caughtError as { launchErrorMessageKey?: string }).launchErrorMessageKey).toBe(
+      'deepReviewActionBar.launchError.unknown',
+    );
+    expect(
+      getDeepReviewLaunchErrorMessage(caughtError, (key: string) => `translated:${key}`),
+    ).toBe('translated:deepReviewActionBar.launchError.unknown');
 
     expect(mockCloseBtwSessionInAuxPane).not.toHaveBeenCalled();
     expect(mockDeleteSession).not.toHaveBeenCalled();
@@ -172,23 +185,33 @@ describe('launchDeepReviewSession', () => {
     expect(mockDiscardLocalSession).toHaveBeenCalledWith('child-123');
   });
 
-  it('throws and performs full cleanup when sendMessage fails', async () => {
+  it('classifies sendMessage launch failures after cleanup', async () => {
     mockCreateBtwChildSession.mockResolvedValue({
       childSessionId: 'child-123',
       parentDialogTurnId: 'turn-456',
     });
-    mockSendMessage.mockRejectedValue(new Error('Send failed'));
+    mockSendMessage.mockRejectedValue(new Error('SSE stream connection timeout'));
     mockDeleteSession.mockResolvedValue(undefined);
     mockSessionsMap.set('child-123', { workspacePath: 'D:\\workspace\\repo' });
 
-    await expect(
-      launchDeepReviewSession({
+    let caughtError: unknown;
+    try {
+      await launchDeepReviewSession({
         parentSessionId: 'parent-123',
         workspacePath: 'D:\\workspace\\repo',
         prompt: 'Review these files',
         displayMessage: 'Deep review started',
-      }),
-    ).rejects.toThrow('Send failed');
+      });
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBeInstanceOf(Error);
+    expect((caughtError as Error).message).toBe('Network connection was interrupted before Deep Review could start.');
+    expect((caughtError as { launchErrorMessageKey?: string }).launchErrorMessageKey).toBe(
+      'deepReviewActionBar.launchError.network',
+    );
+    expect((caughtError as { launchErrorCategory?: string }).launchErrorCategory).toBe('network');
 
     expect(mockCloseBtwSessionInAuxPane).toHaveBeenCalledWith('child-123');
     expect(mockDeleteSession).toHaveBeenCalled();

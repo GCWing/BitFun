@@ -11,6 +11,7 @@ import {
   prepareDefaultReviewTeamForLaunch,
 } from '@/shared/services/reviewTeamService';
 import { DEEP_REVIEW_COMMAND_RE } from '../utils/deepReviewConstants';
+import { classifyLaunchError } from '../utils/deepReviewExperience';
 
 const log = createLogger('DeepReviewService');
 
@@ -34,6 +35,23 @@ interface FailedDeepReviewCleanupResult {
   cleanupCompleted: boolean;
   cleanupIssues: string[];
 }
+
+interface DeepReviewLaunchError extends Error {
+  launchErrorCategory?: string;
+  launchErrorActions?: string[];
+  launchErrorMessageKey?: string;
+  launchErrorStep?: string;
+  originalMessage?: string;
+  childSessionId?: string;
+  cleanupCompleted?: boolean;
+  cleanupIssues?: string[];
+}
+
+const LAUNCH_ERROR_DEFAULT_MESSAGES: Record<string, string> = {
+  'deepReviewActionBar.launchError.modelConfig': 'Deep review could not create a review session. Check the model configuration.',
+  'deepReviewActionBar.launchError.network': 'Network connection was interrupted before Deep Review could start.',
+  'deepReviewActionBar.launchError.unknown': 'Deep review failed to start. Please try again.',
+};
 
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
@@ -63,6 +81,53 @@ function describeLaunchStep(step: DeepReviewLaunchStep): string {
     default:
       return 'launching deep review';
   }
+}
+
+function createDeepReviewLaunchError(
+  launchStep: DeepReviewLaunchStep,
+  originalError: unknown,
+  childSessionId?: string,
+  cleanupResult?: FailedDeepReviewCleanupResult,
+): DeepReviewLaunchError {
+  const classified = classifyLaunchError(launchStep, originalError);
+  const friendlyError = new Error(
+    LAUNCH_ERROR_DEFAULT_MESSAGES[classified.messageKey] ??
+      LAUNCH_ERROR_DEFAULT_MESSAGES['deepReviewActionBar.launchError.unknown'],
+  ) as DeepReviewLaunchError;
+
+  friendlyError.launchErrorCategory = classified.category;
+  friendlyError.launchErrorActions = classified.actions;
+  friendlyError.launchErrorMessageKey = classified.messageKey;
+  friendlyError.launchErrorStep = classified.step;
+  friendlyError.originalMessage = normalizeErrorMessage(originalError);
+  if (childSessionId) {
+    friendlyError.childSessionId = childSessionId;
+  }
+  if (cleanupResult) {
+    friendlyError.cleanupCompleted = cleanupResult.cleanupCompleted;
+    friendlyError.cleanupIssues = cleanupResult.cleanupIssues;
+  }
+
+  return friendlyError;
+}
+
+export function getDeepReviewLaunchErrorMessage(
+  error: unknown,
+  translate: (key: string, options?: { defaultValue?: string }) => string,
+  fallback = LAUNCH_ERROR_DEFAULT_MESSAGES['deepReviewActionBar.launchError.unknown'],
+): string {
+  const launchError = error as DeepReviewLaunchError | null | undefined;
+  if (launchError?.launchErrorMessageKey) {
+    return translate(launchError.launchErrorMessageKey, {
+      defaultValue: launchError.message || fallback,
+    });
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return fallback;
 }
 
 function buildLaunchCleanupError(
@@ -254,7 +319,7 @@ export async function launchDeepReviewSession({
     return { childSessionId };
   } catch (error) {
     if (!childSessionId) {
-      throw error;
+      throw createDeepReviewLaunchError(launchStep, error);
     }
 
     const cleanupResult = await cleanupFailedDeepReviewLaunch(childSessionId, launchStep);
@@ -273,6 +338,10 @@ export async function launchDeepReviewSession({
       cleanupIssues: cleanupResult.cleanupIssues,
       error,
     });
+
+    if (launchStep === 'send_start_message' && cleanupResult.cleanupCompleted) {
+      throw createDeepReviewLaunchError(launchStep, error, childSessionId, cleanupResult);
+    }
 
     throw wrappedError;
   }

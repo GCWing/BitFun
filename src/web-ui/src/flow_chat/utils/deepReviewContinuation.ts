@@ -100,7 +100,7 @@ function findOriginalTarget(session: Session): string {
   return firstTurn?.userMessage?.content?.trim() || 'Unknown Deep Review target.';
 }
 
-function collectReviewerProgress(session: Session): DeepReviewReviewerProgress[] {
+export function collectReviewerProgress(session: Session): DeepReviewReviewerProgress[] {
   const byReviewer = new Map<string, DeepReviewReviewerProgress>();
 
   for (const turn of session.dialogTurns) {

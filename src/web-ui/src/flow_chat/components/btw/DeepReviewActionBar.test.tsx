@@ -8,6 +8,10 @@ const eventBusEmitMock = vi.hoisted(() => vi.fn());
 const confirmWarningMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
   }),
@@ -58,12 +62,50 @@ vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
 vi.mock('@/shared/notification-system', () => ({
   notificationService: {
     error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
   },
 }));
 
 vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({
     error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
+
+vi.mock('../../store/FlowChatStore', () => ({
+  flowChatStore: {
+    getState: () => ({
+      sessions: new Map(),
+      activeSessionId: null,
+    }),
+    subscribe: () => () => {},
+  },
+}));
+
+vi.mock('../../utils/deepReviewExperience', () => ({
+  aggregateReviewerProgress: () => [],
+  buildReviewerProgressSummary: () => null,
+  extractPartialReviewData: () => null,
+  buildErrorAttribution: () => null,
+  buildRecoveryPlan: () => null,
+  evaluateDegradationOptions: () => [],
+}));
+
+vi.mock('../../services/DeepReviewContinuationService', () => ({
+  continueDeepReviewSession: vi.fn(),
+}));
+
+vi.mock('@/shared/ai-errors/aiErrorPresenter', () => ({
+  getAiErrorPresentation: () => ({
+    category: 'network',
+    titleKey: 'test',
+    messageKey: 'test',
+    diagnostics: 'test diagnostics',
+    actions: [],
   }),
 }));
 

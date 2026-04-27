@@ -405,7 +405,41 @@
     "diagnosticsErrorType": "错误类型",
     "diagnosticsDescription": "错误描述",
     "diagnosticsSuggestedActions": "建议操作",
-    "diagnosticsTechnicalDetails": "技术详情"
+    "diagnosticsTechnicalDetails": "技术详情",
+    "reviewInterruptedWithReason": "深度审核已中断：{{reason}}",
+    "resumeBlockedWithReason": "无法继续：{{reason}}",
+    "resumeFailedWithReason": "继续失败：{{reason}}",
+    "reviewErrorWithReason": "审核出错：{{reason}}",
+    "retryResume": "重试",
+    "retryWithDifferentModel": "尝试其他模型",
+    "viewPartialResults": "查看部分结果",
+    "hidePartialResults": "隐藏部分结果",
+    "partialResultsDescription": "{{completed}}/{{total}} 个 reviewer 已完成",
+    "partialIssues": "发现 {{count}} 个问题",
+    "partialRemediationItems": "{{count}} 个修复项",
+    "contextOverflowTitle": "上下文超出限制，请选择处理方式：",
+    "longRunningHint": "审核仍在进行中，可能需要更长时间...",
+    "elapsedTime": "已运行 {{time}}",
+    "showRecoveryPlan": "显示恢复计划",
+    "hideRecoveryPlan": "隐藏恢复计划",
+    "recoveryPreserve": "{{count}} 个已完成的 reviewer 将保留",
+    "recoveryRerun": "{{count}} 个 reviewer 将重新运行",
+    "recoverySkip": "{{count}} 个 reviewer 将被跳过",
+    "degradation": {
+      "reduceReviewers": "仅运行核心 reviewer",
+      "reduceReviewersDesc": "跳过额外 reviewer，只保留核心 reviewer",
+      "reduceReviewersPending": "精简 reviewer 模式将在后续版本中支持",
+      "compressContext": "压缩上下文后重试",
+      "compressContextDesc": "压缩已完成的 reviewer 结果以释放上下文空间",
+      "compressContextPending": "上下文压缩将在后续版本中支持",
+      "viewPartial": "查看部分结果",
+      "viewPartialDesc": "查看已完成的 reviewer 结果"
+    },
+    "launchError": {
+      "modelConfig": "无法创建审核会话，请检查模型配置",
+      "network": "网络连接中断，审核未能启动",
+      "unknown": "审核启动失败，请重试"
+    }
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "审核已完成",
@@ -429,7 +463,8 @@
     "time": "运行期间可以继续工作；只有整个深度审核在后台完成时才会通知你。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
-    "confirm": "开始深度审核"
+    "confirm": "开始深度审核",
+    "estimatedTokens": "预计消耗：{{min}} - {{max}} tokens"
   },
   "flowChatHeader": {
     "turnList": "轮次列表",

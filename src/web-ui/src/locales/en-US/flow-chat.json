@@ -405,7 +405,41 @@
     "diagnosticsErrorType": "Error type",
     "diagnosticsDescription": "Description",
     "diagnosticsSuggestedActions": "Suggested actions",
-    "diagnosticsTechnicalDetails": "Technical details"
+    "diagnosticsTechnicalDetails": "Technical details",
+    "reviewInterruptedWithReason": "Deep review interrupted: {{reason}}",
+    "resumeBlockedWithReason": "Cannot continue: {{reason}}",
+    "resumeFailedWithReason": "Continue failed: {{reason}}",
+    "reviewErrorWithReason": "Review error: {{reason}}",
+    "retryResume": "Retry",
+    "retryWithDifferentModel": "Try different model",
+    "viewPartialResults": "View partial results",
+    "hidePartialResults": "Hide partial results",
+    "partialResultsDescription": "{{completed}}/{{total}} reviewers completed",
+    "partialIssues": "{{count}} issues found",
+    "partialRemediationItems": "{{count}} remediation items",
+    "contextOverflowTitle": "Context limit reached. Choose how to proceed:",
+    "longRunningHint": "Review is still running. This may take a few more minutes.",
+    "elapsedTime": "Running for {{time}}",
+    "showRecoveryPlan": "Show recovery plan",
+    "hideRecoveryPlan": "Hide recovery plan",
+    "recoveryPreserve": "{{count}} completed reviewers will be preserved",
+    "recoveryRerun": "{{count}} reviewers will be rerun",
+    "recoverySkip": "{{count}} reviewers will be skipped",
+    "degradation": {
+      "reduceReviewers": "Run with core reviewers only",
+      "reduceReviewersDesc": "Skip extra reviewers and keep only core reviewers",
+      "reduceReviewersPending": "Reduced reviewer mode will be supported in a future update.",
+      "compressContext": "Compress context and retry",
+      "compressContextDesc": "Compress completed reviewer results to free up context space",
+      "compressContextPending": "Context compression will be supported in a future update.",
+      "viewPartial": "View partial results",
+      "viewPartialDesc": "View completed reviewer results"
+    },
+    "launchError": {
+      "modelConfig": "Failed to create review session. Please check model configuration.",
+      "network": "Network connection interrupted. Review failed to start.",
+      "unknown": "Review launch failed. Please retry."
+    }
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "Review completed",
@@ -429,7 +463,8 @@
     "time": "You can keep working while it runs; we will only notify you when the whole Deep Review finishes in the background.",
     "dontShowAgain": "Do not show this again",
     "cancel": "Cancel",
-    "confirm": "Start Deep Review"
+    "confirm": "Start Deep Review",
+    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens"
   },
   "flowChatHeader": {
     "turnList": "Turn list",

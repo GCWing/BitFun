@@ -143,6 +143,14 @@
   line-height: 1.35;
 }
 
+.deep-review-consent__token-estimate {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 .deep-review-consent__footer {
   display: flex;
   align-items: center;
