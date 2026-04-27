@@ -1,12 +1,13 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{TimedStreamItem, next_stream_item};
+use super::{next_stream_item, TimedStreamItem};
+use crate::provider_error::ProviderError;
 use crate::stream::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
     MessageStart, Usage,
 };
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Error, Result};
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -72,11 +73,11 @@ pub async fn handle_anthropic_stream(
             let _ = tx.send(format!("[{}] {}", event_type, data));
         }
 
-        if let Some(error_msg) = format_provider_error_from_sse_message(&event_type, &data) {
+        if let Some(provider_error) = format_provider_error_from_sse_message(&event_type, &data) {
             stats.increment("error:provider_message");
             stats.log_summary("provider_error_message_received");
-            error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            error!("{}", provider_error);
+            let _ = tx_event.send(Err(Error::new(provider_error)));
             return;
         }
 
@@ -205,36 +206,13 @@ pub async fn handle_anthropic_stream(
     }
 }
 
-fn format_provider_error_from_sse_message(event_type: &str, data: &str) -> Option<String> {
+fn format_provider_error_from_sse_message(event_type: &str, data: &str) -> Option<ProviderError> {
     if event_type != "message" {
         return None;
     }
 
     let value: serde_json::Value = serde_json::from_str(data).ok()?;
-    let error = value.get("error")?.as_object()?;
-    let code = error
-        .get("code")
-        .and_then(|value| value.as_str())
-        .map(str::to_string)
-        .or_else(|| error.get("code").map(|value| value.to_string()))?;
-    let message = error
-        .get("message")
-        .and_then(|value| value.as_str())
-        .unwrap_or("Provider returned an error");
-    let request_id = value
-        .get("request_id")
-        .or_else(|| value.get("requestId"))
-        .and_then(|value| value.as_str());
-
-    let mut formatted = format!(
-        "Provider error: provider=anthropic_compatible, code={}, message={}",
-        code, message
-    );
-    if let Some(request_id) = request_id {
-        formatted.push_str(&format!(", request_id={}", request_id));
-    }
-
-    Some(formatted)
+    ProviderError::from_error_payload("anthropic_compatible", &value)
 }
 
 fn emit_normalized_response(
@@ -257,17 +235,20 @@ fn emit_normalized_response(
 #[cfg(test)]
 mod tests {
     use super::format_provider_error_from_sse_message;
+    use crate::provider_error::ProviderErrorKind;
 
     #[test]
-    fn extracts_glm_business_error_from_message_event() {
+    fn extracts_structured_glm_business_error_from_message_event() {
         let raw = r#"{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"},"request_id":"20260425142416"}"#;
 
-        let formatted = format_provider_error_from_sse_message("message", raw).unwrap();
+        let error = format_provider_error_from_sse_message("message", raw).unwrap();
 
-        assert!(formatted.contains("Provider error"));
-        assert!(formatted.contains("code=1113"));
-        assert!(formatted.contains("余额不足或无可用资源包"));
-        assert!(formatted.contains("request_id=20260425142416"));
+        assert_eq!(error.provider(), Some("anthropic_compatible"));
+        assert_eq!(error.kind(), ProviderErrorKind::ProviderQuota);
+        assert_eq!(error.code(), Some("1113"));
+        assert_eq!(error.message(), "余额不足或无可用资源包,请充值。");
+        assert_eq!(error.request_id(), Some("20260425142416"));
+        assert!(!error.is_retryable());
     }
 
     #[test]
