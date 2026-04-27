@@ -542,26 +542,14 @@ const AgentsHomeView: React.FC = () => {
                   defaultValue:
                     'A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.',
                 })}
-                localOnlyLabel={t('reviewTeams.detail.localOnly', {
+                roleName={t('reviewTeams.detail.localOnly', {
                   defaultValue: 'Code review',
                 })}
-                qualityGateLabel={t('reviewTeams.detail.qualityGate', {
-                  defaultValue: 'Quality gate',
-                })}
-                membersLabel={t('reviewTeams.default.members', {
-                  count: reviewTeam.members.length,
-                  defaultValue: `${reviewTeam.members.length} members`,
-                })}
-                openLabel={t('reviewTeams.detail.open', {
-                  defaultValue: 'Open team',
-                })}
-                memberNames={reviewTeam.coreMembers.map((member) =>
-                  member.definitionKey
-                    ? t(`reviewTeams.members.${member.definitionKey}.role`, {
-                      defaultValue: member.roleName,
-                    })
-                    : member.displayName,
-                )}
+                tagNames={[
+                  t('reviewTeams.members.judge.role', { defaultValue: 'Quality' }),
+                  t('reviewTeams.members.performance.role', { defaultValue: 'Performance' }),
+                  t('reviewTeams.members.architecture.role', { defaultValue: 'Architecture' }),
+                ]}
                 onOpen={openReviewTeam}
               />
             </GalleryGrid>
@@ -684,7 +672,11 @@ const AgentsHomeView: React.FC = () => {
             {selectedAgent.model ? <Badge variant="neutral">{selectedAgent.model}</Badge> : null}
           </>
         ) : null}
-        description={selectedAgent?.description}
+        description={selectedAgent
+          ? (selectedAgent.agentKind === 'mode'
+              ? (t(`agentDescriptions.${selectedAgent.id}`) as string) || selectedAgent.description
+              : selectedAgent.description)
+          : undefined}
         meta={selectedAgent ? (
           <>
             <span>{t('agentCard.meta.tools', { count: selectedAgentToolCount })}</span>

@@ -82,7 +82,11 @@ const AgentCard: React.FC<AgentCardProps> = ({
 
       {/* Body: description + meta */}
       <div className="agent-card__body">
-        <p className="agent-card__desc">{agent.description?.trim() || '—'}</p>
+        <p className="agent-card__desc">
+          {agent.agentKind === 'mode'
+            ? (t(`agentDescriptions.${agent.id}`) as string) || agent.description?.trim() || '—'
+            : agent.description?.trim() || '—'}
+        </p>
 
         <div className="agent-card__meta">
           <div className="agent-card__cap-chips">

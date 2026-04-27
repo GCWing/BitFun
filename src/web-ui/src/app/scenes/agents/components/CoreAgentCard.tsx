@@ -72,7 +72,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
 
       <div className="core-agent-card__body">
         <p className="core-agent-card__desc">
-          {agent.description?.trim() || '—'}
+          {(t(`agentDescriptions.${agent.id}`) as string) || agent.description?.trim() || '—'}
         </p>
       </div>
 
