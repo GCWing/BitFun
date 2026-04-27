@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\lijiale\\.ohos\\config\\default_Vcoder_imQPBwlDhZKHpu-LkgPseVnUO1DIbVYZGHwovJ97cvY=.cer",
+          "certpath": "C:\\Users\\lijiale\\.ohos\\config\\default_vcoder_mLoJ04E4ZMVs3NKJi5Yg30Rswoz227jnCV-I8k6sAvc=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B63A5404F339099984BDD616073E604D447C289B47D5DA41028E43A2E5D4DF2BE67AA24F4CD3464",
-          "profile": "C:\\Users\\lijiale\\.ohos\\config\\default_Vcoder_imQPBwlDhZKHpu-LkgPseVnUO1DIbVYZGHwovJ97cvY=.p7b",
+          "keyPassword": "0000001B1AC4E38D3159F409BFB38FF2B667CE1FE6E108A4C111EF2A0165222070DE0DE0656D86DB91D77C",
+          "profile": "C:\\Users\\lijiale\\.ohos\\config\\default_vcoder_mLoJ04E4ZMVs3NKJi5Yg30Rswoz227jnCV-I8k6sAvc=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\lijiale\\.ohos\\config\\default_Vcoder_imQPBwlDhZKHpu-LkgPseVnUO1DIbVYZGHwovJ97cvY=.p12",
-          "storePassword": "0000001B8D25281252401BEC116357BEDCA9ABEF740814063184A05219DA4399AB405785E0DFC726A24DA1"
+          "storeFile": "C:\\Users\\lijiale\\.ohos\\config\\default_vcoder_mLoJ04E4ZMVs3NKJi5Yg30Rswoz227jnCV-I8k6sAvc=.p12",
+          "storePassword": "0000001BF771363E57B97E663BB05D7EF3F6EA63ED750CF7C726306B8714BD0DF072E44D384B69C6FE4F64"
         }
       }
     ],

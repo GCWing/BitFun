@@ -813,7 +813,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       });
       dispatchMode({ type: 'SET_CURRENT_MODE', payload: nextMode });
       try {
-        sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', session.mode);
+        sessionStorageAdapter.setItem('bitfun:flowchat:lastMode', nextMode);
       } catch {
         // ignore
       }
