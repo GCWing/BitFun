@@ -70,7 +70,8 @@
     line-height: 1.65;
     cursor: pointer;
     user-select: none;
-    transition: color 0.15s ease;
+    border-radius: var(--radius-sm, 6px);
+    transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
       background: var(--bg-hover, rgba(255, 255, 255, 0.05));

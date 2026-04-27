@@ -76,6 +76,9 @@
   }
 
   &__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
     flex: 1;
     padding: $size-gap-2 $size-gap-3;
     position: relative;
@@ -128,6 +131,15 @@
     font-weight: $font-weight-medium;
     white-space: nowrap;
   }
+}
+
+// Shared with ReviewTeamPage for summary metric chips (BEM class reuse).
+.agent-team-card__metrics {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 @media (max-width: 720px) {

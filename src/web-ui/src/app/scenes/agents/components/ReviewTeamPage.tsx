@@ -10,6 +10,7 @@ import {
   Lock,
   Settings,
   Shield,
+  Users,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, ConfigPageLoading } from '@/component-library';
@@ -39,6 +40,7 @@ import {
   type ReviewTeamMember,
 } from '@/shared/services/reviewTeamService';
 import '../AgentsView.scss';
+import './AgentTeamCard.scss';
 import './ReviewTeamPage.scss';
 
 const rtLog = createLogger('ReviewTeamPage');
@@ -248,6 +250,28 @@ const ReviewTeamPage: React.FC = () => {
     return match ? getModelDisplayName(match) : modelId;
   }, [models, tModel]);
 
+  const reviewTeamCoreMemberNames = useMemo(
+    () => (team?.coreMembers ?? []).map((member) =>
+      member.definitionKey
+        ? t(`reviewTeams.members.${member.definitionKey}.role`, {
+          defaultValue: member.roleName,
+        })
+        : member.displayName,
+    ),
+    [team?.coreMembers, t],
+  );
+
+  const reviewTeamMembersLabel = useMemo(
+    () =>
+      team
+        ? t('reviewTeams.default.members', {
+          count: team.members.length,
+          defaultValue: `${team.members.length} members`,
+        })
+        : '',
+    [team, t],
+  );
+
   const openReviewSettings = useCallback(() => {
     setSettingsTab('review');
     openScene('settings');
@@ -312,20 +336,36 @@ const ReviewTeamPage: React.FC = () => {
           description={t('reviewTeams.detail.summaryDescription', {
             defaultValue: 'The code review team launches reviewers in parallel and finishes with a quality-gate pass.',
           })}
-          titleSuffix={(
-            <Badge variant="neutral">
-              {t('reviewTeams.detail.membersCount', {
-                count: team.members.length,
-                defaultValue: `${team.members.length} members`,
-              })}
-            </Badge>
-          )}
         >
-          <div className="review-team-page__summary-grid">
-            <div className="review-team-page__summary-card">
-              <span className="review-team-page__summary-kicker">
+          <div className="review-team-page__agent-team-metrics-wrap">
+            <div
+              className="agent-team-card__metrics"
+              aria-label={reviewTeamCoreMemberNames.join(', ')}
+            >
+              <Badge variant="neutral">
+                <Users size={10} />
+                {reviewTeamMembersLabel}
+              </Badge>
+              <Badge variant="accent">
+                <GitBranch size={10} />
                 {t('reviewTeams.detail.localOnly', { defaultValue: 'Code review' })}
-              </span>
+              </Badge>
+              <Badge variant="purple">
+                <BadgeCheck size={10} />
+                {t('reviewTeams.detail.qualityGate', { defaultValue: 'Quality gate' })}
+              </Badge>
+            </div>
+          </div>
+          <div className="review-team-page__summary-grid">
+            <div className="review-team-page__summary-card review-team-page__summary-card--primary">
+              <div className="review-team-page__summary-card-head">
+                <span className="review-team-page__summary-card-icon" aria-hidden>
+                  <GitBranch size={14} strokeWidth={1.8} />
+                </span>
+                <span className="review-team-page__summary-kicker">
+                  {t('reviewTeams.detail.localOnly', { defaultValue: 'Code review' })}
+                </span>
+              </div>
               <p className="review-team-page__summary-value">
                 {t('reviewTeams.detail.localOnlyDescription', {
                   defaultValue: 'Reviewers run as BitFun subagents and report through the same review workflow.',
@@ -333,9 +373,14 @@ const ReviewTeamPage: React.FC = () => {
               </p>
             </div>
             <div className="review-team-page__summary-card">
-              <span className="review-team-page__summary-kicker">
-                {t('reviewTeams.detail.parallelLabel', { defaultValue: 'Parallel reviewers' })}
-              </span>
+              <div className="review-team-page__summary-card-head">
+                <span className="review-team-page__summary-card-icon" aria-hidden>
+                  <Users size={14} strokeWidth={1.8} />
+                </span>
+                <span className="review-team-page__summary-kicker">
+                  {t('reviewTeams.detail.parallelLabel', { defaultValue: 'Parallel reviewers' })}
+                </span>
+              </div>
               <p className="review-team-page__summary-value">
                 {t('reviewTeams.detail.parallelDescription', {
                   defaultValue: 'Business logic, performance, security, and extra reviewers run concurrently before the judge verifies them.',
@@ -343,9 +388,14 @@ const ReviewTeamPage: React.FC = () => {
               </p>
             </div>
             <div className="review-team-page__summary-card">
-              <span className="review-team-page__summary-kicker">
-                {t('reviewTeams.detail.qualityGate', { defaultValue: 'Quality gate' })}
-              </span>
+              <div className="review-team-page__summary-card-head">
+                <span className="review-team-page__summary-card-icon" aria-hidden>
+                  <BadgeCheck size={14} strokeWidth={1.8} />
+                </span>
+                <span className="review-team-page__summary-kicker">
+                  {t('reviewTeams.detail.qualityGate', { defaultValue: 'Quality gate' })}
+                </span>
+              </div>
               <p className="review-team-page__summary-value">
                 {t('reviewTeams.detail.warning', { defaultValue: team.warning })}
               </p>
