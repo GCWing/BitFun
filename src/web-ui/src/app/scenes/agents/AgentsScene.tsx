@@ -35,7 +35,7 @@ import {
 import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from './agentsIcons';
 import { getCardGradient } from '@/shared/utils/cardGradients';
-import { getAgentBadge, getCapabilityLabel } from './utils';
+import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
 import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
@@ -672,9 +672,7 @@ const AgentsHomeView: React.FC = () => {
           </>
         ) : null}
         description={selectedAgent
-          ? (selectedAgent.agentKind === 'mode'
-              ? (t(`agentDescriptions.${selectedAgent.id}`) as string) || selectedAgent.description
-              : selectedAgent.description)
+          ? getAgentDescription(t, selectedAgent)
           : undefined}
         meta={selectedAgent ? (
           <>

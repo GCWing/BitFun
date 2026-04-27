@@ -323,20 +323,20 @@
     }
   },
   "agentDescriptions": {
-    "agentic": "Autonomous execution mode: automatically analyze requirements, plan tasks, and execute code changes",
-    "cowork": "Cowork mode: work alongside you, asking for confirmation at key steps",
-    "computer_use": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
-    "deep_research": "Deep research agent: conduct systematic investigation and analysis on complex topics",
-    "explore": "Explore agent: quickly browse the codebase to understand project structure and key files",
-    "file_finder": "File finder agent: locate relevant files and code snippets based on requirements",
-    "code_review": "Code review agent: perform quality checks and provide improvement suggestions",
-    "deep_review": "Deep review agent: perform comprehensive code review to discover potential issues",
-    "generate_doc": "Documentation agent: automatically generate code documentation and explanations",
-    "init": "Init agent: help set up project structure and initial configuration",
-    "review_fixer": "Review fixer agent: automatically fix code issues based on review results",
-    "plan": "Plan mode: create detailed task plans and execution steps",
-    "debug": "Debug mode: systematically diagnose and fix errors in code",
-    "claw": "Claw mode: extract and integrate information from external sources",
-    "team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks"
+    "Agentic": "Autonomous execution mode: automatically analyze requirements, plan tasks, and execute code changes",
+    "Cowork": "Cowork mode: work alongside you, asking for confirmation at key steps",
+    "ComputerUse": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
+    "DeepResearch": "Deep research agent: conduct systematic investigation and analysis on complex topics",
+    "Explore": "Explore agent: quickly browse the codebase to understand project structure and key files",
+    "FileFinder": "File finder agent: locate relevant files and code snippets based on requirements",
+    "CodeReview": "Code review agent: perform quality checks and provide improvement suggestions",
+    "DeepReview": "Deep review agent: perform comprehensive code review to discover potential issues",
+    "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",
+    "Init": "Init agent: help set up project structure and initial configuration",
+    "ReviewFixer": "Review fixer agent: automatically fix code issues based on review results",
+    "Plan": "Plan mode: create detailed task plans and execution steps",
+    "Debug": "Debug mode: systematically diagnose and fix errors in code",
+    "Claw": "Claw mode: extract and integrate information from external sources",
+    "Team": "Team mode: coordinate multiple agents to collaboratively complete complex tasks"
   }
 }

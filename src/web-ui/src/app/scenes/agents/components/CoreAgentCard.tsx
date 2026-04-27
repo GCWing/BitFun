@@ -9,6 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
+import { getAgentDescription } from '../utils';
 import './CoreAgentCard.scss';
 
 export interface CoreAgentMeta {
@@ -72,7 +73,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
 
       <div className="core-agent-card__body">
         <p className="core-agent-card__desc">
-          {(t(`agentDescriptions.${agent.id}`) as string) || agent.description?.trim() || '—'}
+          {getAgentDescription(t, agent)}
         </p>
       </div>
 

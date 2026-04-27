@@ -125,7 +125,7 @@
       "pathLabel": "Path:",
       "openPathInExplorer": "Open this folder in file explorer",
       "revealPathUnavailableRemote": "Remote workspace paths cannot be opened in the local file manager",
-      "shadowed": "Inactive",
+      "shadowed": "Duplicate",
       "shadowedTooltip": "This skill is shadowed by a higher-priority skill with the same name and will not be used.",
       "shadowedLabel": "Shadowed by:",
       "shadowedDetail": "Skill key {{key}}"

@@ -650,6 +650,14 @@ $skills-content-top: clamp(36px, 4.5vh, 48px);
       opacity: 0.7;
     }
   }
+
+  .badge {
+    svg {
+      display: inline-block;
+      vertical-align: middle;
+      margin-top: -1px;
+    }
+  }
 }
 
 .skills-split__row-icon {

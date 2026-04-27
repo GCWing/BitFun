@@ -407,12 +407,12 @@ const SkillsScene: React.FC = () => {
                   onKeyDown={(e) => e.stopPropagation()}
                 >
                   {skill.isShadowed && (
-                    <Badge variant="warning">
-                      <span title={t('list.item.shadowedTooltip')}>
+                    <span title={t('list.item.shadowedTooltip')}>
+                      <Badge variant="warning">
                         <ShieldAlert size={11} />
                         {t('list.item.shadowed')}
-                      </span>
-                    </Badge>
+                      </Badge>
+                    </span>
                   )}
                   <Badge variant={skill.level === 'user' ? 'info' : 'purple'}>
                     {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
@@ -478,12 +478,12 @@ const SkillsScene: React.FC = () => {
         badges={selectedInstalledSkill ? (
           <>
             {selectedInstalledSkill.isShadowed && (
-              <Badge variant="warning">
-                <span title={t('list.item.shadowedTooltip')}>
+              <span title={t('list.item.shadowedTooltip')}>
+                <Badge variant="warning">
                   <ShieldAlert size={11} />
                   {t('list.item.shadowed')}
-                </span>
-              </Badge>
+                </Badge>
+              </span>
             )}
             <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
               {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}

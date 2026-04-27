@@ -125,7 +125,7 @@
       "pathLabel": "路径:",
       "openPathInExplorer": "在资源管理器中打开此文件夹",
       "revealPathUnavailableRemote": "远程工作区无法在本地资源管理器中打开路径",
-      "shadowed": "已失效",
+      "shadowed": "重复",
       "shadowedTooltip": "该技能被更高优先级的同名技能覆盖，不会生效。",
       "shadowedLabel": "被覆盖自:",
       "shadowedDetail": "技能 key {{key}}"
