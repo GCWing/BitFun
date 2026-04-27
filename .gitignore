@@ -64,6 +64,7 @@ tests/e2e/reports/
 .cursor
 .cursor/rules/no-cargo.mdc
 .sisyphus/
+.worktrees/
 
 ASSETS_LICENSES.md
 

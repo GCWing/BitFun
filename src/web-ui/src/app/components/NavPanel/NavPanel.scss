@@ -34,7 +34,7 @@ $_section-header-height: 24px;
   display: flex;
   flex-direction: column;
   background: var(--color-bg-primary);
-  overflow: hidden;
+  overflow: visible;
   user-select: none;
 
   // ── Container ──────────────────────────────
@@ -46,7 +46,7 @@ $_section-header-height: 24px;
     // Dynamic clip-path origin — set via JS from anchor element measurement.
     // Fallback: ~20% from top (roughly the "Files" item in a typical layout).
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 
     --clip-origin-top: 20%;
     --clip-origin-bottom: 80%;
@@ -1027,7 +1027,7 @@ $_section-header-height: 24px;
   }
 
   &__collapsible-inner {
-    overflow: hidden;
+    overflow: visible;
     min-height: 0;
   }
 

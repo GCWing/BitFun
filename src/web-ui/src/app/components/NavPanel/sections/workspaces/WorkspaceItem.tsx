@@ -1,4 +1,57 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+
+function useStickyObserver(ref: React.RefObject<HTMLDivElement | null>) {
+  const [isStuck, setIsStuck] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    // Find the nearest scrollable ancestor to use as the observer root.
+    // The sticky element is pinned relative to this scroll container.
+    let scrollContainer: Element | null = el.parentElement;
+    while (scrollContainer) {
+      const style = window.getComputedStyle(scrollContainer);
+      const isScrollable =
+        (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        scrollContainer.scrollHeight > scrollContainer.clientHeight;
+      if (isScrollable) break;
+      scrollContainer = scrollContainer.parentElement;
+    }
+
+    // Place a sentinel element as a sibling right before the sticky element.
+    // When the sentinel scrolls out of the top of the container,
+    // the sticky element is considered "stuck".
+    const sentinel = document.createElement('div');
+    sentinel.style.position = 'static';
+    sentinel.style.height = '1px';
+    sentinel.style.width = '1px';
+    sentinel.style.pointerEvents = 'none';
+    sentinel.style.visibility = 'hidden';
+    el.parentElement?.insertBefore(sentinel, el);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Sentinel is not intersecting → sticky element has been pushed to the top
+        setIsStuck(!entry.isIntersecting);
+      },
+      {
+        root: scrollContainer,
+        threshold: 0,
+        rootMargin: '-1px 0px 0px 0px',
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+      sentinel.remove();
+    };
+  }, [ref]);
+
+  return isStuck;
+}
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch } from 'lucide-react';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
@@ -70,6 +123,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const menuPopoverRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const isCardStuck = useStickyObserver(cardRef);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const isNamedAssistantWorkspace =
     workspace.workspaceKind === WorkspaceKind.Assistant &&
@@ -411,7 +466,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       aria-current={isActive ? 'location' : undefined}
       aria-grabbed={draggable ? isDragging : undefined}>
         <div
-          className="bitfun-nav-panel__assistant-item-card"
+          ref={cardRef}
+          className={[
+            'bitfun-nav-panel__assistant-item-card',
+            isCardStuck && 'is-stuck',
+          ].filter(Boolean).join(' ')}
           draggable={draggable}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
@@ -585,7 +644,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     aria-current={isActive ? 'location' : undefined}
     aria-grabbed={draggable ? isDragging : undefined}>
       <div
-        className="bitfun-nav-panel__workspace-item-card"
+        ref={cardRef}
+        className={[
+          'bitfun-nav-panel__workspace-item-card',
+          isCardStuck && 'is-stuck',
+        ].filter(Boolean).join(' ')}
         draggable={draggable}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
