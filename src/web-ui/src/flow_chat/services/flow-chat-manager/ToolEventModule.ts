@@ -324,12 +324,17 @@ function handleStarted(
 ): void {
   const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
   
+  const toolCallData = {
+    input: toolEvent.params,
+    id: toolEvent.tool_id,
+    ...(typeof toolEvent.timeout_seconds === 'number' && {
+      timeout_seconds: toolEvent.timeout_seconds
+    })
+  };
+
   if (existingItem) {
     store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
-      toolCall: {
-        input: toolEvent.params,
-        id: toolEvent.tool_id
-      },
+      toolCall: toolCallData,
       status: 'running',
       isParamsStreaming: false,
       partialParams: undefined
@@ -341,10 +346,7 @@ function handleStarted(
       type: 'tool',
       toolName: toolEvent.tool_name,
       terminalSessionId: pendingTerminalSessionIds.get(toolEvent.tool_id),
-      toolCall: {
-        input: toolEvent.params,
-        id: toolEvent.tool_id
-      },
+      toolCall: toolCallData,
       timestamp: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
       status: 'running',
       requiresConfirmation: false,

@@ -224,6 +224,7 @@ export interface WaitingToolEvent extends BaseToolEvent<'Waiting'> {
 
 export interface StartedToolEvent extends BaseToolEvent<'Started'> {
   params: unknown;
+  timeout_seconds?: number;
 }
 
 export interface ProgressToolEvent extends BaseToolEvent<'Progress'> {

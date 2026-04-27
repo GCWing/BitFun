@@ -295,6 +295,8 @@ pub enum ToolEventData {
         tool_id: String,
         tool_name: String,
         params: serde_json::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        timeout_seconds: Option<u64>,
     },
     Progress {
         tool_id: String,

@@ -283,7 +283,9 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   startTime={toolItem.startTime}
                   isRunning={isRunning}
                   timeoutMs={
-                    typeof toolCall?.input?.timeout_seconds === 'number' && toolCall.input.timeout_seconds > 0
+                    typeof toolCall?.timeout_seconds === 'number' && toolCall.timeout_seconds > 0
+                      ? toolCall.timeout_seconds * 1000
+                      : typeof toolCall?.input?.timeout_seconds === 'number' && toolCall.input.timeout_seconds > 0
                       ? toolCall.input.timeout_seconds * 1000
                       : undefined
                   }

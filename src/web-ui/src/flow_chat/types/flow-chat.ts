@@ -44,6 +44,7 @@ export interface FlowToolItem extends FlowItem {
   toolCall: {
     input: any;
     id: string;
+    timeout_seconds?: number;
   };
   toolResult?: {
     result: any;

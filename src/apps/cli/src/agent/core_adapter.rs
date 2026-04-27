@@ -199,6 +199,7 @@ impl Agent for CoreAgentAdapter {
                             tool_id,
                             tool_name,
                             params,
+                            timeout_seconds: _,
                         } => {
                             tool_map.entry(tool_id.clone()).or_insert_with(|| ToolCall {
                                 tool_id: Some(tool_id.clone()),

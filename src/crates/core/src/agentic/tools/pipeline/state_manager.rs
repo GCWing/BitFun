@@ -164,6 +164,7 @@ impl ToolStateManager {
                 tool_id: task.tool_call.tool_id.clone(),
                 tool_name: task.tool_call.tool_name.clone(),
                 params: task.tool_call.arguments.clone(),
+                timeout_seconds: task.options.timeout_secs,
             },
 
             ToolExecutionState::Streaming {
