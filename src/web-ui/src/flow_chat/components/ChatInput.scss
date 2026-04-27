@@ -49,17 +49,17 @@
   
   &--collapsed {
     cursor: text;
-    max-width: 300px;
+    max-width: min(380px, 80%);
     margin: 0 auto;
     transform: translateY(3px);
-    
+
     .bitfun-chat-input__box {
       position: relative;
       overflow: hidden;
-      min-height: 42px;
-      max-height: 42px;
+      min-height: 48px;
+      max-height: 48px;
       padding: 0 18px;
-      border-radius: 21px;
+      border-radius: 24px;
       cursor: text;
       background: rgba(18, 18, 28, 0.22);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -123,31 +123,31 @@
       top: 50%;
       left: 50%;
       width: calc(100% - 36px);
-      min-height: 24px;
-      max-height: 24px;
+      min-height: 28px;
+      max-height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
       transform: translate(-50%, -50%);
       pointer-events: none;
-      
+
       .rich-text-input {
-        min-height: 24px !important;
-        max-height: 24px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
         max-width: 100%;
         font-size: var(--flowchat-font-size-base);
-        line-height: 24px;
+        line-height: 28px;
         overflow: hidden;
         padding: 0 !important;
         margin: 0 auto;
         text-align: center;
         width: 100%;
-        
+
         &:empty::before {
           display: block;
           color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
           font-size: var(--flowchat-font-size-base);
-          line-height: 24px;
+          line-height: 28px;
           text-align: center;
           width: 100%;
         }
@@ -162,7 +162,7 @@
         gap: 6px;
         width: 100%;
         font-size: var(--flowchat-font-size-sm);
-        line-height: 24px;
+        line-height: 28px;
         color: color-mix(in srgb, var(--color-text-muted) 48%, transparent);
         white-space: nowrap;
         pointer-events: none;
