@@ -181,6 +181,29 @@ async fn openai_fixture_parses_inline_think_tags_into_reasoning_content() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_preserves_provider_error_code_and_request_id() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/provider_error_with_code.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let error = output
+        .result
+        .expect_err("provider error fixture should fail")
+        .error
+        .to_string();
+
+    assert!(error.contains("SSE API error"));
+    assert!(error.contains("code=1305"));
+    assert!(error.contains("message=provider temporarily overloaded"));
+    assert!(error.contains("request_id=req_1305"));
+    assert!(!error.contains("missing field"));
+    assert!(!error.contains("SSE data schema error"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn openai_fixture_reattaches_id_only_prelude_to_following_payload_chunk() {
     let output = run_stream_fixture(
         StreamFixtureProvider::OpenAi,
