@@ -1,29 +1,28 @@
 import React from 'react';
-import { BadgeCheck, GitBranch, ShieldCheck, Users } from 'lucide-react';
-import { Badge } from '@/component-library';
+import { ShieldCheck, Sparkles } from 'lucide-react';
 import './AgentTeamCard.scss';
 
 interface AgentTeamCardProps {
   index?: number;
   title: string;
   subtitle: string;
-  localOnlyLabel: string;
-  qualityGateLabel: string;
-  membersLabel: string;
-  openLabel: string;
-  memberNames: string[];
+  roleName: string;
+  tagNames: string[];
   onOpen: () => void;
 }
+
+const TAG_COLORS = [
+  { color: '#f59e0b', border: '#f59e0b44' },
+  { color: '#14b8a6', border: '#14b8a644' },
+  { color: '#6366f1', border: '#6366f144' },
+];
 
 const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
   index = 0,
   title,
   subtitle,
-  localOnlyLabel,
-  qualityGateLabel,
-  membersLabel,
-  openLabel,
-  memberNames,
+  roleName,
+  tagNames,
   onOpen,
 }) => {
   return (
@@ -47,34 +46,33 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
         <div className="agent-team-card__header-copy">
           <div className="agent-team-card__title-row">
             <span className="agent-team-card__title">{title}</span>
-            <div className="agent-team-card__badges">
-              <Badge variant="accent">{localOnlyLabel}</Badge>
-              <Badge variant="purple">{qualityGateLabel}</Badge>
-            </div>
           </div>
-          <p className="agent-team-card__subtitle">{subtitle}</p>
+          <span className="agent-team-card__role">
+            <Sparkles size={10} strokeWidth={2} />
+            {roleName}
+          </span>
         </div>
       </div>
 
       <div className="agent-team-card__body">
-        <div className="agent-team-card__metrics" aria-label={memberNames.join(', ')}>
-          <span className="agent-team-card__metric agent-team-card__metric--primary">
-            <Users size={13} />
-            <strong>{membersLabel}</strong>
-          </span>
-          <span className="agent-team-card__metric">
-            <GitBranch size={13} />
-            <span>{localOnlyLabel}</span>
-          </span>
-          <span className="agent-team-card__metric">
-            <BadgeCheck size={13} />
-            <span>{qualityGateLabel}</span>
-          </span>
-        </div>
+        <p className="agent-team-card__desc">{subtitle}</p>
       </div>
 
       <div className="agent-team-card__footer">
-        <span className="agent-team-card__open">{openLabel}</span>
+        <div className="agent-team-card__tags">
+          {tagNames.slice(0, 3).map((name, i) => (
+            <span
+              key={name}
+              className="agent-team-card__tag-chip"
+              style={{
+                color: TAG_COLORS[i % TAG_COLORS.length].color,
+                borderColor: TAG_COLORS[i % TAG_COLORS.length].border,
+              }}
+            >
+              {name}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
