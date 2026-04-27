@@ -115,6 +115,8 @@ export class SessionStateMachineImpl {
       SessionExecutionEvent.TOOL_REJECTED,
       SessionExecutionEvent.USER_CANCEL,
       SessionExecutionEvent.START,
+      SessionExecutionEvent.ERROR_OCCURRED,
+      SessionExecutionEvent.RESET,
     ];
     
     if (toolRelatedEvents.includes(event)) {

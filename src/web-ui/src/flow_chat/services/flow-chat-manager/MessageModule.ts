@@ -284,9 +284,10 @@ export async function sendMessage(
     
     const currentState = stateMachineManager.getCurrentState(sessionId);
     if (currentState === SessionExecutionState.PROCESSING) {
-      stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
+      await stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
         error: errorMessage
       });
+      await stateMachineManager.transition(sessionId, SessionExecutionEvent.RESET);
     }
     
     const state = context.flowChatStore.getState();
